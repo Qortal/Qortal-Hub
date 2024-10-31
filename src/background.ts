@@ -89,14 +89,7 @@ import {
 } from "./background-cases";
 import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
 // import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
-// import { LocalNotifications } from '@capacitor/local-notifications';
 
-
-// LocalNotifications.requestPermissions().then(permission => {
-//   if (permission.display === 'granted') {
-//     console.log("Notifications enabled");
-//   }
-// });
 
 
 export function cleanUrl(url) {
@@ -120,6 +113,50 @@ export const groupApiSocketLocal = "ws://127.0.0.1:12391";
 const timeDifferenceForNotificationChatsBackground = 600000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 let isMobile = true;
+
+function handleNotificationClick(notificationId) {
+  // Determine the type of notification by parsing notificationId
+  const isDirect = notificationId.includes("_type=direct_");
+  const isGroup = notificationId.includes("_type=group_");
+  const isGroupAnnouncement = notificationId.includes(
+    "_type=group-announcement_"
+  );
+  const isNewThreadPost = notificationId.includes("_type=thread-post_");
+
+  // Handle specific notification types and post the message accordingly
+  if (isDirect) {
+    const fromValue = notificationId.split("_from=")[1];
+    window.postMessage(
+      { action: "NOTIFICATION_OPEN_DIRECT", payload: { from: fromValue } },
+      "*"
+    );
+  } else if (isGroup) {
+    const fromValue = notificationId.split("_from=")[1];
+    window.postMessage(
+      { action: "NOTIFICATION_OPEN_GROUP", payload: { from: fromValue } },
+      "*"
+    );
+  } else if (isGroupAnnouncement) {
+    const fromValue = notificationId.split("_from=")[1];
+    window.postMessage(
+      {
+        action: "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP",
+        payload: { from: fromValue },
+      },
+      "*"
+    );
+  } else if (isNewThreadPost) {
+    const dataValue = notificationId.split("_data=")[1];
+    const dataParsed = JSON.parse(dataValue);
+    window.postMessage(
+      {
+        action: "NOTIFICATION_OPEN_THREAD_NEW_POST",
+        payload: { data: dataParsed },
+      },
+      "*"
+    );
+  }
+}
 
 const isMobileDevice = () => {
   const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -180,11 +217,9 @@ export const getApiKeyFromStorage = async (): Promise<string | null> => {
   return getData<string>("apiKey").catch(() => null);
 };
 
-
 export const getCustomNodesFromStorage = async (): Promise<any | null> => {
   return getData<any>("customNodes").catch(() => null);
 };
-
 
 const getArbitraryEndpoint = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
@@ -341,7 +376,6 @@ async function checkWebviewFocus() {
   });
 }
 
-
 function playNotificationSound() {
   // chrome.runtime.sendMessage({ action: "PLAY_NOTIFICATION_SOUND" });
 }
@@ -394,21 +428,30 @@ const handleNotificationDirect = async (directs) => {
       (newestLatestTimestamp &&
         newestLatestTimestamp?.timestamp > oldestLatestTimestamp?.timestamp)
     ) {
-     
+      // Create the notification and assign the onclick handler
+      const title = `New Direct message! ${
+        newestLatestTimestamp?.name ? `from ${newestLatestTimestamp.name}` : ""
+      }`;
+      const body = "You have received a new direct message";
+      const notificationId =
+        "chat_notification_" +
+        Date.now() +
+        "_type=direct" +
+        `_from=${newestLatestTimestamp.address}`;
+      const notification = new window.Notification(title, {
+        body,
+        data: { id: notificationId },
+      });
 
-      // LocalNotifications.schedule({
-      //   notifications: [
-      //     {
-      //       title: `New Direct message! ${
-      //         newestLatestTimestamp?.name && `from ${newestLatestTimestamp.name}`
-      //       }`,
-      //       body: "You have received a new direct message",
-      //       id: notificationId,
-      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-      //     }
-      //   ]
-      // });
- 
+      // Set up the onclick event to call the handler function
+      notification.onclick = () => {
+        handleNotificationClick(notificationId);
+        notification.close();
+      };
+
+      setTimeout(() => {
+        notification.close();
+      }, 5000);
     }
   } catch (error) {
     if (!isFocused) {
@@ -426,22 +469,34 @@ const handleNotificationDirect = async (directs) => {
           );
         });
 
-      const notificationId = "chat_notification_" + Date.now();
-  
-      // LocalNotifications.schedule({
-      //   notifications: [
-      //     {
-      //       title: `New Direct message!`,
-      //       body: "You have received a new direct message",
-      //       id: notificationId,
-      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-      //     }
-      //   ]
-      // });
+      // Create a unique notification ID with type and sender information
+      const notificationId =
+        "chat_notification_" +
+        Date.now() +
+        "_type=direct" +
+        `_from=${newestLatestTimestamp.address}`;
+
+      const title = "New Direct message!";
+      const body = "You have received a new direct message";
+
+      const notification = new window.Notification(title, {
+        body,
+        data: { id: notificationId },
+      });
+
+      // Handle notification click with specific actions based on `notificationId`
+      notification.onclick = () => {
+        handleNotificationClick(notificationId);
+        notification.close(); // Clean up the notification on click
+      };
+
+      // Automatically close the notification after 5 seconds if not clicked
+      setTimeout(() => {
+        notification.close();
+      }, 5000); // Close after 5 seconds
     }
   } finally {
     setChatHeadsDirect(dataDirects);
-    
   }
 };
 async function getThreadActivity(): Promise<any | null> {
@@ -451,7 +506,6 @@ async function getThreadActivity(): Promise<any | null> {
 
   return getData<any>(key).catch(() => null);
 }
-
 
 export function updateThreadActivity({
   threadId,
@@ -483,7 +537,7 @@ export function updateThreadActivity({
         lastResetTime: 0,
       };
     } else {
-      threads = storedData
+      threads = storedData;
     }
 
     let lastResetTime = threads.lastResetTime || 0;
@@ -532,7 +586,6 @@ export function updateThreadActivity({
     localStorage.setItem(key, JSON.stringify(threads));
   });
 }
-
 
 const handleNotification = async (groups) => {
   const wallet = await getSaveWallet();
@@ -604,27 +657,32 @@ const handleNotification = async (groups) => {
         )
           return;
 
+        // Create a unique notification ID with type and group information
         const notificationId =
           "chat_notification_" +
           Date.now() +
           "_type=group" +
           `_from=${newestLatestTimestamp.groupId}`;
 
-        // LocalNotifications.schedule({
-        //   notifications: [
-        //     {
-        //       title: "New Group Message!",
-        //       body: `You have received a new message from ${newestLatestTimestamp?.groupName}`,
-        //       id: notificationId,
-        //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-        //     }
-        //   ]
-        // });
-        if (!isMobile) {
-          setTimeout(() => {
-            chrome.notifications.clear(notificationId);
-          }, 7000);
-        }
+        const title = "New Group Message!";
+        const body = `You have received a new message from ${newestLatestTimestamp?.groupName}`;
+
+        const notification = new window.Notification(title, {
+          body,
+          data: { id: notificationId },
+        });
+
+        // Handle notification click with specific actions based on `notificationId`
+        notification.onclick = () => {
+          handleNotificationClick(notificationId);
+          notification.close(); // Clean up the notification on click
+        };
+
+        // Automatically close the notification after 5 seconds if not clicked
+        setTimeout(() => {
+          notification.close();
+        }, 5000); // Close after 5 seconds
+
         lastGroupNotification = Date.now();
       }
     }
@@ -644,34 +702,36 @@ const handleNotification = async (groups) => {
           );
         });
 
+      // Generate a unique notification ID
       const notificationId = "chat_notification_" + Date.now();
-     
-      // LocalNotifications.schedule({
-      //   notifications: [
-      //     {
-      //       title: "New Group Message!",
-      //       body: "You have received a new message from one of your groups",
-      //       id: notificationId,
-      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-      //     }
-      //   ]
-      // });
-     
- 
-      lastGroupNotification = Date.now();
 
+      const title = "New Group Message!";
+      const body = "You have received a new message from one of your groups";
+
+      // Create and show the notification immediately
+      const notification = new window.Notification(title, {
+        body,
+        data: { id: notificationId },
+      });
+
+      // Handle notification click, allowing specific actions based on `notificationId`
+      notification.onclick = () => {
+        handleNotificationClick(notificationId);
+        notification.close(); // Clean up the notification on click
+      };
+
+      // Automatically close the notification after 5 seconds if it’s not clicked
+      setTimeout(() => {
+        notification.close();
+      }, 5000); // Close after 5 seconds
+
+      lastGroupNotification = Date.now();
     }
   } finally {
     if (!data || data?.length === 0) return;
     setChatHeads(dataWithUpdates);
-    
   }
 };
-
-
-
-
-
 
 const forceCloseWebSocket = () => {
   if (socket) {
@@ -730,7 +790,6 @@ export async function getSaveWallet() {
   }
 }
 
-
 export async function clearAllNotifications() {
   // const notifications = await chrome.notifications.getAll();
   // for (const notificationId of Object.keys(notifications)) {
@@ -754,7 +813,6 @@ async function connection(hostname: string) {
   const isConnected = await getData<any>(hostname).catch(() => null);
   return isConnected;
 }
-
 
 async function getTradeInfo(qortalAtAddress) {
   const response = await fetch(
@@ -786,7 +844,7 @@ export async function getLTCBalance() {
   const wallet = await getSaveWallet();
   let _url = `${buyTradeNodeBaseUrl}/crosschain/ltc/walletbalance`;
   const keyPair = await getKeyPair();
-  const parsedKeyPair = keyPair
+  const parsedKeyPair = keyPair;
   let _body = parsedKeyPair.ltcPublicKey;
   const response = await fetch(_url, {
     method: "POST",
@@ -977,18 +1035,17 @@ export async function getDataPublishes(groupId, type) {
 
   return new Promise((resolve) => {
     getData<any>(`${address}-publishData`)
-  .then((storedData) => {
-    storedData = storedData || {}; // Initialize an empty object if no data
-    const groupData = storedData[groupId] || {}; // Get data by groupId
-    const typeData = groupData[type] || {}; // Get data by type
+      .then((storedData) => {
+        storedData = storedData || {}; // Initialize an empty object if no data
+        const groupData = storedData[groupId] || {}; // Get data by groupId
+        const typeData = groupData[type] || {}; // Get data by type
 
-    resolve(typeData); // Resolve with the data inside the specific type
-  })
-  .catch((error) => {
-    console.error("Error retrieving data:", error);
-    resolve(null); // Return null in case of an error
-  });
-
+        resolve(typeData); // Resolve with the data inside the specific type
+      })
+      .catch((error) => {
+        console.error("Error retrieving data:", error);
+        resolve(null); // Return null in case of an error
+      });
   });
 }
 
@@ -1002,58 +1059,60 @@ export async function addDataPublishes(newData, groupId, type) {
 
   return new Promise((res) => {
     getData<any>(`${address}-publishData`)
-    .then((storedData) => {
-      storedData = storedData || {}; // Initialize if no data found
-      let groupData = storedData[groupId] || {}; // Initialize group data if not found
-      let typeData = groupData[type] || {}; // Initialize type data if not found
-  
-      let totalSize = 0;
-  
-      // Calculate total size of all stored data
-      Object.values(storedData).forEach((group) => {
-        Object.values(group).forEach((type) => {
-          Object.values(type).forEach((data) => {
-            totalSize += data.size; // Accumulate data sizes
+      .then((storedData) => {
+        storedData = storedData || {}; // Initialize if no data found
+        let groupData = storedData[groupId] || {}; // Initialize group data if not found
+        let typeData = groupData[type] || {}; // Initialize type data if not found
+
+        let totalSize = 0;
+
+        // Calculate total size of all stored data
+        Object.values(storedData).forEach((group) => {
+          Object.values(group).forEach((type) => {
+            Object.values(type).forEach((data) => {
+              totalSize += data.size; // Accumulate data sizes
+            });
           });
         });
-      });
-  
-      // Check if adding new data exceeds 3MB limit
-      if (totalSize + newData.size > MAX_STORAGE_SIZE) {
-        let dataEntries = Object.entries(typeData);
-        dataEntries.sort((a, b) => a[1].timestampSaved - b[1].timestampSaved);
-  
-        // Remove oldest entries until there's enough space
-        while (totalSize + newData.size > MAX_STORAGE_SIZE && dataEntries.length > 0) {
-          const removedEntry = dataEntries.shift();
-          totalSize -= removedEntry[1].size;
-          delete typeData[removedEntry[0]]; // Remove from typeData
+
+        // Check if adding new data exceeds 3MB limit
+        if (totalSize + newData.size > MAX_STORAGE_SIZE) {
+          let dataEntries = Object.entries(typeData);
+          dataEntries.sort((a, b) => a[1].timestampSaved - b[1].timestampSaved);
+
+          // Remove oldest entries until there's enough space
+          while (
+            totalSize + newData.size > MAX_STORAGE_SIZE &&
+            dataEntries.length > 0
+          ) {
+            const removedEntry = dataEntries.shift();
+            totalSize -= removedEntry[1].size;
+            delete typeData[removedEntry[0]]; // Remove from typeData
+          }
         }
-      }
-  
-      // Add or update the new data if there's space
-      if (totalSize + newData.size <= MAX_STORAGE_SIZE) {
-        typeData[`${nameIdentifier}`] = newData;
-        groupData[type] = typeData;
-        storedData[groupId] = groupData;
-  
-        // Save updated structure back to localStorage
-        storeData(`${address}-publishData`, storedData)
-          .then(() => res(true)) // Successfully added
-          .catch((error) => {
-            console.error("Error saving data:", error);
-            res(false); // Save failed
-          });
-      } else {
-        console.error("Failed to add data, still exceeds storage limit.");
-        res(false); // Failure due to storage limit
-      }
-    })
-    .catch((error) => {
-      console.error("Error retrieving data:", error);
-      res(false); // Failure due to retrieval error
-    });
-  
+
+        // Add or update the new data if there's space
+        if (totalSize + newData.size <= MAX_STORAGE_SIZE) {
+          typeData[`${nameIdentifier}`] = newData;
+          groupData[type] = typeData;
+          storedData[groupId] = groupData;
+
+          // Save updated structure back to localStorage
+          storeData(`${address}-publishData`, storedData)
+            .then(() => res(true)) // Successfully added
+            .catch((error) => {
+              console.error("Error saving data:", error);
+              res(false); // Save failed
+            });
+        } else {
+          console.error("Failed to add data, still exceeds storage limit.");
+          res(false); // Failure due to storage limit
+        }
+      })
+      .catch((error) => {
+        console.error("Error retrieving data:", error);
+        res(false); // Failure due to retrieval error
+      });
   });
 }
 
@@ -1064,16 +1123,15 @@ export async function getUserSettings({ key }) {
 
   return new Promise((resolve) => {
     getData<any>(`${address}-userSettings`)
-  .then((storedData) => {
-    storedData = storedData || {}; // Initialize empty object if no data
-    const value = storedData[key] || null; // Get data by key
+      .then((storedData) => {
+        storedData = storedData || {}; // Initialize empty object if no data
+        const value = storedData[key] || null; // Get data by key
 
-    resolve(value); // Resolve with the data for the specific key
-  })
-  .catch((error) => {
-    resolve(null); // Return null in case of an error
-  });
-
+        resolve(value); // Resolve with the data for the specific key
+      })
+      .catch((error) => {
+        resolve(null); // Return null in case of an error
+      });
   });
 }
 
@@ -1087,24 +1145,23 @@ export async function addUserSettings({ keyValue }) {
 
   return new Promise((res) => {
     getData<any>(`${address}-userSettings`)
-    .then((storedData) => {
-      storedData = storedData || {}; // Initialize if no data found
-  
-      storedData[key] = value; // Update the key-value pair within stored data
-  
-      // Save updated structure back to localStorage
-      storeData(`${address}-userSettings`, storedData)
-        .then(() => res(true)) // Data successfully added
-        .catch((error) => {
-          console.error("Error saving data:", error);
-          res(false); // Save failed
-        });
-    })
-    .catch((error) => {
-      console.error("Error retrieving data:", error);
-      res(false); // Failure due to retrieval error
-    });
-  
+      .then((storedData) => {
+        storedData = storedData || {}; // Initialize if no data found
+
+        storedData[key] = value; // Update the key-value pair within stored data
+
+        // Save updated structure back to localStorage
+        storeData(`${address}-userSettings`, storedData)
+          .then(() => res(true)) // Data successfully added
+          .catch((error) => {
+            console.error("Error saving data:", error);
+            res(false); // Save failed
+          });
+      })
+      .catch((error) => {
+        console.error("Error retrieving data:", error);
+        res(false); // Failure due to retrieval error
+      });
   });
 }
 
@@ -1143,11 +1200,10 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
     };
     await new Promise((resolve, reject) => {
       storeData("keyPair", toSave)
-      .then(() => resolve(true))
-      .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
-      });
-    
+        .then(() => resolve(true))
+        .catch((error) => {
+          reject(new Error(error.message || "Error saving data"));
+        });
     });
     const newWallet = {
       ...wallet,
@@ -1156,11 +1212,10 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
     };
     await new Promise((resolve, reject) => {
       storeData("walletInfo", newWallet)
-  .then(() => resolve(true))
-  .catch((error) => {
-    reject(new Error(error.message || "Error saving data"));
-  });
-
+        .then(() => resolve(true))
+        .catch((error) => {
+          reject(new Error(error.message || "Error saving data"));
+        });
     });
 
     return true;
@@ -1249,22 +1304,27 @@ export const computePow = async ({ chatBytes, path, difficulty }) => {
 const getStoredData = async (key) => {
   return new Promise((resolve, reject) => {
     getData<any>(key)
-  .then((data) => resolve(data))
-  .catch((error) => reject(error));
-
+      .then((data) => resolve(data))
+      .catch((error) => reject(error));
   });
 };
 
 export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   try {
-    window.postMessage({
-      action: "SET_GROUPS",
-      payload: groups,
-    }, "*"); 
-    window.postMessage({
-      action: "SET_DIRECTS",
-      payload: directs,
-    }, "*"); 
+    window.postMessage(
+      {
+        action: "SET_GROUPS",
+        payload: groups,
+      },
+      "*"
+    );
+    window.postMessage(
+      {
+        action: "SET_DIRECTS",
+        payload: directs,
+      },
+      "*"
+    );
 
     groups = groups;
     directs = directs;
@@ -1274,11 +1334,10 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
     };
 
     // Save the active data to localStorage
-    storeData("active-groups-directs", activeData)
-    .catch((error) => {
+    storeData("active-groups-directs", activeData).catch((error) => {
       console.error("Error saving data:", error);
     });
-  
+
     try {
       handleNotification(groups);
       handleNotificationDirect(directs);
@@ -2311,7 +2370,6 @@ export function removeDuplicateWindow(popupUrl) {
   //         w.tabs &&
   //         w.tabs.some((tab) => tab.url && tab.url.startsWith(popupUrl))
   //     );
-
   //     if (existingPopupsPending.length > 1) {
   //       chrome.windows.remove(
   //         existingPopupsPending?.[0]?.tabs?.[0]?.windowId,
@@ -2335,11 +2393,10 @@ export async function setChatHeads(data) {
   const address = wallet.address0;
   return await new Promise((resolve, reject) => {
     storeData(`chatheads-${address}`, data)
-    .then(() => resolve(true))
-    .catch((error) => {
-      reject(new Error(error.message || "Error saving data"));
-    });
-  
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2357,7 +2414,7 @@ export async function getTempPublish() {
   const SIX_MINUTES = 6 * 60 * 1000; // 6 minutes in milliseconds
 
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     const currentTime = Date.now();
 
     // Filter through each top-level key (e.g., "announcement") and then through its nested entries
@@ -2397,14 +2454,12 @@ export async function saveTempPublish({ data, key }) {
     },
   };
 
-
   return await new Promise((resolve, reject) => {
     storeData(`tempPublish-${address}`, newTemp)
-  .then(() => resolve(newTemp[key]))
-  .catch((error) => {
-    reject(new Error(error.message || "Error saving data"));
-  });
-
+      .then(() => resolve(newTemp[key]))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2413,11 +2468,10 @@ async function setChatHeadsDirect(data) {
   const address = wallet.address0;
   return await new Promise((resolve, reject) => {
     storeData(`chatheads-direct-${address}`, data)
-  .then(() => resolve(true))
-  .catch((error) => {
-    reject(new Error(error.message || "Error saving data"));
-  });
-
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2427,7 +2481,7 @@ export async function getTimestampEnterChat() {
   const key = `enter-chat-timestamp-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData;
   } else {
     return {};
@@ -2439,7 +2493,7 @@ export async function getTimestampGroupAnnouncement() {
   const key = `group-announcement-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData;
   } else {
     return {};
@@ -2460,11 +2514,10 @@ export async function addTimestampGroupAnnouncement({
   };
   return await new Promise((resolve, reject) => {
     storeData(`group-announcement-${address}`, data)
-    .then(() => resolve(true))
-    .catch((error) => {
-      reject(new Error(error.message || "Error saving data"));
-    });
-  
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2474,7 +2527,7 @@ async function getGroupData() {
   const key = `group-data-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData;
   } else {
     return {};
@@ -2486,7 +2539,7 @@ export async function getGroupDataSingle(groupId) {
   const key = `group-data-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData[groupId] || null;
   } else {
     return null;
@@ -2510,11 +2563,10 @@ export async function setGroupData({
   };
   return await new Promise((resolve, reject) => {
     storeData(`group-data-${address}`, data)
-  .then(() => resolve(true))
-  .catch((error) => {
-    reject(new Error(error.message || "Error saving data"));
-  });
-
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2525,11 +2577,10 @@ export async function addTimestampEnterChat({ groupId, timestamp }) {
   data[groupId] = timestamp;
   return await new Promise((resolve, reject) => {
     storeData(`enter-chat-timestamp-${address}`, data)
-    .then(() => resolve(true))
-    .catch((error) => {
-      reject(new Error(error.message || "Error saving data"));
-    });
-  
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
   });
 }
 
@@ -2556,7 +2607,7 @@ async function getChatHeads() {
   const key = `chatheads-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData;
   } else {
     throw new Error("No Chatheads saved");
@@ -2569,7 +2620,7 @@ async function getChatHeadsDirect() {
   const key = `chatheads-direct-${address}`;
   const res = await getData<any>(key).catch(() => null);
   if (res) {
-    const parsedData = res
+    const parsedData = res;
     return parsedData;
   } else {
     throw new Error("No Chatheads saved");
@@ -2579,13 +2630,12 @@ async function getChatHeadsDirect() {
 function setupMessageListener() {
   window.addEventListener("message", async (event) => {
     if (event.origin !== window.location.origin) {
-      return;  
+      return;
     }
     const request = event.data;
 
     // Check if the message is intended for this listener
     if (request?.type !== "backgroundMessage") return; // Only process messages of type 'backgroundMessage'
-
 
     switch (request.action) {
       case "version":
@@ -2786,9 +2836,8 @@ function setupMessageListener() {
                 key2,
                 key3,
               ];
-              
+
               removeKeysAndLogout(keysToRemove, event, request);
-              
             };
             logoutFunc();
           } catch (error) {}
@@ -2803,10 +2852,6 @@ function setupMessageListener() {
 }
 
 setupMessageListener();
-
-
-
-
 
 const checkGroupList = async () => {
   try {
@@ -2844,11 +2889,10 @@ const checkGroupList = async () => {
   }
 };
 
-
 export const checkNewMessages = async () => {
   try {
-    let mutedGroups = await getUserSettings({key: 'mutedGroups'}) || []
-    if(!isArray(mutedGroups)) mutedGroups = []
+    let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
+    if (!isArray(mutedGroups)) mutedGroups = [];
     let myName = "";
     const userData = await getUserInfo();
     if (userData?.name) {
@@ -2907,32 +2951,49 @@ export const checkNewMessages = async () => {
         }
       })
     );
-    let isDisableNotifications = await getUserSettings({key: 'disable-push-notifications'}) || false
+    let isDisableNotifications =
+      (await getUserSettings({ key: "disable-push-notifications" })) || false;
 
-    if (newAnnouncements.length > 0 && !mutedGroups.includes(newAnnouncements[0]?.groupId) && !isDisableNotifications) {
+    if (
+      newAnnouncements.length > 0 &&
+      !mutedGroups.includes(newAnnouncements[0]?.groupId) &&
+      !isDisableNotifications
+    ) {
+      // Create a unique notification ID with type and group announcement details
       const notificationId =
         "chat_notification_" +
         Date.now() +
         "_type=group-announcement" +
         `_from=${newAnnouncements[0]?.groupId}`;
 
-    
-      // LocalNotifications.schedule({
-      //   notifications: [
-      //     {
-      //       title: "New group announcement!",
-      //       body: `You have received a new announcement from ${newAnnouncements[0]?.groupName}`,
-      //       id: notificationId,
-      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-      //     }
-      //   ]
-      // });
+      const title = "New group announcement!";
+      const body = `You have received a new announcement from ${newAnnouncements[0]?.groupName}`;
+
+      // Create and show the notification
+      const notification = new window.Notification(title, {
+        body,
+        data: { id: notificationId },
+      });
+
+      // Handle notification click with specific actions based on `notificationId`
+      notification.onclick = () => {
+        handleNotificationClick(notificationId);
+        notification.close(); // Clean up the notification on click
+      };
+
+      // Automatically close the notification after 5 seconds if it’s not clicked
+      setTimeout(() => {
+        notification.close();
+      }, 5000); // Close after 5 seconds
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
-    window.postMessage({
-      action: "SET_GROUP_ANNOUNCEMENTS",
-      payload: savedtimestampAfter,
-    }, "*"); 
+    window.postMessage(
+      {
+        action: "SET_GROUP_ANNOUNCEMENTS",
+        payload: savedtimestampAfter,
+      },
+      "*"
+    );
   } catch (error) {
   } finally {
   }
@@ -2940,11 +3001,7 @@ export const checkNewMessages = async () => {
 
 const checkActiveChatsForNotifications = async () => {
   try {
-   
-     checkGroupList();
-        
-      
-    
+    checkGroupList();
   } catch (error) {}
 };
 
@@ -3060,27 +3117,47 @@ export const checkThreads = async (bringBack) => {
         Date.now() +
         "_type=thread-post" +
         `_data=${JSON.stringify(newAnnouncements[0])}`;
-        let isDisableNotifications = await getUserSettings({key: 'disable-push-notifications'}) || false
-      if(!isDisableNotifications){
-       
-        // LocalNotifications.schedule({
-        //   notifications: [
-        //     {
-        //       title: `New thread post!`,
-        //       body: `New post in ${newAnnouncements[0]?.thread?.threadData?.title}`,
-        //       id: notificationId,
-        //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-        //     }
-        //   ]
-        // });
+      let isDisableNotifications =
+        (await getUserSettings({ key: "disable-push-notifications" })) || false;
+      if (!isDisableNotifications) {
+     
+
+        // Check user settings to see if notifications are disabled
+        const isDisableNotifications =
+          (await getUserSettings({ key: "disable-push-notifications" })) ||
+          false;
+
+        if (!isDisableNotifications) {
+          const title = "New thread post!";
+          const body = `New post in ${newAnnouncements[0]?.thread?.threadData?.title}`;
+
+          // Create and show the notification
+          const notification = new window.Notification(title, {
+            body,
+            data: { id: notificationId },
+          });
+
+          // Handle notification click with specific actions based on `notificationId`
+          notification.onclick = () => {
+            handleNotificationClick(notificationId);
+            notification.close(); // Clean up the notification on click
+          };
+
+          // Automatically close the notification after 5 seconds if it’s not clicked
+          setTimeout(() => {
+            notification.close();
+          }, 5000); // Close after 5 seconds
+        }
       }
-      
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
-    window.postMessage({
-      action: "SET_GROUP_ANNOUNCEMENTS",
-      payload: savedtimestampAfter,
-    }, "*"); 
+    window.postMessage(
+      {
+        action: "SET_GROUP_ANNOUNCEMENTS",
+        payload: savedtimestampAfter,
+      },
+      "*"
+    );
   } catch (error) {
   } finally {
   }
@@ -3109,34 +3186,4 @@ export const checkThreads = async (bringBack) => {
 // }, (taskId) => {
 //   // Optional timeout callback
 //   BackgroundFetch.finish(taskId);
-// });
-
-
-
-// LocalNotifications.addListener('localNotificationActionPerformed', async (notification) => {
-//   const notificationId = notification.notification.id;
-
-//   // Check the type of notification by parsing notificationId
-//   const isDirect = notificationId.includes('_type=direct_');
-//   const isGroup = notificationId.includes('_type=group_');
-//   const isGroupAnnouncement = notificationId.includes('_type=group-announcement_');
-//   const isNewThreadPost = notificationId.includes('_type=thread-post_');
-
- 
-
-//   // Handle specific notification types
-//   if (isDirect) {
-//     const fromValue = notificationId.split('_from=')[1];
-//     handleDirectNotification(fromValue);
-//   } else if (isGroup) {
-//     const fromValue = notificationId.split('_from=')[1];
-//     handleGroupNotification(fromValue);
-//   } else if (isGroupAnnouncement) {
-//     const fromValue = notificationId.split('_from=')[1];
-//     handleAnnouncementNotification(fromValue);
-//   } else if (isNewThreadPost) {
-//     const dataValue = notificationId.split('_data=')[1];
-//     const dataParsed = JSON.parse(dataValue);
-//     handleThreadPostNotification(dataParsed);
-//   }
 // });
