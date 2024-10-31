@@ -115,6 +115,7 @@ export class ElectronCapacitorApp {
       y: this.mainWindowState.y,
       width: this.mainWindowState.width,
       height: this.mainWindowState.height,
+      backgroundColor: '#27282c', 
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
