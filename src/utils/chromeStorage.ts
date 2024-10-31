@@ -55,47 +55,72 @@ async function decryptData(encryptedData: ArrayBuffer, key: CryptoKey, iv: Uint8
   return decoder.decode(decryptedData);
 }
 
-// Encrypt data, then concatenate the IV and encrypted data for storage
+// Encode a JSON payload as Base64
+function jsonToBase64(payload) {
+  const utf8Array = new TextEncoder().encode(JSON.stringify(payload));
+  let binary = '';
+  utf8Array.forEach((byte) => (binary += String.fromCharCode(byte)));
+  return btoa(binary);
+}
+
+// Decode a Base64 string back to JSON
+function base64ToJson(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 export const storeData = async (key: string, payload: any): Promise<string> => {
   await initializeKeyAndIV();
 
-  if (keysToEncrypt.includes(key) && inMemoryKey) {
-    // Encrypt the payload if the key is in keysToEncrypt
-    const { iv, encryptedData } = await encryptData(JSON.stringify(payload), inMemoryKey);
+  const base64Data = jsonToBase64(payload);
 
-    // Combine IV and encrypted data into a single string
+  if (keysToEncrypt.includes(key) && inMemoryKey) {
+    // Encrypt the Base64-encoded payload
+    const { iv, encryptedData } = await encryptData(base64Data, inMemoryKey);
+
+    // Combine IV and encrypted data into a single Uint8Array
     const combinedData = new Uint8Array([...iv, ...new Uint8Array(encryptedData)]);
-    await SecureStoragePlugin.set({ key, value: btoa(String.fromCharCode(...combinedData)) });
+    const encryptedBase64Data = btoa(String.fromCharCode(...combinedData));
+    await SecureStoragePlugin.set({ key, value: encryptedBase64Data });
   } else {
-    // Store data in plain text if not in keysToEncrypt
-    await SecureStoragePlugin.set({ key, value: JSON.stringify(payload) });
+    // Store Base64-encoded data in plain text if not in keysToEncrypt
+    await SecureStoragePlugin.set({ key, value: base64Data });
   }
 
   return "Data saved successfully";
 };
 
-// Retrieve data, split the IV and encrypted data, then decrypt
+
 export const getData = async <T = any>(key: string): Promise<T> => {
   await initializeKeyAndIV();
 
   const storedDataBase64 = await SecureStoragePlugin.get({ key });
   if (storedDataBase64.value) {
     if (keysToEncrypt.includes(key) && inMemoryKey) {
-      // If the key is in keysToEncrypt, decrypt the data
-      const combinedData = atob(storedDataBase64.value).split("").map((c) => c.charCodeAt(0));
-      const iv = new Uint8Array(combinedData.slice(0, 12)); // First 12 bytes are the IV
-      const encryptedData = new Uint8Array(combinedData.slice(12)).buffer; // The rest is encrypted data
+      // Decode the Base64-encoded encrypted data
+      const combinedData = atob(storedDataBase64.value)
+        .split("")
+        .map((c) => c.charCodeAt(0));
 
-      const decryptedData = await decryptData(encryptedData, inMemoryKey, iv);
-      return JSON.parse(decryptedData) as T;
+      const iv = new Uint8Array(combinedData.slice(0, 12)); // First 12 bytes are the IV
+      const encryptedData = new Uint8Array(combinedData.slice(12)).buffer;
+
+      const decryptedBase64Data = await decryptData(encryptedData, inMemoryKey, iv);
+      return base64ToJson(decryptedBase64Data);
     } else {
-      // If the key is not in keysToEncrypt, parse data as plain text
-      return JSON.parse(storedDataBase64.value) as T;
+      // Decode non-encrypted data
+      return base64ToJson(storedDataBase64.value);
     }
   } else {
     throw new Error(`No data found for key: ${key}`);
   }
 };
+
+
 
 // Remove keys from storage and log out
 export async function removeKeysAndLogout(keys: string[], event: MessageEvent, request: any) {

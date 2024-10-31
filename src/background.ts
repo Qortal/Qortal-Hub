@@ -115,29 +115,36 @@ const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 let isMobile = true;
 
 function handleNotificationClick(notificationId) {
-  // Determine the type of notification by parsing notificationId
-  const isDirect = notificationId.includes("_type=direct_");
-  const isGroup = notificationId.includes("_type=group_");
-  const isGroupAnnouncement = notificationId.includes(
-    "_type=group-announcement_"
-  );
-  const isNewThreadPost = notificationId.includes("_type=thread-post_");
+  // Decode the notificationId if it was encoded
+  const decodedNotificationId = decodeURIComponent(notificationId);
+
+  // Determine the type of notification by parsing decodedNotificationId
+  const isDirect = decodedNotificationId.includes("_type=direct_");
+  const isGroup = decodedNotificationId.includes("_type=group_");
+  const isGroupAnnouncement = decodedNotificationId.includes("_type=group-announcement_");
+  const isNewThreadPost = decodedNotificationId.includes("_type=thread-post_");
+
+  // Helper function to extract parameter values safely
+  function getParameterValue(id, key) {
+    const match = id.match(new RegExp(`${key}=([^_]+)`));
+    return match ? match[1] : null;
+  }
 
   // Handle specific notification types and post the message accordingly
   if (isDirect) {
-    const fromValue = notificationId.split("_from=")[1];
+    const fromValue = getParameterValue(decodedNotificationId, "_from");
     window.postMessage(
       { action: "NOTIFICATION_OPEN_DIRECT", payload: { from: fromValue } },
       "*"
     );
   } else if (isGroup) {
-    const fromValue = notificationId.split("_from=")[1];
+    const fromValue = getParameterValue(decodedNotificationId, "_from");
     window.postMessage(
       { action: "NOTIFICATION_OPEN_GROUP", payload: { from: fromValue } },
       "*"
     );
   } else if (isGroupAnnouncement) {
-    const fromValue = notificationId.split("_from=")[1];
+    const fromValue = getParameterValue(decodedNotificationId, "_from");
     window.postMessage(
       {
         action: "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP",
@@ -146,17 +153,22 @@ function handleNotificationClick(notificationId) {
       "*"
     );
   } else if (isNewThreadPost) {
-    const dataValue = notificationId.split("_data=")[1];
-    const dataParsed = JSON.parse(dataValue);
-    window.postMessage(
-      {
-        action: "NOTIFICATION_OPEN_THREAD_NEW_POST",
-        payload: { data: dataParsed },
-      },
-      "*"
-    );
+    const dataValue = getParameterValue(decodedNotificationId, "_data");
+    try {
+      const dataParsed = JSON.parse(dataValue);
+      window.postMessage(
+        {
+          action: "NOTIFICATION_OPEN_THREAD_NEW_POST",
+          payload: { data: dataParsed },
+        },
+        "*"
+      );
+    } catch (error) {
+      console.error("Error parsing JSON data for thread post notification:", error);
+    }
   }
 }
+
 
 const isMobileDevice = () => {
   const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -400,8 +412,8 @@ const handleNotificationDirect = async (directs) => {
 
     if (newActiveChats?.length === 0) return;
 
-    let newestLatestTimestamp;
-    let oldestLatestTimestamp;
+    let newestLatestTimestamp = null;
+    let oldestLatestTimestamp = null;
     // Find the latest timestamp from newActiveChats
     newActiveChats?.forEach((newChat) => {
       if (
@@ -434,10 +446,10 @@ const handleNotificationDirect = async (directs) => {
       }`;
       const body = "You have received a new direct message";
       const notificationId =
-        "chat_notification_" +
+      encodeURIComponent("chat_notification_" +
         Date.now() +
         "_type=direct" +
-        `_from=${newestLatestTimestamp.address}`;
+        `_from=${newestLatestTimestamp.address}`);
       const notification = new window.Notification(title, {
         body,
         data: { id: notificationId },
@@ -451,7 +463,7 @@ const handleNotificationDirect = async (directs) => {
 
       setTimeout(() => {
         notification.close();
-      }, 5000);
+      }, 10000);
     }
   } catch (error) {
     if (!isFocused) {
@@ -471,10 +483,10 @@ const handleNotificationDirect = async (directs) => {
 
       // Create a unique notification ID with type and sender information
       const notificationId =
-        "chat_notification_" +
+      encodeURIComponent("chat_notification_" +
         Date.now() +
         "_type=direct" +
-        `_from=${newestLatestTimestamp.address}`;
+        `_from=${newestLatestTimestamp.address}`);
 
       const title = "New Direct message!";
       const body = "You have received a new direct message";
@@ -493,7 +505,7 @@ const handleNotificationDirect = async (directs) => {
       // Automatically close the notification after 5 seconds if not clicked
       setTimeout(() => {
         notification.close();
-      }, 5000); // Close after 5 seconds
+      }, 10000); // Close after 5 seconds
     }
   } finally {
     setChatHeadsDirect(dataDirects);
@@ -619,8 +631,8 @@ const handleNotification = async (groups) => {
     const oldActiveChats = await getChatHeads();
 
     let results = [];
-    let newestLatestTimestamp;
-    let oldestLatestTimestamp;
+    let newestLatestTimestamp = null;
+    let oldestLatestTimestamp = null;
     // Find the latest timestamp from newActiveChats
     newActiveChats?.forEach((newChat) => {
       if (
@@ -659,10 +671,10 @@ const handleNotification = async (groups) => {
 
         // Create a unique notification ID with type and group information
         const notificationId =
-          "chat_notification_" +
+        encodeURIComponent("chat_notification_" +
           Date.now() +
           "_type=group" +
-          `_from=${newestLatestTimestamp.groupId}`;
+          `_from=${newestLatestTimestamp.groupId}`);
 
         const title = "New Group Message!";
         const body = `You have received a new message from ${newestLatestTimestamp?.groupName}`;
@@ -681,7 +693,7 @@ const handleNotification = async (groups) => {
         // Automatically close the notification after 5 seconds if not clicked
         setTimeout(() => {
           notification.close();
-        }, 5000); // Close after 5 seconds
+        }, 10000); // Close after 5 seconds
 
         lastGroupNotification = Date.now();
       }
@@ -703,7 +715,7 @@ const handleNotification = async (groups) => {
         });
 
       // Generate a unique notification ID
-      const notificationId = "chat_notification_" + Date.now();
+      const notificationId = encodeURIComponent("chat_notification_" + Date.now());
 
       const title = "New Group Message!";
       const body = "You have received a new message from one of your groups";
@@ -723,7 +735,7 @@ const handleNotification = async (groups) => {
       // Automatically close the notification after 5 seconds if it’s not clicked
       setTimeout(() => {
         notification.close();
-      }, 5000); // Close after 5 seconds
+      }, 10000); // Close after 5 seconds
 
       lastGroupNotification = Date.now();
     }
@@ -1332,7 +1344,6 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
       groups: groups || [], // Your groups data here
       directs: directs || [], // Your directs data here
     };
-
     // Save the active data to localStorage
     storeData("active-groups-directs", activeData).catch((error) => {
       console.error("Error saving data:", error);
@@ -2961,10 +2972,10 @@ export const checkNewMessages = async () => {
     ) {
       // Create a unique notification ID with type and group announcement details
       const notificationId =
-        "chat_notification_" +
+      encodeURIComponent("chat_notification_" +
         Date.now() +
         "_type=group-announcement" +
-        `_from=${newAnnouncements[0]?.groupId}`;
+        `_from=${newAnnouncements[0]?.groupId}`);
 
       const title = "New group announcement!";
       const body = `You have received a new announcement from ${newAnnouncements[0]?.groupName}`;
@@ -2984,7 +2995,7 @@ export const checkNewMessages = async () => {
       // Automatically close the notification after 5 seconds if it’s not clicked
       setTimeout(() => {
         notification.close();
-      }, 5000); // Close after 5 seconds
+      }, 10000); // Close after 5 seconds
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
     window.postMessage(
@@ -3113,10 +3124,10 @@ export const checkThreads = async (bringBack) => {
 
     if (newAnnouncements.length > 0) {
       const notificationId =
-        "chat_notification_" +
+      encodeURIComponent("chat_notification_" +
         Date.now() +
         "_type=thread-post" +
-        `_data=${JSON.stringify(newAnnouncements[0])}`;
+        `_data=${JSON.stringify(newAnnouncements[0])}`);
       let isDisableNotifications =
         (await getUserSettings({ key: "disable-push-notifications" })) || false;
       if (!isDisableNotifications) {
@@ -3146,7 +3157,7 @@ export const checkThreads = async (bringBack) => {
           // Automatically close the notification after 5 seconds if it’s not clicked
           setTimeout(() => {
             notification.close();
-          }, 5000); // Close after 5 seconds
+          }, 10000); // Close after 5 seconds
         }
       }
     }
@@ -3187,3 +3198,5 @@ export const checkThreads = async (bringBack) => {
 //   // Optional timeout callback
 //   BackgroundFetch.finish(taskId);
 // });
+
+
