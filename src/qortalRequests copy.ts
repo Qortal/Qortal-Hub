@@ -38,7 +38,6 @@ function getLocalStorage(key) {
       // Save the updated object back to storage
       await setLocalStorage({ qortalRequestPermissions });
       
-      console.log('Permission set for', key);
     } catch (error) {
       console.error('Error setting permission:', error);
     }

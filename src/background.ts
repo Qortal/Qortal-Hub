@@ -486,7 +486,7 @@ const handleNotificationDirect = async (directs) => {
       encodeURIComponent("chat_notification_" +
         Date.now() +
         "_type=direct" +
-        `_from=${newestLatestTimestamp.address}`);
+        `_from=""`);
 
       const title = "New Direct message!";
       const body = "You have received a new direct message";
