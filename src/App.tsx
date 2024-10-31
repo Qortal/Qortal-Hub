@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { Browser } from "@capacitor/browser";
 import "./App.css";
 import { useDropzone } from "react-dropzone";
 import {
@@ -1377,7 +1376,7 @@ function App() {
               textDecoration: "underline",
             }}
             onClick={async () => {
-              await Browser.open({ url: "https://www.qort.trade" });
+              window.electronAPI.openExternal("https://www.qort.trade");
             }}
           >
             Get QORT at qort.trade
@@ -2287,7 +2286,7 @@ function App() {
               <CustomButton onClick={async ()=> {
                 await saveFileToDiskFunc()
 await showInfo({
-  message: `Your wallet file was saved to internal storage, in the document folder. Keep that file secure.`,
+  message: `Keep your wallet file secure.`,
  })
               }}>
                 Download wallet
@@ -2392,7 +2391,7 @@ await showInfo({
                   await saveFileToDiskFunc();
                   returnToMain();
                   await showInfo({
-                    message: `Your wallet file was saved to internal storage, in the document folder. Keep that file secure.`,
+                    message: `Keep your wallet file secure.`,
                    })
                 }}
               >

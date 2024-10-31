@@ -3,10 +3,10 @@ import { executeEvent } from '../../utils/events';
 import { useSetRecoilState } from 'recoil';
 import { navigationControllerAtom } from '../../atoms/global';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
-import { Browser } from '@capacitor/browser';
 import { saveFile } from '../../qortalRequests/get';
 import { mimeToExtensionMap } from '../../utils/memeTypes';
 import { MyContext } from '../../App';
+import FileSaver from 'file-saver';
 
 
 
@@ -269,7 +269,7 @@ const UIQortalRequests = [
  
   
     try {
-      const { filename, mimeType, blob } = data;
+      const { filename, mimeType, blob, fileHandleOptions } = data;
   
       setInfoSnackCustom({
         type: "info",
@@ -280,7 +280,10 @@ const UIQortalRequests = [
      
       setOpenSnackGlobal(true);
       
-     await saveFileInChunks(blob, filename)
+     
+    
+      FileSaver.saveAs(blob, filename)
+      
      setInfoSnackCustom({
       type: "success",
       message:

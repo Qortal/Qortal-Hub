@@ -36,8 +36,7 @@ export const MessageDisplay = ({ htmlContent , isReply}) => {
     const target = e.target.closest('a');
     if (target) {
       const href = target.getAttribute('href');
-      await Browser.open({ url: href });
-      
+      window.electronAPI.openExternal(href);
     } else {
       console.error('No <a> tag found or href is null.');
     }
