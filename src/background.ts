@@ -88,15 +88,15 @@ import {
   versionCase,
 } from "./background-cases";
 import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
-import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
-import { LocalNotifications } from '@capacitor/local-notifications';
+// import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
+// import { LocalNotifications } from '@capacitor/local-notifications';
 
 
-LocalNotifications.requestPermissions().then(permission => {
-  if (permission.display === 'granted') {
-    console.log("Notifications enabled");
-  }
-});
+// LocalNotifications.requestPermissions().then(permission => {
+//   if (permission.display === 'granted') {
+//     console.log("Notifications enabled");
+//   }
+// });
 
 
 export function cleanUrl(url) {
@@ -396,18 +396,18 @@ const handleNotificationDirect = async (directs) => {
     ) {
      
 
-      LocalNotifications.schedule({
-        notifications: [
-          {
-            title: `New Direct message! ${
-              newestLatestTimestamp?.name && `from ${newestLatestTimestamp.name}`
-            }`,
-            body: "You have received a new direct message",
-            id: notificationId,
-            schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-          }
-        ]
-      });
+      // LocalNotifications.schedule({
+      //   notifications: [
+      //     {
+      //       title: `New Direct message! ${
+      //         newestLatestTimestamp?.name && `from ${newestLatestTimestamp.name}`
+      //       }`,
+      //       body: "You have received a new direct message",
+      //       id: notificationId,
+      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+      //     }
+      //   ]
+      // });
  
     }
   } catch (error) {
@@ -428,16 +428,16 @@ const handleNotificationDirect = async (directs) => {
 
       const notificationId = "chat_notification_" + Date.now();
   
-      LocalNotifications.schedule({
-        notifications: [
-          {
-            title: `New Direct message!`,
-            body: "You have received a new direct message",
-            id: notificationId,
-            schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-          }
-        ]
-      });
+      // LocalNotifications.schedule({
+      //   notifications: [
+      //     {
+      //       title: `New Direct message!`,
+      //       body: "You have received a new direct message",
+      //       id: notificationId,
+      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+      //     }
+      //   ]
+      // });
     }
   } finally {
     setChatHeadsDirect(dataDirects);
@@ -610,16 +610,16 @@ const handleNotification = async (groups) => {
           "_type=group" +
           `_from=${newestLatestTimestamp.groupId}`;
 
-        LocalNotifications.schedule({
-          notifications: [
-            {
-              title: "New Group Message!",
-              body: `You have received a new message from ${newestLatestTimestamp?.groupName}`,
-              id: notificationId,
-              schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-            }
-          ]
-        });
+        // LocalNotifications.schedule({
+        //   notifications: [
+        //     {
+        //       title: "New Group Message!",
+        //       body: `You have received a new message from ${newestLatestTimestamp?.groupName}`,
+        //       id: notificationId,
+        //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+        //     }
+        //   ]
+        // });
         if (!isMobile) {
           setTimeout(() => {
             chrome.notifications.clear(notificationId);
@@ -646,16 +646,16 @@ const handleNotification = async (groups) => {
 
       const notificationId = "chat_notification_" + Date.now();
      
-      LocalNotifications.schedule({
-        notifications: [
-          {
-            title: "New Group Message!",
-            body: "You have received a new message from one of your groups",
-            id: notificationId,
-            schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-          }
-        ]
-      });
+      // LocalNotifications.schedule({
+      //   notifications: [
+      //     {
+      //       title: "New Group Message!",
+      //       body: "You have received a new message from one of your groups",
+      //       id: notificationId,
+      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+      //     }
+      //   ]
+      // });
      
  
       lastGroupNotification = Date.now();
@@ -2917,16 +2917,16 @@ export const checkNewMessages = async () => {
         `_from=${newAnnouncements[0]?.groupId}`;
 
     
-      LocalNotifications.schedule({
-        notifications: [
-          {
-            title: "New group announcement!",
-            body: `You have received a new announcement from ${newAnnouncements[0]?.groupName}`,
-            id: notificationId,
-            schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-          }
-        ]
-      });
+      // LocalNotifications.schedule({
+      //   notifications: [
+      //     {
+      //       title: "New group announcement!",
+      //       body: `You have received a new announcement from ${newAnnouncements[0]?.groupName}`,
+      //       id: notificationId,
+      //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+      //     }
+      //   ]
+      // });
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
     window.postMessage({
@@ -3063,16 +3063,16 @@ export const checkThreads = async (bringBack) => {
         let isDisableNotifications = await getUserSettings({key: 'disable-push-notifications'}) || false
       if(!isDisableNotifications){
        
-        LocalNotifications.schedule({
-          notifications: [
-            {
-              title: `New thread post!`,
-              body: `New post in ${newAnnouncements[0]?.thread?.threadData?.title}`,
-              id: notificationId,
-              schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
-            }
-          ]
-        });
+        // LocalNotifications.schedule({
+        //   notifications: [
+        //     {
+        //       title: `New thread post!`,
+        //       body: `New post in ${newAnnouncements[0]?.thread?.threadData?.title}`,
+        //       id: notificationId,
+        //       schedule: { at: new Date(Date.now() + 1000) }, // 1 second from now
+        //     }
+        //   ]
+        // });
       }
       
     }
@@ -3087,56 +3087,56 @@ export const checkThreads = async (bringBack) => {
 };
 
 // Configure Background Fetch
-BackgroundFetch.configure({
-  minimumFetchInterval: 15,    // Minimum 15-minute interval
-  enableHeadless: true,        // Enable headless mode for Android
-}, async (taskId) => {
-  // This is where your background task logic goes
-  const wallet = await getSaveWallet();
-  const address = wallet.address0;
-  if (!address) return;
-   checkActiveChatsForNotifications();
-   checkNewMessages();
-  checkThreads();
+// BackgroundFetch.configure({
+//   minimumFetchInterval: 15,    // Minimum 15-minute interval
+//   enableHeadless: true,        // Enable headless mode for Android
+// }, async (taskId) => {
+//   // This is where your background task logic goes
+//   const wallet = await getSaveWallet();
+//   const address = wallet.address0;
+//   if (!address) return;
+//    checkActiveChatsForNotifications();
+//    checkNewMessages();
+//   checkThreads();
 
-  await new Promise((res)=> {
-    setTimeout(() => {
-      res()
-    }, 55000);
-  })
-  // Always finish the task when complete
-  BackgroundFetch.finish(taskId);
-}, (taskId) => {
-  // Optional timeout callback
-  BackgroundFetch.finish(taskId);
-});
+//   await new Promise((res)=> {
+//     setTimeout(() => {
+//       res()
+//     }, 55000);
+//   })
+//   // Always finish the task when complete
+//   BackgroundFetch.finish(taskId);
+// }, (taskId) => {
+//   // Optional timeout callback
+//   BackgroundFetch.finish(taskId);
+// });
 
 
 
-LocalNotifications.addListener('localNotificationActionPerformed', async (notification) => {
-  const notificationId = notification.notification.id;
+// LocalNotifications.addListener('localNotificationActionPerformed', async (notification) => {
+//   const notificationId = notification.notification.id;
 
-  // Check the type of notification by parsing notificationId
-  const isDirect = notificationId.includes('_type=direct_');
-  const isGroup = notificationId.includes('_type=group_');
-  const isGroupAnnouncement = notificationId.includes('_type=group-announcement_');
-  const isNewThreadPost = notificationId.includes('_type=thread-post_');
+//   // Check the type of notification by parsing notificationId
+//   const isDirect = notificationId.includes('_type=direct_');
+//   const isGroup = notificationId.includes('_type=group_');
+//   const isGroupAnnouncement = notificationId.includes('_type=group-announcement_');
+//   const isNewThreadPost = notificationId.includes('_type=thread-post_');
 
  
 
-  // Handle specific notification types
-  if (isDirect) {
-    const fromValue = notificationId.split('_from=')[1];
-    handleDirectNotification(fromValue);
-  } else if (isGroup) {
-    const fromValue = notificationId.split('_from=')[1];
-    handleGroupNotification(fromValue);
-  } else if (isGroupAnnouncement) {
-    const fromValue = notificationId.split('_from=')[1];
-    handleAnnouncementNotification(fromValue);
-  } else if (isNewThreadPost) {
-    const dataValue = notificationId.split('_data=')[1];
-    const dataParsed = JSON.parse(dataValue);
-    handleThreadPostNotification(dataParsed);
-  }
-});
+//   // Handle specific notification types
+//   if (isDirect) {
+//     const fromValue = notificationId.split('_from=')[1];
+//     handleDirectNotification(fromValue);
+//   } else if (isGroup) {
+//     const fromValue = notificationId.split('_from=')[1];
+//     handleGroupNotification(fromValue);
+//   } else if (isGroupAnnouncement) {
+//     const fromValue = notificationId.split('_from=')[1];
+//     handleAnnouncementNotification(fromValue);
+//   } else if (isNewThreadPost) {
+//     const dataValue = notificationId.split('_data=')[1];
+//     const dataParsed = JSON.parse(dataValue);
+//     handleThreadPostNotification(dataParsed);
+//   }
+// });

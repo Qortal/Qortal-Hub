@@ -160,7 +160,7 @@ const defaultValues: MyContextInterface = {
     message: "",
   },
 };
-export let isMobile = true;
+export let isMobile = false;
 
 const isMobileDevice = () => {
   const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -1064,43 +1064,8 @@ function App() {
     }
   };
 
-  // const handleBeforeUnload = (e)=> {
-  //   const shouldClose = confirm('Are you sure you want to close this window? You may have unsaved changes.');
 
-  //   if (!shouldClose) {
-  //     // Prevent the window from closing
-  //     e.preventDefault();
-  //     e.returnValue = ''; // Required for Chrome
-  //   } else {
-  //     // Allow the window to close
-  //     // No need to call preventDefault here; returnValue must be left empty
-  //   }
-  // }
-
-  // useEffect(()=> {
-  //   window.addEventListener('beforeunload', handleBeforeUnload);
-
-  //   return ()=> {
-  //     window.removeEventListener('beforeunload', handleBeforeUnload);
-  //   }
-  // }, [])
-
-  useEffect(() => {
-    if (!isMainWindow || isMobile) return;
-    const handleBeforeUnload = (e) => {
-      e.preventDefault();
-      e.returnValue = ""; // This is required for Chrome to display the confirmation dialog.
-      return "";
-    };
-
-    // Add the event listener when the component mounts
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    // Clean up the event listener when the component unmounts
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, []);
+  
 
   useEffect(() => {
     if (!isMainWindow) return;

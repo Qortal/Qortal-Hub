@@ -9,9 +9,13 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "electron:mac": "electron-packager ./electron Qortal --overwrite --platform=darwin --arch=x64 --prune=true --out=release-builds",
+    "electron:win": "electron-packager ./electron Qortal --overwrite --asar=true --platform=win32 --arch=ia32 --prune=true --out=release-builds --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName='Qortal Electron App'",
+    "electron:linux": "electron-packager ./electron Qortal --overwrite --platform=linux --arch=x64 --prune=true --out=release-builds --executable-name=qortal-app --version-string.CompanyName=CE --version-string.FileDescription=CE --version-string.ProductName='Qortal Electron App'"
   },
   "dependencies": {
+    "@capacitor-community/electron": "^5.0.1",
     "@capacitor/android": "^6.1.2",
     "@capacitor/browser": "^6.0.3",
     "@capacitor/cli": "^6.1.2",
@@ -77,6 +81,7 @@
     "tiptap-extension-resize-image": "^1.1.8"
   },
   "devDependencies": {
+    "@electron/packager": "^18.3.5",
     "@testing-library/dom": "^10.3.0",
     "@testing-library/react": "^16.0.0",
     "@types/dompurify": "^3.0.5",
