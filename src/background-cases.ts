@@ -1573,7 +1573,7 @@ export async function publishGroupEncryptedResourceCase(request, event) {
   export async function decryptDirectCase(request, event) {
     try {
       const { data, involvingAddress} = request.payload;
-      const response = await decryptDirectFunc({ data, involvingAddress });
+      const response = await decryptDirectFunc({ messages: data, involvingAddress });
   
       event.source.postMessage(
         {
