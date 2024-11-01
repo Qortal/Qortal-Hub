@@ -493,8 +493,8 @@ export async function cancelInvitationToGroupCase(request, event) {
 
 export async function leaveGroupCase(request, event) {
   try {
-    const { groupId, qortalAddress } = request.payload;
-    const response = await leaveGroup({ groupId, qortalAddress });
+    const { groupId } = request.payload;
+    const response = await leaveGroup({ groupId });
 
     event.source.postMessage(
       {
@@ -611,7 +611,7 @@ export async function banFromGroupCase(request, event) {
 export async function addDataPublishesCase(request, event) {
   try {
     const { data, groupId, type } = request.payload;
-    const response = await addDataPublishes({ data, groupId, type });
+    const response = await addDataPublishes( data, groupId, type );
 
     event.source.postMessage(
       {
@@ -638,7 +638,7 @@ export async function addDataPublishesCase(request, event) {
 export async function getDataPublishesCase(request, event) {
   try {
     const { groupId, type } = request.payload;
-    const response = await getDataPublishes({ groupId, type });
+    const response = await getDataPublishes(groupId, type );
 
     event.source.postMessage(
       {
@@ -1028,6 +1028,7 @@ export async function addGroupNotificationTimestampCase(request, event) {
     const response = await addTimestampGroupAnnouncement({
       groupId,
       timestamp,
+      seenTimestamp: true
     });
 
     event.source.postMessage(
@@ -1546,7 +1547,7 @@ export async function publishGroupEncryptedResourceCase(request, event) {
   export async function decryptSingleForPublishesCase(request, event) {
     try {
       const { data, secretKeyObject, skipDecodeBase64} = request.payload;
-      const response = await decryptSingleForPublishes({ data, secretKeyObject, skipDecodeBase64 });
+      const response = await decryptSingleForPublishes({ messages: data, secretKeyObject, skipDecodeBase64 });
   
       event.source.postMessage(
         {

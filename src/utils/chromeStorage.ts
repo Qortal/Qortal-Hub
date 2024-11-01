@@ -95,30 +95,37 @@ export const storeData = async (key: string, payload: any): Promise<string> => {
 };
 
 
-export const getData = async <T = any>(key: string): Promise<T> => {
+export const getData = async <T = any>(key: string): Promise<T | null> => {
   await initializeKeyAndIV();
 
-  const storedDataBase64 = await SecureStoragePlugin.get({ key });
-  if (storedDataBase64.value) {
-    if (keysToEncrypt.includes(key) && inMemoryKey) {
-      // Decode the Base64-encoded encrypted data
-      const combinedData = atob(storedDataBase64.value)
-        .split("")
-        .map((c) => c.charCodeAt(0));
+  try {
+    const storedDataBase64 = await SecureStoragePlugin.get({ key });
 
-      const iv = new Uint8Array(combinedData.slice(0, 12)); // First 12 bytes are the IV
-      const encryptedData = new Uint8Array(combinedData.slice(12)).buffer;
+    if (storedDataBase64.value) {
+      if (keysToEncrypt.includes(key) && inMemoryKey) {
+        // Decode the Base64-encoded encrypted data
+        const combinedData = atob(storedDataBase64.value)
+          .split("")
+          .map((c) => c.charCodeAt(0));
 
-      const decryptedBase64Data = await decryptData(encryptedData, inMemoryKey, iv);
-      return base64ToJson(decryptedBase64Data);
+        const iv = new Uint8Array(combinedData.slice(0, 12)); // First 12 bytes are the IV
+        const encryptedData = new Uint8Array(combinedData.slice(12)).buffer;
+
+        const decryptedBase64Data = await decryptData(encryptedData, inMemoryKey, iv);
+        return base64ToJson(decryptedBase64Data);
+      } else {
+        // Decode non-encrypted data
+        return base64ToJson(storedDataBase64.value);
+      }
     } else {
-      // Decode non-encrypted data
-      return base64ToJson(storedDataBase64.value);
+      return null;
     }
-  } else {
-    throw new Error(`No data found for key: ${key}`);
+  } catch (error) {
+    return null
   }
 };
+
+
 
 
 
