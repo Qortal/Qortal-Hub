@@ -538,6 +538,7 @@ export function updateThreadActivity({
 
     // Retrieve the existing thread activity data
     const storedData = localStorage.getItem(key);
+
     let threads;
 
     if (!storedData) {
@@ -549,7 +550,7 @@ export function updateThreadActivity({
         lastResetTime: 0,
       };
     } else {
-      threads = storedData;
+      threads = JSON.parse(storedData);
     }
 
     let lastResetTime = threads.lastResetTime || 0;
