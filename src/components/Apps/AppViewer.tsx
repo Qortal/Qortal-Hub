@@ -11,25 +11,35 @@ import { useQortalMessageListener } from "./useQortalMessageListener";
 
 
 
-export const AppViewer = React.forwardRef(({ app , hide}, iframeRef) => {
+export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) => {
   const { rootHeight } = useContext(MyContext);
   // const iframeRef = useRef(null);
   const { document, window: frameWindow } = useFrame();
-  const {path, history, changeCurrentIndex} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId) 
+  const {path, history, changeCurrentIndex} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode) 
   const [url, setUrl] = useState('')
 
   useEffect(()=> {
+    if(isDevMode){
+      setUrl(app?.url)
+      return
+    }
+   
     setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}?theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
   }, [app?.service, app?.name, app?.identifier, app?.path])
   const defaultUrl = useMemo(()=> {
     return  url
-  }, [url])
+  }, [url, isDevMode])
 
 
 
   const refreshAppFunc = (e) => {
     const {tabId} = e.detail
     if(tabId === app?.tabId){
+      if(isDevMode){
+        setUrl(app?.url + `?time=${Date.now()}`)
+        return
+
+      }
       const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=dark&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`
       setUrl(constructUrl)
     }
@@ -41,7 +51,7 @@ export const AppViewer = React.forwardRef(({ app , hide}, iframeRef) => {
     return () => {
       unsubscribeFromEvent("refreshApp", refreshAppFunc);
     };
-  }, [app, path]);
+  }, [app, path, isDevMode]);
 
  // Function to navigate back in iframe
  const navigateBackInIframe = async () => {

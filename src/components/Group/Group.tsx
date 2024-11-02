@@ -91,6 +91,7 @@ import { DesktopHeader } from "../Desktop/DesktopHeader";
 import { Apps } from "../Apps/Apps";
 import { AppsNavBar } from "../Apps/AppsNavBar";
 import { AppsDesktop } from "../Apps/AppsDesktop";
+import { AppsDevMode } from "../Apps/AppsDevMode";
 
 // let touchStartY = 0;
 // let disablePullToRefresh = false;
@@ -437,6 +438,7 @@ export const Group = ({
   const initiatedGetMembers = useRef(false);
   const [groupChatTimestamps, setGroupChatTimestamps] = React.useState({});
   const [appsMode, setAppsMode] = useState('home')
+  const [appsModeDev, setAppsModeDev] = useState('home')
   const [isOpenSideViewDirects, setIsOpenSideViewDirects] = useState(false)
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false)
   const toggleSideViewDirects = ()=> {
@@ -1553,6 +1555,8 @@ export const Group = ({
     }
   };
 
+  console.log('desktopViewMode', desktopViewMode)
+
   const renderDirects = () => {
     return (
       <div
@@ -2021,8 +2025,8 @@ export const Group = ({
           alignItems: "flex-start",
         }}
       >
-        {!isMobile && ((desktopSideView === 'groups' && desktopViewMode !== 'apps') || isOpenSideViewGroups) && renderGroups()}
-        {!isMobile && ((desktopSideView === 'directs'  && desktopViewMode !== 'apps') || isOpenSideViewDirects) && renderDirects()}
+        {!isMobile && ((desktopSideView === 'groups' && desktopViewMode !== 'apps' && desktopViewMode !== 'dev') || isOpenSideViewGroups) && renderGroups()}
+        {!isMobile && ((desktopSideView === 'directs'  && desktopViewMode !== 'apps' && desktopViewMode !== 'dev') || isOpenSideViewDirects) && renderDirects()}
 
         <Box
           sx={{
@@ -2480,13 +2484,13 @@ export const Group = ({
         hasUnreadDirects={directChatHasUnread}
         myName={userInfo?.name || null}
         isHome={groupSection === "home" && desktopViewMode === 'home'}
-        isGroups={desktopSideView === 'groups' && desktopViewMode !== 'apps'}
-        isDirects={desktopSideView === 'directs' && desktopViewMode !== 'apps'}
+        isGroups={desktopSideView === 'groups' && desktopViewMode !== 'apps' && desktopViewMode !== 'apps'}
+        isDirects={desktopSideView === 'directs' && desktopViewMode !== 'apps' && desktopViewMode !== 'apps'}
         setDesktopViewMode={setDesktopViewMode}
         isApps={desktopViewMode === 'apps'}
         setDesktopSideView={setDesktopSideView}
         desktopViewMode={desktopViewMode}
-        hide={desktopViewMode === 'apps'}
+        hide={desktopViewMode === 'apps' || desktopViewMode === 'dev'}
         setIsOpenSideViewDirects={setIsOpenSideViewDirects}
         setIsOpenSideViewGroups={setIsOpenSideViewGroups}
         />
@@ -2515,10 +2519,15 @@ export const Group = ({
             isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
               groupsAnnHasUnread} />
           )}
+            {!isMobile  && (
+            <AppsDevMode toggleSideViewGroups={toggleSideViewGroups} toggleSideViewDirects={toggleSideViewDirects} goToHome={goToHome} mode={appsModeDev} setMode={setAppsModeDev} setDesktopSideView={setDesktopSideView} hasUnreadDirects={directChatHasUnread} show={desktopViewMode === "dev"} myName={userInfo?.name}  isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
+              groupsAnnHasUnread} />
+          )}
       
      
       {!isMobile && !selectedGroup &&
-          groupSection === "home"  && desktopViewMode !== "apps" && (
+          groupSection === "home"  && desktopViewMode !== "apps" && desktopViewMode !== "dev" && (
         <HomeDesktop
   refreshHomeDataFunc={refreshHomeDataFunc}
   myAddress={myAddress}
@@ -2543,7 +2552,7 @@ export const Group = ({
             width: "31px",
             // minWidth: "135px",
             padding: "5px",
-            display: (isMobile || desktopViewMode === 'apps') ? "none" : "flex",
+            display: (isMobile || desktopViewMode === 'apps' || desktopViewMode === 'dev') ? "none" : "flex",
           }}
         >
      

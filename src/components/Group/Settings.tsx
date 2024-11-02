@@ -25,6 +25,8 @@ import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
 import { getFee } from "../../background";
 import { LoadingButton } from "@mui/lab";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
+import { enabledDevModeAtom } from "../../atoms/global";
+import { useRecoilState } from "recoil";
 
 function a11yProps(index: number) {
   return {
@@ -81,6 +83,9 @@ export const Settings = ({
   setOpen,
 }) => {
   const [checked, setChecked] = React.useState(false);
+  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+
+ 
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
@@ -148,7 +153,7 @@ export const Settings = ({
         <AppBar sx={{ position: "relative", bgcolor: "#232428" }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-             General Settings
+              General Settings
             </Typography>
             <IconButton
               edge="start"
@@ -166,29 +171,35 @@ export const Settings = ({
             flexGrow: 1,
             overflowY: "auto",
             color: "white",
-            padding: '20px'
+            padding: "20px",
+            flexDirection: 'column',
+            display: 'flex',
+            gap: '20px'
           }}
         >
-        
-        <FormControlLabel
-      sx={{
-        color: 'white'
-      }}
-        control={<LocalNodeSwitch  checked={checked}
-        onChange={handleChange}  />}
-        label="Disable all push notifications"
-      />
-          
-
-
-         
-          
-         
+          <FormControlLabel
+            sx={{
+              color: "white",
+            }}
+            control={
+              <LocalNodeSwitch checked={checked} onChange={handleChange} />
+            }
+            label="Disable all push notifications"
+          />
+          <FormControlLabel
+            sx={{
+              color: "white",
+            }}
+            control={
+              <LocalNodeSwitch checked={isEnabledDevMode} onChange={(e)=> {
+                setIsEnabledDevMode(e.target.checked)
+                localStorage.setItem('isEnabledDevMode', JSON.stringify(e.target.checked))
+              }} />
+            }
+            label="Enable dev mode"
+          />
         </Box>
-     
-       
       </Dialog>
-      
     </React.Fragment>
   );
 };

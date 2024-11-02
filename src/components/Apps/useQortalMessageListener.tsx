@@ -383,7 +383,7 @@ const UIQortalRequests = [
     return obj; // Updated object with references to stored files
   }
 
-export const useQortalMessageListener = (frameWindow, iframeRef, tabId) => {
+export const useQortalMessageListener = (frameWindow, iframeRef, tabId, isDevMode) => {
   const [path, setPath] = useState('')
   const [history, setHistory] = useState({
     customQDNHistoryPaths: [],
@@ -530,7 +530,7 @@ isDOMContentLoaded: false
           setHistory(event?.data?.payload)
 
         }
-      }  else  if(event?.data?.action === 'SET_TAB'){
+      }  else  if(event?.data?.action === 'SET_TAB' && !isDevMode){
         executeEvent("addTab", {
           data: event?.data?.payload
         })
@@ -553,7 +553,7 @@ isDOMContentLoaded: false
     };
 
     
-  }, []); // Empty dependency array to run once when the component mounts
+  }, [isDevMode]); // Empty dependency array to run once when the component mounts
 
 
 

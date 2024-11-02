@@ -12,8 +12,8 @@ import { Add } from "@mui/icons-material";
 import { getBaseApiReact, isMobile } from "../../App";
 import LogoSelected from "../../assets/svgs/LogoSelected.svg";
 import { executeEvent } from "../../utils/events";
-import { SortablePinnedApps } from "./SortablePinnedApps";
 import { Spacer } from "../../common/Spacer";
+import { SortablePinnedApps } from "./SortablePinnedApps";
 
 export const AppsHomeDesktop = ({
   setMode,

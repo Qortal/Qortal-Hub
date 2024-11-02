@@ -62,3 +62,8 @@ export const navigationControllerAtom = atom({
   key: 'navigationControllerAtom', 
   default: {}, 
 });
+
+export const enabledDevModeAtom = atom({
+  key: 'enabledDevModeAtom', 
+  default: false, 
+});

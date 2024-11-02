@@ -17,6 +17,8 @@ import AppIcon from "../../assets/svgs/AppIcon.svg";
 
 import { HomeIcon } from "../../assets/Icons/HomeIcon";
 import { Save } from "../Save/Save";
+import { useRecoilState } from "recoil";
+import { enabledDevModeAtom } from "../../atoms/global";
 
 export const IconWrapper = ({ children, label, color, selected }) => {
   return (
@@ -81,7 +83,8 @@ export const DesktopFooter = ({
   setIsOpenSideViewGroups
   
 }) => {
-  
+  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+
   if(hide) return
   return (
     <Box
@@ -179,6 +182,24 @@ export const DesktopFooter = ({
         </ButtonBase>
         
         <Save isDesktop />
+        {isEnabledDevMode && (
+          <ButtonBase
+          onClick={() => {
+            setDesktopViewMode('dev')
+            setIsOpenSideViewDirects(false)
+            setIsOpenSideViewGroups(false)
+          }}
+        >
+          <IconWrapper
+            color="rgba(250, 250, 250, 0.5)"
+            label="Dev Mode"
+            selected={isApps}
+          >
+          <img src={AppIcon} />
+          </IconWrapper>
+        </ButtonBase>
+        )}
+        
       </Box>
     </Box>
   );

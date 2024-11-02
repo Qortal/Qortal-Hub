@@ -103,6 +103,7 @@ import { useQortalGetSaveSettings } from "./useQortalGetSaveSettings";
 import { useRecoilState, useResetRecoilState, useSetRecoilState } from "recoil";
 import {
   canSaveSettingToQdnAtom,
+  enabledDevModeAtom,
   fullScreenAtom,
   hasSettingsChangedAtom,
   oldPinnedAppsAtom,
@@ -370,8 +371,16 @@ function App() {
   useRetrieveDataLocalStorage();
   useQortalGetSaveSettings(userInfo?.name);
   const [fullScreen, setFullScreen] = useRecoilState(fullScreenAtom);
+  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
 
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
+
+  useEffect(()=> {
+    const isDevModeFromStorage =  localStorage.getItem('isEnabledDevMode');
+        if(isDevModeFromStorage){
+          setIsEnabledDevMode(JSON.parse(isDevModeFromStorage))
+        }
+      }, [])
 
   useEffect(() => {
     // Attach a global event listener for double-click
@@ -1519,7 +1528,7 @@ function App() {
               desktopViewMode={desktopViewMode}
               setDesktopViewMode={setDesktopViewMode}
             />
-            {!isMobile && desktopViewMode !== "apps" && renderProfile()}
+            {!isMobile && desktopViewMode !== "apps" && desktopViewMode !== "dev" && renderProfile()}
           </Box>
 
           <Box
