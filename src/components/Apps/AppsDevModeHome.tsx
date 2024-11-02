@@ -59,11 +59,11 @@ export const AppsDevModeHome = ({
           });
           return;
         }
-        await show({
+        const {portVal, domainVal} = await show({
           message: "",
           publishFee: "",
         });
-        const framework = domain + ":" + port;
+        const framework = domainVal + ":" + portVal;
         const response = await fetch(
           `${getBaseApiReact()}/developer/proxy/start`,
           {
@@ -170,7 +170,7 @@ export const AppsDevModeHome = ({
             <Button
               disabled={!domain || !port}
               variant="contained"
-              onClick={onOk}
+              onClick={()=> onOk({portVal: port, domainVal: domain})}
               autoFocus
             >
               Add

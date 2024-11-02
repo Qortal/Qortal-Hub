@@ -186,87 +186,27 @@ export const AppsDevModeNavBar = () => {
             src={NavAdd}
           />
         </ButtonBase>
+       
         <ButtonBase
           onClick={(e) => {
-            if (!selectedTab) return;
-            handleClick(e);
+            executeEvent("refreshApp", {
+              tabId: selectedTab?.tabId,
+            });
           }}
         >
-          <img
-            style={{
-              height: "34px",
-              width: "34px",
-            }}
-            src={NavMoreMenu}
-          />
+          <RefreshIcon
+             
+              sx={{
+                color: "rgba(250, 250, 250, 0.5)",
+                width: '40px',
+                height: 'auto'
+              }}
+            />
         </ButtonBase>
       </AppsNavBarRight>
       )}
       
-      <Menu
-        id="navbar-more-mobile"
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        MenuListProps={{
-          "aria-labelledby": "basic-button",
-        }}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
-        }}
-        slotProps={{
-          paper: {
-            sx: {
-              backgroundColor: "var(--bg-primary)",
-              color: "#fff",
-              width: "148px",
-              borderRadius: "5px",
-            },
-          },
-        }}
-        sx={{
-          marginTop: "10px",
-        }}
-      >
-
-        <MenuItem
-          onClick={() => {
-            executeEvent("refreshApp", {
-              tabId: selectedTab?.tabId,
-            });
-            handleClose();
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
-            }}
-          >
-            <RefreshIcon
-              height={20}
-              sx={{
-                color: "rgba(250, 250, 250, 0.5)",
-              }}
-            />
-          </ListItemIcon>
-          <ListItemText
-            sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "rgba(250, 250, 250, 0.5)",
-              },
-            }}
-            primary="Refresh"
-          />
-        </MenuItem>
-      </Menu>
+     
     </AppsNavBarParent>
   );
 };
