@@ -34,14 +34,14 @@ export const MessageItem = ({
 }) => {
   const { ref, inView } = useInView({
     threshold: 0.7, // Fully visible
-    triggerOnce: true, // Only trigger once when it becomes visible
+    triggerOnce: false, // Only trigger once when it becomes visible
   });
 
   useEffect(() => {
-    if (inView && message.unread) {
+    if (inView && isLast && onSeen) {
       onSeen(message.id);
     }
-  }, [inView, message.id, message.unread, onSeen]);
+  }, [inView, message.id, isLast]);
 
 
   return (
