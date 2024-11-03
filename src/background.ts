@@ -14,6 +14,7 @@ import Base58 from "./deps/Base58";
 import {
   base64ToUint8Array,
   decryptSingle,
+  encryptDataGroup,
   encryptSingle,
   objectToBase64,
 } from "./qdn/encryption/group-encryption";
@@ -129,19 +130,19 @@ function handleNotificationClick(notificationId) {
     const match = id.match(new RegExp(`${key}=([^_]+)`));
     return match ? match[1] : null;
   }
-
+  const targetOrigin = window.location.origin;
   // Handle specific notification types and post the message accordingly
   if (isDirect) {
     const fromValue = getParameterValue(decodedNotificationId, "_from");
     window.postMessage(
       { action: "NOTIFICATION_OPEN_DIRECT", payload: { from: fromValue } },
-      "*"
+      targetOrigin
     );
   } else if (isGroup) {
     const fromValue = getParameterValue(decodedNotificationId, "_from");
     window.postMessage(
       { action: "NOTIFICATION_OPEN_GROUP", payload: { from: fromValue } },
-      "*"
+      targetOrigin
     );
   } else if (isGroupAnnouncement) {
     const fromValue = getParameterValue(decodedNotificationId, "_from");
@@ -150,18 +151,19 @@ function handleNotificationClick(notificationId) {
         action: "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP",
         payload: { from: fromValue },
       },
-      "*"
+      targetOrigin
     );
   } else if (isNewThreadPost) {
     const dataValue = getParameterValue(decodedNotificationId, "_data");
     try {
+      const targetOrigin = window.location.origin;
       const dataParsed = JSON.parse(dataValue);
       window.postMessage(
         {
           action: "NOTIFICATION_OPEN_THREAD_NEW_POST",
           payload: { data: dataParsed },
         },
-        "*"
+        targetOrigin
       );
     } catch (error) {
       console.error("Error parsing JSON data for thread post notification:", error);
@@ -371,9 +373,9 @@ async function checkWebviewFocus() {
     const timeout = setTimeout(() => {
       resolve(false); // No response within 1 second, assume not focused
     }, 1000);
-
+    const targetOrigin = window.location.origin;
     // Send a message to check focus
-    window.postMessage({ action: "CHECK_FOCUS" }, "*");
+    window.postMessage({ action: "CHECK_FOCUS" }, targetOrigin);
 
     // Listen for the response
     const handleMessage = (event) => {
@@ -1324,19 +1326,20 @@ const getStoredData = async (key) => {
 
 export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   try {
+    const targetOrigin = window.location.origin;
     window.postMessage(
       {
         action: "SET_GROUPS",
         payload: groups,
       },
-      "*"
+      targetOrigin
     );
     window.postMessage(
       {
         action: "SET_DIRECTS",
         payload: directs,
       },
-      "*"
+      targetOrigin
     );
 
     groups = groups;
@@ -1357,7 +1360,7 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   } catch (error) {}
 }
 
-async function sendChat({ qortAddress, recipientPublicKey, message }) {
+async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message }) {
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
 
@@ -1398,13 +1401,7 @@ async function sendChat({ qortAddress, recipientPublicKey, message }) {
     isText: 1,
   });
   if (!hasEnoughBalance) {
-    const _encryptedMessage = tx._encryptedMessage;
-    const encryptedMessageToBase58 = Base58.encode(_encryptedMessage);
-    return {
-      encryptedMessageToBase58,
-      signature: "id-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
-      reference,
-    };
+    throw new Error('You must have at least 4 QORT to trade using the gateway.')
   }
   const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
@@ -1635,7 +1632,7 @@ export async function decryptDirectFunc({ messages, involvingAddress }) {
   return holdMessages;
 }
 
-async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
+export async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
   try {
     if (useLocal) {
       const wallet = await getSaveWallet();
@@ -1645,7 +1642,7 @@ async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
       const resKeyPair = await getKeyPair();
       const parsedData = resKeyPair;
       const message = {
-        addresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+        addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
         foreignKey: parsedData.ltcPrivateKey,
         receivingAddress: address,
       };
@@ -1655,7 +1652,7 @@ async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
       );
       const apiKey = await getApiKeyFromStorage();
       const responseFetch = await fetch(
-        `${apiKey?.url}/crosschain/tradebot/respondmultiple?apiKey=${apiKey?.apikey}`,
+        `http://127.0.0.1:12391/crosschain/tradebot/respondmultiple?apiKey=${apiKey?.apikey}`,
         {
           method: "POST",
           headers: {
@@ -1682,7 +1679,9 @@ async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
           callResponse: response,
           extra: {
             message: "Transaction processed successfully!",
-            atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            senderAddress: address,
+            node: 'http://127.0.0.1:12391'
           },
         };
       } else {
@@ -1690,23 +1689,14 @@ async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
           callResponse: "ERROR",
           extra: {
             message: response,
-            atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            senderAddress: address,
+            node: 'http://127.0.0.1:12391'
           },
         };
       }
 
-      // setTimeout(() => {
-      //   chrome.tabs.query({}, function (tabs) {
-      //     tabs.forEach((tab) => {
-      //       chrome.tabs.sendMessage(tab.id, {
-      //         type: "RESPONSE_FOR_TRADES",
-      //         message: responseMessage,
-      //       });
-      //     });
-      //   });
-      // }, 5000);
-
-      return;
+      return responseMessage
     }
     const wallet = await getSaveWallet();
     const address = wallet.address0;
@@ -1714,40 +1704,56 @@ async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
     const resKeyPair = await getKeyPair();
     const parsedData = resKeyPair;
     const message = {
-      addresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+      addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
       foreignKey: parsedData.ltcPrivateKey,
       receivingAddress: address,
     };
-    const res = await sendChat({
+    const res = await sendChatForBuyOrder({
       qortAddress: proxyAccountAddress,
       recipientPublicKey: proxyAccountPublicKey,
       message,
     });
     if (res?.signature) {
-      listenForChatMessageForBuyOrder({
+      let responseMessage;
+
+      const message = await listenForChatMessageForBuyOrder({
         nodeBaseUrl: buyTradeNodeBaseUrl,
         senderAddress: proxyAccountAddress,
         senderPublicKey: proxyAccountPublicKey,
         signature: res?.signature,
       });
-      if (res?.encryptedMessageToBase58) {
-        return {
-          atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
-          encryptedMessageToBase58: res?.encryptedMessageToBase58,
-          node: buyTradeNodeBaseUrl,
-          qortAddress: address,
-          chatSignature: res?.signature,
-          senderPublicKey: parsedData.publicKey,
-          sender: address,
-          reference: res?.reference,
-        };
+      // const status = response.callResponse === true ? 'trade-ongoing' : 'trade-failed'
+      // if (res?.encryptedMessageToBase58) {
+      //   return {
+      //     atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+      //     encryptedMessageToBase58: res?.encryptedMessageToBase58,
+      //     node: buyTradeNodeBaseUrl,
+      //     qortAddress: address,
+      //     chatSignature: res?.signature,
+      //     senderPublicKey: parsedData.publicKey,
+      //     sender: address,
+      //     reference: res?.reference,
+      //     response.callResponse
+      //   };
+      // }
+      // return {
+      //   atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
+      //   chatSignature: res?.signature,
+      //   node: buyTradeNodeBaseUrl,
+      //   qortAddress: address,
+      // };
+      responseMessage = {
+        callResponse: message.callResponse,
+          extra: {
+            message: message?.extra?.message,
+            senderAddress: address,
+            node: buyTradeNodeBaseUrl,
+            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+          },
+          encryptedMessageToBase58
       }
-      return {
-        atAddresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
-        chatSignature: res?.signature,
-        node: buyTradeNodeBaseUrl,
-        qortAddress: address,
-      };
+
+      return responseMessage
     } else {
       throw new Error("Unable to send buy order message");
     }
@@ -2350,6 +2356,8 @@ async function listenForChatMessageForBuyOrder({
       signature,
       senderPublicKey
     );
+
+    return parsedMessageObj
 
     // chrome.tabs.query({}, function (tabs) {
     //   tabs.forEach((tab) => {
@@ -2999,12 +3007,14 @@ export const checkNewMessages = async () => {
       }, 10000); // Close after 5 seconds
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
+    const targetOrigin = window.location.origin;
+
     window.postMessage(
       {
         action: "SET_GROUP_ANNOUNCEMENTS",
         payload: savedtimestampAfter,
       },
-      "*"
+      targetOrigin
     );
   } catch (error) {
   } finally {
@@ -3163,12 +3173,14 @@ export const checkThreads = async (bringBack) => {
       }
     }
     const savedtimestampAfter = await getTimestampGroupAnnouncement();
+    const targetOrigin = window.location.origin;
+
     window.postMessage(
       {
         action: "SET_GROUP_ANNOUNCEMENTS",
         payload: savedtimestampAfter,
       },
-      "*"
+      targetOrigin
     );
   } catch (error) {
   } finally {

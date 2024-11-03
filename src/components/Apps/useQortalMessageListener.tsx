@@ -183,7 +183,7 @@ const UIQortalRequests = [
   'GET_WALLET_BALANCE', 'GET_USER_WALLET_INFO', 'GET_CROSSCHAIN_SERVER_INFO',
   'GET_TX_ACTIVITY_SUMMARY', 'GET_FOREIGN_FEE', 'UPDATE_FOREIGN_FEE',
   'GET_SERVER_CONNECTION_HISTORY', 'SET_CURRENT_FOREIGN_SERVER',
-  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY'
+  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER'
 ];
 
 
@@ -534,10 +534,11 @@ isDOMContentLoaded: false
         executeEvent("addTab", {
           data: event?.data?.payload
         })
+        const targetOrigin = iframeRef.current ? new URL(iframeRef.current.src).origin : "*";
         iframeRef.current.contentWindow.postMessage(
           { action: 'SET_TAB_SUCCESS', requestedHandler: 'UI',payload: {
             name: event?.data?.payload?.name
-          }  }, '*'
+          }  }, targetOrigin
         );
       } 
       

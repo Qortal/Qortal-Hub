@@ -1,3 +1,6 @@
+import { openIndexedDB } from "../components/Apps/useQortalMessageListener";
+import { fileToBase64 } from "./fileReading";
+
 export async function handleGetFileFromIndexedDB(event) {
     try {
       const { fileId, requestId } = event.data;
@@ -21,10 +24,11 @@ export async function handleGetFileFromIndexedDB(event) {
   
             deleteRequest.onsuccess = function () {
               try {
-               
+                const targetOrigin = window.location.origin;
+
                 window.postMessage(
                   { action: "getFileFromIndexedDBResponse", requestId, result: base64String },
-                  "*"
+                  targetOrigin
                 );
               } catch (error) {
                 console.log('error', error)
@@ -41,21 +45,24 @@ export async function handleGetFileFromIndexedDB(event) {
               result: null,
               error: "Failed to convert file to Base64",
             });
+            const targetOrigin = window.location.origin;
+
             window.postMessage(
               { action: "getFileFromIndexedDBResponse", requestId, result: null,
               error: "Failed to convert file to Base64"
              },
-              "*"
+              targetOrigin
             );
           }
         } else {
           console.error(`File with ID ${fileId} not found in IndexedDB`);
-      
+          const targetOrigin = window.location.origin;
+
           window.postMessage(
             { action: "getFileFromIndexedDBResponse", requestId, result: null,
             error: 'File not found in IndexedDB'
            },
-            "*"
+           targetOrigin
           );
         }
       };

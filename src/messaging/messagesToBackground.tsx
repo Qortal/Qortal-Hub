@@ -28,9 +28,9 @@ export const sendMessageBackground = (action, data = {}, timeout = 60000, isExte
   return new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
     callbackMap.set(requestId, { resolve, reject }); // Store both resolve and reject callbacks
-
+    const targetOrigin = window.location.origin
     // Send the message with `backgroundMessage` type
-    window.postMessage({ type: "backgroundMessage", action, requestId, payload: data, isExtension }, "*");
+    window.postMessage({ type: "backgroundMessage", action, requestId, payload: data, isExtension }, targetOrigin);
 
     // Set up a timeout to automatically reject if no response is received
     const timeoutId = setTimeout(() => {
