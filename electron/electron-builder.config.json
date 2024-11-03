@@ -1,5 +1,5 @@
 {
-  "appId": "com.yourdomain.yourapp",
+  "appId": "com.github.Qortal.Qortal-Hub",
   "directories": {
     "buildResources": "resources"
   },
@@ -14,13 +14,21 @@
     "oneClick": false,
     "allowToChangeInstallationDirectory": true
   },
+  "publish": [
+    {
+      "provider": "github",
+        "owner": "Qortal",
+        "repo": "Qortal-Hub",
+      "releaseType": "draft"
+    }
+  ],
   "win": {
     "target": "nsis",
     "icon": "assets/appIcon.ico"
   },
   "linux": {
     "target": ["AppImage"],
-    "category": "Utility",  // Set a specific Linux category here
+    "category": "Utility",  
     "executableName": "Qortal",
     "icon": "assets/qortal.png"  
   },

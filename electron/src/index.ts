@@ -46,7 +46,10 @@ if (electronIsDev) {
   // Initialize our app, build windows, and load content.
   await myCapacitorApp.init();
   // Check for updates if we are in a packaged app.
-  // autoUpdater.checkForUpdatesAndNotify();
+  autoUpdater.checkForUpdatesAndNotify();
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 6 * 60 * 60 * 1000); // 24 hours in milliseconds
 })();
 
 // Handle when all of our windows are close (platforms have their own expectations).
