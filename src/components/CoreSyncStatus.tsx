@@ -62,7 +62,7 @@ export const CoreSyncStatus = () => {
     const { isSynchronizing = false, syncPercent = 0, isMintingPossible = false, height = 0, numberOfConnections = 0 } = nodeInfos;
     const buildVersion = coreInfos?.buildVersion ? coreInfos?.buildVersion.substring(0, 12) : '';
 
-    let imagePath = '/img/syncing.png';
+    let imagePath = syncingImg;
     let message = `Synchronizing`
     if (isSynchronizing === true && syncPercent === 99) {
       imagePath = syncedImg
