@@ -65,12 +65,12 @@ export const CoreSyncStatus = () => {
     let imagePath = syncingImg;
     let message = `Synchronizing`
     if (isSynchronizing === true && syncPercent === 99) {
-      imagePath = syncedImg
+      imagePath = syncingImg
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
       message = `Synchronized (Not Minting)`
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
-      imagePath = syncingImg;
+      imagePath = syncedImg
       message = `Synchronized (Not Minting)`
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
