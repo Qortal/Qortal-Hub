@@ -116,6 +116,7 @@ import { NotAuthenticated } from "./ExtStates/NotAuthenticated";
 import {  openIndexedDB, showSaveFilePicker } from "./components/Apps/useQortalMessageListener";
 import { fileToBase64 } from "./utils/fileReading";
 import { handleGetFileFromIndexedDB } from "./utils/indexedDB";
+import { CoreSyncStatus } from "./components/CoreSyncStatus";
 
 
 type extStates =
@@ -1458,6 +1459,8 @@ function App() {
               }}
             />
           )}
+           <Spacer height="20px" />
+          <CoreSyncStatus />
         </AuthenticatedContainerInnerRight>
       </AuthenticatedContainer>
     );
