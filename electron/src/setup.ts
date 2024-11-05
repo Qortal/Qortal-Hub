@@ -6,13 +6,34 @@ import {
 } from '@capacitor-community/electron';
 import chokidar from 'chokidar';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, Menu, MenuItem, nativeImage, Tray, session } from 'electron';
+import { app, BrowserWindow, Menu, MenuItem, nativeImage, Tray, session, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
+import { myCapacitorApp } from '.';
 
 
+const defaultDomains = [
+  'http://127.0.0.1:12391',
+  'ws://127.0.0.1:12391',
+  'https://ext-node.qortal.link',
+  'wss://ext-node.qortal.link',
+  'https://appnode.qortal.org',
+  "https://api.qortal.org",
+  "https://api2.qortal.org",
+  "https://appnode.qortal.org",
+  "https://apinode.qortalnodes.live",
+  "https://apinode1.qortalnodes.live",
+  "https://apinode2.qortalnodes.live",
+  "https://apinode3.qortalnodes.live",
+  "https://apinode4.qortalnodes.live"
+
+];
+// let allowedDomains: string[] = [...defaultDomains]
+const domainHolder = {
+  allowedDomains: [...defaultDomains],
+};
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,
@@ -220,15 +241,79 @@ export class ElectronCapacitorApp {
 }
 
 // Set a CSP up for our application based on the custom scheme
+// export function setupContentSecurityPolicy(customScheme: string): void {
+//   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+//     callback({
+//       responseHeaders: {
+//         ...details.responseHeaders,
+//         'Content-Security-Policy': [
+//           "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval'; object-src 'self'; connect-src 'self' https://*:* http://*:* wss://*:* ws://*:*",
+//         ],
+//       },
+//     });
+//   });
+// }
+
+
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval'; object-src 'self'; connect-src 'self' https://*:* http://*:* wss://*:* ws://*:*",
-        ],
-      },
+      const allowedSources = ["'self'", ...domainHolder.allowedDomains].join(' ');
+      const csp = `
+        script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources};
+        object-src 'self';
+        connect-src ${allowedSources};
+      `.replace(/\s+/g, ' ').trim();
+
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [csp],
+        },
+      });
     });
-  });
+  
 }
+
+
+
+// IPC listener for updating allowed domains
+ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
+
+  // Validate and transform user-provided domains
+  const validatedUserDomains = domains
+    .flatMap((domain) => {
+      try {
+        const url = new URL(domain);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        return [url.origin, socketUrl];
+      } catch {
+        return [];
+      }
+    })
+    .filter(Boolean) as string[];
+
+  // Combine default and validated user domains
+  const newAllowedDomains = [...new Set([...defaultDomains, ...validatedUserDomains])];
+
+  // Sort both current allowed domains and new domains for comparison
+  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
+  const sortedNewDomains = [...newAllowedDomains].sort();
+
+  // Check if the lists are different
+  const hasChanged =
+    sortedCurrentDomains.length !== sortedNewDomains.length ||
+    sortedCurrentDomains.some((domain, index) => domain !== sortedNewDomains[index]);
+
+  // If there's a change, update allowedDomains and reload the window
+  if (hasChanged) {
+    domainHolder.allowedDomains = newAllowedDomains;
+
+    const mainWindow = myCapacitorApp.getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.reload();
+    }
+  } 
+});
+
+

@@ -5,7 +5,10 @@ console.log('User Preload!');
 const { contextBridge, shell, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  openExternal: (url) => shell.openExternal(url)
+  openExternal: (url) => shell.openExternal(url),
+  setAllowedDomains: (domains) => {
+    ipcRenderer.send('set-allowed-domains', domains);
+  },
 });
 
 contextBridge.exposeInMainWorld('electron', {
@@ -13,3 +16,5 @@ contextBridge.exposeInMainWorld('electron', {
   onUpdateDownloaded: (callback) => ipcRenderer.on('update_downloaded', callback),
   restartApp: () => ipcRenderer.send('restart_app')
 });
+
+ipcRenderer.send('test-ipc');
