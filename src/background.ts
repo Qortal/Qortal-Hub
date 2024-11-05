@@ -11,6 +11,7 @@ import {
 } from "./backgroundFunctions/encryption";
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from "./constants/codes";
 import Base58 from "./deps/Base58";
+import axios from 'axios'
 import {
   base64ToUint8Array,
   decryptSingle,
@@ -1360,12 +1361,13 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   } catch (error) {}
 }
 
-async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message }) {
+async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses }) {
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
 
   let sendTimestamp = Date.now();
-
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
   let reference = Base58.encode(_reference);
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -1400,8 +1402,31 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message })
     isEncrypted: 1,
     isText: 1,
   });
-  if (!hasEnoughBalance) {
-    throw new Error('You must have at least 4 QORT to trade using the gateway.')
+  //TODO
+  // if (!hasEnoughBalance) {
+  if(!hasEnoughBalance){
+    const _encryptedMessage = tx._encryptedMessage;
+    const encryptedMessageToBase58 = Base58.encode(_encryptedMessage);
+    const signature = "id-" + Date.now() + "-" + Math.floor(Math.random() * 1000)
+    const res = await axios.post(
+      `https://www.qort.trade/api/transaction/updatetxgateway`,
+      {
+        qortalAtAddresses: atAddresses, qortAddress: address, node: buyTradeNodeBaseUrl, status: "message-sent", encryptedMessageToBase58, signature ,
+        reference, senderPublicKey: parsedData.publicKey,
+        sender: address,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        },
+      }
+    );
+
+    return {
+      encryptedMessageToBase58,
+      status: "message-sent",
+      signature
+    }
   }
   const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
@@ -1712,16 +1737,49 @@ export async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
       qortAddress: proxyAccountAddress,
       recipientPublicKey: proxyAccountPublicKey,
       message,
+      atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
     });
+
+    
     if (res?.signature) {
       let responseMessage;
 
-      const message = await listenForChatMessageForBuyOrder({
-        nodeBaseUrl: buyTradeNodeBaseUrl,
-        senderAddress: proxyAccountAddress,
-        senderPublicKey: proxyAccountPublicKey,
-        signature: res?.signature,
-      });
+      if(res?.encryptedMessageToBase58){
+        const message = await listenForChatMessageForBuyOrder({
+          nodeBaseUrl: buyTradeNodeBaseUrl,
+          senderAddress: proxyAccountAddress,
+          senderPublicKey: proxyAccountPublicKey,
+          signature: res?.signature,
+        });
+        responseMessage = {
+          callResponse: message.callResponse,
+            extra: {
+              message: message?.extra?.message,
+              senderAddress: address,
+              node: buyTradeNodeBaseUrl,
+              atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            }
+          }
+      } else {
+        const message = await listenForChatMessageForBuyOrder({
+          nodeBaseUrl: buyTradeNodeBaseUrl,
+          senderAddress: proxyAccountAddress,
+          senderPublicKey: proxyAccountPublicKey,
+          signature: res?.signature,
+        });
+
+        responseMessage = {
+          callResponse: message.callResponse,
+            extra: {
+              message: message?.extra?.message,
+              senderAddress: address,
+              node: buyTradeNodeBaseUrl,
+              atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            }
+          }
+      }
+
+      
       // const status = response.callResponse === true ? 'trade-ongoing' : 'trade-failed'
       // if (res?.encryptedMessageToBase58) {
       //   return {
@@ -1742,16 +1800,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, useLocal }) {
       //   node: buyTradeNodeBaseUrl,
       //   qortAddress: address,
       // };
-      responseMessage = {
-        callResponse: message.callResponse,
-          extra: {
-            message: message?.extra?.message,
-            senderAddress: address,
-            node: buyTradeNodeBaseUrl,
-            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
-          },
-          encryptedMessageToBase58
-      }
+     
 
       return responseMessage
     } else {

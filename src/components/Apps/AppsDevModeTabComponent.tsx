@@ -16,7 +16,8 @@ export const AppsDevModeTabComponent = ({isSelected, app}) => {
             return
         }
         executeEvent('setSelectedTab', {
-            data: app
+            data: app,
+            isDevMode: true
         })
     }}>
     <TabParent sx={{

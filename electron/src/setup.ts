@@ -20,6 +20,7 @@ const defaultDomains = [
   'https://ext-node.qortal.link',
   'wss://ext-node.qortal.link',
   'https://appnode.qortal.org',
+  'wss://appnode.qortal.org',
   "https://api.qortal.org",
   "https://api2.qortal.org",
   "https://appnode.qortal.org",
@@ -27,7 +28,8 @@ const defaultDomains = [
   "https://apinode1.qortalnodes.live",
   "https://apinode2.qortalnodes.live",
   "https://apinode3.qortalnodes.live",
-  "https://apinode4.qortalnodes.live"
+  "https://apinode4.qortalnodes.live",
+  "https://www.qort.trade"
 
 ];
 // let allowedDomains: string[] = [...defaultDomains]

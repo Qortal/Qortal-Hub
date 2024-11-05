@@ -113,7 +113,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
   }, [tabs]);
   const setSelectedTabFunc = (e) => {
     const data = e.detail?.data;
-
+    if(!e.detail?.isDevMode) return
     setSelectedTab(data);
     setTimeout(() => {
       executeEvent("appsDevModeSetTabsToNav", {

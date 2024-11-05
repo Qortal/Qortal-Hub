@@ -201,8 +201,8 @@ export const AppsCategoryDesktop = ({
         </AppsWidthLimiter>
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
-            sx={{
-              height: rootHeight,
+             sx={{
+              height: `calc(100vh - 36px - 90px)`,
             }}
           >
             <Virtuoso

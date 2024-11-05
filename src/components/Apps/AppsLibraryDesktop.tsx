@@ -96,7 +96,7 @@ export const AppsLibraryDesktop = ({
   myName,
   hasPublishApp,
   isShow,
-  categories = { categories },
+  categories
 }) => {
   const [searchValue, setSearchValue] = useState("");
   const virtuosoRef = useRef();

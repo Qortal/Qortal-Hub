@@ -1365,22 +1365,31 @@ export const getWalletBalance = async (data, bypassPermission?: boolean, isFromE
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
+
+  const value = (await getPermission(`qAPPAutoWalletBalance-${data.coin}`)) || false;
+  console.log('value', value)
+  let skip = false;
+  if (value) {
+    skip = true;
+  }
   let resPermission
 
-  if(!bypassPermission){
+  if(!bypassPermission && !skip){
      resPermission = await getUserPermission({
         text1: "Do you give this application permission to fetch your",
         highlightedText: `${data.coin} balance`,
+        checkbox1: {
+          value: true,
+          label: "Always allow balance to be retrieved automatically",
+        },
       }, isFromExtension);
-  } else {
-    resPermission = {
-        accepted: false
-    }
+  } 
+  console.log('resPermission', resPermission)
+  const { accepted = false, checkbox1 = false } = resPermission || {};
+  if(resPermission){
+    setPermission(`qAPPAutoWalletBalance-${data.coin}`, checkbox1);
   }
- 
-  const { accepted } = resPermission;
-
-  if (accepted || bypassPermission) {
+  if (accepted || bypassPermission || skip) {
     let coin = data.coin;
     const wallet = await getSaveWallet();
     const address = wallet.address0;
@@ -2401,6 +2410,65 @@ export const sendCoin = async (data, isFromExtension) => {
 
 
 export const createBuyOrder = async (data, isFromExtension) => {
+ 
+  const requiredFields = [
+    "crosschainAtInfo",
+    "processType"
+  ];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+  const crosschainAtInfo = data.crosschainAtInfo;
+  const atAddresses = data.crosschainAtInfo?.map((order)=> order.qortalAtAddress);
+  const processType = data.processType;
+  if(processType !== 'local' && processType !== 'gateway'){
+    throw new Error('Process Type must be either local or gateway')
+  }
+
+  try {
+    const resPermission = await getUserPermission({
+      text1: "Do you give this application permission to perform a buy order?",
+      text2: `${atAddresses?.length}${" "}
+      ${`buy order${
+        atAddresses?.length === 1 ? "" : "s"
+      }`}`, 
+      text3: `${crosschainAtInfo?.reduce((latest, cur) => {
+        return latest + +cur?.qortAmount;
+      }, 0)} QORT FOR   ${roundUpToDecimals(
+        crosschainAtInfo?.reduce((latest, cur) => {
+          return latest + +cur?.foreignAmount;
+        }, 0)
+      )}
+      ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
+      highlightedText: `Using ${processType}`,
+      fee: ''
+    }, isFromExtension);
+    const { accepted } = resPermission;
+    if (accepted) {
+    const resBuyOrder = await createBuyOrderTx(
+      {
+        crosschainAtInfo,
+        useLocal: processType === 'local' ? true : false
+    }
+    );
+    return resBuyOrder;
+  } else {
+    throw new Error("User declined request");
+  }
+  } catch (error) {
+    throw new Error(error?.message || "Failed to submit trade order.");
+  }
+};
+
+export const createSellOrder = async (data, isFromExtension) => {
  
   const requiredFields = [
     "crosschainAtInfo",

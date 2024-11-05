@@ -1,4 +1,4 @@
-import { addForeignServer, addListItems, createBuyOrder, createPoll, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
+import { addForeignServer, addListItems, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
 
 
@@ -588,6 +588,25 @@ function setLocalStorage(key, data) {
         case "CREATE_TRADE_BUY_ORDER": {
           try {
             const res = await createBuyOrder(request.payload, isFromExtension);
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
+        case "CREATE_TRADE_SELL_ORDER": {
+          try {
+            const res = await createSellOrder(request.payload, isFromExtension);
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
