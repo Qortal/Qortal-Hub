@@ -4,7 +4,7 @@ import syncedMintingImg from '../assets/syncStatus/synced.png'
 import syncingImg from '../assets/syncStatus/synced.png'
 import { getBaseApiReact } from '../App';
 import './CoreSyncStatus.css'
-export const CoreSyncStatus = () => {
+export const CoreSyncStatus = ({imageSize, position}) => {
   const [nodeInfos, setNodeInfos] = useState({});
   const [coreInfos, setCoreInfos] = useState({});
   const [isUsingGateway, setIsUsingGateway] = useState(false);
@@ -68,22 +68,27 @@ export const CoreSyncStatus = () => {
       imagePath = syncingImg
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `Synchronized (Not Minting)`
+      message = `Synchronizing ${isUsingGateway ? '' :'(Not Minting)'}`
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncedImg
-      message = `Synchronized (Not Minting)`
+      message = `Synchronized ${isUsingGateway ? '' :'(Not Minting)'}`
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
-      imagePath = syncedMintingImg;
-      message = `Synchronized (Minting)`
+      imagePath = syncingImg;
+      message = `Synchronizing ${isUsingGateway ? '' :'(Minting)'}`
     } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
-      message = `Synchronized (Minting)`
+      message = `Synchronized ${isUsingGateway ? '' :'(Minting)'}`
     }
+
+    
 
     return (
       <div className="tooltip" style={{ display: 'inline' }}>
-        <span><img src={imagePath} style={{ height: 'auto', width: '24px' }} alt="sync status" /></span>
-        <div className="bottom">
+        <span><img src={imagePath} style={{ height: 'auto', width: imageSize ? imageSize : '24px' }} alt="sync status" /></span>
+        <div className="bottom" style={{
+          right: position && 'unset',
+          left: position && '0px'
+        }}>
           <h3>Core Information</h3>
           <h4 className="lineHeight">Core Version: <span style={{ color: '#03a9f4' }}>{buildVersion}</span></h4>
           <h4 className="lineHeight">{message}</h4>

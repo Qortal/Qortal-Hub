@@ -16,7 +16,7 @@ import { getFee } from "../../background";
 import { CustomizedSnackbars } from "../Snackbar/Snackbar";
 import { SaveIcon } from "../../assets/svgs/SaveIcon";
 import { IconWrapper } from "../Desktop/DesktopFooter";
-export const Save = ({ isDesktop }) => {
+export const Save = ({ isDesktop, disableWidth }) => {
   const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
   const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useRecoilState(
     settingsQDNLastUpdatedAtom
@@ -160,6 +160,7 @@ export const Save = ({ isDesktop }) => {
       >
         {isDesktop ? (
           <IconWrapper
+          disableWidth={disableWidth}
             color="rgba(250, 250, 250, 0.5)"
             label="Save"
             selected={false}

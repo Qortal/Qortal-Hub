@@ -20,6 +20,7 @@ import { HomeIcon } from "../../assets/Icons/HomeIcon";
 import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { Save } from "../Save/Save";
 import { HubsIcon } from "../../assets/Icons/HubsIcon";
+import { CoreSyncStatus } from "../CoreSyncStatus";
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -299,7 +300,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
         height: '100vh',
         alignItems: 'center',
         display: 'flex',
-        gap: '30px'
+        gap: '25px'
        }}>
         <ButtonBase
           sx={{
@@ -356,7 +357,9 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             />
      
         </ButtonBase>
-        <Save isDesktop />
+        <Save isDesktop disableWidth />
+        <CoreSyncStatus imageSize="30px" position="left" />
+
         {mode !== 'home' && (
                  <AppsNavBarDesktop  />
 

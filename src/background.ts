@@ -111,7 +111,7 @@ export const groupApi = "https://ext-node.qortal.link";
 export const groupApiSocket = "wss://ext-node.qortal.link";
 export const groupApiLocal = "http://127.0.0.1:12391";
 export const groupApiSocketLocal = "ws://127.0.0.1:12391";
-const timeDifferenceForNotificationChatsBackground = 600000;
+const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 let isMobile = true;
 
@@ -3212,4 +3212,27 @@ export const checkThreads = async (bringBack) => {
 //   BackgroundFetch.finish(taskId);
 // });
 
+let notificationCheckInterval
 
+const createNotificationCheck = () => {
+  // Check if an interval already exists before creating it
+  if (!notificationCheckInterval) {
+    notificationCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
+
+        checkActiveChatsForNotifications();
+        checkNewMessages();
+        checkThreads();
+      } catch (error) {
+        console.error('Error checking notifications:', error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes
+  }
+};
+
+// Call this function when initializing your app
+createNotificationCheck();
