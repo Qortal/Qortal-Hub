@@ -2744,6 +2744,25 @@ await showInfo({
                 <Spacer height="15px" />
               </>
             )}
+            {messageQortalRequestExtension?.foreignFee && (
+              <>
+                <Spacer height="15px" />
+
+                <TextP
+                  sx={{
+                    textAlign: "center",
+                    lineHeight: 1.2,
+                    fontSize: "16px",
+                    fontWeight: "normal",
+                    maxWidth: "90%",
+                  }}
+                >
+                  {"Foreign Fee: "}
+                  {messageQortalRequestExtension?.foreignFee}
+                </TextP>
+                <Spacer height="15px" />
+              </>
+            )}
             {messageQortalRequestExtension?.checkbox1 && (
               <Box
                 sx={{

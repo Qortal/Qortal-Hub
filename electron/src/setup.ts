@@ -15,23 +15,23 @@ import { myCapacitorApp } from '.';
 
 
 const defaultDomains = [
+  'capacitor-electron://-',
   'http://127.0.0.1:12391',
   'ws://127.0.0.1:12391',
   'https://ext-node.qortal.link',
-  'wss://ext-node.qortal.link',
-  'https://appnode.qortal.org',
-  'wss://appnode.qortal.org',
-  "https://api.qortal.org",
-  "https://api2.qortal.org",
-  "https://appnode.qortal.org",
-  "https://apinode.qortalnodes.live",
+  'wss://ext-node.qortal.link',           
+  'https://appnode.qortal.org',             
+  'wss://appnode.qortal.org',               
+  "https://api.qortal.org",                   
+  "https://api2.qortal.org",                  
+  "https://apinode.qortalnodes.live",       
   "https://apinode1.qortalnodes.live",
   "https://apinode2.qortalnodes.live",
   "https://apinode3.qortalnodes.live",
   "https://apinode4.qortalnodes.live",
-  "https://www.qort.trade"
-
+  "https://www.qort.trade"                    
 ];
+
 // let allowedDomains: string[] = [...defaultDomains]
 const domainHolder = {
   allowedDomains: [...defaultDomains],
@@ -144,9 +144,7 @@ export class ElectronCapacitorApp {
         contextIsolation: true,
         // Use preload to inject the electron varriant overrides for capacitor plugins.
         // preload: join(app.getAppPath(), "node_modules", "@capacitor-community", "electron", "dist", "runtime", "electron-rt.js"),
-        preload: preloadPath,
-        webSecurity: false
-      },
+        preload: preloadPath      },
     });
     this.mainWindowState.manage(this.MainWindow);
 
@@ -242,39 +240,81 @@ export class ElectronCapacitorApp {
   }
 }
 
-// Set a CSP up for our application based on the custom scheme
-// export function setupContentSecurityPolicy(customScheme: string): void {
-//   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-//     callback({
-//       responseHeaders: {
-//         ...details.responseHeaders,
-//         'Content-Security-Policy': [
-//           "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval'; object-src 'self'; connect-src 'self' https://*:* http://*:* wss://*:* ws://*:*",
-//         ],
-//       },
-//     });
-//   });
-// }
+
 
 
 export function setupContentSecurityPolicy(customScheme: string): void {
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-      const allowedSources = ["'self'", ...domainHolder.allowedDomains].join(' ');
-      const csp = `
-        script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources};
-        object-src 'self';
-        connect-src ${allowedSources};
-      `.replace(/\s+/g, ' ').trim();
+  session.defaultSession.webRequest.onHeadersReceived((details: any, callback) => {
+    const allowedSources = ["'self'", customScheme, ...domainHolder.allowedDomains];
+    const connectSources = [...allowedSources];
+    const frameSources = [
+      "'self'",
+      'http://localhost:*',
+      'https://localhost:*',
+      'http://127.0.0.1:*',
+      'https://127.0.0.1:*',
+      ...allowedSources,
+    ];
 
-      callback({
-        responseHeaders: {
-          ...details.responseHeaders,
-          'Content-Security-Policy': [csp],
-        },
-      });
-    });
-  
+    // Create the Content Security Policy (CSP) string
+    const csp = `
+      default-src 'self' ${allowedSources.join(' ')};
+      frame-src ${frameSources.join(' ')};
+      script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources.join(' ')};
+      object-src 'self';
+      connect-src ${connectSources.join(' ')};
+      img-src 'self' data: blob: ${allowedSources.join(' ')};
+      style-src 'self' 'unsafe-inline';
+      font-src 'self' data:;
+    `.replace(/\s+/g, ' ').trim();
+   
+    // Get the request URL and origin
+    const requestUrl = details.url;
+    const requestOrigin = details.origin || details.referrer || 'capacitor-electron://-';
+
+    // Parse the request URL to get its origin
+    let requestUrlOrigin: string;
+    try {
+      const parsedUrl = new URL(requestUrl);
+      requestUrlOrigin = parsedUrl.origin;
+    } catch (e) {
+      // Handle invalid URLs gracefully
+      requestUrlOrigin = '';
+    }
+
+    // Determine if the request is cross-origin
+    const isCrossOrigin = requestOrigin !== requestUrlOrigin;
+
+    // Check if the response already includes Access-Control-Allow-Origin
+    const hasAccessControlAllowOrigin = Object.keys(details.responseHeaders).some(
+      (header) => header.toLowerCase() === 'access-control-allow-origin'
+    );
+
+    // Prepare response headers
+    const responseHeaders: Record<string, string | string[]> = {
+      ...details.responseHeaders,
+      'Content-Security-Policy': [csp],
+    };
+
+    if (isCrossOrigin && !hasAccessControlAllowOrigin) {
+      // Handle CORS for cross-origin requests lacking CORS headers
+      // Optionally, check if the requestOrigin is allowed
+      responseHeaders['Access-Control-Allow-Origin'] = requestOrigin;
+      responseHeaders['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, DELETE';
+      responseHeaders['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, x-api-key';
+    }
+
+    // Callback with modified headers
+    callback({ responseHeaders });
+  });
 }
+
+
+
+
+
+
+
 
 
 
@@ -283,17 +323,17 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
 
   // Validate and transform user-provided domains
   const validatedUserDomains = domains
-    .flatMap((domain) => {
-      try {
-        const url = new URL(domain);
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        return [url.origin, socketUrl];
-      } catch {
-        return [];
-      }
-    })
-    .filter(Boolean) as string[];
+  .flatMap((domain) => {
+    try {
+      const url = new URL(domain);
+      const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+      return [url.origin, socketUrl];
+    } catch {
+      return [];
+    }
+  })
+  .filter(Boolean) as string[];
 
   // Combine default and validated user domains
   const newAllowedDomains = [...new Set([...defaultDomains, ...validatedUserDomains])];

@@ -1,4 +1,5 @@
-import { addForeignServer, addListItems, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
+import { gateways, getApiKeyFromStorage } from "./background";
+import { addForeignServer, addListItems, cancelSellOrder, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
 
 
@@ -16,6 +17,15 @@ function setLocalStorage(key, data) {
     console.error("Error saving data:", error);
     throw error;
   });
+}
+export const isRunningGateway = async ()=> {
+            let isGateway = true;
+            const apiKey = await getApiKeyFromStorage();
+            if (apiKey && (apiKey?.url && !gateways.some(gateway => apiKey?.url?.includes(gateway)))) {
+              isGateway = false;
+            }
+
+            return isGateway
 }
 
   
@@ -623,7 +633,47 @@ function setLocalStorage(key, data) {
           }
           break;
         }
-  
+        case "CANCEL_TRADE_SELL_ORDER": {
+          try {
+            const res = await cancelSellOrder(request.payload, isFromExtension);
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
+        case "IS_USING_GATEWAY": {
+          try {
+            console.log('isusing going')
+            let isGateway =  await isRunningGateway()
+            console.log('isGateway', isGateway)
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: {isGateway},
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            console.log('isusing going', error)
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
         default:
           break;
       }

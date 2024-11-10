@@ -36,7 +36,7 @@ export const AppsDevModeHome = ({
   availableQapps,
 }) => {
 
-    const [domain, setDomain] = useState("");
+    const [domain, setDomain] = useState("127.0.0.1");
     const [port, setPort] = useState("");
     const { isShow, onCancel, onOk, show, message } = useModal();
     const {

@@ -183,7 +183,7 @@ const UIQortalRequests = [
   'GET_WALLET_BALANCE', 'GET_USER_WALLET_INFO', 'GET_CROSSCHAIN_SERVER_INFO',
   'GET_TX_ACTIVITY_SUMMARY', 'GET_FOREIGN_FEE', 'UPDATE_FOREIGN_FEE',
   'GET_SERVER_CONNECTION_HISTORY', 'SET_CURRENT_FOREIGN_SERVER',
-  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER', 'CREATE_TRADE_SELL_ORDER'
+  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER', 'CREATE_TRADE_SELL_ORDER', 'CANCEL_TRADE_SELL_ORDER', 'IS_USING_GATEWAY'
 ];
 
 
@@ -437,7 +437,7 @@ isDOMContentLoaded: false
       if (event?.data?.requestedHandler !== 'UI') return;
 
       const sendMessageToRuntime = (message, eventPort) => {
-        window.sendMessage(message.action, message.payload, 60000, message.isExtension)
+        window.sendMessage(message.action, message.payload, 300000, message.isExtension)
         .then((response) => {
           if (response.error) {
             eventPort.postMessage({
