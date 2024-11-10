@@ -67,7 +67,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             fontWeight: 600,
           }}
         >
-          Hub Invites:
+          Group Invites:
         </Typography>
         <Spacer height="10px" />
       </Box>

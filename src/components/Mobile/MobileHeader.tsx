@@ -205,7 +205,7 @@ const Header = ({
                     fontWeight: 600,
                     color: hasUnreadGroups ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
                   },
-                }} primary="Hubs" />
+                }} primary="Groups" />
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -441,7 +441,7 @@ const Header = ({
                     fontWeight: 600,
                     color: hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
                   },
-                }} primary="Hubs" />
+                }} primary="Groups" />
         </MenuItem>
         <MenuItem
           onClick={() => {

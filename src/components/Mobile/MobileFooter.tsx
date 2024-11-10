@@ -106,7 +106,7 @@ export const MobileFooter = ({
             setMobileViewMode("groups");
           }}
           icon={
-            <IconWrapper color="rgba(250, 250, 250, 0.5)" label="Hubs">
+            <IconWrapper color="rgba(250, 250, 250, 0.5)" label="Groups">
               <HubsIcon color={hasUnreadGroups ? "var(--unread)" : "rgba(250, 250, 250, 0.5)"} />
             </IconWrapper>
           }

@@ -76,7 +76,7 @@ export const GroupMenu = ({ setGroupSection, groupSection, setOpenManageMembers,
                  <> <NotificationIcon2 color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'}  /> {" Announcements"}</>
             )}
              {groupSection === "chat" &&(
-                 <> <ChatIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'} /> {" Hub Chats"}</>
+                 <> <ChatIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'} /> {" Group Chats"}</>
             )}
              {groupSection === "forum" &&(
                  <> <ThreadsIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'} /> {" Threads"}</>
