@@ -33,7 +33,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
     const uniqueInitialMessages = Array.from(uniqueInitialMessagesMap.values()).sort(
       (a, b) => a.timestamp - b.timestamp
     );
-    const totalMessages = [...uniqueInitialMessages, ...(tempMessages || [])];
+    const totalMessages = [...uniqueInitialMessages, ...(tempMessages || [])]
 
     if (totalMessages.length === 0) return;
 
@@ -151,6 +151,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
               ...(message?.message || {}),
               isTemp: true,
               unread: false,
+              status: message?.status
             };
           }
 

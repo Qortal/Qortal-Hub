@@ -11,7 +11,7 @@ let messageQueue = []; // Global message queue
 export const MessageQueueProvider = ({ children }) => {
   const [queueChats, setQueueChats] = useState({}); // Stores chats and status for display
   const isProcessingRef = useRef(false); // To track if the queue is being processed
-  const maxRetries = 4;
+  const maxRetries = 2;
   const clearStatesMessageQueueProvider = useCallback(() => {
     setQueueChats({});
     messageQueue = [];
@@ -43,7 +43,7 @@ export const MessageQueueProvider = ({ children }) => {
     ];
 
     // Start processing the queue if not already processing
-    processQueue();
+    processQueue([], groupDirectId);
   }, []);
 
   // Method to process with new messages and groupDirectId
@@ -66,6 +66,11 @@ export const MessageQueueProvider = ({ children }) => {
         updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
       
           return !newMessages.some(newMsg => newMsg?.specialId === chat?.message?.specialId);
+        });
+
+        updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
+          console.log('chatstasu', chat)
+          return chat?.status !== 'failed-permanent'
         });
 
         // If no more chats for this group, delete the groupDirectId entry
@@ -102,7 +107,6 @@ export const MessageQueueProvider = ({ children }) => {
       try {
         // Execute the function stored in the messageQueue
         await currentMessage.func();
-     
         // Remove the message from the messageQueue after successful sending
         messageQueue = messageQueue.slice(1); // Slice here remains for successful messages
   
@@ -136,10 +140,10 @@ export const MessageQueueProvider = ({ children }) => {
               // Remove the message from the messageQueue after max retries
               messageQueue = messageQueue.slice(1); // Slice for failed messages after max retries
   
-              // Remove the message from queueChats after failure
-              updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
-                (item) => item.identifier !== identifier
-              );
+              // // Remove the message from queueChats after failure
+              // updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
+              //   (item) => item.identifier !== identifier
+              // );
             }
           }
           return updatedChats;

@@ -37,6 +37,8 @@ export const MessageItem = ({
     triggerOnce: false, // Only trigger once when it becomes visible
   });
 
+
+
   useEffect(() => {
     if (inView && isLast && onSeen) {
       onSeen(message.id);
@@ -262,21 +264,21 @@ export const MessageItem = ({
             <Typography
               sx={{
                 fontSize: "14px",
-                color: "gray",
+                color:  "gray",
                 fontFamily: "Inter",
               }}
             >
-              Updating...
+              {message?.status === 'failed-permanent' ? 'Failed to update' : 'Updating...'} 
             </Typography>
           ) : isTemp ? (
             <Typography
               sx={{
                 fontSize: "14px",
-                color: "gray",
+                color:  "gray",
                 fontFamily: "Inter",
               }}
             >
-              Sending...
+              {message?.status === 'failed-permanent' ? 'Failed to send' : 'Sending...'}
             </Typography>
           ) : (
             <Typography

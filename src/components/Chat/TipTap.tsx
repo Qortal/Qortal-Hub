@@ -323,10 +323,10 @@ export default ({
         attributes: {
           class: "tiptap-prosemirror",
           style:
-            isMobile &&
+            isMobile ?
             `overflow: auto; min-height: ${
               customEditorHeight ? "200px" : "0px"
-            }; max-height:calc(100svh - ${customEditorHeight || "140px"})`,
+            }; max-height:calc(100svh - ${customEditorHeight || "140px"})`: `overflow: auto; max-height: 250px`,
         },
         handleKeyDown(view, event) {
           if (!disableEnter && event.key === "Enter") {
