@@ -123,60 +123,65 @@ export const AppsDevModeHome = ({
         </ButtonBase>
       </AppsContainer>
       {isShow && (
-        <Dialog
-          open={isShow}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-        >
-          <DialogTitle id="alert-dialog-title">
-            {"Add custom framework"}
-          </DialogTitle>
-          <DialogContent>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-              }}
-            >
-              <Label>Domain</Label>
-              <Input
-                placeholder="Domain"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-              />
-            </Box>
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-                marginTop: '15px'
-              }}
-            >
-              <Label>Port</Label>
-
-              <Input
-                placeholder="Port"
-                value={port}
-                onChange={(e) => setPort(e.target.value)}
-              />
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button variant="contained" onClick={onCancel}>
-              Close
-            </Button>
-            <Button
-              disabled={!domain || !port}
-              variant="contained"
-              onClick={()=> onOk({portVal: port, domainVal: domain})}
-              autoFocus
-            >
-              Add
-            </Button>
-          </DialogActions>
-        </Dialog>
+       <Dialog
+       open={isShow}
+       aria-labelledby="alert-dialog-title"
+       aria-describedby="alert-dialog-description"
+       onKeyDown={(e) => {
+         if (e.key === 'Enter' && domain && port) {
+           onOk({ portVal: port, domainVal: domain });
+         }
+       }}
+     >
+       <DialogTitle id="alert-dialog-title">
+         {"Add custom framework"}
+       </DialogTitle>
+       <DialogContent>
+         <Box
+           sx={{
+             display: "flex",
+             flexDirection: "column",
+             gap: "5px",
+           }}
+         >
+           <Label>Domain</Label>
+           <Input
+             placeholder="Domain"
+             value={domain}
+             onChange={(e) => setDomain(e.target.value)}
+           />
+         </Box>
+         <Box
+           sx={{
+             display: "flex",
+             flexDirection: "column",
+             gap: "5px",
+             marginTop: '15px'
+           }}
+         >
+           <Label>Port</Label>
+           <Input
+             placeholder="Port"
+             value={port}
+             onChange={(e) => setPort(e.target.value)}
+           />
+         </Box>
+       </DialogContent>
+       <DialogActions>
+         <Button variant="contained" onClick={onCancel}>
+           Close
+         </Button>
+         <Button
+           disabled={!domain || !port}
+           variant="contained"
+           onClick={() => onOk({ portVal: port, domainVal: domain })}
+           autoFocus
+         >
+           Add
+         </Button>
+       </DialogActions>
+     </Dialog>
+     
       )}
     </>
   );
