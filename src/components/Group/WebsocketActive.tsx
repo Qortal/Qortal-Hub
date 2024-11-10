@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { getBaseApiReactSocket, pauseAllQueues, resumeAllQueues } from '../../App';
+import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 
 export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   const socketRef = useRef(null); // WebSocket reference
@@ -15,6 +16,18 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
       socketRef.current = null;
     }
   };
+
+  const logoutEventFunc = () => {
+    forceCloseWebSocket()
+  };
+
+  useEffect(() => {
+    subscribeToEvent("logout-event", logoutEventFunc);
+
+    return () => {
+      unsubscribeFromEvent("logout-event", logoutEventFunc);
+    };
+  }, []);
 
   useEffect(() => {
     if (!myAddress) return; // Only proceed if myAddress is set
