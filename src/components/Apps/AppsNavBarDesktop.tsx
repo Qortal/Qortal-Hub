@@ -117,7 +117,6 @@ export const AppsNavBarDesktop = () => {
 
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
-
     setTabs([...tabs]);
     setSelectedTab(!selectedTab ? null : { ...selectedTab });
     setIsNewTabWindow(isNewTabWindow);
@@ -137,6 +136,8 @@ export const AppsNavBarDesktop = () => {
     (item) =>
       item?.name === selectedTab?.name && item?.service === selectedTab?.service
   );
+
+  console.log('tabs', tabs)
   return (
     <AppsNavBarParent
       sx={{

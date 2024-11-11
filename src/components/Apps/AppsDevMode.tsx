@@ -131,10 +131,10 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
   
 
   useEffect(() => {
-    subscribeToEvent("setSelectedTab", setSelectedTabFunc);
+    subscribeToEvent("setSelectedTabDevMode", setSelectedTabFunc);
 
     return () => {
-      unsubscribeFromEvent("setSelectedTab", setSelectedTabFunc);
+      unsubscribeFromEvent("setSelectedTabDevMode", setSelectedTabFunc);
     };
   }, [tabs, isNewTabWindow]);
 
@@ -149,7 +149,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
     setTabs(copyTabs);
     setSelectedTab(copyTabs[0]);
     setTimeout(() => {
-      executeEvent("setTabsToNav", {
+      executeEvent("appsDevModeSetTabsToNav", {
         data: {
           tabs: copyTabs,
           selectedTab: copyTabs[0],
@@ -159,10 +159,10 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
   };
 
   useEffect(() => {
-    subscribeToEvent("removeTab", removeTabFunc);
+    subscribeToEvent("removeTabDevMode", removeTabFunc);
 
     return () => {
-      unsubscribeFromEvent("removeTab", removeTabFunc);
+      unsubscribeFromEvent("removeTabDevMode", removeTabFunc);
     };
   }, [tabs]);
 

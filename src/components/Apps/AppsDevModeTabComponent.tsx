@@ -10,12 +10,12 @@ export const AppsDevModeTabComponent = ({isSelected, app}) => {
   return (
     <ButtonBase onClick={()=> {
         if(isSelected){
-            executeEvent('removeTab', {
+            executeEvent('removeTabDevMode', {
                 data: app
             })
             return
         }
-        executeEvent('setSelectedTab', {
+        executeEvent('setSelectedTabDevMode', {
             data: app,
             isDevMode: true
         })

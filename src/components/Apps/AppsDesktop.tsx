@@ -259,6 +259,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
     } else {
       setSelectedTab(copyTabs[0]);
     }
+    console.log('copyTabs', copyTabs)
     setTabs(copyTabs);
     setSelectedTab(copyTabs[0]);
     setTimeout(() => {
