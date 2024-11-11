@@ -4,11 +4,11 @@ import './styles.css';
 import { executeEvent } from '../../utils/events';
 
 const extractComponents = (url) => {
-  if (!url.startsWith("qortal://")) {
+  if (!url || !url.startsWith("qortal://")) { // Check if url exists and starts with "qortal://"
     return null;
   }
 
-  url = url.replace(/^(qortal\:\/\/)/, "");
+  url = url.replace(/^(qortal\:\/\/)/, ""); // Safe to use replace now
   if (url.includes("/")) {
     let parts = url.split("/");
     const service = parts[0].toUpperCase();
@@ -22,6 +22,7 @@ const extractComponents = (url) => {
 
   return null;
 };
+
 
 function processText(input) {
   const linkRegex = /(qortal:\/\/\S+)/g;
@@ -58,6 +59,8 @@ function processText(input) {
 
 export const MessageDisplay = ({ htmlContent, isReply }) => {
   const linkify = (text) => {
+    if (!text) return ""; // Return an empty string if text is null or undefined
+  
     let textFormatted = text;
     const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
     textFormatted = text.replace(urlPattern, (url) => {
@@ -66,6 +69,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     });
     return processText(textFormatted);
   };
+  
 
   const sanitizedContent = DOMPurify.sanitize(linkify(htmlContent), {
     ALLOWED_TAGS: [
