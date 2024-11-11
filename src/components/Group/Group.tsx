@@ -2285,13 +2285,17 @@ export const Group = ({
               <Box
                 sx={{
                   position: "absolute",
-                  left: "0px",
-                  right: "0px",
-                  bottom: "0px",
-                  top: "0px",
+               
+                  right: !(desktopViewMode === 'chat') ? "unset" :  "0px",
+                  bottom: !(desktopViewMode === 'chat') ? "unset" :  "0px",
+                  top: !(desktopViewMode === 'chat') ? "unset" :  "0px",
                   background: "#27282c",
                   zIndex: 5,
                   height: isMobile && `calc(${rootHeight} - 45px)`,
+                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
+                 
+                left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
+                      
                 }}
               >
                 <ChatDirect
@@ -2632,13 +2636,15 @@ export const Group = ({
               <Box
                 sx={{
                   position: "absolute",
-                  left: "0px",
-                  right: "0px",
-                  bottom: "0px",
-                  top: "0px",
+                  right: !(desktopViewMode === 'chat') ? "unset" : "0px",
+                  bottom: !(desktopViewMode === 'chat') ? "unset" :  "0px",
+                  top: !(desktopViewMode === 'chat') ? "unset" :  "0px",
                   background: "#27282c",
                   zIndex: 5,
                   height: isMobile && `calc(${rootHeight} - 45px)`,
+                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
+                 
+                  left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                 }}
               >
                 <Box
