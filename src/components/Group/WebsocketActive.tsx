@@ -9,7 +9,6 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   const initiateRef = useRef(null)
   const forceCloseWebSocket = () => {
     if (socketRef.current) {
-      console.log('Force closing the WebSocket');
       clearTimeout(timeoutIdRef.current);
       clearTimeout(groupSocketTimeoutRef.current);
       socketRef.current.close(1000, 'forced');

@@ -77,7 +77,6 @@ export const saveFileInChunks = async (
       isFirstChunk = false;
     }
 
-    console.log('File saved successfully in chunks:', fullFileName);
   } catch (error) {
     console.error('Error saving file in chunks:', error);
   }

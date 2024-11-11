@@ -137,7 +137,6 @@ export const AppsNavBarDesktop = () => {
       item?.name === selectedTab?.name && item?.service === selectedTab?.service
   );
 
-  console.log('tabs', tabs)
   return (
     <AppsNavBarParent
       sx={{

@@ -4,7 +4,6 @@ import './styles.css';
 import { executeEvent } from '../../utils/events';
 
 const extractComponents = (url) => {
-  console.log('url', url);
   if (!url.startsWith("qortal://")) {
     return null;
   }

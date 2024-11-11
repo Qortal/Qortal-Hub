@@ -6,7 +6,6 @@ import Base58 from '../deps/Base58'
 import utils from '../utils/utils'
 
 const signTradeBotTransaction = async (unsignedTxn, keyPair) => {
-	console.log('keypair', unsignedTxn, keyPair)
 	if (!unsignedTxn) {
 		throw new Error('Unsigned Transaction Bytes not defined')
 	}

@@ -69,7 +69,6 @@ export const MessageQueueProvider = ({ children }) => {
         });
 
         updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
-          console.log('chatstasu', chat)
           return chat?.status !== 'failed-permanent'
         });
 

@@ -101,7 +101,6 @@ export const Save = ({ isDesktop, disableWidth }) => {
             console.error("Failed qortalRequest", error);
           });
       });
-      console.log('encryptData', encryptData)
       if (encryptData && !encryptData?.error) {
         const fee = await getFee("ARBITRARY");
 
@@ -139,7 +138,6 @@ export const Save = ({ isDesktop, disableWidth }) => {
         }
       }
     } catch (error) {
-      console.log('errorsave', error)
       setInfoSnack({
         type: "error",
         message: error?.message || "Unable to save to QDN",

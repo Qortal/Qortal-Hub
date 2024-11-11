@@ -1611,7 +1611,6 @@ export const Group = ({
     }
   };
 
-  console.log('desktopViewMode', desktopViewMode)
 
   const renderDirects = () => {
     return (
