@@ -92,7 +92,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
       if (res) {
         const { service, name, identifier, path } = res;
         executeEvent("addTab", { data: { service, name, identifier, path } });
-        executeEvent("open-dev-mode", { });
+        executeEvent("open-apps-mode", { });
 
       }
     }

@@ -77,7 +77,7 @@ display: flex;
 border: 1px solid var(--50-white, rgba(255, 255, 255, 0.5));
 justify-content: space-between;
 align-items: center;
-width: 140px;
+width: auto;
 height: 25px;
 padding: 5px 15px 5px 15px;
 gap: 5px;

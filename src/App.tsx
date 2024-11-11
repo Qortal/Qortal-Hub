@@ -1244,7 +1244,8 @@ function App() {
       <AuthenticatedContainerInnerLeft
       sx={{
         overflowY: isMobile && "auto",
-        padding: '0px 20px'
+        padding: '0px 20px',
+        minWidth: '225px'
       }}
     >
       <Spacer height="48px" />
@@ -1391,10 +1392,11 @@ function App() {
           textDecoration: "underline",
         }}
         onClick={async () => {
-          window.electronAPI.openExternal("https://www.qort.trade");
+          executeEvent("addTab", { data: { service: 'APP', name: 'q-trade' } });
+          executeEvent("open-apps-mode", { });
         }}
       >
-        Get QORT at qort.trade
+        Get QORT at Q-Trade
       </TextP>
     </AuthenticatedContainerInnerLeft>
   )}

@@ -1303,7 +1303,7 @@ export const Group = ({
     };
   }, []);
 
-  const openDevModeFunc = () => {
+  const openAppsMode = () => {
     if (isMobile) {
       setMobileViewMode("apps");
     }
@@ -1311,34 +1311,37 @@ export const Group = ({
       setDesktopViewMode('apps')
 
     }
-    setIsOpenSideViewDirects(false)
-    setIsOpenSideViewGroups(false)
-    setGroupSection("default");
-    setSelectedGroup(null);
-    setNewChat(false);
-    setSelectedDirect(null);
-    setSecretKey(null);
-    setGroupOwner(null)
-    lastFetchedSecretKey.current = null;
-    initiatedGetMembers.current = false;
-    setSecretKeyPublishDate(null);
-    setAdmins([]);
-    setSecretKeyDetails(null);
-    setAdminsWithNames([]);
-    setMembers([]);
-    setMemberCountFromSecretKeyData(null);
-    setTriedToFetchSecretKey(false);
-    setFirstSecretKeyInCreation(false);
-    setIsOpenSideViewDirects(false)
-    setIsOpenSideViewGroups(false)
+    if(isMobile){
+      setIsOpenSideViewDirects(false)
+      setIsOpenSideViewGroups(false)
+      setGroupSection("default");
+      setSelectedGroup(null);
+      setNewChat(false);
+      setSelectedDirect(null);
+      setSecretKey(null);
+      setGroupOwner(null)
+      lastFetchedSecretKey.current = null;
+      initiatedGetMembers.current = false;
+      setSecretKeyPublishDate(null);
+      setAdmins([]);
+      setSecretKeyDetails(null);
+      setAdminsWithNames([]);
+      setMembers([]);
+      setMemberCountFromSecretKeyData(null);
+      setTriedToFetchSecretKey(false);
+      setFirstSecretKeyInCreation(false);
+      setIsOpenSideViewDirects(false)
+      setIsOpenSideViewGroups(false)
+    }
+   
 
   };
 
   useEffect(() => {
-    subscribeToEvent("open-dev-mode", openDevModeFunc);
+    subscribeToEvent("open-apps-mode", openAppsMode);
 
     return () => {
-      unsubscribeFromEvent("open-dev-mode", openDevModeFunc);
+      unsubscribeFromEvent("open-apps-mode", openAppsMode);
     };
   }, []);
 

@@ -212,7 +212,7 @@ export const ThingsToDoInitial = ({ myAddress, name, hasGroups, balance }) => {
                     fontSize: "13px",
                     fontWeight: 400,
                   },
-                }} primary={`Join a group hub`} />
+                }} primary={`Join a group`} />
               <ListItemIcon sx={{
                   justifyContent: "flex-end",
                 }}>

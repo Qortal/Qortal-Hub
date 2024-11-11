@@ -1424,6 +1424,16 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
     const _encryptedMessage = tx._encryptedMessage;
     const encryptedMessageToBase58 = Base58.encode(_encryptedMessage);
     const signature = "id-" + Date.now() + "-" + Math.floor(Math.random() * 1000)
+    const checkGatewayStatusRes = await fetch(`${buyTradeNodeBaseUrl}/admin/status`)
+    const checkGatewayStatusData = await checkGatewayStatusRes.json()
+    if(+checkGatewayStatusData?.syncPercent !== 100 || checkGatewayStatusData?.isSynchronizing !== false){
+      throw new Error("Cannot make trade. Gateway node is synchronizing")
+    }
+    const healthCheckRes = await fetch('https://www.qort.trade/api/transaction/healthcheck')
+    const healthcheckData = await healthCheckRes.json()
+    if(healthcheckData?.dbConnection !== 'healthy'){
+      throw new Error('Could not connect to db. Try again later.')
+    }
     const res = await axios.post(
       `https://www.qort.trade/api/transaction/updatetxgateway`,
       {
