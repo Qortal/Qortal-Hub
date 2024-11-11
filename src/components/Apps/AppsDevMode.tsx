@@ -22,10 +22,12 @@ import { Save } from "../Save/Save";
 import { HubsIcon } from "../../assets/Icons/HubsIcon";
 import { AppsDevModeNavBar } from "./AppsDevModeNavBar";
 import { CoreSyncStatus } from "../CoreSyncStatus";
+import { AppsIcon } from "../../assets/Icons/AppsIcon";
+import { IconWrapper } from "../Desktop/DesktopFooter";
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktopSideView, hasUnreadDirects, isDirects, isGroups, hasUnreadGroups, toggleSideViewGroups, toggleSideViewDirects}) => {
+export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktopSideView, hasUnreadDirects, isDirects, isGroups, hasUnreadGroups, toggleSideViewGroups, toggleSideViewDirects, setDesktopViewMode, desktopViewMode, isApps}) => {
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null)
@@ -208,49 +210,59 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
             
             <HomeIcon
               height={34}
-              color="rgba(250, 250, 250, 0.5)"
+              color={desktopViewMode === 'home' ? 'white': "rgba(250, 250, 250, 0.5)"}
             />
         
         </ButtonBase>
         <ButtonBase
           onClick={() => {
-            setDesktopSideView("directs");
-            toggleSideViewDirects()
+            setDesktopViewMode('apps')
           }}
         >
-        
+          <IconWrapper
+            color={isApps ? 'white' :"rgba(250, 250, 250, 0.5)"}
+            label="Apps"
+            disableWidth
+          >
+          <AppsIcon height={30} color={isApps ? 'white' :"rgba(250, 250, 250, 0.5)"} />
+          </IconWrapper>
+        </ButtonBase>
+        <ButtonBase
+          onClick={() => {
+            setDesktopViewMode('chat')
+          }}
+        >
+        <IconWrapper
+            color={desktopViewMode === 'chat' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+            label="Chat"
+            disableWidth
+          >
             <MessagingIcon
               height={30}
               color={
                 hasUnreadDirects
                   ? "var(--unread)"
-                  : isDirects
+                  : desktopViewMode === 'chat'
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"
               }
             />
-
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-            toggleSideViewGroups()
-          }}
-        >
-            <HubsIcon
-              height={30}
-              color={
-                hasUnreadGroups
-                  ? "var(--unread)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-     
+    </IconWrapper>
         </ButtonBase>
         <Save isDesktop disableWidth />
-        <CoreSyncStatus imageSize="30px" position="left" />
+        <ButtonBase
+           onClick={() => {
+             setDesktopViewMode('dev')
+           }}
+         >
+           <IconWrapper
+             color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"}
+             label="Dev"
+             disableWidth
+           >
+            <AppsIcon color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"} height={30} />
+           </IconWrapper>
+         </ButtonBase>
         {mode !== 'home' && (
                  <AppsDevModeNavBar  />
 

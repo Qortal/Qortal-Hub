@@ -20,6 +20,7 @@ export const Home = ({
   setOpenManageMembers,
   setOpenAddGroup,
   setMobileViewMode,
+  setDesktopViewMode
 }) => {
   return (
     <Box
@@ -95,6 +96,7 @@ export const Home = ({
             myAddress={myAddress}
             groups={groups}
             setMobileViewMode={setMobileViewMode}
+            setDesktopViewMode={setDesktopViewMode}
           />
           <GroupInvites
             setOpenAddGroup={setOpenAddGroup}

@@ -18,7 +18,7 @@ import { getBaseApi } from "../../background";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2)
 
-export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, getTimestampEnterChat, setSelectedGroup, setGroupSection, setMobileViewMode }) => {
+export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, getTimestampEnterChat, setSelectedGroup, setGroupSection, setMobileViewMode, setDesktopViewMode }) => {
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const {txList, setTxList} = React.useContext(MyContext)
@@ -179,6 +179,9 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
             getTimestampEnterChat()
             setGroupSection("announcement")
             setOpenManageMembers(true)
+            if(!isMobile){
+              setDesktopViewMode('chat')
+            }
             setTimeout(() => {
               executeEvent("openGroupJoinRequest", {});
 

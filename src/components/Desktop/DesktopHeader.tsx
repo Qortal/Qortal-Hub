@@ -19,7 +19,7 @@ import { ChatIcon } from "../../assets/Icons/ChatIcon";
 import { ThreadsIcon } from "../../assets/Icons/ThreadsIcon";
 import { MembersIcon } from "../../assets/Icons/MembersIcon";
 
-const IconWrapper = ({ children, label, color, selected, selectColor }) => {
+const IconWrapper = ({ children, label, color, selected, selectColor, customHeight }) => {
   return (
     <Box
       sx={{
@@ -28,8 +28,8 @@ const IconWrapper = ({ children, label, color, selected, selectColor }) => {
         alignItems: "center",
         gap: "5px",
         flexDirection: "column",
-        height: "65px",
-        width: "65px",
+        height: customHeight ? customHeight : "65px",
+        width: customHeight ? customHeight :  "65px",
         borderRadius: "50%",
         backgroundColor: selected ? selectColor || "rgba(28, 29, 32, 1)" : "transparent",
       }}
@@ -111,7 +111,7 @@ export const DesktopHeader = ({
           alignItems: "center",
         }}
       >
-        <ButtonBase
+        {/* <ButtonBase
           onClick={() => {
             goToHome();
           }}
@@ -170,15 +170,15 @@ export const DesktopHeader = ({
               }
             />
           </IconWrapper>
-        </ButtonBase>
-        <Box
+        </ButtonBase> */}
+        {/* <Box
           sx={{
             width: "1px",
             height: "50px",
             background: "white",
             borderRadius: "50px",
           }}
-        />
+        /> */}
         <ButtonBase
           onClick={() => {
             goToAnnouncements()
@@ -189,6 +189,7 @@ export const DesktopHeader = ({
             label="ANN"
             selected={isAnnouncement}
             selectColor="#09b6e8"
+            customHeight="55px"
           >
             <NotificationIcon2
               height={25}
@@ -214,6 +215,7 @@ export const DesktopHeader = ({
             label="Chat"
             selected={isChat}
             selectColor="#09b6e8"
+            customHeight="55px"
           >
             <ChatIcon
               height={25}
@@ -240,6 +242,7 @@ export const DesktopHeader = ({
             label="Threads"
             selected={isForum}
             selectColor="#09b6e8"
+            customHeight="55px"
           >
             <ThreadsIcon
               height={25}
@@ -262,6 +265,7 @@ export const DesktopHeader = ({
             color="rgba(250, 250, 250, 0.5)"
             label="Members"
             selected={false}
+            customHeight="55px"
           >
             <MembersIcon
               height={25}

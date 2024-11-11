@@ -86,12 +86,15 @@ import { getRootHeight } from "../../utils/mobile/mobileUtils";
 import { ReturnIcon } from "../../assets/Icons/ReturnIcon";
 import { ExitIcon } from "../../assets/Icons/ExitIcon";
 import { HomeDesktop } from "./HomeDesktop";
-import { DesktopFooter } from "../Desktop/DesktopFooter";
+import { DesktopFooter, IconWrapper } from "../Desktop/DesktopFooter";
 import { DesktopHeader } from "../Desktop/DesktopHeader";
 import { Apps } from "../Apps/Apps";
 import { AppsNavBar } from "../Apps/AppsNavBar";
 import { AppsDesktop } from "../Apps/AppsDesktop";
 import { AppsDevMode } from "../Apps/AppsDevMode";
+import { DesktopSideBar } from "../DesktopSideBar";
+import { HubsIcon } from "../../assets/Icons/HubsIcon";
+import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 
 // let touchStartY = 0;
 // let disablePullToRefresh = false;
@@ -1282,6 +1285,9 @@ export const Group = ({
     setupGroupWebsocketInterval.current = null;
     settimeoutForRefetchSecretKey.current = null;
     initiatedGetMembers.current = false;
+    if(!isMobile){
+      setDesktopViewMode('home')
+    }
   };
 
   const logoutEventFunc = () => {
@@ -1368,6 +1374,9 @@ export const Group = ({
       setTriedToFetchSecretKey(false);
       setFirstSecretKeyInCreation(false);
       setGroupSection("chat");
+      if(!isMobile){
+        setDesktopViewMode('chat')
+      }
 
       window.sendMessage("addTimestampEnterChat", {
         timestamp: Date.now(),
@@ -1381,10 +1390,9 @@ export const Group = ({
         setSelectedGroup(findGroup);
         setMobileViewMode("group");
         setDesktopSideView('groups')
-        setDesktopViewMode('home')
         getTimestampEnterChat();
         isLoadingOpenSectionFromNotification.current = false;
-      }, 200);
+      }, 350);
     } else {
       isLoadingOpenSectionFromNotification.current = false;
     }
@@ -1419,6 +1427,9 @@ export const Group = ({
       setTriedToFetchSecretKey(false);
       setFirstSecretKeyInCreation(false);
       setGroupSection("announcement");
+      if(!isMobile){
+        setDesktopViewMode('chat')
+      }
       window.sendMessage("addGroupNotificationTimestamp", {
         timestamp: Date.now(),
         groupId: findGroup.groupId,
@@ -1430,9 +1441,8 @@ export const Group = ({
         setSelectedGroup(findGroup);
         setMobileViewMode("group");
         setDesktopSideView('groups')
-        setDesktopViewMode('home')
         getGroupAnnouncements();
-      }, 200);
+      }, 350);
     }
   };
 
@@ -1481,14 +1491,15 @@ export const Group = ({
       setFirstSecretKeyInCreation(false);
       setGroupSection("forum");
       setDefaultThread(data);
-
+      if(!isMobile){
+        setDesktopViewMode('chat')
+      }
       setTimeout(() => {
         setSelectedGroup(findGroup);
         setMobileViewMode("group");
         setDesktopSideView('groups')
-        setDesktopViewMode('home')
         getGroupAnnouncements();
-      }, 200);
+      }, 350);
     }
   };
 
@@ -1512,31 +1523,31 @@ export const Group = ({
     }
     setDesktopViewMode('home')
 
-    setGroupSection("default");
-    clearAllQueues();
+    // setGroupSection("default");
+    // clearAllQueues();
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
       }, 200);
     });
-    setGroupSection("home");
-    setSelectedGroup(null);
-    setNewChat(false);
-    setSelectedDirect(null);
-    setSecretKey(null);
-    setGroupOwner(null)
-    lastFetchedSecretKey.current = null;
-    initiatedGetMembers.current = false;
-    setSecretKeyPublishDate(null);
-    setAdmins([]);
-    setSecretKeyDetails(null);
-    setAdminsWithNames([]);
-    setMembers([]);
-    setMemberCountFromSecretKeyData(null);
-    setTriedToFetchSecretKey(false);
-    setFirstSecretKeyInCreation(false);
-    setIsOpenSideViewDirects(false)
-    setIsOpenSideViewGroups(false)
+    // setGroupSection("home");
+    // setSelectedGroup(null);
+    // setNewChat(false);
+    // setSelectedDirect(null);
+    // setSecretKey(null);
+    // setGroupOwner(null)
+    // lastFetchedSecretKey.current = null;
+    // initiatedGetMembers.current = false;
+    // setSecretKeyPublishDate(null);
+    // setAdmins([]);
+    // setSecretKeyDetails(null);
+    // setAdminsWithNames([]);
+    // setMembers([]);
+    // setMemberCountFromSecretKeyData(null);
+    // setTriedToFetchSecretKey(false);
+    // setFirstSecretKeyInCreation(false);
+    // setIsOpenSideViewDirects(false)
+    // setIsOpenSideViewGroups(false)
   };
 
   const goToAnnouncements = async () => {
@@ -1612,6 +1623,67 @@ export const Group = ({
           borderRadius: !isMobile && '0px 15px 15px 0px'
         }}
       >
+        {!isMobile && (
+            <Box sx={{
+              width: '100%',
+              alignItems: 'center',
+              justifyContent: 'center',
+              display: 'flex',
+              gap: '10px'
+            }}>
+               <ButtonBase
+              onClick={() => {
+                setDesktopSideView("groups");
+              }}
+            >
+              <IconWrapper
+                color={(groupChatHasUnread ||
+                  groupsAnnHasUnread)
+                         ? "var(--unread)"
+                         : desktopSideView === 'groups' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+                label="Groups"
+                selected={desktopSideView === 'groups'}
+                customWidth="75px"
+              >
+                <HubsIcon
+                  height={24}
+                  color={
+                    (groupChatHasUnread ||
+               groupsAnnHasUnread)
+                      ? "var(--unread)"
+                      : desktopSideView === 'groups'
+                      ? "white"
+                      : "rgba(250, 250, 250, 0.5)"
+                  }
+                />
+              </IconWrapper>
+            </ButtonBase>
+            <ButtonBase
+              onClick={() => {
+                setDesktopSideView("directs");
+              }}
+            >
+              <IconWrapper
+              customWidth="75px"
+                color={directChatHasUnread ? "var(--unread)" : desktopSideView === 'directs' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+                label="Messaging"
+                selected={desktopSideView === 'directs'}
+              >
+                <MessagingIcon
+                  height={24}
+                  color={
+                    directChatHasUnread
+                      ? "var(--unread)"
+                      : desktopSideView === 'directs'
+                      ? "white"
+                      : "rgba(250, 250, 250, 0.5)"
+                  }
+                />
+              </IconWrapper>
+              </ButtonBase>
+            </Box>
+        )}
+       
         {isMobile && (
            <Box
            sx={{
@@ -1819,7 +1891,67 @@ export const Group = ({
           borderRadius: !isMobile && '0px 15px 15px 0px'
         }}
       >
-        
+        {!isMobile && (
+           <Box sx={{
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            gap: '10px'
+          }}>
+             <ButtonBase
+            onClick={() => {
+              setDesktopSideView("groups");
+            }}
+          >
+            <IconWrapper
+              color={(groupChatHasUnread ||
+                groupsAnnHasUnread)
+                       ? "var(--unread)"
+                       :  desktopSideView === 'groups' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+              label="Groups"
+              selected={desktopSideView === 'groups'}
+              customWidth="75px"
+            >
+              <HubsIcon
+                height={24}
+                color={
+                  (groupChatHasUnread ||
+             groupsAnnHasUnread)
+                    ? "var(--unread)"
+                    : desktopSideView === 'groups' 
+                    ? "white"
+                    : "rgba(250, 250, 250, 0.5)"
+                }
+              />
+            </IconWrapper>
+          </ButtonBase>
+          <ButtonBase
+            onClick={() => {
+              setDesktopSideView("directs");
+            }}
+          >
+            <IconWrapper
+            customWidth="75px"
+              color={directChatHasUnread ? "var(--unread)" : desktopSideView === 'directs' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+              label="Messaging"
+              selected={desktopSideView === 'directs' }
+            >
+              <MessagingIcon
+                height={24}
+                color={
+                  directChatHasUnread
+                    ? "var(--unread)"
+                    : desktopSideView === 'directs' 
+                    ? "white"
+                    : "rgba(250, 250, 250, 0.5)"
+                }
+              />
+            </IconWrapper>
+            </ButtonBase>
+          </Box>
+        )}
+       
         <div
           style={{
             display: "flex",
@@ -1850,7 +1982,6 @@ export const Group = ({
                 onClick={() => {
                   setMobileViewMode("group");
                   setDesktopSideView('groups')
-                  setDesktopViewMode('home')
                   initiatedGetMembers.current = false;
                   clearAllQueues();
                   setSelectedDirect(null);
@@ -2067,8 +2198,14 @@ export const Group = ({
           alignItems: "flex-start",
         }}
       >
-        {!isMobile && ((desktopSideView === 'groups' && desktopViewMode !== 'apps' && desktopViewMode !== 'dev') || isOpenSideViewGroups) && renderGroups()}
-        {!isMobile && ((desktopSideView === 'directs'  && desktopViewMode !== 'apps' && desktopViewMode !== 'dev') || isOpenSideViewDirects) && renderDirects()}
+        {!isMobile && ((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') || isOpenSideViewGroups) && (
+             <DesktopSideBar desktopViewMode={desktopViewMode} toggleSideViewGroups={toggleSideViewGroups} toggleSideViewDirects={toggleSideViewDirects} goToHome={goToHome} mode={appsMode} setMode={setAppsMode} setDesktopSideView={setDesktopSideView} hasUnreadDirects={directChatHasUnread} isApps={desktopViewMode === 'apps'} myName={userInfo?.name}  isGroups={isOpenSideViewGroups}
+             isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
+               groupsAnnHasUnread} setDesktopViewMode={setDesktopViewMode} />
+        )}
+
+        {!isMobile && desktopViewMode === 'chat' && desktopSideView !== 'directs' && renderGroups()}
+        {!isMobile && desktopViewMode === 'chat'  && desktopSideView === 'directs' && renderDirects()}
 
         <Box
           sx={{
@@ -2174,9 +2311,37 @@ export const Group = ({
               </Box>
             </>
           )}
-          {selectedGroup && mobileViewMode !== 'groups' && (
-            <>
-            {!isMobile && selectedGroup && (
+          {desktopViewMode === 'chat' && !selectedGroup && (
+            <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: 'center',
+              height: '100%',
+           
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "14px",
+                fontWeight: 400,
+                color: 'rgba(255, 255, 255, 0.2)'
+              }}
+            >
+              No group selected
+            </Typography>
+          </Box>
+          )}
+          {mobileViewMode !== 'groups' && (
+            <div style={{
+              width: '100%',
+              display: selectedGroup? 'block' : 'none',
+              opacity: !(desktopViewMode === 'chat' && selectedGroup) ? 0 : 1,
+      position: !(desktopViewMode === 'chat' && selectedGroup) ? 'absolute' : 'relative',
+    left: !(desktopViewMode === 'chat' && selectedGroup) ? '-100000px' : '0px',
+            }}>
+            {!isMobile &&  (
         
         <DesktopHeader
         selectedGroup={selectedGroup}
@@ -2457,7 +2622,7 @@ export const Group = ({
                   isOwner={groupOwner?.owner === myAddress}
                 />
               )}
-            </>
+            </div>
           )}
 
           {selectedDirect && !newChat && (
@@ -2501,7 +2666,7 @@ export const Group = ({
               </Box>
             </>
           )}
-           {!isMobile && groupSection === "home" && (
+           {/* {!isMobile && groupSection === "home" && (
         <DesktopFooter 
         selectedGroup={selectedGroup}
         groupSection={groupSection}
@@ -2536,7 +2701,7 @@ export const Group = ({
         setIsOpenSideViewDirects={setIsOpenSideViewDirects}
         setIsOpenSideViewGroups={setIsOpenSideViewGroups}
         />
-      )}
+      )} */}
           {isMobile && mobileViewMode === "home" && (
             <Home
               refreshHomeDataFunc={refreshHomeDataFunc}
@@ -2551,6 +2716,7 @@ export const Group = ({
               setOpenManageMembers={setOpenManageMembers}
               setOpenAddGroup={setOpenAddGroup}
               setMobileViewMode={setMobileViewMode}
+              setDesktopViewMode={setDesktopViewMode}
             />
           )}
           {isMobile  && (
@@ -2559,17 +2725,16 @@ export const Group = ({
             {!isMobile  && (
             <AppsDesktop toggleSideViewGroups={toggleSideViewGroups} toggleSideViewDirects={toggleSideViewDirects} goToHome={goToHome} mode={appsMode} setMode={setAppsMode} setDesktopSideView={setDesktopSideView} hasUnreadDirects={directChatHasUnread} show={desktopViewMode === "apps"} myName={userInfo?.name}  isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
-              groupsAnnHasUnread} />
+              groupsAnnHasUnread} setDesktopViewMode={setDesktopViewMode} isApps={desktopViewMode === 'apps'} desktopViewMode={desktopViewMode} />
           )}
             {!isMobile  && (
             <AppsDevMode toggleSideViewGroups={toggleSideViewGroups} toggleSideViewDirects={toggleSideViewDirects} goToHome={goToHome} mode={appsModeDev} setMode={setAppsModeDev} setDesktopSideView={setDesktopSideView} hasUnreadDirects={directChatHasUnread} show={desktopViewMode === "dev"} myName={userInfo?.name}  isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
-              groupsAnnHasUnread} />
+              groupsAnnHasUnread} setDesktopViewMode={setDesktopViewMode} desktopViewMode={desktopViewMode} isApps={desktopViewMode === 'apps'} />
           )}
       
      
-      {!isMobile && !selectedGroup &&
-          groupSection === "home"  && desktopViewMode !== "apps" && desktopViewMode !== "dev" && (
+      {!isMobile && desktopViewMode === 'home'  && (
         <HomeDesktop
   refreshHomeDataFunc={refreshHomeDataFunc}
   myAddress={myAddress}
@@ -2583,18 +2748,20 @@ export const Group = ({
   setOpenManageMembers={setOpenManageMembers}
   setOpenAddGroup={setOpenAddGroup}
   setMobileViewMode={setMobileViewMode}
+  setDesktopViewMode={setDesktopViewMode}
 />
       )}
 
     
         </Box>
+       
         <AuthenticatedContainerInnerRight
           sx={{
             marginLeft: "auto",
             width: "31px",
             // minWidth: "135px",
             padding: "5px",
-            display: (isMobile || desktopViewMode === 'apps' || desktopViewMode === 'dev') ? "none" : "flex",
+            display: (isMobile || desktopViewMode === 'apps' || desktopViewMode === 'dev' || desktopViewMode === 'chat') ? "none" : "flex",
           }}
         >
      

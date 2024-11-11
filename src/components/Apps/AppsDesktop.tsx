@@ -21,10 +21,15 @@ import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { Save } from "../Save/Save";
 import { HubsIcon } from "../../assets/Icons/HubsIcon";
 import { CoreSyncStatus } from "../CoreSyncStatus";
+import { IconWrapper } from "../Desktop/DesktopFooter";
+import AppIcon from "../../assets/svgs/AppIcon.svg";
+import { useRecoilState } from "recoil";
+import { enabledDevModeAtom } from "../../atoms/global";
+import { AppsIcon } from "../../assets/Icons/AppsIcon";
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktopSideView, hasUnreadDirects, isDirects, isGroups, hasUnreadGroups, toggleSideViewGroups, toggleSideViewDirects}) => {
+export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktopSideView, hasUnreadDirects, isDirects, isGroups, hasUnreadGroups, toggleSideViewGroups, toggleSideViewDirects, setDesktopViewMode, isApps, desktopViewMode}) => {
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null)
@@ -33,6 +38,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const [categories, setCategories] = useState([])
   const iframeRefs = useRef({});
+  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
   const myApp = useMemo(()=> {
    
    return availableQapps.find((app)=> app.name === myName && app.service === 'APP')
@@ -317,11 +323,46 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             
             <HomeIcon
               height={34}
-              color="rgba(250, 250, 250, 0.5)"
+              color={desktopViewMode === 'home' ? 'white': "rgba(250, 250, 250, 0.5)"}
             />
         
         </ButtonBase>
         <ButtonBase
+          onClick={() => {
+            setDesktopViewMode('apps')
+          }}
+        >
+          <IconWrapper
+            color={isApps ? 'white' :"rgba(250, 250, 250, 0.5)"}
+            label="Apps"
+            disableWidth
+          >
+          <AppsIcon height={30} color={isApps ? 'white' :"rgba(250, 250, 250, 0.5)"} />
+          </IconWrapper>
+        </ButtonBase>
+        <ButtonBase
+          onClick={() => {
+            setDesktopViewMode('chat')
+          }}
+        >
+        <IconWrapper
+            color={(hasUnreadDirects || hasUnreadGroups) ? "var(--unread)" : desktopViewMode === 'chat' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+            label="Chat"
+            disableWidth
+          >
+            <MessagingIcon
+              height={30}
+              color={
+                (hasUnreadDirects || hasUnreadGroups)
+                  ? "var(--unread)"
+                  : desktopViewMode === 'chat'
+                  ? "white"
+                  : "rgba(250, 250, 250, 0.5)"
+              }
+            />
+    </IconWrapper>
+        </ButtonBase>
+        {/* <ButtonBase
           onClick={() => {
             setDesktopSideView("directs");
             toggleSideViewDirects()
@@ -357,10 +398,23 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
               }
             />
      
-        </ButtonBase>
+        </ButtonBase> */}
         <Save isDesktop disableWidth />
-        <CoreSyncStatus imageSize="30px" position="left" />
-
+        {isEnabledDevMode && (
+           <ButtonBase
+           onClick={() => {
+             setDesktopViewMode('dev')
+           }}
+         >
+           <IconWrapper
+             color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"}
+             label="Dev"
+             disableWidth
+           >
+            <AppsIcon color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"} height={30} />
+           </IconWrapper>
+         </ButtonBase>
+        )}
         {mode !== 'home' && (
                  <AppsNavBarDesktop  />
 

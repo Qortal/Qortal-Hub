@@ -20,7 +20,7 @@ import { Save } from "../Save/Save";
 import { useRecoilState } from "recoil";
 import { enabledDevModeAtom } from "../../atoms/global";
 
-export const IconWrapper = ({ children, label, color, selected, disableWidth }) => {
+export const IconWrapper = ({ children, label, color, selected, disableWidth, customWidth }) => {
   return (
     <Box
       sx={{
@@ -29,8 +29,8 @@ export const IconWrapper = ({ children, label, color, selected, disableWidth }) 
         alignItems: "center",
         gap:  "5px",
         flexDirection: "column",
-        height: disableWidth ? 'auto' :  "89px",
-        width: disableWidth ? 'auto' : "89px",
+        height: customWidth ? customWidth : disableWidth ? 'auto' :  "89px",
+        width: customWidth? customWidth : disableWidth ? 'auto' : "89px",
         borderRadius: "50%",
         backgroundColor: selected ? "rgba(28, 29, 32, 1)" : "transparent",
       }}
