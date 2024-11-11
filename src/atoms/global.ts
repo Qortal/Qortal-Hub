@@ -24,6 +24,10 @@ export const sortablePinnedAppsAtom = atom({
   },{
     name: 'Qombo',
     service: 'APP'
+  },
+  {
+    name: 'Q-Trade',
+    service: 'APP'
   }
 ], 
 });
