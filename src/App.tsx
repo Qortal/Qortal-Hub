@@ -650,10 +650,11 @@ function App() {
   const qortalRequestPermissonFromExtension = async (message, event) => {
     if (message.action === "QORTAL_REQUEST_PERMISSION") {
       try {
+        if(message?.payload?.checkbox1){
+          qortalRequestCheckbox1Ref.current = message?.payload?.checkbox1
+        }
         await showQortalRequestExtension(message?.payload);
-          if(message?.payload?.checkbox1){
-            qortalRequestCheckbox1Ref.current = message?.payload?.checkbox1
-          }
+         
         if (qortalRequestCheckbox1Ref.current) {
           event.source.postMessage(
             {
