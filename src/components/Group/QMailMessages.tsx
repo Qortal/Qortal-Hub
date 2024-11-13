@@ -99,7 +99,6 @@ export const QMailMessages = ({userName, userAddress}) => {
 
     
 
-      console.log('mails', mails)
   return (
     <Box
     sx={{
