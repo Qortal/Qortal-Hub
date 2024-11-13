@@ -509,6 +509,11 @@ isDOMContentLoaded: false
       event?.data?.action === 'QDN_RESOURCE_DISPLAYED'){
         const pathUrl = event?.data?.path != null ? (event?.data?.path.startsWith('/') ? '' : '/') + event?.data?.path : null
         setPath(pathUrl)
+        if(appName.toLowerCase() === 'q-mail'){
+          window.sendMessage("addEnteredQmailTimestamp").catch((error) => {
+            // error
+          });
+        }
       } else if(event?.data?.action === 'NAVIGATION_HISTORY'){
         if(event?.data?.payload?.isDOMContentLoaded){
           setHistory((prev)=> {

@@ -1,5 +1,6 @@
 import {
   addDataPublishes,
+  addEnteredQmailTimestamp,
   addTimestampEnterChat,
   addTimestampGroupAnnouncement,
   addUserSettings,
@@ -20,6 +21,7 @@ import {
   getBalanceInfo,
   getCustomNodesFromStorage,
   getDataPublishes,
+  getEnteredQmailTimestamp,
   getGroupDataSingle,
   getKeyPair,
   getLTCBalance,
@@ -1045,6 +1047,56 @@ export async function addGroupNotificationTimestampCase(request, event) {
       {
         requestId: request.requestId,
         action: "addGroupNotificationTimestamp",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+export async function addEnteredQmailTimestampCase(request, event) {
+  try {
+    const response = await addEnteredQmailTimestamp();
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "addEnteredQmailTimestamp",
+        payload: response,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "addEnteredQmailTimestamp",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+export async function getEnteredQmailTimestampCase(request, event) {
+  try {
+    const response = await getEnteredQmailTimestamp();
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "getEnteredQmailTimestamp",
+        payload: {timestamp: response},
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "getEnteredQmailTimestamp",
         error: error?.message,
         type: "backgroundMessageResponse",
       },

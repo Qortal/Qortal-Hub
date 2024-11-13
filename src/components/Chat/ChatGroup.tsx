@@ -351,7 +351,6 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
           }
       }
       socketRef.current.onerror = (e) => {
-        console.error('WebSocket error:', error);
         clearTimeout(groupSocketTimeoutRef.current);
         clearTimeout(timeoutIdRef.current);
         if (socketRef.current) {

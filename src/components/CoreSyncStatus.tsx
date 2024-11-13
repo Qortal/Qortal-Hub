@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import syncedImg from '../assets/syncStatus/synced.png'
-import syncedMintingImg from '../assets/syncStatus/synced.png'
-import syncingImg from '../assets/syncStatus/synced.png'
+import syncedMintingImg from '../assets/syncStatus/synced_minting.png'
+import syncingImg from '../assets/syncStatus/syncing.png'
 import { getBaseApiReact } from '../App';
 import './CoreSyncStatus.css'
 export const CoreSyncStatus = ({imageSize, position}) => {
