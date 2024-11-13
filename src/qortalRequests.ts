@@ -1,5 +1,5 @@
 import { gateways, getApiKeyFromStorage } from "./background";
-import { addForeignServer, addListItems, cancelSellOrder, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
+import { addForeignServer, addListItems, adminAction, cancelSellOrder, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
 
 
@@ -68,6 +68,7 @@ export const isRunningGateway = async ()=> {
       
       // Ensure the message is from a trusted source
       const isFromExtension = request?.isExtension;
+      const appInfo = request?.appInfo;
       if (request?.type !== "backgroundMessage") return; // Only process messages of type 'backgroundMessage'
   
   
@@ -75,7 +76,7 @@ export const isRunningGateway = async ()=> {
       switch (request.action) {
         case "GET_USER_ACCOUNT": {
           try {
-            const res = await getUserAccount();
+            const res = await getUserAccount({isFromExtension, appInfo});
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
@@ -357,7 +358,7 @@ export const isRunningGateway = async ()=> {
   
         case "GET_WALLET_BALANCE": {
           try {
-            const res = await getWalletBalance(request.payload, false, isFromExtension);
+            const res = await getWalletBalance(request.payload, false, isFromExtension, appInfo);
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
@@ -659,6 +660,25 @@ export const isRunningGateway = async ()=> {
               requestId: request.requestId,
               action: request.action,
               payload: {isGateway},
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
+        case "ADMIN_ACTION": {
+          try {
+            const res =  await adminAction(request.payload, isFromExtension)
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
               type: "backgroundMessageResponse",
             }, event.origin);
           } catch (error) {

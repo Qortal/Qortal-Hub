@@ -651,7 +651,7 @@ function App() {
     if (message.action === "QORTAL_REQUEST_PERMISSION") {
       try {
         if(message?.payload?.checkbox1){
-          qortalRequestCheckbox1Ref.current = message?.payload?.checkbox1
+          qortalRequestCheckbox1Ref.current = message?.payload?.checkbox1?.value || false
         }
         await showQortalRequestExtension(message?.payload);
          

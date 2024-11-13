@@ -287,8 +287,30 @@ async function getUserPermission(payload, isFromExtension) {
 }
 
 
-export const getUserAccount = async () => {
+export const getUserAccount = async ({isFromExtension, appInfo}) => {
   try {
+    const value = (await getPermission(`qAPPAutoAuth-${appInfo?.name}`)) || false;
+    let skip = false;
+    if (value) {
+      skip = true;
+    }
+    let resPermission
+    if(!skip){
+      resPermission = await getUserPermission({
+         text1: "Do you give this application permission to authenticate?",
+         checkbox1: {
+           value: false,
+           label: "Always authenticate automatically",
+         },
+       }, isFromExtension);
+   } 
+
+   const { accepted = false, checkbox1 = false } = resPermission || {};
+   if(resPermission){
+     setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
+   }
+   if (accepted  || skip) {
+
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const publicKey = wallet.publicKey;
@@ -296,7 +318,12 @@ export const getUserAccount = async () => {
       address,
       publicKey,
     };
+  } else {
+    throw new Error("User declined request");
+
+  }
   } catch (error) {
+    console.log('per error', error)
     throw new Error("Unable to fetch user account");
   }
 };
@@ -369,8 +396,10 @@ export const decryptData = async (data) => {
 };
 
 export const getListItems = async (data, isFromExtension) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
+  const  isGateway =  await isRunningGateway()
+  if(isGateway){
+    throw new Error('This action cannot be done through a gateway')
+  }
   const requiredFields = ["list_name"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -421,8 +450,10 @@ export const getListItems = async (data, isFromExtension) => {
 };
 
 export const addListItems = async (data, isFromExtension) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
+  const  isGateway =  await isRunningGateway()
+  if(isGateway){
+    throw new Error('This action cannot be done through a gateway')
+  }
   const requiredFields = ["list_name", "items"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -474,8 +505,10 @@ export const addListItems = async (data, isFromExtension) => {
 };
 
 export const deleteListItems = async (data, isFromExtension) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
+  const  isGateway =  await isRunningGateway()
+  if(isGateway){
+    throw new Error('This action cannot be done through a gateway')
+  }
   const requiredFields = ["list_name", "item"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -1359,7 +1392,7 @@ export const getUserWallet = async (data, isFromExtension) => {
   }
 };
 
-export const getWalletBalance = async (data, bypassPermission?: boolean, isFromExtension) => {
+export const getWalletBalance = async (data, bypassPermission?: boolean, isFromExtension?: boolean, appInfo?: any) => {
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -1373,7 +1406,7 @@ export const getWalletBalance = async (data, bypassPermission?: boolean, isFromE
     throw new Error(errorMsg);
   }
 
-  const value = (await getPermission(`qAPPAutoWalletBalance-${data.coin}`)) || false;
+  const value = (await getPermission(`qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`)) || false;
   let skip = false;
   if (value) {
     skip = true;
@@ -1392,7 +1425,7 @@ export const getWalletBalance = async (data, bypassPermission?: boolean, isFromE
   } 
   const { accepted = false, checkbox1 = false } = resPermission || {};
   if(resPermission){
-    setPermission(`qAPPAutoWalletBalance-${data.coin}`, checkbox1);
+    setPermission(`qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`, checkbox1);
   }
   if (accepted || bypassPermission || skip) {
     let coin = data.coin;
@@ -2020,8 +2053,9 @@ export const sendCoin = async (data, isFromExtension) => {
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
     const parsedData = resKeyPair;
-    const localNodeAvailable = await isUsingLocal()
-    if(checkCoin !== 'QORT' && !localNodeAvailable) throw new Error('Cannot send a non-QORT coin through the gateway. Please use your local node.')
+    const  isGateway =  await isRunningGateway()
+
+    if(checkCoin !== 'QORT' && isGateway) throw new Error('Cannot send a non-QORT coin through the gateway. Please use your local node.')
     if (checkCoin === "QORT") {
         // Params: data.coin, data.destinationAddress, data.amount, data.fee
         // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
@@ -2716,4 +2750,61 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   } catch (error) {
     throw new Error(error?.message || "Failed to submit sell order.");
   }
+};
+
+export const adminAction = async (data, isFromExtension) => {
+
+  const requiredFields = [
+    "type",
+  ];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+  const  isGateway =  await isRunningGateway()
+  if(isGateway){
+    throw new Error('This action cannot be done through a gateway')
+  }
+
+    let apiEndpoint = '';
+    switch (data.type.toLowerCase()) {
+      case 'stop':
+        apiEndpoint = await createEndpoint('/admin/stop');
+        break;
+      case 'restart':
+        apiEndpoint = await createEndpoint('/admin/restart');
+        break;
+      case 'bootstrap':
+        apiEndpoint = await createEndpoint('/admin/bootstrap');
+        break;
+      default:
+        throw new Error(`Unknown admin action type: ${data.type}`);
+    }
+
+    const resPermission = await getUserPermission({
+      text1: `Do you give this application permission to perform a node ${data.type}?`,
+    }, isFromExtension);
+    const { accepted } = resPermission;
+    if (accepted) {
+      const response = await fetch(apiEndpoint);
+    if (!response.ok) throw new Error("Failed to perform request");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    return res;
+  } else {
+    throw new Error("User declined request");
+  }
+ 
 };
