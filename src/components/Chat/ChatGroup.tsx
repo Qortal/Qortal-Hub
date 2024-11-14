@@ -541,6 +541,7 @@ const clearEditorContent = () => {
     
   const onReply = useCallback((message)=> {
     setReplyMessage(message)
+    editorRef?.current?.chain().focus()
   }, [])
 
   const handleReaction = useCallback(async (reaction, chatMessage, reactionState = true)=> {
