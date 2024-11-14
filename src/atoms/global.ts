@@ -13,7 +13,7 @@ export const sortablePinnedAppsAtom = atom({
     name: 'Q-Share',
     service: 'APP'
   }, {
-    name: 'Q-Blog',
+    name: 'qombo',
     service: 'APP'
   }, {
     name: 'Q-Fund',
