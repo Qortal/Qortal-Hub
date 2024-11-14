@@ -10,15 +10,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
   const [showScrollButton, setShowScrollButton] = useState(false);
   const hasLoadedInitialRef = useRef(false);
   const isAtBottomRef = useRef(true);
-  // const [ref, inView] = useInView({
-  //   threshold: 0.7
-  // })
 
-  // useEffect(() => {
-  //   if (inView) {
-      
-  //   }
-  // }, [inView])
   // Update message list with unique signatures and tempMessages
   useEffect(() => {
     let uniqueInitialMessagesMap = new Map();
@@ -60,7 +52,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
   const scrollToBottom = (initialMsgs) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
-      rowVirtualizer.scrollToIndex(index, { align: 'end' });
+        rowVirtualizer.scrollToIndex(index, { align: 'end' })
     }
     handleMessageSeen()
   };
@@ -76,12 +68,6 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
     setShowScrollButton(false)
   }, []);
 
-  // const scrollToBottom = (initialMsgs) => {
-  //   const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
-  //   if (parentRef.current) {
-  //     parentRef.current.scrollToIndex(index);
-  //   }
-  // };
 
 
   const sentNewMessageGroupFunc = useCallback(() => {
@@ -105,35 +91,48 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
+    getItemKey: React.useCallback(
+      (index) => messages[index].signature,
+      [messages]
+    ),
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80, // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
-    measureElement:
-    typeof window !== 'undefined' &&
-    navigator.userAgent.indexOf('Firefox') === -1
-      ? element => {
-        return element?.getBoundingClientRect().height
-      }
-      : undefined,
+
   });
+
+
+
+  
 
   return (
 <div style={{
   height: '100%',
-  position: 'relative'
+  position: 'relative',
+  display: 'flex',
+  flexDirection: 'column'
 }}>
-    <div ref={parentRef} style={{ height: '100%', overflow: 'auto', position: 'relative', display: 'flex' }}>
-      <div
-        style={{
-          width: '100%',
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center', // Center items horizontally
-          gap: '10px', // Add gap between items
-          flexGrow: 1
-        }}
+
+       <div
+        ref={parentRef}
+        className="List"
+        style={{ flexGrow: 1, overflow: 'auto', position: 'relative', display: 'flex', height: '0px' }}
       >
+       <div
+          style={{
+            height: rowVirtualizer.getTotalSize(),
+            width: '100%',
+         
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+            }}
+          >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const index = virtualRow.index;
           let message = messages[index];
@@ -172,7 +171,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
           return (
             <div
             data-index={virtualRow.index} //needed for dynamic row height measurement
-            ref={node => rowVirtualizer.measureElement(node)} //measure dynamic row height
+            ref={rowVirtualizer.measureElement} //measure dynamic row height
               key={message.signature}
               style={{
                 position: 'absolute',
@@ -205,7 +204,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
           );
         })}
       </div>
-
+        </div>
      
     </div>
     {showScrollButton && (
