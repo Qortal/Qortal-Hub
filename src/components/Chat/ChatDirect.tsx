@@ -383,6 +383,8 @@ const clearEditorContent = () => {
 
   const onReply = useCallback((message)=> {
     setReplyMessage(message)
+    editorRef?.current?.chain().focus()
+
   }, [])
 
     
