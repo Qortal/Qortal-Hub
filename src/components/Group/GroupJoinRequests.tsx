@@ -16,13 +16,17 @@ import { Spacer } from "../../common/Spacer";
 import { CustomLoader } from "../../common/CustomLoader";
 import { getBaseApi } from "../../background";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
+import { myGroupsWhereIAmAdminAtom } from "../../atoms/global";
+import { useSetRecoilState } from "recoil";
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2)
 
 export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, getTimestampEnterChat, setSelectedGroup, setGroupSection, setMobileViewMode, setDesktopViewMode }) => {
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const {txList, setTxList} = React.useContext(MyContext)
-
+  const setMyGroupsWhereIAmAdmin = useSetRecoilState(
+    myGroupsWhereIAmAdminAtom
+  );
 
 
   const getJoinRequests = async ()=> {
@@ -50,6 +54,7 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
 
      
       await Promise.all(getAllGroupsAsAdmin)
+      setMyGroupsWhereIAmAdmin(groupsAsAdmin)
      const res = await Promise.all(groupsAsAdmin.map(async (group)=> {
 
       const joinRequestResponse = await requestQueueGroupJoinRequests.enqueue(()=> {

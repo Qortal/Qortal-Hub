@@ -258,15 +258,17 @@ export function setupContentSecurityPolicy(customScheme: string): void {
 
     // Create the Content Security Policy (CSP) string
     const csp = `
-      default-src 'self' ${allowedSources.join(' ')};
-      frame-src ${frameSources.join(' ')};
-      script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources.join(' ')};
-      object-src 'self';
-      connect-src ${connectSources.join(' ')};
-      img-src 'self' data: blob: ${allowedSources.join(' ')};
-      style-src 'self' 'unsafe-inline';
-      font-src 'self' data:;
-    `.replace(/\s+/g, ' ').trim();
+    default-src 'self' ${allowedSources.join(' ')};
+    frame-src ${frameSources.join(' ')};
+    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources.join(' ')};
+    object-src 'self';
+    connect-src ${connectSources.join(' ')};
+    img-src 'self' data: blob: ${allowedSources.join(' ')};
+    media-src 'self' blob: ${allowedSources.join(' ')};  
+    style-src 'self' 'unsafe-inline';
+    font-src 'self' data:;
+  `.replace(/\s+/g, ' ').trim();
+  
    
     // Get the request URL and origin
     const requestUrl = details.url;
