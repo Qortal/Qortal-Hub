@@ -71,6 +71,7 @@
   margin: 1.5rem 0;
   padding: 0.75rem 1rem;
   outline: none;
+  text-wrap: wrap;
 }
 
 .tiptap pre code {
