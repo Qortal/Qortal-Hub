@@ -35,6 +35,7 @@ import {
   addEnteredQmailTimestampCase,
   addGroupNotificationTimestampCase,
   addTimestampEnterChatCase,
+  addTimestampMentionCase,
   addUserSettingsCase,
   balanceCase,
   banFromGroupCase,
@@ -59,6 +60,7 @@ import {
   getTempPublishCase,
   getThreadActivityCase,
   getTimestampEnterChatCase,
+  getTimestampMentionCase,
   getUserSettingsCase,
   getWalletInfoCase,
   handleActiveGroupDataFromSocketCase,
@@ -2543,6 +2545,18 @@ export async function getTimestampEnterChat() {
     return {};
   }
 }
+export async function getTimestampMention() {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const key = `enter-mention-timestamp-${address}`;
+  const res = await getData<any>(key).catch(() => null);
+  if (res) {
+    const parsedData = res;
+    return parsedData;
+  } else {
+    return {};
+  }
+}
 export async function getTimestampGroupAnnouncement() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -2665,6 +2679,21 @@ export async function addTimestampEnterChat({ groupId, timestamp }) {
       });
   });
 }
+
+export async function addTimestampMention({ groupId, timestamp }) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const data = await getTimestampMention();
+  data[groupId] = timestamp;
+  return await new Promise((resolve, reject) => {
+    storeData(`enter-mention-timestamp-${address}`, data)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
+  });
+}
+
 
 export async function notifyAdminRegenerateSecretKey({
   groupName,
@@ -2841,6 +2870,12 @@ function setupMessageListener() {
       case "getTimestampEnterChat":
         getTimestampEnterChatCase(request, event);
         break;
+        case "addTimestampMention":
+          addTimestampMentionCase(request, event);
+          break;
+          case "getTimestampMention":
+            getTimestampMentionCase(request, event);
+            break;
       case "getGroupNotificationTimestamp":
         getGroupNotificationTimestampCase(request, event);
         break;

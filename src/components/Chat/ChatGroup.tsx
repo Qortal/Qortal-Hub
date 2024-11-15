@@ -24,7 +24,7 @@ import { isExtMsg } from '../../background'
 
 const uid = new ShortUniqueId({ length: 5 });
 
-export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey, myAddress, handleNewEncryptionNotification, hide, handleSecretKeyCreationInProgress, triedToFetchSecretKey, myName, balance}) => {
+export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey, myAddress, handleNewEncryptionNotification, hide, handleSecretKeyCreationInProgress, triedToFetchSecretKey, myName, balance, getTimestampEnterChatParent}) => {
   const [messages, setMessages] = useState([])
   const [chatReferences, setChatReferences] = useState({})
   const [isSending, setIsSending] = useState(false)
@@ -43,6 +43,61 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
   const editorRef = useRef(null);
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
+  const lastReadTimestamp = useRef(null)
+
+ 
+
+  const getTimestampEnterChat = async () => {
+    try {
+      return new Promise((res, rej) => {
+        window.sendMessage("getTimestampEnterChat")
+  .then((response) => {
+    if (!response?.error) {
+      if(response && selectedGroup && response[selectedGroup]){
+        lastReadTimestamp.current = response[selectedGroup]
+        window.sendMessage("addTimestampEnterChat", {
+          timestamp: Date.now(),
+          groupId: selectedGroup
+        }).catch((error) => {
+            console.error("Failed to add timestamp:", error.message || "An error occurred");
+          });
+        
+
+        setTimeout(() => {
+          getTimestampEnterChatParent();
+        }, 200);
+      }
+    
+      res(response);
+      return;
+    }
+    rej(response.error);
+  })
+  .catch((error) => {
+    rej(error.message || "An error occurred");
+  });
+
+      });
+    } catch (error) {}
+  };
+
+  useEffect(()=> {
+    getTimestampEnterChat()
+  }, [])
+
+  
+
+  const members = useMemo(() => {
+    const uniqueMembers = new Set();
+
+    messages.forEach((message) => {
+      if (message?.senderName) {
+        uniqueMembers.add(message?.senderName);
+      }
+    });
+
+    return Array.from(uniqueMembers);
+  }, [messages]);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state
@@ -145,16 +200,20 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
                 res(combineUIAndExtensionMsgs);
           
                 if (isInitiated) {
+
                   const formatted = combineUIAndExtensionMsgs
                     .filter((rawItem) => !rawItem?.chatReference)
-                    .map((item) => ({
-                      ...item,
-                      id: item.signature,
-                      text: item?.decryptedData?.message || "",
-                      repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
-                      unread: item?.sender === myAddress ? false : !!item?.chatReference ? false : true,
-                      isNotEncrypted: !!item?.messageText,
-                    }));
+                    .map((item) => {
+                     
+                      return {
+                        ...item,
+                        id: item.signature,
+                        text: item?.decryptedData?.message || "",
+                        repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
+                        unread: item?.sender === myAddress ? false : !!item?.chatReference ? false : true,
+                        isNotEncrypted: !!item?.messageText,
+                      }
+                    });
                   setMessages((prev) => [...prev, ...formatted]);
           
                   setChatReferences((prev) => {
@@ -211,16 +270,25 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
                     return organizedChatReferences;
                   });
                 } else {
+                  let firstUnreadFound = false;
                   const formatted = combineUIAndExtensionMsgs
                     .filter((rawItem) => !rawItem?.chatReference)
-                    .map((item) => ({
-                      ...item,
-                      id: item.signature,
-                      text: item?.decryptedData?.message || "",
-                      repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
-                      isNotEncrypted: !!item?.messageText,
-                      unread: false,
-                    }));
+                    .map((item) => {
+                      const divide = lastReadTimestamp.current && !firstUnreadFound && item.timestamp > lastReadTimestamp.current && myAddress !== item?.sender;
+                     
+                      if(divide){
+                        firstUnreadFound = true
+                      }
+                      return {
+                        ...item,
+                        id: item.signature,
+                        text: item?.decryptedData?.message || "",
+                        repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
+                        isNotEncrypted: !!item?.messageText,
+                        unread: false,
+                        divide
+                      }
+                    });
                   setMessages(formatted);
           
                   setChatReferences((prev) => {
@@ -620,9 +688,9 @@ const clearEditorContent = () => {
       position: hide ? 'absolute' : 'relative',
     left: hide && '-100000px',
     }}>
- 
-              <ChatList onReply={onReply} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences}/>
-
+              
+              <ChatList enableMentions onReply={onReply} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
+             
    
       <div style={{
         // position: 'fixed',
@@ -669,7 +737,7 @@ const clearEditorContent = () => {
       )}
      
      
-      <Tiptap setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} />
+      <Tiptap enableMentions setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} membersWithNames={members} />
       </div>
       <Box sx={{
         display: 'flex',

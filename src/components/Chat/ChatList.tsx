@@ -3,11 +3,15 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { MessageItem } from './MessageItem';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useInView } from 'react-intersection-observer'
+import { Box } from '@mui/material';
+import { ChatOptions } from './ChatOptions';
 
-export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onReply, handleReaction, chatReferences, tempChatReferences }) => {
+export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onReply, handleReaction, chatReferences, tempChatReferences, members, myName, selectedGroup, enableMentions }) => {
   const parentRef = useRef();
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+
   const hasLoadedInitialRef = useRef(false);
   const isAtBottomRef = useRef(true);
 
@@ -32,7 +36,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
     setMessages(totalMessages);
 
     setTimeout(() => {
-      const hasUnreadMessages = totalMessages.some((msg) => msg.unread && !msg?.chatReference);
+      const hasUnreadMessages = totalMessages.some((msg) => msg.unread && !msg?.chatReference && !msg?.isTemp);
       if (parentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
       const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
@@ -43,19 +47,28 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
         }
       }
       if (!hasLoadedInitialRef.current) {
-        scrollToBottom(totalMessages);
+        const findDivideIndex = totalMessages.findIndex((item)=> !!item?.divide)
+        const divideIndex = findDivideIndex !== -1 ? findDivideIndex : undefined
+        scrollToBottom(totalMessages, divideIndex);
         hasLoadedInitialRef.current = true;
       }
     }, 500);
   }, [initialMessages, tempMessages]);
 
-  const scrollToBottom = (initialMsgs) => {
+  const scrollToBottom = (initialMsgs, divideIndex) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
+      if(divideIndex){
+        rowVirtualizer.scrollToIndex(divideIndex, { align: 'start' })
+      } else {
         rowVirtualizer.scrollToIndex(index, { align: 'end' })
+
+      }
     }
     handleMessageSeen()
   };
+
+
 
 
   const handleMessageSeen = useCallback(() => {
@@ -98,19 +111,51 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80, // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
+    observeElementOffset: (instance, cb) => {
+      const offsetCheck = () => {
+        const { scrollHeight, scrollTop, clientHeight } = instance.scrollElement;
+        const atBottom = scrollHeight - scrollTop - clientHeight <= 300;
+        if(showScrollButton){
+          setShowScrollDownButton(false)
+        } else
+        if(atBottom){
+          setShowScrollDownButton(false)
+
+        } else {
+          setShowScrollDownButton(true)
+
+        }
+        cb(scrollTop); // Pass scroll offset to callback
+        // setShowScrollToBottom(!atBottom);
+      };
+
+      // Initial check and continuous monitoring
+      offsetCheck();
+      instance.scrollElement.addEventListener('scroll', offsetCheck);
+      return () => instance.scrollElement.removeEventListener('scroll', offsetCheck);
+    },
 
   });
 
+ const goToMessage = useCallback((idx)=> {
+  rowVirtualizer.scrollToIndex(idx)
+ }, [])
 
 
   
 
   return (
+    <Box sx={{
+      display: 'flex',
+      width: '100%',
+      height: '100%'
+    }}>
 <div style={{
   height: '100%',
   position: 'relative',
   display: 'flex',
-  flexDirection: 'column'
+  flexDirection: 'column',
+  width: '100%'
 }}>
 
        <div
@@ -181,8 +226,10 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
                 width: '100%', // Control width (90% of the parent)
                 padding: '10px 0',
                 display: 'flex',
-                justifyContent: 'center',
+                alignItems: 'center',
                 overscrollBehavior: 'none',
+                flexDirection: 'column',
+                gap: '5px'
               }}
             >
               <MessageItem
@@ -195,7 +242,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
                 onReply={onReply}
                 reply={reply}
                 replyIndex={replyIndex}
-                scrollToItem={(idx) => rowVirtualizer.scrollToIndex(idx)}
+                scrollToItem={goToMessage}
                 handleReaction={handleReaction}
                 reactions={reactions}
                 isUpdating={isUpdating}
@@ -214,18 +261,44 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
           bottom:  20,
           position: 'absolute',
           right: 20,
-          backgroundColor: '#ff5a5f',
+          backgroundColor: 'var(--unread)',
           color: 'white',
           padding: '10px 20px',
           borderRadius: '20px',
           cursor: 'pointer',
           zIndex: 10,
+          border: 'none',
+          outline: 'none'
         }}
       >
         Scroll to Unread Messages
       </button>
     )}
+    {showScrollDownButton &&  (
+      <button
+        onClick={() => scrollToBottom()}
+        style={{
+          bottom:  20,
+          position: 'absolute',
+          right: 20,
+          backgroundColor: 'var(--Mail-Background)',
+          color: 'white',
+          padding: '10px 20px',
+          borderRadius: '20px',
+          cursor: 'pointer',
+          zIndex: 10,
+          border: 'none',
+          outline: 'none'
+        }}
+      >
+        Scroll to bottom
+      </button>
+    )}
    </div>
- 
+   {enableMentions && (
+       <ChatOptions messages={messages} goToMessage={goToMessage} members={members} myName={myName} selectedGroup={selectedGroup}/>
+
+   )}
+   </Box>
   );
 };

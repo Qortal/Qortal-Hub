@@ -323,7 +323,6 @@ export const getUserAccount = async ({isFromExtension, appInfo}) => {
 
   }
   } catch (error) {
-    console.log('per error', error)
     throw new Error("Unable to fetch user account");
   }
 };

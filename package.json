@@ -36,6 +36,7 @@
     "@tiptap/extension-color": "^2.5.9",
     "@tiptap/extension-highlight": "^2.6.6",
     "@tiptap/extension-image": "^2.6.6",
+    "@tiptap/extension-mention": "^2.9.1",
     "@tiptap/extension-placeholder": "^2.6.2",
     "@tiptap/extension-text-style": "^2.5.9",
     "@tiptap/extension-underline": "^2.6.6",
@@ -57,6 +58,7 @@
     "electron-builder": "^25.1.8",
     "emoji-picker-react": "^4.12.0",
     "file-saver": "^2.0.5",
+    "html-to-text": "^9.0.5",
     "jssha": "3.3.1",
     "lodash": "^4.17.21",
     "mime": "^4.0.4",
@@ -80,6 +82,7 @@
     "short-unique-id": "^5.2.0",
     "slate": "^0.103.0",
     "slate-react": "^0.109.0",
+    "tippy.js": "^6.3.7",
     "tiptap-extension-resize-image": "^1.1.8"
   },
   "devDependencies": {

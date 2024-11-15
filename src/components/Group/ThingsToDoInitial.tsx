@@ -48,10 +48,11 @@ export const ThingsToDoInitial = ({ myAddress, name, hasGroups, balance, userInf
     if (name) setChecked2(true);
   }, [name]);
 
+
   const isLoaded = React.useMemo(()=> {
-      if(balance !== null &&  userInfo !== null) return true
+      if(userInfo !== null) return true
     return false
-  }, [balance, userInfo])
+  }, [ userInfo])
 
   const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(()=> {
     if(isLoaded && checked1 && checked2) return true

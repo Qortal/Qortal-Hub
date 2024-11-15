@@ -3,6 +3,7 @@ import {
   addEnteredQmailTimestamp,
   addTimestampEnterChat,
   addTimestampGroupAnnouncement,
+  addTimestampMention,
   addUserSettings,
   banFromGroup,
   cancelBan,
@@ -29,6 +30,7 @@ import {
   getTempPublish,
   getTimestampEnterChat,
   getTimestampGroupAnnouncement,
+  getTimestampMention,
   getUserInfo,
   getUserSettings,
   handleActiveGroupDataFromSocket,
@@ -1209,6 +1211,59 @@ export async function getTimestampEnterChatCase(request, event) {
       {
         requestId: request.requestId,
         action: "getTimestampEnterChat",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+
+export async function getTimestampMentionCase(request, event) {
+  try {
+    const response = await getTimestampMention();
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "getTimestampMention",
+        payload: response,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "getTimestampMention",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+
+export async function addTimestampMentionCase(request, event) {
+  try {
+    const { groupId, timestamp } = request.payload;
+    const response = await addTimestampMention({ groupId, timestamp });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "addTimestampMention",
+        payload: response,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "addTimestampMention",
         error: error?.message,
         type: "backgroundMessageResponse",
       },

@@ -37,6 +37,14 @@ if (electronIsDev) {
   setupReloadWatcher(myCapacitorApp);
 }
 
+const checkForUpdates = async () => {
+  try {
+    await autoUpdater.checkForUpdatesAndNotify();
+  } catch (error) {
+    console.error("Error checking for updates:", error);
+  }
+};
+
 // Run Application
 (async () => {
   // Wait for electron app to be ready.
@@ -46,10 +54,13 @@ if (electronIsDev) {
   // Initialize our app, build windows, and load content.
   await myCapacitorApp.init();
   // Check for updates if we are in a packaged app.
-  autoUpdater.checkForUpdatesAndNotify();
-  setInterval(() => {
-    autoUpdater.checkForUpdatesAndNotify();
-  }, 6 * 60 * 60 * 1000); // 24 hours in milliseconds
+ 
+  checkForUpdates();
+
+  // Set up periodic update checks
+
+    setInterval(checkForUpdates, 24 * 60 * 60 * 1000); // 24 hours
+
 })();
 
 // Handle when all of our windows are close (platforms have their own expectations).

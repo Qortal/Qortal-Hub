@@ -6,15 +6,15 @@ const MessageQueueContext = createContext(null);
 export const useMessageQueue = () => useContext(MessageQueueContext);
 
 const uid = new ShortUniqueId({ length: 8 });
-let messageQueue = []; // Global message queue
 
 export const MessageQueueProvider = ({ children }) => {
+  const messageQueueRef = useRef([]);
   const [queueChats, setQueueChats] = useState({}); // Stores chats and status for display
   const isProcessingRef = useRef(false); // To track if the queue is being processed
   const maxRetries = 2;
   const clearStatesMessageQueueProvider = useCallback(() => {
     setQueueChats({});
-    messageQueue = [];
+    messageQueueRef.current = [];
     isProcessingRef.current = false;
   }, []);
 
@@ -36,9 +36,9 @@ export const MessageQueueProvider = ({ children }) => {
       [groupDirectId]: [...(prev[groupDirectId] || []), chatData]
     }));
 
-    // Add the message to the global messageQueue
-    messageQueue = [
-      ...messageQueue,
+    // Add the message to the global messageQueueRef.current
+    messageQueueRef.current = [
+      ...messageQueueRef.current,
       { func: sendMessageFunc, identifier: tempId, groupDirectId, specialId: messageObj?.message?.specialId }
     ];
 
@@ -51,10 +51,10 @@ export const MessageQueueProvider = ({ children }) => {
     processQueue(newMessages, groupDirectId);
   };
 
-  // Function to process the messageQueue and handle new messages
+  // Function to process the messageQueueRef.current and handle new messages
   const processQueue = useCallback(async (newMessages = [], groupDirectId) => {
     // Filter out any message in the queue that matches the specialId from newMessages
-    messageQueue = messageQueue.filter((msg) => {
+    messageQueueRef.current = messageQueueRef.current.filter((msg) => {
       return !newMessages.some(newMsg => newMsg?.specialId === msg?.specialId);
     });
 
@@ -81,12 +81,12 @@ export const MessageQueueProvider = ({ children }) => {
     });
 
     // If currently processing or the queue is empty, return
-    if (isProcessingRef.current || messageQueue.length === 0) return;
+    if (isProcessingRef.current || messageQueueRef.current.length === 0) return;
   
     isProcessingRef.current = true; // Lock the queue for processing
   
-    while (messageQueue.length > 0) {
-      const currentMessage = messageQueue[0]; // Get the first message in the queue
+    while (messageQueueRef.current.length > 0) {
+      const currentMessage = messageQueueRef.current[0]; // Get the first message in the queue
       const { groupDirectId, identifier } = currentMessage;
   
       // Update the chat status to 'sending'
@@ -104,10 +104,10 @@ export const MessageQueueProvider = ({ children }) => {
       });
   
       try {
-        // Execute the function stored in the messageQueue
+        // Execute the function stored in the messageQueueRef.current
         await currentMessage.func();
-        // Remove the message from the messageQueue after successful sending
-        messageQueue = messageQueue.slice(1); // Slice here remains for successful messages
+        // Remove the message from the messageQueueRef.current after successful sending
+        messageQueueRef.current.shift(); // Slice here remains for successful messages
   
         // Remove the message from queueChats after success
         // setQueueChats((prev) => {
@@ -136,8 +136,8 @@ export const MessageQueueProvider = ({ children }) => {
               // Max retries reached, set status to 'failed-permanent'
               updatedChats[groupDirectId][chatIndex].status = 'failed-permanent';
   
-              // Remove the message from the messageQueue after max retries
-              messageQueue = messageQueue.slice(1); // Slice for failed messages after max retries
+              // Remove the message from the messageQueueRef.current after max retries
+              messageQueueRef.current.shift();// Slice for failed messages after max retries
   
               // // Remove the message from queueChats after failure
               // updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
@@ -147,7 +147,7 @@ export const MessageQueueProvider = ({ children }) => {
           }
           return updatedChats;
         });
-      }
+      } 
   
       // Delay between processing each message to avoid overlap
       await new Promise((res) => setTimeout(res, 5000));

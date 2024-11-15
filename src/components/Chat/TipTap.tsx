@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { EditorProvider, useCurrentEditor } from "@tiptap/react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { EditorProvider, useCurrentEditor, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color } from "@tiptap/extension-color";
 import ListItem from "@tiptap/extension-list-item";
@@ -22,10 +22,28 @@ import RedoIcon from "@mui/icons-material/Redo";
 import FormatHeadingIcon from "@mui/icons-material/FormatSize";
 import DeveloperModeIcon from "@mui/icons-material/DeveloperMode";
 import Compressor from "compressorjs";
-
+import Mention from '@tiptap/extension-mention';
 import ImageResize from "tiptap-extension-resize-image"; // Import the ResizeImage extension
 import { isMobile } from "../../App";
+import tippy from "tippy.js";
+import "tippy.js/dist/tippy.css";
+import Popover from '@mui/material/Popover';
+import List from '@mui/material/List';
+import ListItemMui from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import { ReactRenderer } from '@tiptap/react'
+import MentionList from './MentionList.jsx'
 
+function textMatcher(doc, from) {
+  const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
+  const match = textBeforeCursor.match(/@[\w]*$/); // Match '@' followed by valid characters
+  if (!match) return null;
+
+  const start = from - match[0].length;
+  const query = match[0];
+  return { start, query };
+}
 const MenuBar = ({ setEditorRef, isChat }) => {
   const { editor } = useCurrentEditor();
   const fileInputRef = useRef(null);
@@ -279,8 +297,10 @@ export default ({
   isFocusedParent,
   overrideMobile,
   customEditorHeight,
+  membersWithNames,
+  enableMentions
 }) => {
-  const [isFocused, setIsFocused] = useState(false);
+
   const extensionsFiltered = isChat
     ? extensions.filter((item) => item?.name !== "image")
     : extensions;
@@ -289,6 +309,32 @@ export default ({
     editorRef.current = editorInstance;
     setEditorRef(editorInstance);
   };
+
+  // const users = [
+  //   { id: 1, label: 'Alice' },
+  //   { id: 2, label: 'Bob' },
+  //   { id: 3, label: 'Charlie' },
+  // ];
+
+
+
+  const users = useMemo(()=> {
+    return (membersWithNames || [])?.map((item)=> {
+      return {
+        id: item,
+        label: item
+      }
+    })
+  }, [membersWithNames])
+
+
+
+
+
+  const usersRef = useRef([]);
+  useEffect(() => {
+    usersRef.current = users; // Keep users up-to-date
+  }, [users]);
 
   const handleFocus = () => {
     if (!isMobile) return;
@@ -302,14 +348,89 @@ export default ({
     }
   };
 
+  const additionalExtensions = useMemo(()=> {
+    if(!enableMentions) return []
+    return [
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'mention',
+        },
+        suggestion: {
+          items: ({ query }) => {
+            if (!query) return usersRef?.current;
+            return usersRef?.current?.filter((user) =>
+              user.label.toLowerCase().includes(query.toLowerCase())
+            );
+          },
+          render: () => {
+            let popup; // Reference to the Tippy.js instance
+            let component;
+
+           return {
+            onStart: props => {
+              component = new ReactRenderer(MentionList, {
+                props,
+                editor: props.editor,
+              })
+      
+              if (!props.clientRect) {
+                return
+              }
+      
+              popup = tippy('body', {
+                getReferenceClientRect: props.clientRect,
+                appendTo: () => document.body,
+                content: component.element,
+                showOnCreate: true,
+                interactive: true,
+                trigger: 'manual',
+                placement: 'bottom-start',
+              })
+            },
+      
+            onUpdate(props) {
+              component.updateProps(props)
+      
+              if (!props.clientRect) {
+                return
+              }
+      
+              popup[0].setProps({
+                getReferenceClientRect: props.clientRect,
+              })
+            },
+      
+            onKeyDown(props) {
+              if (props.event.key === 'Escape') {
+                popup[0].hide()
+      
+                return true
+              }
+      
+              return component.ref?.onKeyDown(props)
+            },
+      
+            onExit() {
+              popup[0].destroy()
+              component.destroy()
+            },
+           }
+          },
+        },
+      })
+    ]
+  }, [enableMentions])
+
   return (
+    <div>
     <EditorProvider
       slotBefore={
         (isFocusedParent || !isMobile || overrideMobile) && (
           <MenuBar setEditorRef={setEditorRefFunc} isChat={isChat} />
         )
       }
-      extensions={extensionsFiltered}
+      extensions={[...extensionsFiltered,   ...additionalExtensions
+    ]}
       content={content}
       onCreate={({ editor }) => {
         editor.on("focus", handleFocus); // Listen for focus event
@@ -348,5 +469,7 @@ export default ({
         },
       }}
     />
+    </div>
+
   );
 };

@@ -47,6 +47,12 @@ export const MessageItem = ({
 
 
   return (
+    <>
+    {message?.divide && (
+     <div className="unread-divider" id="unread-divider-id">
+     Unread messages below
+   </div>
+    )}
     <div
       ref={lastSignature === message?.signature ? ref : null}
       style={{
@@ -239,7 +245,9 @@ export const MessageItem = ({
                     handleReaction(reaction, message, true)
                   }
                 }}>
-               <div>{reaction}</div>  {numberOfReactions > 1 && (
+               <div style={{
+                fontSize: '16px'
+               }}>{reaction}</div>  {numberOfReactions > 1 && (
                 <Typography sx={{
                   marginLeft: '4px'
                 }}>{' '} {numberOfReactions}</Typography>
@@ -307,6 +315,7 @@ export const MessageItem = ({
     ></Message> */}
       {/* {!message.unread && <span style={{ color: 'green' }}> Seen</span>} */}
     </div>
+    </>
   );
 };
 
@@ -355,5 +364,6 @@ export const ReplyPreview = ({message})=> {
               )}
             </Box>
           </Box>
+          
   )
 }

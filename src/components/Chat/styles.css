@@ -123,3 +123,50 @@
 .isReply p {
   font-size: 12px !important;
 }
+
+.tiptap .mention {
+  box-decoration-break: clone;
+  color: lightblue;
+  padding: 0.1rem 0.3rem;
+}
+
+
+.unread-divider {
+  width: 90%;
+        color: white;
+        border-bottom: 1px solid white;
+        display: flex;
+        justify-content: center;
+        border-radius: 2px;
+}
+
+.mention-item {
+  cursor: pointer;
+}
+
+.dropdown-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.4rem;
+  position: relative;
+  max-height: 200px;
+  overflow: auto;
+
+  button {
+    align-items: center;
+    background-color: transparent;
+    display: flex;
+    gap: 0.25rem;
+    text-align: left;
+    font-size: 16px;
+    width: 100%;
+    border: none;
+    color: white;
+    cursor: pointer;
+    &:hover,
+    &:hover.is-selected {
+      background-color: gray;
+    }
+  }
+}

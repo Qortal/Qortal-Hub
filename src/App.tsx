@@ -575,6 +575,7 @@ function App() {
     };
   };
 
+
   const getBalanceFunc = () => {
     setQortBalanceLoading(true);
     window
@@ -2173,6 +2174,7 @@ function App() {
               onClick={() => {
                 setRawWallet(null);
                 setExtstate("not-authenticated");
+                logoutFunc()
               }}
               src={Return}
             />
