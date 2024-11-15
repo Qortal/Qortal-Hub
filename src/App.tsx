@@ -69,7 +69,7 @@ import { Loader } from "./components/Loader";
 import { PasswordField, ErrorText } from "./components";
 import { ChatGroup } from "./components/Chat/ChatGroup";
 import { Group, requestQueueMemberNames } from "./components/Group/Group";
-import { TaskManger } from "./components/TaskManager/TaskManger";
+import { TaskManager } from "./components/TaskManager/TaskManger";
 import { useModal } from "./common/useModal";
 import { LoadingButton } from "@mui/lab";
 import { Label } from "./components/Group/AddGroup";
@@ -1555,7 +1555,7 @@ function App() {
               zIndex: 100000,
             }}
           >
-            <TaskManger getUserInfo={getUserInfo} />
+            <TaskManager getUserInfo={getUserInfo} />
           </Box>
         </MyContext.Provider>
       )}
