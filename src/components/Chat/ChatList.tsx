@@ -13,7 +13,13 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
 
   const hasLoadedInitialRef = useRef(false);
-  const isAtBottomRef = useRef(true);
+
+  const showScrollButtonRef = useRef(showScrollButton);
+
+// Update the ref whenever the state changes
+useEffect(() => {
+  showScrollButtonRef.current = showScrollButton;
+}, [showScrollButton]);
 
   // Update message list with unique signatures and tempMessages
   useEffect(() => {
@@ -42,6 +48,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
       const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
         if (!atBottom && hasUnreadMessages) {
           setShowScrollButton(hasUnreadMessages);
+          setShowScrollDownButton(false)
         } else {
           handleMessageSeen();
         }
@@ -84,8 +91,16 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
 
 
   const sentNewMessageGroupFunc = useCallback(() => {
-    scrollToBottom();
+    const { scrollHeight, scrollTop, clientHeight } = parentRef.current;
+  
+    // Check if the user is within 200px from the bottom
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    console.log('distanceFromBottom', distanceFromBottom)
+    if (distanceFromBottom <= 700) {
+      scrollToBottom();
+    }
   }, [messages]);
+  
 
   useEffect(() => {
     subscribeToEvent('sent-new-message-group', sentNewMessageGroupFunc);
@@ -115,7 +130,7 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
       const offsetCheck = () => {
         const { scrollHeight, scrollTop, clientHeight } = instance.scrollElement;
         const atBottom = scrollHeight - scrollTop - clientHeight <= 300;
-        if(showScrollButton){
+        if(showScrollButtonRef.current){
           setShowScrollDownButton(false)
         } else
         if(atBottom){
@@ -288,7 +303,8 @@ export const ChatList = ({ initialMessages, myAddress, tempMessages, chatId, onR
           cursor: 'pointer',
           zIndex: 10,
           border: 'none',
-          outline: 'none'
+          outline: 'none',
+          fontSize: '16px'
         }}
       >
         Scroll to bottom
