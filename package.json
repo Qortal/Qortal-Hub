@@ -47,8 +47,8 @@
     "@types/chrome": "^0.0.263",
     "asmcrypto.js": "2.3.2",
     "axios": "^1.7.7",
-    "buffer": "6.0.3",
     "bcryptjs": "2.4.3",
+    "buffer": "6.0.3",
     "chokidar": "^3.6.0",
     "compressorjs": "^1.2.1",
     "cordova-plugin-android-permissions": "^1.1.5",
@@ -83,7 +83,9 @@
     "slate": "^0.103.0",
     "slate-react": "^0.109.0",
     "tippy.js": "^6.3.7",
-    "tiptap-extension-resize-image": "^1.1.8"
+    "tiptap-extension-resize-image": "^1.1.8",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm": "^3.3.0"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.3.0",

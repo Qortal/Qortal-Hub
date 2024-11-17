@@ -13,7 +13,8 @@ import {
   sendQortFee,
   sendCoin as sendCoinFunc,
   isUsingLocal,
-  createBuyOrderTx
+  createBuyOrderTx,
+  performPowTask
 } from "../background";
 import { getNameInfo } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -1066,7 +1067,6 @@ export const sendChatMessage = async (data, isFromExtension) => {
         publicKey: uint8PublicKey,
       };
 
-      const difficulty = 8;
       const tx = await createTransaction(18, keyPair, {
         timestamp: sendTimestamp,
         recipient: recipient,
@@ -1078,15 +1078,13 @@ export const sendChatMessage = async (data, isFromExtension) => {
         isEncrypted: 1,
         isText: 1,
       });
-      const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
 
-      const { nonce, chatBytesArray } = await computePow({
-        chatBytes: tx.chatBytes,
-        path,
-        difficulty,
-      });
-
+      
+      const chatBytes = tx.chatBytes;
+      const difficulty = 8;
+      const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+    
       let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
       if (_response?.error) {
         throw new Error(_response?.message);
@@ -1106,7 +1104,6 @@ export const sendChatMessage = async (data, isFromExtension) => {
         publicKey: uint8PublicKey,
       };
 
-      const difficulty = 8;
 
       const txBody = {
         timestamp: Date.now(),
@@ -1125,14 +1122,11 @@ export const sendChatMessage = async (data, isFromExtension) => {
       // if (!hasEnoughBalance) {
       //   throw new Error("Must have at least 4 QORT to send a chat message");
       // }
-      const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
-
-
-      const { nonce, chatBytesArray } = await computePow({
-        chatBytes: tx.chatBytes,
-        path,
-        difficulty,
-      });
+     
+      const chatBytes = tx.chatBytes;
+      const difficulty = 8;
+      const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+    
       let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
       if (_response?.error) {
         throw new Error(_response?.message);

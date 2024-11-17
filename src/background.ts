@@ -19,6 +19,7 @@ import {
   encryptSingle,
   objectToBase64,
 } from "./qdn/encryption/group-encryption";
+import ChatComputePowWorker from './chatComputePow.worker.js?worker';
 import { reusableGet } from "./qdn/publish/pubish";
 import { signChat } from "./transactions/signChat";
 import { createTransaction } from "./transactions/transactions";
@@ -408,6 +409,30 @@ async function checkWebviewFocus() {
     };
 
     window.addEventListener("message", handleMessage);
+  });
+}
+const worker = new ChatComputePowWorker()
+
+export async function performPowTask(chatBytes, difficulty) {
+  return new Promise((resolve, reject) => {
+    worker.onmessage = (e) => {
+      if (e.data.error) {
+        reject(new Error(e.data.error));
+      } else {
+        resolve(e.data);
+      }
+    };
+
+    worker.onerror = (err) => {
+      reject(err);
+    };
+
+    // Send the task to the worker
+    worker.postMessage({
+      chatBytes,
+      path: `${import.meta.env.BASE_URL}memory-pow.wasm.full`,
+      difficulty,
+    });
   });
 }
 
@@ -1399,7 +1424,6 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   };
   const balance = await getBalanceInfo();
   const hasEnoughBalance = +balance < 4 ? false : true;
-  const difficulty = 8;
   const jsonData = {
     addresses: message.addresses,
     foreignKey: message.foreignKey,
@@ -1460,11 +1484,11 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   }
   const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
-  const { nonce, chatBytesArray } = await computePow({
-    chatBytes: tx.chatBytes,
-    path,
-    difficulty,
-  });
+
+  const chatBytes = tx.chatBytes;
+  const difficulty = 8;
+  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+
   let _response = await signChatFunc(
     chatBytesArray,
     nonce,
@@ -1476,6 +1500,9 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   }
   return _response;
 }
+
+
+
 
 export async function sendChatGroup({
   groupId,
@@ -1497,7 +1524,7 @@ export async function sendChatGroup({
   };
   // const balance = await getBalanceInfo();
   // const hasEnoughBalance = +balance < 4 ? false : true;
-  const difficulty = 8;
+
 
   const txBody = {
     timestamp: Date.now(),
@@ -1520,13 +1547,12 @@ export async function sendChatGroup({
   // if (!hasEnoughBalance) {
   //   throw new Error("Must have at least 4 QORT to send a chat message");
   // }
-  const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
-  const { nonce, chatBytesArray } = await computePow({
-    chatBytes: tx.chatBytes,
-    path,
-    difficulty,
-  });
+  const chatBytes = tx.chatBytes;
+  const difficulty = 8;
+  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+
+ 
   let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
   if (_response?.error) {
     throw new Error(_response?.message);
@@ -1572,7 +1598,6 @@ export async function sendChatDirect({
   // const balance = await getBalanceInfo();
   // const hasEnoughBalance = +balance < 4 ? false : true;
 
-  const difficulty = 8;
 
   const finalJson = {
     message: messageText,
@@ -1600,13 +1625,10 @@ export async function sendChatDirect({
   // if (!hasEnoughBalance) {
   //   throw new Error("Must have at least 4 QORT to send a chat message");
   // }
-  const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
-  const { nonce, chatBytesArray } = await computePow({
-    chatBytes: tx.chatBytes,
-    path,
-    difficulty,
-  });
+  const chatBytes = tx.chatBytes;
+  const difficulty = 8;
+  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
 
   let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
   if (_response?.error) {
