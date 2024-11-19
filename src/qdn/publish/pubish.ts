@@ -113,6 +113,7 @@ export const publishData = async ({
 			transactionBytesBase58
 		)
 
+		
 		if (convertedBytesBase58.error) {
 			throw new Error('Error when signing')
 		}

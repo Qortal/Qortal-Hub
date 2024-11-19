@@ -25,6 +25,8 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
+import 'react-json-view-lite/dist/index.css';
 import { decryptStoredWallet } from "./utils/decryptWallet";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
 import Logo1 from "./assets/svgs/Logo1.svg";
@@ -113,11 +115,13 @@ import {
 } from "./atoms/global";
 import { useAppFullScreen } from "./useAppFullscreen";
 import { NotAuthenticated } from "./ExtStates/NotAuthenticated";
-import {  openIndexedDB, showSaveFilePicker } from "./components/Apps/useQortalMessageListener";
+import {
+  openIndexedDB,
+  showSaveFilePicker,
+} from "./components/Apps/useQortalMessageListener";
 import { fileToBase64 } from "./utils/fileReading";
 import { handleGetFileFromIndexedDB } from "./utils/indexedDB";
 import { CoreSyncStatus } from "./components/CoreSyncStatus";
-
 
 type extStates =
   | "not-authenticated"
@@ -372,16 +376,17 @@ function App() {
   useRetrieveDataLocalStorage();
   useQortalGetSaveSettings(userInfo?.name);
   const [fullScreen, setFullScreen] = useRecoilState(fullScreenAtom);
-  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+  const [isEnabledDevMode, setIsEnabledDevMode] =
+    useRecoilState(enabledDevModeAtom);
 
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
 
-  useEffect(()=> {
-    const isDevModeFromStorage =  localStorage.getItem('isEnabledDevMode');
-        if(isDevModeFromStorage){
-          setIsEnabledDevMode(JSON.parse(isDevModeFromStorage))
-        }
-      }, [])
+  useEffect(() => {
+    const isDevModeFromStorage = localStorage.getItem("isEnabledDevMode");
+    if (isDevModeFromStorage) {
+      setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
+    }
+  }, []);
 
   useEffect(() => {
     // Attach a global event listener for double-click
@@ -575,7 +580,6 @@ function App() {
     };
   };
 
-
   const getBalanceFunc = () => {
     setQortBalanceLoading(true);
     window
@@ -651,11 +655,12 @@ function App() {
   const qortalRequestPermissonFromExtension = async (message, event) => {
     if (message.action === "QORTAL_REQUEST_PERMISSION") {
       try {
-        if(message?.payload?.checkbox1){
-          qortalRequestCheckbox1Ref.current = message?.payload?.checkbox1?.value || false
+        if (message?.payload?.checkbox1) {
+          qortalRequestCheckbox1Ref.current =
+            message?.payload?.checkbox1?.value || false;
         }
         await showQortalRequestExtension(message?.payload);
-         
+
         if (qortalRequestCheckbox1Ref.current) {
           event.source.postMessage(
             {
@@ -694,13 +699,12 @@ function App() {
       }
     }
   };
-  
 
   useEffect(() => {
     // Handler function for incoming messages
     const messageHandler = (event) => {
       if (event.origin !== window.location.origin) {
-        return;  
+        return;
       }
       const message = event.data;
 
@@ -717,15 +721,11 @@ function App() {
         executeEvent("openGroupMessage", {
           from: message.payload.from,
         });
-      } else if (
-        message.action === "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP" 
-      ) {
+      } else if (message.action === "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP") {
         executeEvent("openGroupAnnouncement", {
           from: message.payload.from,
         });
-      } else if (
-        message.action === "NOTIFICATION_OPEN_THREAD_NEW_POST" 
-      ) {
+      } else if (message.action === "NOTIFICATION_OPEN_THREAD_NEW_POST") {
         executeEvent("openThreadNewPost", {
           data: message.payload.data,
         });
@@ -734,8 +734,7 @@ function App() {
         message?.isFromExtension
       ) {
         qortalRequestPermissonFromExtension(message, event);
-      } 
-      else if(message?.action === 'getFileFromIndexedDB'){
+      } else if (message?.action === "getFileFromIndexedDB") {
         handleGetFileFromIndexedDB(event);
       }
     };
@@ -780,9 +779,8 @@ function App() {
               holdRefExtState.current === "web-app-request-buy-order"
             )
               return;
-            if(response?.hasKeyPair){
+            if (response?.hasKeyPair) {
               setExtstate("authenticated");
-
             } else {
               setExtstate("wallet-dropped");
             }
@@ -869,7 +867,6 @@ function App() {
         walletToBeDownloaded.wallet,
         walletToBeDownloaded.qortAddress
       );
-     
     } catch (error: any) {
       setWalletToBeDownloadedError(error?.message);
     } finally {
@@ -1014,7 +1011,7 @@ function App() {
     resetAllRecoil();
   };
 
-   function roundUpToDecimals(number, decimals = 8) {
+  function roundUpToDecimals(number, decimals = 8) {
     const factor = Math.pow(10, decimals); // Create a factor based on the number of decimals
     return Math.ceil(+number * factor) / factor;
   }
@@ -1029,10 +1026,14 @@ function App() {
         }, 250);
       });
       window
-        .sendMessage("decryptWallet", {
-          password: authenticatePassword,
-          wallet: rawWallet,
-        }, 120000)
+        .sendMessage(
+          "decryptWallet",
+          {
+            password: authenticatePassword,
+            wallet: rawWallet,
+          },
+          120000
+        )
         .then((response) => {
           if (response && !response.error) {
             setAuthenticatePassword("");
@@ -1077,9 +1078,6 @@ function App() {
       setWalletToBeDecryptedError("Unable to authenticate. Wrong password");
     }
   };
-
-
-  
 
   useEffect(() => {
     if (!isMainWindow) return;
@@ -1220,7 +1218,7 @@ function App() {
           width: isMobile ? "100vw" : "auto",
           display: "flex",
           backgroundColor: "var(--bg-2)",
-          justifyContent: 'flex-end'
+          justifyContent: "flex-end",
         }}
       >
         {isMobile && (
@@ -1242,237 +1240,268 @@ function App() {
             />
           </Box>
         )}
-  {desktopViewMode !== "apps" && desktopViewMode !== "dev" && desktopViewMode !== "chat" && (
-      <AuthenticatedContainerInnerLeft
-      sx={{
-        overflowY: isMobile && "auto",
-        padding: '0px 20px',
-        minWidth: '225px'
-      }}
-    >
-      <Spacer height="48px" />
-
-      {authenticatedMode === "ltc" ? (
-        <>
-          <img src={ltcLogo} />
-          <Spacer height="32px" />
-          <CopyToClipboard text={rawWallet?.ltcAddress}>
-            <AddressBox>
-              {rawWallet?.ltcAddress?.slice(0, 6)}...
-              {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
-            </AddressBox>
-          </CopyToClipboard>
-          <Spacer height="10px" />
-          {ltcBalanceLoading && (
-            <CircularProgress color="success" size={16} />
-          )}
-          {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
-            <Box
+        {desktopViewMode !== "apps" &&
+          desktopViewMode !== "dev" &&
+          desktopViewMode !== "chat" && (
+            <AuthenticatedContainerInnerLeft
               sx={{
-                gap: "10px",
-                display: "flex",
-                alignItems: "center",
+                overflowY: isMobile && "auto",
+                padding: "0px 20px",
+                minWidth: "225px",
               }}
             >
+              <Spacer height="48px" />
+
+              {authenticatedMode === "ltc" ? (
+                <>
+                  <img src={ltcLogo} />
+                  <Spacer height="32px" />
+                  <CopyToClipboard text={rawWallet?.ltcAddress}>
+                    <AddressBox>
+                      {rawWallet?.ltcAddress?.slice(0, 6)}...
+                      {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
+                    </AddressBox>
+                  </CopyToClipboard>
+                  <Spacer height="10px" />
+                  {ltcBalanceLoading && (
+                    <CircularProgress color="success" size={16} />
+                  )}
+                  {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
+                    <Box
+                      sx={{
+                        gap: "10px",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <TextP
+                        sx={{
+                          textAlign: "center",
+                          lineHeight: "24px",
+                          fontSize: "20px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {ltcBalance} LTC
+                      </TextP>
+                      <RefreshIcon
+                        onClick={getLtcBalanceFunc}
+                        sx={{
+                          fontSize: "16px",
+                          color: "white",
+                          cursor: "pointer",
+                        }}
+                      />
+                    </Box>
+                  )}
+                  <AddressQRCode targetAddress={rawWallet?.ltcAddress} />
+                </>
+              ) : (
+                <>
+                  <MainAvatar myName={userInfo?.name} />
+                  <Spacer height="32px" />
+                  <TextP
+                    sx={{
+                      textAlign: "center",
+                      lineHeight: "24px",
+                      fontSize: "20px",
+                    }}
+                  >
+                    {userInfo?.name}
+                  </TextP>
+                  <Spacer height="10px" />
+                  <CopyToClipboard text={rawWallet?.address0}>
+                    <AddressBox>
+                      {rawWallet?.address0?.slice(0, 6)}...
+                      {rawWallet?.address0?.slice(-4)} <img src={Copy} />
+                    </AddressBox>
+                  </CopyToClipboard>
+                  <Spacer height="10px" />
+                  {qortBalanceLoading && (
+                    <CircularProgress color="success" size={16} />
+                  )}
+                  {!qortBalanceLoading && balance >= 0 && (
+                    <Box
+                      sx={{
+                        gap: "10px",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
+                      <TextP
+                        sx={{
+                          textAlign: "center",
+                          lineHeight: "24px",
+                          fontSize: "20px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {balance?.toFixed(2)} QORT
+                      </TextP>
+                      <RefreshIcon
+                        onClick={getBalanceFunc}
+                        sx={{
+                          fontSize: "16px",
+                          color: "white",
+                          cursor: "pointer",
+                        }}
+                      />
+                    </Box>
+                  )}
+
+                  <Spacer height="35px" />
+                  {userInfo && !userInfo?.name && (
+                    <TextP
+                      ref={registerNamePopoverRef}
+                      sx={{
+                        textAlign: "center",
+                        lineHeight: 1.2,
+                        fontSize: "16px",
+                        fontWeight: 500,
+                        cursor: "pointer",
+                        marginTop: "10px",
+                        color: "red",
+                        textDecoration: "underline",
+                      }}
+                      onClick={() => {
+                        setOpenRegisterName(true);
+                      }}
+                    >
+                      REGISTER NAME
+                    </TextP>
+                  )}
+                  <Spacer height="20px" />
+                  <CustomButton
+                    onClick={() => {
+                      setIsOpenSendQort(true);
+                      // setExtstate("send-qort");
+                      setIsOpenDrawerProfile(false);
+                    }}
+                  >
+                    Transfer QORT
+                  </CustomButton>
+                  <AddressQRCode targetAddress={rawWallet?.address0} />
+                </>
+              )}
               <TextP
                 sx={{
                   textAlign: "center",
                   lineHeight: "24px",
-                  fontSize: "20px",
-                  fontWeight: 700,
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  marginTop: "10px",
+                  textDecoration: "underline",
+                }}
+                onClick={async () => {
+                  executeEvent("addTab", {
+                    data: { service: "APP", name: "q-trade" },
+                  });
+                  executeEvent("open-apps-mode", {});
                 }}
               >
-                {ltcBalance} LTC
+                Get QORT at Q-Trade
               </TextP>
-              <RefreshIcon
-                onClick={getLtcBalanceFunc}
-                sx={{
-                  fontSize: "16px",
-                  color: "white",
-                  cursor: "pointer",
-                }}
-              />
-            </Box>
+            </AuthenticatedContainerInnerLeft>
           )}
-          <AddressQRCode targetAddress={rawWallet?.ltcAddress} />
-        </>
-      ) : (
-        <>
-          <MainAvatar myName={userInfo?.name} />
-          <Spacer height="32px" />
-          <TextP
+
+        <AuthenticatedContainerInnerRight
+          sx={{
+            height: "100%",
+            justifyContent: "space-between",
+          }}
+        >
+          <Box
             sx={{
-              textAlign: "center",
-              lineHeight: "24px",
-              fontSize: "20px",
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: 'center'
             }}
           >
-            {userInfo?.name}
-          </TextP>
-          <Spacer height="10px" />
-          <CopyToClipboard text={rawWallet?.address0}>
-            <AddressBox>
-              {rawWallet?.address0?.slice(0, 6)}...
-              {rawWallet?.address0?.slice(-4)} <img src={Copy} />
-            </AddressBox>
-          </CopyToClipboard>
-          <Spacer height="10px" />
-          {qortBalanceLoading && (
-            <CircularProgress color="success" size={16} />
-          )}
-          {!qortBalanceLoading && balance >= 0 && (
-            <Box
-              sx={{
-                gap: "10px",
-                display: "flex",
-                alignItems: "center",
+            <Spacer height="20px" />
+            
+            {!isMobile && (
+              <>
+                <Spacer height="20px" />
+                <img
+                  src={Logout}
+                  onClick={() => {
+                    logoutFunc();
+                    setIsOpenDrawerProfile(false);
+                  }}
+                  style={{
+                    cursor: "pointer",
+                    width: '20px',
+                    height: 'auto'
+                  }}
+                />
+              </>
+            )}
+            <Spacer height="20px" />
+
+            <ButtonBase
+              onClick={() => {
+                setIsSettingsOpen(true);
               }}
             >
-              <TextP
+              <SettingsIcon
                 sx={{
-                  textAlign: "center",
-                  lineHeight: "24px",
-                  fontSize: "20px",
-                  fontWeight: 700,
-                }}
-              >
-                {balance?.toFixed(2)} QORT
-              </TextP>
-              <RefreshIcon
-                onClick={getBalanceFunc}
-                sx={{
-                  fontSize: "16px",
-                  color: "white",
-                  cursor: "pointer",
+                  color: "rgba(255, 255, 255, 0.5)",
                 }}
               />
-            </Box>
-          )}
-
-          <Spacer height="35px" />
-          {userInfo && !userInfo?.name && (
-            <TextP
-              ref={registerNamePopoverRef}
-              sx={{
-                textAlign: "center",
-                lineHeight: 1.2,
-                fontSize: "16px",
-                fontWeight: 500,
-                cursor: "pointer",
-                marginTop: "10px",
-                color: "red",
-                textDecoration: "underline",
-              }}
-              onClick={() => {
-                setOpenRegisterName(true);
-              }}
-            >
-              REGISTER NAME
-            </TextP>
-          )}
-          <Spacer height="20px" />
-          <CustomButton
-            onClick={() => {
-              setIsOpenSendQort(true);
-              // setExtstate("send-qort");
-              setIsOpenDrawerProfile(false);
-            }}
-          >
-            Transfer QORT
-          </CustomButton>
-          <AddressQRCode targetAddress={rawWallet?.address0} />
-        </>
-      )}
-      <TextP
-        sx={{
-          textAlign: "center",
-          lineHeight: "24px",
-          fontSize: "12px",
-          fontWeight: 500,
-          cursor: "pointer",
-          marginTop: "10px",
-          textDecoration: "underline",
-        }}
-        onClick={async () => {
-          executeEvent("addTab", { data: { service: 'APP', name: 'q-trade' } });
-          executeEvent("open-apps-mode", { });
-        }}
-      >
-        Get QORT at Q-Trade
-      </TextP>
-    </AuthenticatedContainerInnerLeft>
-  )}
-      
-        
-        <AuthenticatedContainerInnerRight>
-          <Spacer height="20px" />
-          <img
-            onClick={() => {
-              setExtstate("download-wallet");
-              setIsOpenDrawerProfile(false);
-            }}
-            src={Download}
-            style={{
-              cursor: "pointer",
-            }}
-          />
-          {!isMobile && (
-            <>
-              <Spacer height="20px" />
+            </ButtonBase>
+            <Spacer height="20px" />
+            {authenticatedMode === "qort" && (
               <img
-                src={Logout}
                 onClick={() => {
-                  logoutFunc();
-                  setIsOpenDrawerProfile(false);
+                  setAuthenticatedMode("ltc");
                 }}
+                src={ltcLogo}
                 style={{
                   cursor: "pointer",
+                  width: "20px",
+                  height: "auto",
                 }}
               />
-            </>
-          )}
-          <Spacer height="20px" />
-
-          <ButtonBase
-            onClick={() => {
-              setIsSettingsOpen(true);
+            )}
+            {authenticatedMode === "ltc" && (
+              <img
+                onClick={() => {
+                  setAuthenticatedMode("qort");
+                }}
+                src={qortLogo}
+                style={{
+                  cursor: "pointer",
+                  width: "20px",
+                  height: "auto",
+                }}
+              />
+            )}
+            <Spacer height="20px" />
+            <CoreSyncStatus />
+          </Box>
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: 'center'
             }}
           >
-            <SettingsIcon
-              sx={{
-                color: "rgba(255, 255, 255, 0.5)",
-              }}
-            />
-          </ButtonBase>
-          <Spacer height="20px" />
-          {authenticatedMode === "qort" && (
-            <img
+          <img
               onClick={() => {
-                setAuthenticatedMode("ltc");
+                setExtstate("download-wallet");
+                setIsOpenDrawerProfile(false);
               }}
-              src={ltcLogo}
+              src={Download}
               style={{
                 cursor: "pointer",
-                width: "20px",
-                height: "auto",
+                width: '20px'
               }}
             />
-          )}
-          {authenticatedMode === "ltc" && (
-            <img
-              onClick={() => {
-                setAuthenticatedMode("qort");
-              }}
-              src={qortLogo}
-              style={{
-                cursor: "pointer",
-                width: "20px",
-                height: "auto",
-              }}
-            />
-          )}
-           <Spacer height="20px" />
-          <CoreSyncStatus />
+            <Spacer height="40px" />
+            </Box>
         </AuthenticatedContainerInnerRight>
       </AuthenticatedContainer>
     );
@@ -1516,10 +1545,10 @@ function App() {
             message,
             rootHeight,
             showInfo,
-            openSnackGlobal: openSnack, 
+            openSnackGlobal: openSnack,
             setOpenSnackGlobal: setOpenSnack,
             infoSnackCustom: infoSnack,
-            setInfoSnackCustom: setInfoSnack
+            setInfoSnackCustom: setInfoSnack,
           }}
         >
           <Box
@@ -1543,7 +1572,7 @@ function App() {
               desktopViewMode={desktopViewMode}
               setDesktopViewMode={setDesktopViewMode}
             />
-            {!isMobile &&  renderProfile()}
+            {!isMobile && renderProfile()}
           </Box>
 
           <Box
@@ -2174,7 +2203,7 @@ function App() {
               onClick={() => {
                 setRawWallet(null);
                 setExtstate("not-authenticated");
-                logoutFunc()
+                logoutFunc();
               }}
               src={Return}
             />
@@ -2308,12 +2337,14 @@ function App() {
 
           {walletToBeDownloaded && (
             <>
-              <CustomButton onClick={async ()=> {
-                await saveFileToDiskFunc()
-await showInfo({
-  message: `Keep your wallet file secure.`,
- })
-              }}>
+              <CustomButton
+                onClick={async () => {
+                  await saveFileToDiskFunc();
+                  await showInfo({
+                    message: `Keep your wallet file secure.`,
+                  });
+                }}
+              >
                 Download wallet
               </CustomButton>
             </>
@@ -2417,7 +2448,7 @@ await showInfo({
                   returnToMain();
                   await showInfo({
                     message: `Keep your wallet file secure.`,
-                   })
+                  });
                 }}
               >
                 Backup Account
@@ -2567,10 +2598,8 @@ await showInfo({
             <DialogContentText id="alert-dialog-description">
               {messageInfo.message}
             </DialogContentText>
-           
           </DialogContent>
           <DialogActions>
-            
             <Button variant="contained" onClick={onOkInfo} autoFocus>
               Close
             </Button>
@@ -2733,6 +2762,16 @@ await showInfo({
             >
               {messageQortalRequestExtension?.highlightedText}
             </TextP>
+
+            {messageQortalRequestExtension?.json && (
+              <>
+                          <Spacer height="15px" />
+
+                          <JsonView data={messageQortalRequestExtension?.json} shouldExpandNode={allExpanded} style={darkStyles} />
+                          <Spacer height="15px" />
+
+              </>
+            )}
 
             {messageQortalRequestExtension?.fee && (
               <>

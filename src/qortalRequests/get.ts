@@ -14,12 +14,13 @@ import {
   sendCoin as sendCoinFunc,
   isUsingLocal,
   createBuyOrderTx,
-  performPowTask
+  performPowTask,
 } from "../background";
 import { getNameInfo } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
 import { QORT_DECIMALS } from "../constants/constants";
 import Base58 from "../deps/Base58";
+import nacl from "../deps/nacl-fast";
 import {
   base64ToUint8Array,
   decryptDeprecatedSingle,
@@ -29,41 +30,52 @@ import {
   uint8ArrayToBase64,
 } from "../qdn/encryption/group-encryption";
 import { publishData } from "../qdn/publish/pubish";
-import { getPermission, isRunningGateway, setPermission } from "../qortalRequests";
+import {
+  getPermission,
+  isRunningGateway,
+  setPermission,
+} from "../qortalRequests";
 import TradeBotCreateRequest from "../transactions/TradeBotCreateRequest";
 import DeleteTradeOffer from "../transactions/TradeBotDeleteRequest";
 import signTradeBotTransaction from "../transactions/signTradeBotTransaction";
 import { createTransaction } from "../transactions/transactions";
 import { mimeToExtensionMap } from "../utils/memeTypes";
+import utils from "../utils/utils";
 
 const sellerForeignFee = {
-  'LITECOIN': {
-    value: '~0.00005',
-    ticker: 'LTC'
-  }
-}
+  LITECOIN: {
+    value: "~0.00005",
+    ticker: "LTC",
+  },
+};
 
-const btcFeePerByte = 0.00000100
-const ltcFeePerByte = 0.00000030
-const dogeFeePerByte = 0.00001000
-const dgbFeePerByte = 0.00000010
-const rvnFeePerByte = 0.00001125
+const btcFeePerByte = 0.000001;
+const ltcFeePerByte = 0.0000003;
+const dogeFeePerByte = 0.00001;
+const dgbFeePerByte = 0.0000001;
+const rvnFeePerByte = 0.00001125;
 
 function roundUpToDecimals(number, decimals = 8) {
   const factor = Math.pow(10, decimals); // Create a factor based on the number of decimals
   return Math.ceil(+number * factor) / factor;
 }
 
-const _createPoll = async ({pollName, pollDescription, options}, isFromExtension) => {
+const _createPoll = async (
+  { pollName, pollDescription, options },
+  isFromExtension
+) => {
   const fee = await getFee("CREATE_POLL");
 
-  const resPermission = await getUserPermission({
-    text1: "You are requesting to create the poll below:",
-    text2: `Poll: ${pollName}`,
-    text3: `Description: ${pollDescription}`,
-    text4: `Options: ${options?.join(", ")}`,
-    fee: fee.fee,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "You are requesting to create the poll below:",
+      text2: `Poll: ${pollName}`,
+      text3: `Description: ${pollDescription}`,
+      text4: `Options: ${options?.join(", ")}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -90,7 +102,9 @@ const _createPoll = async ({pollName, pollDescription, options}, isFromExtension
     const signedBytes = Base58.encode(tx.signedBytes);
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
-      throw new Error(res?.message || "Transaction was not able to be processed");
+      throw new Error(
+        res?.message || "Transaction was not able to be processed"
+      );
     return res;
   } else {
     throw new Error("User declined request");
@@ -98,22 +112,20 @@ const _createPoll = async ({pollName, pollDescription, options}, isFromExtension
 };
 
 const _deployAt = async (
-  {name,
-  description,
-  tags,
-  creationBytes,
-  amount,
-  assetId,
-  atType}, isFromExtension
+  { name, description, tags, creationBytes, amount, assetId, atType },
+  isFromExtension
 ) => {
   const fee = await getFee("DEPLOY_AT");
 
-  const resPermission = await getUserPermission({
-    text1: "Would you like to deploy this AT?",
-    text2: `Name: ${name}`,
-    text3: `Description: ${description}`,
-    fee: fee.fee,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "Would you like to deploy this AT?",
+      text2: `Name: ${name}`,
+      text3: `Description: ${description}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
 
   const { accepted } = resPermission;
 
@@ -155,15 +167,21 @@ const _deployAt = async (
   }
 };
 
-const _voteOnPoll = async ({pollName, optionIndex, optionName}, isFromExtension) => {
+const _voteOnPoll = async (
+  { pollName, optionIndex, optionName },
+  isFromExtension
+) => {
   const fee = await getFee("VOTE_ON_POLL");
 
-  const resPermission = await getUserPermission({
-    text1: "You are being requested to vote on the poll below:",
-    text2: `Poll: ${pollName}`,
-    text3: `Option: ${optionName}`,
-    fee: fee.fee,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "You are being requested to vote on the poll below:",
+      text2: `Poll: ${pollName}`,
+      text3: `Option: ${optionName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -189,7 +207,9 @@ const _voteOnPoll = async ({pollName, optionIndex, optionName}, isFromExtension)
     const signedBytes = Base58.encode(tx.signedBytes);
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
-      throw new Error(res?.message || "Transaction was not able to be processed");
+      throw new Error(
+        res?.message || "Transaction was not able to be processed"
+      );
     return res;
   } else {
     throw new Error("User declined request");
@@ -202,7 +222,10 @@ const fileRequestResolvers = new Map();
 const handleFileMessage = (event) => {
   const { action, requestId, result, error } = event.data;
 
-  if (action === "getFileFromIndexedDBResponse" && fileRequestResolvers.has(requestId)) {
+  if (
+    action === "getFileFromIndexedDBResponse" &&
+    fileRequestResolvers.has(requestId)
+  ) {
     const { resolve, reject } = fileRequestResolvers.get(requestId);
     fileRequestResolvers.delete(requestId); // Clean up after resolving
 
@@ -239,14 +262,12 @@ function getFileFromContentScript(fileId) {
   });
 }
 
-
 // function sendToSaveFilePicker(data) {
 //   window.postMessage({
 //     action: "SHOW_SAVE_FILE_PICKER",
 //     payload: data,
-//   }, "*"); 
+//   }, "*");
 // }
-
 
 const responseResolvers = new Map();
 
@@ -254,7 +275,10 @@ const handleMessage = (event) => {
   const { action, requestId, result } = event.data;
 
   // Check if this is the expected response action and if we have a stored resolver
-  if (action === "QORTAL_REQUEST_PERMISSION_RESPONSE" && responseResolvers.has(requestId)) {
+  if (
+    action === "QORTAL_REQUEST_PERMISSION_RESPONSE" &&
+    responseResolvers.has(requestId)
+  ) {
     // Resolve the stored promise with the result
     responseResolvers.get(requestId)(result || false);
     responseResolvers.delete(requestId); // Clean up after resolving
@@ -262,8 +286,6 @@ const handleMessage = (event) => {
 };
 
 window.addEventListener("message", handleMessage);
-
-
 
 async function getUserPermission(payload, isFromExtension) {
   return new Promise((resolve) => {
@@ -273,7 +295,12 @@ async function getUserPermission(payload, isFromExtension) {
 
     // Send the request message
     window.postMessage(
-      { action: "QORTAL_REQUEST_PERMISSION", payload, requestId, isFromExtension },
+      {
+        action: "QORTAL_REQUEST_PERMISSION",
+        payload,
+        requestId,
+        isFromExtension,
+      },
       targetOrigin
     );
 
@@ -287,42 +314,43 @@ async function getUserPermission(payload, isFromExtension) {
   });
 }
 
-
-export const getUserAccount = async ({isFromExtension, appInfo}) => {
+export const getUserAccount = async ({ isFromExtension, appInfo }) => {
   try {
-    const value = (await getPermission(`qAPPAutoAuth-${appInfo?.name}`)) || false;
+    const value =
+      (await getPermission(`qAPPAutoAuth-${appInfo?.name}`)) || false;
     let skip = false;
     if (value) {
       skip = true;
     }
-    let resPermission
-    if(!skip){
-      resPermission = await getUserPermission({
-         text1: "Do you give this application permission to authenticate?",
-         checkbox1: {
-           value: false,
-           label: "Always authenticate automatically",
-         },
-       }, isFromExtension);
-   } 
+    let resPermission;
+    if (!skip) {
+      resPermission = await getUserPermission(
+        {
+          text1: "Do you give this application permission to authenticate?",
+          checkbox1: {
+            value: false,
+            label: "Always authenticate automatically",
+          },
+        },
+        isFromExtension
+      );
+    }
 
-   const { accepted = false, checkbox1 = false } = resPermission || {};
-   if(resPermission){
-     setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
-   }
-   if (accepted  || skip) {
-
-    const wallet = await getSaveWallet();
-    const address = wallet.address0;
-    const publicKey = wallet.publicKey;
-    return {
-      address,
-      publicKey,
-    };
-  } else {
-    throw new Error("User declined request");
-
-  }
+    const { accepted = false, checkbox1 = false } = resPermission || {};
+    if (resPermission) {
+      setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
+    }
+    if (accepted || skip) {
+      const wallet = await getSaveWallet();
+      const address = wallet.address0;
+      const publicKey = wallet.publicKey;
+      return {
+        address,
+        publicKey,
+      };
+    } else {
+      throw new Error("User declined request");
+    }
   } catch (error) {
     throw new Error("Unable to fetch user account");
   }
@@ -396,9 +424,9 @@ export const decryptData = async (data) => {
 };
 
 export const getListItems = async (data, isFromExtension) => {
-  const  isGateway =  await isRunningGateway()
-  if(isGateway){
-    throw new Error('This action cannot be done through a gateway')
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
   }
   const requiredFields = ["list_name"];
   const missingFields: string[] = [];
@@ -422,15 +450,18 @@ export const getListItems = async (data, isFromExtension) => {
   let acceptedVar;
   let checkbox1Var;
   if (!skip) {
-    resPermission = await getUserPermission({
-      text1: "Do you give this application permission to",
-      text2: "Access the list",
-      highlightedText: data.list_name,
-      checkbox1: {
-        value: value,
-        label: "Always allow lists to be retrieved automatically",
+    resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to",
+        text2: "Access the list",
+        highlightedText: data.list_name,
+        checkbox1: {
+          value: value,
+          label: "Always allow lists to be retrieved automatically",
+        },
       },
-    }, isFromExtension);
+      isFromExtension
+    );
     const { accepted, checkbox1 } = resPermission;
     acceptedVar = accepted;
     checkbox1Var = checkbox1;
@@ -450,9 +481,9 @@ export const getListItems = async (data, isFromExtension) => {
 };
 
 export const addListItems = async (data, isFromExtension) => {
-  const  isGateway =  await isRunningGateway()
-  if(isGateway){
-    throw new Error('This action cannot be done through a gateway')
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
   }
   const requiredFields = ["list_name", "items"];
   const missingFields: string[] = [];
@@ -470,11 +501,14 @@ export const addListItems = async (data, isFromExtension) => {
   const items = data.items;
   const list_name = data.list_name;
 
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to",
-    text2: `Add the following to the list ${list_name}:`,
-    highlightedText: items.join(", "),
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to",
+      text2: `Add the following to the list ${list_name}:`,
+      highlightedText: items.join(", "),
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -505,9 +539,9 @@ export const addListItems = async (data, isFromExtension) => {
 };
 
 export const deleteListItems = async (data, isFromExtension) => {
-  const  isGateway =  await isRunningGateway()
-  if(isGateway){
-    throw new Error('This action cannot be done through a gateway')
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
   }
   const requiredFields = ["list_name", "item"];
   const missingFields: string[] = [];
@@ -525,11 +559,14 @@ export const deleteListItems = async (data, isFromExtension) => {
   const item = data.item;
   const list_name = data.list_name;
 
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to",
-    text2: `Remove the following from the list ${list_name}:`,
-    highlightedText: item,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to",
+      text2: `Remove the following from the list ${list_name}:`,
+      highlightedText: item,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -559,7 +596,11 @@ export const deleteListItems = async (data, isFromExtension) => {
   }
 };
 
-export const publishQDNResource = async (data: any, sender, isFromExtension) => {
+export const publishQDNResource = async (
+  data: any,
+  sender,
+  isFromExtension
+) => {
   const requiredFields = ["service"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -608,15 +649,15 @@ export const publishQDNResource = async (data: any, sender, isFromExtension) => 
   }
   if (data.encrypt) {
     try {
-        const resKeyPair = await getKeyPair()
-        const parsedData = resKeyPair
-        const privateKey = parsedData.privateKey
-        const userPublicKey = parsedData.publicKey
+      const resKeyPair = await getKeyPair();
+      const parsedData = resKeyPair;
+      const privateKey = parsedData.privateKey;
+      const userPublicKey = parsedData.publicKey;
       const encryptDataResponse = encryptDataGroup({
         data64,
         publicKeys: data.publicKeys,
         privateKey,
-        userPublicKey
+        userPublicKey,
       });
       if (encryptDataResponse) {
         data64 = encryptDataResponse;
@@ -630,13 +671,16 @@ export const publishQDNResource = async (data: any, sender, isFromExtension) => 
 
   const fee = await getFee("ARBITRARY");
 
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to publish to QDN?",
-    text2: `service: ${service}`,
-    text3: `identifier: ${identifier || null}`,
-    highlightedText: `isEncrypted: ${!!data.encrypt}`,
-    fee: fee.fee,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to publish to QDN?",
+      text2: `service: ${service}`,
+      text3: `identifier: ${identifier || null}`,
+      highlightedText: `isEncrypted: ${!!data.encrypt}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
   if (accepted) {
     if (data.fileId && !data.encrypt) {
@@ -671,7 +715,11 @@ export const publishQDNResource = async (data: any, sender, isFromExtension) => 
   }
 };
 
-export const publishMultipleQDNResources = async (data: any, sender, isFromExtension) => {
+export const publishMultipleQDNResources = async (
+  data: any,
+  sender,
+  isFromExtension
+) => {
   const requiredFields = ["resources"];
   const missingFields: string[] = [];
   let feeAmount = null;
@@ -702,9 +750,10 @@ export const publishMultipleQDNResources = async (data: any, sender, isFromExten
   const fee = await getFee("ARBITRARY");
   const registeredName = await getNameInfo();
   const name = registeredName;
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to publish to QDN?",
-    html: `
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to publish to QDN?",
+      html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
       body {
@@ -766,9 +815,11 @@ export const publishMultipleQDNResources = async (data: any, sender, isFromExten
   </div>
   
       `,
-    highlightedText: `isEncrypted: ${!!data.encrypt}`,
-    fee: fee.fee * resources.length,
-  }, isFromExtension);
+      highlightedText: `isEncrypted: ${!!data.encrypt}`,
+      fee: fee.fee * resources.length,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error("User declined request");
@@ -828,15 +879,15 @@ export const publishMultipleQDNResources = async (data: any, sender, isFromExten
       }
       if (data.encrypt) {
         try {
-            const resKeyPair = await getKeyPair()
-        const parsedData = resKeyPair
-        const privateKey = parsedData.privateKey
-        const userPublicKey = parsedData.publicKey
+          const resKeyPair = await getKeyPair();
+          const parsedData = resKeyPair;
+          const privateKey = parsedData.privateKey;
+          const userPublicKey = parsedData.publicKey;
           const encryptDataResponse = encryptDataGroup({
             data64,
             publicKeys: data.publicKeys,
             privateKey,
-            userPublicKey
+            userPublicKey,
           });
           if (encryptDataResponse) {
             data64 = encryptDataResponse;
@@ -933,7 +984,10 @@ export const voteOnPoll = async (data, isFromExtension) => {
   }
   try {
     const optionName = pollInfo.pollOptions[optionIndex].optionName;
-    const resVoteOnPoll = await _voteOnPoll({pollName, optionIndex, optionName}, isFromExtension);
+    const resVoteOnPoll = await _voteOnPoll(
+      { pollName, optionIndex, optionName },
+      isFromExtension
+    );
     return resVoteOnPoll;
   } catch (error) {
     throw new Error(error?.message || "Failed to vote on the poll.");
@@ -966,10 +1020,10 @@ export const createPoll = async (data, isFromExtension) => {
     const resCreatePoll = await _createPoll(
       {
         pollName,
-      pollDescription,
-      options: pollOptions,
-    },
-    isFromExtension
+        pollDescription,
+        options: pollOptions,
+      },
+      isFromExtension
     );
     return resCreatePoll;
   } catch (error) {
@@ -982,11 +1036,15 @@ export const sendChatMessage = async (data, isFromExtension) => {
   const recipient = data.destinationAddress;
   const groupId = data.groupId;
   const isRecipient = !groupId;
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to send this chat message?",
-    text2: `To: ${isRecipient ? recipient : `group ${groupId}`}`,
-    text3: `${message?.slice(0, 25)}${message?.length > 25 ? "..." : ""}`,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1:
+        "Do you give this application permission to send this chat message?",
+      text2: `To: ${isRecipient ? recipient : `group ${groupId}`}`,
+      text3: `${message?.slice(0, 25)}${message?.length > 25 ? "..." : ""}`,
+    },
+    isFromExtension
+  );
 
   const { accepted } = resPermission;
   if (accepted) {
@@ -1010,7 +1068,7 @@ export const sendChatMessage = async (data, isFromExtension) => {
       repliedTo: "",
       version: 3,
     };
-   
+
     const stringifyMessageObject = JSON.stringify(messageObject);
 
     const balance = await getBalanceInfo();
@@ -1079,12 +1137,13 @@ export const sendChatMessage = async (data, isFromExtension) => {
         isText: 1,
       });
 
-
-      
       const chatBytes = tx.chatBytes;
       const difficulty = 8;
-      const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
-    
+      const { nonce, chatBytesArray } = await performPowTask(
+        chatBytes,
+        difficulty
+      );
+
       let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
       if (_response?.error) {
         throw new Error(_response?.message);
@@ -1104,7 +1163,6 @@ export const sendChatMessage = async (data, isFromExtension) => {
         publicKey: uint8PublicKey,
       };
 
-
       const txBody = {
         timestamp: Date.now(),
         groupID: Number(groupId),
@@ -1122,11 +1180,14 @@ export const sendChatMessage = async (data, isFromExtension) => {
       // if (!hasEnoughBalance) {
       //   throw new Error("Must have at least 4 QORT to send a chat message");
       // }
-     
+
       const chatBytes = tx.chatBytes;
       const difficulty = 8;
-      const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
-    
+      const { nonce, chatBytesArray } = await performPowTask(
+        chatBytes,
+        difficulty
+      );
+
       let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
       if (_response?.error) {
         throw new Error(_response?.message);
@@ -1166,11 +1227,14 @@ export const joinGroup = async (data, isFromExtension) => {
   }
   const fee = await getFee("JOIN_GROUP");
 
-  const resPermission = await getUserPermission({
-    text1: "Confirm joining the group:",
-    highlightedText: `${groupInfo.groupName}`,
-    fee: fee.fee,
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1: "Confirm joining the group:",
+      highlightedText: `${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -1193,7 +1257,7 @@ export const joinGroup = async (data, isFromExtension) => {
 
 export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   try {
-    const requiredFields = ['filename', 'blob']
+    const requiredFields = ["filename", "blob"];
     const missingFields: string[] = [];
     requiredFields.forEach((field) => {
       if (!data[field]) {
@@ -1208,10 +1272,13 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     const filename = data.filename;
     const blob = data.blob;
     const fileId = data.fileId;
-    const resPermission = await getUserPermission({
-      text1: "Would you like to download:",
-      highlightedText: `${filename}`,
-    }, isFromExtension);
+    const resPermission = await getUserPermission(
+      {
+        text1: "Would you like to download:",
+        highlightedText: `${filename}`,
+      },
+      isFromExtension
+    );
     const { accepted } = resPermission;
 
     if (accepted) {
@@ -1237,11 +1304,14 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         };
       }
 
-      showSaveFilePicker(  {
-        filename,
-        mimeType,
-        blob
-      }, snackMethods)
+      showSaveFilePicker(
+        {
+          filename,
+          mimeType,
+          blob,
+        },
+        snackMethods
+      );
       // sendToSaveFilePicker(
       //   {
       //     filename,
@@ -1283,15 +1353,15 @@ export const deployAt = async (data, isFromExtension) => {
   try {
     const resDeployAt = await _deployAt(
       {
-       name: data.name,
-     description: data.description,
-     tags: data.tags,
-     creationBytes: data.creationBytes,
-      amount: data.amount,
-     assetId: data.assetId,
-     atType: data.type
-    },
-    isFromExtension
+        name: data.name,
+        description: data.description,
+        tags: data.tags,
+        creationBytes: data.creationBytes,
+        amount: data.amount,
+        assetId: data.assetId,
+        atType: data.type,
+      },
+      isFromExtension
     );
     return resDeployAt;
   } catch (error) {
@@ -1312,10 +1382,13 @@ export const getUserWallet = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  const resPermission = await getUserPermission({
-    text1:
-      "Do you give this application permission to get your wallet information?",
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1:
+        "Do you give this application permission to get your wallet information?",
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -1385,7 +1458,12 @@ export const getUserWallet = async (data, isFromExtension) => {
   }
 };
 
-export const getWalletBalance = async (data, bypassPermission?: boolean, isFromExtension?: boolean, appInfo?: any) => {
+export const getWalletBalance = async (
+  data,
+  bypassPermission?: boolean,
+  isFromExtension?: boolean,
+  appInfo?: any
+) => {
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -1399,30 +1477,42 @@ export const getWalletBalance = async (data, bypassPermission?: boolean, isFromE
     throw new Error(errorMsg);
   }
 
-  const  isGateway =  await isRunningGateway()
+  const isGateway = await isRunningGateway();
 
-    if(data?.coin === 'ARRR' && isGateway) throw new Error('Cannot view ARRR balance through the gateway. Please use your local node.')
+  if (data?.coin === "ARRR" && isGateway)
+    throw new Error(
+      "Cannot view ARRR balance through the gateway. Please use your local node."
+    );
 
-  const value = (await getPermission(`qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`)) || false;
+  const value =
+    (await getPermission(
+      `qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`
+    )) || false;
   let skip = false;
   if (value) {
     skip = true;
   }
-  let resPermission
+  let resPermission;
 
-  if(!bypassPermission && !skip){
-     resPermission = await getUserPermission({
+  if (!bypassPermission && !skip) {
+    resPermission = await getUserPermission(
+      {
         text1: "Do you give this application permission to fetch your",
         highlightedText: `${data.coin} balance`,
         checkbox1: {
           value: true,
           label: "Always allow balance to be retrieved automatically",
         },
-      }, isFromExtension);
-  } 
+      },
+      isFromExtension
+    );
+  }
   const { accepted = false, checkbox1 = false } = resPermission || {};
-  if(resPermission){
-    setPermission(`qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`, checkbox1);
+  if (resPermission) {
+    setPermission(
+      `qAPPAutoWalletBalance-${appInfo?.name}-${data.coin}`,
+      checkbox1
+    );
   }
   if (accepted || bypassPermission || skip) {
     let coin = data.coin;
@@ -1563,9 +1653,13 @@ export const getUserWalletInfo = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  const resPermission = await getUserPermission({
-    text1: "Do you give this application permission to retrieve your wallet information",
-  }, isFromExtension);
+  const resPermission = await getUserPermission(
+    {
+      text1:
+        "Do you give this application permission to retrieve your wallet information",
+    },
+    isFromExtension
+  );
   const { accepted } = resPermission;
 
   if (accepted) {
@@ -1584,7 +1678,7 @@ export const getUserWalletInfo = async (data, isFromExtension) => {
         },
         body: JSON.stringify(_body),
       });
-      if(!response?.ok) throw new Error('Unable to fetch wallet information')
+      if (!response?.ok) throw new Error("Unable to fetch wallet information");
       let res;
       try {
         res = await response.clone().json();
@@ -1604,854 +1698,8 @@ export const getUserWalletInfo = async (data, isFromExtension) => {
   }
 };
 
-export const getCrossChainServerInfo = async (data)=> {
-    const requiredFields = ['coin']
-					const missingFields: string[] = []
-					requiredFields.forEach((field) => {
-						if (!data[field]) {
-							missingFields.push(field)
-						}
-					})
-					if (missingFields.length > 0) {
-						const missingFieldsString = missingFields.join(', ')
-						const errorMsg = `Missing fields: ${missingFieldsString}`
-						throw new Error(errorMsg)
-					}
-					let _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`
-					try {
-					
-					
-                        const url = await createEndpoint(_url);
-                        const response = await fetch(url);
-                        if (!response.ok) throw new Error("Failed to fetch");
-                        let res;
-                        try {
-                          res = await response.clone().json();
-                        } catch (e) {
-                          res = await response.text();
-                        }
-                        if (res?.error && res?.message) {
-                          throw new Error(res.message);
-                        }
-						return res.servers
-					} catch (error) {
-						
-                        throw new Error(error?.message || 'Error in retrieving server info')
-					} 
-}
-
-export const getTxActivitySummary = async (data) => {
-    const requiredFields = ['coin'];
-    const missingFields: string[] = [];
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const coin = data.coin;
-    const url = `/crosschain/txactivity?foreignBlockchain=${coin}`; // No apiKey here
-  
-    try {
-      const endpoint = await createEndpoint(url);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!response.ok) throw new Error('Failed to fetch');
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-      return res; // Return full response here
-    } catch (error) {
-      throw new Error(error?.message || 'Error in tx activity summary');
-    }
-  };
-
-  export const getForeignFee = async (data) => {
-    const requiredFields = ['coin', 'type'];
-    const missingFields: string[] = [];
-  
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const { coin, type } = data;
-    const url = `/crosschain/${coin}/${type}`;
-  
-    try {
-      const endpoint = await createEndpoint(url);
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!response.ok) throw new Error('Failed to fetch');
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-      return res; // Return full response here
-    } catch (error) {
-      throw new Error(error?.message || 'Error in get foreign fee');
-    }
-  };
-
-  export const updateForeignFee = async (data) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
-    const requiredFields = ['coin', 'type', 'value'];
-    const missingFields: string[] = [];
-  
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const { coin, type, value } = data;
-    const url = `/crosschain/${coin}/update${type}`;
-  
-    try {
-      const endpoint = await createEndpoint(url);
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value }),
-      });
-  
-      if (!response.ok) throw new Error('Failed to update foreign fee');
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-      return res; // Return full response here
-    } catch (error) {
-      throw new Error(error?.message || 'Error in update foreign fee');
-    }
-  };
-  
-  export const getServerConnectionHistory = async (data) => {
-    const requiredFields = ['coin'];
-    const missingFields: string[] = [];
-  
-    // Validate required fields
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const coin = data.coin.toLowerCase();
-    const url = `/crosschain/${coin}/serverconnectionhistory`;
-  
-    try {
-      const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-      });
-  
-      if (!response.ok) throw new Error('Failed to fetch server connection history');
-      
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-  
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-  
-      return res; // Return full response here
-    } catch (error) {
-      throw new Error(error?.message || 'Error in get server connection history');
-    }
-  };
-
-  export const setCurrentForeignServer = async (data) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
-    const requiredFields = ['coin'];
-    const missingFields: string[] = [];
-  
-    // Validate required fields
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const { coin, host, port, type } = data;
-    const body = {
-      hostName: host,
-      port: port,
-      connectionType: type,
-    };
-  
-    const url = `/crosschain/${coin}/setcurrentserver`;
-  
-    try {
-      const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-  
-      if (!response.ok) throw new Error('Failed to set current server');
-      
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-  
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-  
-      return res; // Return the full response
-    } catch (error) {
-      throw new Error(error?.message || 'Error in set current server');
-    }
-  };
-  
-
-  export const addForeignServer = async (data) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
-    const requiredFields = ['coin'];
-    const missingFields: string[] = [];
-  
-    // Validate required fields
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const { coin, host, port, type } = data;
-    const body = {
-      hostName: host,
-      port: port,
-      connectionType: type,
-    };
-  
-    const url = `/crosschain/${coin}/addserver`;
-  
-    try {
-      const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-  
-      if (!response.ok) throw new Error('Failed to add server');
-      
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-  
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-  
-      return res; // Return the full response
-    } catch (error) {
-      throw new Error(error.message || 'Error in adding server');
-    }
-  };
-  
-  export const removeForeignServer = async (data) => {
-    const localNodeAvailable = await isUsingLocal()
-    if(!localNodeAvailable) throw new Error('Please use your local node.')
-    const requiredFields = ['coin'];
-    const missingFields: string[] = [];
-  
-    // Validate required fields
-    requiredFields.forEach((field) => {
-      if (!data[field]) {
-        missingFields.push(field);
-      }
-    });
-  
-    if (missingFields.length > 0) {
-      const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
-      throw new Error(errorMsg);
-    }
-  
-    const { coin, host, port, type } = data;
-    const body = {
-      hostName: host,
-      port: port,
-      connectionType: type,
-    };
-  
-    const url = `/crosschain/${coin}/removeserver`;
-  
-    try {
-      const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          Accept: '*/*',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-  
-      if (!response.ok) throw new Error('Failed to remove server');
-      
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-  
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-  
-      return res; // Return the full response
-    } catch (error) {
-      throw new Error(error?.message || 'Error in removing server');
-    }
-  };
-  
-  export const getDaySummary = async () => {
-    const url = `/admin/summary`; // Simplified endpoint URL
-  
-    try {
-      const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: {
-          Accept: '*/*',
-        },
-      });
-  
-      if (!response.ok) throw new Error('Failed to retrieve summary');
-  
-      let res;
-      try {
-        res = await response.clone().json();
-      } catch (e) {
-        res = await response.text();
-      }
-  
-      if (res?.error && res?.message) {
-        throw new Error(res.message);
-      }
-  
-      return res; // Return the full response
-    } catch (error) {
-      throw new Error(error?.message || 'Error in retrieving summary');
-    }
-  };
-  
-export const sendCoin = async (data, isFromExtension) => {
-    const requiredFields = ['coin', 'destinationAddress', 'amount']
-    const missingFields: string[] = []
-    requiredFields.forEach((field) => {
-        if (!data[field]) {
-            missingFields.push(field)
-        }
-    })
-    if (missingFields.length > 0) {
-        const missingFieldsString = missingFields.join(', ')
-        const errorMsg = `Missing fields: ${missingFieldsString}`
-        throw new Error(errorMsg)
-    }
-    let checkCoin = data.coin
-    const wallet = await getSaveWallet();
-    const address = wallet.address0;
-    const resKeyPair = await getKeyPair();
-    const parsedData = resKeyPair;
-    const  isGateway =  await isRunningGateway()
-
-    if(checkCoin !== 'QORT' && isGateway) throw new Error('Cannot send a non-QORT coin through the gateway. Please use your local node.')
-    if (checkCoin === "QORT") {
-        // Params: data.coin, data.destinationAddress, data.amount, data.fee
-        // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
-        // then set the response string from the core to the `response` variable (defined above)
-        // If they decline, send back JSON that includes an `error` key, such as `{"error": "User declined request"}`
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-       
-        const url = await createEndpoint(`/addresses/balance/${address}`);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to fetch");
-    let walletBalance;
-    try {
-        walletBalance = await response.clone().json();
-    } catch (e) {
-        walletBalance = await response.text();
-    }
-        if (isNaN(Number(walletBalance))) {
-            let errorMsg = "Failed to Fetch QORT Balance. Try again!"
-           throw new Error(errorMsg)
-        }
-        
-        const transformDecimals = (Number(walletBalance) * QORT_DECIMALS).toFixed(0)
-        const walletBalanceDecimals = Number(transformDecimals)
-        const amountDecimals = Number(amount) * QORT_DECIMALS
-        const fee: number = await sendQortFee()
-        if (amountDecimals + (fee * QORT_DECIMALS) > walletBalanceDecimals) {
-            let errorMsg = "Insufficient Funds!"
-            throw new Error(errorMsg)
-        }
-        if (amount <= 0) {
-            let errorMsg = "Invalid Amount!"
-           throw new Error(errorMsg)
-        }
-        if (recipient.length === 0) {
-            let errorMsg = "Receiver cannot be empty!"
-            throw new Error(errorMsg)
-        }
-
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            fee: fee * QORT_DECIMALS
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const makePayment = await sendCoinFunc({amount, password: null, receiver: recipient }, true)
-            return makePayment.res
-          } else {
-            throw new Error("User declined request")
-          }
-      
-    } else if (checkCoin === "BTC") {
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const xprv58 = parsedData.btcPrivateKey
-        const feePerByte = data.fee ? data.fee : btcFeePerByte
-        
-        const btcWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-
-        if (isNaN(Number(btcWalletBalance))) {
-            throw new Error('Unable to fetch BTC balance')
-        }
-        const btcWalletBalanceDecimals = Number(btcWalletBalance)
-        const btcAmountDecimals = Number(amount) * QORT_DECIMALS
-        const fee = feePerByte * 500 // default 0.00050000
-        if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
-            throw new Error("INSUFFICIENT_FUNDS")
-        }
-       
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} BTC`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const opts = {
-                xprv58: xprv58,
-                receivingAddress: recipient,
-                bitcoinAmount: amount,
-                feePerByte: feePerByte 
-            }
-            const url = await createEndpoint(`/crosschain/btc/send`);
-            
-           const response = await  fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(opts)
-            })
-            if (!response.ok) throw new Error("Failed to send");
-            let res;
-            try {
-              res = await response.clone().json();
-            } catch (e) {
-              res = await response.text();
-            }
-            return res;
-         
-          } else {
-            throw new Error("User declined request")
-          }
-
-    } else if (checkCoin === "LTC") {
-    
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const xprv58 = parsedData.ltcPrivateKey
-        const feePerByte = data.fee ? data.fee : ltcFeePerByte
-        const ltcWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-
-        if (isNaN(Number(ltcWalletBalance))) {
-            let errorMsg = "Failed to Fetch LTC Balance. Try again!"
-            throw new Error(errorMsg)
-        }
-        const ltcWalletBalanceDecimals = Number(ltcWalletBalance)
-        const ltcAmountDecimals = Number(amount) * QORT_DECIMALS
-        const balance = (Number(ltcWalletBalance) / 1e8).toFixed(8)
-        const fee = feePerByte * 1000 // default 0.00030000
-        if (ltcAmountDecimals + fee  > ltcWalletBalanceDecimals) {
-            throw new Error("Insufficient Funds!")
-        }
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} LTC`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const url = await createEndpoint(`/crosschain/ltc/send`);
-            const opts = {
-                xprv58: xprv58,
-                receivingAddress: recipient,
-                litecoinAmount: amount,
-                feePerByte: feePerByte
-            }
-            const response = await  fetch(url, {
-                 method: 'POST',
-                 headers: {
-                     'Accept': 'application/json',
-                     'Content-Type': 'application/json'
-                 },
-                 body: JSON.stringify(opts)
-             })
-             if (!response.ok) throw new Error("Failed to send");
-             let res;
-             try {
-               res = await response.clone().json();
-             } catch (e) {
-               res = await response.text();
-             }
-             return res;
-          } else {
-            throw new Error("User declined request")
-          }
-        
-    } else if (checkCoin === "DOGE") {
-       
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const coin = data.coin
-        const xprv58 = parsedData.dogePrivateKey
-        const feePerByte = data.fee ? data.fee : dogeFeePerByte
-        const dogeWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-        if (isNaN(Number(dogeWalletBalance))) {
-            let errorMsg = "Failed to Fetch DOGE Balance. Try again!"
-            throw new Error(errorMsg)
-        }
-        const dogeWalletBalanceDecimals = Number(dogeWalletBalance)
-        const dogeAmountDecimals = Number(amount) * QORT_DECIMALS
-        const balance = (Number(dogeWalletBalance) / 1e8).toFixed(8)
-        const fee = feePerByte * 5000 // default 0.05000000
-        if (dogeAmountDecimals + fee  > dogeWalletBalanceDecimals) {
-            let errorMsg = "Insufficient Funds!"
-            throw new Error(errorMsg)
-        }
-        
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} DOGE`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const opts = {
-                xprv58: xprv58,
-                receivingAddress: recipient,
-                dogecoinAmount: amount,
-                feePerByte: feePerByte 
-            }
-            const url = await createEndpoint(`/crosschain/doge/send`);
-            
-            const response = await  fetch(url, {
-                 method: 'POST',
-                 headers: {
-                     'Accept': 'application/json',
-                     'Content-Type': 'application/json'
-                 },
-                 body: JSON.stringify(opts)
-             })
-             if (!response.ok) throw new Error("Failed to send");
-             let res;
-             try {
-               res = await response.clone().json();
-             } catch (e) {
-               res = await response.text();
-             }
-             return res;
-          } else {
-            throw new Error("User declined request")
-          }
-        
-    } else if (checkCoin === "DGB") {
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const xprv58 = parsedData.dbgPrivateKey
-        const feePerByte = data.fee ? data.fee : dgbFeePerByte
-        const dgbWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-        if (isNaN(Number(dgbWalletBalance))) {
-            let errorMsg = "Failed to Fetch DGB Balance. Try again!"
-            throw new Error(errorMsg)
-        }
-        const dgbWalletBalanceDecimals = Number(dgbWalletBalance)
-        const dgbAmountDecimals = Number(amount) * QORT_DECIMALS
-        const fee = feePerByte * 500 // default 0.00005000
-        if (dgbAmountDecimals + fee  > dgbWalletBalanceDecimals) {
-            let errorMsg = "Insufficient Funds!"
-            throw new Error(errorMsg)
-        }
-
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} DGB`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const opts = {
-                xprv58: xprv58,
-                receivingAddress: recipient,
-                digibyteAmount: amount,
-                feePerByte: feePerByte 
-            }
-            const url = await createEndpoint(`/crosschain/dgb/send`);
-            
-            const response = await  fetch(url, {
-                 method: 'POST',
-                 headers: {
-                     'Accept': 'application/json',
-                     'Content-Type': 'application/json'
-                 },
-                 body: JSON.stringify(opts)
-             })
-             if (!response.ok) throw new Error("Failed to send");
-             let res;
-             try {
-               res = await response.clone().json();
-             } catch (e) {
-               res = await response.text();
-             }
-             return res;
-          } else {
-            throw new Error("User declined request")
-          }
-       
-    } else if (checkCoin === "RVN") {
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const coin = data.coin
-        const xprv58 = parsedData.rvnPrivateKey
-        const feePerByte = data.fee ? data.fee : rvnFeePerByte
-        const rvnWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-        if (isNaN(Number(rvnWalletBalance))) {
-            let errorMsg = "Failed to Fetch RVN Balance. Try again!"
-            throw new Error(errorMsg)
-        }
-        const rvnWalletBalanceDecimals = Number(rvnWalletBalance)
-        const rvnAmountDecimals = Number(amount) * QORT_DECIMALS
-        const balance = (Number(rvnWalletBalance) / 1e8).toFixed(8)
-        const fee = feePerByte * 500 // default 0.00562500
-        if (rvnAmountDecimals + fee  > rvnWalletBalanceDecimals) {
-          
-            let errorMsg = "Insufficient Funds!"
-            throw new Error(errorMsg)
-        }
-        
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} RVN`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const opts = {
-                xprv58: xprv58,
-                receivingAddress: recipient,
-                ravencoinAmount: amount,
-                feePerByte: feePerByte
-            }
-            const url = await createEndpoint(`/crosschain/rvn/send`);
-            
-           const response = await  fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(opts)
-            })
-            if (!response.ok) throw new Error("Failed to send");
-            let res;
-            try {
-              res = await response.clone().json();
-            } catch (e) {
-              res = await response.text();
-            }
-            return res;
-          } else {
-            throw new Error("User declined request")
-          }
-    } else if (checkCoin === "ARRR") {
-        const amount = Number(data.amount)
-        const recipient = data.destinationAddress
-        const memo = data.memo
-        const arrrWalletBalance = await getWalletBalance({coin: checkCoin}, true)
-
-        if (isNaN(Number(arrrWalletBalance))) {
-            let errorMsg = "Failed to Fetch ARRR Balance. Try again!"
-            throw new Error(errorMsg)
-        }
-        const arrrWalletBalanceDecimals = Number(arrrWalletBalance)
-        const arrrAmountDecimals = Number(amount) * QORT_DECIMALS
-        const fee = 0.00010000
-        if (arrrAmountDecimals + fee  > arrrWalletBalanceDecimals) {
-            let errorMsg = "Insufficient Funds!"
-            throw new Error(errorMsg)
-        }
-        
-        const resPermission = await getUserPermission({
-            text1: "Do you give this application permission to send coins?",
-            text2: `To: ${recipient}`, 
-            highlightedText: `${amount} ${checkCoin}`,
-            foreignFee: `${fee} ARRR`
-          }, isFromExtension);
-          const { accepted } = resPermission;
-        
-          if (accepted) {
-            const opts = {
-                entropy58: parsedData.arrrSeed58,
-                receivingAddress: recipient,
-                arrrAmount: amount,
-                memo: memo
-            }
-            const url = await createEndpoint(`/crosschain/btc/send`);
-            
-           const response = await  fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(opts)
-            })
-            if (!response.ok) throw new Error("Failed to send");
-            let res;
-            try {
-              res = await response.clone().json();
-            } catch (e) {
-              res = await response.text();
-            }
-            return res;
-          } else {
-            throw new Error("User declined request")
-          }
-    }
-};
-
-
-export const createBuyOrder = async (data, isFromExtension) => {
- 
-  const requiredFields = [
-    "crosschainAtInfo",
-    "foreignBlockchain"
-  ];
+export const getCrossChainServerInfo = async (data) => {
+  const requiredFields = ["coin"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
     if (!data[field]) {
@@ -2463,50 +1711,910 @@ export const createBuyOrder = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  const isGateway = await isRunningGateway()
-  const foreignBlockchain = data.foreignBlockchain
-  const crosschainAtInfo = data.crosschainAtInfo;
-  const atAddresses = data.crosschainAtInfo?.map((order)=> order.qortalAtAddress);
+  let _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
+  try {
+    const url = await createEndpoint(_url);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch");
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+    return res.servers;
+  } catch (error) {
+    throw new Error(error?.message || "Error in retrieving server info");
+  }
+};
+
+export const getTxActivitySummary = async (data) => {
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const coin = data.coin;
+  const url = `/crosschain/txactivity?foreignBlockchain=${coin}`; // No apiKey here
 
   try {
-    const resPermission = await getUserPermission({
-      text1: "Do you give this application permission to perform a buy order?",
-      text2: `${atAddresses?.length}${" "}
-      ${`buy order${
-        atAddresses?.length === 1 ? "" : "s"
-      }`}`, 
-      text3: `${crosschainAtInfo?.reduce((latest, cur) => {
-        return latest + +cur?.qortAmount;
-      }, 0)} QORT FOR   ${roundUpToDecimals(
-        crosschainAtInfo?.reduce((latest, cur) => {
-          return latest + +cur?.foreignAmount;
-        }, 0)
-      )}
+    const endpoint = await createEndpoint(url);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to fetch");
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+    return res; // Return full response here
+  } catch (error) {
+    throw new Error(error?.message || "Error in tx activity summary");
+  }
+};
+
+export const getForeignFee = async (data) => {
+  const requiredFields = ["coin", "type"];
+  const missingFields: string[] = [];
+
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const { coin, type } = data;
+  const url = `/crosschain/${coin}/${type}`;
+
+  try {
+    const endpoint = await createEndpoint(url);
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to fetch");
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+    return res; // Return full response here
+  } catch (error) {
+    throw new Error(error?.message || "Error in get foreign fee");
+  }
+};
+
+export const updateForeignFee = async (data) => {
+  const localNodeAvailable = await isUsingLocal();
+  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const requiredFields = ["coin", "type", "value"];
+  const missingFields: string[] = [];
+
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const { coin, type, value } = data;
+  const url = `/crosschain/${coin}/update${type}`;
+
+  try {
+    const endpoint = await createEndpoint(url);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ value }),
+    });
+
+    if (!response.ok) throw new Error("Failed to update foreign fee");
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+    return res; // Return full response here
+  } catch (error) {
+    throw new Error(error?.message || "Error in update foreign fee");
+  }
+};
+
+export const getServerConnectionHistory = async (data) => {
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+
+  // Validate required fields
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const coin = data.coin.toLowerCase();
+  const url = `/crosschain/${coin}/serverconnectionhistory`;
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok)
+      throw new Error("Failed to fetch server connection history");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return full response here
+  } catch (error) {
+    throw new Error(error?.message || "Error in get server connection history");
+  }
+};
+
+export const setCurrentForeignServer = async (data) => {
+  const localNodeAvailable = await isUsingLocal();
+  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+
+  // Validate required fields
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const { coin, host, port, type } = data;
+  const body = {
+    hostName: host,
+    port: port,
+    connectionType: type,
+  };
+
+  const url = `/crosschain/${coin}/setcurrentserver`;
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) throw new Error("Failed to set current server");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in set current server");
+  }
+};
+
+export const addForeignServer = async (data) => {
+  const localNodeAvailable = await isUsingLocal();
+  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+
+  // Validate required fields
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const { coin, host, port, type } = data;
+  const body = {
+    hostName: host,
+    port: port,
+    connectionType: type,
+  };
+
+  const url = `/crosschain/${coin}/addserver`;
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) throw new Error("Failed to add server");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error.message || "Error in adding server");
+  }
+};
+
+export const removeForeignServer = async (data) => {
+  const localNodeAvailable = await isUsingLocal();
+  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+
+  // Validate required fields
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const { coin, host, port, type } = data;
+  const body = {
+    hostName: host,
+    port: port,
+    connectionType: type,
+  };
+
+  const url = `/crosschain/${coin}/removeserver`;
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) throw new Error("Failed to remove server");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in removing server");
+  }
+};
+
+export const getDaySummary = async () => {
+  const url = `/admin/summary`; // Simplified endpoint URL
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to retrieve summary");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in retrieving summary");
+  }
+};
+
+export const sendCoin = async (data, isFromExtension) => {
+  const requiredFields = ["coin", "destinationAddress", "amount"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+  let checkCoin = data.coin;
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const isGateway = await isRunningGateway();
+
+  if (checkCoin !== "QORT" && isGateway)
+    throw new Error(
+      "Cannot send a non-QORT coin through the gateway. Please use your local node."
+    );
+  if (checkCoin === "QORT") {
+    // Params: data.coin, data.destinationAddress, data.amount, data.fee
+    // TODO: prompt user to send. If they confirm, call `POST /crosschain/:coin/send`, or for QORT, broadcast a PAYMENT transaction
+    // then set the response string from the core to the `response` variable (defined above)
+    // If they decline, send back JSON that includes an `error` key, such as `{"error": "User declined request"}`
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+
+    const url = await createEndpoint(`/addresses/balance/${address}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch");
+    let walletBalance;
+    try {
+      walletBalance = await response.clone().json();
+    } catch (e) {
+      walletBalance = await response.text();
+    }
+    if (isNaN(Number(walletBalance))) {
+      let errorMsg = "Failed to Fetch QORT Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+
+    const transformDecimals = (Number(walletBalance) * QORT_DECIMALS).toFixed(
+      0
+    );
+    const walletBalanceDecimals = Number(transformDecimals);
+    const amountDecimals = Number(amount) * QORT_DECIMALS;
+    const fee: number = await sendQortFee();
+    if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
+      let errorMsg = "Insufficient Funds!";
+      throw new Error(errorMsg);
+    }
+    if (amount <= 0) {
+      let errorMsg = "Invalid Amount!";
+      throw new Error(errorMsg);
+    }
+    if (recipient.length === 0) {
+      let errorMsg = "Receiver cannot be empty!";
+      throw new Error(errorMsg);
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        fee: fee * QORT_DECIMALS,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const makePayment = await sendCoinFunc(
+        { amount, password: null, receiver: recipient },
+        true
+      );
+      return makePayment.res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "BTC") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const xprv58 = parsedData.btcPrivateKey;
+    const feePerByte = data.fee ? data.fee : btcFeePerByte;
+
+    const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+
+    if (isNaN(Number(btcWalletBalance))) {
+      throw new Error("Unable to fetch BTC balance");
+    }
+    const btcWalletBalanceDecimals = Number(btcWalletBalance);
+    const btcAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const fee = feePerByte * 500; // default 0.00050000
+    if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
+      throw new Error("INSUFFICIENT_FUNDS");
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} BTC`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const opts = {
+        xprv58: xprv58,
+        receivingAddress: recipient,
+        bitcoinAmount: amount,
+        feePerByte: feePerByte,
+      };
+      const url = await createEndpoint(`/crosschain/btc/send`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "LTC") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const xprv58 = parsedData.ltcPrivateKey;
+    const feePerByte = data.fee ? data.fee : ltcFeePerByte;
+    const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+
+    if (isNaN(Number(ltcWalletBalance))) {
+      let errorMsg = "Failed to Fetch LTC Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+    const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
+    const ltcAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const balance = (Number(ltcWalletBalance) / 1e8).toFixed(8);
+    const fee = feePerByte * 1000; // default 0.00030000
+    if (ltcAmountDecimals + fee > ltcWalletBalanceDecimals) {
+      throw new Error("Insufficient Funds!");
+    }
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} LTC`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const url = await createEndpoint(`/crosschain/ltc/send`);
+      const opts = {
+        xprv58: xprv58,
+        receivingAddress: recipient,
+        litecoinAmount: amount,
+        feePerByte: feePerByte,
+      };
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "DOGE") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const coin = data.coin;
+    const xprv58 = parsedData.dogePrivateKey;
+    const feePerByte = data.fee ? data.fee : dogeFeePerByte;
+    const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+    if (isNaN(Number(dogeWalletBalance))) {
+      let errorMsg = "Failed to Fetch DOGE Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+    const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
+    const dogeAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const balance = (Number(dogeWalletBalance) / 1e8).toFixed(8);
+    const fee = feePerByte * 5000; // default 0.05000000
+    if (dogeAmountDecimals + fee > dogeWalletBalanceDecimals) {
+      let errorMsg = "Insufficient Funds!";
+      throw new Error(errorMsg);
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} DOGE`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const opts = {
+        xprv58: xprv58,
+        receivingAddress: recipient,
+        dogecoinAmount: amount,
+        feePerByte: feePerByte,
+      };
+      const url = await createEndpoint(`/crosschain/doge/send`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "DGB") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const xprv58 = parsedData.dbgPrivateKey;
+    const feePerByte = data.fee ? data.fee : dgbFeePerByte;
+    const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+    if (isNaN(Number(dgbWalletBalance))) {
+      let errorMsg = "Failed to Fetch DGB Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+    const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
+    const dgbAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const fee = feePerByte * 500; // default 0.00005000
+    if (dgbAmountDecimals + fee > dgbWalletBalanceDecimals) {
+      let errorMsg = "Insufficient Funds!";
+      throw new Error(errorMsg);
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} DGB`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const opts = {
+        xprv58: xprv58,
+        receivingAddress: recipient,
+        digibyteAmount: amount,
+        feePerByte: feePerByte,
+      };
+      const url = await createEndpoint(`/crosschain/dgb/send`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "RVN") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const coin = data.coin;
+    const xprv58 = parsedData.rvnPrivateKey;
+    const feePerByte = data.fee ? data.fee : rvnFeePerByte;
+    const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+    if (isNaN(Number(rvnWalletBalance))) {
+      let errorMsg = "Failed to Fetch RVN Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+    const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
+    const rvnAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const balance = (Number(rvnWalletBalance) / 1e8).toFixed(8);
+    const fee = feePerByte * 500; // default 0.00562500
+    if (rvnAmountDecimals + fee > rvnWalletBalanceDecimals) {
+      let errorMsg = "Insufficient Funds!";
+      throw new Error(errorMsg);
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} RVN`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const opts = {
+        xprv58: xprv58,
+        receivingAddress: recipient,
+        ravencoinAmount: amount,
+        feePerByte: feePerByte,
+      };
+      const url = await createEndpoint(`/crosschain/rvn/send`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  } else if (checkCoin === "ARRR") {
+    const amount = Number(data.amount);
+    const recipient = data.destinationAddress;
+    const memo = data.memo;
+    const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
+
+    if (isNaN(Number(arrrWalletBalance))) {
+      let errorMsg = "Failed to Fetch ARRR Balance. Try again!";
+      throw new Error(errorMsg);
+    }
+    const arrrWalletBalanceDecimals = Number(arrrWalletBalance);
+    const arrrAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const fee = 0.0001;
+    if (arrrAmountDecimals + fee > arrrWalletBalanceDecimals) {
+      let errorMsg = "Insufficient Funds!";
+      throw new Error(errorMsg);
+    }
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to send coins?",
+        text2: `To: ${recipient}`,
+        highlightedText: `${amount} ${checkCoin}`,
+        foreignFee: `${fee} ARRR`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    if (accepted) {
+      const opts = {
+        entropy58: parsedData.arrrSeed58,
+        receivingAddress: recipient,
+        arrrAmount: amount,
+        memo: memo,
+      };
+      const url = await createEndpoint(`/crosschain/btc/send`);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(opts),
+      });
+      if (!response.ok) throw new Error("Failed to send");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      return res;
+    } else {
+      throw new Error("User declined request");
+    }
+  }
+};
+
+export const createBuyOrder = async (data, isFromExtension) => {
+  const requiredFields = ["crosschainAtInfo", "foreignBlockchain"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+  const isGateway = await isRunningGateway();
+  const foreignBlockchain = data.foreignBlockchain;
+  const crosschainAtInfo = data.crosschainAtInfo;
+  const atAddresses = data.crosschainAtInfo?.map(
+    (order) => order.qortalAtAddress
+  );
+
+  try {
+    const resPermission = await getUserPermission(
+      {
+        text1:
+          "Do you give this application permission to perform a buy order?",
+        text2: `${atAddresses?.length}${" "}
+      ${`buy order${atAddresses?.length === 1 ? "" : "s"}`}`,
+        text3: `${crosschainAtInfo?.reduce((latest, cur) => {
+          return latest + +cur?.qortAmount;
+        }, 0)} QORT FOR   ${roundUpToDecimals(
+          crosschainAtInfo?.reduce((latest, cur) => {
+            return latest + +cur?.foreignAmount;
+          }, 0)
+        )}
       ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
-      highlightedText: `Is using gateway: ${isGateway}`,
-      fee: '',
-      foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`
-    }, isFromExtension);
+        highlightedText: `Is using gateway: ${isGateway}`,
+        fee: "",
+        foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`,
+      },
+      isFromExtension
+    );
     const { accepted } = resPermission;
     if (accepted) {
-    const resBuyOrder = await createBuyOrderTx(
-      {
+      const resBuyOrder = await createBuyOrderTx({
         crosschainAtInfo,
         isGateway,
-        foreignBlockchain 
-      }
-    );
-    return resBuyOrder;
-  } else {
-    throw new Error("User declined request");
-  }
+        foreignBlockchain,
+      });
+      return resBuyOrder;
+    } else {
+      throw new Error("User declined request");
+    }
   } catch (error) {
     throw new Error(error?.message || "Failed to submit trade order.");
   }
 };
 
- const cancelTradeOfferTradeBot = async (body, keyPair) => {
-	const txn = new DeleteTradeOffer().createTransaction(body)
+const cancelTradeOfferTradeBot = async (body, keyPair) => {
+  const txn = new DeleteTradeOffer().createTransaction(body);
   const url = await createEndpoint(`/crosschain/tradeoffer`);
   const bodyToString = JSON.stringify(txn);
 
@@ -2518,51 +2626,50 @@ export const createBuyOrder = async (data, isFromExtension) => {
     body: bodyToString,
   });
 
-  if(!deleteTradeBotResponse.ok) throw new Error('Unable to update tradebot')
-  const unsignedTxn = await deleteTradeBotResponse.text()
-  const signedTxnBytes = await signTradeBotTransaction(
-    unsignedTxn,
-    keyPair
-  )
+  if (!deleteTradeBotResponse.ok) throw new Error("Unable to update tradebot");
+  const unsignedTxn = await deleteTradeBotResponse.text();
+  const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
   const signedBytes = Base58.encode(signedTxnBytes);
 
-  let res
+  let res;
   try {
-    res = await processTransactionVersion2(signedBytes)
+    res = await processTransactionVersion2(signedBytes);
   } catch (error) {
     return {
       error: "Failed to Cancel Sell Order. Try again!",
       failedTradeBot: {
         atAddress: body.atAddress,
-        creatorAddress: body.creatorAddress
-      }
-    }
+        creatorAddress: body.creatorAddress,
+      },
+    };
   }
-  if(res?.error){
+  if (res?.error) {
     return {
       error: "Failed to Cancel Sell Order. Try again!",
       failedTradeBot: {
         atAddress: body.atAddress,
-        creatorAddress: body.creatorAddress
-      }
-    }
+        creatorAddress: body.creatorAddress,
+      },
+    };
   }
-  if (res?.signature){
-    return res
+  if (res?.signature) {
+    return res;
   } else {
-    throw new Error("Failed to Cancel Sell Order. Try again!")
+    throw new Error("Failed to Cancel Sell Order. Try again!");
   }
-}
-const findFailedTradebot = async (createBotCreationTimestamp, body)=> {
+};
+const findFailedTradebot = async (createBotCreationTimestamp, body) => {
   //wait 5 secs
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  await new Promise((res)=> {
+  await new Promise((res) => {
     setTimeout(() => {
-      res(null)
+      res(null);
     }, 5000);
-  })
-  const url = await createEndpoint(`/crosschain/tradebot?foreignBlockchain=LITECOIN`);
+  });
+  const url = await createEndpoint(
+    `/crosschain/tradebot?foreignBlockchain=LITECOIN`
+  );
 
   const tradeBotsReponse = await fetch(url, {
     method: "GET",
@@ -2570,33 +2677,29 @@ const findFailedTradebot = async (createBotCreationTimestamp, body)=> {
       "Content-Type": "application/json",
     },
   });
-  const data = await tradeBotsReponse.json()
+  const data = await tradeBotsReponse.json();
   const latestItem2 = data
-  .filter(
-    (item) =>
-      item.creatorAddress === address
-  ).sort((a, b) => b.timestamp - a.timestamp)[0]
+    .filter((item) => item.creatorAddress === address)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
   const latestItem = data
-  .filter(
-    (item) =>
-      item.creatorAddress === address &&
-      +item.foreignAmount === +body.foreignAmount
-  )
-  .sort((a, b) => b.timestamp - a.timestamp)[0];
-    if (
-      latestItem &&
-      createBotCreationTimestamp - latestItem.timestamp <= 5000 && 
-      createBotCreationTimestamp > latestItem.timestamp // Ensure latestItem's timestamp is before createBotCreationTimestamp
-    ) {
-  
-      return latestItem
-    } else {
-      return null
-    }
-  
-}
-const tradeBotCreateRequest = async (body, keyPair)=> {
-  const txn = new TradeBotCreateRequest().createTransaction(body)
+    .filter(
+      (item) =>
+        item.creatorAddress === address &&
+        +item.foreignAmount === +body.foreignAmount
+    )
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+  if (
+    latestItem &&
+    createBotCreationTimestamp - latestItem.timestamp <= 5000 &&
+    createBotCreationTimestamp > latestItem.timestamp // Ensure latestItem's timestamp is before createBotCreationTimestamp
+  ) {
+    return latestItem;
+  } else {
+    return null;
+  }
+};
+const tradeBotCreateRequest = async (body, keyPair) => {
+  const txn = new TradeBotCreateRequest().createTransaction(body);
   const url = await createEndpoint(`/crosschain/tradebot/create`);
   const bodyToString = JSON.stringify(txn);
 
@@ -2607,41 +2710,35 @@ const tradeBotCreateRequest = async (body, keyPair)=> {
     },
     body: bodyToString,
   });
-  if(!unsignedTxnResponse.ok) throw new Error('Unable to create tradebot')
-  const createBotCreationTimestamp = Date.now()
-  const unsignedTxn = await unsignedTxnResponse.text()
-  const signedTxnBytes = await signTradeBotTransaction(
-    unsignedTxn,
-    keyPair
-  )
+  if (!unsignedTxnResponse.ok) throw new Error("Unable to create tradebot");
+  const createBotCreationTimestamp = Date.now();
+  const unsignedTxn = await unsignedTxnResponse.text();
+  const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
   const signedBytes = Base58.encode(signedTxnBytes);
 
-  let res
+  let res;
   try {
-    res = await processTransactionVersion2(signedBytes)
+    res = await processTransactionVersion2(signedBytes);
   } catch (error) {
-    const findFailedTradeBot =    await findFailedTradebot(createBotCreationTimestamp, body)
+    const findFailedTradeBot = await findFailedTradebot(
+      createBotCreationTimestamp,
+      body
+    );
     return {
       error: "Failed to Create Sell Order. Try again!",
-      failedTradeBot: findFailedTradeBot
-    }
+      failedTradeBot: findFailedTradeBot,
+    };
   }
 
-  if (res?.signature){
-    return res
+  if (res?.signature) {
+    return res;
   } else {
-    throw new Error("Failed to Create Sell Order. Try again!")
+    throw new Error("Failed to Create Sell Order. Try again!");
   }
-
-}
+};
 
 export const createSellOrder = async (data, isFromExtension) => {
- 
-  const requiredFields = [
-    "qortAmount",
-    "foreignBlockchain",
-    "foreignAmount"
-  ];
+  const requiredFields = ["qortAmount", "foreignBlockchain", "foreignAmount"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
     if (!data[field]) {
@@ -2654,53 +2751,58 @@ export const createSellOrder = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
-const receivingAddress = await getUserWalletFunc('LTC')
+  const receivingAddress = await getUserWalletFunc("LTC");
   try {
-    const resPermission = await getUserPermission({
-      text1: "Do you give this application permission to perform a sell order?",
-      text2: `${data.qortAmount}${" "}
-      ${`QORT`}`, 
-      text3: `FOR  ${data.foreignAmount} ${data.foreignBlockchain}`,
-      fee: '0.02'
-    }, isFromExtension);
+    const resPermission = await getUserPermission(
+      {
+        text1:
+          "Do you give this application permission to perform a sell order?",
+        text2: `${data.qortAmount}${" "}
+      ${`QORT`}`,
+        text3: `FOR  ${data.foreignAmount} ${data.foreignBlockchain}`,
+        fee: "0.02",
+      },
+      isFromExtension
+    );
     const { accepted } = resPermission;
     if (accepted) {
-      const resKeyPair = await getKeyPair()
-        const parsedData = resKeyPair
-        const userPublicKey = parsedData.publicKey
-        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-  const uint8PublicKey = Base58.decode(parsedData.publicKey);
-  const keyPair = {
-    privateKey: uint8PrivateKey,
-    publicKey: uint8PublicKey,
-  };
-      const response = await tradeBotCreateRequest({
-        creatorPublicKey: userPublicKey,
-				qortAmount: parseFloat(data.qortAmount),
-				fundingQortAmount: parseFloat(data.qortAmount) + 0.001,
-				foreignBlockchain: data.foreignBlockchain,
-				foreignAmount: parseFloat(data.foreignAmount),
-				tradeTimeout: 120,
-				receivingAddress: receivingAddress.address
-      }, keyPair)
+      const resKeyPair = await getKeyPair();
+      const parsedData = resKeyPair;
+      const userPublicKey = parsedData.publicKey;
+      const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+      const uint8PublicKey = Base58.decode(parsedData.publicKey);
+      const keyPair = {
+        privateKey: uint8PrivateKey,
+        publicKey: uint8PublicKey,
+      };
+      const response = await tradeBotCreateRequest(
+        {
+          creatorPublicKey: userPublicKey,
+          qortAmount: parseFloat(data.qortAmount),
+          fundingQortAmount: parseFloat(data.qortAmount) + 0.001,
+          foreignBlockchain: data.foreignBlockchain,
+          foreignAmount: parseFloat(data.foreignAmount),
+          tradeTimeout: 120,
+          receivingAddress: receivingAddress.address,
+        },
+        keyPair
+      );
 
-      return response
-
-  } else {
-    throw new Error("User declined request");
-  }
+      return response;
+    } else {
+      throw new Error("User declined request");
+    }
   } catch (error) {
     throw new Error(error?.message || "Failed to submit sell order.");
   }
 };
 
 export const cancelSellOrder = async (data, isFromExtension) => {
- 
   const requiredFields = [
     "qortAmount",
     "foreignBlockchain",
     "foreignAmount",
-    "atAddress"
+    "atAddress",
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -2717,44 +2819,47 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   try {
     const fee = await getFee("MESSAGE");
 
-    const resPermission = await getUserPermission({
-      text1: "Do you give this application permission to perform cancel a sell order?",
-      text2: `${data.qortAmount}${" "}
-      ${`QORT`}`, 
-      text3: `FOR  ${data.foreignAmount} ${data.foreignBlockchain}`,
-      fee: fee.fee
-    }, isFromExtension);
+    const resPermission = await getUserPermission(
+      {
+        text1:
+          "Do you give this application permission to perform cancel a sell order?",
+        text2: `${data.qortAmount}${" "}
+      ${`QORT`}`,
+        text3: `FOR  ${data.foreignAmount} ${data.foreignBlockchain}`,
+        fee: fee.fee,
+      },
+      isFromExtension
+    );
     const { accepted } = resPermission;
     if (accepted) {
-      const resKeyPair = await getKeyPair()
-        const parsedData = resKeyPair
-        const userPublicKey = parsedData.publicKey
-        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-  const uint8PublicKey = Base58.decode(parsedData.publicKey);
-  const keyPair = {
-    privateKey: uint8PrivateKey,
-    publicKey: uint8PublicKey,
-  };
-      const response = await cancelTradeOfferTradeBot({
-        creatorPublicKey: userPublicKey,
-        atAddress: data.atAddress
-      }, keyPair)
+      const resKeyPair = await getKeyPair();
+      const parsedData = resKeyPair;
+      const userPublicKey = parsedData.publicKey;
+      const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+      const uint8PublicKey = Base58.decode(parsedData.publicKey);
+      const keyPair = {
+        privateKey: uint8PrivateKey,
+        publicKey: uint8PublicKey,
+      };
+      const response = await cancelTradeOfferTradeBot(
+        {
+          creatorPublicKey: userPublicKey,
+          atAddress: data.atAddress,
+        },
+        keyPair
+      );
 
-      return response
-
-  } else {
-    throw new Error("User declined request");
-  }
+      return response;
+    } else {
+      throw new Error("User declined request");
+    }
   } catch (error) {
     throw new Error(error?.message || "Failed to submit sell order.");
   }
 };
 
 export const adminAction = async (data, isFromExtension) => {
-
-  const requiredFields = [
-    "type",
-  ];
+  const requiredFields = ["type"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
     if (!data[field]) {
@@ -2766,32 +2871,35 @@ export const adminAction = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  const  isGateway =  await isRunningGateway()
-  if(isGateway){
-    throw new Error('This action cannot be done through a gateway')
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
   }
 
-    let apiEndpoint = '';
-    switch (data.type.toLowerCase()) {
-      case 'stop':
-        apiEndpoint = await createEndpoint('/admin/stop');
-        break;
-      case 'restart':
-        apiEndpoint = await createEndpoint('/admin/restart');
-        break;
-      case 'bootstrap':
-        apiEndpoint = await createEndpoint('/admin/bootstrap');
-        break;
-      default:
-        throw new Error(`Unknown admin action type: ${data.type}`);
-    }
+  let apiEndpoint = "";
+  switch (data.type.toLowerCase()) {
+    case "stop":
+      apiEndpoint = await createEndpoint("/admin/stop");
+      break;
+    case "restart":
+      apiEndpoint = await createEndpoint("/admin/restart");
+      break;
+    case "bootstrap":
+      apiEndpoint = await createEndpoint("/admin/bootstrap");
+      break;
+    default:
+      throw new Error(`Unknown admin action type: ${data.type}`);
+  }
 
-    const resPermission = await getUserPermission({
+  const resPermission = await getUserPermission(
+    {
       text1: `Do you give this application permission to perform a node ${data.type}?`,
-    }, isFromExtension);
-    const { accepted } = resPermission;
-    if (accepted) {
-      const response = await fetch(apiEndpoint);
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+    const response = await fetch(apiEndpoint);
     if (!response.ok) throw new Error("Failed to perform request");
 
     let res;
@@ -2804,5 +2912,86 @@ export const adminAction = async (data, isFromExtension) => {
   } else {
     throw new Error("User declined request");
   }
- 
+};
+
+export const signTransaction = async (data, isFromExtension) => {
+  const requiredFields = ["unsignedBytes"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  let _url = await createEndpoint(
+    "/transactions/decode?ignoreValidityChecks=false"
+  );
+
+  let _body = data.unsignedBytes;
+  const response = await fetch(_url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: _body,
+  });
+  if (!response.ok) throw new Error("Failed to decode transaction");
+  const decodedData = await response.json();
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to sign a transaction?`,
+      highlightedText: "Read the transaction carefully before accepting!",
+      text2: `Tx type: ${decodedData.type}`,
+      json: decodedData,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+   
+      let urlConverted = await createEndpoint("/transactions/convert");
+
+      const responseConverted = await fetch(urlConverted, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: data.unsignedBytes,
+      });
+      const resKeyPair = await getKeyPair();
+      const parsedData = resKeyPair;
+      const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+      const uint8PublicKey = Base58.decode(parsedData.publicKey);
+      const keyPair = {
+        privateKey: uint8PrivateKey,
+        publicKey: uint8PublicKey,
+      };
+      const convertedBytes = await responseConverted.text();
+      const txBytes = Base58.decode(data.unsignedBytes);
+      const _arbitraryBytesBuffer = Object.keys(txBytes).map(function (key) {
+        return txBytes[key];
+      });
+      const arbitraryBytesBuffer = new Uint8Array(_arbitraryBytesBuffer);
+      const txByteSigned = Base58.decode(convertedBytes);
+      const _bytesForSigningBuffer = Object.keys(txByteSigned).map(function (
+        key
+      ) {
+        return txByteSigned[key];
+      });
+      const bytesForSigningBuffer = new Uint8Array(_bytesForSigningBuffer);
+      const signature = nacl.sign.detached(
+        bytesForSigningBuffer,
+        keyPair.privateKey
+      );
+      const signedBytes = utils.appendBuffer(arbitraryBytesBuffer, signature);
+      return uint8ArrayToBase64(signedBytes);
+   
+  } else {
+    throw new Error("User declined request");
+  }
 };
