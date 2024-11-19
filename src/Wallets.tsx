@@ -20,9 +20,8 @@ const parsefilenameQortal = (filename)=> {
 
 export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [wallets, setWallets] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const hasFetchedWalletsRef = useRef(false)
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       "application/json": [".json"], // Only accept JSON files
@@ -100,7 +99,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   useEffect(()=> {
     setIsLoading(true)
     getWallets().then((res)=> {
-        hasFetchedWalletsRef.current = true
+      
         if(res && Array.isArray(res)){
             setWallets(res)
         }
@@ -112,10 +111,10 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   }, [])
 
   useEffect(()=> {
-    if(hasFetchedWalletsRef.current && wallets && Array.isArray(wallets)){
+    if(!isLoading && wallets && Array.isArray(wallets)){
         storeWallets(wallets)
     }
-  }, [wallets])
+  }, [wallets, isLoading])
 
   if(isLoading) return null
 

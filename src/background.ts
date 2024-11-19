@@ -856,14 +856,14 @@ export async function getWallets() {
   if (res) {
     return res;
   } else {
-    throw new Error("No wallet saved");
+    return null
   }
 }
 
 export async function storeWallets(wallets) {
   storeData("wallets", wallets)
         .catch((error) => {
-          reject(new Error(error.message || "Error saving data"));
+         console.error(error)
         });
 }
 
