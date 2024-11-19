@@ -851,6 +851,23 @@ export async function getSaveWallet() {
   }
 }
 
+export async function getWallets() {
+  const res = await getData<any>("wallets").catch(() => null);
+  if (res) {
+    return res;
+  } else {
+    throw new Error("No wallet saved");
+  }
+}
+
+export async function storeWallets(wallets) {
+  storeData("wallets", wallets)
+        .catch((error) => {
+          reject(new Error(error.message || "Error saving data"));
+        });
+}
+
+
 export async function clearAllNotifications() {
   // const notifications = await chrome.notifications.getAll();
   // for (const notificationId of Object.keys(notifications)) {

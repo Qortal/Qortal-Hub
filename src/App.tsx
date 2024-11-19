@@ -122,6 +122,7 @@ import {
 import { fileToBase64 } from "./utils/fileReading";
 import { handleGetFileFromIndexedDB } from "./utils/indexedDB";
 import { CoreSyncStatus } from "./components/CoreSyncStatus";
+import { Wallets } from "./Wallets";
 
 type extStates =
   | "not-authenticated"
@@ -137,6 +138,7 @@ type extStates =
   | "wallet-dropped"
   | "web-app-request-buy-order"
   | "buy-order-submitted"
+  | "wallets"
   | "group";
 
 interface MyContextInterface {
@@ -237,6 +239,8 @@ export const resumeAllQueues = () => {
     );
   });
 };
+
+
 
 export const MyContext = createContext<MyContextInterface>(defaultValues);
 
@@ -2184,9 +2188,9 @@ function App() {
           </CustomButton>
         </>
       )}
-      {rawWallet && extState === "wallet-dropped" && (
+        {extState === "wallets" && (
         <>
-          <Spacer height="22px" />
+         <Spacer height="22px" />
           <Box
             sx={{
               display: "flex",
@@ -2208,6 +2212,34 @@ function App() {
               src={Return}
             />
           </Box>
+         <Wallets setRawWallet={setRawWallet} setExtState={setExtstate} rawWallet={rawWallet} />
+
+        </>
+      )}
+      {rawWallet && extState === "wallet-dropped" && (
+        <>
+          <Spacer height="22px" />
+          <Box
+            sx={{
+              display: "flex",
+              width: "100%",
+              justifyContent: "flex-start",
+              paddingLeft: "22px",
+              boxSizing: "border-box",
+            }}
+          >
+            <img
+              style={{
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                setRawWallet(null);
+                setExtstate("wallets");
+                logoutFunc();
+              }}
+              src={Return}
+            />
+          </Box>
           <Spacer height="10px" />
           <div
             className="image-container"
@@ -2224,9 +2256,11 @@ function App() {
             sx={{
               display: "flex",
               flexDirection: "column",
-              alignItems: "flex-start",
+              alignItems: "center",
             }}
           >
+            <Typography>{rawWallet?.name ? rawWallet?.name : rawWallet?.address0}</Typography>
+            <Spacer height="10px" />
             <TextP
               sx={{
                 textAlign: "start",
