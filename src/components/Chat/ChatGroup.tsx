@@ -496,7 +496,7 @@ const sendChatGroup = async ({groupId, typeMessage = undefined, chatReference = 
         typeMessage,
         chatReference,
         messageText,
-      })
+      }, 120000)
         .then((response) => {
           if (!response?.error) {
             res(response);
@@ -562,7 +562,7 @@ const clearEditorContent = () => {
         // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
        
         const sendMessageFunc = async () => {
-          await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
+         return await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
         };
   
         // Add the function to the queue
@@ -641,7 +641,7 @@ const clearEditorContent = () => {
       // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
      
       const sendMessageFunc = async () => {
-        await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle, chatReference: chatMessage.signature})
+       return await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle, chatReference: chatMessage.signature})
       };
 
       // Add the function to the queue

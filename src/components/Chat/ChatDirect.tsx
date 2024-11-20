@@ -251,7 +251,7 @@ const sendChatDirect = async ({ chatReference = undefined, messageText, otherDat
         otherData,
         publicKeyOfRecipient,
         address: directTo,
-      })
+      }, 120000)
         .then(async (response) => {
           if (!response?.error) {
             if (isNewChatVar) {
@@ -342,7 +342,7 @@ const clearEditorContent = () => {
           repliedTo
         }
         const sendMessageFunc = async () => {
-          await sendChatDirect({ chatReference: undefined, messageText: htmlContent, otherData}, selectedDirect?.address, publicKeyOfRecipient, false)
+          return await sendChatDirect({ chatReference: undefined, messageText: htmlContent, otherData}, selectedDirect?.address, publicKeyOfRecipient, false)
         };
 
         
