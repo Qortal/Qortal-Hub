@@ -15,7 +15,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar'
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/codes'
 import { useMessageQueue } from '../../MessageQueueContext'
 import { executeEvent } from '../../utils/events'
-import { Box, ButtonBase } from '@mui/material'
+import { Box, ButtonBase, Typography } from '@mui/material'
 import ShortUniqueId from "short-unique-id";
 import { ReplyPreview } from './MessageItem'
 import { ExitIcon } from '../../assets/Icons/ExitIcon'
@@ -35,7 +35,7 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
   const hasInitialized = useRef(false)
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [replyMessage, setReplyMessage] = useState(null)
-
+const [messageSize, setMessageSize] = useState(0)
   const hasInitializedWebsocket = useRef(false)
   const socketRef = useRef(null); // WebSocket reference
   const timeoutIdRef = useRef(null); // Timeout ID reference
@@ -515,6 +515,7 @@ const sendChatGroup = async ({groupId, typeMessage = undefined, chatReference = 
 }
 const clearEditorContent = () => {
   if (editorRef.current) {
+    setMessageSize(0)
     editorRef.current.chain().focus().clearContent().run();
     if(isMobile){
       setTimeout(() => {
@@ -598,6 +599,24 @@ const clearEditorContent = () => {
         resumeAllQueues()
       }
     }
+
+    useEffect(() => {
+      if (!editorRef?.current) return;
+      const handleUpdate = () => {
+        const htmlContent = editorRef?.current.getHTML();
+        const stringified = JSON.stringify(htmlContent);
+        const size = new Blob([stringified]).size;
+        setMessageSize(size + 100);
+      };
+  
+      // Add a listener for the editorRef?.current's content updates
+      editorRef?.current.on('update', handleUpdate);
+  
+      // Cleanup the listener on unmount
+      return () => {
+        editorRef?.current.off('update', handleUpdate);
+      };
+    }, [editorRef?.current]);
 
   useEffect(() => {
     if (hide) {
@@ -739,9 +758,23 @@ const clearEditorContent = () => {
      
       <Tiptap enableMentions setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} membersWithNames={members} />
       </div>
+      {messageSize > 750 && (
+        <Box sx={{
+          display: 'flex',
+          width: '100%',
+          justifyContent: 'flex-end',
+          position: 'relative',
+        }}>
+                <Typography sx={{
+                  fontSize: '12px',
+                  color: messageSize > 4000 ? 'var(--unread)' : 'unset'
+                }}>{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
+
+          </Box>
+      )}
       <Box sx={{
         display: 'flex',
-        width: '100&',
+        width: '100%',
         gap: '10px',
         justifyContent: 'center',
         flexShrink: 0,
@@ -771,6 +804,7 @@ const clearEditorContent = () => {
             )}
       <CustomButton
               onClick={()=> {
+                if(messageSize > 4000) return
                 if(isSending) return
                 sendMessage()
               }}

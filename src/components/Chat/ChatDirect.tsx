@@ -41,6 +41,7 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
   const editorRef = useRef(null);
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
+  const [messageSize, setMessageSize] = useState(0)
   const groupSocketTimeoutRef = useRef(null);
   const [replyMessage, setReplyMessage] = useState(null)
   const setEditorRef = (editorInstance) => {
@@ -298,6 +299,7 @@ const sendChatDirect = async ({ chatReference = undefined, messageText, otherDat
 }
 const clearEditorContent = () => {
   if (editorRef.current) {
+    setMessageSize(0)
     editorRef.current.chain().focus().clearContent().run();
     if(isMobile){
       setTimeout(() => {
@@ -311,7 +313,23 @@ const clearEditorContent = () => {
     }
   }
 };
+useEffect(() => {
+  if (!editorRef?.current) return;
+  const handleUpdate = () => {
+    const htmlContent = editorRef?.current.getHTML();
+    const stringified = JSON.stringify(htmlContent);
+    const size = new Blob([stringified]).size;
+    setMessageSize(size + 100);
+  };
 
+  // Add a listener for the editorRef?.current's content updates
+  editorRef?.current.on('update', handleUpdate);
+
+  // Cleanup the listener on unmount
+  return () => {
+    editorRef?.current.off('update', handleUpdate);
+  };
+}, [editorRef?.current]);
 
     const sendMessage = async ()=> {
       try {
@@ -542,6 +560,20 @@ const clearEditorContent = () => {
      
       <Tiptap isFocusedParent={isFocusedParent} setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} setIsFocusedParent={setIsFocusedParent}/>
       </div>
+      {messageSize > 750 && (
+        <Box sx={{
+          display: 'flex',
+          width: '100%',
+          justifyContent: 'flex-end',
+          position: 'relative',
+        }}>
+                <Typography sx={{
+                  fontSize: '12px',
+                  color: messageSize > 4000 ? 'var(--unread)' : 'unset'
+                }}>{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
+
+          </Box>
+      )}
       <Box sx={{
         display: 'flex',
         width: '100&',
@@ -574,6 +606,8 @@ const clearEditorContent = () => {
             )}
       <CustomButton
               onClick={()=> {
+                if(messageSize > 4000) return
+
                 if(isSending) return
                 sendMessage()
               }}
