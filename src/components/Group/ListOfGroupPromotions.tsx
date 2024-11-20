@@ -685,6 +685,7 @@ export const ListOfGroupPromotions = () => {
                 rowHeight={cache.rowHeight}
                 rowRenderer={rowRenderer}
                 deferredMeasurementCache={cache}
+                className="scrollable-container"
               />
             )}
           </AutoSizer>

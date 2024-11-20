@@ -135,6 +135,7 @@ export const ListOfThreadPostsWatched = () => {
         )}
         {posts?.length > 0 && (
                <List
+               className="scrollable-container"
                sx={{
                  width: "100%",
                  maxWidth: 360,

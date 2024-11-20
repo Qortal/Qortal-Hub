@@ -125,6 +125,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             maxHeight: "300px",
             overflow: "auto",
           }}
+          className="scrollable-container"
         >
           {groupsWithJoinRequests?.map((group) => {
             return (

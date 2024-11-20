@@ -172,7 +172,7 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
     </Typography>
   </Box>
     )}
-    <List sx={{ width: "100%", maxWidth: 360, bgcolor: "background.paper", maxHeight: '300px', overflow: 'auto' }}>
+    <List className="scrollable-container" sx={{ width: "100%", maxWidth: 360, bgcolor: "background.paper", maxHeight: '300px', overflow: 'auto' }}>
       {filteredJoinRequests?.map((group)=> {
         if(group?.data?.length === 0) return null
         return (

@@ -129,6 +129,7 @@ export const QMailMessages = ({userName, userAddress}) => {
     </Box>
 
     <Box
+    className="scrollable-container"
       sx={{
         width: "322px",
         height: isMobile ? "165px" : "250px",
