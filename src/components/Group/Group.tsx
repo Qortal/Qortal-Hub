@@ -1152,7 +1152,6 @@ export const Group = ({
     if (findDirect) {
       if(!isMobile){
         setDesktopSideView("directs");
-        setDesktopViewMode('home')
       } else {
         setMobileViewModeKeepOpen("messaging");
       }
@@ -1176,7 +1175,6 @@ export const Group = ({
     } else {
       if(!isMobile){
         setDesktopSideView("directs");
-        setDesktopViewMode('home')
       } else {
         setMobileViewModeKeepOpen("messaging");
       }
