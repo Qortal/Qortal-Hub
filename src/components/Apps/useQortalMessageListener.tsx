@@ -395,6 +395,7 @@ isDOMContentLoaded: false
     infoSnackCustom,
     setInfoSnackCustom } = useContext(MyContext);
 
+
  
   useEffect(()=> {
     if(tabId && !isNaN(history?.currentIndex)){
@@ -509,7 +510,7 @@ isDOMContentLoaded: false
       event?.data?.action === 'QDN_RESOURCE_DISPLAYED'){
         const pathUrl = event?.data?.path != null ? (event?.data?.path.startsWith('/') ? '' : '/') + event?.data?.path : null
         setPath(pathUrl)
-        if(appName.toLowerCase() === 'q-mail'){
+        if(appName?.toLowerCase() === 'q-mail'){
           window.sendMessage("addEnteredQmailTimestamp").catch((error) => {
             // error
           });

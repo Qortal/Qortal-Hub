@@ -45,6 +45,7 @@
     "@tiptap/starter-kit": "^2.5.9",
     "@transistorsoft/capacitor-background-fetch": "^6.0.1",
     "@types/chrome": "^0.0.263",
+    "adm-zip": "^0.5.16",
     "asmcrypto.js": "2.3.2",
     "axios": "^1.7.7",
     "bcryptjs": "2.4.3",

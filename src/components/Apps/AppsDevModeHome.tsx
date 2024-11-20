@@ -7,6 +7,8 @@ import {
   AppsContainer,
   AppsParent,
 } from "./Apps-styles";
+import {Buffer} from 'buffer'
+
 import {
   Avatar,
   Box,
@@ -24,9 +26,8 @@ import { MyContext, getBaseApiReact, isMobile } from "../../App";
 import LogoSelected from "../../assets/svgs/LogoSelected.svg";
 import { executeEvent } from "../../utils/events";
 import { Spacer } from "../../common/Spacer";
-import { AppsDevModeSortablePinnedApps } from "./AppsDevModeSortablePinnedApps";
 import { useModal } from "../../common/useModal";
-import { isUsingLocal } from "../../background";
+import { createEndpoint, isUsingLocal } from "../../background";
 import { Label } from "../Group/AddGroup";
 
 export const AppsDevModeHome = ({
@@ -34,10 +35,13 @@ export const AppsDevModeHome = ({
   myApp,
   myWebsite,
   availableQapps,
+  myName
 }) => {
 
     const [domain, setDomain] = useState("127.0.0.1");
     const [port, setPort] = useState("");
+    const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
+
     const { isShow, onCancel, onOk, show, message } = useModal();
     const {
       openSnackGlobal,
@@ -45,6 +49,27 @@ export const AppsDevModeHome = ({
       infoSnackCustom,
       setInfoSnackCustom,
     } = useContext(MyContext);
+
+    const handleSelectFile = async (existingFilePath) => {
+      const filePath = existingFilePath || await window.electron.selectFile();
+      if (filePath) {
+        
+        const content = await window.electron.readFile(filePath);
+        return {buffer: content, filePath}
+      } else {
+        console.log('No file selected.');
+      }
+    };
+    const handleSelectDirectry = async (existingDirectoryPath) => {
+      const {buffer, directoryPath} =  await window.electron.selectAndZipDirectory(existingDirectoryPath);
+      if (buffer) {
+        
+     
+        return {buffer, directoryPath}
+      } else {
+        console.log('No file selected.');
+      }
+    };
 
     const addDevModeApp = async () => {
       try {
@@ -82,6 +107,170 @@ export const AppsDevModeHome = ({
         });
       } catch (error) {}
     };
+
+    const addPreviewApp = async (isRefresh, existingFilePath, tabId) => {
+      try {
+        const usingLocal = await isUsingLocal();
+        if (!usingLocal) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "Please use your local node for dev mode! Logout and use Local node.",
+          });
+          return;
+        }
+        if (!myName) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "You need a name to use preview",
+          });
+          return;
+        }
+
+      
+        const {buffer, filePath} = await handleSelectFile(existingFilePath)
+       
+        if (!buffer) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "Please select a file",
+          });
+          return;
+        }
+       const postBody = Buffer.from(buffer).toString('base64')
+    
+          const endpoint = await createEndpoint(`/arbitrary/APP/${myName}/zip?preview=true`)
+        const response = await fetch(
+          endpoint
+          ,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain",
+            },
+            body: postBody,
+          }
+        );
+        if(!response?.ok) throw new Error('Invalid zip')
+        const previewPath = await response.text();
+      if(tabId){
+        executeEvent("appsDevModeUpdateTab", {
+          data: {
+            url:  "http://127.0.0.1:12391" + previewPath,
+            isPreview: true,
+            filePath,
+            refreshFunc: (tabId)=> {
+              addPreviewApp(true, filePath, tabId)
+            },
+            tabId
+          },
+        });
+        return
+      }
+        executeEvent("appsDevModeAddTab", {
+          data: {
+            url:  "http://127.0.0.1:12391" + previewPath,
+            isPreview: true,
+            filePath,
+            refreshFunc: (tabId)=> {
+              addPreviewApp(true, filePath, tabId)
+            }
+          },
+        });
+      } catch (error) {
+        console.error(error)
+      }
+    };
+
+    const addPreviewAppWithDirectory = async (isRefresh, existingDir, tabId) => {
+      try {
+        const usingLocal = await isUsingLocal();
+        if (!usingLocal) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "Please use your local node for dev mode! Logout and use Local node.",
+          });
+          return;
+        }
+        if (!myName) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "You need a name to use preview",
+          });
+          return;
+        }
+
+      
+        const {buffer, directoryPath} = await handleSelectDirectry(existingDir)
+       
+        if (!buffer) {
+          setOpenSnackGlobal(true);
+
+          setInfoSnackCustom({
+            type: "error",
+            message:
+              "Please select a file",
+          });
+          return;
+        }
+       const postBody = Buffer.from(buffer).toString('base64')
+    
+          const endpoint = await createEndpoint(`/arbitrary/APP/${myName}/zip?preview=true`)
+        const response = await fetch(
+          endpoint
+          ,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain",
+            },
+            body: postBody,
+          }
+        );
+        if(!response?.ok) throw new Error('Invalid zip')
+        const previewPath = await response.text();
+      if(tabId){
+        executeEvent("appsDevModeUpdateTab", {
+          data: {
+            url:  "http://127.0.0.1:12391" + previewPath,
+            isPreview: true,
+            directoryPath,
+            refreshFunc: (tabId)=> {
+              addPreviewAppWithDirectory(true, directoryPath, tabId)
+            },
+            tabId
+          },
+        });
+        return
+      }
+        executeEvent("appsDevModeAddTab", {
+          data: {
+            url:  "http://127.0.0.1:12391" + previewPath,
+            isPreview: true,
+            directoryPath,
+            refreshFunc: (tabId)=> {
+              addPreviewAppWithDirectory(true, directoryPath, tabId)
+            }
+          },
+        });
+      } catch (error) {
+        console.error(error)
+      }
+    };
   
   return (
     <>
@@ -118,7 +307,39 @@ export const AppsDevModeHome = ({
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
-            <AppCircleLabel>App</AppCircleLabel>
+            <AppCircleLabel>Server</AppCircleLabel>
+          </AppCircleContainer>
+        </ButtonBase>
+        <ButtonBase
+          onClick={() => {
+            addPreviewApp();
+          }}
+        >
+          <AppCircleContainer
+            sx={{
+              gap: !isMobile ? "10px" : "5px",
+            }}
+          >
+            <AppCircle>
+              <Add>+</Add>
+            </AppCircle>
+            <AppCircleLabel>Zip</AppCircleLabel>
+          </AppCircleContainer>
+        </ButtonBase>
+        <ButtonBase
+          onClick={() => {
+            addPreviewAppWithDirectory();
+          }}
+        >
+          <AppCircleContainer
+            sx={{
+              gap: !isMobile ? "10px" : "5px",
+            }}
+          >
+            <AppCircle>
+              <Add>+</Add>
+            </AppCircle>
+            <AppCircleLabel>Directory</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
       </AppsContainer>

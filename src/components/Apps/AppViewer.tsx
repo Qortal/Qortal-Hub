@@ -15,31 +15,44 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
   const { rootHeight } = useContext(MyContext);
   // const iframeRef = useRef(null);
   const { document, window: frameWindow } = useFrame();
-  const {path, history, changeCurrentIndex} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode, app?.name, app?.service) 
+  const {path, history, changeCurrentIndex, resetHistory} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode, app?.name, app?.service) 
   const [url, setUrl] = useState('')
 
+
   useEffect(()=> {
+    if(app?.isPreview) return
     if(isDevMode){
       setUrl(app?.url)
       return
     }
    
     setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}?theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
-  }, [app?.service, app?.name, app?.identifier, app?.path])
+  }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview])
+
+  useEffect(()=> {
+    if(app?.isPreview && app?.url){
+      resetHistory()
+      setUrl(app.url)
+    }
+  }, [app?.url, app?.isPreview])
   const defaultUrl = useMemo(()=> {
     return  url
   }, [url, isDevMode])
-
 
 
   const refreshAppFunc = (e) => {
     const {tabId} = e.detail
     if(tabId === app?.tabId){
       if(isDevMode){
-        setUrl(app?.url + `?time=${Date.now()}`)
+        
+        resetHistory()
+        if(!app?.isPreview){
+          setUrl(app?.url + `?time=${Date.now()}`)
+        }
         return
 
       }
+
       const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=dark&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`
       setUrl(constructUrl)
     }
@@ -123,7 +136,10 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
     try {
       await navigationPromise;
     } catch (error) {
-     
+     if(isDevMode){
+        setUrl(`${url}${previousPath != null ? previousPath : ''}?theme=dark&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
+      return
+     }
       setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
       // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
     }

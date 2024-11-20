@@ -189,9 +189,14 @@ export const AppsDevModeNavBar = () => {
        
         <ButtonBase
           onClick={(e) => {
-            executeEvent("refreshApp", {
-              tabId: selectedTab?.tabId,
-            });
+            if(selectedTab?.refreshFunc){
+              selectedTab.refreshFunc(selectedTab?.tabId)
+            } else {
+              executeEvent("refreshApp", {
+                tabId: selectedTab?.tabId,
+              });
+            }
+            
           }}
         >
           <RefreshIcon

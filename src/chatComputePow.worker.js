@@ -78,9 +78,7 @@ async function computePow(chatBytes, difficulty) {
     workBufferPtr = sbrk(workBufferLength);
   }
 
-  console.log('Starting POW computation...');
   const nonce = compute(hashPtr, workBufferPtr, workBufferLength, difficulty);
-  console.log('POW computation finished.');
 
   return { nonce, chatBytesArray };
 }

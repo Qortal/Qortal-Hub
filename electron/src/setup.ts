@@ -6,13 +6,15 @@ import {
 } from '@capacitor-community/electron';
 import chokidar from 'chokidar';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, Menu, MenuItem, nativeImage, Tray, session, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, MenuItem, nativeImage, Tray, session, ipcMain, dialog } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
+const AdmZip = require('adm-zip');
 import { join } from 'path';
 import { myCapacitorApp } from '.';
-
+const fs = require('fs');
+const path = require('path')
 
 const defaultDomains = [
   'capacitor-electron://-',
@@ -360,4 +362,71 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   } 
 });
 
+
+ipcMain.handle('dialog:openFile', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      { name: 'ZIP Files', extensions: ['zip'] } // Restrict to ZIP files
+    ],
+  });
+  return result.filePaths[0];
+});
+
+ipcMain.handle('fs:readFile', async (_, filePath) => {
+  try {
+    // Ensure the file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error('File does not exist.');
+    }
+
+    // Ensure the filePath is an absolute path (optional but recommended for safety)
+    const absolutePath = path.resolve(filePath);
+
+    // Read the file as a Buffer
+    const fileBuffer = fs.readFileSync(absolutePath);
+    
+    return fileBuffer
+
+  } catch (error) {
+    console.error('Error reading file:', error.message);
+    return null; // Return null on error
+  }
+});
+
+ipcMain.handle('fs:selectAndZip', async (_, path) => {
+  let directoryPath = path
+  if(!directoryPath){
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+  });
+  if (canceled || filePaths.length === 0) {
+    console.log('No directory selected');
+    return null;
+}
+
+ directoryPath = filePaths[0];
+  } 
+
+
+
+
+
+
+try {
+
+    // Add the entire directory to the zip
+    const zip = new AdmZip();
+
+        // Add the entire directory to the zip
+        zip.addLocalFolder(directoryPath);
+
+        // Generate the zip file as a buffer
+        const zipBuffer = zip.toBuffer();
+
+   return {buffer: zipBuffer, directoryPath}
+} catch (error) {
+    return null
+}
+});
 

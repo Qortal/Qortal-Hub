@@ -3,6 +3,7 @@ import { AppsDevModeHome } from "./AppsDevModeHome";
 import { Spacer } from "../../common/Spacer";
 import { MyContext, getBaseApiReact } from "../../App";
 import { AppInfo } from "./AppInfo";
+
 import {
   executeEvent,
   subscribeToEvent,
@@ -113,6 +114,38 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
       unsubscribeFromEvent("appsDevModeAddTab", addTabFunc);
     };
   }, [tabs]);
+
+  const updateTabFunc = (e) => {
+    const data = e.detail?.data;
+    if(!data.tabId) return
+    const findIndexTab = tabs.findIndex((tab)=> tab?.tabId === data?.tabId)
+    if(findIndexTab === -1) return
+    const copyTabs = [...tabs]
+    const newTab ={
+      ...copyTabs[findIndexTab],
+      url: data.url
+
+    }
+    copyTabs[findIndexTab] = newTab
+   
+    setTabs(copyTabs);
+    setSelectedTab(newTab);
+    setMode("viewer");
+
+    setIsNewTabWindow(false);
+  };
+
+
+
+  useEffect(() => {
+    subscribeToEvent("appsDevModeUpdateTab", updateTabFunc);
+
+    return () => {
+      unsubscribeFromEvent("appsDevModeUpdateTab", updateTabFunc);
+    };
+  }, [tabs]);
+
+  
   const setSelectedTabFunc = (e) => {
     const data = e.detail?.data;
     if(!e.detail?.isDevMode) return
@@ -281,7 +314,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-        <AppsDevModeHome availableQapps={availableQapps}  setMode={setMode} myApp={null} myWebsite={null} />
+        <AppsDevModeHome myName={myName} availableQapps={availableQapps}  setMode={setMode} myApp={null} myWebsite={null} />
         </Box>
       )}
     
@@ -315,7 +348,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-          <AppsDevModeHome availableQapps={availableQapps} setMode={setMode} myApp={null} myWebsite={null}  />
+          <AppsDevModeHome myName={myName} availableQapps={availableQapps} setMode={setMode} myApp={null} myWebsite={null}  />
           </Box>
         </>
       )}
