@@ -22,3 +22,13 @@ export const decryptStoredWallet = async (password, wallet) => {
 	const decryptedBytes = AES_CBC.decrypt(encryptedSeedBytes, encryptionKey, false, iv)
 	return decryptedBytes
 }
+
+export const decryptStoredWalletFromSeedPhrase = async (password) => {
+	console.log('p')
+	const threads = doInitWorkers(crypto.kdfThreads)
+	const salt = new Uint8Array(void 0)
+
+	
+	const seed = await kdf(password, salt, threads)
+	return seed
+}

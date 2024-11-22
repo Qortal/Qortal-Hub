@@ -6,13 +6,19 @@ import ListItemText from "@mui/material/ListItemText";
 import ListItemAvatar from "@mui/material/ListItemAvatar";
 import Avatar from "@mui/material/Avatar";
 import Typography from "@mui/material/Typography";
-import { Box, Button, ButtonBase, IconButton, Input } from "@mui/material";
+import { Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Input } from "@mui/material";
 import { CustomButton } from "./App-styles";
 import { useDropzone } from "react-dropzone";
 import EditIcon from "@mui/icons-material/Edit";
 import { Label } from "./components/Group/AddGroup";
 import { Spacer } from "./common/Spacer";
-import { getWallets, storeWallets } from "./background";
+import { getWallets, storeWallets, walletVersion } from "./background";
+import { useModal } from "./common/useModal";
+import PhraseWallet from "./utils/generateWallet/phrase-wallet";
+import { decryptStoredWalletFromSeedPhrase } from "./utils/decryptWallet";
+import { crypto } from "./constants/decryptWallet";
+import { LoadingButton } from "@mui/lab";
+import { PasswordField } from "./components";
 
 const parsefilenameQortal = (filename)=> {
     return filename.startsWith("qortal_backup_") ? filename.slice(14) : filename;
@@ -21,6 +27,15 @@ const parsefilenameQortal = (filename)=> {
 export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [wallets, setWallets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [seedValue, setSeedValue] = useState("");
+  const [seedName, setSeedName] = useState("");
+  const [seedError, setSeedError] = useState("");
+
+  const [password, setPassword] = useState("");
+  const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
+  const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
+
+  const { isShow, onCancel, onOk, show,  } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -81,7 +96,6 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     setWallets((prev) => {
       let copyPrev = [...prev];
       if (wallet === null) {
-        console.log("entered");
         copyPrev.splice(idx, 1); // Use splice to remove the item
         return copyPrev;
       } else {
@@ -90,6 +104,42 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       }
     });
   };
+
+  const handleSetSeedValue = async ()=> {
+    try {
+      setIsOpenSeedModal(true)
+      const {seedValue, seedName, password} = await show({
+        message: "",
+        publishFee: "",
+      });
+      setIsLoadingEncryptSeed(true)
+      const res = await decryptStoredWalletFromSeedPhrase(seedValue)
+      const wallet2 = new PhraseWallet(res, walletVersion);
+      const wallet = await wallet2.generateSaveWalletData(
+        password,
+        crypto.kdfThreads,
+        () => {}
+      );
+      if(wallet?.address0){
+        setWallets([...wallets, {
+          ...wallet,
+          name: seedName
+        }]);
+        setIsOpenSeedModal(false)
+        setSeedValue('')
+        setSeedName('')
+        setPassword('')
+        setSeedError('')
+      } else {
+        setSeedError('Could not create wallet.')
+      }
+
+    } catch (error) {
+      setSeedError(error?.message || 'Could not create wallet.')
+    } finally {
+      setIsLoadingEncryptSeed(false)
+    }
+  }
 
   const selectedWalletFunc = (wallet) => {
     setRawWallet(wallet);
@@ -179,12 +229,98 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           right: '20px'
         }}
       >
-        <CustomButton {...getRootProps()}>
+        <CustomButton onClick={handleSetSeedValue} sx={{
+          padding: '10px'
+        }} >
+         
+          Add seed-phrase
+        </CustomButton>
+        <CustomButton sx={{
+          padding: '10px'
+        }} {...getRootProps()}>
           <input {...getInputProps()} />
           Add wallets
         </CustomButton>
       </Box>
+
+       <Dialog
+       open={isOpenSeedModal}
+       aria-labelledby="alert-dialog-title"
+       aria-describedby="alert-dialog-description"
+       onKeyDown={(e) => {
+         if (e.key === 'Enter' && seedValue && seedName && password) {
+           onOk({seedValue, seedName, password});
+         }
+       }}
+     >
+       <DialogTitle id="alert-dialog-title">
+         Type or paste in your seed-phrase
+       </DialogTitle>
+       <DialogContent>
+         <Box
+           sx={{
+             display: "flex",
+             flexDirection: "column",
+          
+           }}
+         >
+            <Label>Name</Label>
+           <Input
+             placeholder="Name"
+             value={seedName}
+             onChange={(e) => setSeedName(e.target.value)}
+           />
+           <Spacer height="7px" />
+           <Label>Seed-phrase</Label>
+           <Input
+             placeholder="Seed-phrase"
+             value={seedValue}
+             onChange={(e) => setSeedValue(e.target.value)}
+           />
+                      <Spacer height="7px" />
+
+           <Label>Choose new password</Label>
+           <PasswordField
+              id="standard-adornment-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="off"
+            />
+ 
+         </Box>
+       
+       </DialogContent>
+       <DialogActions>
+         <Button disabled={isLoadingEncryptSeed} variant="contained" onClick={()=> {
+          setIsOpenSeedModal(false)
+        setSeedValue('')
+        setSeedName('')
+        setPassword('')
+        setSeedError('')
+         }}>
+           Close
+         </Button>
+         <LoadingButton
+            loading={isLoadingEncryptSeed}
+           disabled={!seedValue || !seedName || !password}
+           variant="contained"
+           onClick={() => {
+            if(!seedValue || !seedName || !password) return
+            onOk({seedValue, seedName, password});
+           }}
+           autoFocus
+         >
+           Add
+         </LoadingButton>
+         <Typography sx={{
+          fontSize: '14px',
+          visibility: seedError ? 'visible' : 'hidden'
+         }}>{seedError}</Typography>
+       </DialogActions>
+     </Dialog>
+
     </div>
+      
   );
 };
 
@@ -338,6 +474,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           </Box>
         </Box>
       )}
+      
+     
+    
     </>
   );
 };
