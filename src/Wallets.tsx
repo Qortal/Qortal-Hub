@@ -225,8 +225,8 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           gap: "10px",
           alignItems: "center",
           position: wallets?.length === 0 ? 'relative' : 'fixed',
-          bottom: '20px',
-          right: '20px'
+          bottom:  wallets?.length === 0 ? 'unset' : '20px',
+          right:  wallets?.length === 0 ? 'unset' : '20px'
         }}
       >
         <CustomButton onClick={handleSetSeedValue} sx={{
