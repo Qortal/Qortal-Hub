@@ -390,7 +390,6 @@ function App() {
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
   const generatorRef = useRef(null)
   const exportSeedphrase = ()=> {
-    console.log('hello', generatorRef.current.parsedString)
     const seedPhrase = generatorRef.current.parsedString
     saveSeedPhraseToDisk(seedPhrase)
   }
