@@ -15,6 +15,7 @@ import {
   isUsingLocal,
   createBuyOrderTx,
   performPowTask,
+  parseErrorResponse,
 } from "../background";
 import { getNameInfo } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -634,6 +635,9 @@ export const publishQDNResource = async (
   if (data.identifier == null) {
     identifier = "default";
   }
+  if (data.fileId) {
+    data64 = await getFileFromContentScript(data.fileId);
+  }
   if (
     data.encrypt &&
     (!data.publicKeys ||
@@ -644,9 +648,7 @@ export const publishQDNResource = async (
   if (!data.encrypt && data.service.endsWith("_PRIVATE")) {
     throw new Error("Only encrypted data can go into private services");
   }
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
-  }
+
   if (data.encrypt) {
     try {
       const resKeyPair = await getKeyPair();
@@ -683,9 +685,7 @@ export const publishQDNResource = async (
   );
   const { accepted } = resPermission;
   if (accepted) {
-    if (data.fileId && !data.encrypt) {
-      data64 = await getFileFromContentScript(data.fileId);
-    }
+
     try {
       const resPublish = await publishData({
         registeredName: encodeURIComponent(name),
@@ -971,7 +971,10 @@ export const voteOnPoll = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/polls/${encodeURIComponent(pollName)}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to fetch poll");
+    if (!response.ok){
+      const errorMessage = await parseErrorResponse(response, "Failed to fetch poll");
+      throw new Error(errorMessage);
+    }
 
     pollInfo = await response.json();
   } catch (error) {
@@ -979,6 +982,7 @@ export const voteOnPoll = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
   if (!pollInfo || pollInfo.error) {
+
     const errorMsg = (pollInfo && pollInfo.message) || "Poll not found";
     throw new Error(errorMsg);
   }

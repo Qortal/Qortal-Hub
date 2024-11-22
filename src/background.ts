@@ -938,6 +938,33 @@ export async function getLTCBalance() {
   } else throw new Error("Onable to get LTC balance");
 }
 
+export async function parseErrorResponse(response, defaultMessage = "Request failed") {
+  let message = defaultMessage;
+
+  try {
+    // Attempt to parse JSON
+    const json = await response.json();
+    if (json?.message) {
+      message = json.message;
+    } else {
+      // If JSON exists but no `message` field, include full JSON string
+      message = JSON.stringify(json);
+    }
+  } catch (jsonError) {
+    try {
+      // Fallback to plain text
+      const text = await response.text();
+      message = text || response.statusText || message;
+    } catch (textError) {
+      // Fallback to statusText or defaultMessage
+      message = response.statusText || message;
+    }
+  }
+
+  return message;
+}
+
+
 const processTransactionVersion2Chat = async (body: any, customApi) => {
   // const validApi = await findUsableApi();
   const url = await createEndpoint(
