@@ -56,7 +56,6 @@ class RandomSentenceGenerator extends LitElement {
 	
 
 	firstUpdated() {
-		console.log('this.template', this.template)
 		// ...
 	}
 
@@ -74,7 +73,6 @@ class RandomSentenceGenerator extends LitElement {
 				const wl = { ...this._wordlists }
 
 				for (const partOfSpeech in this._wordlists) {
-					console.log(this._wordlists[partOfSpeech])
 					if (Array.isArray(this._wordlists[partOfSpeech])) {
 						wl[partOfSpeech] = this._wordlists[partOfSpeech].filter(word => word.length <= this.maxWordLength)
 					}
