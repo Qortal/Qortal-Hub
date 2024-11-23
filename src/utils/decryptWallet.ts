@@ -24,7 +24,6 @@ export const decryptStoredWallet = async (password, wallet) => {
 }
 
 export const decryptStoredWalletFromSeedPhrase = async (password) => {
-	console.log('p')
 	const threads = doInitWorkers(crypto.kdfThreads)
 	const salt = new Uint8Array(void 0)
 

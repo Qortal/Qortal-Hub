@@ -45,7 +45,6 @@ function sbrk(size) {
   // Grow memory if needed
   if (brk > memory.buffer.byteLength) {
     const pagesNeeded = Math.ceil((brk - memory.buffer.byteLength) / (64 * 1024)); // 64 KiB per page
-    console.log(`Growing memory by ${pagesNeeded} pages`);
     try {
       memory.grow(pagesNeeded);
       heap = new Uint8Array(memory.buffer); // Update heap view
