@@ -25,6 +25,7 @@ import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
 import { getFee } from "../../background";
 import { LoadingButton } from "@mui/lab";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
+import { Spacer } from "../../common/Spacer";
 
 function a11yProps(index: number) {
   return {
@@ -113,13 +114,20 @@ export const ManageMembers = ({
     }
   };
 
-  const getMembers = async (groupId) => {
+  const getMembersWithNames =  React.useCallback(async (groupId) => {
     try {
       setIsLoadingMembers(true)
       const res = await getGroupMembers(groupId);
       const resWithNames = await getNames(res.members);
       setMembersWithNames(resWithNames);
       setIsLoadingMembers(false)
+    } catch (error) {}
+  }, []);
+
+  const getMembers = async (groupId) => {
+    try {
+      const res = await getGroupMembers(groupId);
+      setMembersWithNames(res?.members || []);
     } catch (error) {}
   };
 
@@ -256,6 +264,8 @@ export const ManageMembers = ({
                 maxWidth: '750px'
               }}
             >
+              <Button variant="contained" onClick={()=> getMembersWithNames(selectedGroup?.groupId)}>Load members with names</Button>
+              <Spacer height="10px" />
               <ListOfMembers
                 members={membersWithNames || []}
                 groupId={selectedGroup?.groupId}

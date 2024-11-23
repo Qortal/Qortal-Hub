@@ -12,14 +12,16 @@ export const getMemberInvites = async (groupNumber) => {
   return groupData;
 }
 
-const getNames = async (listOfMembers) => {
+const getNames = async (listOfMembers, includeNoNames) => {
   let members = [];
   if (listOfMembers && Array.isArray(listOfMembers)) {
     for (const member of listOfMembers) {
       if (member.joiner) {
         const name = await getNameInfo(member.joiner);
         if (name) {
-          members.push({ ...member, name });
+          members.push({ ...member, name: name || "" });
+        } else if(includeNoNames){
+          members.push({ ...member, name: name || "" });
         }
       }
     }
@@ -44,7 +46,7 @@ export const ListOfJoinRequests = ({ groupId, setInfoSnack, setOpenSnack, show }
   const getInvites = async (groupId) => {
     try {
       const res = await getMemberInvites(groupId);
-      const resWithNames = await getNames(res);
+      const resWithNames = await getNames(res, true);
       setInvites(resWithNames);
     } catch (error) {
       console.error(error);
@@ -181,7 +183,7 @@ export const ListOfJoinRequests = ({ groupId, setInfoSnack, setOpenSnack, show }
                 <ListItemAvatar>
                   <Avatar
                     alt={member?.name}
-                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true`}
+                    src={member?.name ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true` : ''}
                   />
                 </ListItemAvatar>
                 <ListItemText primary={member?.name || member?.joiner} />

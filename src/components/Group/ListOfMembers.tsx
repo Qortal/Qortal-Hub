@@ -336,7 +336,7 @@ const ListOfMembers = ({
                 <ListItemAvatar>
                   <Avatar
                     alt={member?.name || member?.member}
-                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true`}
+                    src={member?.name ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true` : ''}
                   />
                 </ListItemAvatar>
                 <ListItemText

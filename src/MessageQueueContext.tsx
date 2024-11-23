@@ -25,6 +25,7 @@ export const MessageQueueProvider = ({ children }) => {
       ...messageObj,
       type,
       groupDirectId,
+      signature:  uid.rnd(),
       identifier: tempId,
       retries: 0, // Retry count for display purposes
       status: 'pending' // Initial status is 'pending'
