@@ -193,7 +193,7 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 	for(const msg of messages){
 		try {
 			const decoded = atob(msg?.data);
-			const parseDecoded = JSON.parse(decoded)
+			const parseDecoded =JSON.parse(decodeURIComponent(escape(decoded)))
 			if(parseDecoded?.messageText){
 				msgs.push({
 					...msg,
