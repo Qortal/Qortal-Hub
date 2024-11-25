@@ -650,7 +650,7 @@ const clearEditorContent = () => {
     
   const onReply = useCallback((message)=> {
     if(onEditMessage){
-      editorRef.current.chain().focus().clearContent().run()
+      clearEditorContent()
     }
     setReplyMessage(message)
     setOnEditMessage(null)
@@ -749,7 +749,6 @@ const clearEditorContent = () => {
         // bottom: '0px',
         backgroundColor: "#232428",
         minHeight: isMobile ? '0px' : '150px',
-        maxHeight: isMobile ? 'auto' : '400px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -804,7 +803,7 @@ const clearEditorContent = () => {
                 setReplyMessage(null)
                 setOnEditMessage(null)
               
-                  editorRef.current.chain().focus().clearContent().run()
+                  clearEditorContent()
                 
                }}
              >
