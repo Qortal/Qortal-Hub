@@ -9,8 +9,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { MessageItem } from "./MessageItem";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import { useInView } from "react-intersection-observer";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { ChatOptions } from "./ChatOptions";
+import ErrorBoundary from "../../common/ErrorBoundary";
 
 export const ChatList = ({
   initialMessages,
@@ -18,6 +19,7 @@ export const ChatList = ({
   tempMessages,
   chatId,
   onReply,
+  onEdit,
   handleReaction,
   chatReferences,
   tempChatReferences,
@@ -155,7 +157,6 @@ export const ChatList = ({
 
     // Check if the user is within 200px from the bottom
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    console.log("distanceFromBottom", distanceFromBottom);
     if (distanceFromBottom <= 700) {
       scrollToBottom();
     }
@@ -177,7 +178,6 @@ export const ChatList = ({
   const goToMessage = useCallback((idx) => {
     rowVirtualizer.scrollToIndex(idx);
   }, []);
-
   return (
     <Box
       sx={{
@@ -220,49 +220,98 @@ export const ChatList = ({
                 width: "100%",
               }}
             >
+            
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const index = virtualRow.index;
-                let message = messages[index];
-                let replyIndex = messages.findIndex(
-                  (msg) => msg?.signature === message?.repliedTo
-                );
-                let reply;
+                let message = messages[index] || null; // Safeguard against undefined
+                let replyIndex = -1;
+                let reply = null;
                 let reactions = null;
-
-                if (message?.repliedTo && replyIndex !== -1) {
-                  reply = messages[replyIndex];
-                }
-
-                if (message?.message && message?.groupDirectId) {
-                  replyIndex = messages.findIndex(
-                    (msg) => msg?.signature === message?.message?.repliedTo
-                  );
-                  if (message?.message?.repliedTo && replyIndex !== -1) {
-                    reply = messages[replyIndex];
-                  }
-                  message = {
-                    ...(message?.message || {}),
-                    isTemp: true,
-                    unread: false,
-                    status: message?.status,
-                  };
-                }
-
-                if (chatReferences && chatReferences[message?.signature]) {
-                  if (chatReferences[message.signature]?.reactions) {
-                    reactions = chatReferences[message.signature]?.reactions;
-                  }
-                }
-
                 let isUpdating = false;
-                if (
-                  tempChatReferences &&
-                  tempChatReferences?.find(
-                    (item) => item?.chatReference === message?.signature
-                  )
-                ) {
-                  isUpdating = true;
+              
+                try {
+                  // Safeguard for message existence
+                  if (message) {
+                    // Check for repliedTo logic
+                    replyIndex = messages.findIndex(
+                      (msg) => msg?.signature === message?.repliedTo
+                    );
+              
+                    if (message?.repliedTo && replyIndex !== -1) {
+                      reply = { ...(messages[replyIndex] || {}) };
+                      if (chatReferences?.[reply?.signature]?.edit) {
+                        reply.decryptedData = chatReferences[reply?.signature]?.edit;
+                        reply.text = chatReferences[reply?.signature]?.edit?.message;
+                      }
+                    }
+              
+                    // GroupDirectId logic
+                    if (message?.message && message?.groupDirectId) {
+                      replyIndex = messages.findIndex(
+                        (msg) => msg?.signature === message?.message?.repliedTo
+                      );
+                      if (message?.message?.repliedTo && replyIndex !== -1) {
+                        reply = messages[replyIndex] || null;
+                      }
+                      message = {
+                        ...(message?.message || {}),
+                        isTemp: true,
+                        unread: false,
+                        status: message?.status,
+                      };
+                    }
+              
+                    // Check for reactions and edits
+                    if (chatReferences?.[message.signature]) {
+                      reactions = chatReferences[message.signature]?.reactions || null;
+              
+                      if (chatReferences[message.signature]?.edit?.message && message?.text) {
+                        message.text = chatReferences[message.signature]?.edit?.message;
+                        message.isEdit = true
+                      }
+
+                    
+                    }
+              
+                    // Check if message is updating
+                    if (
+                      tempChatReferences?.some(
+                        (item) => item?.chatReference === message?.signature
+                      )
+                    ) {
+                      isUpdating = true;
+                    }
+                  }
+                } catch (error) {
+                  console.error("Error processing message:", error, { index, message });
+                  // Gracefully handle the error by providing fallback data
+                  message = null;
+                  reply = null;
+                  reactions = null;
                 }
+                 // Render fallback if message is null
+                if (!message) {
+                    return (
+                      <div
+                        key={virtualRow.index}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: "50%",
+                          transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
+                          width: "100%",
+                          padding: "10px 0",
+                          display: "flex",
+                          alignItems: "center",
+                          flexDirection: "column",
+                          gap: "5px",
+                        }}
+                      >
+                        <Typography>Error loading message.</Typography>
+                      </div>
+                    );
+                  }
+
 
                 return (
                   <div
@@ -283,6 +332,13 @@ export const ChatList = ({
                       gap: "5px",
                     }}
                   >
+                      <ErrorBoundary
+                      fallback={
+                        <Typography>
+                          Error loading content: Invalid Data
+                        </Typography>
+                      }
+                    >
                     <MessageItem
                       isLast={index === messages.length - 1}
                       lastSignature={lastSignature}
@@ -291,6 +347,7 @@ export const ChatList = ({
                       isTemp={!!message?.isTemp}
                       myAddress={myAddress}
                       onReply={onReply}
+                      onEdit={onEdit}
                       reply={reply}
                       replyIndex={replyIndex}
                       scrollToItem={goToMessage}
@@ -298,9 +355,11 @@ export const ChatList = ({
                       reactions={reactions}
                       isUpdating={isUpdating}
                     />
+                     </ErrorBoundary>
                   </div>
                 );
               })}
+             
             </div>
           </div>
         </div>

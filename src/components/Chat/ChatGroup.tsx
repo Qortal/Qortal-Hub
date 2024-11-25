@@ -35,6 +35,9 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
   const hasInitialized = useRef(false)
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [replyMessage, setReplyMessage] = useState(null)
+  const [onEditMessage, setOnEditMessage] = useState(null)
+
+
 const [messageSize, setMessageSize] = useState(0)
   const hasInitializedWebsocket = useRef(false)
   const socketRef = useRef(null); // WebSocket reference
@@ -218,52 +221,59 @@ const [messageSize, setMessageSize] = useState(0)
           
                   setChatReferences((prev) => {
                     const organizedChatReferences = { ...prev };
-          
                     combineUIAndExtensionMsgs
-                      .filter((rawItem) => rawItem && rawItem.chatReference && rawItem.decryptedData?.type === "reaction")
+                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem.decryptedData?.type === "reaction" || rawItem.decryptedData?.type === "edit"))
                       .forEach((item) => {
                         try {
-                          const content = item.decryptedData?.content;
-                          const sender = item.sender;
-                          const newTimestamp = item.timestamp;
-                          const contentState = item.decryptedData?.contentState;
-          
-                          if (!content || typeof content !== "string" || !sender || typeof sender !== "string" || !newTimestamp) {
-                            console.warn("Invalid content, sender, or timestamp in reaction data", item);
-                            return;
+                          if(item.decryptedData?.type === "edit"){
+                            organizedChatReferences[item.chatReference] = {
+                              ...(organizedChatReferences[item.chatReference] || {}),
+                              edit: item.decryptedData,
+                            };
+                          } else {
+                            const content = item.decryptedData?.content;
+                            const sender = item.sender;
+                            const newTimestamp = item.timestamp;
+                            const contentState = item.decryptedData?.contentState;
+            
+                            if (!content || typeof content !== "string" || !sender || typeof sender !== "string" || !newTimestamp) {
+                              console.warn("Invalid content, sender, or timestamp in reaction data", item);
+                              return;
+                            }
+            
+                            organizedChatReferences[item.chatReference] = {
+                              ...(organizedChatReferences[item.chatReference] || {}),
+                              reactions: organizedChatReferences[item.chatReference]?.reactions || {},
+                            };
+            
+                            organizedChatReferences[item.chatReference].reactions[content] =
+                              organizedChatReferences[item.chatReference].reactions[content] || [];
+            
+                            let latestTimestampForSender = null;
+            
+                            organizedChatReferences[item.chatReference].reactions[content] = 
+                              organizedChatReferences[item.chatReference].reactions[content].filter((reaction) => {
+                                if (reaction.sender === sender) {
+                                  latestTimestampForSender = Math.max(latestTimestampForSender || 0, reaction.timestamp);
+                                }
+                                return reaction.sender !== sender;
+                              });
+            
+                            if (latestTimestampForSender && newTimestamp < latestTimestampForSender) {
+                              return;
+                            }
+            
+                            if (contentState !== false) {
+                              organizedChatReferences[item.chatReference].reactions[content].push(item);
+                            }
+            
+                            if (organizedChatReferences[item.chatReference].reactions[content].length === 0) {
+                              delete organizedChatReferences[item.chatReference].reactions[content];
+                            }
                           }
-          
-                          organizedChatReferences[item.chatReference] = {
-                            ...(organizedChatReferences[item.chatReference] || {}),
-                            reactions: organizedChatReferences[item.chatReference]?.reactions || {},
-                          };
-          
-                          organizedChatReferences[item.chatReference].reactions[content] =
-                            organizedChatReferences[item.chatReference].reactions[content] || [];
-          
-                          let latestTimestampForSender = null;
-          
-                          organizedChatReferences[item.chatReference].reactions[content] = 
-                            organizedChatReferences[item.chatReference].reactions[content].filter((reaction) => {
-                              if (reaction.sender === sender) {
-                                latestTimestampForSender = Math.max(latestTimestampForSender || 0, reaction.timestamp);
-                              }
-                              return reaction.sender !== sender;
-                            });
-          
-                          if (latestTimestampForSender && newTimestamp < latestTimestampForSender) {
-                            return;
-                          }
-          
-                          if (contentState !== false) {
-                            organizedChatReferences[item.chatReference].reactions[content].push(item);
-                          }
-          
-                          if (organizedChatReferences[item.chatReference].reactions[content].length === 0) {
-                            delete organizedChatReferences[item.chatReference].reactions[content];
-                          }
+                        
                         } catch (error) {
-                          console.error("Error processing reaction item:", error, item);
+                          console.error("Error processing reaction/edit item:", error, item);
                         }
                       });
           
@@ -295,9 +305,15 @@ const [messageSize, setMessageSize] = useState(0)
                     const organizedChatReferences = { ...prev };
           
                     combineUIAndExtensionMsgs
-                      .filter((rawItem) => rawItem && rawItem.chatReference && rawItem.decryptedData?.type === "reaction")
+                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem.decryptedData?.type === "reaction" || rawItem.decryptedData?.type === "edit"))
                       .forEach((item) => {
                         try {
+                          if(item.decryptedData?.type === "edit"){
+                            organizedChatReferences[item.chatReference] = {
+                              ...(organizedChatReferences[item.chatReference] || {}),
+                              edit: item.decryptedData,
+                            };
+                          } else {
                           const content = item.decryptedData?.content;
                           const sender = item.sender;
                           const newTimestamp = item.timestamp;
@@ -337,6 +353,7 @@ const [messageSize, setMessageSize] = useState(0)
                           if (organizedChatReferences[item.chatReference].reactions[content].length === 0) {
                             delete organizedChatReferences[item.chatReference].reactions[content];
                           }
+                        }
                         } catch (error) {
                           console.error("Error processing reaction item:", error, item);
                         }
@@ -549,13 +566,17 @@ const clearEditorContent = () => {
 				if (replyMessage?.chatReference) {
 					repliedTo = replyMessage?.chatReference
 				}
+        let chatReference = onEditMessage?.signature
+
         const otherData = {
+          repliedTo,
+          ...(onEditMessage?.decryptedData || {}),
+          type: chatReference ? 'edit' : '',
           specialId: uid.rnd(),
-          repliedTo
         }
         const objectMessage = {
-          message,
-          ...(otherData || {})
+          ...(otherData || {}),
+          message
         }
         const message64: any = await objectToBase64(objectMessage)
      
@@ -563,7 +584,7 @@ const clearEditorContent = () => {
         // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
        
         const sendMessageFunc = async () => {
-         return await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
+         return await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle, chatReference})
         };
   
         // Add the function to the queue
@@ -575,7 +596,7 @@ const clearEditorContent = () => {
           sender: myAddress,
              ...(otherData || {})
           },
-         
+         chatReference
         }
         addToQueue(sendMessageFunc, messageObj, 'chat',
         selectedGroup );
@@ -584,6 +605,7 @@ const clearEditorContent = () => {
         }, 150);
         clearEditorContent()
         setReplyMessage(null)
+        setOnEditMessage(null)
         }
         // send chat message
       } catch (error) {
@@ -627,10 +649,21 @@ const clearEditorContent = () => {
   }, [hide]);
     
   const onReply = useCallback((message)=> {
+    if(onEditMessage){
+      editorRef.current.chain().focus().clearContent().run()
+    }
     setReplyMessage(message)
+    setOnEditMessage(null)
     editorRef?.current?.chain().focus()
-  }, [])
+  }, [onEditMessage])
 
+
+  const onEdit = useCallback((message)=> {
+    setOnEditMessage(message)
+    setReplyMessage(null)
+    editorRef.current.chain().focus().setContent(message?.text).run();
+
+  }, [])
   const handleReaction = useCallback(async (reaction, chatMessage, reactionState = true)=> {
     try {
       
@@ -708,7 +741,7 @@ const clearEditorContent = () => {
     left: hide && '-100000px',
     }}>
               
-              <ChatList enableMentions onReply={onReply} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
+              <ChatList enableMentions onReply={onReply} onEdit={onEdit} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
              
    
       <div style={{
@@ -748,6 +781,31 @@ const clearEditorContent = () => {
            <ButtonBase
                onClick={() => {
                 setReplyMessage(null)
+              
+                setOnEditMessage(null)
+
+               }}
+             >
+             <ExitIcon />
+             </ButtonBase>
+        </Box>
+      )}
+      {onEditMessage && (
+        <Box sx={{
+          display: 'flex',
+          gap: '5px',
+          alignItems: 'flex-start',
+          width: '100%'
+        }}>
+                  <ReplyPreview isEdit message={onEditMessage} />
+
+           <ButtonBase
+               onClick={() => {
+                setReplyMessage(null)
+                setOnEditMessage(null)
+              
+                  editorRef.current.chain().focus().clearContent().run()
+                
                }}
              >
              <ExitIcon />

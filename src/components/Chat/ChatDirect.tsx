@@ -28,6 +28,7 @@ const uid = new ShortUniqueId({ length: 5 });
 export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDirect, setNewChat, getTimestampEnterChat, myName, balance, close, setMobileViewModeKeepOpen}) => {
   const { queueChats, addToQueue, processWithNewMessages} = useMessageQueue();
     const [isFocusedParent, setIsFocusedParent] = useState(false);
+    const [onEditMessage, setOnEditMessage] = useState(null)
 
   const [messages, setMessages] = useState([])
   const [isSending, setIsSending] = useState(false)
@@ -38,6 +39,8 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
   const [infoSnack, setInfoSnack] = React.useState(null);
   const [publicKeyOfRecipient, setPublicKeyOfRecipient] = React.useState("")
   const hasInitializedWebsocket = useRef(false)
+  const [chatReferences, setChatReferences] = useState({})
+
   const editorRef = useRef(null);
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
@@ -66,10 +69,19 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
   const tempMessages = useMemo(()=> {
     if(!selectedDirect?.address) return []
     if(queueChats[selectedDirect?.address]){
-      return queueChats[selectedDirect?.address]
+      return queueChats[selectedDirect?.address]?.filter((item)=> !item?.chatReference)
     }
     return []
   }, [selectedDirect?.address, queueChats])
+
+  const tempChatReferences = useMemo(()=> {
+    if(!selectedDirect?.address) return []
+    if(queueChats[selectedDirect?.address]){
+      return queueChats[selectedDirect?.address]?.filter((item)=> !!item?.chatReference)
+    }
+    return []
+  }, [selectedDirect?.address, queueChats])
+
   useEffect(()=> {
     if(selectedDirect?.address){
       publicKeyOfRecipientRef.current = selectedDirect?.address
@@ -112,22 +124,54 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
                 res(response);
           
                 if (isInitiated) {
-                  const formatted = response.map((item) => ({
+                  const formatted = response.filter((rawItem) => !rawItem?.chatReference).map((item) => ({
                     ...item,
                     id: item.signature,
                     text: item.message,
                     unread: item?.sender === myAddress ? false : true,
                   }));
                   setMessages((prev) => [...prev, ...formatted]);
+                  setChatReferences((prev) => {
+                    const organizedChatReferences = { ...prev };
+
+                  response.filter((rawItem) => !!rawItem?.chatReference && rawItem?.type === 'edit').forEach((item) => {
+                    try {
+                      organizedChatReferences[item.chatReference] = {
+                        ...(organizedChatReferences[item.chatReference] || {}),
+                        edit: item
+                      };
+                    } catch(error){
+
+                    }
+                  })
+                   return  organizedChatReferences
+                  })
                 } else {
-                  const formatted = response.map((item) => ({
+                  hasInitialized.current = true;
+                  const formatted = response.filter((rawItem) => !rawItem?.chatReference)
+                  .map((item) => ({
                     ...item,
                     id: item.signature,
                     text: item.message,
                     unread: false,
                   }));
                   setMessages(formatted);
-                  hasInitialized.current = true;
+
+                  setChatReferences((prev) => {
+                    const organizedChatReferences = { ...prev };
+
+                  response.filter((rawItem) => !!rawItem?.chatReference && rawItem?.type === 'edit').forEach((item) => {
+                    try {
+                      organizedChatReferences[item.chatReference] = {
+                        ...(organizedChatReferences[item.chatReference] || {}),
+                        edit: item
+                      };
+                    } catch(error){
+
+                    }
+                  })
+                   return  organizedChatReferences
+                  })
                 }
                 return;
               }
@@ -333,7 +377,7 @@ useEffect(() => {
 
     const sendMessage = async ()=> {
       try {
-
+  
         
         if(+balance < 4) throw new Error('You need at least 4 QORT to send a message')
         if(isSending) return
@@ -355,12 +399,16 @@ useEffect(() => {
 				if (replyMessage?.chatReference) {
 					repliedTo = replyMessage?.chatReference
 				}
+        let chatReference = onEditMessage?.signature
+
         const otherData = {
+          ...(onEditMessage?.decryptedData || {}),
           specialId: uid.rnd(),
-          repliedTo
+          repliedTo: onEditMessage ? onEditMessage?.repliedTo : repliedTo,
+          type: chatReference ? 'edit' : ''
         }
         const sendMessageFunc = async () => {
-          return await sendChatDirect({ chatReference: undefined, messageText: htmlContent, otherData}, selectedDirect?.address, publicKeyOfRecipient, false)
+          return await sendChatDirect({ chatReference, messageText: htmlContent, otherData}, selectedDirect?.address, publicKeyOfRecipient, false)
         };
 
         
@@ -368,13 +416,13 @@ useEffect(() => {
         // Add the function to the queue
         const messageObj = {
           message: {
-            text: htmlContent,
             timestamp: Date.now(),
           senderName: myName,
           sender: myAddress,
-          ...(otherData || {})
+          ...(otherData || {}),
+          text: htmlContent,
           },
-         
+          chatReference
         }
         addToQueue(sendMessageFunc, messageObj, 'chat-direct',
         selectedDirect?.address );
@@ -383,6 +431,8 @@ useEffect(() => {
         }, 150);
         clearEditorContent()
         setReplyMessage(null)
+        setOnEditMessage(null)
+
         }
         // send chat message
       } catch (error) {
@@ -399,12 +449,22 @@ useEffect(() => {
       }
     }
 
-  const onReply = useCallback((message)=> {
-    setReplyMessage(message)
-    editorRef?.current?.chain().focus()
-
-  }, [])
-
+    const onReply = useCallback((message)=> {
+      if(onEditMessage){
+        editorRef.current.chain().focus().clearContent().run()
+      }
+      setReplyMessage(message)
+      setOnEditMessage(null)
+      editorRef?.current?.chain().focus()
+    }, [onEditMessage])
+  
+  
+    const onEdit = useCallback((message)=> {
+      setOnEditMessage(message)
+      setReplyMessage(null)
+      editorRef.current.chain().focus().setContent(message?.text).run();
+  
+    }, [])
     
   return (
     <div style={{
@@ -511,7 +571,7 @@ useEffect(() => {
         </>
       )}
       
-              <ChatList onReply={onReply} chatId={selectedDirect?.address} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages}/>
+              <ChatList chatReferences={chatReferences} onEdit={onEdit} onReply={onReply} chatId={selectedDirect?.address} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} tempChatReferences={tempChatReferences}/>
 
    
       <div style={{
@@ -551,6 +611,30 @@ useEffect(() => {
            <ButtonBase
                onClick={() => {
                 setReplyMessage(null)
+                setOnEditMessage(null)
+
+               }}
+             >
+             <ExitIcon />
+             </ButtonBase>
+        </Box>
+      )}
+          {onEditMessage && (
+        <Box sx={{
+          display: 'flex',
+          gap: '5px',
+          alignItems: 'flex-start',
+          width: '100%'
+        }}>
+                  <ReplyPreview isEdit message={onEditMessage} />
+
+           <ButtonBase
+               onClick={() => {
+                setReplyMessage(null)
+                setOnEditMessage(null)
+              
+                  editorRef.current.chain().focus().clearContent().run()
+                
                }}
              >
              <ExitIcon />

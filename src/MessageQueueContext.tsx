@@ -53,6 +53,7 @@ export const MessageQueueProvider = ({ children }) => {
 
   // Function to process the message queue
   const processQueue = useCallback((newMessages = [], groupDirectId) => {
+
     processingPromiseRef.current = processingPromiseRef.current
       .then(() => processQueueInternal(newMessages, groupDirectId))
       .catch((err) => console.error('Error in processQueue:', err));
@@ -61,33 +62,7 @@ export const MessageQueueProvider = ({ children }) => {
   // Internal function to handle queue processing
   const processQueueInternal = async (newMessages, groupDirectId) => {
     // Remove any messages from the queue that match the specialId from newMessages
-    if (newMessages.length > 0) {
-      messageQueueRef.current = messageQueueRef.current.filter((msg) => {
-        return !newMessages.some(newMsg => newMsg?.specialId === msg?.specialId);
-      });
-
-      // Remove corresponding entries in queueChats for the provided groupDirectId
-      setQueueChats((prev) => {
-        const updatedChats = { ...prev };
-        if (updatedChats[groupDirectId]) {
-          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
-            return !newMessages.some(newMsg => newMsg?.specialId === chat?.message?.specialId);
-          });
-
-          // Remove messages with status 'failed-permanent'
-          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
-            return chat?.status !== 'failed-permanent';
-          });
-
-          // If no more chats for this group, delete the groupDirectId entry
-          if (updatedChats[groupDirectId].length === 0) {
-            delete updatedChats[groupDirectId];
-          }
-        }
-        return updatedChats;
-      });
-    }
-
+    
     // If the queue is empty, no need to process
     if (messageQueueRef.current.length === 0) return;
 
@@ -112,11 +87,11 @@ export const MessageQueueProvider = ({ children }) => {
 
       try {
         // Execute the function stored in the messageQueueRef
+
         await currentMessage.func();
 
         // Remove the message from the queue after successful sending
         messageQueueRef.current.shift();
-
         // Remove the message from queueChats
         setQueueChats((prev) => {
           const updatedChats = { ...prev };
@@ -167,7 +142,33 @@ export const MessageQueueProvider = ({ children }) => {
 
   // Method to process with new messages and groupDirectId
   const processWithNewMessages = (newMessages, groupDirectId) => {
-    processQueue(newMessages, groupDirectId);
+    if (newMessages.length > 0) {
+      messageQueueRef.current = messageQueueRef.current.filter((msg) => {
+        return !newMessages.some(newMsg => newMsg?.specialId === msg?.specialId);
+      });
+
+      // Remove corresponding entries in queueChats for the provided groupDirectId
+      setQueueChats((prev) => {
+        const updatedChats = { ...prev };
+        if (updatedChats[groupDirectId]) {
+          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
+            return !newMessages.some(newMsg => newMsg?.specialId === chat?.message?.specialId);
+          });
+
+          // Remove messages with status 'failed-permanent'
+          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
+            return chat?.status !== 'failed-permanent';
+          });
+
+          // If no more chats for this group, delete the groupDirectId entry
+          if (updatedChats[groupDirectId].length === 0) {
+            delete updatedChats[groupDirectId];
+          }
+        }
+        return updatedChats;
+      });
+    }
+
   };
 
   return (
