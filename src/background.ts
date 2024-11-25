@@ -45,6 +45,7 @@ import {
   checkLocalCase,
   clearAllNotificationsCase,
   createGroupCase,
+  createPollCase,
   decryptDirectCase,
   decryptGroupEncryptionCase,
   decryptSingleCase,
@@ -93,6 +94,7 @@ import {
   userInfoCase,
   validApiCase,
   versionCase,
+  voteOnPollCase,
 } from "./background-cases";
 import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
 // import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
@@ -2893,7 +2895,12 @@ function setupMessageListener() {
       case "registerName":
         registerNameCase(request, event);
         break;
-
+      case "createPoll":
+        createPollCase(request, event);
+        break;
+      case "voteOnPoll":
+        voteOnPollCase(request, event);
+          break;
       case "makeAdmin":
         makeAdminCase(request, event);
         break;

@@ -103,28 +103,30 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
     getRating(app?.name, app?.service);
   }, [getRating, app?.name]);
 
-  const rateFunc = async (event, newValue) => {
+  const rateFunc = async (event, chosenValue, currentValue) => {
     try {
+      const newValue = chosenValue || currentValue
+      console.log('event', newValue)
       if (!myName) throw new Error("You need a name to rate.");
       if (!app?.name) return;
-      const fee = await getFee("ARBITRARY");
+      const fee = await getFee("CREATE_POLL");
 
       await show({
-        message: `Would you like to rate this app a rating of ${newValue}?`,
+        message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
         publishFee: fee.fee + " QORT",
       });
-
+      console.log('hasPublishedRating', hasPublishedRating)
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
         await new Promise((res, rej) => {
-          window.sendMessage("CREATE_POLL", {
-            payload: {
+          window.sendMessage("createPoll", {
+          
               pollName: pollName,
               pollDescription: `Rating for ${app.service} ${app.name}`,
               pollOptions: pollOptions,
               pollOwnerAddress: myName,
-            },
+         
           }, 60000)
           .then((response) => {
             if (response.error) {
@@ -147,17 +149,19 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
         });
       } else {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
+
         const optionIndex = pollInfo?.pollOptions.findIndex(
           (option) => +option.optionName === +newValue
         );
+        console.log('optionIndex', optionIndex, newValue)
         if (isNaN(optionIndex) || optionIndex === -1)
           throw new Error("Cannot find rating option");
         await new Promise((res, rej) => {
-          window.sendMessage("VOTE_ON_POLL", {
-            payload: {
+          window.sendMessage("voteOnPoll", {
+     
               pollName: pollName,
               optionIndex,
-            },
+          
           }, 60000)
           .then((response) => {
             if (response.error) {
@@ -180,9 +184,10 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
         });
       }
     } catch (error) {
+      console.log('error', error)
       setInfoSnack({
         type: "error",
-        message: error.message || "An error occurred while trying to rate.",
+        message: error?.message || "Unable to rate",
       });
       setOpenSnack(true);
     }
@@ -212,9 +217,8 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
 
         <Rating
           value={value}
-          onChange={rateFunc}
+          onChange={(event, rating)=> rateFunc(event, rating, value)}
           precision={1}
-          readOnly={hasPublishedRating === null}
           size="small"
           icon={<StarFilledIcon />}
           emptyIcon={<StarEmptyIcon />}

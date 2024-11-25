@@ -19,6 +19,7 @@ import {
 } from "../background";
 import { getNameInfo } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
+import { extractComponents } from "../components/Chat/MessageDisplay";
 import { QORT_DECIMALS } from "../constants/constants";
 import Base58 from "../deps/Base58";
 import nacl from "../deps/nacl-fast";
@@ -40,6 +41,7 @@ import TradeBotCreateRequest from "../transactions/TradeBotCreateRequest";
 import DeleteTradeOffer from "../transactions/TradeBotDeleteRequest";
 import signTradeBotTransaction from "../transactions/signTradeBotTransaction";
 import { createTransaction } from "../transactions/transactions";
+import { executeEvent } from "../utils/events";
 import { mimeToExtensionMap } from "../utils/memeTypes";
 import utils from "../utils/utils";
 
@@ -61,25 +63,28 @@ function roundUpToDecimals(number, decimals = 8) {
   return Math.ceil(+number * factor) / factor;
 }
 
-const _createPoll = async (
+export const _createPoll = async (
   { pollName, pollDescription, options },
-  isFromExtension
+  isFromExtension, skipPermission
 ) => {
   const fee = await getFee("CREATE_POLL");
+  let resPermission = {}
+  if(!skipPermission){
+     resPermission = await getUserPermission(
+      {
+        text1: "You are requesting to create the poll below:",
+        text2: `Poll: ${pollName}`,
+        text3: `Description: ${pollDescription}`,
+        text4: `Options: ${options?.join(", ")}`,
+        fee: fee.fee,
+      },
+      isFromExtension
+    );
+  }
+  
+  const { accepted = false } = resPermission;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: "You are requesting to create the poll below:",
-      text2: `Poll: ${pollName}`,
-      text3: `Description: ${pollDescription}`,
-      text4: `Options: ${options?.join(", ")}`,
-      fee: fee.fee,
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
-
-  if (accepted) {
+  if (accepted || skipPermission) {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
@@ -168,24 +173,27 @@ const _deployAt = async (
   }
 };
 
-const _voteOnPoll = async (
+export const _voteOnPoll = async (
   { pollName, optionIndex, optionName },
-  isFromExtension
+  isFromExtension, skipPermission
 ) => {
   const fee = await getFee("VOTE_ON_POLL");
+  let resPermission = {}
+  if(!skipPermission){
+    resPermission = await getUserPermission(
+      {
+        text1: "You are being requested to vote on the poll below:",
+        text2: `Poll: ${pollName}`,
+        text3: `Option: ${optionName}`,
+        fee: fee.fee,
+      },
+      isFromExtension
+    );
+  }
+  
+  const { accepted = false } = resPermission;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: "You are being requested to vote on the poll below:",
-      text2: `Poll: ${pollName}`,
-      text3: `Option: ${optionName}`,
-      fee: fee.fee,
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
-
-  if (accepted) {
+  if (accepted || skipPermission) {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
@@ -1035,23 +1043,40 @@ export const createPoll = async (data, isFromExtension) => {
   }
 };
 
-export const sendChatMessage = async (data, isFromExtension) => {
-  const message = data.message;
+export const sendChatMessage = async (data, isFromExtension, appInfo) => {
+  const message = data?.message;
+  const fullMessageObject = data?.fullMessageObject
   const recipient = data.destinationAddress;
   const groupId = data.groupId;
   const isRecipient = !groupId;
-  const resPermission = await getUserPermission(
+
+  const value =
+  (await getPermission(`qAPPSendChatMessage-${appInfo?.name}`)) || false;
+let skip = false;
+if (value) {
+  skip = true;
+}
+let resPermission;
+if (!skip) {
+   resPermission = await getUserPermission(
     {
       text1:
         "Do you give this application permission to send this chat message?",
       text2: `To: ${isRecipient ? recipient : `group ${groupId}`}`,
       text3: `${message?.slice(0, 25)}${message?.length > 25 ? "..." : ""}`,
+      checkbox1: {
+        value: false,
+        label: "Always allow chat messages from this app",
+      },
     },
     isFromExtension
   );
-
-  const { accepted } = resPermission;
-  if (accepted) {
+  }
+  const { accepted = false, checkbox1 = false } = resPermission || {};
+  if (resPermission && accepted) {
+    setPermission(`qAPPSendChatMessage-${appInfo?.name}`, checkbox1);
+  }
+  if (accepted || skip) {
     const tiptapJson = {
       type: "doc",
       content: [
@@ -1066,7 +1091,7 @@ export const sendChatMessage = async (data, isFromExtension) => {
         },
       ],
     };
-    const messageObject = {
+    const messageObject = fullMessageObject ? fullMessageObject : {
       messageText: tiptapJson,
       images: [""],
       repliedTo: "",
@@ -2860,6 +2885,37 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   } catch (error) {
     throw new Error(error?.message || "Failed to submit sell order.");
   }
+};
+
+export const openNewTab = async (data, isFromExtension) => {
+  const requiredFields = [
+    "qortalLink",
+  ];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const res = extractComponents(data.qortalLink);
+      if (res) {
+        const { service, name, identifier, path } = res;
+        if(!service && !name) throw new Error('Invalid qortal link')
+        executeEvent("addTab", { data: { service, name, identifier, path } });
+        executeEvent("open-apps-mode", { });
+        return true
+      } else {
+        throw new Error("Invalid qortal link")
+      }
+    
+   
+
 };
 
 export const adminAction = async (data, isFromExtension) => {

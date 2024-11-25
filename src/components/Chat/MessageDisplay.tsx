@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import './styles.css';
 import { executeEvent } from '../../utils/events';
 
-const extractComponents = (url) => {
+export const extractComponents = (url) => {
   if (!url || !url.startsWith("qortal://")) { // Check if url exists and starts with "qortal://"
     return null;
   }

@@ -57,6 +57,7 @@ import {
 import { decryptGroupEncryption, encryptAndPublishSymmetricKeyGroupChat, publishGroupEncryptedResource, publishOnQDN } from "./backgroundFunctions/encryption";
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from "./constants/codes";
 import { encryptSingle } from "./qdn/encryption/group-encryption";
+import { _createPoll, _voteOnPoll } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
 
 export function versionCase(request, event) {
@@ -756,6 +757,67 @@ export async function registerNameCase(request, event) {
         requestId: request.requestId,
         action: "registerName",
         payload: response,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "registerName",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+export async function createPollCase(request, event) {
+  try {
+    console.log('request', event)
+    const { pollName, pollDescription, pollOptions } = request.payload;
+    const resCreatePoll = await _createPoll(
+      {
+        pollName,
+        pollDescription,
+        options: pollOptions,
+      },
+      true,
+       true // skip permission
+    );
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "registerName",
+        payload: resCreatePoll,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "registerName",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+export async function voteOnPollCase(request, event) {
+  try {
+    const res = await _voteOnPoll(request.payload, true, true);
+
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "registerName",
+        payload: res,
         type: "backgroundMessageResponse",
       },
       event.origin
