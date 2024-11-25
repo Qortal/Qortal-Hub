@@ -775,7 +775,6 @@ export async function registerNameCase(request, event) {
 }
 export async function createPollCase(request, event) {
   try {
-    console.log('request', event)
     const { pollName, pollDescription, pollOptions } = request.payload;
     const resCreatePoll = await _createPoll(
       {
