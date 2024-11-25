@@ -68,7 +68,7 @@ const [messageSize, setMessageSize] = useState(0)
 
         setTimeout(() => {
           getTimestampEnterChatParent();
-        }, 200);
+        }, 600);
       }
     
       res(response);
