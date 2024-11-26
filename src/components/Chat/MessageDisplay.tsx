@@ -2,13 +2,19 @@ import React, { useEffect } from 'react';
 import DOMPurify from 'dompurify';
 import './styles.css';
 import { executeEvent } from '../../utils/events';
+import { Embed } from '../Embeds/Embed';
 
 export const extractComponents = (url) => {
-  if (!url || !url.startsWith("qortal://")) { // Check if url exists and starts with "qortal://"
+  if (!url || !url.startsWith("qortal://")) {
     return null;
   }
 
-  url = url.replace(/^(qortal\:\/\/)/, ""); // Safe to use replace now
+  // Skip links starting with "qortal://use-"
+  if (url.startsWith("qortal://use-")) {
+    return null;
+  }
+
+  url = url.replace(/^(qortal\:\/\/)/, "");
   if (url.includes("/")) {
     let parts = url.split("/");
     const service = parts[0].toUpperCase();
@@ -23,9 +29,9 @@ export const extractComponents = (url) => {
   return null;
 };
 
-
 function processText(input) {
   const linkRegex = /(qortal:\/\/\S+)/g;
+
   function processNode(node) {
     if (node.nodeType === Node.TEXT_NODE) {
       const parts = node.textContent.split(linkRegex);
@@ -80,7 +86,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
       'href', 'target', 'rel', 'class', 'src', 'alt', 'title', 
       'width', 'height', 'style', 'align', 'valign', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'data-url'
     ],
-  });
+  }).replace(/<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g, '');;
 
   const handleClick = async (e) => {
     e.preventDefault();
@@ -96,16 +102,28 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
         const { service, name, identifier, path } = res;
         executeEvent("addTab", { data: { service, name, identifier, path } });
         executeEvent("open-apps-mode", { });
-
       }
     }
   };
 
+  const embedLink = htmlContent.match(/qortal:\/\/use-embed\/[^\s<>]+/);
+
+  let embedData = null;
+
+  if (embedLink) {
+    embedData = embedLink[0]
+  }
+
   return (
+    <>
+    {embedLink && (
+      <Embed embedLink={embedData} />
+    )}
     <div
       className={`tiptap ${isReply ? 'isReply' : ''}`}
       dangerouslySetInnerHTML={{ __html: sanitizedContent }}
       onClick={handleClick}
     />
+    </>
   );
 };

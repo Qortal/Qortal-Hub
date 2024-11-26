@@ -1554,6 +1554,7 @@ function App() {
             onCancel,
             onOk,
             show,
+            userInfo,
             message,
             rootHeight,
             showInfo,
