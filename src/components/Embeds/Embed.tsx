@@ -22,7 +22,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { extractComponents } from "../Chat/MessageDisplay";
 import { executeEvent } from "../../utils/events";
 import { CustomLoader } from "../../common/CustomLoader";
-
+import PollIcon from '@mui/icons-material/Poll';
 function decodeHTMLEntities(str) {
   const txt = document.createElement("textarea");
   txt.innerHTML = str;
@@ -52,7 +52,7 @@ const parseQortalLink = (link) => {
         const [key, value] = pair.split("=");
         if (key && value) {
           const decodedKey = decodeURIComponent(key.trim());
-          const decodedValue = decodeURIComponent(value.trim()).replace(
+          const decodedValue = value.trim().replace(
             /<\/?[^>]+(>|$)/g,
             "" // Remove any HTML tags
           );
@@ -115,10 +115,10 @@ export const Embed = ({ embedLink }) => {
       const pollRes = await getPoll(parsedData.name);
       setPoll(pollRes);
       if (parsedData?.ref) {
-        const res = extractComponents(parsedData.ref);
-        const { service, name, identifier, path } = res;
+        const res = extractComponents(decodeURIComponent(parsedData.ref));
+      
 
-        if (service && name) {
+        if (res?.service && res?.name) {
           setExternal(res);
         }
       }
@@ -131,6 +131,7 @@ export const Embed = ({ embedLink }) => {
   const handleLink = () => {
     try {
       const parsedData = parseQortalLink(embedLink);
+      console.log('parsedData', parsedData)
       const type = parsedData?.type;
       switch (type) {
         case "POLL":
@@ -204,7 +205,7 @@ export const PollCard = ({
     const fee = await getFee("VOTE_ON_POLL");
 
     await show({
-      message: `Do you accept this VOTE_ON_POLL transaction?`,
+      message: `Do you accept this VOTE_ON_POLL transaction? POLLS are public!`,
       publishFee: fee.fee + " QORT",
     });
     setIsLoadingSubmit(true);
@@ -261,6 +262,8 @@ export const PollCard = ({
     }
   }, [poll?.info?.owner]);
 
+  console.log('ownerName', ownerName)
+
   return (
     <Card
       sx={{
@@ -277,7 +280,18 @@ export const PollCard = ({
           padding: "16px 16px 0px 16px",
         }}
       >
+         <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+          }}
+        >
+        <PollIcon sx={{
+            color: 'white'
+        }} />
         <Typography>POLL embed</Typography>
+        </Box>
         <Box
           sx={{
             display: "flex",
@@ -389,7 +403,9 @@ export const PollCard = ({
           title={poll?.info?.pollName}
           subheader={poll?.info?.description}
           sx={{
-            fontSize: "18px",
+            "& .MuiCardHeader-title": {
+              fontSize: "18px", // Custom font size for title
+            },
           }}
         />
         <CardContent>

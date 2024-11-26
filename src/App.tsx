@@ -1142,6 +1142,24 @@ function App() {
     };
   }, []);
 
+  const openGlobalSnackBarFunc = (e) => {
+    const message = e.detail?.message;
+    const type = e.detail?.type;
+    setOpenSnack(true);
+    setInfoSnack({
+      type,
+      message
+    });
+  };
+
+  useEffect(() => {
+    subscribeToEvent("openGlobalSnackBar", openGlobalSnackBarFunc);
+
+    return () => {
+      unsubscribeFromEvent("openGlobalSnackBar", openGlobalSnackBarFunc);
+    };
+  }, []);
+
   const openPaymentInternal = (e) => {
     const directAddress = e.detail?.address;
     const name = e.detail?.name;

@@ -1,5 +1,5 @@
 import { gateways, getApiKeyFromStorage } from "./background";
-import { addForeignServer, addListItems, adminAction, cancelSellOrder, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, openNewTab, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, signTransaction, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
+import { addForeignServer, addListItems, adminAction, cancelSellOrder, createAndCopyEmbedLink, createBuyOrder, createPoll, createSellOrder, decryptData, deleteListItems, deployAt, encryptData, getCrossChainServerInfo, getDaySummary, getForeignFee, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getWalletBalance, joinGroup, openNewTab, publishMultipleQDNResources, publishQDNResource, removeForeignServer, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, signTransaction, updateForeignFee, voteOnPoll } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
 
 
@@ -713,6 +713,26 @@ export const isRunningGateway = async ()=> {
         case "OPEN_NEW_TAB": {
           try {
             const res =  await openNewTab(request.payload, isFromExtension)
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
+
+        case "CREATE_AND_COPY_EMBED_LINK": {
+          try {
+            const res =  await createAndCopyEmbedLink(request.payload, isFromExtension)
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,

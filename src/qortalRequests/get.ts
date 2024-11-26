@@ -3055,3 +3055,56 @@ export const signTransaction = async (data, isFromExtension) => {
     throw new Error("User declined request");
   }
 };
+
+const encode = (value) => encodeURIComponent(value.trim()); // Helper to encode values
+
+export const createAndCopyEmbedLink = async (data, isFromExtension) => {
+  const requiredFields = [
+    "type",
+    "name"
+  ];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+
+  switch (data.type) {
+    case "POLL": {
+      const queryParams = [
+        `name=${encode(data.name)}`,
+        data.ref ? `ref=${encode(data.ref)}` : null, // Add only if ref exists
+      ]
+        .filter(Boolean) // Remove null values
+        .join("&"); // Join with `&`
+        const link = `qortal://use-embed/POLL?${queryParams}`
+
+        navigator.clipboard.writeText(link)
+        .then(() => {
+          executeEvent('openGlobalSnackBar', {
+            message: 'Copied link to clipboard',
+            type: 'info'
+          })
+          //success
+        })
+        .catch((error) => {
+          executeEvent('openGlobalSnackBar', {
+            message: 'Failed to copy to clipboard',
+            type: 'error'
+          })
+          // error
+        });
+      return link;
+    }
+    default:
+      throw new Error('Invalid type')
+  }
+
+};
