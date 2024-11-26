@@ -3056,12 +3056,25 @@ export const signTransaction = async (data, isFromExtension) => {
   }
 };
 
+const missingFieldsFunc = (data, requiredFields)=> {
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+}
+
 const encode = (value) => encodeURIComponent(value.trim()); // Helper to encode values
 
 export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   const requiredFields = [
     "type",
-    "name"
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -3078,6 +3091,11 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
 
   switch (data.type) {
     case "POLL": {
+      missingFieldsFunc(data, [
+        "type",
+        "name"
+      ])
+     
       const queryParams = [
         `name=${encode(data.name)}`,
         data.ref ? `ref=${encode(data.ref)}` : null, // Add only if ref exists
@@ -3103,6 +3121,41 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
         });
       return link;
     }
+    case "IMAGE": {
+      missingFieldsFunc(data, [
+        "type",
+        "name",
+        "service",
+        "identifier"
+      ])
+      const queryParams = [
+        `name=${encode(data.name)}`,
+        `service=${encode(data.service)}`,
+        `identifier=${encode(data.identifier)}`,
+        data.ref ? `ref=${encode(data.ref)}` : null, // Add only if ref exists
+      ]
+        .filter(Boolean) // Remove null values
+        .join("&"); // Join with `&`
+
+      const link = `qortal://use-embed/IMAGE?${queryParams}`;
+
+      try {
+        await navigator.clipboard.writeText(link);
+        executeEvent("openGlobalSnackBar", {
+          message: "Copied link to clipboard",
+          type: "info",
+        });
+      } catch (error) {
+        executeEvent("openGlobalSnackBar", {
+          message: "Failed to copy to clipboard",
+          type: "error",
+        });
+      }
+
+      return link;
+    }
+
+ 
     default:
       throw new Error('Invalid type')
   }
