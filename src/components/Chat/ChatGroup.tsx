@@ -15,16 +15,18 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar'
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/codes'
 import { useMessageQueue } from '../../MessageQueueContext'
 import { executeEvent } from '../../utils/events'
-import { Box, ButtonBase, Typography } from '@mui/material'
+import { Box, ButtonBase, Divider, Typography } from '@mui/material'
 import ShortUniqueId from "short-unique-id";
 import { ReplyPreview } from './MessageItem'
 import { ExitIcon } from '../../assets/Icons/ExitIcon'
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/resourceTypes'
 import { isExtMsg } from '../../background'
+import AppViewerContainer from '../Apps/AppViewerContainer'
+import CloseIcon from "@mui/icons-material/Close";
 
 const uid = new ShortUniqueId({ length: 5 });
 
-export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey, myAddress, handleNewEncryptionNotification, hide, handleSecretKeyCreationInProgress, triedToFetchSecretKey, myName, balance, getTimestampEnterChatParent}) => {
+export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey, myAddress, handleNewEncryptionNotification, hide, handleSecretKeyCreationInProgress, triedToFetchSecretKey, myName, balance, getTimestampEnterChatParent, hideView}) => {
   const [messages, setMessages] = useState([])
   const [chatReferences, setChatReferences] = useState({})
   const [isSending, setIsSending] = useState(false)
@@ -36,7 +38,7 @@ export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey,
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [replyMessage, setReplyMessage] = useState(null)
   const [onEditMessage, setOnEditMessage] = useState(null)
-
+  const [isOpenQManager, setIsOpenQManager] = useState(null)
 
 const [messageSize, setMessageSize] = useState(0)
   const hasInitializedWebsocket = useRef(false)
@@ -143,7 +145,6 @@ const [messageSize, setMessageSize] = useState(0)
     messages?.forEach((message)=> {
       try {
         const decodeMsg =  atob(message.data);
-    
         if(decodeMsg === PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY){
           handleSecretKeyCreationInProgress()
           return
@@ -174,7 +175,6 @@ const [messageSize, setMessageSize] = useState(0)
       console.error(error);
     }
  }
-
  
     const decryptMessages = (encryptedMessages: any[], isInitiated: boolean )=> {
       try {
@@ -729,6 +729,10 @@ const clearEditorContent = () => {
       resumeAllQueues()
     }
   }, [])
+
+  const openQManager = useCallback(()=> {
+    setIsOpenQManager(true)
+  }, [])
   
   return (
     <div style={{
@@ -741,7 +745,7 @@ const clearEditorContent = () => {
     left: hide && '-100000px',
     }}>
               
-              <ChatList enableMentions onReply={onReply} onEdit={onEdit} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
+              <ChatList openQManager={openQManager} enableMentions onReply={onReply} onEdit={onEdit} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
              
    
       <div style={{
@@ -894,6 +898,55 @@ const clearEditorContent = () => {
               </Box>
       {/* <button onClick={sendMessage}>send</button> */}
       </div>
+      {isOpenQManager !== null && (
+ <Box sx={{
+  position: 'fixed',
+  height: '600px',
+  
+  maxHeight: '100vh',
+  width: '400px',
+  maxWidth: '100vw',
+  backgroundColor: '#27282c',
+  zIndex: 100,
+  bottom: 0,
+  right: 0,
+  overflow: 'hidden',
+  borderTopLeftRadius: '10px',
+  borderTopRightRadius: '10px',
+  display: hideView ? 'none' : isOpenQManager === true ? 'block' : 'none',
+  boxShadow: 4,
+  
+}}>
+   <Box sx={{
+  height: '100%',
+  width: '100%',
+
+}}>
+  <Box sx={{
+    height: '40px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '5px',
+
+    justifyContent: 'space-between'
+  }}>
+            <Typography>Q-Manager</Typography>
+        <ButtonBase onClick={()=> {
+          setIsOpenQManager(false)
+        }}><CloseIcon sx={{
+          color: 'white'
+        }} /></ButtonBase>
+  </Box>
+  <Divider />
+<AppViewerContainer customHeight="560px" app={{
+  tabId: '5558588',
+  name: 'Q-Manager',
+  service: 'APP'
+}} isSelected />
+</Box>
+</Box>
+      )}
+     
       {/* <ChatContainerComp messages={formatMessages} /> */}
       <LoadingSnackbar open={isLoading} info={{
         message: "Loading chat... please wait."

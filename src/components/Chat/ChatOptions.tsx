@@ -12,6 +12,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { Spacer } from "../../common/Spacer";
 import AlternateEmailIcon from "@mui/icons-material/AlternateEmail";
 import CloseIcon from "@mui/icons-material/Close";
+import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import {
   AppsSearchContainer,
   AppsSearchLeft,
@@ -42,7 +43,7 @@ const cache = new CellMeasurerCache({
   defaultHeight: 50,
 });
 
-export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGroup }) => {
+export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGroup, openQManager }) => {
   const [mode, setMode] = useState("default");
   const [searchValue, setSearchValue] = useState("");
   const [selectedMember, setSelectedMember] = useState(0);
@@ -676,6 +677,16 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
         }}>
           <SearchIcon />
         </ButtonBase>
+        <ButtonBase onClick={() => {
+            setMode("default")
+            setSearchValue('')
+            setSelectedMember(0)
+            openQManager()
+        }}>
+          <InsertLinkIcon sx={{
+            color: 'white'
+          }} />
+        </ButtonBase>
         <ContextMenuMentions getTimestampMention={getTimestampMention} groupId={selectedGroup}>
         <ButtonBase onClick={() => {
             setMode("mentions")
@@ -686,7 +697,10 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
             color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
           }} />
         </ButtonBase>
+      
         </ContextMenuMentions>
+       
+        
       </Box>
     </Box>
   );

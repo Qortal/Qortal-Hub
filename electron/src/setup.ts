@@ -264,7 +264,7 @@ export function setupContentSecurityPolicy(customScheme: string): void {
     frame-src ${frameSources.join(' ')};
     script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources.join(' ')};
     object-src 'self';
-    connect-src ${connectSources.join(' ')};
+    connect-src 'self' blob: ${connectSources.join(' ')};
     img-src 'self' data: blob: ${allowedSources.join(' ')};
     media-src 'self' blob: ${allowedSources.join(' ')};  
     style-src 'self' 'unsafe-inline';

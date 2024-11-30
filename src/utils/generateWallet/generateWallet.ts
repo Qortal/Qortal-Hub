@@ -7,6 +7,7 @@ import * as WORDLISTS from './wordlists';
 import FileSaver from 'file-saver';
 
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { mimeToExtensionMap } from '../memeTypes';
 export function generateRandomSentence(template = 'adverb verb noun adjective noun adverb verb noun adjective noun adjective verbed adjective noun', maxWordLength = 0, capitalize = true) {
     const partsOfSpeechMap = {
         'noun': 'nouns',
@@ -85,6 +86,10 @@ export const createAccount = async(generatedSeedPhrase)=> {
        
   }
 
+  const hasExtension = (filename) => {
+    return filename.includes(".") && filename.split(".").pop().length > 0;
+  };
+
   export const saveFileToDisk = async (data, qortAddress) => {
    
         const dataString = JSON.stringify(data);
@@ -93,6 +98,19 @@ export const createAccount = async(generatedSeedPhrase)=> {
 
     await FileSaver.saveAs(blob, fileName);
   
+}
+
+export const saveFileToDiskGeneric = async (blob, filename) => {
+    const timestamp = new Date()
+                        .toISOString()
+                        .replace(/:/g, "-"); // Safe timestamp for filenames
+                
+                        const fileExtension = mimeToExtensionMap[blob.type]
+let fileName = filename ||  "qortal_file_" + timestamp + "." + fileExtension;
+fileName = hasExtension(fileName) ? fileName : fileName  + "." + fileExtension;
+
+await FileSaver.saveAs(blob, fileName);
+
 }
 
 export const saveSeedPhraseToDisk = async (data) => {

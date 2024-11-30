@@ -16,18 +16,25 @@ import {
   createBuyOrderTx,
   performPowTask,
   parseErrorResponse,
+  groupSecretkeys,
 } from "../background";
-import { getNameInfo } from "../backgroundFunctions/encryption";
+import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
 import { extractComponents } from "../components/Chat/MessageDisplay";
+import { decryptResource, getGroupAdmins, getPublishesFromAdmins, validateSecretKey } from "../components/Group/Group";
 import { QORT_DECIMALS } from "../constants/constants";
 import Base58 from "../deps/Base58";
 import nacl from "../deps/nacl-fast";
 import {
   base64ToUint8Array,
+  createSymmetricKeyAndNonce,
   decryptDeprecatedSingle,
   decryptGroupDataQortalRequest,
+  decryptGroupEncryptionWithSharingKey,
+  decryptSingle,
   encryptDataGroup,
+  encryptSingle,
+  objectToBase64,
   uint8ArrayStartsWith,
   uint8ArrayToBase64,
 } from "../qdn/encryption/group-encryption";
@@ -391,6 +398,169 @@ export const encryptData = async (data, sender) => {
     throw new Error("Unable to encrypt");
   }
 };
+
+export const encryptQortalGroupData = async (data, sender) => {
+  let data64 = data.data64;
+  let groupId = data?.groupId
+
+  if(!groupId){
+    throw new Error('Please provide a groupId')
+  }
+  if (data.fileId) {
+    data64 = await getFileFromContentScript(data.fileId);
+  }
+  if (!data64) {
+    throw new Error("Please include data to encrypt");
+  }
+  let secretKeyObject
+  if(groupSecretkeys[groupId] && groupSecretkeys[groupId].secretKeyObject && groupSecretkeys[groupId]?.timestamp && (Date.now() - groupSecretkeys[groupId]?.timestamp) <  1200000){
+    secretKeyObject = groupSecretkeys[groupId].secretKeyObject
+  }
+
+  if(!secretKeyObject){
+    const { names } =
+    await getGroupAdmins(groupId)
+
+    const publish =
+     await getPublishesFromAdmins(names, groupId);
+  if(publish === false) throw new Error('No group key found.')
+  const url = await createEndpoint(`/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+    publish.identifier
+  }?encoding=base64`);
+
+  const res = await fetch(
+url
+  );
+  const resData = await res.text();
+  const decryptedKey: any = await decryptResource(resData);
+
+  const dataint8Array = base64ToUint8Array(decryptedKey.data);
+  const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+
+  if (!validateSecretKey(decryptedKeyToObject))
+    throw new Error("SecretKey is not valid");
+    secretKeyObject = decryptedKeyToObject
+    groupSecretkeys[groupId] = {
+      secretKeyObject,
+      timestamp: Date.now()
+    }
+  }
+
+      
+        const resGroupEncryptedResource = encryptSingle({
+          data64, secretKeyObject: secretKeyObject, 
+        })
+  
+  if (resGroupEncryptedResource) {
+    return resGroupEncryptedResource;
+  } else {
+    throw new Error("Unable to encrypt");
+  }
+};
+
+export const decryptQortalGroupData = async (data, sender) => {
+  let data64 = data.data64;
+  let groupId = data?.groupId
+  if(!groupId){
+    throw new Error('Please provide a groupId')
+  }
+  if (data.fileId) {
+    data64 = await getFileFromContentScript(data.fileId);
+  }
+  if (!data64) {
+    throw new Error("Please include data to encrypt");
+  }
+
+  let secretKeyObject
+  if(groupSecretkeys[groupId] && groupSecretkeys[groupId].secretKeyObject && groupSecretkeys[groupId]?.timestamp && (Date.now() - groupSecretkeys[groupId]?.timestamp) <  1200000){
+    secretKeyObject = groupSecretkeys[groupId].secretKeyObject
+  }
+  if(!secretKeyObject){
+    const { names } =
+    await getGroupAdmins(groupId)
+
+    const publish =
+     await getPublishesFromAdmins(names, groupId);
+  if(publish === false) throw new Error('No group key found.')
+  const url = await createEndpoint(`/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+    publish.identifier
+  }?encoding=base64`);
+
+  const res = await fetch(
+url
+  );
+  const resData = await res.text();
+  const decryptedKey: any = await decryptResource(resData);
+
+  const dataint8Array = base64ToUint8Array(decryptedKey.data);
+  const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+  if (!validateSecretKey(decryptedKeyToObject))
+    throw new Error("SecretKey is not valid");
+    secretKeyObject = decryptedKeyToObject
+    groupSecretkeys[groupId] = {
+      secretKeyObject,
+      timestamp: Date.now()
+    }
+  }
+      
+        const resGroupDecryptResource = decryptSingle({
+          data64, secretKeyObject: secretKeyObject, skipDecodeBase64: true
+        })
+  if (resGroupDecryptResource) {
+    return resGroupDecryptResource;
+  } else {
+    throw new Error("Unable to decrypt");
+  }
+};
+
+export const encryptDataWithSharingKey = async (data, sender) => {
+  let data64 = data.data64;
+  let publicKeys = data.publicKeys || [];
+  if (data.fileId) {
+    data64 = await getFileFromContentScript(data.fileId);
+  }
+  if (!data64) {
+    throw new Error("Please include data to encrypt");
+  }
+  const symmetricKey = createSymmetricKeyAndNonce()
+  const dataObject = {
+    data: data64,
+    key:symmetricKey.messageKey
+  }
+  const dataObjectBase64 = await objectToBase64(dataObject)
+
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const privateKey = parsedData.privateKey;
+  const userPublicKey = parsedData.publicKey;
+
+  const encryptDataResponse = encryptDataGroup({
+    data64: dataObjectBase64,
+    publicKeys: publicKeys,
+    privateKey,
+    userPublicKey,
+    customSymmetricKey: symmetricKey.messageKey
+  });
+  if (encryptDataResponse) {
+    return encryptDataResponse;
+  } else {
+    throw new Error("Unable to encrypt");
+  }
+};
+
+export const decryptDataWithSharingKey = async (data, sender) => {
+  const { encryptedData, key } = data;
+
+ 
+  if (!encryptedData) {
+    throw new Error("Please include data to decrypt");
+  }
+  const decryptedData = await decryptGroupEncryptionWithSharingKey({data64EncryptedData: encryptedData, key})
+  const base64ToObject = JSON.parse(atob(decryptedData))
+  if(!base64ToObject.data) throw new Error('No data in the encrypted resource')
+  return base64ToObject.data
+};
+
 export const decryptData = async (data) => {
   const { encryptedData, publicKey } = data;
 
@@ -653,9 +823,7 @@ export const publishQDNResource = async (
   ) {
     throw new Error("Encrypting data requires public keys");
   }
-  if (!data.encrypt && data.service.endsWith("_PRIVATE")) {
-    throw new Error("Only encrypted data can go into private services");
-  }
+
 
   if (data.encrypt) {
     try {
@@ -686,7 +854,7 @@ export const publishQDNResource = async (
       text1: "Do you give this application permission to publish to QDN?",
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
-      highlightedText: `isEncrypted: ${!!data.encrypt}`,
+      highlightedText: data?.externalEncrypt ? `App is externally encrypting the resource. Make sure you trust the app.` : `isEncrypted: ${!!data.encrypt}`,
       fee: fee.fee,
     },
     isFromExtension
@@ -3071,7 +3239,17 @@ const missingFieldsFunc = (data, requiredFields)=> {
 }
 
 const encode = (value) => encodeURIComponent(value.trim()); // Helper to encode values
-
+const buildQueryParams = (data) => {
+const allowedParams= ["name", "service", "identifier", "mimeType", "fileName", "encryptionType", "key"]
+  return Object.entries(data)
+    .map(([key, value]) => {
+      if (value === undefined || value === null || value === false || !allowedParams.includes(key)) return null; // Skip null, undefined, or false
+      if (typeof value === "boolean") return `${key}=${value}`; // Handle boolean values
+      return `${key}=${encode(value)}`; // Encode other values
+    })
+    .filter(Boolean) // Remove null values
+    .join("&"); // Join with `&`
+};
 export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   const requiredFields = [
     "type",
@@ -3103,53 +3281,33 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
         .filter(Boolean) // Remove null values
         .join("&"); // Join with `&`
         const link = `qortal://use-embed/POLL?${queryParams}`
-
-        navigator.clipboard.writeText(link)
-        .then(() => {
-          executeEvent('openGlobalSnackBar', {
-            message: 'Copied link to clipboard',
-            type: 'info'
-          })
-          //success
-        })
-        .catch((error) => {
-          executeEvent('openGlobalSnackBar', {
-            message: 'Failed to copy to clipboard',
-            type: 'error'
-          })
-          // error
-        });
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch (error) {
+          throw new Error('Failed to copy to clipboard.')
+        }
       return link;
     }
-    case "IMAGE": {
+    case "IMAGE": 
+    case "ATTACHMENT":
+    {
       missingFieldsFunc(data, [
         "type",
         "name",
         "service",
         "identifier"
       ])
-      const queryParams = [
-        `name=${encode(data.name)}`,
-        `service=${encode(data.service)}`,
-        `identifier=${encode(data.identifier)}`,
-        data.ref ? `ref=${encode(data.ref)}` : null, // Add only if ref exists
-      ]
-        .filter(Boolean) // Remove null values
-        .join("&"); // Join with `&`
+      if(data?.encryptionType === 'private' && !data?.key){
+        throw new Error('For an encrypted resource, you must provide the key to create the shared link')
+      }
+      const queryParams = buildQueryParams(data)
 
-      const link = `qortal://use-embed/IMAGE?${queryParams}`;
+      const link = `qortal://use-embed/${data.type}?${queryParams}`;
 
       try {
         await navigator.clipboard.writeText(link);
-        executeEvent("openGlobalSnackBar", {
-          message: "Copied link to clipboard",
-          type: "info",
-        });
       } catch (error) {
-        executeEvent("openGlobalSnackBar", {
-          message: "Failed to copy to clipboard",
-          type: "error",
-        });
+        throw new Error('Failed to copy to clipboard.')
       }
 
       return link;

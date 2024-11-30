@@ -3,7 +3,7 @@ import { AppViewer } from './AppViewer';
 import Frame from 'react-frame-component';
 import { MyContext, isMobile } from '../../App';
 
-const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode }, ref) => {
+const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode, customHeight }, ref) => {
   const { rootHeight } = useContext(MyContext);
 
 
@@ -36,7 +36,7 @@ const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode 
       }
       style={{
         display: (!isSelected || hide) && 'none',
-        height: !isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px)`,
+        height: customHeight ? customHeight : !isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px)`,
         border: 'none',
         width: '100%',
         overflow: 'hidden',

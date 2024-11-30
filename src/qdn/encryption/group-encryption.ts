@@ -65,7 +65,7 @@ export const createSymmetricKeyAndNonce = () => {
 };
 
 
-export const encryptDataGroup = ({ data64, publicKeys, privateKey, userPublicKey }: any) => {
+export const encryptDataGroup = ({ data64, publicKeys, privateKey, userPublicKey, customSymmetricKey }: any) => {
 
 	let combinedPublicKeys = [...publicKeys, userPublicKey]
 	const decodedPrivateKey = Base58.decode(privateKey)
@@ -77,8 +77,16 @@ export const encryptDataGroup = ({ data64, publicKeys, privateKey, userPublicKey
 	}
 	try {
 		// Generate a random symmetric key for the message.
-		const messageKey = new Uint8Array(32)
+		
+		let messageKey
+		if(customSymmetricKey){
+			messageKey = base64ToUint8Array(customSymmetricKey)
+		} else {
+		 messageKey = new Uint8Array(32)
 		crypto.getRandomValues(messageKey)
+		}
+
+		if(!messageKey) throw new Error('Cannot create symmetric key')
 		const nonce = new Uint8Array(24)
 		crypto.getRandomValues(nonce)
 		// Encrypt the data with the symmetric key.
@@ -132,7 +140,7 @@ export const encryptDataGroup = ({ data64, publicKeys, privateKey, userPublicKey
 		combinedData.set(countArray, combinedData.length - 4)
 		return uint8ArrayToBase64(combinedData)
 	} catch (error) {
-
+		console.log('error', error)
 		throw new Error("Error in encrypting data")
 	}
 }
@@ -269,6 +277,46 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 	  throw new Error("Decryption failed");
 	}
   
+	// Convert the decrypted Uint8Array back to a Base64 string
+	return uint8ArrayToBase64(decryptedData);
+  };
+
+  export const decryptGroupEncryptionWithSharingKey = async ({ data64EncryptedData, key }: any) => {
+
+	const allCombined = base64ToUint8Array(data64EncryptedData)
+	const str = "qortalGroupEncryptedData"
+	const strEncoder = new TextEncoder()
+	const strUint8Array = strEncoder.encode(str)
+	// Extract the nonce
+	const nonceStartPosition = strUint8Array.length
+	const nonceEndPosition = nonceStartPosition + 24 // Nonce is 24 bytes
+	const nonce = allCombined.slice(nonceStartPosition, nonceEndPosition)
+	// Extract the shared keyNonce
+	const keyNonceStartPosition = nonceEndPosition
+	const keyNonceEndPosition = keyNonceStartPosition + 24 // Nonce is 24 bytes
+	const keyNonce = allCombined.slice(keyNonceStartPosition, keyNonceEndPosition)
+	// Extract the sender's public key
+	const senderPublicKeyStartPosition = keyNonceEndPosition
+	const senderPublicKeyEndPosition = senderPublicKeyStartPosition + 32 // Public keys are 32 bytes
+
+	// Calculate count first
+	const countStartPosition = allCombined.length - 4 // 4 bytes before the end, since count is stored in Uint32 (4 bytes)
+	const countArray = allCombined.slice(countStartPosition, countStartPosition + 4)
+	const count = new Uint32Array(countArray.buffer)[0]
+	// Then use count to calculate encryptedData
+	const encryptedDataStartPosition = senderPublicKeyEndPosition // start position of encryptedData
+	const encryptedDataEndPosition = allCombined.length - ((count * (32 + 16)) + 4)
+	const encryptedData = allCombined.slice(encryptedDataStartPosition, encryptedDataEndPosition)
+	const symmetricKey = base64ToUint8Array(key);
+	
+	// Decrypt the data using the nonce and messageKey
+	const decryptedData = nacl.secretbox.open(encryptedData, nonce, symmetricKey)
+
+  
+	// Check if decryption was successful
+	if (!decryptedData) {
+	  throw new Error("Decryption failed");
+	}
 	// Convert the decrypted Uint8Array back to a Base64 string
 	return uint8ArrayToBase64(decryptedData);
   };

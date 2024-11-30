@@ -118,6 +118,36 @@ import { formatEmailDate } from "./QMailMessages";
 //     }
 // });
 
+export const getPublishesFromAdmins = async (admins: string[], groupId) => {
+  // const validApi = await findUsableApi();
+  const queryString = admins.map((name) => `name=${name}`).join("&");
+  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
+    groupId
+  }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("network error");
+  }
+  const adminData = await response.json();
+
+  const filterId = adminData.filter(
+    (data: any) =>
+      data.identifier === `symmetric-qchat-group-${groupId}`
+  );
+  if (filterId?.length === 0) {
+    return false;
+  }
+  const sortedData = filterId.sort((a: any, b: any) => {
+    // Get the most recent date for both a and b
+    const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
+    const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
+
+    // Sort by most recent
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  return sortedData[0];
+};
 interface GroupProps {
   myAddress: string;
   isFocused: boolean;
@@ -685,36 +715,7 @@ export const Group = ({
   //   };
   // }, [checkGroupListFunc, myAddress]);
 
-  const getPublishesFromAdmins = async (admins: string[]) => {
-    // const validApi = await findUsableApi();
-    const queryString = admins.map((name) => `name=${name}`).join("&");
-    const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
-      selectedGroup?.groupId
-    }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error("network error");
-    }
-    const adminData = await response.json();
-
-    const filterId = adminData.filter(
-      (data: any) =>
-        data.identifier === `symmetric-qchat-group-${selectedGroup?.groupId}`
-    );
-    if (filterId?.length === 0) {
-      return false;
-    }
-    const sortedData = filterId.sort((a: any, b: any) => {
-      // Get the most recent date for both a and b
-      const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
-      const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
-
-      // Sort by most recent
-      return dateB.getTime() - dateA.getTime();
-    });
-
-    return sortedData[0];
-  };
+  
   const getSecretKey = async (
     loadingGroupParam?: boolean,
     secretKeyToPublish?: boolean
@@ -763,7 +764,7 @@ export const Group = ({
         throw new Error("Network error");
       }
       const publish =
-        publishFromStorage || (await getPublishesFromAdmins(names));
+        publishFromStorage || (await getPublishesFromAdmins(names, selectedGroup?.groupId));
 
       if (prevGroupId !== selectedGroupRef.current.groupId) {
         if (settimeoutForRefetchSecretKey.current) {
@@ -791,12 +792,9 @@ export const Group = ({
         );
         data = await res.text();
       }
-
       const decryptedKey: any = await decryptResource(data);
-
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
-
       if (!validateSecretKey(decryptedKeyToObject))
         throw new Error("SecretKey is not valid");
       setSecretKeyDetails(publish);
@@ -2478,6 +2476,7 @@ export const Group = ({
                       setNewEncryptionNotification
                     }
                     hide={groupSection !== "chat" || !secretKey}
+                    hideView={!(desktopViewMode === 'chat' && selectedGroup)}
                     handleSecretKeyCreationInProgress={
                       handleSecretKeyCreationInProgress
                     }

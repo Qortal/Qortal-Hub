@@ -126,6 +126,7 @@ import { handleGetFileFromIndexedDB } from "./utils/indexedDB";
 import { CoreSyncStatus } from "./components/CoreSyncStatus";
 import { Wallets } from "./Wallets";
 import { RandomSentenceGenerator } from "./utils/seedPhrase/RandomSentenceGenerator";
+import { useFetchResources } from "./common/useFetchResources";
 
 type extStates =
   | "not-authenticated"
@@ -334,6 +335,7 @@ function App() {
   const [hasSettingsChanged, setHasSettingsChanged] = useRecoilState(
     hasSettingsChangedAtom
   );
+  const {downloadResource} = useFetchResources()
   const holdRefExtState = useRef<extStates>("not-authenticated");
   const isFocusedRef = useRef<boolean>(true);
   const { isShow, onCancel, onOk, show, message } = useModal();
@@ -1580,6 +1582,7 @@ function App() {
             setOpenSnackGlobal: setOpenSnack,
             infoSnackCustom: infoSnack,
             setInfoSnackCustom: setInfoSnack,
+            downloadResource
           }}
         >
           <Box

@@ -1,4 +1,4 @@
-import { atom } from 'recoil';
+import { atom, selectorFamily } from 'recoil';
 
 
 export const sortablePinnedAppsAtom = atom({
@@ -93,4 +93,30 @@ export const promotionTimeIntervalAtom = atom({
 export const promotionsAtom = atom({
   key: 'promotionsAtom', 
   default: [], 
+});
+
+export const resourceDownloadControllerAtom = atom({
+  key: 'resourceDownloadControllerAtom', 
+  default: {}, 
+});
+
+export const resourceKeySelector = selectorFamily({
+  key: 'resourceKeySelector',
+  get: (key) => ({ get }) => {
+    const resources = get(resourceDownloadControllerAtom);
+    return resources[key] || null; // Return the value for the key or null if not found
+  },
+});
+
+export const blobControllerAtom = atom({
+  key: 'blobControllerAtom', 
+  default: {}, 
+});
+
+export const blobKeySelector = selectorFamily({
+  key: 'blobKeySelector',
+  get: (key) => ({ get }) => {
+    const blobs = get(blobControllerAtom);
+    return blobs[key] || null; // Return the value for the key or null if not found
+  },
 });

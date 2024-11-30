@@ -55,3 +55,13 @@ export const fileToBase64 = (file) => new Promise(async (resolve, reject) => {
 		semaphore.release()
 	}
 })
+
+export const base64ToBlobUrl = (base64, mimeType = "image/png") => {
+    const binary = atob(base64);
+    const array = [];
+    for (let i = 0; i < binary.length; i++) {
+      array.push(binary.charCodeAt(i));
+    }
+    const blob = new Blob([new Uint8Array(array)], { type: mimeType });
+    return URL.createObjectURL(blob);
+  };

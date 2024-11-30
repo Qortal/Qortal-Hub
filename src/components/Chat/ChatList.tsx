@@ -27,6 +27,7 @@ export const ChatList = ({
   myName,
   selectedGroup,
   enableMentions,
+  openQManager
 }) => {
   const parentRef = useRef();
   const [messages, setMessages] = useState(initialMessages);
@@ -407,6 +408,7 @@ export const ChatList = ({
       </div>
       {enableMentions && (
         <ChatOptions
+        openQManager={openQManager}
           messages={messages}
           goToMessage={goToMessage}
           members={members}

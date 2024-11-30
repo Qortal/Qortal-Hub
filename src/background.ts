@@ -99,7 +99,7 @@ import {
 import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
 // import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
 
-
+export let groupSecretkeys = {}
 
 export function cleanUrl(url) {
   return url?.replace(/^(https?:\/\/)?(www\.)?/, "");
@@ -1728,6 +1728,7 @@ export async function decryptSingleForPublishes({
   return holdMessages;
 }
 
+
 export async function decryptDirectFunc({ messages, involvingAddress }) {
   const senderPublicKey = await getPublicKey(involvingAddress);
   let holdMessages = [];
@@ -3018,7 +3019,7 @@ function setupMessageListener() {
                 // for announcement notification
                 clearInterval(interval);
               }
-
+              groupSecretkeys = {}
               const wallet = await getSaveWallet();
               const address = wallet.address0;
               const key1 = `tempPublish-${address}`;
