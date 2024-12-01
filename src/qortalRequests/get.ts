@@ -20,6 +20,7 @@ import {
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
+import { getPublishesFromAdminsAdminSpace } from "../components/Chat/AdminSpaceInner";
 import { extractComponents } from "../components/Chat/MessageDisplay";
 import { decryptResource, getGroupAdmins, getPublishesFromAdmins, validateSecretKey } from "../components/Group/Group";
 import { QORT_DECIMALS } from "../constants/constants";
@@ -402,7 +403,7 @@ export const encryptData = async (data, sender) => {
 export const encryptQortalGroupData = async (data, sender) => {
   let data64 = data.data64;
   let groupId = data?.groupId
-
+  let isAdmins = data?.isAdmins
   if(!groupId){
     throw new Error('Please provide a groupId')
   }
@@ -412,7 +413,10 @@ export const encryptQortalGroupData = async (data, sender) => {
   if (!data64) {
     throw new Error("Please include data to encrypt");
   }
+
+
   let secretKeyObject
+  if(!isAdmins){
   if(groupSecretkeys[groupId] && groupSecretkeys[groupId].secretKeyObject && groupSecretkeys[groupId]?.timestamp && (Date.now() - groupSecretkeys[groupId]?.timestamp) <  1200000){
     secretKeyObject = groupSecretkeys[groupId].secretKeyObject
   }
@@ -445,7 +449,44 @@ url
       timestamp: Date.now()
     }
   }
+} else {
 
+  if(groupSecretkeys[`admins-${groupId}`] && groupSecretkeys[`admins-${groupId}`].secretKeyObject && groupSecretkeys[`admins-${groupId}`]?.timestamp && (Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp) <  1200000){
+    secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject
+  }
+
+  if(!secretKeyObject){
+    const { names } =
+    await getGroupAdmins(groupId)
+
+    const publish =
+     await getPublishesFromAdminsAdminSpace(names, groupId);
+  if(publish === false) throw new Error('No group key found.')
+  const url = await createEndpoint(`/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+    publish.identifier
+  }?encoding=base64`);
+
+  const res = await fetch(
+url
+  );
+  const resData = await res.text();
+  const decryptedKey: any = await decryptResource(resData);
+
+  const dataint8Array = base64ToUint8Array(decryptedKey.data);
+  const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+
+  if (!validateSecretKey(decryptedKeyToObject))
+    throw new Error("SecretKey is not valid");
+    secretKeyObject = decryptedKeyToObject
+    groupSecretkeys[`admins-${groupId}`] = {
+      secretKeyObject,
+      timestamp: Date.now()
+    }
+  }
+
+
+
+}
       
         const resGroupEncryptedResource = encryptSingle({
           data64, secretKeyObject: secretKeyObject, 
@@ -461,17 +502,17 @@ url
 export const decryptQortalGroupData = async (data, sender) => {
   let data64 = data.data64;
   let groupId = data?.groupId
+  let isAdmins = data?.isAdmins
   if(!groupId){
     throw new Error('Please provide a groupId')
   }
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
-  }
+
   if (!data64) {
     throw new Error("Please include data to encrypt");
   }
 
   let secretKeyObject
+  if(!isAdmins){
   if(groupSecretkeys[groupId] && groupSecretkeys[groupId].secretKeyObject && groupSecretkeys[groupId]?.timestamp && (Date.now() - groupSecretkeys[groupId]?.timestamp) <  1200000){
     secretKeyObject = groupSecretkeys[groupId].secretKeyObject
   }
@@ -502,6 +543,40 @@ url
       timestamp: Date.now()
     }
   }
+} else {
+  if(groupSecretkeys[`admins-${groupId}`] && groupSecretkeys[`admins-${groupId}`].secretKeyObject && groupSecretkeys[`admins-${groupId}`]?.timestamp && (Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp) <  1200000){
+    secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject
+  }
+  if(!secretKeyObject){
+    const { names } =
+    await getGroupAdmins(groupId)
+
+    const publish =
+     await getPublishesFromAdminsAdminSpace(names, groupId);
+  if(publish === false) throw new Error('No group key found.')
+  const url = await createEndpoint(`/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+    publish.identifier
+  }?encoding=base64`);
+
+  const res = await fetch(
+url
+  );
+  const resData = await res.text();
+  const decryptedKey: any = await decryptResource(resData);
+
+  const dataint8Array = base64ToUint8Array(decryptedKey.data);
+  const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+  if (!validateSecretKey(decryptedKeyToObject))
+    throw new Error("SecretKey is not valid");
+    secretKeyObject = decryptedKeyToObject
+    groupSecretkeys[`admins-${groupId}`] = {
+      secretKeyObject,
+      timestamp: Date.now()
+    }
+  }
+
+
+}
       
         const resGroupDecryptResource = decryptSingle({
           data64, secretKeyObject: secretKeyObject, skipDecodeBase64: true

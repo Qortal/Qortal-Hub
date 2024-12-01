@@ -54,7 +54,7 @@ import {
   updateThreadActivity,
   walletVersion,
 } from "./background";
-import { decryptGroupEncryption, encryptAndPublishSymmetricKeyGroupChat, publishGroupEncryptedResource, publishOnQDN } from "./backgroundFunctions/encryption";
+import { decryptGroupEncryption, encryptAndPublishSymmetricKeyGroupChat, encryptAndPublishSymmetricKeyGroupChatForAdmins, publishGroupEncryptedResource, publishOnQDN } from "./backgroundFunctions/encryption";
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from "./constants/codes";
 import { encryptSingle } from "./qdn/encryption/group-encryption";
 import { _createPoll, _voteOnPoll } from "./qortalRequests/get";
@@ -1398,6 +1398,41 @@ export async function encryptAndPublishSymmetricKeyGroupChatCase(
     } catch (error) {
       // error in sending notification
     }
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "encryptAndPublishSymmetricKeyGroupChat",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+
+export async function encryptAndPublishSymmetricKeyGroupChatForAdminsCase(
+  request,
+  event
+) {
+  try {
+    const { groupId, previousData, admins } = request.payload;
+    const { data, numberOfMembers } =
+      await encryptAndPublishSymmetricKeyGroupChatForAdmins({
+        groupId,
+        previousData,
+        admins
+      });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "encryptAndPublishSymmetricKeyGroupChatForAdmins",
+        payload: data,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
   } catch (error) {
     event.source.postMessage(
       {

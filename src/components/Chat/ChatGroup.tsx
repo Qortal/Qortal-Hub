@@ -23,6 +23,7 @@ import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/resou
 import { isExtMsg } from '../../background'
 import AppViewerContainer from '../Apps/AppViewerContainer'
 import CloseIcon from "@mui/icons-material/Close";
+import { throttle } from 'lodash'
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -50,7 +51,8 @@ const [messageSize, setMessageSize] = useState(0)
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const lastReadTimestamp = useRef(null)
 
- 
+  const handleUpdateRef = useRef(null);
+
 
   const getTimestampEnterChat = async () => {
     try {
@@ -624,21 +626,21 @@ const clearEditorContent = () => {
 
     useEffect(() => {
       if (!editorRef?.current) return;
-      const handleUpdate = () => {
-        const htmlContent = editorRef?.current.getHTML();
-        const stringified = JSON.stringify(htmlContent);
-        const size = new Blob([stringified]).size;
+  
+      handleUpdateRef.current = throttle(() => {
+        const htmlContent = editorRef.current.getHTML();
+        const size = new TextEncoder().encode(htmlContent).length; 
         setMessageSize(size + 100);
-      };
+      }, 1200); 
   
-      // Add a listener for the editorRef?.current's content updates
-      editorRef?.current.on('update', handleUpdate);
+      const currentEditor = editorRef.current;
   
-      // Cleanup the listener on unmount
+      currentEditor.on("update", handleUpdateRef.current);
+  
       return () => {
-        editorRef?.current.off('update', handleUpdate);
+        currentEditor.off("update", handleUpdateRef.current);
       };
-    }, [editorRef?.current]);
+    }, [editorRef, setMessageSize]); 
 
   useEffect(() => {
     if (hide) {

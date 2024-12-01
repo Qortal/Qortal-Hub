@@ -52,6 +52,7 @@ import {
   decryptSingleForPublishesCase,
   decryptWalletCase,
   encryptAndPublishSymmetricKeyGroupChatCase,
+  encryptAndPublishSymmetricKeyGroupChatForAdminsCase,
   encryptSingleCase,
   getApiKeyCase,
   getCustomNodesFromStorageCase,
@@ -2955,6 +2956,9 @@ function setupMessageListener() {
         break;
       case "encryptAndPublishSymmetricKeyGroupChat":
         encryptAndPublishSymmetricKeyGroupChatCase(request, event);
+        break;
+      case "encryptAndPublishSymmetricKeyGroupChatForAdmins":
+        encryptAndPublishSymmetricKeyGroupChatForAdminsCase(request, event);
         break;
       case "publishGroupEncryptedResource":
         publishGroupEncryptedResourceCase(request, event);

@@ -96,6 +96,7 @@ import { DesktopSideBar } from "../DesktopSideBar";
 import { HubsIcon } from "../../assets/Icons/HubsIcon";
 import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { formatEmailDate } from "./QMailMessages";
+import { AdminSpace } from "../Chat/AdminSpace";
 
 // let touchStartY = 0;
 // let disablePullToRefresh = false;
@@ -2475,7 +2476,7 @@ export const Group = ({
                     handleNewEncryptionNotification={
                       setNewEncryptionNotification
                     }
-                    hide={groupSection !== "chat" || !secretKey}
+                    hide={groupSection !== "chat" || !secretKey || selectedDirect || newChat}
                     hideView={!(desktopViewMode === 'chat' && selectedGroup)}
                     handleSecretKeyCreationInProgress={
                       handleSecretKeyCreationInProgress
@@ -2588,6 +2589,8 @@ export const Group = ({
                       defaultThread={defaultThread}
                       setDefaultThread={setDefaultThread}
                     />
+                    <AdminSpace adminsWithNames={adminsWithNames} selectedGroup={selectedGroup?.groupId} myAddress={myAddress} userInfo={userInfo} hide={groupSection !== "adminSpace"}  isAdmin={admins.includes(myAddress)}
+  />
                   </>
                 )}
 

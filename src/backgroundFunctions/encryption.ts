@@ -85,6 +85,26 @@ const getPublicKeys = async (groupNumber: number) => {
       return members
   }
 
+  export const getPublicKeysByAddress = async (admins) => {
+    const validApi = await getBaseApi()
+
+
+      let members: any = [];
+      if (Array.isArray(admins)) {
+        for (const address of admins) {
+          if (address) {
+            const resAddress = await fetch(`${validApi}/addresses/${address}`);
+      const resData = await resAddress.json();
+            const publicKey = resData.publicKey;
+            members.push(publicKey)
+          }
+        }
+      }
+
+      return members
+  }
+
+
 
 
 export const encryptAndPublishSymmetricKeyGroupChat = async ({groupId, previousData}: {
@@ -135,6 +155,57 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({groupId, previousD
     } catch (error: any) {
         throw new Error(error.message);
     }
+}
+export const encryptAndPublishSymmetricKeyGroupChatForAdmins = async ({groupId, previousData, admins}: {
+  groupId: number,
+  previousData: Object,
+}) => {
+  try {
+    
+      let highestKey = 0
+      if(previousData){
+         highestKey = Math.max(...Object.keys((previousData || {})).filter(item=> !isNaN(+item)).map(Number));
+  
+      }
+     
+      const resKeyPair = await getKeyPair()
+      const parsedData = resKeyPair
+      const privateKey = parsedData.privateKey
+      const userPublicKey = parsedData.publicKey
+      const groupmemberPublicKeys = await getPublicKeysByAddress(admins.map((admin)=> admin.address))
+
+    
+      const symmetricKey = createSymmetricKeyAndNonce()
+      const nextNumber = highestKey + 1
+      const objectToSave = {
+          ...previousData,
+          [nextNumber]: symmetricKey
+      }
+  
+      const symmetricKeyAndNonceBase64 = await objectToBase64(objectToSave)
+      
+      const encryptedData =  encryptDataGroup({
+          data64: symmetricKeyAndNonceBase64,
+          publicKeys: groupmemberPublicKeys,
+          privateKey,
+          userPublicKey
+      })
+      if(encryptedData){
+          const registeredName = await getNameInfo()
+          const data = await publishData({
+              registeredName, file: encryptedData, service: 'DOCUMENT_PRIVATE', identifier: `admins-symmetric-qchat-group-${groupId}`, uploadType: 'file', isBase64: true, withFee: true
+          })
+          return {
+            data,
+            numberOfMembers: groupmemberPublicKeys.length
+          }
+          
+      } else {
+          throw new Error('Cannot encrypt content')
+      }
+  } catch (error: any) {
+      throw new Error(error.message);
+  }
 }
 export const publishGroupEncryptedResource = async ({encryptedData, identifier}) => {
   try {

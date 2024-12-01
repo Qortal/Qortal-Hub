@@ -729,7 +729,7 @@ font-size: 23px;
 font-style: normal;
 font-weight: 700;
 line-height: normal;
-white-space: nowrap;
+white-space: wrap;
   text-overflow: ellipsis;
   overflow: hidden;
 `

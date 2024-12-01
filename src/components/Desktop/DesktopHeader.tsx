@@ -18,6 +18,7 @@ import { NotificationIcon2 } from "../../assets/Icons/NotificationIcon2";
 import { ChatIcon } from "../../assets/Icons/ChatIcon";
 import { ThreadsIcon } from "../../assets/Icons/ThreadsIcon";
 import { MembersIcon } from "../../assets/Icons/MembersIcon";
+import { AdminsIcon } from "../../assets/Icons/AdminsIcon";
 
 const IconWrapper = ({ children, label, color, selected, selectColor, customHeight }) => {
   return (
@@ -273,6 +274,30 @@ export const DesktopHeader = ({
               color={
                 isForum
                   ? "white"
+                  : "rgba(250, 250, 250, 0.5)"
+              }
+            />
+          </IconWrapper>
+        </ButtonBase>
+        <ButtonBase
+          onClick={() => {
+            setGroupSection("adminSpace");
+          
+          }}
+        >
+          <IconWrapper
+            color={groupSection === 'adminSpace' ? 'black' : "rgba(250, 250, 250, 0.5)"}
+            label="Admins"
+            selected={groupSection === 'adminSpace'}
+            customHeight="55px"
+            selectColor="#09b6e8"
+          >
+            <AdminsIcon
+              height={25}
+              width={20}
+              color={
+                groupSection === 'adminSpace'
+                  ? "black"
                   : "rgba(250, 250, 250, 0.5)"
               }
             />
