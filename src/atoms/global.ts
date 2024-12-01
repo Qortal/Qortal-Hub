@@ -124,3 +124,8 @@ export const blobKeySelector = selectorFamily({
     return blobs[key] || null; // Return the value for the key or null if not found
   },
 });
+
+export const selectedGroupIdAtom = atom({
+  key: 'selectedGroupIdAtom', 
+  default: null, 
+});

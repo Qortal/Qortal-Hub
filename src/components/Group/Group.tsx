@@ -97,6 +97,8 @@ import { HubsIcon } from "../../assets/Icons/HubsIcon";
 import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { formatEmailDate } from "./QMailMessages";
 import { AdminSpace } from "../Chat/AdminSpace";
+import { useSetRecoilState } from "recoil";
+import { selectedGroupIdAtom } from "../../atoms/global";
 
 // let touchStartY = 0;
 // let disablePullToRefresh = false;
@@ -476,7 +478,7 @@ export const Group = ({
   const [appsModeDev, setAppsModeDev] = useState('home')
   const [isOpenSideViewDirects, setIsOpenSideViewDirects] = useState(false)
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false)
-
+  const setSelectedGroupId = useSetRecoilState(selectedGroupIdAtom)
   const toggleSideViewDirects = ()=> {
     if(isOpenSideViewGroups){
       setIsOpenSideViewGroups(false)
@@ -502,6 +504,7 @@ export const Group = ({
 
   useEffect(() => {
     selectedGroupRef.current = selectedGroup;
+    setSelectedGroupId(selectedGroup?.groupId)
   }, [selectedGroup]);
 
   useEffect(() => {

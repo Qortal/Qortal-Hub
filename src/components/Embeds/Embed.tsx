@@ -8,8 +8,8 @@ import { extractComponents } from "../Chat/MessageDisplay";
 import { executeEvent } from "../../utils/events";
 
 import { base64ToBlobUrl } from "../../utils/fileReading";
-import { useRecoilValue, useSetRecoilState } from "recoil";
-import { blobControllerAtom, blobKeySelector, resourceKeySelector } from "../../atoms/global";
+import { useRecoilState, useRecoilValue, useSetRecoilState } from "recoil";
+import { blobControllerAtom, blobKeySelector, resourceKeySelector, selectedGroupIdAtom } from "../../atoms/global";
 import { parseQortalLink } from "./embed-utils";
 import { PollCard } from "./PollEmbed";
 import { ImageCard } from "./ImageEmbed";
@@ -59,7 +59,7 @@ export const Embed = ({ embedLink }) => {
   const [imageUrl, setImageUrl] = useState("");
   const [parsedData, setParsedData] = useState(null);
   const setBlobs = useSetRecoilState(blobControllerAtom);
-
+  const [selectedGroupId] = useRecoilState(selectedGroupIdAtom)
   const resourceData = useMemo(()=> {
     const parsedDataOnTheFly = parseQortalLink(embedLink);
     if(parsedDataOnTheFly?.service && parsedDataOnTheFly?.name && parsedDataOnTheFly?.identifier){
@@ -148,22 +148,24 @@ export const Embed = ({ embedLink }) => {
                   );
                 }
                  if(encryptionType === 'group'){
+
                   decryptedData = await window.sendMessage(
                     "DECRYPT_QORTAL_GROUP_DATA",
                    
                       {
                         data64: data,
-                      groupId: 683,
+                      groupId: selectedGroupId,
                       }
                     
                   );
+
                  }
               } catch (error) {
                 throw new Error('Unable to decrypt')
               }
               
               if (!decryptedData || decryptedData?.error) throw new Error("Could not decrypt data");
-               imageFinalUrl = base64ToBlobUrl(decryptedData)
+               imageFinalUrl = base64ToBlobUrl(decryptedData, parsedData?.mimeType ? decodeURIComponent(parsedData?.mimeType) : undefined)
                setBlobs((prev=> {
                 return {
                   ...prev,
@@ -357,6 +359,7 @@ export const Embed = ({ embedLink }) => {
           isLoadingParent={isLoading}
           errorMsg={errorMsg}
           encryptionType={encryptionType}
+          selectedGroupId={selectedGroupId}
         />
       )}
       <CustomizedSnackbars
