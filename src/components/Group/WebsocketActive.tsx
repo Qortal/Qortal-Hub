@@ -58,7 +58,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
           pauseAllQueues()
           
         }
-        const socketLink = `${getBaseApiReactSocket()}/websockets/chat/active/${currentAddress}?encoding=BASE64`;
+        const socketLink = `${getBaseApiReactSocket()}/websockets/chat/active/${currentAddress}?encoding=BASE64&haschatreference=false`;
         socketRef.current = new WebSocket(socketLink);
 
         socketRef.current.onopen = () => {

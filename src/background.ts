@@ -3057,7 +3057,7 @@ const checkGroupList = async () => {
   try {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
-    const url = await createEndpoint(`/chat/active/${address}`);
+    const url = await createEndpoint(`/chat/active/${address}?encoding=BASE64&haschatreference=false`);
     const response = await fetch(url, {
       method: "GET",
       headers: {

@@ -20,6 +20,7 @@ import { getFee } from "../../background";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { Spacer } from "../../common/Spacer";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import { CustomLoader } from "../../common/CustomLoader";
 
 
 export const PollCard = ({
