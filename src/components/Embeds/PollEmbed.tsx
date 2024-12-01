@@ -271,6 +271,12 @@ export const PollCard = ({
                     />
                   }
                   label={option?.optionName}
+                  sx={{
+                    "& .MuiFormControlLabel-label": {
+                      fontSize: "14px", 
+                     
+                    },
+                  }}
                 />
               ))}
             </RadioGroup>
@@ -353,13 +359,13 @@ export const PollCard = ({
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography
                   variant="body1"
-                  sx={{ fontWeight: index === 0 ? "bold" : "normal" }}
+                  sx={{ fontWeight: index === 0 ? "bold" : "normal" ,  fontSize: "14px"}}
                 >
                   {`${index + 1}. ${option.optionName}`}
                 </Typography>
                 <Typography
                   variant="body1"
-                  sx={{ fontWeight: index === 0 ? "bold" : "normal" }}
+                  sx={{ fontWeight: index === 0 ? "bold" : "normal" ,  fontSize: "14px"}}
                 >
                   {option.voteCount} votes
                 </Typography>
