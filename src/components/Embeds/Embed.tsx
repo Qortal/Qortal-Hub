@@ -14,6 +14,7 @@ import { parseQortalLink } from "./embed-utils";
 import { PollCard } from "./PollEmbed";
 import { ImageCard } from "./ImageEmbed";
 import { AttachmentCard } from "./AttachmentEmbed";
+import { decodeIfEncoded } from "../../utils/decode";
 
 const getPoll = async (name) => {
   const pollName = name;

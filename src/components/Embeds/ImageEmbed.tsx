@@ -17,6 +17,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { CustomLoader } from "../../common/CustomLoader";
 import ImageIcon from "@mui/icons-material/Image";
 import CloseIcon from "@mui/icons-material/Close";
+import { decodeIfEncoded } from "../../utils/decode";
 
 export const ImageCard = ({
     image,
@@ -37,11 +38,11 @@ export const ImageCard = ({
       }
     }, [isOpen]);
   
-    useEffect(()=> {
-      if(errorMsg){
-        setHeight('300px')
-      }
-    }, [errorMsg])
+    // useEffect(()=> {
+    //   if(errorMsg){
+    //     setHeight('300px')
+    //   }
+    // }, [errorMsg])
   
     return (
       <Card
@@ -113,7 +114,7 @@ export const ImageCard = ({
               color: "white",
             }}
           >
-            Created by {owner}
+            Created by {decodeIfEncoded(owner)}
           </Typography>
           <Typography
             sx={{

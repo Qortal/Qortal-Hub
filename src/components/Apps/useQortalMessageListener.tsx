@@ -481,7 +481,7 @@ isDOMContentLoaded: false
       } else if (
         event?.data?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' ||
         event?.data?.action === 'PUBLISH_QDN_RESOURCE' ||
-        event?.data?.action === 'ENCRYPT_DATA' || event?.data?.action === 'ENCRYPT_DATA_WITH_SHARING_KEY' || 'ENCRYPT_QORTAL_GROUP_DATA'
+        event?.data?.action === 'ENCRYPT_DATA' || event?.data?.action === 'ENCRYPT_DATA_WITH_SHARING_KEY' || event?.data?.action === 'ENCRYPT_QORTAL_GROUP_DATA'
         
       ) {
         let data;

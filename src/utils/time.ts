@@ -36,3 +36,21 @@ export function formatTimestamp(timestamp: number): string {
   
     return date
   }
+
+  export function sortArrayByTimestampAndGroupName(array) {
+    return array.sort((a, b) => {
+      if (a.timestamp && b.timestamp) {
+        // Both have timestamp, sort by timestamp descending
+        return b.timestamp - a.timestamp;
+      } else if (a.timestamp) {
+        // Only `a` has timestamp, it comes first
+        return -1;
+      } else if (b.timestamp) {
+        // Only `b` has timestamp, it comes first
+        return 1;
+      } else {
+        // Neither has timestamp, sort alphabetically by groupName
+        return a.groupName.localeCompare(b.groupName);
+      }
+    });
+  }

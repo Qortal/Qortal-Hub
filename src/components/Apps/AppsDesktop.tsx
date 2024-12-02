@@ -301,7 +301,6 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
     };
   }, [tabs]);
 
-
   return (
     <AppsParent
       sx={{
@@ -425,7 +424,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
          </ButtonBase>
         )}
         {mode !== 'home' && (
-                 <AppsNavBarDesktop  />
+                 <AppsNavBarDesktop disableBack={isNewTabWindow && mode === 'viewer'}  />
 
         )}
 

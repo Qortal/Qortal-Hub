@@ -28,6 +28,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import SaveIcon from '@mui/icons-material/Save';
 import { useSetRecoilState } from "recoil";
 import { blobControllerAtom } from "../../atoms/global";
+import { decodeIfEncoded } from "../../utils/decode";
 
 
 export const AttachmentCard = ({
@@ -181,7 +182,7 @@ export const AttachmentCard = ({
               color: "white",
             }}
           >
-            Created by {owner}
+            Created by {decodeIfEncoded(owner)}
           </Typography>
           <Typography
             sx={{

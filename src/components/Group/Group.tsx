@@ -99,6 +99,7 @@ import { formatEmailDate } from "./QMailMessages";
 import { AdminSpace } from "../Chat/AdminSpace";
 import { useSetRecoilState } from "recoil";
 import { selectedGroupIdAtom } from "../../atoms/global";
+import { sortArrayByTimestampAndGroupName } from "../../utils/time";
 
 // let touchStartY = 0;
 // let disablePullToRefresh = false;
@@ -120,6 +121,13 @@ import { selectedGroupIdAtom } from "../../atoms/global";
 //         event.preventDefault();
 //     }
 // });
+
+const isWithinLast15Minutes = (timestamp) => {
+  const now = Date.now(); // Current timestamp in milliseconds
+  const fifteenMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+  return now - timestamp < fifteenMinutes;
+};
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   // const validApi = await findUsableApi();
@@ -909,7 +917,7 @@ export const Group = ({
       if (message?.action === "SET_GROUPS") {
 
         // Update the component state with the received 'sendqort' state
-        setGroups(message.payload);
+        setGroups(sortArrayByTimestampAndGroupName(message.payload));
         getLatestRegularChat(message.payload);
         setMemberGroups(message.payload);
   

@@ -63,7 +63,7 @@ export function saveToLocalStorage(key, subKey, newValue) {
   }
 }
 
-export const AppsNavBarDesktop = () => {
+export const AppsNavBarDesktop = ({disableBack}) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] =  useRecoilState(navigationControllerAtom)
@@ -107,10 +107,11 @@ export const AppsNavBarDesktop = () => {
 
 
   const isDisableBackButton = useMemo(()=> {
+    if(disableBack) return true
     if(selectedTab && navigationController[selectedTab?.tabId]?.hasBack) return false
     if(selectedTab && !navigationController[selectedTab?.tabId]?.hasBack) return true
     return false
-  }, [navigationController, selectedTab])
+  }, [navigationController, selectedTab, disableBack])
 
 
 
