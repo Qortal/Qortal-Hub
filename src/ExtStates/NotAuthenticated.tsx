@@ -23,7 +23,7 @@ import { set } from "lodash";
 import { cleanUrl, isUsingLocal } from "../background";
 
 const manifestData = {
-  version: "0.3.5",
+  version: "0.3.6",
 };
 
 export const NotAuthenticated = ({
