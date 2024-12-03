@@ -746,9 +746,9 @@ const clearEditorContent = () => {
     left: hide && '-100000px',
     }}>
               
-              <ChatList openQManager={openQManager} enableMentions onReply={onReply} onEdit={onEdit} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
+              <ChatList hasSecretKey={!!secretKey} openQManager={openQManager} enableMentions onReply={onReply} onEdit={onEdit} chatId={selectedGroup} initialMessages={messages} myAddress={myAddress} tempMessages={tempMessages} handleReaction={handleReaction} chatReferences={chatReferences} tempChatReferences={tempChatReferences} members={members} myName={myName} selectedGroup={selectedGroup} />
              
-   
+              {!!secretKey && (
       <div style={{
         // position: 'fixed',
         // bottom: '0px',
@@ -818,7 +818,8 @@ const clearEditorContent = () => {
       )}
      
      
-      <Tiptap enableMentions setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} membersWithNames={members} />
+       <Tiptap enableMentions setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} membersWithNames={members} />
+    
       </div>
       {messageSize > 750 && (
         <Box sx={{
@@ -899,6 +900,7 @@ const clearEditorContent = () => {
               </Box>
       {/* <button onClick={sendMessage}>send</button> */}
       </div>
+              )}
       {isOpenQManager !== null && (
  <Box sx={{
   position: 'fixed',
