@@ -2488,6 +2488,7 @@ export const Group = ({
                       setNewEncryptionNotification
                     }
                     hide={groupSection !== "chat" || selectedDirect || newChat}
+                    hideView={!(desktopViewMode === 'chat' && selectedGroup)}
                     handleSecretKeyCreationInProgress={
                       handleSecretKeyCreationInProgress
                     }
