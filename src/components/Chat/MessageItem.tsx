@@ -296,7 +296,11 @@ export const MessageItem = ({
                 <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
                   People who reacted with {selectedReaction}
                 </Typography>
-                <List>
+                <List sx={{
+                  overflow: 'auto',
+                  maxWidth: '300px',
+                  maxHeight: '300px'
+                }}>
                   {reactions[selectedReaction]?.map((reactionItem) => (
                     <ListItem key={reactionItem.sender}>
                       <ListItemText
