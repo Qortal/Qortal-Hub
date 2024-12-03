@@ -1,8 +1,8 @@
 import { Message } from "@chatscope/chat-ui-kit-react";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { MessageDisplay } from "./MessageDisplay";
-import { Avatar, Box, ButtonBase, Typography } from "@mui/material";
+import { Avatar, Box, Button, ButtonBase, List, ListItem, ListItemText, Popover, Typography } from "@mui/material";
 import { formatTimestamp } from "../../utils/time";
 import { getBaseApi } from "../../background";
 import { getBaseApiReact } from "../../App";
@@ -40,6 +40,8 @@ export const MessageItem = ({
     triggerOnce: false, // Only trigger once when it becomes visible
   });
 
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [selectedReaction, setSelectedReaction] = useState(null);
 
 
   useEffect(() => {
@@ -246,17 +248,15 @@ export const MessageItem = ({
               // const myReaction = reactions
               if(numberOfReactions === 0) return null
               return (
-                <ButtonBase sx={{
+                <ButtonBase key={reaction} sx={{
                   height: '30px',
                   minWidth:  '45px',
                   background: 'var(--bg-2)',
                   borderRadius: '7px'
-                }} onClick={()=> {
-                  if(reactions[reaction] && reactions[reaction]?.find((item)=> item?.sender === myAddress)){
-                    handleReaction(reaction, message, false)
-                  } else {
-                    handleReaction(reaction, message, true)
-                  }
+                }} onClick={(event) => {
+                    event.stopPropagation(); // Prevent event bubbling
+                    setAnchorEl(event.currentTarget);
+                    setSelectedReaction(reaction);
                 }}>
                <div style={{
                 fontSize: '16px'
@@ -269,6 +269,69 @@ export const MessageItem = ({
               )
             })}
           </Box>
+          {selectedReaction && (
+            <Popover
+              open={Boolean(anchorEl)}
+              anchorEl={anchorEl}
+              onClose={() => {
+                setAnchorEl(null);
+                setSelectedReaction(null);
+              }}
+              anchorOrigin={{
+                vertical: "top",
+                horizontal: "center",
+              }}
+              transformOrigin={{
+                vertical: "bottom",
+                horizontal: "center",
+              }}
+              PaperProps={{
+                style: {
+                  backgroundColor: "#232428",
+                  color: "white",
+                },
+              }}
+            >
+              <Box sx={{ p: 2 }}>
+                <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
+                  People who reacted with {selectedReaction}
+                </Typography>
+                <List>
+                  {reactions[selectedReaction]?.map((reactionItem) => (
+                    <ListItem key={reactionItem.sender}>
+                      <ListItemText
+                        primary={reactionItem.senderName || reactionItem.sender}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => {
+                    if (
+                      reactions[selectedReaction]?.find(
+                        (item) => item?.sender === myAddress
+                      )
+                    ) {
+                      handleReaction(selectedReaction, message, false); // Remove reaction
+                    } else {
+                      handleReaction(selectedReaction, message, true); // Add reaction
+                    }
+                    setAnchorEl(null);
+                    setSelectedReaction(null);
+                  }}
+                  sx={{ marginTop: 2 }}
+                >
+                  {reactions[selectedReaction]?.find(
+                    (item) => item?.sender === myAddress
+                  )
+                    ? "Remove Reaction"
+                    : "Add Reaction"}
+                </Button>
+              </Box>
+            </Popover>
+          )}
           <Box sx={{
             display: 'flex',
             alignItems: 'center',
