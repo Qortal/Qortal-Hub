@@ -755,7 +755,7 @@ const clearEditorContent = () => {
         backgroundColor: "#232428",
         minHeight: isMobile ? '0px' : '150px',
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
         overflow: 'hidden',
         width: '100%',
         boxSizing: 'border-box',
@@ -766,12 +766,15 @@ const clearEditorContent = () => {
         zIndex: isFocusedParent ? 5 : 'unset',
         flexShrink: 0
       }}>
+      
       <div style={{
             display: 'flex',
             flexDirection: 'column',
             flexGrow: isMobile && 1,
             overflow: !isMobile &&  "auto",
-            flexShrink: 0
+            flexShrink: 0,
+            width: 'calc(100% - 100px)',
+            justifyContent: 'flex-end'
       }}>
         {replyMessage && (
         <Box sx={{
@@ -837,34 +840,13 @@ const clearEditorContent = () => {
       )}
       <Box sx={{
         display: 'flex',
-        width: '100%',
+        width: '100px',
         gap: '10px',
         justifyContent: 'center',
         flexShrink: 0,
         position: 'relative',
       }}>
-         {isFocusedParent && (
-               <CustomButton
-               onClick={()=> {
-                 if(isSending) return
-                 setIsFocusedParent(false)
-                 clearEditorContent()
-                 // Unfocus the editor
-               }}
-               style={{
-                 marginTop: 'auto',
-                 alignSelf: 'center',
-                 cursor: isSending ? 'default' : 'pointer',
-                 background: 'red',
-                 flexShrink: 0,
-                 padding: isMobile && '5px'
-               }}
-             >
-               
-               {` Close`}
-             </CustomButton>
-           
-            )}
+
       <CustomButton
               onClick={()=> {
                 if(messageSize > 4000) return
@@ -877,7 +859,9 @@ const clearEditorContent = () => {
                 cursor: isSending ? 'default' : 'pointer',
                 background: isSending && 'rgba(0, 0, 0, 0.8)',
                 flexShrink: 0,
-                padding: isMobile && '5px',
+                padding: '5px',
+                width: '100px',
+                minWidth: 'auto'
                 
               }}
             >
@@ -898,7 +882,6 @@ const clearEditorContent = () => {
             </CustomButton>
            
               </Box>
-      {/* <button onClick={sendMessage}>send</button> */}
       </div>
               )}
       {isOpenQManager !== null && (
