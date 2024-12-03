@@ -1,5 +1,5 @@
 import { Button, InputAdornment, TextField, TextFieldProps, styled } from "@mui/material";
-import { useState } from 'react'
+import React, { forwardRef, useState } from 'react'
 
 export const CustomInput = styled(TextField)({
     width: "183px", // Adjust the width as needed
@@ -41,7 +41,7 @@ export const CustomInput = styled(TextField)({
 });
 
 
-export const PasswordField: React.FunctionComponent<TextFieldProps> = ({ ...props }) => {
+export const PasswordField = forwardRef<HTMLInputElement, TextFieldProps>( ({ ...props }, ref) => {
     const [canViewPassword, setCanViewPassword] = useState(false);
     return (
             <CustomInput
@@ -55,7 +55,8 @@ export const PasswordField: React.FunctionComponent<TextFieldProps> = ({ ...prop
                         </InputAdornment>
                     )
                 }}
+                inputRef={ref}
                 {...props}
             />
     )
-}
+});
