@@ -182,7 +182,6 @@ const [messageSize, setMessageSize] = useState(0)
       try {
         if(!secretKeyRef.current){
           checkForFirstSecretKeyNotification(encryptedMessages)
-          return
         }
         return new Promise((res, rej)=> {
           window.sendMessage("decryptSingle", {
