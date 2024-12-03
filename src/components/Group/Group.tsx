@@ -2487,7 +2487,7 @@ export const Group = ({
                     handleNewEncryptionNotification={
                       setNewEncryptionNotification
                     }
-                    hide={groupSection !== "chat" || !secretKey || selectedDirect || newChat}
+                    hide={groupSection !== "chat" || selectedDirect || newChat}
                     hideView={!(desktopViewMode === 'chat' && selectedGroup)}
                     handleSecretKeyCreationInProgress={
                       handleSecretKeyCreationInProgress
@@ -2540,6 +2540,10 @@ export const Group = ({
                         <Typography>
                           You are not part of the encrypted group of members.
                           Wait until an admin re-encrypts the keys.
+                        </Typography>
+                        <Spacer height="25px" />
+                        <Typography>
+                          <strong>Only unencrypted messages will be displayed.</strong>
                         </Typography>
                         <Spacer height="25px" />
                         <Typography>
