@@ -2145,7 +2145,7 @@ export const Group = ({
                   color: "white",
                 }}
               />
-              Add Group
+              Group Mgmt
             </CustomButton>
           )}
           {chatMode === "directs" && (

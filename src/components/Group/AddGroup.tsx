@@ -194,7 +194,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
         <AppBar sx={{ position: "relative", bgcolor: "#232428" }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-              Add Group
+              Group Mgmt
             </Typography>
 
             <IconButton
