@@ -395,6 +395,12 @@ function App() {
     const seedPhrase = generatorRef.current.parsedString
     saveSeedPhraseToDisk(seedPhrase)
   }
+  const passwordRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (extState === "wallet-dropped" && passwordRef.current) {
+      passwordRef.current.focus();
+    }
+  }, [extState]);
   useEffect(() => {
     const isDevModeFromStorage = localStorage.getItem("isEnabledDevMode");
     if (isDevModeFromStorage) {
@@ -2318,6 +2324,7 @@ function App() {
                   authenticateWallet();
                 }
               }}
+              ref={passwordRef}
             />
             <Spacer height="20px" />
             <CustomButton onClick={authenticateWallet}>
