@@ -152,7 +152,7 @@ export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, sec
       maxWidth: '350px',
       background: '#444444'
     }}>
-      <LoadingButton loading={isLoading} loadingPosition="start" color="warning" variant='contained' onClick={createCommonSecret}>Re-encyrpt key</LoadingButton>
+      <LoadingButton loading={isLoading} loadingPosition="start" color="warning" variant='contained' onClick={createCommonSecret}>Re-encrypt key</LoadingButton>
       {noSecretKey ? (
          <Box>
          <Typography>There is no group secret key. Be the first admin to publish one!</Typography>
