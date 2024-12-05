@@ -37,6 +37,7 @@ export const ChatList = ({
 
   const hasLoadedInitialRef = useRef(false);
   const scrollingIntervalRef = useRef(null);
+  const lastSeenUnreadMessageTimestamp = useRef(null);
 
 
   // Initialize the virtualizer
@@ -108,7 +109,7 @@ export const ChatList = ({
 
     setTimeout(() => {
       const hasUnreadMessages = totalMessages.some(
-        (msg) => msg.unread && !msg?.chatReference && !msg?.isTemp
+        (msg) => msg.unread && !msg?.chatReference && !msg?.isTemp && (!msg?.chatReference && msg?.timestamp > lastSeenUnreadMessageTimestamp.current || 0)
       );
       if (parentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
@@ -152,6 +153,7 @@ export const ChatList = ({
       }))
     );
     setShowScrollButton(false);
+    lastSeenUnreadMessageTimestamp.current = Date.now()
   }, []);
 
   const sentNewMessageGroupFunc = useCallback(() => {
@@ -385,7 +387,7 @@ export const ChatList = ({
             Scroll to Unread Messages
           </button>
         )}
-        {showScrollDownButton && (
+        {showScrollDownButton && !showScrollButton && (
           <button
             onClick={() => scrollToBottom()}
             style={{
