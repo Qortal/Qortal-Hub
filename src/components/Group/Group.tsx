@@ -157,6 +157,7 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
     return dateB.getTime() - dateA.getTime();
   });
 
+
   return sortedData[0];
 };
 interface GroupProps {
@@ -241,6 +242,7 @@ export const getGroupMembers = async (groupNumber: number) => {
   const groupData = await response.json();
   return groupData;
 };
+
 
 export const decryptResource = async (data: string) => {
   try {
@@ -519,6 +521,8 @@ export const Group = ({
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
 
+
+
   const getUserSettings = async () => {
     try {
       return new Promise((res, rej) => {
@@ -753,8 +757,9 @@ export const Group = ({
       if (
         secretKeyToPublish &&
         secretKey &&
-        lastFetchedSecretKey.current &&
-        Date.now() - lastFetchedSecretKey.current < 1800000
+        lastFetchedSecretKey.current 
+        &&
+        Date.now() - lastFetchedSecretKey.current < 600000
       )
         return secretKey;
       if (loadingGroupParam) {
@@ -2505,7 +2510,7 @@ export const Group = ({
                       style={{
                         display: "flex",
                         width: "100%",
-                        height: "100$",
+                        height: "100%",
                         flexDirection: "column",
                         alignItems: "flex-start",
                         padding: "20px",
