@@ -626,10 +626,16 @@ const clearEditorContent = () => {
     useEffect(() => {
       if (!editorRef?.current) return;
   
-      handleUpdateRef.current = throttle(() => {
+      handleUpdateRef.current = throttle(async () => {
+       try {
         const htmlContent = editorRef.current.getHTML();
-        const size = new TextEncoder().encode(htmlContent).length; 
-        setMessageSize(size + 100);
+        const message64 =  await objectToBase64(JSON.stringify(htmlContent))
+        const secretKeyObject = await getSecretKey(false, true)
+        const encryptSingle = await encryptChatMessage(message64, secretKeyObject)
+        setMessageSize((encryptSingle?.length || 0) + 200);
+       } catch (error) {
+        // calc size error
+       }
       }, 1200); 
   
       const currentEditor = editorRef.current;
@@ -822,13 +828,11 @@ const clearEditorContent = () => {
      
      
        <Tiptap enableMentions setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent} membersWithNames={members} />
-    
-      </div>
-      {messageSize > 750 && (
+       {messageSize > 750 && (
         <Box sx={{
           display: 'flex',
           width: '100%',
-          justifyContent: 'flex-end',
+          justifyContent: 'flex-start',
           position: 'relative',
         }}>
                 <Typography sx={{
@@ -838,6 +842,8 @@ const clearEditorContent = () => {
 
           </Box>
       )}
+      </div>
+      
       <Box sx={{
         display: 'flex',
         width: '100px',

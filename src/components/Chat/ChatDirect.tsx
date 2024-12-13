@@ -363,7 +363,7 @@ useEffect(() => {
     const htmlContent = editorRef?.current.getHTML();
     const stringified = JSON.stringify(htmlContent);
     const size = new Blob([stringified]).size;
-    setMessageSize(size + 100);
+    setMessageSize(size + 200);
   };
 
   // Add a listener for the editorRef?.current's content updates
@@ -646,12 +646,11 @@ useEffect(() => {
       )}
      
       <Tiptap isFocusedParent={isFocusedParent} setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} setIsFocusedParent={setIsFocusedParent}/>
-      </div>
       {messageSize > 750 && (
         <Box sx={{
           display: 'flex',
           width: '100%',
-          justifyContent: 'flex-end',
+          justifyContent: 'flex-start',
           position: 'relative',
         }}>
                 <Typography sx={{
@@ -661,6 +660,8 @@ useEffect(() => {
 
           </Box>
       )}
+      </div>
+    
       <Box sx={{
         display: 'flex',
         width: '100px',
