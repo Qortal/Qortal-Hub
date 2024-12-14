@@ -97,6 +97,7 @@ export const AppsCategoryDesktop = ({
   const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
+    if(category?.id === 'all') return availableQapps
     return availableQapps.filter(
       (app) => app?.metadata?.category === category?.id
     );
@@ -133,6 +134,9 @@ export const AppsCategoryDesktop = ({
         app={app}
         myName={myName}
         isFromCategory={true}
+        parentStyles={{
+          padding: '0px 10px'
+        }}
       />
     );
   };
@@ -206,7 +210,7 @@ export const AppsCategoryDesktop = ({
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
              sx={{
-              height: `calc(100vh - 36px - 90px)`,
+              height: `calc(100vh - 36px - 90px - 25px)`,
             }}
           >
             <Virtuoso
@@ -215,9 +219,9 @@ export const AppsCategoryDesktop = ({
               itemContent={rowRenderer}
               atBottomThreshold={50}
               followOutput="smooth"
-              components={{
-                Scroller: ScrollerStyled, // Use the styled scroller component
-              }}
+              // components={{
+              //   Scroller: ScrollerStyled, // Use the styled scroller component
+              // }}
             />
           </StyledVirtuosoContainer>
         </AppsWidthLimiter>
