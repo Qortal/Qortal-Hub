@@ -122,7 +122,11 @@ export const AppsLibraryDesktop = ({
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
     }, 350);
-
+    setTimeout(() => {
+      virtuosoRef.current.scrollToIndex({
+        index: 0
+      });
+    }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);
@@ -134,7 +138,7 @@ export const AppsLibraryDesktop = ({
   const searchedList = useMemo(() => {
     if (!debouncedValue) return [];
     return availableQapps.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase())
+      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue]);
 

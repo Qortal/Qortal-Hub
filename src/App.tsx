@@ -354,7 +354,7 @@ function App() {
     show: showInfo,
     message: messageInfo,
   } = useModal();
-
+  
   const {
     onCancel: onCancelQortalRequest,
     onOk: onOkQortalRequest,
@@ -383,6 +383,9 @@ function App() {
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
   const [rootHeight, setRootHeight] = useState("100%");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [showSeed, setShowSeed] = useState(false)
+  const [creationStep, setCreationStep] = useState(1)
+
   const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage();
   useQortalGetSaveSettings(userInfo?.name);
@@ -998,6 +1001,8 @@ function App() {
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword("");
+    setShowSeed(false)
+    setCreationStep(1)
     setExtstate("authenticated");
     setIsOpenSendQort(false);
     setIsOpenSendQortSuccess(false);
@@ -1023,6 +1028,9 @@ function App() {
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword("");
+    setShowSeed(false)
+    setCreationStep(1)
+
     setWalletToBeDownloadedPasswordConfirm("");
     setWalletToBeDownloadedError("");
     setSendqortState(null);
@@ -2397,6 +2405,7 @@ function App() {
                 value={walletToBeDownloadedPassword}
                 onChange={(e) =>
                   setWalletToBeDownloadedPassword(e.target.value)
+                  
                 }
               />
               <Spacer height="20px" />
@@ -2442,7 +2451,15 @@ function App() {
                     cursor: "pointer",
                   }}
                   onClick={() => {
+                    if(creationStep === 2){
+                      setCreationStep(1)
+                      return
+                    }
                     setExtstate("not-authenticated");
+                    setShowSeed(false)
+                    setCreationStep(1)
+                    setWalletToBeDownloadedPasswordConfirm('')
+                    setWalletToBeDownloadedPassword('')
                   }}
                   src={Return}
                 />
@@ -2474,33 +2491,110 @@ function App() {
                 justifyContent: 'center',
                 padding: '10px'
               }}>
-              <Box sx={{
-                display: 'flex',
+                <Box sx={{
+                display: creationStep === 1 ? 'flex' :  'none',
                 flexDirection: 'column',
-                maxWidth: '400px',
                 alignItems: 'center',
-                gap: '10px'
+                width: '350px',
+                maxWidth: '95%'
               }}>
                 <Typography sx={{
                   fontSize: '14px'
-                }}>Your seedphrase</Typography>
-                <Typography sx={{
-                  fontSize: '12px'
-                }}>Only shown once! Please copy and keep safe!</Typography>
+                }}>
+                A ‘ <span onClick={()=> {
+                  setShowSeed(true)
+                }} style={{
+                  fontSize: '14px',
+                  color: 'steelblue',
+                  cursor: 'pointer'
+                }}>SEEDPHRASE</span> ’ has been randomly generated in the background. 
 
-              <random-sentence-generator
+
+                </Typography>
+                <Typography sx={{
+                  fontSize: '14px',
+                  marginTop: '5px'
+                }}>
+                If you wish to VIEW THE SEEDPHRASE, click the word 'SEEDPHRASE' in this text. Seedphrases are used to generate the private key for your Qortal account. For security by default, seedphrases are NOT displayed unless specifically chosen.
+                </Typography>
+                <Typography sx={{
+                  fontSize: '16px',
+                  marginTop: '15px',
+                 
+                  textAlign: 'center'
+                }}>
+               Create your Qortal account by clicking <span style={{
+                fontWeight: 'bold'
+               }}>NEXT</span> below.
+
+                </Typography>
+                <Spacer height="17px" />
+                <CustomButton onClick={()=> {
+                  setCreationStep(2)
+                }}>
+                Next
+              </CustomButton>
+                </Box>
+                <div style={{
+                  display: 'none'
+                }}>
+                <random-sentence-generator
               ref={generatorRef}
 											template="adverb verb noun adjective noun adverb verb noun adjective noun adjective verbed adjective noun"
 									
 										></random-sentence-generator>
+                    </div>
+                <Dialog
+          open={showSeed}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogContent>
+          <Box sx={{
+                flexDirection: 'column',
+                maxWidth: '400px',
+                alignItems: 'center',
+                gap: '10px',
+                display: showSeed ? 'flex' : 'none'
+              }}>
+                <Typography sx={{
+                  fontSize: '14px'
+                }}>Your seedphrase</Typography>
+               
+                <Box sx={{
+                  textAlign: 'center',
+                  width: '100%',
+                  backgroundColor: '#1f2023',
+                  borderRadius: '5px',
+                  padding: '10px',
+                }}>
+                  {generatorRef.current?.parsedString}
                 </Box>
-                </Box>
-              <CustomButton sx={{
+             
+                    <CustomButton sx={{
                 padding: '7px',
                 fontSize: '12px'
               }} onClick={exportSeedphrase}>
                 Export Seedphrase
               </CustomButton>
+                </Box>
+          </DialogContent>
+          <DialogActions>
+           
+            <Button  variant="contained" onClick={()=> setShowSeed(false)}>
+              close
+            </Button>
+            
+          </DialogActions>
+        </Dialog>
+            
+                </Box>
+                <Box sx={{
+                display: creationStep === 2 ? 'flex' :  'none',
+                flexDirection: 'column',
+                alignItems: 'center',
+
+              }}>
               <Spacer height="14px" />
               <CustomLabel htmlFor="standard-adornment-password">
                 Wallet Password
@@ -2530,6 +2624,7 @@ function App() {
               <CustomButton onClick={createAccountFunc}>
                 Create Account
               </CustomButton>
+              </Box>
               <ErrorText>{walletToBeDownloadedError}</ErrorText>
             </>
           )}

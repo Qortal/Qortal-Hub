@@ -109,8 +109,13 @@ export const AppsCategoryDesktop = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
+     
     }, 350);
-
+    setTimeout(() => {
+      virtuosoRef.current.scrollToIndex({
+        index: 0
+      });
+    }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);
@@ -122,7 +127,7 @@ export const AppsCategoryDesktop = ({
   const searchedList = useMemo(() => {
     if (!debouncedValue) return categoryList;
     return categoryList.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase())
+      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue, categoryList]);
 
