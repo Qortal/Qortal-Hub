@@ -118,9 +118,9 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
             data: encryptedMessages,
             involvingAddress: selectedDirect?.address,
           })
-            .then((response) => {
-              if (!response?.error) {
-                processWithNewMessages(response, selectedDirect?.address);
+            .then((decryptResponse) => {
+              if (!decryptResponse?.error) {
+                const response = processWithNewMessages(decryptResponse, selectedDirect?.address);
                 res(response);
           
                 if (isInitiated) {

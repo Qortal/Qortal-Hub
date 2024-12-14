@@ -39,11 +39,10 @@ export const ChatList = ({
   const scrollingIntervalRef = useRef(null);
   const lastSeenUnreadMessageTimestamp = useRef(null);
 
-
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
-    getItemKey: (index) => messages[index].signature,
+    getItemKey: (index) => messages[index]?.tempSignature || messages[index].signature,
     getScrollElement: () => parentRef?.current,
     estimateSize: useCallback(() => 80, []), // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness

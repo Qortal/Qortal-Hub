@@ -193,9 +193,9 @@ const [messageSize, setMessageSize] = useState(0)
                 const filterUIMessages = encryptedMessages.filter((item) => !isExtMsg(item.data));
                 const decodedUIMessages = decodeBase64ForUIChatMessages(filterUIMessages);
           
-                const combineUIAndExtensionMsgs = [...decodedUIMessages, ...response];
-                processWithNewMessages(
-                  combineUIAndExtensionMsgs.map((item) => ({
+                const combineUIAndExtensionMsgsBefore = [...decodedUIMessages, ...response];
+                const combineUIAndExtensionMsgs = processWithNewMessages(
+                  combineUIAndExtensionMsgsBefore.map((item) => ({
                     ...item,
                     ...(item?.decryptedData || {}),
                   })),
