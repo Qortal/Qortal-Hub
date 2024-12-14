@@ -62,6 +62,7 @@ import {
   AuthenticatedContainerInnerLeft,
   AuthenticatedContainerInnerRight,
   CustomButton,
+  CustomButtonAccept,
   CustomInput,
   CustomLabel,
   TextItalic,
@@ -318,7 +319,7 @@ function App() {
     useState<string>("");
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useState<string>("");
+  const [authenticatePassword, setAuthenticatePassword] = useState<string>("1234567890");
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [
@@ -2683,11 +2684,30 @@ function App() {
             </DialogContentText>
           </DialogContent>
           <DialogActions>
-            <Button variant="contained" onClick={onCancel}>
-              Disagree
+           
+            <Button sx={{
+                  backgroundColor: 'var(--green)',
+                  color: 'black',
+                  opacity: 0.7,
+                  '&:hover': {
+                    backgroundColor: 'var(--green)',
+                  color: 'black',
+                  opacity: 1
+                  },
+                }} variant="contained" onClick={onOk} autoFocus>
+              accept
             </Button>
-            <Button variant="contained" onClick={onOk} autoFocus>
-              Agree
+            <Button sx={{
+                  backgroundColor: 'var(--unread)',
+                  color: 'black',
+                  opacity: 0.7,
+                  '&:hover': {
+                    backgroundColor: 'var(--unread)',
+                  color: 'black',
+                  opacity: 1
+                  },
+                }}  variant="contained" onClick={onCancel}>
+              decline
             </Button>
           </DialogActions>
         </Dialog>
@@ -2966,22 +2986,26 @@ function App() {
                 gap: "14px",
               }}
             >
-              <CustomButton
+              <CustomButtonAccept
+              color="black"
+              bgColor="var(--green)"
                 sx={{
                   minWidth: "102px",
                 }}
                 onClick={() => onOkQortalRequestExtension("accepted")}
               >
                 accept
-              </CustomButton>
-              <CustomButton
+              </CustomButtonAccept>
+              <CustomButtonAccept
+               color="black"
+               bgColor="var(--unread)"
                 sx={{
                   minWidth: "102px",
                 }}
                 onClick={() => onCancelQortalRequestExtension()}
               >
                 decline
-              </CustomButton>
+              </CustomButtonAccept>
             </Box>
             <ErrorText>{sendPaymentError}</ErrorText>
           </Box>
