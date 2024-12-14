@@ -263,7 +263,7 @@ export const decryptSingle = async ({ data64, secretKeyObject, skipDecodeBase64 
 	} else {
 	  if (hasTypeNumber) {
 		// const typeNumberStr = new TextDecoder().decode(typeNumberBytes);
-		if(decodeForNumber.slice(10, 13) === '002'){
+		if(decodeForNumber.slice(10, 13) !== '001'){
 			const decodedBinary = base64ToUint8Array(decodedData);
 			const highestKeyBytes = decodedBinary.slice(0, 10); // if ASCII digits only
 			const highestKeyStr = new TextDecoder().decode(highestKeyBytes);
