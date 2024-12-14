@@ -1,10 +1,7 @@
 import {
   Avatar,
   Box,
-  Button,
   ButtonBase,
-  Grid,
-  IconButton,
   List,
   ListItem,
   ListItemAvatar,
@@ -12,36 +9,27 @@ import {
   Typography,
 } from "@mui/material";
 import React, {
-  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import SettingsIcon from "@mui/icons-material/Settings";
 import { ChatGroup } from "../Chat/ChatGroup";
 import { CreateCommonSecret } from "../Chat/CreateCommonSecret";
 import { base64ToUint8Array } from "../../qdn/encryption/group-encryption";
 import { uint8ArrayToObject } from "../../backgroundFunctions/encryption";
-import ChatIcon from "@mui/icons-material/Chat";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import { AddGroup } from "./AddGroup";
-import MarkUnreadChatAltIcon from "@mui/icons-material/MarkUnreadChatAlt";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CreateIcon from "@mui/icons-material/Create";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import AnnouncementsIcon from "@mui/icons-material/Notifications";
-import GroupIcon from "@mui/icons-material/Group";
-import PersonIcon from "@mui/icons-material/Person";
+
 
 import {
   AuthenticatedContainerInnerRight,
   CustomButton,
 } from "../../App-styles";
-import ForumIcon from "@mui/icons-material/Forum";
 import { Spacer } from "../../common/Spacer";
-import PeopleIcon from "@mui/icons-material/People";
 import { ManageMembers } from "./ManageMembers";
 import MarkChatUnreadIcon from "@mui/icons-material/MarkChatUnread";
 import {
@@ -58,38 +46,26 @@ import { CustomizedSnackbars } from "../Snackbar/Snackbar";
 import { LoadingButton } from "@mui/lab";
 import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
 import { GroupAnnouncements } from "../Chat/GroupAnnouncements";
-import HomeIcon from "@mui/icons-material/Home";
-import CloseIcon from "@mui/icons-material/Close";
 
-import { ThingsToDoInitial } from "./ThingsToDoInitial";
-import { GroupJoinRequests } from "./GroupJoinRequests";
+
+
 import { GroupForum } from "../Chat/GroupForum";
-import { GroupInvites } from "./GroupInvites";
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from "../../utils/events";
-import { ListOfThreadPostsWatched } from "./ListOfThreadPostsWatched";
 import { RequestQueueWithPromise } from "../../utils/queue/queue";
 import { WebSocketActive } from "./WebsocketActive";
-import { flushSync } from "react-dom";
 import { useMessageQueue } from "../../MessageQueueContext";
-import { DrawerComponent } from "../Drawer/Drawer";
 import { isExtMsg, isUpdateMsg } from "../../background";
 import { ContextMenu } from "../ContextMenu";
-import { MobileFooter } from "../Mobile/MobileFooter";
-import Header from "../Mobile/MobileHeader";
-import { Home } from "./Home";
-import { GroupMenu } from "./GroupMenu";
-import { getRootHeight } from "../../utils/mobile/mobileUtils";
+
 import { ReturnIcon } from "../../assets/Icons/ReturnIcon";
 import { ExitIcon } from "../../assets/Icons/ExitIcon";
 import { HomeDesktop } from "./HomeDesktop";
-import { DesktopFooter, IconWrapper } from "../Desktop/DesktopFooter";
+import {  IconWrapper } from "../Desktop/DesktopFooter";
 import { DesktopHeader } from "../Desktop/DesktopHeader";
-import { Apps } from "../Apps/Apps";
-import { AppsNavBar } from "../Apps/AppsNavBar";
 import { AppsDesktop } from "../Apps/AppsDesktop";
 import { AppsDevMode } from "../Apps/AppsDevMode";
 import { DesktopSideBar } from "../DesktopSideBar";
@@ -101,36 +77,11 @@ import { useSetRecoilState } from "recoil";
 import { selectedGroupIdAtom } from "../../atoms/global";
 import { sortArrayByTimestampAndGroupName } from "../../utils/time";
 
-// let touchStartY = 0;
-// let disablePullToRefresh = false;
 
-// // Detect when the user touches the screen
-// window.addEventListener('touchstart', function(event) {
-//     if (event.touches.length !== 1) return; // Ignore multi-touch events
 
-//     touchStartY = event.touches[0].clientY;
-//     disablePullToRefresh = window.scrollY === 0; // Only disable if at the top
-// });
 
-// // Detect when the user moves their finger on the screen
-// window.addEventListener('touchmove', function(event) {
-//     let touchY = event.touches[0].clientY;
-
-//     // If pulling down from the top of the page, prevent the default behavior
-//     if (disablePullToRefresh && touchY > touchStartY) {
-//         event.preventDefault();
-//     }
-// });
-
-const isWithinLast15Minutes = (timestamp) => {
-  const now = Date.now(); // Current timestamp in milliseconds
-  const fifteenMinutes = 15 * 60 * 1000; // 15 minutes in milliseconds
-
-  return now - timestamp < fifteenMinutes;
-};
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
-  // const validApi = await findUsableApi();
   const queryString = admins.map((name) => `name=${name}`).join("&");
   const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
     groupId
@@ -163,7 +114,6 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
 interface GroupProps {
   myAddress: string;
   isFocused: boolean;
-  isMain: boolean;
   userInfo: any;
   balance: number;
 }
@@ -331,16 +281,7 @@ export const getGroupAdmins = async (groupNumber: number) => {
   let members: any = [];
   let membersAddresses = [];
   let both = [];
-  // if (groupData && Array.isArray(groupData?.members)) {
-  //   for (const member of groupData.members) {
-  //     if (member.member) {
-  //       const name = await getNameInfo(member.member);
-  //       if (name) {
-  //         members.push(name);
-  //       }
-  //     }
-  //   }
-  // }
+
 
   const getMemNames = groupData?.members?.map(async (member) => {
     if (member?.member) {
@@ -386,17 +327,9 @@ export const getNames = async (listOfMembers) => {
   return members;
 };
 export const getNamesForAdmins = async (admins) => {
-  // const validApi = await findUsableApi();
 
   let members: any = [];
-  // if (admins && Array.isArray(admins)) {
-  //   for (const admin of admins) {
-  //     const name = await getNameInfo(admin);
-  //     if (name) {
-  //       members.push({ address: admin, name });
-  //     }
-  //   }
-  // }
+
   const getMemNames = admins?.map(async (admin) => {
     if (admin) {
       const name = await requestQueueAdminMemberNames.enqueue(() => {
@@ -417,12 +350,9 @@ export const getNamesForAdmins = async (admins) => {
 export const Group = ({
   myAddress,
   isFocused,
-  isMain,
   userInfo,
   balance,
-  isOpenDrawerProfile,
   setIsOpenDrawerProfile,
-  logoutFunc,
   setDesktopViewMode,
   desktopViewMode
 }: GroupProps) => {
@@ -450,7 +380,7 @@ export const Group = ({
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
-  const { setMemberGroups, memberGroups, rootHeight } = useContext(MyContext);
+  const { setMemberGroups,  rootHeight } = useContext(MyContext);
   const lastGroupNotification = useRef<null | number>(null);
   const [timestampEnterData, setTimestampEnterData] = useState({});
   const [chatMode, setChatMode] = useState("groups");
@@ -570,28 +500,7 @@ export const Group = ({
       });
     } catch (error) {}
   };
-  const getGroupDataSingle = async (groupId) => {
-    try {
-      return new Promise((res, rej) => {
-        window.sendMessage("getGroupDataSingle", {
-          groupId,
-        })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              return;
-            }
-            rej(response.error);
-          })
-          .catch((error) => {
-            rej(error.message || "An error occurred");
-          });
-        
-      });
-    } catch (error) {
-      return {};
-    }
-  };
+
   const refreshHomeDataFunc = () => {
     setGroupSection("default");
     setTimeout(() => {
@@ -633,43 +542,8 @@ export const Group = ({
     } catch (error) {}
   };
 
-  const checkGroupList = React.useCallback(async (address) => {
-    try {
-      const url = `${getBaseApiReact()}/chat/active/${address}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-      if (!Array.isArray(responseData?.groups)) return;
-      const filterOutGeneral = responseData.groups?.filter(
-        (item) => item?.groupId !== 0
-      );
-      const sortedGroups = filterOutGeneral.sort((a, b) => {
-        // If a has no timestamp, move it down
-        if (!a.timestamp) return 1;
-        // If b has no timestamp, move it up
-        if (!b.timestamp) return -1;
-        // Otherwise, sort by timestamp in descending order (most recent first)
-        return b.timestamp - a.timestamp;
-      });
-      setGroups(sortedGroups);
-      setMemberGroups(sortedGroups);
-    } catch (error) {
-    } finally {
-    }
-  }, []);
-  // const checkGroupListFunc = useCallback((myAddress) => {
-  //   let isCalling = false;
-  //   checkGroupInterval.current = setInterval(async () => {
-  //     if (isCalling) return;
-  //     isCalling = true;
-  //     const res = await checkGroupList(myAddress);
-  //     isCalling = false;
-  //   }, 120000);
-  // }, []);
+
+
 
   const directChatHasUnread = useMemo(() => {
     let hasUnread = false;
@@ -721,15 +595,7 @@ export const Group = ({
     return hasUnread;
   }, [groupAnnouncements, groups]);
 
-  // useEffect(() => {
-  //   if (!myAddress) return;
-  //   checkGroupListFunc(myAddress);
-  //   return () => {
-  //     if (checkGroupInterval?.current) {
-  //       clearInterval(checkGroupInterval.current);
-  //     }
-  //   };
-  // }, [checkGroupListFunc, myAddress]);
+
 
   
   const getSecretKey = async (
@@ -738,22 +604,10 @@ export const Group = ({
   ) => {
     try {
       setIsLoadingGroupMessage("Locating encryption keys");
-      // setGroupDataLastSet(null)
       pauseAllQueues();
       let dataFromStorage;
       let publishFromStorage;
       let adminsFromStorage;
-      // const groupData = await getGroupDataSingle(selectedGroup?.groupId);
-      // if (
-      //   groupData?.secretKeyData &&
-      //   Date.now() - groupData?.timestampLastSet < 3600000
-      // ) {
-      //   dataFromStorage = groupData.secretKeyData;
-      //   publishFromStorage = groupData.secretKeyResource;
-      //   adminsFromStorage = groupData.admins;
-      //   // setGroupDataLastSet(groupData.timestampLastSet)
-      // }
-
       if (
         secretKeyToPublish &&
         secretKey &&
@@ -844,9 +698,6 @@ export const Group = ({
     } finally {
       setIsLoadingGroup(false);
       setIsLoadingGroupMessage("");
-      if (!secretKeyToPublish) {
-        // await getAdmins(selectedGroup?.groupId);
-      }
       resumeAllQueues();
     }
   };
@@ -864,14 +715,7 @@ export const Group = ({
 
  
 
-  const getAdmins = async (groupId) => {
-    try {
-      const res = await getGroupAdminsAddress(groupId);
-      setAdmins(res);
-      const adminsWithNames = await getNamesForAdmins(res);
-      setAdminsWithNames(adminsWithNames);
-    } catch (error) {}
-  };
+
 
   const getCountNewMesg = async (groupId, after)=> {
     try {
@@ -1133,9 +977,7 @@ export const Group = ({
       } else {
         setMobileViewModeKeepOpen("messaging");
       }
-      // setChatMode("directs");
       setSelectedDirect(null);
-      // setSelectedGroup(null);
 
       setNewChat(false);
 
@@ -1171,7 +1013,6 @@ export const Group = ({
         setMobileViewModeKeepOpen("messaging");
       }
       setSelectedDirect(null);
-      // setSelectedGroup(null);
 
       setNewChat(false);
 
@@ -1485,11 +1326,7 @@ export const Group = ({
     if (findGroup?.groupId === selectedGroup?.groupId) {
       setGroupSection("forum");
       setDefaultThread(data);
-      // setTimeout(() => {
-      //   executeEvent("setThreadByEvent", {
-      //     data: data
-      //   });
-      // }, 400);
+
       return;
     }
     if (findGroup) {
@@ -1541,31 +1378,13 @@ export const Group = ({
     }
     setDesktopViewMode('home')
 
-    // setGroupSection("default");
-    // clearAllQueues();
+
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
       }, 200);
     });
-    // setGroupSection("home");
-    // setSelectedGroup(null);
-    // setNewChat(false);
-    // setSelectedDirect(null);
-    // setSecretKey(null);
-    // setGroupOwner(null)
-    // lastFetchedSecretKey.current = null;
-    // initiatedGetMembers.current = false;
-    // setSecretKeyPublishDate(null);
-    // setAdmins([]);
-    // setSecretKeyDetails(null);
-    // setAdminsWithNames([]);
-    // setMembers([]);
-    // setMemberCountFromSecretKeyData(null);
-    // setTriedToFetchSecretKey(false);
-    // setFirstSecretKeyInCreation(false);
-    // setIsOpenSideViewDirects(false)
-    // setIsOpenSideViewGroups(false)
+
   };
 
   const goToAnnouncements = async () => {
@@ -1701,54 +1520,6 @@ export const Group = ({
             </Box>
         )}
        
-        {isMobile && (
-           <Box
-           sx={{
-             display: "flex",
-             alignItems: "center",
-             width: "100%",
-             marginTop: "14px",
-             justifyContent: "center",
-             height: "15px",
-           }}
-         >
-           <Box
-             sx={{
-               display: "flex",
-               alignItems: "center",
-               justifyContent: "space-between",
-               width: "320px",
-             }}
-           >
-             <Box
-               sx={{
-                 display: "flex",
-                 alignItems: "center",
-                 width: "50px",
-               }}
-             >
-              
-             </Box>
-             
-             <Box
-               sx={{
-                 display: "flex",
-                 alignItems: "center",
-                 width: "50px",
-                 justifyContent: "flex-end",
-               }}
-             >
-                 <ButtonBase
-                 onClick={() => {
-                  setMobileViewModeKeepOpen('')
-                 }}
-               >
-               <ExitIcon />
-               </ButtonBase>
-             </Box>
-           </Box>
-         </Box>
-        )}
         <div
           style={{
             display: "flex",
@@ -1757,9 +1528,6 @@ export const Group = ({
             alignItems: "flex-start",
             flexGrow: 1,
             overflowY: "auto",
-            // visibility: chatMode === "groups" && "hidden",
-            // position: chatMode === "groups" && "fixed",
-            // left: chatMode === "groups" && "-1000px",
           }}
         >
           {directs.map((direct: any) => (
@@ -1771,15 +1539,9 @@ export const Group = ({
               dense={true}
             >
               <ListItem
-                //   secondaryAction={
-                //     <IconButton edge="end" aria-label="delete">
-                //       <SettingsIcon />
-                //     </IconButton>
-                //   }
                 onClick={() => {
                   setSelectedDirect(null);
                   setNewChat(false);
-                  // setSelectedGroup(null);
                   setIsOpenDrawer(false);
                   window.sendMessage("addTimestampEnterChat", {
                     timestamp: Date.now(),
@@ -1820,7 +1582,6 @@ export const Group = ({
                         color: "white",
                       }}
                       alt={direct?.name || direct?.address}
-                      //  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${groupOwner?.name}/qortal_group_avatar_${group.groupId}?async=true`}
                     >
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>
@@ -1881,7 +1642,6 @@ export const Group = ({
             onClick={() => {
               setNewChat(true);
               setSelectedDirect(null);
-              // setSelectedGroup(null);
               setIsOpenDrawer(false);
             }}
           >
@@ -1993,11 +1753,6 @@ export const Group = ({
               dense={true}
             >
               <ListItem
-                //   secondaryAction={
-                //     <IconButton edge="end" aria-label="delete">
-                //       <SettingsIcon />
-                //     </IconButton>
-                //   }
                 onClick={() => {
                   setMobileViewMode("group");
                   setDesktopSideView('groups')
@@ -2018,28 +1773,12 @@ export const Group = ({
                   setMemberCountFromSecretKeyData(null);
                   setHideCommonKeyPopup(false);
                   setFirstSecretKeyInCreation(false);
-                  // setGroupSection("announcement");
                   setGroupSection("chat");
                   setIsOpenDrawer(false);
                   setTimeout(() => {
                     setSelectedGroup(group);
 
-                    // getTimestampEnterChat();
                   }, 200);
-
-                  // window.sendMessage("addTimestampEnterChat", {
-                  //   timestamp: Date.now(),
-                  //   groupId: group.groupId,
-                  // }).catch((error) => {
-                  //     console.error("Failed to add timestamp:", error.message || "An error occurred");
-                  //   });
-                  
-
-                  // setTimeout(() => {
-                  //   getTimestampEnterChat();
-                  // }, 200);
-
-                  
                 }}
                 sx={{
                   display: "flex",
@@ -2072,7 +1811,6 @@ export const Group = ({
                           color: "white",
                         }}
                         alt={group?.groupName}
-                        //  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${groupOwner?.name}/qortal_group_avatar_${group.groupId}?async=true`}
                       >
                         {group.groupName?.charAt(0)}
                       </Avatar>
@@ -2158,7 +1896,6 @@ export const Group = ({
               onClick={() => {
                 setNewChat(true);
                 setSelectedDirect(null);
-                // setSelectedGroup(null);
                 setIsOpenDrawer(false);
               }}
             >
@@ -2188,26 +1925,7 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
       
-      {isMobile && (
-         <Header
-         setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-         isThin={
-           mobileViewMode === "groups" ||
-           mobileViewMode === "group" ||
-           mobileViewModeKeepOpen === "messaging" || (mobileViewMode === "apps" && appsMode !== 'home')
-         }
-         logoutFunc={logoutFunc}
-         goToHome={goToHome}
-         setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-         hasUnreadGroups={groupChatHasUnread ||
-           groupsAnnHasUnread}
-         hasUnreadDirects={directChatHasUnread}
-         setMobileViewMode={setMobileViewMode}
-         myName={userInfo?.name}
-         setSelectedDirect={setSelectedDirect}
-         setNewChat={setNewChat}
-       />
-      )}
+
      
 
       <div
@@ -2241,9 +1959,7 @@ export const Group = ({
             setOpen={setOpenAddGroup}
           />
 
-          {mobileViewMode === "groups" && !mobileViewModeKeepOpen && renderGroups()}
 
-          {mobileViewModeKeepOpen === "messaging" && renderDirects()}
           {newChat && (
             <>
                 {isMobile && (
@@ -2358,7 +2074,7 @@ export const Group = ({
             </Typography>
           </Box>
           )}
-          {mobileViewMode !== 'groups' && (
+
             <div style={{
               width: '100%',
               display: selectedGroup? 'block' : 'none',
@@ -2404,75 +2120,9 @@ export const Group = ({
         />
    
   )}
-            {isMobile && (
-               <Box
-               sx={{
-                 display: "flex",
-                 alignItems: "center",
-                 width: "100%",
-                 marginTop: "14px",
-                 justifyContent: "center",
-                 height: "15px",
-               }}
-             >
-               <Box
-                 sx={{
-                   display: "flex",
-                   alignItems: "center",
-                   justifyContent: "space-between",
-                   width: "320px",
-                 }}
-               >
-                 <Box
-                   sx={{
-                     display: "flex",
-                     alignItems: "center",
-                     width: "50px",
-                   }}
-                 >
-                   <ButtonBase
-                     onClick={() => {
-                       setMobileViewMode("groups");
-                     }}
-                   >
-                     <ReturnIcon />
-                   </ButtonBase>
-                 </Box>
-                 <Typography
-                   sx={{
-                     fontSize: "14px",
-                     fontWeight: 600,
-                   }}
-                 >
-                   {selectedGroup?.groupName}
-                 </Typography>
-                 <Box
-                   sx={{
-                     display: "flex",
-                     alignItems: "center",
-                     width: "50px",
-                     justifyContent: "flex-end",
-                   }}
-                 >
-                   {/* <ExitIcon /> */}
-                 </Box>
-               </Box>
-             </Box>
-            )}
+         
              
-              {isMobile && mobileViewMode === "group" && (
-                <>
-                  <GroupMenu
-                    setGroupSection={setGroupSection}
-                    groupSection={groupSection}
-                    setOpenManageMembers={setOpenManageMembers}
-                    goToAnnouncements={goToAnnouncements}
-                    goToChat={goToChat}
-                    hasUnreadAnnouncements={isUnread}
-                    hasUnreadChat={isUnreadChat}
-                  />
-                </>
-              )}
+            
               <Box
                 sx={{
                   position: "relative",
@@ -2656,7 +2306,7 @@ export const Group = ({
                 />
               )}
             </div>
-          )}
+       
 
           {selectedDirect && !newChat && (
             <>
@@ -2701,62 +2351,7 @@ export const Group = ({
               </Box>
             </>
           )}
-           {/* {!isMobile && groupSection === "home" && (
-        <DesktopFooter 
-        selectedGroup={selectedGroup}
-        groupSection={groupSection}
-        isUnread={isUnread}
-        goToAnnouncements={goToAnnouncements}
-        isUnreadChat={isUnreadChat}
-        goToChat={goToChat}
-        goToThreads={goToThreads}
-        setOpenManageMembers={setOpenManageMembers}
-        groupChatHasUnread={groupChatHasUnread}
-        groupsAnnHasUnread={groupsAnnHasUnread}
-        directChatHasUnread={directChatHasUnread}
-        chatMode={chatMode}
-        openDrawerGroups={openDrawerGroups}
-        goToHome={goToHome}
-        setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-        mobileViewMode={mobileViewMode}
-        setMobileViewMode={setMobileViewMode}
-        setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-        hasUnreadGroups={groupChatHasUnread ||
-          groupsAnnHasUnread}
-        hasUnreadDirects={directChatHasUnread}
-        myName={userInfo?.name || null}
-        isHome={groupSection === "home" && desktopViewMode === 'home'}
-        isGroups={desktopSideView === 'groups' && desktopViewMode !== 'apps' && desktopViewMode !== 'apps'}
-        isDirects={desktopSideView === 'directs' && desktopViewMode !== 'apps' && desktopViewMode !== 'apps'}
-        setDesktopViewMode={setDesktopViewMode}
-        isApps={desktopViewMode === 'apps'}
-        setDesktopSideView={setDesktopSideView}
-        desktopViewMode={desktopViewMode}
-        hide={desktopViewMode === 'apps' || desktopViewMode === 'dev'}
-        setIsOpenSideViewDirects={setIsOpenSideViewDirects}
-        setIsOpenSideViewGroups={setIsOpenSideViewGroups}
-        />
-      )} */}
-          {isMobile && mobileViewMode === "home" && (
-            <Home
-              refreshHomeDataFunc={refreshHomeDataFunc}
-              myAddress={myAddress}
-              isLoadingGroups={isLoadingGroups}
-              balance={balance}
-              userInfo={userInfo}
-              groups={groups}
-              setGroupSection={setGroupSection}
-              setSelectedGroup={setSelectedGroup}
-              getTimestampEnterChat={getTimestampEnterChat}
-              setOpenManageMembers={setOpenManageMembers}
-              setOpenAddGroup={setOpenAddGroup}
-              setMobileViewMode={setMobileViewMode}
-              setDesktopViewMode={setDesktopViewMode}
-            />
-          )}
-          {isMobile  && (
-            <Apps mode={appsMode} setMode={setAppsMode} show={mobileViewMode === "apps"} myName={userInfo?.name} />
-          )}
+ 
             {!isMobile  && (
             <AppsDesktop toggleSideViewGroups={toggleSideViewGroups} toggleSideViewDirects={toggleSideViewDirects} goToHome={goToHome} mode={appsMode} setMode={setAppsMode} setDesktopSideView={setDesktopSideView} hasUnreadDirects={directChatHasUnread} show={desktopViewMode === "apps"} myName={userInfo?.name}  isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}    hasUnreadGroups={groupChatHasUnread ||
@@ -2794,7 +2389,6 @@ export const Group = ({
           sx={{
             marginLeft: "auto",
             width: "31px",
-            // minWidth: "135px",
             padding: "5px",
             display: (isMobile || desktopViewMode === 'apps' || desktopViewMode === 'dev' || desktopViewMode === 'chat') ? "none" : "flex",
           }}
@@ -2816,54 +2410,6 @@ export const Group = ({
           }}
         />
       </div>
-     
-      {(isMobile && mobileViewMode === "home" || (isMobile && mobileViewMode === "apps" && appsMode === 'home')) &&  !mobileViewModeKeepOpen && (
-        <>
-          <div
-            style={{
-              height: "66px",
-              width: "100%",
-              backgroundColor: "var(--bg-primary)",
-              borderTopRightRadius: "25px",
-              borderTopLeftRadius: "25px",
-            }}
-          />
-          {/* <DrawerComponent open={isOpenDrawer} setOpen={setIsOpenDrawer}>
-        {renderGroups()}
-      </DrawerComponent> */}
-          {isMobile && (
-            <MobileFooter
-              selectedGroup={selectedGroup}
-              groupSection={groupSection}
-              isUnread={isUnread}
-              goToAnnouncements={goToAnnouncements}
-              isUnreadChat={isUnreadChat}
-              goToChat={goToChat}
-              goToThreads={goToThreads}
-              setOpenManageMembers={setOpenManageMembers}
-              groupChatHasUnread={groupChatHasUnread}
-              groupsAnnHasUnread={groupsAnnHasUnread}
-              directChatHasUnread={directChatHasUnread}
-              chatMode={chatMode}
-              openDrawerGroups={openDrawerGroups}
-              goToHome={goToHome}
-              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-              mobileViewMode={mobileViewMode}
-              setMobileViewMode={setMobileViewMode}
-              setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-              hasUnreadGroups={groupChatHasUnread ||
-                groupsAnnHasUnread}
-              hasUnreadDirects={directChatHasUnread}
-              myName={userInfo?.name || null}
-            />
-          )}
-        </>
-      )}
-       {(isMobile &&  mobileViewMode === "apps" && appsMode !== 'home') &&  !mobileViewModeKeepOpen && (
-        <>
-          <AppsNavBar />
-        </>
-      )}
     </>
   );
 };
