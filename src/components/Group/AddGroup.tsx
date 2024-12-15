@@ -217,6 +217,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             flexGrow: 1,
             overflowY: "auto",
             color: "white",
+            flexDirection: 'column',
+            flexGrow: 1,
+            display: 'flex'
           }}
         >
           <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
@@ -454,7 +457,10 @@ export const AddGroup = ({ address, open, setOpen }) => {
           {value === 1 && (
             <Box sx={{
               width: '100%',
-              padding: '25px'
+              padding: '25px',
+              flexDirection: 'column',
+              flexGrow: 1,
+              display: 'flex'
             }}>
                         <AddGroupList  setOpenSnack={setOpenSnack} setInfoSnack={setInfoSnack} />
 
@@ -465,7 +471,10 @@ export const AddGroup = ({ address, open, setOpen }) => {
     {value === 2 && (
             <Box sx={{
               width: '100%',
-              padding: '25px'
+              padding: '25px',
+              flexDirection: 'column',
+              flexGrow: 1,
+              display: 'flex'
             }}>
             <UserListOfInvites myAddress={address} setOpenSnack={setOpenSnack} setInfoSnack={setInfoSnack} />
          </Box>
