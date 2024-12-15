@@ -6,7 +6,7 @@ import { objectToBase64 } from "../../qdn/encryption/group-encryption";
 import ShortUniqueId from "short-unique-id";
 import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
 import { getBaseApi, getFee } from "../../background";
-import { decryptPublishes, getTempPublish, saveTempPublish } from "./GroupAnnouncements";
+import { decryptPublishes, getTempPublish, handleUnencryptedPublishes, saveTempPublish } from "./GroupAnnouncements";
 import { AnnouncementList } from "./AnnouncementList";
 import { Spacer } from "../../common/Spacer";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -22,7 +22,8 @@ export const AnnouncementDiscussion = ({
   secretKey,
   setSelectedAnnouncement,
   show,
-  myName
+  myName,
+  isPrivate
 }) => {
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,7 +50,7 @@ export const AnnouncementDiscussion = ({
     }
   };
 
-  const getData = async ({ identifier, name }) => {
+  const getData = async ({ identifier, name }, isPrivate) => {
     try {
      
       const res = await fetch(
@@ -57,7 +58,7 @@ export const AnnouncementDiscussion = ({
       );
       if(!res?.ok) return
       const data = await res.text();
-      const response = await decryptPublishes([{ data }], secretKey);
+      const response = isPrivate === false ? handleUnencryptedPublishes([data]) :  await decryptPublishes([{ data }], secretKey);
     
       const messageData = response[0];
       setData((prev) => {
@@ -132,10 +133,10 @@ export const AnnouncementDiscussion = ({
           extra: {},
           message: htmlContent,
         };
-        const secretKeyObject = await getSecretKey(false, true);
-        const message64: any = await objectToBase64(message);
+        const secretKeyObject = isPrivate === false ? null : await getSecretKey(false, true);
+        const message64: any =  await objectToBase64(message);
      
-        const encryptSingle = await encryptChatMessage(
+        const encryptSingle = isPrivate === false ? message64 : await encryptChatMessage(
           message64,
           secretKeyObject
         );
@@ -169,7 +170,7 @@ export const AnnouncementDiscussion = ({
   };
 
   const getComments = React.useCallback(
-    async (selectedAnnouncement) => {
+    async (selectedAnnouncement, isPrivate) => {
       try {
         
         setIsLoading(true);
@@ -190,7 +191,7 @@ export const AnnouncementDiscussion = ({
         setComments(responseData);
         setIsLoading(false);
         for (const data of responseData) {
-          getData({ name: data.name, identifier: data.identifier });
+          getData({ name: data.name, identifier: data.identifier }, isPrivate);
         }
       } catch (error) {
       } finally {
@@ -220,7 +221,7 @@ export const AnnouncementDiscussion = ({
         setComments((prev)=> [...prev, ...responseData]);
         setIsLoading(false);
         for (const data of responseData) {
-          getData({ name: data.name, identifier: data.identifier });
+          getData({ name: data.name, identifier: data.identifier }, isPrivate);
         }
     } catch (error) {
       
@@ -245,11 +246,12 @@ export const AnnouncementDiscussion = ({
   }, [tempPublishedList, comments]);
 
   React.useEffect(() => {
-    if (selectedAnnouncement && secretKey && !firstMountRef.current) {
-      getComments(selectedAnnouncement);
+    if(!secretKey && isPrivate) return
+    if (selectedAnnouncement && !firstMountRef.current && isPrivate !== null) {
+      getComments(selectedAnnouncement, isPrivate);
       firstMountRef.current = true
     }
-  }, [selectedAnnouncement, secretKey]);
+  }, [selectedAnnouncement, secretKey, isPrivate]);
   return (
     <div
       style={{
