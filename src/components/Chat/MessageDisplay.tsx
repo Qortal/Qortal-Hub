@@ -106,7 +106,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     }
   };
 
-  const embedLink = htmlContent.match(/qortal:\/\/use-embed\/[^\s<>]+/);
+  const embedLink = htmlContent?.match(/qortal:\/\/use-embed\/[^\s<>]+/);
 
   let embedData = null;
 

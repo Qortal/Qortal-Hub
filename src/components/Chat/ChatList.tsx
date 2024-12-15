@@ -28,13 +28,13 @@ export const ChatList = ({
   selectedGroup,
   enableMentions,
   openQManager,
-  hasSecretKey
+  hasSecretKey,
+  isPrivate
 }) => {
   const parentRef = useRef();
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
-
   const hasLoadedInitialRef = useRef(false);
   const scrollingIntervalRef = useRef(null);
   const lastSeenUnreadMessageTimestamp = useRef(null);
@@ -272,7 +272,10 @@ export const ChatList = ({
                         message.text = chatReferences[message.signature]?.edit?.message;
                         message.isEdit = true
                       }
-
+                      if (chatReferences[message.signature]?.edit?.messageText && message?.messageText) {
+                        message.messageText = chatReferences[message.signature]?.edit?.messageText;
+                        message.isEdit = true
+                      }
                     
                     }
               
@@ -315,7 +318,6 @@ export const ChatList = ({
                     );
                   }
 
-
                 return (
                   <div
                     data-index={virtualRow.index} //needed for dynamic row height measurement
@@ -357,6 +359,7 @@ export const ChatList = ({
                       handleReaction={handleReaction}
                       reactions={reactions}
                       isUpdating={isUpdating}
+                      isPrivate={isPrivate}
                     />
                      </ErrorBoundary>
                   </div>
@@ -408,7 +411,7 @@ export const ChatList = ({
           </button>
         )}
       </div>
-      {enableMentions && hasSecretKey && (
+      {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
         openQManager={openQManager}
           messages={messages}
@@ -416,6 +419,7 @@ export const ChatList = ({
           members={members}
           myName={myName}
           selectedGroup={selectedGroup}
+          isPrivate={isPrivate}
         />
       )}
     </Box>

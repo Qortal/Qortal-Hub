@@ -125,7 +125,7 @@
   font-size: 12px !important;
 }
 
-.tiptap .mention {
+.tiptap [data-type="mention"] {
   box-decoration-break: clone;
   color: lightblue;
   padding: 0.1rem 0.3rem;

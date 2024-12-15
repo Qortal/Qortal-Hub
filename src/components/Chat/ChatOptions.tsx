@@ -13,6 +13,10 @@ import { Spacer } from "../../common/Spacer";
 import AlternateEmailIcon from "@mui/icons-material/AlternateEmail";
 import CloseIcon from "@mui/icons-material/Close";
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
+import Highlight from "@tiptap/extension-highlight";
+import Mention from "@tiptap/extension-mention";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
 import {
   AppsSearchContainer,
   AppsSearchLeft,
@@ -32,6 +36,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatTimestamp } from "../../utils/time";
 import { ContextMenuMentions } from "../ContextMenuMentions";
 import { convert } from 'html-to-text';
+import { generateHTML } from "@tiptap/react";
+import ErrorBoundary from "../../common/ErrorBoundary";
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
@@ -43,7 +49,7 @@ const cache = new CellMeasurerCache({
   defaultHeight: 50,
 });
 
-export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGroup, openQManager }) => {
+export const ChatOptions = ({ messages : untransformedMessages, goToMessage, members, myName, selectedGroup, openQManager, isPrivate }) => {
   const [mode, setMode] = useState("default");
   const [searchValue, setSearchValue] = useState("");
   const [selectedMember, setSelectedMember] = useState(0);
@@ -52,7 +58,27 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
   const parentRefMentions = useRef();
   const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null)
   const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
-
+  const messages = useMemo(()=> {
+    return untransformedMessages?.map((item)=> {
+      if(item?.messageText){
+        let transformedMessage = item?.messageText
+        try {
+            transformedMessage = generateHTML(item?.messageText, [
+              StarterKit,
+              Underline,
+              Highlight,
+              Mention
+            ])
+            return {
+              ...item,
+              messageText: transformedMessage
+            }
+        } catch (error) {
+          // error
+        }
+      } else return item
+    })
+  }, [untransformedMessages])
   const getTimestampMention = async () => {
     try {
       return new Promise((res, rej) => {
@@ -124,7 +150,7 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
         .filter(
           (message) =>
             message?.senderName === selectedMember &&
-            extractTextFromHTML(message?.decryptedData?.message)?.includes(
+            extractTextFromHTML(isPrivate ? message?.messageText : message?.decryptedData?.message)?.includes(
               debouncedValue.toLowerCase()
             )
         )
@@ -132,20 +158,27 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
     }
     return messages
       .filter((message) =>
-      extractTextFromHTML(message?.decryptedData?.message)?.includes(debouncedValue.toLowerCase())
+      extractTextFromHTML(isPrivate === false ? message?.messageText : message?.decryptedData?.message)?.includes(debouncedValue.toLowerCase())
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
-  }, [debouncedValue, messages, selectedMember]);
+  }, [debouncedValue, messages, selectedMember, isPrivate]);
 
   const mentionList = useMemo(() => {
     if(!messages || messages.length === 0 || !myName) return []
-
+    if(isPrivate === false){
+      return messages
+      .filter((message) =>
+      extractTextFromHTML(message?.messageText)?.includes(`@${myName}`)
+      )
+      ?.sort((a, b) => b?.timestamp - a?.timestamp);
+      
+    }
     return messages
       .filter((message) =>
       extractTextFromHTML(message?.decryptedData?.message)?.includes(`@${myName}`)
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
-  }, [messages, myName]);
+  }, [messages, myName, isPrivate]);
 
   const rowVirtualizer = useVirtualizer({
     count: searchedList.length,
@@ -291,7 +324,8 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                             gap: "5px",
                           }}
                         >
-                          <Box
+                          <ShowMessage messages={messages} goToMessage={goToMessage} message={message} />
+                          {/* <Box
                             sx={{
                               display: "flex",
                               flexDirection: "column",
@@ -363,7 +397,7 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                                 }
                               />
                             </Box>
-                          </Box>
+                          </Box> */}
                         </div>
                       );
                     })}
@@ -544,6 +578,7 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                       const index = virtualRow.index;
                       let message = searchedList[index];
                       return (
+                    
                         <div
                           data-index={virtualRow.index} //needed for dynamic row height measurement
                           ref={rowVirtualizer.measureElement} //measure dynamic row height
@@ -562,80 +597,17 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                             gap: "5px",
                           }}
                         >
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              width: "100%",
-                              padding: "0px 20px",
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                width: "100%",
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "15px",
-                                }}
-                              >
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: "#27282c",
-                                    color: "white",
-                                    height: "25px",
-                                    width: "25px",
-                                  }}
-                                  alt={message?.senderName}
-                                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                                    message?.senderName
-                                  }/qortal_avatar?async=true`}
-                                >
-                                  {message?.senderName?.charAt(0)}
-                                </Avatar>
-                                <Typography
-                                  sx={{
-                                    fontWight: 600,
-                                    fontFamily: "Inter",
-                                    color: "cadetBlue",
-                                  }}
-                                >
-                                  {message?.senderName}
-                                </Typography>
-                              </Box>
-                            </Box>
-                            <Spacer height="5px" />
-                            <Typography sx={{
-                                fontSize: '12px'
-                            }}>{formatTimestamp(message.timestamp)}</Typography>
-                            <Box
-                              style={{
-                                cursor: "pointer",
-                              }}
-                              onClick={() => {
-                                const findMsgIndex = messages.findIndex(
-                                  (item) =>
-                                    item?.signature === message?.signature
-                                );
-                                if (findMsgIndex !== -1) {
-                                  goToMessage(findMsgIndex);
-                                }
-                              }}
-                            >
-                              <MessageDisplay
-                                htmlContent={
-                                  message?.decryptedData?.message || "<p></p>"
-                                }
-                              />
-                            </Box>
-                          </Box>
+                              <ErrorBoundary
+                        fallback={
+                          <Typography>
+                            Error loading content: Invalid Data
+                          </Typography>
+                        }
+                      >
+                          <ShowMessage message={message} goToMessage={goToMessage} messages={messages} />
+                          </ErrorBoundary>
                         </div>
+                    
                       );
                     })}
                   </div>
@@ -705,3 +677,91 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
     </Box>
   );
 };
+
+
+const ShowMessage = ({message, goToMessage, messages})=> {
+
+  return (
+<Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              width: "100%",
+                              padding: "0px 20px",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                width: "100%",
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "15px",
+                                }}
+                              >
+                                <Avatar
+                                  sx={{
+                                    backgroundColor: "#27282c",
+                                    color: "white",
+                                    height: "25px",
+                                    width: "25px",
+                                  }}
+                                  alt={message?.senderName}
+                                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                                    message?.senderName
+                                  }/qortal_avatar?async=true`}
+                                >
+                                  {message?.senderName?.charAt(0)}
+                                </Avatar>
+                                <Typography
+                                  sx={{
+                                    fontWight: 600,
+                                    fontFamily: "Inter",
+                                    color: "cadetBlue",
+                                  }}
+                                >
+                                  {message?.senderName}
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <Spacer height="5px" />
+                            <Typography sx={{
+                                fontSize: '12px'
+                            }}>{formatTimestamp(message.timestamp)}</Typography>
+                            <Box
+                              style={{
+                                cursor: "pointer",
+                              }}
+                              onClick={() => {
+                                const findMsgIndex = messages.findIndex(
+                                  (item) =>
+                                    item?.signature === message?.signature
+                                );
+                                if (findMsgIndex !== -1) {
+                                  goToMessage(findMsgIndex);
+                                }
+                              }}
+                            >
+                              {message?.messageText && (
+                                  <MessageDisplay
+                                htmlContent={message?.messageText}
+                                  />
+                                )}
+                          {message?.decryptedData?.message && (
+                             <MessageDisplay
+                             htmlContent={
+                               message?.decryptedData?.message || "<p></p>"
+                             }
+                           />
+                          )}
+                             
+                            </Box>
+                          </Box>
+  )
+}

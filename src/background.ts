@@ -664,8 +664,7 @@ const handleNotification = async (groups) => {
   const data = groups.filter(
     (group) =>
       group?.sender !== address &&
-      !mutedGroups.includes(group.groupId) &&
-      !isUpdateMsg(group?.data)
+      !mutedGroups.includes(group.groupId)
   );
   const dataWithUpdates = groups.filter(
     (group) => group?.sender !== address && !mutedGroups.includes(group.groupId)
@@ -716,8 +715,7 @@ const handleNotification = async (groups) => {
         Date.now() - lastGroupNotification >= 120000
       ) {
         if (
-          !newestLatestTimestamp?.data ||
-          !isExtMsg(newestLatestTimestamp?.data)
+          !newestLatestTimestamp?.data
         )
           return;
 

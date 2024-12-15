@@ -217,12 +217,12 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 		try {
 			const decoded = atob(msg?.data);
 			const parseDecoded =JSON.parse(decodeURIComponent(escape(decoded)))
-			if(parseDecoded?.messageText){
+		
 				msgs.push({
 					...msg,
 					...parseDecoded
 				})
-			}
+		
 		} catch (error) {
 			
 		}

@@ -19,6 +19,8 @@ import { ChatIcon } from "../../assets/Icons/ChatIcon";
 import { ThreadsIcon } from "../../assets/Icons/ThreadsIcon";
 import { MembersIcon } from "../../assets/Icons/MembersIcon";
 import { AdminsIcon } from "../../assets/Icons/AdminsIcon";
+import LockIcon from '@mui/icons-material/Lock';
+import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 
 const IconWrapper = ({ children, label, color, selected, selectColor, customHeight }) => {
   return (
@@ -80,7 +82,8 @@ export const DesktopHeader = ({
   hasUnreadChat,
   isChat,
   isForum,
-  setGroupSection
+  setGroupSection,
+  isPrivate
 }) => {
   const [value, setValue] = React.useState(0);
   return (
@@ -95,7 +98,20 @@ export const DesktopHeader = ({
         padding: "10px",
       }}
     >
-      <Box>
+      <Box sx={{
+        display: 'flex',
+        gap: '10px'
+      }}>
+        {isPrivate && (
+          <LockIcon sx={{
+            color: 'var(--green)'
+          }} />
+        )}
+        {isPrivate === false && (
+          <NoEncryptionGmailerrorredIcon sx={{
+            color: 'var(--unread)'
+          }} />
+        )}
         <Typography
           sx={{
             fontSize: "16px",

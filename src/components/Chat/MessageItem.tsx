@@ -8,6 +8,7 @@ import { getBaseApi } from "../../background";
 import { getBaseApiReact } from "../../App";
 import { generateHTML } from "@tiptap/react";
 import Highlight from "@tiptap/extension-highlight";
+import Mention from "@tiptap/extension-mention";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import { executeEvent } from "../../utils/events";
@@ -33,12 +34,14 @@ export const MessageItem = ({
   reactions,
   isUpdating,
   lastSignature,
-  onEdit
+  onEdit,
+  isPrivate
 }) => {
   const { ref, inView } = useInView({
     threshold: 0.7, // Fully visible
     triggerOnce: false, // Only trigger once when it becomes visible
   });
+
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedReaction, setSelectedReaction] = useState(null);
@@ -136,7 +139,7 @@ export const MessageItem = ({
             gap: '10px',
             alignItems: 'center'
           }}>
-           {message?.sender === myAddress && !message?.isNotEncrypted && (
+           {message?.sender === myAddress && (!message?.isNotEncrypted || isPrivate === false) && (
             <ButtonBase
               onClick={() => {
                 onEdit(message);
@@ -205,6 +208,7 @@ export const MessageItem = ({
                     StarterKit,
                     Underline,
                     Highlight,
+                    Mention
                   ])}
                 />
               )}
@@ -223,6 +227,7 @@ export const MessageItem = ({
               StarterKit,
               Underline,
               Highlight,
+              Mention
             ])}
           />
         )}
@@ -341,7 +346,7 @@ export const MessageItem = ({
             alignItems: 'center',
             gap: '15px'
           }}>
-          {message?.isNotEncrypted && (
+          {message?.isNotEncrypted && isPrivate && (
               <KeyOffIcon sx={{
                 color: 'white',
                 marginLeft: '10px'
@@ -456,6 +461,7 @@ export const ReplyPreview = ({message, isEdit})=> {
                     StarterKit,
                     Underline,
                     Highlight,
+                    Mention
                   ])}
                 />
               )}
