@@ -37,6 +37,7 @@ import { NewThread } from "./NewThread";
 import {
   decryptPublishes,
   getTempPublish,
+  handleUnencryptedPublishes,
 } from "../../Chat/GroupAnnouncements";
 import { LoadingSnackbar } from "../../Snackbar/LoadingSnackbar";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../../utils/events";
@@ -71,7 +72,7 @@ const getEncryptedResource = async ({
   resource,
   groupId,
   dataPublishes,
-}) => {
+}, isPrivate) => {
   let data = dataPublishes[`${name}-${identifier}`];
   if (
     !data ||
@@ -99,7 +100,7 @@ const getEncryptedResource = async ({
   } else {
     data = data.data;
   }
-  const response = await decryptPublishes([{ data }], secretKey);
+  const response = isPrivate === false ? handleUnencryptedPublishes([data]) : await decryptPublishes([{ data }], secretKey);
 
   const messageData = response[0];
   return messageData.decryptedData;
@@ -114,6 +115,7 @@ export const Thread = ({
   secretKey,
   getSecretKey,
   updateThreadActivityCurrentThread,
+  isPrivate
 }: ThreadProps) => {
   const [tempPublishedList, setTempPublishedList] = useState([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -164,7 +166,7 @@ export const Thread = ({
         resource: message,
         groupId: groupInfo?.groupId,
         dataPublishes: dataPublishes.current,
-      });
+      }, isPrivate);
 
       if (responseDataMessage?.error) {
         const fullObject = {
@@ -323,9 +325,9 @@ export const Thread = ({
     [messages, secretKey]
   );
   const getMessages = React.useCallback(async () => {
-    if (!currentThread || !secretKey || !groupInfo?.groupId) return;
+    if (!currentThread || (!secretKey && isPrivate) || !groupInfo?.groupId || isPrivate === null) return;
     await getMailMessages(currentThread, null, null, false, groupInfo?.groupId);
-  }, [getMailMessages, currentThread, secretKey, groupInfo?.groupId]);
+  }, [getMailMessages, currentThread, secretKey, groupInfo?.groupId, isPrivate]);
   const firstMount = useRef(false);
 
   const saveTimestamp = useCallback((currentThread: any, username?: string) => {
@@ -380,10 +382,11 @@ export const Thread = ({
     if (currentThreadRef.current?.threadId !== currentThread?.threadId) {
       firstMount.current = false;
     }
-    if (currentThread && secretKey && !firstMount.current) {
+    if(!secretKey && isPrivate) return
+    if (currentThread &&  !firstMount.current && isPrivate !== null) {
       getMessagesMiddleware();
     }
-  }, [currentThread, secretKey]);
+  }, [currentThread, secretKey, isPrivate]);
   const messageCallback = useCallback((msg: any) => {
     // dispatch(addToHashMapMail(msg))
     // setMessages((prev) => [msg, ...prev])
@@ -576,6 +579,7 @@ export const Thread = ({
           myName={userInfo?.name}
           publishCallback={setTempData}
           setPostReply={setPostReply}
+          isPrivate={isPrivate}
         />
         <Box
           sx={{

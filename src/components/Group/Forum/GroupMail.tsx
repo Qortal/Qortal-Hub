@@ -46,7 +46,7 @@ import LazyLoad from "../../../common/LazyLoad";
 import { delay } from "../../../utils/helpers";
 import { NewThread } from "./NewThread";
 import { getBaseApi } from "../../../background";
-import { decryptPublishes, getTempPublish } from "../../Chat/GroupAnnouncements";
+import { decryptPublishes, getTempPublish, handleUnencryptedPublishes } from "../../Chat/GroupAnnouncements";
 import CheckSVG from "../../../assets/svgs/Check.svg";
 import SortSVG from "../../../assets/svgs/Sort.svg";
 import ArrowDownSVG from "../../../assets/svgs/ArrowDown.svg";
@@ -66,7 +66,8 @@ export const GroupMail = ({
   secretKey,
   defaultThread, 
   setDefaultThread,
-  hide
+  hide,
+  isPrivate
 }) => {
   const [viewedThreads, setViewedThreads] = React.useState<any>({});
   const [filterMode, setFilterMode] = useState<string>("Recently active");
@@ -123,7 +124,7 @@ export const GroupMail = ({
    
   }
 
-  const getEncryptedResource = async ({ name, identifier, resource }) => {
+  const getEncryptedResource = async ({ name, identifier, resource }, isPrivate) => {
     let data = dataPublishes.current[`${name}-${identifier}`]
     if(!data || (data?.update || data?.created !== (resource?.updated || resource?.created))){
     const res = await fetch(
@@ -136,7 +137,7 @@ export const GroupMail = ({
     } else {
       data = data.data
     }
-    const response = await decryptPublishes([{ data }], secretKey);
+    const response = isPrivate === false ? handleUnencryptedPublishes([data]) : await decryptPublishes([{ data }], secretKey);
 
     const messageData = response[0];
     return messageData.decryptedData;
@@ -212,7 +213,7 @@ export const GroupMail = ({
                   name: message.name,
                   identifier: message.identifier,
                   resource: message
-                }),
+                }, isPrivate),
                 delay(5000),
               ]);
             } catch (error) {}
@@ -255,7 +256,7 @@ export const GroupMail = ({
         }
       }
     },
-    [allThreads]
+    [allThreads, isPrivate]
   );
   const getMailMessages = React.useCallback(
     async (groupId: string, members: any) => {
@@ -327,7 +328,7 @@ export const GroupMail = ({
                     name: thread.name,
                     identifier: message.threadId,
                     resource: thread
-                  }),
+                  }, isPrivate),
                   delay(10000),
                 ]);
                 if (threadRes?.title) {
@@ -356,16 +357,16 @@ export const GroupMail = ({
         // dispatch(setIsLoadingCustom(null));
       }
     },
-    [secretKey]
+    [secretKey, isPrivate]
   );
 
   const getMessages = React.useCallback(async () => {
  
     // if ( !groupId || members?.length === 0) return;
-    if (!groupId) return;
+    if (!groupId || isPrivate === null) return;
 
     await getMailMessages(groupId, members);
-  }, [getMailMessages, groupId, members, secretKey]);
+  }, [getMailMessages, groupId, members, secretKey, isPrivate]);
 
   const interval = useRef<any>(null);
 
@@ -378,7 +379,7 @@ export const GroupMail = ({
       firstMount.current = false;
     }
     // if (groupId && !firstMount.current && members.length > 0) {
-    if (groupId && !firstMount.current) {
+    if (groupId && !firstMount.current && isPrivate !== null) {
       if (filterMode === "Recently active") {
         getMessages();
       } else if (filterMode === "Newest") {
@@ -389,7 +390,7 @@ export const GroupMail = ({
       setTempData()
       firstMount.current = true;
     }
-  }, [groupId, members, filterMode, hide]);
+  }, [groupId, members, filterMode, hide, isPrivate]);
 
   const closeThread = useCallback(() => {
     setCurrentThread(null);
@@ -468,7 +469,7 @@ export const GroupMail = ({
     } else if (filterMode === "Oldest") {
       getAllThreads(groupId, "Oldest", true);
     }
-  }, [filterMode])
+  }, [filterMode, isPrivate])
 
   const updateThreadActivityCurrentThread = ()=> {
     if(!currentThread) return
@@ -540,6 +541,7 @@ export const GroupMail = ({
         secretKey={secretKey}
         getSecretKey={getSecretKey}
         updateThreadActivityCurrentThread={updateThreadActivityCurrentThread}
+        isPrivate={isPrivate}
       />
     );
 
@@ -620,6 +622,7 @@ export const GroupMail = ({
               userInfo={userInfo}
               getSecretKey={getSecretKey}
               myName={userInfo?.name}
+              isPrivate={isPrivate}
             />
             <ComposeContainerBlank
               sx={{

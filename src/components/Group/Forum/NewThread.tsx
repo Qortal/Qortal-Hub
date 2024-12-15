@@ -144,7 +144,8 @@ export const NewThread = ({
   closeCallback,
   postReply,
   myName,
-  setPostReply
+  setPostReply,
+  isPrivate
 }: NewMessageProps) => {
   const { show } = React.useContext(MyContext);
 
@@ -245,8 +246,8 @@ export const NewThread = ({
         reply,
       };
     
-      const secretKey = await getSecretKey(false, true);
-      if (!secretKey) {
+      const secretKey = isPrivate === false ? null : await getSecretKey(false, true);
+      if (!secretKey && isPrivate) {
         throw new Error("Cannot get group secret key");
       }
     
@@ -254,7 +255,7 @@ export const NewThread = ({
         const idThread = uid.rnd();
         const idMsg = uid.rnd();
         const messageToBase64 = await objectToBase64(mailObject);
-        const encryptSingleFirstPost = await encryptSingleFunc(
+        const encryptSingleFirstPost = isPrivate === false ? messageToBase64 :  await encryptSingleFunc(
           messageToBase64,
           secretKey
         );
@@ -266,7 +267,7 @@ export const NewThread = ({
         };
         const threadToBase64 = await objectToBase64(threadObject);
 
-        const encryptSingleThread = await encryptSingleFunc(
+        const encryptSingleThread = isPrivate === false ? threadToBase64 :  await encryptSingleFunc(
           threadToBase64,
           secretKey
         );
@@ -321,7 +322,7 @@ export const NewThread = ({
         if (!currentThread) throw new Error("unable to locate thread Id");
         const idThread = currentThread.threadId;
         const messageToBase64 = await objectToBase64(mailObject);
-        const encryptSinglePost = await encryptSingleFunc(
+        const encryptSinglePost = isPrivate === false ? messageToBase64 :  await encryptSingleFunc(
           messageToBase64,
           secretKey
         );
