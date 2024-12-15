@@ -562,6 +562,7 @@ const clearEditorContent = () => {
 
     const sendMessage = async ()=> {
       try {
+        if(messageSize > 4000) return
         if(isPrivate === null) throw new Error('Unable to determine if group is private')
         if(isSending) return
         if(+balance < 4) throw new Error('You need at least 4 QORT to send a message')
@@ -647,11 +648,19 @@ const clearEditorContent = () => {
   
       handleUpdateRef.current = throttle(async () => {
        try {
-        const htmlContent = editorRef.current.getHTML();
-        const message64 =  await objectToBase64(JSON.stringify(htmlContent))
-        const secretKeyObject = await getSecretKey(false, true)
-        const encryptSingle = await encryptChatMessage(message64, secretKeyObject)
-        setMessageSize((encryptSingle?.length || 0) + 200);
+        if(isPrivate){
+          const htmlContent = editorRef.current.getHTML();
+          const message64 =  await objectToBase64(JSON.stringify(htmlContent))
+          const secretKeyObject = await getSecretKey(false, true)
+          const encryptSingle = await encryptChatMessage(message64, secretKeyObject)
+          setMessageSize((encryptSingle?.length || 0) + 200);
+        } else {
+          const htmlContent = editorRef.current.getJSON();
+          const message =  JSON.stringify(htmlContent)
+          const size = new Blob([message]).size
+          setMessageSize(size + 300);
+        }
+       
        } catch (error) {
         // calc size error
        }
@@ -664,7 +673,7 @@ const clearEditorContent = () => {
       return () => {
         currentEditor.off("update", handleUpdateRef.current);
       };
-    }, [editorRef, setMessageSize]); 
+    }, [editorRef, setMessageSize, isPrivate]); 
 
   useEffect(() => {
     if (hide) {
@@ -874,7 +883,7 @@ const clearEditorContent = () => {
 
       <CustomButton
               onClick={()=> {
-                if(messageSize > 4000) return
+              
                 if(isSending) return
                 sendMessage()
               }}

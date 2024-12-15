@@ -377,7 +377,8 @@ useEffect(() => {
 
     const sendMessage = async ()=> {
       try {
-  
+        if(messageSize > 4000) return
+
         
         if(+balance < 4) throw new Error('You need at least 4 QORT to send a message')
         if(isSending) return
@@ -674,7 +675,6 @@ useEffect(() => {
 
       <CustomButton
               onClick={()=> {
-                if(messageSize > 4000) return
 
                 if(isSending) return
                 sendMessage()

@@ -319,7 +319,7 @@ function App() {
     useState<string>("");
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useState<string>("1234567890");
+  const [authenticatePassword, setAuthenticatePassword] = useState<string>("");
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [
