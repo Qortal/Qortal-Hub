@@ -82,8 +82,14 @@ export const NotAuthenticated = ({
       const data = await response.json();
       if (data?.height) {
         setHasLocalNode(true);
+        return true
       }
-    } catch (error) {}
+      return false
+      
+    } catch (error) {
+      return false
+      
+    } 
   }, []);
 
   useEffect(() => {
@@ -122,8 +128,9 @@ export const NotAuthenticated = ({
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
       if (!currentNodeRef.current) return;
+      const stillHasLocal = await checkIfUserHasLocalNode()
       const isLocalKey = cleanUrl(key?.url) === "127.0.0.1:12391";
-      if (isLocalKey && !hasLocalNodeRef.current && !fromStartUp) {
+      if (isLocalKey && !stillHasLocal && !fromStartUp) {
         throw new Error("Please turn on your local node");
       }
       const isCurrentNodeLocal =
@@ -185,6 +192,26 @@ export const NotAuthenticated = ({
     } catch (error) {
       setIsValidApiKey(false);
       setUseLocalNode(false);
+      if(fromStartUp){
+        setCurrentNode({
+          url: "http://127.0.0.1:12391",
+        });
+        window
+          .sendMessage("setApiKey", null)
+          .then((response) => {
+            if (response) {
+              setApiKey(null);
+              handleSetGlobalApikey(null);
+            }
+          })
+          .catch((error) => {
+            console.error(
+              "Failed to set API key:",
+              error.message || "An error occurred"
+            );
+          });
+        return
+      }
       setInfoSnack({
         type: "error",
         message: error?.message || "Select a valid apikey",
