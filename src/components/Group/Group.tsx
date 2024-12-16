@@ -2252,7 +2252,7 @@ export const Group = ({
                     getTimestampEnterChatParent={getTimestampEnterChat}
                   />
                 )}
-                {isPrivate &&firstSecretKeyInCreation &&
+                {isPrivate && firstSecretKeyInCreation &&
                   triedToFetchSecretKey &&
                   !secretKeyPublishDate && (
                     <div

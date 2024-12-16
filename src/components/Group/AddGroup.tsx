@@ -218,7 +218,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
             overflowY: "auto",
             color: "white",
             flexDirection: 'column',
-            flexGrow: 1,
             display: 'flex'
           }}
         >
