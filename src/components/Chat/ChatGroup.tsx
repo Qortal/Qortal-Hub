@@ -223,15 +223,15 @@ const [messageSize, setMessageSize] = useState(0)
                   setChatReferences((prev) => {
                     const organizedChatReferences = { ...prev };
                     combineUIAndExtensionMsgs
-                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem.decryptedData?.type === "reaction" || rawItem.decryptedData?.type === "edit" || rawItem?.type === "edit" || rawItem?.type === "reaction"))
+                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem?.decryptedData?.type === "reaction" || rawItem?.decryptedData?.type === "edit" || rawItem?.type === "edit" || rawItem?.isEdited || rawItem?.type === "reaction"))
                       .forEach((item) => {
                         try {
-                          if(item.decryptedData?.type === "edit"){
+                          if(item?.decryptedData?.type === "edit"){
                             organizedChatReferences[item.chatReference] = {
                               ...(organizedChatReferences[item.chatReference] || {}),
                               edit: item.decryptedData,
                             };
-                          } else if(item?.type === "edit"){
+                          } else if(item?.type === "edit" || item?.isEdited){
                             organizedChatReferences[item.chatReference] = {
                               ...(organizedChatReferences[item.chatReference] || {}),
                               edit: item,
@@ -287,6 +287,7 @@ const [messageSize, setMessageSize] = useState(0)
                   });
                 } else {
                   let firstUnreadFound = false;
+                  console.log('combineUIAndExtensionMsgs', combineUIAndExtensionMsgs)
                   const formatted = combineUIAndExtensionMsgs
                     .filter((rawItem) => !rawItem?.chatReference)
                     .map((item) => {
@@ -311,15 +312,15 @@ const [messageSize, setMessageSize] = useState(0)
                     const organizedChatReferences = { ...prev };
           
                     combineUIAndExtensionMsgs
-                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem.decryptedData?.type === "reaction" || rawItem.decryptedData?.type === "edit" || rawItem?.type === "edit" || rawItem?.type === "reaction"))
+                      .filter((rawItem) => rawItem && rawItem.chatReference && (rawItem?.decryptedData?.type === "reaction" || rawItem?.decryptedData?.type === "edit" || rawItem?.type === "edit" || rawItem?.isEdited || rawItem?.type === "reaction"))
                       .forEach((item) => {
                         try {
-                          if(item.decryptedData?.type === "edit"){
+                          if(item?.decryptedData?.type === "edit"){
                             organizedChatReferences[item.chatReference] = {
                               ...(organizedChatReferences[item.chatReference] || {}),
                               edit: item.decryptedData,
                             };
-                          } else if(item?.type === "edit"){
+                          } else if(item?.type === "edit" || item?.isEdited){
                             organizedChatReferences[item.chatReference] = {
                               ...(organizedChatReferences[item.chatReference] || {}),
                               edit: item,
