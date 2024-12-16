@@ -9,14 +9,17 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from "../../atoms/global";
-import { ButtonBase } from "@mui/material";
+import { Box, ButtonBase, Popover, Typography } from "@mui/material";
 import { objectToBase64 } from "../../qdn/encryption/group-encryption";
 import { MyContext } from "../../App";
 import { getFee } from "../../background";
 import { CustomizedSnackbars } from "../Snackbar/Snackbar";
 import { SaveIcon } from "../../assets/svgs/SaveIcon";
 import { IconWrapper } from "../Desktop/DesktopFooter";
-export const Save = ({ isDesktop, disableWidth }) => {
+import { Spacer } from "../../common/Spacer";
+import { LoadingButton } from "@mui/lab";
+import { saveToLocalStorage } from "../Apps/AppsNavBar";
+export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
   const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useRecoilState(
     settingsQDNLastUpdatedAtom
@@ -31,7 +34,7 @@ export const Save = ({ isDesktop, disableWidth }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [oldPinnedApps, setOldPinnedApps] = useRecoilState(oldPinnedAppsAtom);
-
+  const [anchorEl, setAnchorEl] = useState(null);
   const { show } = useContext(MyContext);
 
   const hasChanged = useMemo(() => {
@@ -83,9 +86,7 @@ export const Save = ({ isDesktop, disableWidth }) => {
           .sendMessage(
             "ENCRYPT_DATA",
             {
-            
-                data64,
-         
+              data64,
             },
             60000
           )
@@ -135,6 +136,7 @@ export const Save = ({ isDesktop, disableWidth }) => {
             message: "Sucessfully published to QDN",
           });
           setOpenSnack(true);
+          setAnchorEl(null)
         }
       }
     } catch (error) {
@@ -147,20 +149,31 @@ export const Save = ({ isDesktop, disableWidth }) => {
       setIsLoading(false);
     }
   };
+  const handlePopupClick = (event) => {
+    event.stopPropagation(); // Prevent parent onClick from firing
+    setAnchorEl(event.currentTarget);
+  };
+
+  const revertChanges = () => {
+    setPinnedApps(oldPinnedApps);
+    saveToLocalStorage("ext_saved_settings", "sortablePinnedApps", null);
+    setAnchorEl(null)
+  };
+
   return (
     <>
       <ButtonBase
-        onClick={saveToQdn}
+        onClick={handlePopupClick}
         disabled={
-          !hasChanged ||
-          !canSave ||
-          isLoading ||
-          settingsQdnLastUpdated === -100
+          // !hasChanged ||
+          // !canSave ||
+          isLoading 
+          // settingsQdnLastUpdated === -100
         }
       >
         {isDesktop ? (
           <IconWrapper
-          disableWidth={disableWidth}
+            disableWidth={disableWidth}
             color="rgba(250, 250, 250, 0.5)"
             label="Save"
             selected={false}
@@ -187,6 +200,204 @@ export const Save = ({ isDesktop, disableWidth }) => {
           />
         )}
       </ButtonBase>
+      <Popover
+        open={!!anchorEl}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)} // Close popover on click outside
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+        sx={{
+          width: "300px",
+          maxWidth: "90%",
+          maxHeight: "80%",
+          overflow: "auto",
+        }}
+      >
+        <Box
+          sx={{
+            padding: "15px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 1,
+            width: '100%'
+          }}
+        >
+          {!myName ? (
+            <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "14px",
+              }}
+            >
+              You need a registered Qortal name to save your pinned apps to QDN.
+            </Typography>
+            </Box>
+          ) : (
+            <>
+               {hasChanged && (
+            <Box
+              sx={{
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: "14px",
+                }}
+              >
+                You have unsaved changes to your pinned apps. Save them to QDN.
+              </Typography>
+              <Spacer height="10px" />
+              <LoadingButton
+                sx={{
+                  backgroundColor: "var(--green)",
+                  color: "black",
+                  opacity: 0.7,
+                  "&:hover": {
+                    backgroundColor: "var(--green)",
+                    color: "black",
+                    opacity: 1,
+                  },
+                }}
+                size="small"
+                loading={isLoading}
+                onClick={saveToQdn}
+                variant="contained"
+              >
+                Save to QDN
+              </LoadingButton>
+              <Spacer height="20px" />
+              {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated > 0 && (
+                <>
+                  <Typography
+                    sx={{
+                      fontSize: "14px",
+                    }}
+                  >
+                    Don't like your current local changes? Would you like to
+                    reset to your saved QDN pinned apps?
+                  </Typography>
+                  <Spacer height="10px" />
+                  <LoadingButton
+                    size="small"
+                    loading={isLoading}
+                    onClick={revertChanges}
+                    variant="contained"
+                    sx={{
+                      backgroundColor: "var(--unread)",
+                      color: "black",
+                      opacity: 0.7,
+                      "&:hover": {
+                        backgroundColor: "var(--unread)",
+                        color: "black",
+                        opacity: 1,
+                      },
+                    }}
+                  >
+                    Revert to QDN
+                  </LoadingButton>
+                </>
+              )}
+              {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated === 0 && (
+                <>
+                  <Typography
+                    sx={{
+                      fontSize: "14px",
+                    }}
+                  >
+                    Don't like your current local changes? Would you like to
+                    reset to the default pinned apps?
+                  </Typography>
+                  <Spacer height="10px" />
+                  <LoadingButton
+                    loading={isLoading}
+                    onClick={revertChanges}
+                    variant="contained"
+                  >
+                    Revert to default
+                  </LoadingButton>
+                </>
+              )}
+            </Box>
+          )}
+          {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated === -100 && (
+            <Box
+              sx={{
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: "14px",
+                }}
+              >
+                The app was unable to download your existing QDN-saved pinned
+                apps. Would you like to overwrite those changes?
+              </Typography>
+              <Spacer height="10px" />
+              <LoadingButton
+                size="small"
+                loading={isLoading}
+                onClick={saveToQdn}
+                variant="contained"
+                sx={{
+                  backgroundColor: "var(--unread)",
+                  color: "black",
+                  opacity: 0.7,
+                  "&:hover": {
+                    backgroundColor: "var(--unread)",
+                    color: "black",
+                    opacity: 1,
+                  },
+                }}
+              >
+                Overwrite to QDN
+              </LoadingButton>
+            </Box>
+          )}
+           {!hasChanged && (
+            <Box
+              sx={{
+                width: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: "14px",
+                }}
+              >
+                You currently do not have any changes to your pinned apps
+              </Typography>
+              
+            </Box>
+          )}
+            </>
+          )}
+       
+        </Box>
+      </Popover>
       <CustomizedSnackbars
         duration={3500}
         open={openSnack}

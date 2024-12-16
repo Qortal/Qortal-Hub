@@ -407,7 +407,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             />
      
         </ButtonBase> */}
-        <Save isDesktop disableWidth />
+        <Save isDesktop disableWidth myName={myName}/>
         {isEnabledDevMode && (
            <ButtonBase
            onClick={() => {

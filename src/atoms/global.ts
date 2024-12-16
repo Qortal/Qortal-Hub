@@ -40,6 +40,10 @@ export const sortablePinnedAppsAtom = atom({
   {
     name: 'Q-Manager',
     service: 'APP'
+  },
+  {
+    name: 'Q-Blog',
+    service: 'APP'
   }
 ], 
 });

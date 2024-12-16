@@ -40,7 +40,6 @@ const getPublishRecord = async (myName) => {
       );
       data = await res.text();
     
-
     if(!data) throw new Error('Unable to fetch publish')
 
     const decryptedKey: any = await decryptResource(data);
@@ -53,7 +52,8 @@ const getPublishRecord = async (myName) => {
     }
   };
 
-export const useQortalGetSaveSettings = (myName) => {
+
+export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
     const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
     const setCanSave = useSetRecoilState(canSaveSettingToQdnAtom);
     const setSettingsQDNLastUpdated = useSetRecoilState(settingsQDNLastUpdatedAtom);
@@ -67,7 +67,7 @@ export const useQortalGetSaveSettings = (myName) => {
             const settings = await getPublish(myName)
             if(settings?.sortablePinnedApps && timestamp > settingsLocalLastUpdated){
                 setSortablePinnedApps(settings.sortablePinnedApps)
-              
+                
                 setSettingsQDNLastUpdated(timestamp || 0)
             } else if(settings?.sortablePinnedApps){
                 setSettingsQDNLastUpdated(timestamp || 0)
@@ -87,8 +87,8 @@ export const useQortalGetSaveSettings = (myName) => {
         }
     }, [])
     useEffect(()=> {
-        if(!myName || !settingsLocalLastUpdated) return
+        if(!myName || !settingsLocalLastUpdated || !isAuthenticated) return
         getSavedSettings(myName, settingsLocalLastUpdated)
-    }, [getSavedSettings, myName, settingsLocalLastUpdated])
+    }, [getSavedSettings, myName, settingsLocalLastUpdated, isAuthenticated])
  
 }

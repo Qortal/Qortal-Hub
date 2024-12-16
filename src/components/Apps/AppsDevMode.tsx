@@ -282,7 +282,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
             />
     </IconWrapper>
         </ButtonBase>
-        <Save isDesktop disableWidth />
+        <Save isDesktop disableWidth myName={myName} />
         <ButtonBase
            onClick={() => {
              setDesktopViewMode('dev')

@@ -23,8 +23,11 @@ export const useRetrieveDataLocalStorage = () => {
         const pinnedAppsLocal = fetchFromLocalStorage('ext_saved_settings')
         if(pinnedAppsLocal?.sortablePinnedApps){
             setSortablePinnedApps(pinnedAppsLocal?.sortablePinnedApps)
+            setSettingsLocalLastUpdated(pinnedAppsLocal?.timestamp || -1)
+        } else {
+            setSettingsLocalLastUpdated(-1)
         }
-        setSettingsLocalLastUpdated(pinnedAppsLocal?.timestamp || -1)
+      
     }, [])
     useEffect(()=> {
       
