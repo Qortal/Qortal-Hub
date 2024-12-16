@@ -8,7 +8,7 @@ import { decryptResource, getGroupAdmins, validateSecretKey } from '../Group/Gro
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 
-export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, secretKeyDetails, userInfo, noSecretKey, setHideCommonKeyPopup}) => {
+export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, secretKeyDetails, userInfo, noSecretKey, setHideCommonKeyPopup, setIsForceShowCreationKeyPopup}) => {
   const { show, setTxList } = useContext(MyContext);
 
   const [openSnack, setOpenSnack] = React.useState(false);
@@ -131,6 +131,9 @@ export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, sec
                 ]);
               }
               setIsLoading(false);
+              setTimeout(() => {
+                setIsForceShowCreationKeyPopup(false)
+              }, 1000);
             })
             .catch((error) => {
               console.error("Failed to encrypt and publish symmetric key for group chat:", error.message || "An error occurred");
@@ -173,6 +176,7 @@ export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, sec
       }}>
         <Button onClick={()=> {
           setHideCommonKeyPopup(true)
+          setIsForceShowCreationKeyPopup(false)
         }} size='small'>Hide</Button>
       </Box>
         <CustomizedSnackbars open={openSnack} setOpen={setOpenSnack} info={infoSnack} setInfo={setInfoSnack}  />

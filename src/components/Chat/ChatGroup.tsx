@@ -54,14 +54,14 @@ const [messageSize, setMessageSize] = useState(0)
   const handleUpdateRef = useRef(null);
 
 
-  const getTimestampEnterChat = async () => {
+  const getTimestampEnterChat = async (selectedGroup) => {
     try {
       return new Promise((res, rej) => {
         window.sendMessage("getTimestampEnterChat")
   .then((response) => {
     if (!response?.error) {
-      if(response && selectedGroup && response[selectedGroup]){
-        lastReadTimestamp.current = response[selectedGroup]
+      if(response && selectedGroup){
+        lastReadTimestamp.current = response[selectedGroup] || undefined
         window.sendMessage("addTimestampEnterChat", {
           timestamp: Date.now(),
           groupId: selectedGroup
@@ -89,8 +89,9 @@ const [messageSize, setMessageSize] = useState(0)
   };
 
   useEffect(()=> {
-    getTimestampEnterChat()
-  }, [])
+    if(!selectedGroup) return
+    getTimestampEnterChat(selectedGroup)
+  }, [selectedGroup])
 
   
 
@@ -208,7 +209,9 @@ const [messageSize, setMessageSize] = useState(0)
                   const formatted = combineUIAndExtensionMsgs
                     .filter((rawItem) => !rawItem?.chatReference)
                     .map((item) => {
-                     
+                      const additionalFields = item?.data === 'NDAwMQ==' ? {
+                        text: "<p>First group key created.</p>" 
+                     } : {}
                       return {
                         ...item,
                         id: item.signature,
@@ -216,6 +219,7 @@ const [messageSize, setMessageSize] = useState(0)
                         repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
                         unread: item?.sender === myAddress ? false : !!item?.chatReference ? false : true,
                         isNotEncrypted: !!item?.messageText,
+                        ...additionalFields
                       }
                     });
                   setMessages((prev) => [...prev, ...formatted]);
@@ -287,10 +291,12 @@ const [messageSize, setMessageSize] = useState(0)
                   });
                 } else {
                   let firstUnreadFound = false;
-                  console.log('combineUIAndExtensionMsgs', combineUIAndExtensionMsgs)
                   const formatted = combineUIAndExtensionMsgs
                     .filter((rawItem) => !rawItem?.chatReference)
                     .map((item) => {
+                      const additionalFields = item?.data === 'NDAwMQ==' ? {
+                         text: "<p>First group key created.</p>" 
+                      } : {}
                       const divide = lastReadTimestamp.current && !firstUnreadFound && item.timestamp > lastReadTimestamp.current && myAddress !== item?.sender;
                      
                       if(divide){
@@ -303,7 +309,8 @@ const [messageSize, setMessageSize] = useState(0)
                         repliedTo: item?.repliedTo || item?.decryptedData?.repliedTo,
                         isNotEncrypted: !!item?.messageText,
                         unread: false,
-                        divide
+                        divide,
+                        ...additionalFields
                       }
                     });
                   setMessages(formatted);
