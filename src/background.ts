@@ -2964,6 +2964,9 @@ function setupMessageListener() {
       case "publishOnQDN":
         publishOnQDNCase(request, event);
         break;
+      case "getUserSettings":
+        getUserSettingsCase(request, event);
+        break;
       case "handleActiveGroupDataFromSocket":
         handleActiveGroupDataFromSocketCase(request, event);
         break;
