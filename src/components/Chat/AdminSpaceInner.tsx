@@ -199,7 +199,7 @@ export const AdminSpaceInner = ({
             {` by ${groupSecretKeyPublishDetails?.name}`}
           </Typography>
         )}
-        <Button disabled={isFetchingGroupSecretKey} onClick={setIsForceShowCreationKeyPopup} variant="contained">
+        <Button disabled={isFetchingGroupSecretKey} onClick={()=> setIsForceShowCreationKeyPopup(true)} variant="contained">
           Publish group secret key
         </Button>
         <Spacer height="20px" />

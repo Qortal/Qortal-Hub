@@ -8,7 +8,7 @@ import { decryptResource, getGroupAdmins, validateSecretKey } from '../Group/Gro
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 
-export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, secretKeyDetails, userInfo, noSecretKey, setHideCommonKeyPopup, setIsForceShowCreationKeyPopup}) => {
+export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, secretKeyDetails, userInfo, noSecretKey, setHideCommonKeyPopup, setIsForceShowCreationKeyPopup, isForceShowCreationKeyPopup}) => {
   const { show, setTxList } = useContext(MyContext);
 
   const [openSnack, setOpenSnack] = React.useState(false);
@@ -164,7 +164,7 @@ export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, sec
         <Box>
         <Typography>The latest group secret key was published by a non-owner. As the owner of the group please re-encrypt the key as a safeguard</Typography>
       </Box>
-      ): (
+      ): isForceShowCreationKeyPopup ? null : (
         <Box>
         <Typography>The group member list has changed. Please re-encrypt the secret key.</Typography>
       </Box>
