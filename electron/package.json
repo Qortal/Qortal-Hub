@@ -3,8 +3,10 @@
   "version": "0.3.8",
   "description": "A desktop app that gives you access to the Qortal network",
   "author": {
-    "name": ""
+    "name": "",
+    "email": "qortalblockchain@gmail.com"
   },
+  "homepage": "https://qortal.dev",
   "repository": {
     "type": "git",
     "url": ""

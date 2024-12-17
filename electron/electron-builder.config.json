@@ -3,12 +3,7 @@
   "directories": {
     "buildResources": "resources"
   },
-  "files": [
-    "assets/**/*",
-    "build/**/*",
-    "capacitor.config.*",
-    "app/**/*"
-  ],
+  "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "nsis": {
     "allowElevation": true,
     "oneClick": false,
@@ -17,20 +12,36 @@
   "publish": [
     {
       "provider": "github",
-        "owner": "Qortal",
-        "repo": "Qortal-Hub",
+      "owner": "Qortal",
+      "repo": "Qortal-Hub",
       "releaseType": "draft"
     }
   ],
   "win": {
-    "target": "nsis",
+    "target": ["nsis", "portable"],
     "icon": "assets/appIcon.ico"
   },
   "linux": {
     "target": ["AppImage"],
-    "category": "Utility",  
-    "executableName": "Qortal",
-    "icon": "assets/qortal.png"  
+    "category": "Network",
+    "packageCategory": "Network",
+    "desktop": {
+      "StartupWMClass": "qortal-ui"
+    },
+    "executableName": "Qortal Hub",
+    "icon": "assets/png",
+    "asar": true
+  },
+  "deb": {
+    "artifactName": "Qortal-Hub-Setup.${ext}",
+    "synopsis": "Qortal Hub for Linux"
+  },
+  "appImage": {
+    "artifactName": "Qortal-Hub.${ext}"
+  },
+  "snap": {
+    "artifactName": "Qortal-Hub-Setup.${ext}",
+    "synopsis": "Qortal Hub for Linux"
   },
   "mac": {
     "category": "your.app.category.type",
