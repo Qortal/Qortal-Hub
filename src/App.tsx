@@ -974,6 +974,11 @@ function App() {
           message:
             "Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.",
         });
+      } else {
+        await showUnsavedChanges({
+          message:
+            "Are you sure you would like to logout?",
+        });
       }
       window
         .sendMessage("logout", {})
