@@ -108,7 +108,7 @@ export const MobileFooter = ({
           }}
           icon={
             <IconWrapper color="rgba(250, 250, 250, 0.5)" label="Groups">
-              <HubsIcon color={hasUnreadGroups ? "var(--unread)" : "rgba(250, 250, 250, 0.5)"} />
+              <HubsIcon color={hasUnreadGroups ? "var(--danger)" : "rgba(250, 250, 250, 0.5)"} />
             </IconWrapper>
           }
           sx={{
@@ -175,7 +175,7 @@ export const MobileFooter = ({
           }}
           icon={
             <IconWrapper label="Messaging" color="rgba(250, 250, 250, 0.5)">
-              <MessagingIcon color={hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"} />
+              <MessagingIcon color={hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"} />
             </IconWrapper>
           }
           sx={{

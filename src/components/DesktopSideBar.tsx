@@ -90,7 +90,7 @@ export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDire
               height={30}
               color={
                 hasUnreadGroups
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isGroups
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"

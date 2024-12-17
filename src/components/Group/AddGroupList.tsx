@@ -240,7 +240,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
         )}
         {group?.isOpen === true && (
           <NoEncryptionGmailerrorredIcon sx={{
-            color: 'var(--unread)'
+            color: 'var(--danger)'
           }} />
         )}
         <Spacer width="15px" />

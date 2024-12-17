@@ -192,7 +192,7 @@ export const UserListOfInvites = ({myAddress, setInfoSnack, setOpenSnack}) => {
         )}
         {invite?.isOpen === true && (
           <NoEncryptionGmailerrorredIcon sx={{
-            color: 'var(--unread)'
+            color: 'var(--danger)'
           }} />
         )}
         <Spacer width="15px" />

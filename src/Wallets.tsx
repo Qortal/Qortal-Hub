@@ -434,12 +434,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             </Button>
             <Button
             sx={{
-                backgroundColor: 'var(--unread)',
+                backgroundColor: 'var(--danger)',
                 "&:hover": {
-                    backgroundColor: "var(--unread)", 
+                    backgroundColor: "var(--danger)", 
                   },
                   "&:focus": {
-                    backgroundColor: "var(--unread)", 
+                    backgroundColor: "var(--danger)", 
                   },
             }}
             size="small"

@@ -377,7 +377,7 @@ export const ChatList = ({
               position: "absolute",
               right: 20,
               backgroundColor: "var(--unread)",
-              color: "white",
+              color: "black",
               padding: "10px 20px",
               borderRadius: "20px",
               cursor: "pointer",

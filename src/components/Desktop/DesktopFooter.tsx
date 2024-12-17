@@ -150,7 +150,7 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadGroups
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isGroups
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"
@@ -172,7 +172,7 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadDirects
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isDirects
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"

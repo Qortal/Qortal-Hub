@@ -2793,11 +2793,11 @@ function App() {
               accept
             </Button>
             <Button sx={{
-                  backgroundColor: 'var(--unread)',
+                  backgroundColor: 'var(--danger)',
                   color: 'black',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--unread)',
+                    backgroundColor: 'var(--danger)',
                   color: 'black',
                   opacity: 1
                   },
@@ -3093,7 +3093,7 @@ function App() {
               </CustomButtonAccept>
               <CustomButtonAccept
                color="black"
-               bgColor="var(--unread)"
+               bgColor="var(--danger)"
                 sx={{
                   minWidth: "102px",
                 }}

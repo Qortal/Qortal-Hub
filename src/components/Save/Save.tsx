@@ -300,11 +300,11 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     onClick={revertChanges}
                     variant="contained"
                     sx={{
-                      backgroundColor: "var(--unread)",
+                      backgroundColor: "var(--danger)",
                       color: "black",
                       opacity: 0.7,
                       "&:hover": {
-                        backgroundColor: "var(--unread)",
+                        backgroundColor: "var(--danger)",
                         color: "black",
                         opacity: 1,
                       },
@@ -360,11 +360,11 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 onClick={saveToQdn}
                 variant="contained"
                 sx={{
-                  backgroundColor: "var(--unread)",
+                  backgroundColor: "var(--danger)",
                   color: "black",
                   opacity: 0.7,
                   "&:hover": {
-                    backgroundColor: "var(--unread)",
+                    backgroundColor: "var(--danger)",
                     color: "black",
                     opacity: 1,
                   },

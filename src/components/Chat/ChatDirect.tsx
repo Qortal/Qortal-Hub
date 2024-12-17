@@ -656,7 +656,7 @@ useEffect(() => {
         }}>
                 <Typography sx={{
                   fontSize: '12px',
-                  color: messageSize > 4000 ? 'var(--unread)' : 'unset'
+                  color: messageSize > 4000 ? 'var(--danger)' : 'unset'
                 }}>{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
 
           </Box>

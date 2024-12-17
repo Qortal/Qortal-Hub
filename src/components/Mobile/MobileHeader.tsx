@@ -92,7 +92,7 @@ const Header = ({
              
               onClick={handleClick}
             >
-              <NotificationIcon height={20} width={21} color={hasUnreadDirects || hasUnreadGroups ? "var(--unread)" : "rgba(145, 145, 147, 1)"} />
+              <NotificationIcon height={20} width={21} color={hasUnreadDirects || hasUnreadGroups ? "var(--danger)" : "rgba(145, 145, 147, 1)"} />
             </ButtonBase>
             {fullScreen && (
                <ButtonBase onClick={()=> {
@@ -135,7 +135,7 @@ const Header = ({
                 setMobileViewModeKeepOpen("messaging");
               }}
             >
-              <MessagingIcon2    height={20}              color={hasUnreadDirects ? "var(--unread)" : "rgba(145, 145, 147, 1)"}
+              <MessagingIcon2    height={20}              color={hasUnreadDirects ? "var(--danger)" : "rgba(145, 145, 147, 1)"}
                 
               />
             </ButtonBase>
@@ -197,13 +197,13 @@ const Header = ({
             
             minWidth: '24px !important'
           }}>
-            <HubsIcon height={20} color={hasUnreadGroups ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"} />
+            <HubsIcon height={20} color={hasUnreadGroups ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"} />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadGroups ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
+                    color: hasUnreadGroups ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"
                   },
                 }} primary="Groups" />
         </MenuItem>
@@ -218,13 +218,13 @@ const Header = ({
             
             minWidth: '24px !important'
           }}>
-          <MessagingIcon height={20} color={hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"} />
+          <MessagingIcon height={20} color={hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"} />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
+                    color: hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"
                   },
                 }} primary="Messaging" />
         </MenuItem>
@@ -358,7 +358,7 @@ const Header = ({
           }}
         >
           <IconButton  onClick={handleClick} color="inherit">
-            <NotificationIcon color={hasUnreadDirects || hasUnreadGroups ? "var(--unread)" : "rgba(255, 255, 255, 1)"} />
+            <NotificationIcon color={hasUnreadDirects || hasUnreadGroups ? "var(--danger)" : "rgba(255, 255, 255, 1)"} />
           </IconButton>
         </Box>
 
@@ -433,13 +433,13 @@ const Header = ({
             
             minWidth: '24px !important'
           }}>
-            <HubsIcon height={20} color={hasUnreadGroups ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"} />
+            <HubsIcon height={20} color={hasUnreadGroups ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"} />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
+                    color: hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"
                   },
                 }} primary="Groups" />
         </MenuItem>
@@ -454,13 +454,13 @@ const Header = ({
             
             minWidth: '24px !important'
           }}>
-          <MessagingIcon height={20} color={hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"} />
+          <MessagingIcon height={20} color={hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"} />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadDirects ? "var(--unread)" :"rgba(250, 250, 250, 0.5)"
+                    color: hasUnreadDirects ? "var(--danger)" :"rgba(250, 250, 250, 0.5)"
                   },
                 }} primary="Messaging" />
         </MenuItem>

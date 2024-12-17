@@ -534,14 +534,12 @@ export const NewThread = ({
             </NewMessageSendP>
             {isMessage ? (
               <SendNewMessage
-                color="red"
                 opacity={1}
                 height="25px"
                 width="25px"
               />
             ) : (
               <CreateThreadIcon
-                color="red"
                 opacity={1}
                 height="25px"
                 width="25px"

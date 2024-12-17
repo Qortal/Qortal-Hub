@@ -1687,7 +1687,7 @@ export const Group = ({
                         direct?.timestamp) && (
                       <MarkChatUnreadIcon
                         sx={{
-                          color: "red",
+                          color: "var(--unread)",
                         }}
                       />
                     )}
@@ -1897,7 +1897,7 @@ export const Group = ({
                           justifyContent: 'center'
                         }}>
                         <NoEncryptionGmailerrorredIcon sx={{
-                          color: 'var(--unread)'
+                          color: 'var(--danger)'
                         }} />
                         </Box>
                       //   <Avatar
@@ -1940,7 +1940,7 @@ export const Group = ({
                       !groupAnnouncements[group?.groupId]?.seentimestamp && (
                         <CampaignIcon
                           sx={{
-                            color: "red",
+                            color: "var(--unread)",
                             marginRight: "5px",
                           }}
                         />
@@ -1956,7 +1956,7 @@ export const Group = ({
                           group?.timestamp) && (
                         <MarkChatUnreadIcon
                           sx={{
-                            color: "red",
+                            color: "var(--unread)",
                           }}
                         />
                       )}
