@@ -2783,6 +2783,7 @@ function App() {
             <Button sx={{
                   backgroundColor: 'var(--green)',
                   color: 'black',
+                  fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
                     backgroundColor: 'var(--green)',
@@ -2795,6 +2796,7 @@ function App() {
             <Button sx={{
                   backgroundColor: 'var(--danger)',
                   color: 'black',
+                  fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
                     backgroundColor: 'var(--danger)',

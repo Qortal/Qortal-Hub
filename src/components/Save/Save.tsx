@@ -269,6 +269,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   backgroundColor: "var(--green)",
                   color: "black",
                   opacity: 0.7,
+                  fontWeight: 'bold',
                   "&:hover": {
                     backgroundColor: "var(--green)",
                     color: "black",
@@ -302,6 +303,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     sx={{
                       backgroundColor: "var(--danger)",
                       color: "black",
+                      fontWeight: 'bold',
                       opacity: 0.7,
                       "&:hover": {
                         backgroundColor: "var(--danger)",
@@ -362,6 +364,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 sx={{
                   backgroundColor: "var(--danger)",
                   color: "black",
+                  fontWeight: 'bold',
                   opacity: 0.7,
                   "&:hover": {
                     backgroundColor: "var(--danger)",

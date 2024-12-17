@@ -604,7 +604,7 @@ export const Group = ({
       }
     });
     return hasUnread;
-  }, [timestampEnterData, groups, myAddress]);
+  }, [timestampEnterData, groups, myAddress, groupChatTimestamps]);
 
   const groupsAnnHasUnread = useMemo(() => {
     let hasUnread = false;
