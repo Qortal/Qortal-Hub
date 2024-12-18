@@ -80,6 +80,8 @@ import { LoadingButton } from "@mui/lab";
 import { Label } from "./components/Group/AddGroup";
 import { CustomizedSnackbars } from "./components/Snackbar/Snackbar";
 import SettingsIcon from "@mui/icons-material/Settings";
+import HelpIcon from '@mui/icons-material/Help';
+
 import {
   cleanUrl,
   getFee,
@@ -128,6 +130,8 @@ import { CoreSyncStatus } from "./components/CoreSyncStatus";
 import { Wallets } from "./Wallets";
 import { RandomSentenceGenerator } from "./utils/seedPhrase/RandomSentenceGenerator";
 import { useFetchResources } from "./common/useFetchResources";
+import { Tutorials } from "./components/Tutorials/Tutorials";
+import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
 
 type extStates =
   | "not-authenticated"
@@ -247,8 +251,12 @@ export const resumeAllQueues = () => {
 };
 
 
-
+const defaultValuesGlobal = {
+  openTutorialModal: null,
+  setOpenTutorialModal: ()=> {}
+}
 export const MyContext = createContext<MyContextInterface>(defaultValues);
+export const GlobalContext = createContext<MyContextInterface>(defaultValuesGlobal);
 
 export let globalApiKey: string | null = null;
 
@@ -339,6 +347,7 @@ function App() {
   const {downloadResource} = useFetchResources()
   const holdRefExtState = useRef<extStates>("not-authenticated");
   const isFocusedRef = useRef<boolean>(true);
+  const {showTutorial, openTutorialModal, shownTutorialsInitiated, setOpenTutorialModal} = useHandleTutorials()
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     isShow: isShowUnsavedChanges,
@@ -411,6 +420,17 @@ function App() {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
     }
   }, []);
+
+  useEffect(()=> {
+    if(!shownTutorialsInitiated) return
+    if(extState === 'not-authenticated'){
+      showTutorial('create-account')
+    } else if(extState === "create-wallet" && walletToBeDownloaded){
+      showTutorial('important-information')
+    } else if(extState === "authenticated"){
+      showTutorial('getting-started')
+    }
+  }, [extState, walletToBeDownloaded, shownTutorialsInitiated])
 
   useEffect(() => {
     // Attach a global event listener for double-click
@@ -974,7 +994,7 @@ function App() {
           message:
             "Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.",
         });
-      } else {
+      } else if(extState === 'authenticated') {
         await showUnsavedChanges({
           message:
             "Are you sure you would like to logout?",
@@ -1541,6 +1561,23 @@ function App() {
               alignItems: 'center'
             }}
           >
+            {(desktopViewMode === "apps" || desktopViewMode === "home") && (
+               <ButtonBase onClick={()=> {
+                if(desktopViewMode === "apps"){
+                  showTutorial('qapps', true)
+  
+                } else {
+                  showTutorial('create-account', true)
+  
+                }
+                }} >
+                  <HelpIcon sx={{
+                color: 'var(--unread)'
+                 }} />
+                </ButtonBase>
+              )}
+            
+        <Spacer height="20px" />
           <img
               onClick={() => {
                 setExtstate("download-wallet");
@@ -1569,6 +1606,13 @@ function App() {
         // backgroundRepeat: desktopViewMode === "apps" && "no-repeat",
       }}
     >
+      <GlobalContext.Provider value={{
+            showTutorial,
+            openTutorialModal,
+            setOpenTutorialModal,
+            downloadResource
+      }}>
+            <Tutorials />
       {extState === "not-authenticated" && (
         <NotAuthenticated
           getRootProps={getRootProps}
@@ -1602,7 +1646,8 @@ function App() {
             setOpenSnackGlobal: setOpenSnack,
             infoSnackCustom: infoSnack,
             setInfoSnackCustom: setInfoSnack,
-            downloadResource
+            downloadResource,
+
           }}
         >
           <Box
@@ -3174,6 +3219,21 @@ function App() {
       >
         {renderProfile()}
       </DrawerComponent>
+      </GlobalContext.Provider>
+      {extState === "create-wallet" && walletToBeDownloaded && (
+         <ButtonBase onClick={()=> {
+          showTutorial('important-information', true)
+       }} sx={{
+         position: 'fixed',
+         bottom: '25px',
+         right: '25px'
+       }}>
+         <HelpIcon sx={{
+           color: 'var(--unread)'
+         }} />
+         </ButtonBase>
+      )}
+     
     </AppContainer>
   );
 }

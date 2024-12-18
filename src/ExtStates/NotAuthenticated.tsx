@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Spacer } from "../common/Spacer";
 import { CustomButton, TextItalic, TextP, TextSpan } from "../App-styles";
 import {
   Box,
   Button,
+  ButtonBase,
   Checkbox,
   Dialog,
   DialogActions,
@@ -18,9 +19,11 @@ import {
 import Logo1 from "../assets/svgs/Logo1.svg";
 import Logo1Dark from "../assets/svgs/Logo1Dark.svg";
 import Info from "../assets/svgs/Info.svg";
+import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from "../components/Snackbar/Snackbar";
 import { set } from "lodash";
 import { cleanUrl, isUsingLocal } from "../background";
+import { GlobalContext } from "../App";
 
 const manifestData = {
   version: "0.3.8",
@@ -53,6 +56,8 @@ export const NotAuthenticated = ({
   const [customApikey, setCustomApiKey] = React.useState("");
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
+    const { showTutorial  } = useContext(GlobalContext);
+
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
   const hasLocalNodeRef = useRef(null);
@@ -291,6 +296,7 @@ export const NotAuthenticated = ({
         WELCOME TO <TextItalic>YOUR</TextItalic> <br></br>
         <TextSpan> QORTAL WALLET</TextSpan>
       </TextP>
+      
       <Spacer height="30px" />
       <Box
         sx={{
@@ -686,6 +692,17 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
+      <ButtonBase onClick={()=> {
+         showTutorial('getting-started', true)
+      }} sx={{
+        position: 'fixed',
+        bottom: '25px',
+        right: '25px'
+      }}>
+        <HelpIcon sx={{
+          color: 'var(--unread)'
+        }} />
+        </ButtonBase>
     </>
   );
 };
