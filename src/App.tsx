@@ -607,7 +607,7 @@ function App() {
     let wallet = structuredClone(rawWallet);
 
     const res = await decryptStoredWallet(password, wallet);
-    const wallet2 = new PhraseWallet(res, walletVersion);
+    const wallet2 = new PhraseWallet(res, wallet?.version || walletVersion);
     wallet = await wallet2.generateSaveWalletData(
       password,
       crypto.kdfThreads,
