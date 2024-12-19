@@ -22,11 +22,10 @@ export const useFetchResources = () => {
       let isCalling = false;
       let percentLoaded = 0;
       let timer = 24;
-      let tries = 26;
+      let tries = 0;
       let calledFirstTime = false
 
       const callFunction = async ()=> {
-        console.log('calledFirstTime', calledFirstTime)
         if (isCalling) return;
         isCalling = true;
 
@@ -43,8 +42,10 @@ export const useFetchResources = () => {
                 },
               });
                res = await resCall.json()
-               if(tries === 5 && intervalId?.current){
-                clearInterval(intervalId?.current)
+               if(tries > 18 ){
+                if(intervalId?.current){
+                  clearInterval(intervalId?.current)
+                }
                 setResources((prev) => ({
                   ...prev,
                   [`${service}-${name}-${identifier}`]: {
@@ -104,6 +105,7 @@ export const useFetchResources = () => {
                 isCalling = false;
                 downloadResource({ name, service, identifier }, true);
               }, 25000);
+              
               return;
             }
 
@@ -122,7 +124,10 @@ export const useFetchResources = () => {
 
         // Check if progress is 100% and clear interval if true
         if (res?.status === 'READY') {
-          clearInterval(intervalId.current);
+          if(intervalId.current){
+            clearInterval(intervalId.current);
+
+          }
 
           // Update Recoil state for completion
           setResources((prev) => ({

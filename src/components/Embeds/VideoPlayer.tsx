@@ -440,7 +440,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }
 
-console.log('!src && !isLoading) || !startPlay', startPlay, resourceStatus?.status === 'READY')
+  console.log('resourceStatus', resourceStatus)
+
   return (
     <VideoContainer
       tabIndex={0}

@@ -98,7 +98,7 @@ useEffect(()=> {
                   multi: [
                    
                     {
-                      title: "Getting Started",
+                      title: "1. Getting Started",
                       resource: {
                         name: "a-test",
                         service: "VIDEO",
@@ -106,7 +106,7 @@ useEffect(()=> {
                       },
                     },
                     {
-                        title: "Overview",
+                        title: "2. Overview",
                         resource: {
                           name: "a-test",
                           service: "VIDEO",
@@ -114,7 +114,7 @@ useEffect(()=> {
                         },
                       },
                     {
-                      title: "Qortal Groups",
+                      title: "3. Qortal Groups",
                       resource: {
                         name: "a-test",
                         service: "VIDEO",
@@ -133,7 +133,7 @@ useEffect(()=> {
                     setOpenTutorialModal({
                       multi: [
                         {
-                          title: "Apps Dashboard",
+                          title: "1. Apps Dashboard",
                           resource: {
                             name: "a-test",
                             service: "VIDEO",
@@ -141,7 +141,7 @@ useEffect(()=> {
                           },
                         },
                         {
-                          title: "Apps Navigation",
+                          title: "2. Apps Navigation",
                           resource: {
                             name: "a-test",
                             service: "VIDEO",
