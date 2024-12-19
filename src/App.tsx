@@ -1567,7 +1567,7 @@ function App() {
                   showTutorial('qapps', true)
   
                 } else {
-                  showTutorial('create-account', true)
+                  showTutorial('getting-started', true)
   
                 }
                 }} >
