@@ -693,7 +693,7 @@ export const NotAuthenticated = ({
         </Dialog>
       )}
       <ButtonBase onClick={()=> {
-         showTutorial('getting-started', true)
+         showTutorial('create-account', true)
       }} sx={{
         position: 'fixed',
         bottom: '25px',
