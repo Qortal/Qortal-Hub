@@ -489,7 +489,19 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             )}
               </>
             )}
-         <Box sx={{
+        
+          </Box>
+        )}
+              <Box
+            sx={{
+              padding: "15px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 1,
+              width: '100%'
+            }}
+          >
+       <Box sx={{
           display: 'flex',
           gap: '10px',
           justifyContent: 'flex-end',
@@ -546,9 +558,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             Export
             </ButtonBase>
          </Box>
-          </Box>
-        )}
-      
+         </Box>
       </Popover>
       <CustomizedSnackbars
         duration={3500}
