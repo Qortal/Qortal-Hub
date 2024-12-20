@@ -440,7 +440,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }
 
-  console.log('resourceStatus', resourceStatus)
 
   return (
     <VideoContainer

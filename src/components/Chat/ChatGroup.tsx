@@ -969,7 +969,8 @@ const clearEditorContent = () => {
 <AppViewerContainer customHeight="560px" app={{
   tabId: '5558588',
   name: 'Q-Manager',
-  service: 'APP'
+  service: 'APP',
+  path: `?groupId=${selectedGroup}`
 }} isSelected />
 </Box>
 </Box>

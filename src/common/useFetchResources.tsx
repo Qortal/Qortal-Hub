@@ -138,6 +138,16 @@ export const useFetchResources = () => {
             },
           }));
         }
+        if(res?.status === 'DOWNLOADED'){
+          const url = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
+          const resCall = await fetch(url, {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+             res = await resCall.json();
+        }
       }
       callFunction()
        intervalId.current = setInterval(async () => {

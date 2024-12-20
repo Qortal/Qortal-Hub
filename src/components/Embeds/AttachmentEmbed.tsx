@@ -263,7 +263,7 @@ export const AttachmentCard = ({
           }}>
              
           <FileAttachmentContainer >
-            <Typography>{resourceDetails?.status?.status}</Typography>
+            <Typography>{resourceDetails?.status?.status === 'DOWNLOADED' ? 'BUILDING' : resourceDetails?.status?.status}</Typography>
             {!resourceDetails && (
               <>
                         <DownloadIcon />
