@@ -113,6 +113,7 @@ import {
   enabledDevModeAtom,
   fullScreenAtom,
   hasSettingsChangedAtom,
+  isUsingImportExportSettingsAtom,
   oldPinnedAppsAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
@@ -453,6 +454,7 @@ function App() {
   const resetAtomSortablePinnedAppsAtom = useResetRecoilState(
     sortablePinnedAppsAtom
   );
+  const resetAtomIsUsingImportExportSettingsAtom = useResetRecoilState(isUsingImportExportSettingsAtom)
   const resetAtomCanSaveSettingToQdnAtom = useResetRecoilState(
     canSaveSettingToQdnAtom
   );
@@ -470,6 +472,7 @@ function App() {
     resetAtomSettingsQDNLastUpdatedAtom();
     resetAtomSettingsLocalLastUpdatedAtom();
     resetAtomOldPinnedAppsAtom();
+    resetAtomIsUsingImportExportSettingsAtom()
   };
   useEffect(() => {
     if (!isMobile) return;

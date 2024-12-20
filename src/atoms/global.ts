@@ -67,6 +67,11 @@ export const oldPinnedAppsAtom = atom({
   key: 'oldPinnedAppsAtom', 
   default: [], 
 });
+export const isUsingImportExportSettingsAtom = atom({
+  key: 'isUsingImportExportSettingsAtom', 
+  default: null, 
+});
+
 
 export const fullScreenAtom = atom({
   key: 'fullScreenAtom', 

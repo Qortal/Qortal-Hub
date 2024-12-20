@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react'
 import { useSetRecoilState } from 'recoil';
-import { settingsLocalLastUpdatedAtom, sortablePinnedAppsAtom } from './atoms/global';
+import { isUsingImportExportSettingsAtom, oldPinnedAppsAtom, settingsLocalLastUpdatedAtom, settingsQDNLastUpdatedAtom, sortablePinnedAppsAtom } from './atoms/global';
 
 function fetchFromLocalStorage(key) {
     try {
@@ -18,7 +18,10 @@ function fetchFromLocalStorage(key) {
 export const useRetrieveDataLocalStorage = () => {
     const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
     const setSettingsLocalLastUpdated = useSetRecoilState(settingsLocalLastUpdatedAtom);
-    
+    const setIsUsingImportExportSettings = useSetRecoilState(isUsingImportExportSettingsAtom)
+    const setSettingsQDNLastUpdated = useSetRecoilState(settingsQDNLastUpdatedAtom);
+    const setOldPinnedApps =  useSetRecoilState(oldPinnedAppsAtom)
+
     const getSortablePinnedApps = useCallback(()=> {
         const pinnedAppsLocal = fetchFromLocalStorage('ext_saved_settings')
         if(pinnedAppsLocal?.sortablePinnedApps){
@@ -29,9 +32,24 @@ export const useRetrieveDataLocalStorage = () => {
         }
       
     }, [])
+    const getSortablePinnedAppsImportExport = useCallback(()=> {
+        const pinnedAppsLocal = fetchFromLocalStorage('ext_saved_settings_import_export')
+        if(pinnedAppsLocal?.sortablePinnedApps){
+            setOldPinnedApps(pinnedAppsLocal?.sortablePinnedApps)
+            
+          
+                setIsUsingImportExportSettings(true)
+                setSettingsQDNLastUpdated(pinnedAppsLocal?.timestamp || 0)
+           
+        } else {
+            setIsUsingImportExportSettings(false)
+        }
+      
+    }, [])
     useEffect(()=> {
       
         getSortablePinnedApps()
+        getSortablePinnedAppsImportExport()
     }, [getSortablePinnedApps])
  
 }
