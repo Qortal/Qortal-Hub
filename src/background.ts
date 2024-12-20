@@ -2282,7 +2282,7 @@ export async function sendCoin(
 
     const lastRef = await getLastRef();
     const fee = await sendQortFee();
-    const validApi = await findUsableApi();
+    const validApi = null;
 
     const res = await makeTransactionRequest(
       confirmReceiver,

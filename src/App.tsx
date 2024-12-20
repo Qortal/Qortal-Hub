@@ -133,6 +133,8 @@ import { RandomSentenceGenerator } from "./utils/seedPhrase/RandomSentenceGenera
 import { useFetchResources } from "./common/useFetchResources";
 import { Tutorials } from "./components/Tutorials/Tutorials";
 import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
+import { removeLeadingZero } from "./utils/helpers";
+import BoundedNumericTextField from "./common/BoundedNumericTextField";
 
 type extStates =
   | "not-authenticated"
@@ -657,7 +659,8 @@ function App() {
         setLtcBalanceLoading(false);
       });
   };
-  const sendCoinFunc = () => {
+  const sendCoinFunc = async() => {
+   try {
     setSendPaymentError("");
     setSendPaymentSuccess("");
     if (!paymentTo) {
@@ -672,6 +675,12 @@ function App() {
       setSendPaymentError("Please enter your wallet password");
       return;
     }
+    const fee = await getFee('PAYMENT')
+
+    await show({
+      message: `Would you like to transfer ${Number(paymentAmount)} QORT?` ,
+      paymentFee: fee.fee + ' QORT'
+    })
     setIsLoading(true);
     window
       .sendMessage("sendCoin", {
@@ -692,6 +701,9 @@ function App() {
         console.error("Failed to send coin:", error);
         setIsLoading(false);
       });
+   } catch (error) {
+    // error
+   }
   };
 
   const clearAllStates = () => {
@@ -1778,12 +1790,22 @@ function App() {
               Amount
             </CustomLabel>
             <Spacer height="5px" />
-            <CustomInput
+            {/* <CustomInput
               id="standard-adornment-amount"
               type="number"
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(+e.target.value)}
               autoComplete="off"
+              onInput={removeLeadingZero}
+            /> */}
+             <BoundedNumericTextField
+              value={paymentAmount}
+              minValue={0}
+               maxValue={+balance}
+                allowDecimals={true}
+                initialValue={'0'}
+                allowNegatives={false}
+                afterChange={(e: string) => setPaymentAmount(+e)}
             />
             <Spacer height="6px" />
             <CustomLabel htmlFor="standard-adornment-password">
@@ -2822,14 +2844,21 @@ function App() {
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">{"Publish"}</DialogTitle>
+          <DialogTitle id="alert-dialog-title">{message.paymentFee ? "Payment"  : "Publish"}</DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
               {message.message}
             </DialogContentText>
-            <DialogContentText id="alert-dialog-description2">
-              publish fee: {message.publishFee}
-            </DialogContentText>
+            {message?.paymentFee && (
+               <DialogContentText id="alert-dialog-description2">
+               payment fee: {message.paymentFee}
+             </DialogContentText>
+            )}
+           {message?.publishFee && (
+             <DialogContentText id="alert-dialog-description2">
+             publish fee: {message.publishFee}
+           </DialogContentText>
+           )}
           </DialogContent>
           <DialogActions>
            
