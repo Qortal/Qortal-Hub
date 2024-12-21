@@ -19,7 +19,8 @@
   ],
   "win": {
     "target": ["nsis", "portable"],
-    "icon": "assets/appIcon.ico"
+    "icon": "assets/appIcon.ico",
+    "artifactName": "Qortal-Hub-Setup_${version}.exe",
   },
   "linux": {
     "target": ["AppImage"],
@@ -28,23 +29,25 @@
     "desktop": {
       "StartupWMClass": "qortal-ui"
     },
-    "executableName": "Qortal Hub",
+    "executableName": "Qortal-Hub",
     "icon": "assets/png",
     "asar": true
   },
   "deb": {
-    "artifactName": "Qortal-Hub-Setup.${ext}",
+    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "appImage": {
     "artifactName": "Qortal-Hub.${ext}"
   },
+  
   "snap": {
-    "artifactName": "Qortal-Hub-Setup.${ext}",
+    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "mac": {
     "category": "your.app.category.type",
     "target": "dmg"
-  }
+  },
+  "productName": "Qortal Hub"
 }
