@@ -109,7 +109,8 @@ export const handleUnencryptedPublishes =  (publishes) => {
   let publishesData = []
   publishes.forEach((pub)=> {
     try {
-      const decodedData = JSON.parse(atob(pub))
+      const decryptToUnit8Array = base64ToUint8Array(pub);
+      const decodedData = uint8ArrayToObject(decryptToUnit8Array);
       if(decodedData){
         publishesData.push({decryptedData: decodedData})
       }
