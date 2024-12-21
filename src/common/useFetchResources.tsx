@@ -5,7 +5,6 @@ import { getBaseApiReact } from '../App';
 
 export const useFetchResources = () => {
   const [resources, setResources] = useRecoilState(resourceDownloadControllerAtom);
-  const intervalId = useRef(null)
 
   const downloadResource = useCallback(({ service, name, identifier }, build) => {
     setResources((prev) => ({
@@ -24,7 +23,8 @@ export const useFetchResources = () => {
       let timer = 24;
       let tries = 0;
       let calledFirstTime = false
-
+      let intervalId
+      let timeoutId
       const callFunction = async ()=> {
         if (isCalling) return;
         isCalling = true;
@@ -43,8 +43,11 @@ export const useFetchResources = () => {
               });
                res = await resCall.json()
                if(tries > 18 ){
-                if(intervalId?.current){
-                  clearInterval(intervalId?.current)
+                if(intervalId){
+                  clearInterval(intervalId)
+                }
+                if(timeoutId){
+                  clearTimeout(timeoutId)
                 }
                 setResources((prev) => ({
                   ...prev,
@@ -64,7 +67,7 @@ export const useFetchResources = () => {
       
         
         if(build || (calledFirstTime === false && res?.status !== 'READY')){
-            const url = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
+            const url = `${getBaseApiReact()}/arbitrary/resource/properties/${service}/${name}/${identifier}?build=true`;
             const resCall = await fetch(url, {
                 method: "GET",
                 headers: {
@@ -101,7 +104,7 @@ export const useFetchResources = () => {
                 },
               }));
 
-              setTimeout(() => {
+              timeoutId = setTimeout(() => {
                 isCalling = false;
                 downloadResource({ name, service, identifier }, true);
               }, 25000);
@@ -124,11 +127,13 @@ export const useFetchResources = () => {
 
         // Check if progress is 100% and clear interval if true
         if (res?.status === 'READY') {
-          if(intervalId.current){
-            clearInterval(intervalId.current);
+          if(intervalId){
+            clearInterval(intervalId);
 
           }
-
+          if(timeoutId){
+            clearTimeout(timeoutId)
+          }
           // Update Recoil state for completion
           setResources((prev) => ({
             ...prev,
@@ -150,7 +155,7 @@ export const useFetchResources = () => {
         }
       }
       callFunction()
-       intervalId.current = setInterval(async () => {
+      intervalId = setInterval(async () => {
         callFunction()
       }, 5000);
      

@@ -440,7 +440,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }
 
-
+console.log('tester', startPlay,  resourceStatus?.status, src )
   return (
     <VideoContainer
       tabIndex={0}
@@ -472,7 +472,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }}
         >
           <CircularProgress color="secondary" />
-          {resourceStatus && (
+         
             <Typography
               variant="subtitle2"
               component="div"
@@ -494,14 +494,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <>Download Completed: building tutorial video...</>
               ) : resourceStatus?.status !== 'READY' ? (
                 <>
-                  {getDownloadProgress(resourceStatus?.localChunkCount, resourceStatus?.totalChunkCount)}
+                  {getDownloadProgress(resourceStatus?.localChunkCount || 0, resourceStatus?.totalChunkCount || 100)}
 
                 </>
               ) : (
                 <>Fetching tutorial from the Qortal Network...</>
               )}
             </Typography>
-          )}
+         
         </Box>
       )}
       {((!src && !isLoading) || !startPlay) && (
