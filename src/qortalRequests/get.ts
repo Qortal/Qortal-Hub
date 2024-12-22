@@ -58,6 +58,26 @@ const sellerForeignFee = {
     value: "~0.00005",
     ticker: "LTC",
   },
+  DOGECOIN: {
+    value: "~0.005",
+    ticker: "DOGE",
+  },
+  BITCOIN: {
+    value: "~0.0001",
+    ticker: "BTC",
+  },
+  DIGIBYTE: {
+    value: "~0.0005",
+    ticker: "DGB",
+  },
+  RAVENCOIN: {
+    value: "~0.006",
+    ticker: "RVN",
+  },
+  PIRATECHAIN: {
+    value: "~0.0002",
+    ticker: "ARRR",
+  },
 };
 
 const btcFeePerByte = 0.000001;
@@ -1873,6 +1893,28 @@ export const getWalletBalance = async (
   }
 };
 
+const getPirateWallet = async (arrrSeed58)=> {
+  const bodyToString = arrrSeed58;
+  const url = await createEndpoint(`/crosschain/arrr/walletaddress`);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: bodyToString,
+  });
+  let res;
+  try {
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
+  }
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+  return res
+}
+
 export const getUserWalletFunc = async (coin) => {
   let userWallet = {};
   const wallet = await getSaveWallet();
@@ -1885,26 +1927,34 @@ export const getUserWalletFunc = async (coin) => {
       userWallet["publickey"] = parsedData.publicKey;
       break;
     case "BTC":
+    case "BITCOIN":
       userWallet["address"] = parsedData.btcAddress;
       userWallet["publickey"] = parsedData.btcPublicKey;
       break;
     case "LTC":
+    case "LITECOIN":
       userWallet["address"] = parsedData.ltcAddress;
       userWallet["publickey"] = parsedData.ltcPublicKey;
       break;
     case "DOGE":
+    case "DOGECOIN":
       userWallet["address"] = parsedData.dogeAddress;
       userWallet["publickey"] = parsedData.dogePublicKey;
       break;
     case "DGB":
+    case "DIGIBYTE":
       userWallet["address"] = parsedData.dgbAddress;
       userWallet["publickey"] = parsedData.dgbPublicKey;
       break;
     case "RVN":
+    case "RAVENCOIN":
       userWallet["address"] = parsedData.rvnAddress;
       userWallet["publickey"] = parsedData.rvnPublicKey;
       break;
     case "ARRR":
+    case "PIRATECHAIN":
+      const arrrAddress = await getPirateWallet(parsedData.arrrSeed58)
+      userWallet["address"] = arrrAddress
       break;
     default:
       break;
@@ -2492,7 +2542,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error("Unable to fetch BTC balance");
     }
     const btcWalletBalanceDecimals = Number(btcWalletBalance);
-    const btcAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const btcAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00050000
     if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
       throw new Error("INSUFFICIENT_FUNDS");
@@ -2549,8 +2599,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
-    const ltcAmountDecimals = Number(amount) * QORT_DECIMALS;
-    const balance = (Number(ltcWalletBalance) / 1e8).toFixed(8);
+    const ltcAmountDecimals = Number(amount);
     const fee = feePerByte * 1000; // default 0.00030000
     if (ltcAmountDecimals + fee > ltcWalletBalanceDecimals) {
       throw new Error("Insufficient Funds!");
@@ -2596,7 +2645,6 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === "DOGE") {
     const amount = Number(data.amount);
     const recipient = data.destinationAddress;
-    const coin = data.coin;
     const xprv58 = parsedData.dogePrivateKey;
     const feePerByte = data.fee ? data.fee : dogeFeePerByte;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
@@ -2605,8 +2653,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
-    const dogeAmountDecimals = Number(amount) * QORT_DECIMALS;
-    const balance = (Number(dogeWalletBalance) / 1e8).toFixed(8);
+    const dogeAmountDecimals = Number(amount);
     const fee = feePerByte * 5000; // default 0.05000000
     if (dogeAmountDecimals + fee > dogeWalletBalanceDecimals) {
       let errorMsg = "Insufficient Funds!";
@@ -2663,7 +2710,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
-    const dgbAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const dgbAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00005000
     if (dgbAmountDecimals + fee > dgbWalletBalanceDecimals) {
       let errorMsg = "Insufficient Funds!";
@@ -2712,7 +2759,6 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === "RVN") {
     const amount = Number(data.amount);
     const recipient = data.destinationAddress;
-    const coin = data.coin;
     const xprv58 = parsedData.rvnPrivateKey;
     const feePerByte = data.fee ? data.fee : rvnFeePerByte;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
@@ -2721,8 +2767,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
-    const rvnAmountDecimals = Number(amount) * QORT_DECIMALS;
-    const balance = (Number(rvnWalletBalance) / 1e8).toFixed(8);
+    const rvnAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00562500
     if (rvnAmountDecimals + fee > rvnWalletBalanceDecimals) {
       let errorMsg = "Insufficient Funds!";
@@ -2771,7 +2816,7 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === "ARRR") {
     const amount = Number(data.amount);
     const recipient = data.destinationAddress;
-    const memo = data.memo;
+    const memo = data?.memo;
     const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(arrrWalletBalance))) {
@@ -2779,7 +2824,7 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     const arrrWalletBalanceDecimals = Number(arrrWalletBalance);
-    const arrrAmountDecimals = Number(amount) * QORT_DECIMALS;
+    const arrrAmountDecimals = Number(amount);
     const fee = 0.0001;
     if (arrrAmountDecimals + fee > arrrWalletBalanceDecimals) {
       let errorMsg = "Insufficient Funds!";
@@ -2804,7 +2849,7 @@ export const sendCoin = async (data, isFromExtension) => {
         arrrAmount: amount,
         memo: memo,
       };
-      const url = await createEndpoint(`/crosschain/btc/send`);
+      const url = await createEndpoint(`/crosschain/arrr/send`);
 
       const response = await fetch(url, {
         method: "POST",
@@ -3023,7 +3068,7 @@ export const createSellOrder = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
-  const receivingAddress = await getUserWalletFunc("LTC");
+  const receivingAddress = await getUserWalletFunc(data.foreignBlockchain);
   try {
     const resPermission = await getUserPermission(
       {
