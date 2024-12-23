@@ -1894,6 +1894,10 @@ export const getWalletBalance = async (
 };
 
 const getPirateWallet = async (arrrSeed58)=> {
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("Retrieving PIRATECHAIN balance is not allowed through a gateway.");
+  }
   const bodyToString = arrrSeed58;
   const url = await createEndpoint(`/crosschain/arrr/walletaddress`);
   const response = await fetch(url, {

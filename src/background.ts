@@ -1775,7 +1775,6 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       const address = wallet.address0;
       let message
       if(foreignBlockchain === 'PIRATECHAIN'){
-        console.log('crosschainAtInfo', crosschainAtInfo, crosschainAtInfo[0].qortalAtAddress)
          message = {
           atAddress: crosschainAtInfo[0].qortalAtAddress,
           foreignKey: await getForeignKey(foreignBlockchain),
@@ -1808,7 +1807,6 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
           url =  await createEndpoint('/crosschain/tradebot/respondmultiple')
       }
     
-      console.log('txn', txn, JSON.stringify(txn))
       const responseFetch = await fetch(
         url,
         {
