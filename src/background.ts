@@ -1818,8 +1818,11 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
         }
       );
 
-      if(!responseFetch?.ok) throw new Error('Failed to submit buy order')
       const res = await responseFetch.json();
+      if(res?.error && res?.message){
+        throw new Error(res?.message)
+      }
+      if(!responseFetch?.ok) throw new Error('Failed to submit buy order')
 
       if (res === false) {
         responseVar = {
