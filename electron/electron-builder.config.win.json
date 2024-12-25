@@ -1,0 +1,44 @@
+{
+  "appId": "org.qortal.Qortal-Hub",
+  "productName": "Qortal Hub",
+  "copyright": "Copyright © 2021 - 2025 Qortal",
+  "compression": "normal",
+  "asar": "true",
+  "files": [
+    "assets/**/*",
+    "build/**/*",
+    "capacitor.config.*",
+    "app/**/*"
+  ],
+  "win": {
+    "legalTrademarks": "QORTAL.ORG",
+    "icon": "assets/appIcon.ico",
+    "target": [
+      "nsis",
+      "portable"
+    ]
+  },
+  "nsis": {
+    "artifactName": "Qortal-Hub-Setup-win64_${version}.${ext}",
+    "allowElevation": true,
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "perMachine": true,
+    "runAfterFinish": true,
+    "deleteAppDataOnUninstall": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "directories": {
+    "output": "dist",
+    "buildResources": "resources"
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Qortal",
+      "repo": "Qortal-Hub",
+      "releaseType": "draft"
+    }
+  ]
+}

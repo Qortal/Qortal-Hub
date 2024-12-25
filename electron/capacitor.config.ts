@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.example.app',
-  appName: 'Qortal ',
+  appId: 'org.Qortal.Qortal-Hub',
+  appName: 'Qortal-Hub',
   webDir: 'dist',
   "plugins": {
     "LocalNotifications": {
