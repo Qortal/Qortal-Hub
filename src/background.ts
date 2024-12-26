@@ -1462,7 +1462,7 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   } catch (error) {}
 }
 
-async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses }) {
+async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses, isSingle }) {
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
 
@@ -1487,7 +1487,9 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   };
   const finalJson = {
     callRequest: jsonData,
-    extra: "whatever additional data goes here",
+    extra: {
+      type: isSingle ? "single" : "multiple"
+    },
   };
   const messageStringified = JSON.stringify(finalJson);
 
@@ -1538,7 +1540,6 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
       signature
     }
   }
-  const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
 
   const chatBytes = tx.chatBytes;
@@ -1839,7 +1840,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
           callResponse: response,
           extra: {
             message: "Transaction processed successfully!",
-            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             senderAddress: address,
             node: url
           },
@@ -1849,7 +1850,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
           callResponse: "ERROR",
           extra: {
             message: response,
-            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             senderAddress: address,
             node: url
           },
@@ -1863,7 +1864,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
 
  
     const message = {
-      addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      addresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
       foreignKey: await getForeignKey(foreignBlockchain),
       receivingAddress: address,
     };
@@ -1871,7 +1872,8 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       qortAddress: proxyAccountAddress,
       recipientPublicKey: proxyAccountPublicKey,
       message,
-      atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      isSingle: foreignBlockchain === 'PIRATECHAIN'
     });
 
     
@@ -1890,7 +1892,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
               message: message?.extra?.message,
               senderAddress: address,
               node: buyTradeNodeBaseUrl,
-              atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+              atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             }
           }
     
