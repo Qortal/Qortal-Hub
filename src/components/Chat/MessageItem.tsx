@@ -18,7 +18,7 @@ import { Spacer } from "../../common/Spacer";
 import { ReactionPicker } from "../ReactionPicker";
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
-
+import TextStyle from '@tiptap/extension-text-style';
 export const MessageItem = ({
   message,
   onSeen,
@@ -208,7 +208,8 @@ export const MessageItem = ({
                     StarterKit,
                     Underline,
                     Highlight,
-                    Mention
+                    Mention,
+                    TextStyle
                   ])}
                 />
               )}
@@ -227,7 +228,8 @@ export const MessageItem = ({
               StarterKit,
               Underline,
               Highlight,
-              Mention
+              Mention,
+              TextStyle
             ])}
           />
         )}
@@ -461,7 +463,8 @@ export const ReplyPreview = ({message, isEdit})=> {
                     StarterKit,
                     Underline,
                     Highlight,
-                    Mention
+                    Mention,
+                    TextStyle
                   ])}
                 />
               )}
