@@ -46,7 +46,7 @@
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
+    "electron": "^26.2.2",
     "electron-builder": "~23.6.0",
     "@electron/rebuild": "^3.2.10",
     "@electron/notarize": "^2.5.0",
