@@ -1,5 +1,5 @@
 {
-  "appId": "com.github.Qortal.Qortal-Hub",
+  "appId": "org.Qortal.Qortal-Hub",
   "directories": {
     "buildResources": "resources"
   },
@@ -27,7 +27,7 @@
     "category": "Network",
     "packageCategory": "Network",
     "desktop": {
-      "StartupWMClass": "qortal-ui"
+      "StartupWMClass": "qortal-hub"
     },
     "executableName": "Qortal-Hub",
     "icon": "assets/png",
