@@ -133,7 +133,6 @@ import { RandomSentenceGenerator } from "./utils/seedPhrase/RandomSentenceGenera
 import { useFetchResources } from "./common/useFetchResources";
 import { Tutorials } from "./components/Tutorials/Tutorials";
 import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
-import { removeLeadingZero } from "./utils/helpers";
 import BoundedNumericTextField from "./common/BoundedNumericTextField";
 
 type extStates =
@@ -1790,14 +1789,6 @@ function App() {
               Amount
             </CustomLabel>
             <Spacer height="5px" />
-            {/* <CustomInput
-              id="standard-adornment-amount"
-              type="number"
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(+e.target.value)}
-              autoComplete="off"
-              onInput={removeLeadingZero}
-            /> */}
              <BoundedNumericTextField
               value={paymentAmount}
               minValue={0}
