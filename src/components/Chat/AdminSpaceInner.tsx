@@ -123,7 +123,7 @@ export const AdminSpaceInner = ({
       window
         .sendMessage("encryptAndPublishSymmetricKeyGroupChatForAdmins", {
           groupId: selectedGroup,
-          previousData: null,
+          previousData: adminGroupSecretKey,
           admins: adminsWithNames,
         })
         .then((response) => {
