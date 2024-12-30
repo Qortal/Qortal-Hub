@@ -1,11 +1,11 @@
 import { Message } from "@chatscope/chat-ui-kit-react";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { MessageDisplay } from "./MessageDisplay";
-import { Avatar, Box, Button, ButtonBase, List, ListItem, ListItemText, Popover, Typography } from "@mui/material";
+import { Avatar, Box, Button, ButtonBase, List, ListItem, ListItemText, Popover, Tooltip, Typography } from "@mui/material";
 import { formatTimestamp } from "../../utils/time";
 import { getBaseApi } from "../../background";
-import { getBaseApiReact } from "../../App";
+import { MyContext, getBaseApiReact } from "../../App";
 import { generateHTML } from "@tiptap/react";
 import Highlight from "@tiptap/extension-highlight";
 import Mention from "@tiptap/extension-mention";
@@ -19,6 +19,37 @@ import { ReactionPicker } from "../ReactionPicker";
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
 import TextStyle from '@tiptap/extension-text-style';
+import { addressInfoKeySelector } from "../../atoms/global";
+import { useRecoilValue } from "recoil";
+import level0Img from "../../assets/badges/level-0.png"
+import level1Img from "../../assets/badges/level-1.png"
+import level2Img from "../../assets/badges/level-2.png"
+import level3Img from "../../assets/badges/level-3.png"
+import level4Img from "../../assets/badges/level-4.png"
+import level5Img from "../../assets/badges/level-5.png"
+import level6Img from "../../assets/badges/level-6.png"
+import level7Img from "../../assets/badges/level-7.png"
+import level8Img from "../../assets/badges/level-8.png"
+import level9Img from "../../assets/badges/level-9.png"
+import level10Img from "../../assets/badges/level-10.png"
+
+const getBadgeImg = (level)=> {
+  switch(level?.toString()){
+
+    case '0': return level0Img
+    case '1': return level1Img
+    case '2': return level2Img
+    case '3': return level3Img
+    case '4': return level4Img
+    case '5': return level5Img
+    case '6': return level6Img
+    case '7': return level7Img
+    case '8': return level8Img
+    case '9': return level9Img
+    case '10': return level10Img
+    default: return level0Img
+  }
+}
 export const MessageItem = ({
   message,
   onSeen,
@@ -41,11 +72,10 @@ export const MessageItem = ({
     threshold: 0.7, // Fully visible
     triggerOnce: false, // Only trigger once when it becomes visible
   });
-
-
+const {getIndividualUserInfo} = useContext(MyContext)
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedReaction, setSelectedReaction] = useState(null);
-
+  const userInfo = useRecoilValue(addressInfoKeySelector(message?.sender));
 
   useEffect(() => {
     if (inView && isLast && onSeen) {
@@ -53,7 +83,11 @@ export const MessageItem = ({
     }
   }, [inView, message.id, isLast]);
 
-
+useEffect(()=> {
+  if(message?.sender){
+    getIndividualUserInfo(message?.sender)
+  }
+}, [message?.sender])
 
   return (
     <>
@@ -82,11 +116,18 @@ export const MessageItem = ({
           }}
         />
       ) : (
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+          alignItems: 'center'
+        }}>
         <WrapperUserAction
           disabled={myAddress === message?.sender}
           address={message?.sender}
           name={message?.senderName}
         >
+          
           <Avatar
             sx={{
               backgroundColor: "#27282c",
@@ -99,7 +140,19 @@ export const MessageItem = ({
           >
             {message?.senderName?.charAt(0)}
           </Avatar>
+          
+          
         </WrapperUserAction>
+        <Tooltip disableFocusListener title={`level ${userInfo?.level}`}>
+            
+         
+            <img style={{
+              visibility: userInfo?.level !== undefined ? 'visible' : 'hidden',
+              width: '30px',
+              height: 'auto'
+            }} src={getBadgeImg(userInfo?.level)} /> 
+        </Tooltip>
+        </Box>
       )}
 
       <Box

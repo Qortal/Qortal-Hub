@@ -134,6 +134,7 @@ import { useFetchResources } from "./common/useFetchResources";
 import { Tutorials } from "./components/Tutorials/Tutorials";
 import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
 import BoundedNumericTextField from "./common/BoundedNumericTextField";
+import { useHandleUserInfo } from "./components/Group/useHandleUserInfo";
 
 type extStates =
   | "not-authenticated"
@@ -396,7 +397,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false)
   const [creationStep, setCreationStep] = useState(1)
-
+  const {getIndividualUserInfo} = useHandleUserInfo()
   const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage();
   useQortalGetSaveSettings(userInfo?.name, extState === "authenticated");
@@ -1661,7 +1662,7 @@ function App() {
             infoSnackCustom: infoSnack,
             setInfoSnackCustom: setInfoSnack,
             downloadResource,
-
+            getIndividualUserInfo
           }}
         >
           <Box
