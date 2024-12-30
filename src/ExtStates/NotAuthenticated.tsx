@@ -26,7 +26,7 @@ import { cleanUrl, isUsingLocal } from "../background";
 import { GlobalContext } from "../App";
 
 const manifestData = {
-  version: "0.3.9",
+  version: "0.4.0",
 };
 
 export const NotAuthenticated = ({
