@@ -656,6 +656,78 @@ export const decryptDataWithSharingKey = async (data, sender) => {
   return base64ToObject.data
 };
 
+export const getHostedData = async (data, isFromExtension) => {
+ 
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to",
+      text2: `Get a list of your hosted data?`,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+
+  if(accepted){
+    const limit = data?.limit ? data?.limit : 20;
+    const query = data?.query ? data?.query : undefined
+    const offset = data?.offset ? data?.offset : 0
+
+    try {
+       
+      const url = await createEndpoint(`/arbitrary/hosted/resources/?limit=${limit}&query=${query}&offset=${offset}`);
+      const response = await fetch(url);
+      const data =  await response.json();
+      return data
+    } catch (error) {
+      throw error
+    }
+    
+    } else {
+    throw new Error("User declined to get list of hosted resources");
+  }
+  
+};
+
+export const deleteHostedData = async (data, isFromExtension) => {
+  const requiredFields = ["hostedData"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const resPermission = await getUserPermission(
+    {
+      text1: "Do you give this application permission to",
+      text2: `Delete ${data?.hostedData?.length} hosted resources?`,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+
+  if(accepted){
+    const { hostedData } = data;
+
+  for (const hostedDataItem of hostedData){
+    try {
+      const url = await createEndpoint(`/arbitrary/resource/${hostedDataItem.service}/${hostedDataItem.name}/${hostedDataItem.identifer}`);
+       await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        }
+      });
+    } catch (error) {
+      //error
+    }
+  }
+
+  return true
+  } else {
+    throw new Error("User declined delete hosted resources");
+  }
+  
+};
 export const decryptData = async (data) => {
   const { encryptedData, publicKey } = data;
 
