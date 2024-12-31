@@ -2,6 +2,10 @@ import { getBaseApi } from "../background";
 import { createSymmetricKeyAndNonce, decryptGroupData, encryptDataGroup, objectToBase64 } from "../qdn/encryption/group-encryption";
 import { publishData } from "../qdn/publish/pubish";
 import { getData } from "../utils/chromeStorage";
+import { RequestQueueWithPromise } from "../utils/queue/queue";
+
+
+export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
 
 const apiEndpoints = [
     "https://api.qortal.org",
@@ -65,44 +69,51 @@ async function getKeyPair() {
       throw new Error("Wallet not authenticated");
     }
   }
-const getPublicKeys = async (groupNumber: number) => {
-    const validApi = await getBaseApi()
-      const response = await fetch(`${validApi}/groups/members/${groupNumber}?limit=0`);
-      const groupData = await response.json();
-
-      let members: any = [];
-      if (groupData && Array.isArray(groupData?.members)) {
-        for (const member of groupData.members) {
-          if (member.member) {
+  const getPublicKeys = async (groupNumber: number) => {
+    const validApi = await getBaseApi();
+    const response = await fetch(`${validApi}/groups/members/${groupNumber}?limit=0`);
+    const groupData = await response.json();
+  
+    if (groupData && Array.isArray(groupData.members)) {
+      // Use the request queue for fetching public keys
+      const memberPromises = groupData.members
+        .filter((member) => member.member)
+        .map((member) =>
+          requestQueueGetPublicKeys.enqueue(async () => {
             const resAddress = await fetch(`${validApi}/addresses/${member.member}`);
-      const resData = await resAddress.json();
-            const publicKey = resData.publicKey;
-            members.push(publicKey)
-          }
-        }
-      }
+            const resData = await resAddress.json();
+            return resData.publicKey;
+          })
+        );
+  
+      const members = await Promise.all(memberPromises);
+      return members;
+    }
+  
+    return [];
+  };
 
-      return members
-  }
-
-  export const getPublicKeysByAddress = async (admins) => {
-    const validApi = await getBaseApi()
-
-
-      let members: any = [];
-      if (Array.isArray(admins)) {
-        for (const address of admins) {
-          if (address) {
+  export const getPublicKeysByAddress = async (admins: string[]) => {
+    const validApi = await getBaseApi();
+  
+    if (Array.isArray(admins)) {
+      // Use the request queue to limit concurrent fetches
+      const memberPromises = admins
+        .filter((address) => address) // Ensure the address is valid
+        .map((address) =>
+          requestQueueGetPublicKeys.enqueue(async () => {
             const resAddress = await fetch(`${validApi}/addresses/${address}`);
-      const resData = await resAddress.json();
-            const publicKey = resData.publicKey;
-            members.push(publicKey)
-          }
-        }
-      }
-
-      return members
-  }
+            const resData = await resAddress.json();
+            return resData.publicKey;
+          })
+        );
+  
+      const members = await Promise.all(memberPromises);
+      return members;
+    }
+  
+    return []; // Return empty array if admins is not an array
+  };
 
 
 
