@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorProvider, useCurrentEditor, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Color } from "@tiptap/extension-color";
@@ -34,6 +34,9 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import { ReactRenderer } from '@tiptap/react'
 import MentionList from './MentionList.jsx'
+import { useRecoilState } from "recoil";
+import { isDisabledEditorEnterAtom } from "../../atoms/global.js";
+import { Box, Checkbox, Typography } from "@mui/material";
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -44,7 +47,7 @@ function textMatcher(doc, from) {
   const query = match[0];
   return { start, query };
 }
-const MenuBar = ({ setEditorRef, isChat }) => {
+const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEditorEnter }) => {
   const { editor } = useCurrentEditor();
   const fileInputRef = useRef(null);
 
@@ -120,7 +123,9 @@ const MenuBar = ({ setEditorRef, isChat }) => {
 
   return (
     <div className="control-group">
-      <div className="button-group">
+      <div className="button-group" style={{
+        display: 'flex'
+      }}>
         <IconButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
@@ -244,6 +249,43 @@ const MenuBar = ({ setEditorRef, isChat }) => {
         >
           <RedoIcon />
         </IconButton>
+        {isChat && (
+          <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            marginLeft: '5px',
+            cursor: 'pointer'
+          }}
+          onClick={()=> {
+            setIsDisabledEditorEnter(!isDisabledEditorEnter)
+          }}
+        >
+          <Checkbox
+          edge="start"
+          tabIndex={-1}
+          disableRipple
+          
+          checked={isDisabledEditorEnter}
+          sx={{
+            "&.Mui-checked": {
+              color: "gray", // Customize the color when checked
+            },
+            "& .MuiSvgIcon-root": {
+              color: "gray",
+            },
+          }}
+        />
+         <Typography
+                sx={{
+                  fontSize: "14px",
+                  color: 'gray'
+                }}
+              >
+                disable enter
+              </Typography>
+        </Box>
+        )}
         {!isChat && (
           <>
             <IconButton
@@ -300,6 +342,7 @@ export default ({
   membersWithNames,
   enableMentions
 }) => {
+  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(isDisabledEditorEnterAtom)
 
   const extensionsFiltered = isChat
     ? extensions.filter((item) => item?.name !== "image")
@@ -421,12 +464,19 @@ export default ({
     ]
   }, [enableMentions])
 
+  const handleSetIsDisabledEditorEnter = useCallback((val)=> {
+    setIsDisabledEditorEnter(val)
+    localStorage.setItem('settings-disable-editor-enter', JSON.stringify(val));
+
+  }, [])
+
+
   return (
     <div>
     <EditorProvider
       slotBefore={
         (isFocusedParent || !isMobile || overrideMobile) && (
-          <MenuBar setEditorRef={setEditorRefFunc} isChat={isChat} />
+          <MenuBar setEditorRef={setEditorRefFunc} isChat={isChat} isDisabledEditorEnter={isDisabledEditorEnter} setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter} />
         )
       }
       extensions={[...extensionsFiltered,   ...additionalExtensions
@@ -450,7 +500,7 @@ export default ({
             }; max-height:calc(100svh - ${customEditorHeight || "140px"})`: `overflow: auto; max-height: 250px`,
         },
         handleKeyDown(view, event) {
-          if (!disableEnter && event.key === "Enter") {
+          if (!disableEnter && !isDisabledEditorEnter && event.key === "Enter") {
             if (event.shiftKey) {
               view.dispatch(
                 view.state.tr.replaceSelectionWith(

@@ -113,6 +113,7 @@ import {
   enabledDevModeAtom,
   fullScreenAtom,
   hasSettingsChangedAtom,
+  isDisabledEditorEnterAtom,
   isUsingImportExportSettingsAtom,
   oldPinnedAppsAtom,
   settingsLocalLastUpdatedAtom,
@@ -404,6 +405,7 @@ function App() {
   const [fullScreen, setFullScreen] = useRecoilState(fullScreenAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
+  const setIsDisabledEditorEnter = useSetRecoilState(isDisabledEditorEnterAtom)
 
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
   const generatorRef = useRef(null)
@@ -525,6 +527,20 @@ function App() {
       holdRefExtState.current = extState;
     }
   }, [extState]);
+
+  useEffect(()=> {
+    try {
+     const val = localStorage.getItem('settings-disable-editor-enter');
+      if(val){
+        const parsedVal = JSON.parse(val)
+        if(parsedVal === false || parsedVal === true){
+          setIsDisabledEditorEnter(parsedVal)
+        }
+      }
+    } catch (error) {
+      
+    }
+  }, [])
 
   useEffect(() => {
     isFocusedRef.current = isFocused;
