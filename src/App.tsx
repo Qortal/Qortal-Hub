@@ -44,7 +44,7 @@ import Success from "./assets/svgs/Success.svg";
 import Info from "./assets/svgs/Info.svg";
 import CloseIcon from "@mui/icons-material/Close";
 import './utils/seedPhrase/RandomSentenceGenerator';
-
+import EngineeringIcon from '@mui/icons-material/Engineering';
 import {
   createAccount,
   generateRandomSentence,
@@ -136,6 +136,8 @@ import { Tutorials } from "./components/Tutorials/Tutorials";
 import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
 import BoundedNumericTextField from "./common/BoundedNumericTextField";
 import { useHandleUserInfo } from "./components/Group/useHandleUserInfo";
+import { Minting } from "./components/Minting/Minting";
+import { isRunningGateway } from "./qortalRequests";
 
 type extStates =
   | "not-authenticated"
@@ -406,7 +408,7 @@ function App() {
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
   const setIsDisabledEditorEnter = useSetRecoilState(isDisabledEditorEnterAtom)
-
+  const [isOpenMinting, setIsOpenMinting] = useState(false)
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
   const generatorRef = useRef(null)
   const exportSeedphrase = ()=> {
@@ -1592,6 +1594,54 @@ function App() {
               alignItems: 'center'
             }}
           >
+            {extState === "authenticated" && isMainWindow && (
+               <MyContext.Provider
+               value={{
+                 txList,
+                 setTxList,
+                 memberGroups,
+                 setMemberGroups,
+                 isShow,
+                 onCancel,
+                 onOk,
+                 show,
+                 userInfo,
+                 message,
+                 rootHeight,
+                 showInfo,
+                 openSnackGlobal: openSnack,
+                 setOpenSnackGlobal: setOpenSnack,
+                 infoSnackCustom: infoSnack,
+                 setInfoSnackCustom: setInfoSnack,
+                 downloadResource,
+                 getIndividualUserInfo
+               }}
+             >
+                 <TaskManager getUserInfo={getUserInfo} />
+                 </MyContext.Provider>
+            )}
+                          <Spacer height="20px" />
+            <ButtonBase onClick={async ()=> {
+              try {
+                const res =  await isRunningGateway()
+                if(res) throw new Error('Cannot view minting details on the gateway')
+                setIsOpenMinting(true)
+
+              } catch (error) {
+                setOpenSnack(true)
+                setInfoSnack({
+                  type: 'error',
+                  message: error?.message
+                })
+              }
+            }}>
+              <EngineeringIcon sx={{
+                color: 'var(--unread)'
+                 }} />
+            </ButtonBase>
+          
+           
+            <Spacer height="20px" />
             {(desktopViewMode === "apps" || desktopViewMode === "home") && (
                <ButtonBase onClick={()=> {
                 if(desktopViewMode === "apps"){
@@ -1705,17 +1755,7 @@ function App() {
             {!isMobile && renderProfile()}
           </Box>
 
-          <Box
-            sx={{
-              position: "fixed",
-              right: "25px",
-              bottom: "25px",
-              width: "350px",
-              zIndex: 100000,
-            }}
-          >
-            <TaskManager getUserInfo={getUserInfo} />
-          </Box>
+
         </MyContext.Provider>
       )}
       {isOpenSendQort && isMainWindow && (
@@ -3273,7 +3313,9 @@ function App() {
          }} />
          </ButtonBase>
       )}
-     
+     {isOpenMinting && (
+      <Minting setIsOpenMinting={setIsOpenMinting} groups={memberGroups} myAddress={address} show={show} setTxList={setTxList} txList={txList}/>
+     )}
     </AppContainer>
   );
 }

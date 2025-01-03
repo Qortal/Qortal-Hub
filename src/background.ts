@@ -47,6 +47,7 @@ import {
   clearAllNotificationsCase,
   createGroupCase,
   createPollCase,
+  createRewardShareCase,
   decryptDirectCase,
   decryptGroupEncryptionCase,
   decryptSingleCase,
@@ -61,6 +62,7 @@ import {
   getEnteredQmailTimestampCase,
   getGroupDataSingleCase,
   getGroupNotificationTimestampCase,
+  getRewardSharePrivateKeyCase,
   getTempPublishCase,
   getThreadActivityCase,
   getTimestampEnterChatCase,
@@ -82,6 +84,7 @@ import {
   publishOnQDNCase,
   registerNameCase,
   removeAdminCase,
+  removeRewardShareCase,
   resumeAllQueuesCase,
   saveTempPublishCase,
   sendChatDirectCase,
@@ -1105,7 +1108,7 @@ export const sendQortFee = async (): Promise<number> => {
   return qortFee;
 };
 
-async function getNameOrAddress(receiver) {
+export async function getNameOrAddress(receiver) {
   try {
     const isAddress = validateAddress(receiver);
     if (isAddress) {
@@ -3045,6 +3048,15 @@ function setupMessageListener() {
         break;
       case "setupGroupWebsocket":
         setupGroupWebsocketCase(request, event);
+        break;
+      case "createRewardShare":
+        createRewardShareCase(request, event);
+        break;
+        case "getRewardSharePrivateKey":
+          getRewardSharePrivateKeyCase(request, event);
+          break;
+      case "removeRewardShare" :
+        removeRewardShareCase(request, event);
         break;
       case "addEnteredQmailTimestamp":
         addEnteredQmailTimestampCase(request, event);

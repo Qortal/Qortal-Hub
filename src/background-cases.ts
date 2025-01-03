@@ -26,6 +26,7 @@ import {
   getGroupDataSingle,
   getKeyPair,
   getLTCBalance,
+  getLastRef,
   getNameInfo,
   getTempPublish,
   getTimestampEnterChat,
@@ -41,6 +42,7 @@ import {
   makeAdmin,
   notifyAdminRegenerateSecretKey,
   pauseAllQueues,
+  processTransactionVersion2,
   registerName,
   removeAdmin,
   resumeAllQueues,
@@ -56,8 +58,10 @@ import {
 } from "./background";
 import { decryptGroupEncryption, encryptAndPublishSymmetricKeyGroupChat, encryptAndPublishSymmetricKeyGroupChatForAdmins, publishGroupEncryptedResource, publishOnQDN } from "./backgroundFunctions/encryption";
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from "./constants/codes";
+import Base58 from "./deps/Base58";
 import { encryptSingle } from "./qdn/encryption/group-encryption";
 import { _createPoll, _voteOnPoll } from "./qortalRequests/get";
+import { createTransaction } from "./transactions/transactions";
 import { getData, storeData } from "./utils/chromeStorage";
 
 export function versionCase(request, event) {
@@ -1896,3 +1900,139 @@ export async function publishGroupEncryptedResourceCase(request, event) {
       );
     }
   }
+
+  export async function createRewardShareCase(request, event) {
+    try {
+      const {recipientPublicKey} = request.payload;
+        const resKeyPair = await getKeyPair();
+        const parsedData = resKeyPair;
+        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+        const uint8PublicKey = Base58.decode(parsedData.publicKey);
+        const keyPair = {
+          privateKey: uint8PrivateKey,
+          publicKey: uint8PublicKey,
+        };
+        let lastRef = await getLastRef();
+      
+        const tx = await createTransaction(38, keyPair, {
+          recipientPublicKey,
+          percentageShare: 0,
+          lastReference: lastRef,
+        });
+
+        const signedBytes = Base58.encode(tx.signedBytes);
+      
+        const res = await processTransactionVersion2(signedBytes);
+        if (!res?.signature)
+          throw new Error("Transaction was not able to be processed");
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "createRewardShare",
+          payload: res,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    } catch (error) {
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "createRewardShare",
+          error: error?.message,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    }
+  }
+
+  export async function removeRewardShareCase(request, event) {
+    try {
+      const {rewardShareKeyPairPublicKey, recipient, percentageShare} = request.payload;
+        const resKeyPair = await getKeyPair();
+        const parsedData = resKeyPair;
+        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+        const uint8PublicKey = Base58.decode(parsedData.publicKey);
+        const keyPair = {
+          privateKey: uint8PrivateKey,
+          publicKey: uint8PublicKey,
+        };
+        let lastRef = await getLastRef();
+      
+        const tx = await createTransaction(381, keyPair, {
+          rewardShareKeyPairPublicKey,
+          recipient,
+          percentageShare,
+          lastReference: lastRef,
+        });
+
+        const signedBytes = Base58.encode(tx.signedBytes);
+      
+        const res = await processTransactionVersion2(signedBytes);
+        if (!res?.signature)
+          throw new Error("Transaction was not able to be processed");
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "removeRewardShare",
+          payload: res,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    } catch (error) {
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "removeRewardShare",
+          error: error?.message,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    }
+  }
+
+  export async function getRewardSharePrivateKeyCase(request, event) {
+    try {
+      const {recipientPublicKey} = request.payload;
+        const resKeyPair = await getKeyPair();
+        const parsedData = resKeyPair;
+        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+        const uint8PublicKey = Base58.decode(parsedData.publicKey);
+        const keyPair = {
+          privateKey: uint8PrivateKey,
+          publicKey: uint8PublicKey,
+        };
+        let lastRef = await getLastRef();
+      
+        const tx = await createTransaction(38, keyPair, {
+          recipientPublicKey,
+          percentageShare: 0,
+          lastReference: lastRef,
+        });
+
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "getRewardSharePrivateKey",
+          payload: tx?._base58RewardShareSeed,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    } catch (error) {
+      event.source.postMessage(
+        {
+          requestId: request.requestId,
+          action: "getRewardSharePrivateKey",
+          error: error?.message,
+          type: "backgroundMessageResponse",
+        },
+        event.origin
+      );
+    }
+  }
+
+  

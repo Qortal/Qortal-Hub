@@ -17,6 +17,8 @@ import RegisterNameTransaction from './RegisterNameTransaction.js'
 import VoteOnPollTransaction from './VoteOnPollTransaction.js'
 import CreatePollTransaction from './CreatePollTransaction.js'
 import DeployAtTransaction from './DeployAtTransaction.js'
+import RewardShareTransaction from './RewardShareTransaction.js'
+import RemoveRewardShareTransaction from './RemoveRewardShareTransaction.js'
 
 
 export const transactionTypes = {
@@ -36,14 +38,14 @@ export const transactionTypes = {
 	29: GroupInviteTransaction,
 	30: CancelGroupInviteTransaction,
 	31: JoinGroupTransaction,
-	32: LeaveGroupTransaction
+	32: LeaveGroupTransaction,
+	38: RewardShareTransaction,
+	381: RemoveRewardShareTransaction
 }
 
 
 export const createTransaction = (type, keyPair, params) => {
-
 	const tx = new transactionTypes[type]()
-
 	tx.keyPair = keyPair
 	Object.keys(params).forEach(param => {
 	
