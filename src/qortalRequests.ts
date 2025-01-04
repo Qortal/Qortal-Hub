@@ -729,7 +729,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
-        case "SIGN_AND_PROCESS_TRANSACTION": {
+        case "SIGN_TRANSACTION": {
           try {
             const res =  await signTransaction(request.payload, isFromExtension)
             event.source.postMessage({

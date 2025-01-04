@@ -3407,6 +3407,7 @@ export const signTransaction = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
 
+  const shouldProcess = data?.process || false;
   let _url = await createEndpoint(
     "/transactions/decode?ignoreValidityChecks=false"
   );
@@ -3423,7 +3424,7 @@ export const signTransaction = async (data, isFromExtension) => {
   const decodedData = await response.json();
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to SIGN and PROCESS a transaction?`,
+      text1: `Do you give this application permission to ${ shouldProcess ? 'SIGN and PROCESS' : 'SIGN' } a transaction?`,
       highlightedText: "Read the transaction carefully before accepting!",
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
@@ -3469,7 +3470,9 @@ export const signTransaction = async (data, isFromExtension) => {
       );
       const signedBytes = utils.appendBuffer(arbitraryBytesBuffer, signature);
       const signedBytesToBase58 = Base58.encode(signedBytes);
-      
+      if(!shouldProcess){
+        return uint8ArrayToBase64(signedBytes);
+      }
       const res = await processTransactionVersion2(signedBytesToBase58);
       if (!res?.signature)
       throw new Error(
