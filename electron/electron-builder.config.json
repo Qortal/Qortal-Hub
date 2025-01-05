@@ -46,8 +46,9 @@
     "synopsis": "Qortal Hub for Linux"
   },
   "mac": {
-    "category": "your.app.category.type",
-    "target": "dmg"
+    "icon": "assets/mac/appIcon.icns",
+    "category": "public.app-category.utilities",
+    "target": ["dmg"]
   },
   "productName": "Qortal Hub"
 }
