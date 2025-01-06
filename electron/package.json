@@ -31,6 +31,7 @@
     "electron:make": "npm run build && electron-builder build -c ./electron-builder.config.json -p always",
     "electron:make-local": "npm run build && electron-builder build -c ./electron-builder.config.json --publish=never",
     "electron:make-lin": "npm run build && electron-builder build -c ./electron-builder.config.lin.json --publish=never -l",
+    "electron:make-mac": "npm run build && electron-builder build -c ./electron-builder.config.mac.json --publish=never --mac",
     "electron:make-win": "npm run build && electron-builder build -c ./electron-builder.config.win.json --publish=never -w",
     "electron:make-arm": "npm run build && electron-builder build -c ./electron-builder.config.arm.json --publish=never --linux --arm64",
     "electron:make-all": "npm run build && electron-builder build -c ./electron-builder.config.win.json --publish=never -w && electron-builder build -c ./electron-builder.config.lin.json --publish=never -l && electron-builder build -c ./electron-builder.config.arm.json --publish=never --linux --arm64"
