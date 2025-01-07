@@ -115,7 +115,9 @@ import {
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isUsingImportExportSettingsAtom,
+  mailsAtom,
   oldPinnedAppsAtom,
+  qMailLastEnteredTimestampAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
@@ -138,6 +140,7 @@ import BoundedNumericTextField from "./common/BoundedNumericTextField";
 import { useHandleUserInfo } from "./components/Group/useHandleUserInfo";
 import { Minting } from "./components/Minting/Minting";
 import { isRunningGateway } from "./qortalRequests";
+import { QMailStatus } from "./components/QMailStatus";
 
 type extStates =
   | "not-authenticated"
@@ -471,6 +474,8 @@ function App() {
     settingsLocalLastUpdatedAtom
   );
   const resetAtomOldPinnedAppsAtom = useResetRecoilState(oldPinnedAppsAtom);
+  const resetAtomQMailLastEnteredTimestampAtom = useResetRecoilState(qMailLastEnteredTimestampAtom)
+  const resetAtomMailsAtom = useResetRecoilState(mailsAtom)
 
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
@@ -479,6 +484,8 @@ function App() {
     resetAtomSettingsLocalLastUpdatedAtom();
     resetAtomOldPinnedAppsAtom();
     resetAtomIsUsingImportExportSettingsAtom()
+    resetAtomQMailLastEnteredTimestampAtom()
+    resetAtomMailsAtom()
   };
   useEffect(() => {
     if (!isMobile) return;
@@ -1585,6 +1592,8 @@ function App() {
             )}
             <Spacer height="20px" />
             <CoreSyncStatus />
+            <Spacer height="20px" />
+            <QMailStatus />
           </Box>
           <Box
             sx={{

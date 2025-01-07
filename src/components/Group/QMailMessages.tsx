@@ -13,7 +13,9 @@ import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { executeEvent } from '../../utils/events';
 import { CustomLoader } from '../../common/CustomLoader';
-const isLessThanOneWeekOld = (timestamp) => {
+import { useRecoilState } from 'recoil';
+import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
+export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
   const now = Date.now();
   
@@ -39,8 +41,8 @@ export function formatEmailDate(timestamp: number) {
     }
 }
 export const QMailMessages = ({userName, userAddress}) => {
-    const [mails, setMails] = useState([])
-    const [lastEnteredTimestamp, setLastEnteredTimestamp] = useState(null)
+    const [mails, setMails] = useRecoilState(mailsAtom)
+    const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(qMailLastEnteredTimestampAtom)
     const [loading, setLoading] = useState(true)
 
     const getMails = useCallback(async () => {
@@ -187,6 +189,8 @@ export const QMailMessages = ({userName, userAddress}) => {
                     onClick={()=> {
                         executeEvent("addTab", { data: { service: 'APP', name: 'q-mail' } });
                         executeEvent("open-apps-mode", { });
+                        setLastEnteredTimestamp(Date.now())
+
                     }}
                   >
                     <ListItemButton
@@ -220,7 +224,7 @@ export const QMailMessages = ({userName, userAddress}) => {
                           <MailOutlineIcon sx={{
                             color: 'white'
                         }} />
-                        ): lastEnteredTimestamp < mail?.created ? (
+                        ): (lastEnteredTimestamp < mail?.created) && isLessThanOneWeekOld(mail?.created) ? (
                           <MailIcon sx={{
                             color: 'var(--unread)'
                         }} />
