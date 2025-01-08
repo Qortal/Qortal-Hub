@@ -3471,7 +3471,7 @@ export const signTransaction = async (data, isFromExtension) => {
       const signedBytes = utils.appendBuffer(arbitraryBytesBuffer, signature);
       const signedBytesToBase58 = Base58.encode(signedBytes);
       if(!shouldProcess){
-        return uint8ArrayToBase64(signedBytes);
+        return signedBytesToBase58
       }
       const res = await processTransactionVersion2(signedBytesToBase58);
       if (!res?.signature)
