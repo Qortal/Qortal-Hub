@@ -400,6 +400,11 @@ function App() {
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
   const [rootHeight, setRootHeight] = useState("100%");
+   const [currentNode, setCurrentNode] = useState({
+      url: "http://127.0.0.1:12391",
+    });
+      const [useLocalNode, setUseLocalNode] = useState(false);
+    
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false)
   const [creationStep, setCreationStep] = useState(1)
@@ -516,7 +521,9 @@ function App() {
     globalApiKey = key;
   };
   useEffect(() => {
-    window
+    try {
+      setIsLoading(true);
+      window
       .sendMessage("getApiKey")
       .then((response) => {
         if (response) {
@@ -529,7 +536,36 @@ function App() {
           "Failed to get API key:",
           error?.message || "An error occurred"
         );
-      });
+      }).finally(()=> {
+        window
+        .sendMessage("getWalletInfo")
+        .then((response) => {
+          if (response && response?.walletInfo) {
+            setRawWallet(response?.walletInfo);
+            if (
+              holdRefExtState.current === "web-app-request-payment" ||
+              holdRefExtState.current === "web-app-request-connection" ||
+              holdRefExtState.current === "web-app-request-buy-order"
+            )
+              return;
+            if (response?.hasKeyPair) {
+              setExtstate("authenticated");
+            } else {
+              setExtstate("wallet-dropped");
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to get wallet info:", error);
+        });
+      })
+    } catch (error) {
+      
+    } finally {
+      setIsLoading(false);
+
+    }
+   
   }, []);
   useEffect(() => {
     if (extState) {
@@ -627,8 +663,6 @@ function App() {
         setdecryptedWallet(null);
       } catch (e) {
         console.log(e);
-
-        error = e;
       }
     },
   });
@@ -848,36 +882,6 @@ function App() {
     // REMOVED FOR MOBILE APP
   };
 
-  useEffect(() => {
-    try {
-      setIsLoading(true);
-
-      window
-        .sendMessage("getWalletInfo")
-        .then((response) => {
-          if (response && response?.walletInfo) {
-            setRawWallet(response?.walletInfo);
-            if (
-              holdRefExtState.current === "web-app-request-payment" ||
-              holdRefExtState.current === "web-app-request-connection" ||
-              holdRefExtState.current === "web-app-request-buy-order"
-            )
-              return;
-            if (response?.hasKeyPair) {
-              setExtstate("authenticated");
-            } else {
-              setExtstate("wallet-dropped");
-            }
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to get wallet info:", error);
-        });
-    } catch (error) {
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
 
   const getUserInfo = useCallback(async (useTimer?: boolean) => {
     try {
@@ -1712,6 +1716,10 @@ function App() {
           globalApiKey={globalApiKey}
           setApiKey={setApiKey}
           handleSetGlobalApikey={handleSetGlobalApikey}
+          currentNode={currentNode}
+          setCurrentNode={setCurrentNode}
+          setUseLocalNode={setUseLocalNode}
+          useLocalNode={useLocalNode}
         />
       )}
       {/* {extState !== "not-authenticated" && (
@@ -2467,7 +2475,31 @@ function App() {
               }}
               ref={passwordRef}
             />
-            <Spacer height="20px" />
+            {useLocalNode ? (
+              <>
+           <Spacer height="20px" />
+             <Typography
+                    sx={{
+                      fontSize: "12px",
+                    }}
+                  >
+                    {"Using node: "} {currentNode?.url}
+                  </Typography>
+              </>
+            ) : (
+              <>
+              <Spacer height="20px" />
+                <Typography
+                       sx={{
+                         fontSize: "12px",
+                       }}
+                     >
+                       {"Using gateway"} 
+                     </Typography>
+                 </>
+            )}
+           
+                  <Spacer height="20px" />
             <CustomButton onClick={authenticateWallet}>
               Authenticate
             </CustomButton>
