@@ -324,7 +324,6 @@ export function setupContentSecurityPolicy(customScheme: string): void {
 
 // IPC listener for updating allowed domains
 ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
-  console.log('domains', domains)
   if (!Array.isArray(domains)) {
     return;
   }
