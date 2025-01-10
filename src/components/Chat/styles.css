@@ -93,7 +93,7 @@
 .tiptap hr {
   border: none;
   border-top: 1px solid var(--gray-2);
-  margin: 2rem 0;
+  margin: 1rem 0;
 }
 
 .ProseMirror:focus-visible {
@@ -103,6 +103,7 @@
 .tiptap p {
   font-size: 16px;
   color: white; /* Ensure paragraph text color is white */
+  margin: 0px;
 }
   .tiptap p.is-editor-empty:first-child::before {
     color: #adb5bd;

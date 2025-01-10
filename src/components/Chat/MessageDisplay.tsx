@@ -80,7 +80,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
   const sanitizedContent = DOMPurify.sanitize(linkify(htmlContent), {
     ALLOWED_TAGS: [
       'a', 'b', 'i', 'em', 'strong', 'p', 'br', 'div', 'span', 'img', 
-      'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td'
+      'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 's', 'hr'
     ],
     ALLOWED_ATTR: [
       'href', 'target', 'rel', 'class', 'src', 'alt', 'title', 

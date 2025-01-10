@@ -889,7 +889,7 @@ export const deleteListItems = async (data, isFromExtension) => {
   if (isGateway) {
     throw new Error("This action cannot be done through a gateway");
   }
-  const requiredFields = ["list_name", "item"];
+  const requiredFields = ["list_name"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
     if (!data[field]) {
@@ -901,15 +901,18 @@ export const deleteListItems = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-
-  const item = data.item;
+  if(!data?.item && !data?.items){
+    throw new Error('Missing fields: items')
+  }
+  const item = data?.item;
+  const items = data?.items
   const list_name = data.list_name;
 
   const resPermission = await getUserPermission(
     {
       text1: "Do you give this application permission to",
       text2: `Remove the following from the list ${list_name}:`,
-      highlightedText: item,
+      highlightedText: items ? JSON.stringify(items) : item,
     },
     isFromExtension
   );
@@ -918,7 +921,7 @@ export const deleteListItems = async (data, isFromExtension) => {
   if (accepted) {
     const url = await createEndpoint(`/lists/${list_name}`);
     const body = {
-      items: [item],
+      items: items || [item],
     };
     const bodyToString = JSON.stringify(body);
     const response = await fetch(url, {
@@ -1781,10 +1784,17 @@ export const getUserWallet = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
+  const isGateway = await isRunningGateway();
+
+  if (data?.coin === "ARRR" && isGateway)
+    throw new Error(
+      "Cannot view ARRR wallet info through the gateway. Please use your local node."
+    );
   const resPermission = await getUserPermission(
     {
       text1:
         "Do you give this application permission to get your wallet information?",
+        highlightedText: `coin: ${data.coin}`,
     },
     isFromExtension
   );
@@ -1827,7 +1837,7 @@ export const getUserWallet = async (data, isFromExtension) => {
         break;
       case "BTC":
         userWallet["address"] = parsedData.btcAddress;
-        userWallet["publickey"] = parsedData.derivedMasterPublicKey;
+        userWallet["publickey"] = parsedData.btcPublicKey;
         break;
       case "LTC":
         userWallet["address"] = parsedData.ltcAddress;
@@ -1846,6 +1856,7 @@ export const getUserWallet = async (data, isFromExtension) => {
         userWallet["publickey"] = parsedData.rvnPublicKey;
         break;
       case "ARRR":
+        await checkArrrSyncStatus(parsedData.arrrSeed58)
         userWallet["address"] = arrrAddress;
         break;
       default:
@@ -2088,10 +2099,17 @@ export const getUserWalletInfo = async (data, isFromExtension) => {
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
+  if(data?.coin === 'ARRR'){
+
+    throw new Error(
+      "ARRR is not supported for this call."
+    );
+  }
   const resPermission = await getUserPermission(
     {
       text1:
         "Do you give this application permission to retrieve your wallet information",
+        highlightedText: `coin: ${data.coin}`,
     },
     isFromExtension
   );
@@ -2100,6 +2118,8 @@ export const getUserWalletInfo = async (data, isFromExtension) => {
   if (accepted) {
     let coin = data.coin;
     let walletKeys = await getUserWalletFunc(coin);
+
+   
     const _url = await createEndpoint(
       `/crosschain/` + data.coin.toLowerCase() + `/addressinfos`
     );
