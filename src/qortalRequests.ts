@@ -376,7 +376,7 @@ export const isRunningGateway = async ()=> {
   
         case "GET_USER_WALLET": {
           try {
-            const res = await getUserWallet(request.payload, isFromExtension);
+            const res = await getUserWallet(request.payload, isFromExtension, appInfo);
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
@@ -416,7 +416,7 @@ export const isRunningGateway = async ()=> {
   
         case "GET_USER_WALLET_INFO": {
           try {
-            const res = await getUserWalletInfo(request.payload, isFromExtension);
+            const res = await getUserWalletInfo(request.payload, isFromExtension, appInfo);
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
