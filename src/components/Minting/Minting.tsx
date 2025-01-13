@@ -593,7 +593,7 @@ export const Minting = ({
           </Typography>
         </Card>
         <Spacer height="10px" />
-        {accountInfo?.level >= 1 && !accountIsMinting && (
+        {isPartOfMintingGroup && !accountIsMinting && (
           <Box
             sx={{
               display: "flex",
@@ -671,17 +671,17 @@ export const Minting = ({
               <Typography>
                 Minting account: {handleNames(acct?.mintingAccount)}
               </Typography>
-              <Typography>
+              {/* <Typography>
                 Recipient account: {handleNames(acct?.recipientAccount)}
-              </Typography>
-              {acct?.mintingAccount !== accountInfo?.address &&
+              </Typography> */}
+              {/* {acct?.mintingAccount !== accountInfo?.address &&
                 acct?.recipientAccount === accountInfo?.address &&
                 (accountInfo?.level || 0) > 0 && (
                   <Typography>
                     You have reached level 1+. Remove this minting key and then
                     click "Start Minting".
                   </Typography>
-                )}
+                )} */}
               <Button
                 size="small"
                 sx={{
@@ -825,7 +825,7 @@ export const Minting = ({
             </Box>
           </Card>
         )}
-        {isPartOfMintingGroup && (
+        {/* {isPartOfMintingGroup && (
           <>
             {accountInfo?.level >= 5 && (
               <Box
@@ -1124,8 +1124,8 @@ export const Minting = ({
               </Box>
             )}
           </>
-        )}
-        {isShow && (
+        )} */}
+        {/* {isShow && (
           <Dialog
             open={isShow}
             aria-labelledby="alert-dialog-title"
@@ -1160,7 +1160,7 @@ export const Minting = ({
               </Button>
             </DialogActions>
           </Dialog>
-        )}
+        )} */}
       </DialogContent>
       <DialogActions>
         <Button
