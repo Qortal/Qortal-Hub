@@ -31,8 +31,7 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
         <ButtonBase
         ref={setNodeRef} {...attributes} {...listeners}
               sx={{
-                height: "80px",
-                width: "60px",
+                width: "80px",
                 transform: CSS.Transform.toString(transform),
                 transition,
               }}
@@ -53,8 +52,8 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                 >
                   <Avatar
                     sx={{
-                      height: "31px",
-                      width: "31px",
+                      height: "42px",
+                      width: "42px",
                       '& img': { 
                         objectFit: 'fill',
                       }

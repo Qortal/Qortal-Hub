@@ -59,8 +59,8 @@ export const AppInfoSnippet = ({ app, myName, isFromCategory, parentStyles = {} 
           >
             <Avatar
               sx={{
-                height: "31px",
-                width: "31px",
+                height: "42px",
+                width: "42px",
                 '& img': { 
                   objectFit: 'fill',
                 }

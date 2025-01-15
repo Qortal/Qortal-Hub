@@ -298,13 +298,16 @@ export const AppsLibraryDesktop = ({
                 Official Apps
               </AppLibrarySubTitle>
               <Spacer height="45px" />
-              <AppsContainer>
+              <AppsContainer sx={{
+                gap: '50px',
+                justifyContent: 'flex-start'
+              }}>
                 {officialApps?.map((qapp) => {
                   return (
                     <ButtonBase
                       sx={{
-                        height: "80px",
-                        width: "60px",
+                        // height: "80px",
+                        width: "80px",
                       }}
                       onClick={() => {
                         // executeEvent("addTab", {
@@ -327,8 +330,8 @@ export const AppsLibraryDesktop = ({
                         >
                           <Avatar
                             sx={{
-                              height: "31px",
-                              width: "31px",
+                              height: "42px",
+                              width: "42px",
                             }}
                             alt={qapp?.name}
                             src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
