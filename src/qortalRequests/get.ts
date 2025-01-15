@@ -394,7 +394,7 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
 };
 
 export const encryptData = async (data, sender) => {
-  let data64 = data.data64;
+  let data64 = data.data64 || data.base64;
   let publicKeys = data.publicKeys || [];
   if (data.fileId) {
     data64 = await getFileFromContentScript(data.fileId);
@@ -962,24 +962,40 @@ export const publishQDNResource = async (
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  if (!data.fileId && !data.data64) {
+  if (!data.fileId && !data.data64 && !data.base64) {
     throw new Error("No data or file was submitted");
   }
   // Use "default" if user hasn't specified an identifer
   const service = data.service;
+  const appFee = data?.appFee ? +data.appFee : undefined
+  const appFeeRecipient = data?.appFeeRecipient
+  let hasAppFee = false
+  if(appFee && appFee > 0 && appFeeRecipient){
+    hasAppFee = true
+  }
   const registeredName = await getNameInfo();
   const name = registeredName;
+  if(!name){
+    throw new Error('User has no Qortal name')
+  }
   let identifier = data.identifier;
-  let data64 = data.data64;
+  let data64 = data.data64 || data.base64;
   const filename = data.filename;
   const title = data.title;
   const description = data.description;
   const category = data.category;
-  const tag1 = data.tag1;
-  const tag2 = data.tag2;
-  const tag3 = data.tag3;
-  const tag4 = data.tag4;
-  const tag5 = data.tag5;
+
+  const tags = data?.tags || [];
+const result = {};
+
+// Fill tags dynamically while maintaining backward compatibility
+for (let i = 0; i < 5; i++) {
+  result[`tag${i + 1}`] = tags[i] || data[`tag${i + 1}`] || undefined;
+}
+
+// Access tag1 to tag5 from result
+const { tag1, tag2, tag3, tag4, tag5 } = result;
+
   if (data.identifier == null) {
     identifier = "default";
   }
@@ -1019,17 +1035,30 @@ export const publishQDNResource = async (
 
   const fee = await getFee("ARBITRARY");
 
+  const handleDynamicValues = {}
+  if(hasAppFee){
+    const feePayment = await getFee("PAYMENT");
+
+    handleDynamicValues['appFee'] = +appFee + +feePayment.fee,
+    handleDynamicValues['checkbox1'] = {
+      value: true,
+      label: "accept app fee",
+    }
+  }
+  if(!!data?.encrypt){
+    handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`
+  }
   const resPermission = await getUserPermission(
     {
       text1: "Do you give this application permission to publish to QDN?",
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
-      highlightedText: data?.externalEncrypt ? `App is externally encrypting the resource. Make sure you trust the app.` : `isEncrypted: ${!!data.encrypt}`,
       fee: fee.fee,
+      ...handleDynamicValues
     },
     isFromExtension
   );
-  const { accepted } = resPermission;
+  const { accepted, checkbox1 = false } = resPermission;
   if (accepted) {
 
     try {
@@ -1052,6 +1081,12 @@ export const publishQDNResource = async (
         apiVersion: 2,
         withFee: true,
       });
+      if(resPublish?.signature && hasAppFee && checkbox1){
+         sendCoinFunc({
+          amount: appFee,
+          receiver: appFeeRecipient
+        }, true)
+      }
       return resPublish;
     } catch (error) {
       throw new Error(error?.message || "Upload failed");
@@ -1121,16 +1156,54 @@ export const publishMultipleQDNResources = async (
   if (resources.length === 0) {
     throw new Error("No resources to publish");
   }
-  if (
-    data.encrypt &&
-    (!data.publicKeys ||
-      (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
-  ) {
-    throw new Error("Encrypting data requires public keys");
+
+  const encrypt = data?.encrypt
+
+  for (const resource of resources) {
+    const resourceEncrypt = encrypt && resource?.disableEncrypt !== true
+    if (!resourceEncrypt && resource?.service.endsWith("_PRIVATE")) {
+      const errorMsg = "Only encrypted data can go into private services";
+      throw new Error(errorMsg)
+    } else if(resourceEncrypt && !resource?.service.endsWith("_PRIVATE")){
+      const errorMsg = "For an encrypted publish please use a service that ends with _PRIVATE";
+      throw new Error(errorMsg)
+    }
   }
+  
+ 
+  // if (
+  //   data.encrypt &&
+  //   (!data.publicKeys ||
+  //     (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
+  // ) {
+  //   throw new Error("Encrypting data requires public keys");
+  // }
   const fee = await getFee("ARBITRARY");
   const registeredName = await getNameInfo();
   const name = registeredName;
+  if(!name){
+    throw new Error('You need a Qortal name to publish.')
+  }
+  const appFee = data?.appFee ? +data.appFee : undefined
+  const appFeeRecipient = data?.appFeeRecipient
+  let hasAppFee = false
+  if(appFee && appFee > 0 && appFeeRecipient){
+    hasAppFee = true
+  }
+
+  const handleDynamicValues = {}
+  if(hasAppFee){
+    const feePayment = await getFee("PAYMENT");
+
+    handleDynamicValues['appFee'] = +appFee + +feePayment.fee,
+    handleDynamicValues['checkbox1'] = {
+      value: true,
+      label: "accept app fee",
+    }
+  }
+  if(data?.encrypt){
+    handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`
+  }
   const resPermission = await getUserPermission(
     {
       text1: "Do you give this application permission to publish to QDN?",
@@ -1181,7 +1254,7 @@ export const publishMultipleQDNResources = async (
           <div class="resource-detail"><span>Service:</span> ${
             resource.service
           }</div>
-          <div class="resource-detail"><span>Name:</span> ${resource.name}</div>
+          <div class="resource-detail"><span>Name:</span> ${name}</div>
           <div class="resource-detail"><span>Identifier:</span> ${
             resource.identifier
           }</div>
@@ -1196,12 +1269,12 @@ export const publishMultipleQDNResources = async (
   </div>
   
       `,
-      highlightedText: `isEncrypted: ${!!data.encrypt}`,
-      fee: fee.fee * resources.length,
+      fee: +fee.fee * resources.length,
+      ...handleDynamicValues
     },
     isFromExtension
   );
-  const { accepted } = resPermission;
+  const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
     throw new Error("User declined request");
   }
@@ -1224,7 +1297,7 @@ export const publishMultipleQDNResources = async (
         });
         continue;
       }
-      if (!resource.fileId && !resource.data64) {
+      if (!resource.fileId && !resource.data64 && !resource?.base64) {
         const errorMsg = "No data or file was submitted";
         failedPublishesIdentifiers.push({
           reason: errorMsg,
@@ -1234,20 +1307,26 @@ export const publishMultipleQDNResources = async (
       }
       const service = resource.service;
       let identifier = resource.identifier;
-      let data64 = resource.data64;
+      let data64 = resource?.data64 || resource?.base64;
       const filename = resource.filename;
       const title = resource.title;
       const description = resource.description;
       const category = resource.category;
-      const tag1 = resource.tag1;
-      const tag2 = resource.tag2;
-      const tag3 = resource.tag3;
-      const tag4 = resource.tag4;
-      const tag5 = resource.tag5;
+      const tags = resource?.tags || [];
+      const result = {};
+
+      // Fill tags dynamically while maintaining backward compatibility
+      for (let i = 0; i < 5; i++) {
+        result[`tag${i + 1}`] = tags[i] || resource[`tag${i + 1}`] || undefined;
+      }
+
+      // Access tag1 to tag5 from result
+      const { tag1, tag2, tag3, tag4, tag5 } = result;
+      const resourceEncrypt = encrypt && resource?.disableEncrypt !== true
       if (resource.identifier == null) {
         identifier = "default";
       }
-      if (!data.encrypt && service.endsWith("_PRIVATE")) {
+      if (!resourceEncrypt && service.endsWith("_PRIVATE")) {
         const errorMsg = "Only encrypted data can go into private services";
         failedPublishesIdentifiers.push({
           reason: errorMsg,
@@ -1258,7 +1337,7 @@ export const publishMultipleQDNResources = async (
       if (resource.fileId) {
         data64 = await getFileFromContentScript(resource.fileId);
       }
-      if (data.encrypt) {
+      if (resourceEncrypt) {
         try {
           const resKeyPair = await getKeyPair();
           const parsedData = resKeyPair;
@@ -1318,7 +1397,7 @@ export const publishMultipleQDNResources = async (
       }
     } catch (error) {
       failedPublishesIdentifiers.push({
-        reason: "Unknown error",
+        reason: error?.message || "Unknown error",
         identifier: resource.identifier,
       });
     }
@@ -1329,6 +1408,12 @@ export const publishMultipleQDNResources = async (
       unsuccessfulPublishes: failedPublishesIdentifiers,
     };
     return obj;
+  }
+  if(hasAppFee && checkbox1){
+     sendCoinFunc({
+      amount: appFee,
+      receiver: appFeeRecipient
+    }, true)
   }
   return true;
 };

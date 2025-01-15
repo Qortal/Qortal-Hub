@@ -549,6 +549,18 @@ export const Minting = ({
       }}
     >
       <DialogTitle id="alert-dialog-title">{"Manage your minting"}</DialogTitle>
+      <IconButton
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 8,
+              }}
+              color="inherit"
+              onClick={()=> setIsOpenMinting(false)}
+              aria-label="close"
+            >
+              <CloseIcon />
+            </IconButton>
       <DialogContent
         sx={{
           position: "relative",
