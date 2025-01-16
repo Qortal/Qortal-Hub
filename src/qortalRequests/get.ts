@@ -26,6 +26,8 @@ import { decryptResource, getGroupAdmins, getPublishesFromAdmins, validateSecret
 import { QORT_DECIMALS } from "../constants/constants";
 import Base58 from "../deps/Base58";
 import nacl from "../deps/nacl-fast";
+
+
 import {
   base64ToUint8Array,
   createSymmetricKeyAndNonce,
@@ -52,7 +54,10 @@ import { createTransaction } from "../transactions/transactions";
 import { executeEvent } from "../utils/events";
 import { fileToBase64 } from "../utils/fileReading";
 import { mimeToExtensionMap } from "../utils/memeTypes";
+import { RequestQueueWithPromise } from "../utils/queue/queue";
 import utils from "../utils/utils";
+
+export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
 
 const sellerForeignFee = {
   LITECOIN: {
@@ -2453,8 +2458,10 @@ export const getForeignFee = async (data) => {
 };
 
 export const updateForeignFee = async (data) => {
-  const localNodeAvailable = await isUsingLocal();
-  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
+  }
   const requiredFields = ["coin", "type", "value"];
   const missingFields: string[] = [];
 
@@ -2471,7 +2478,7 @@ export const updateForeignFee = async (data) => {
   }
 
   const { coin, type, value } = data;
-  const url = `/crosschain/${coin}/update${type}`;
+  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
 
   try {
     const endpoint = await createEndpoint(url);
@@ -2518,7 +2525,7 @@ export const getServerConnectionHistory = async (data) => {
   }
 
   const coin = data.coin.toLowerCase();
-  const url = `/crosschain/${coin}/serverconnectionhistory`;
+  const url = `/crosschain/${coin.toLowerCase()}/serverconnectionhistory`;
 
   try {
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
@@ -2551,8 +2558,10 @@ export const getServerConnectionHistory = async (data) => {
 };
 
 export const setCurrentForeignServer = async (data) => {
-  const localNodeAvailable = await isUsingLocal();
-  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
+  }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
 
@@ -2576,7 +2585,7 @@ export const setCurrentForeignServer = async (data) => {
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin}/setcurrentserver`;
+  const url = `/crosschain/${coin.toLowerCase()}/setcurrentserver`;
 
   try {
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
@@ -2609,8 +2618,10 @@ export const setCurrentForeignServer = async (data) => {
 };
 
 export const addForeignServer = async (data) => {
-  const localNodeAvailable = await isUsingLocal();
-  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
+  }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
 
@@ -2634,7 +2645,7 @@ export const addForeignServer = async (data) => {
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin}/addserver`;
+  const url = `/crosschain/${coin.toLowerCase()}/addserver`;
 
   try {
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
@@ -2667,8 +2678,10 @@ export const addForeignServer = async (data) => {
 };
 
 export const removeForeignServer = async (data) => {
-  const localNodeAvailable = await isUsingLocal();
-  if (!localNodeAvailable) throw new Error("Please use your local node.");
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error("This action cannot be done through a gateway");
+  }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
 
@@ -2692,7 +2705,7 @@ export const removeForeignServer = async (data) => {
     connectionType: type,
   };
 
-  const url = `/crosschain/${coin}/removeserver`;
+  const url = `/crosschain/${coin.toLowerCase()}/removeserver`;
 
   try {
     const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
@@ -3201,11 +3214,24 @@ export const createBuyOrder = async (data, isFromExtension) => {
   }
   const isGateway = await isRunningGateway();
   const foreignBlockchain = data.foreignBlockchain;
-  const crosschainAtInfo = data.crosschainAtInfo;
   const atAddresses = data.crosschainAtInfo?.map(
     (order) => order.qortalAtAddress
   );
 
+      const atPromises = atAddresses
+          .map((atAddress) =>
+            requestQueueGetAtAddresses.enqueue(async () => {
+              const url = await createEndpoint(`/crosschain/trade/${atAddress}`)
+              const resAddress = await fetch(url);
+              const resData = await resAddress.json();
+              if(foreignBlockchain !== resData?.foreignBlockchain){
+                throw new Error('All requested ATs need to be of the same foreign Blockchain.')
+              }
+              return resData
+            })
+          );
+    
+    const crosschainAtInfo = await Promise.all(atPromises);
   try {
     const resPermission = await getUserPermission(
       {
@@ -3217,7 +3243,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
           return latest + +cur?.qortAmount;
         }, 0)} QORT FOR   ${roundUpToDecimals(
           crosschainAtInfo?.reduce((latest, cur) => {
-            return latest + +cur?.foreignAmount;
+            return latest + +cur?.expectedForeignAmount;
           }, 0)
         )}
       ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
