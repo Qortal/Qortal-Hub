@@ -472,7 +472,12 @@ export default ({
 
 
   return (
-    <div>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      height: '100%'
+    }}>
     <EditorProvider
       slotBefore={
         (isFocusedParent || !isMobile || overrideMobile) && (

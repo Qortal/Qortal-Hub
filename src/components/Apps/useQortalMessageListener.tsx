@@ -320,7 +320,7 @@ const UIQortalRequests = [
   
     // Handle the obj.file if it exists and is a File instance
     if (obj.file) {
-      const fileId = "objFile_qortalfile";
+      const fileId = Date.now() + "objFile_qortalfile";
   
       // Store the file in IndexedDB
       const fileData = {
@@ -334,7 +334,7 @@ const UIQortalRequests = [
       delete obj.file;
     }
     if (obj.blob) {
-      const fileId = "objFile_qortalfile";
+      const fileId = Date.now() +  "objFile_qortalfile";
   
       // Store the file in IndexedDB
       const fileData = {
@@ -355,8 +355,8 @@ const UIQortalRequests = [
     // Iterate through resources to find files and save them to IndexedDB
     for (let resource of (obj?.resources || [])) {
       if (resource.file) {
-        const fileId = resource.identifier + "_qortalfile";
-  
+        const fileId = resource.identifier + Date.now()  + "_qortalfile";
+        
         // Store the file in IndexedDB
         const fileData = {
           id: fileId,
@@ -484,17 +484,8 @@ isDOMContentLoaded: false
         event?.data?.action === 'ENCRYPT_DATA' || event?.data?.action === 'ENCRYPT_DATA_WITH_SHARING_KEY' || event?.data?.action === 'ENCRYPT_QORTAL_GROUP_DATA'
         
       ) {
-        let data;
-        try {
-          data = await storeFilesInIndexedDB(event.data);
-        } catch (error) {
-          console.error('Error storing files in IndexedDB:', error);
-          event.ports[0].postMessage({
-            result: null,
-            error: 'Failed to store files in IndexedDB',
-          });
-          return;
-        }
+        const data = event.data;
+
         if (data) {
           sendMessageToRuntime(
             { action: event.data.action, type: 'qortalRequest', payload: data, isExtension: true },

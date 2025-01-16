@@ -54,14 +54,13 @@ export const Minting = ({
   const [nodeInfos, setNodeInfos] = useState({});
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { isShow, onCancel, onOk, show: showKey, message } = useModal();
+  const {  show: showKey, message } = useModal();
+  const { isShow: isShowNext,  onOk, show: showNext } = useModal();
+
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
-
-
- 
-
+  const [showWaitDialog, setShowWaitDialog] = useState(false)
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
     return !!groups?.find((item) => item?.groupId?.toString() === "694");
@@ -199,6 +198,7 @@ export const Minting = ({
       }
       const data = await response.json();
       setRewardShares(data);
+      return data
     } catch (error) {}
   }, []);
 
@@ -338,6 +338,31 @@ export const Minting = ({
     });
   }, []);
 
+  const waitUntilRewardShareIsConfirmed = async (timeoutMs = 600000) => {
+    const pollingInterval = 30000;
+    const startTime = Date.now();
+  
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+  
+    while (Date.now() - startTime < timeoutMs) {
+ 
+        const rewardShares = await getRewardShares(myAddress);
+        const findRewardShare = rewardShares?.find(
+          (item) =>
+            item?.recipient === myAddress && item?.mintingAccount === myAddress
+        );
+  
+        if (findRewardShare) {
+          return true; // Exit early if found
+        }
+  
+  
+      await sleep(pollingInterval); // Wait before the next poll
+    }
+  
+    throw new Error("Timeout waiting for reward share confirmation");
+  };
+
   const startMinting = async () => {
     try {
       setIsLoading(true);
@@ -352,12 +377,20 @@ export const Minting = ({
         addMintingAccount(privateRewardShare);
       } else {
         await createRewardShare(accountInfo?.publicKey, myAddress);
+        setShowWaitDialog(true)
+        await waitUntilRewardShareIsConfirmed()
+        await showNext({
+          message: ''
+        })
         const privateRewardShare = await getRewardSharePrivateKey(
           accountInfo?.publicKey
         );
+        setShowWaitDialog(false)
         addMintingAccount(privateRewardShare);
+       
       }
     } catch (error) {
+      setShowWaitDialog(false)
       setInfo({
         type: "error",
         message: error?.message || "Unable to start minting",
@@ -436,8 +469,8 @@ export const Minting = ({
       const confirmReceiver = await getNameOrAddress(receiver);
       if (confirmReceiver.error)
         throw new Error("Invalid receiver address or name");
-      const isInMinterGroup = await checkIfMinterGroup(confirmReceiver)
-      if(!isInMinterGroup) throw new Error('Account not in Minter Group')
+      const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
+      if (!isInMinterGroup) throw new Error("Account not in Minter Group");
       const publicKey = await getPublicKeyFromAddress(confirmReceiver);
       const findRewardShare = rewardShares?.find(
         (item) =>
@@ -520,18 +553,8 @@ export const Minting = ({
     return "" + countBlocksString;
   };
 
-  const showAndCopySponsorshipKey = async (rs) => {
-    try {
-      const sponsorshipKey = await getRewardSharePrivateKey(
-        rs?.rewardSharePublicKey
-      );
-      await showKey({
-        message: sponsorshipKey,
-      });
-    } catch (error) {}
-  };
 
- 
+
   return (
     <Dialog
       open={true}
@@ -550,17 +573,17 @@ export const Minting = ({
     >
       <DialogTitle id="alert-dialog-title">{"Manage your minting"}</DialogTitle>
       <IconButton
-              sx={{
-                position: 'absolute',
-                right: 8,
-                top: 8,
-              }}
-              color="inherit"
-              onClick={()=> setIsOpenMinting(false)}
-              aria-label="close"
-            >
-              <CloseIcon />
-            </IconButton>
+        sx={{
+          position: "absolute",
+          right: 8,
+          top: 8,
+        }}
+        color="inherit"
+        onClick={() => setIsOpenMinting(false)}
+        aria-label="close"
+      >
+        <CloseIcon />
+      </IconButton>
       <DialogContent
         sx={{
           position: "relative",
@@ -683,17 +706,6 @@ export const Minting = ({
               <Typography>
                 Minting account: {handleNames(acct?.mintingAccount)}
               </Typography>
-              {/* <Typography>
-                Recipient account: {handleNames(acct?.recipientAccount)}
-              </Typography> */}
-              {/* {acct?.mintingAccount !== accountInfo?.address &&
-                acct?.recipientAccount === accountInfo?.address &&
-                (accountInfo?.level || 0) > 0 && (
-                  <Typography>
-                    You have reached level 1+. Remove this minting key and then
-                    click "Start Minting".
-                  </Typography>
-                )} */}
               <Button
                 size="small"
                 sx={{
@@ -728,63 +740,7 @@ export const Minting = ({
             </Typography>
           )}
         </Card>
-        {txList?.filter(
-          (item) =>
-            !item?.done &&
-            (item?.type === "remove-rewardShare" ||
-              item?.type === "add-rewardShare")
-        )?.length > 0 && (
-          <>
-            <Spacer height="20px" />
-            <Typography>Ongoing transactions</Typography>
-            <Card
-              sx={{
-                backgroundColor: "var(--bg-2)",
-                padding: "10px",
-              }}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: "5px",
-                  flexDirection: "column",
-                  width: "100%",
-                }}
-              >
-                {txList
-                  ?.filter(
-                    (item) =>
-                      !item.done &&
-                      (item?.type === "remove-rewardShare" ||
-                        item?.type === "add-rewardShare")
-                  )
-                  ?.map((txItem) => (
-                    <Box
-                      key={txItem?.signature}
-                      sx={{
-                        display: "flex",
-                        gap: "5px",
-                        flexDirection: "column",
-                      }}
-                    >
-                      {txItem?.type === "remove-rewardShare" && (
-                        <Typography>Reward share being removed</Typography>
-                      )}
-                      {txItem?.type === "add-rewardShare" && (
-                        <Typography>Reward share being created</Typography>
-                      )}
-                      <Typography>
-                        Recipient: {handleNames(txItem?.recipient)}
-                      </Typography>
 
-                      <Divider />
-                      <Spacer height="10px" />
-                    </Box>
-                  ))}
-              </Box>
-            </Card>
-          </>
-        )}
         <Spacer height="20px" />
         {!isPartOfMintingGroup && (
           <Card
@@ -837,342 +793,39 @@ export const Minting = ({
             </Box>
           </Card>
         )}
-        {/* {isPartOfMintingGroup && (
-          <>
-            {accountInfo?.level >= 5 && (
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: "5px",
-                  flexDirection: "column",
-                }}
-              >
-                {rewardShares?.filter((item) => item?.recipient !== myAddress)
-                  ?.length > 0 && (
-                  <>
-                    <Typography>Active sponsorships</Typography>
-                    <Card
-                      sx={{
-                        backgroundColor: "var(--bg-2)",
-                        padding: "10px",
-                        display: "flex",
-                        gap: "5px",
-                        flexDirection: "column",
-                      }}
-                    >
-                      {rewardShares
-                        ?.filter((item) => item?.recipient !== myAddress)
-                        .map((rs) => (
-                          <Box
-                            key={rs?.recipient}
-                            sx={{
-                              display: "flex",
-                              gap: "10px",
-                              flexDirection: "column",
-                            }}
-                          >
-                            <Typography>
-                              Recipient: {handleNames(rs?.recipient)}
-                            </Typography>
-                            <Typography>
-                              Level:{" "}
-                              {handleAccountInfos(rs?.recipient, "level")}
-                            </Typography>
-                            {handleAccountInfos(rs?.recipient, "level") !==
-                              undefined && (
-                              <>
-                                {handleAccountInfos(rs?.recipient, "level") ===
-                                  0 && (
-                                  <Typography>
-                                    Blocks remaining until level 1:{" "}
-                                    {calculateBlocksRemainingToLevel1(
-                                      rs?.recipient
-                                    )}
-                                  </Typography>
-                                )}
-                                {(handleAccountInfos(rs?.recipient, "level") ||
-                                  0) > 0 && (
-                                  <Typography>
-                                    This account is above level 0. You may
-                                    remove this rewardshare
-                                  </Typography>
-                                )}
-                              </>
-                            )}
-                            <Button
-                              size="small"
-                              sx={{
-                                backgroundColor: "var(--danger)",
-                                color: "black",
-                                fontWeight: "bold",
-                                opacity: 0.7,
-                                maxWidth: "90%",
-                                width: "200px",
-                                "&:hover": {
-                                  backgroundColor: "var(--danger)",
-                                  color: "black",
-                                  opacity: 1,
-                                },
-                              }}
-                              onClick={() => {
-                                handleRemoveRewardShare(rs);
-                              }}
-                              variant="contained"
-                            >
-                              Remove reward share
-                            </Button>
-                            <Button
-                              size="small"
-                              sx={{
-                                backgroundColor: "var(--green)",
-                                color: "black",
-                                fontWeight: "bold",
-                                opacity: 0.7,
-                                maxWidth: "90%",
-                                width: "200px",
-                                "&:hover": {
-                                  backgroundColor: "var(--green)",
-                                  color: "black",
-                                  opacity: 1,
-                                },
-                              }}
-                              onClick={() => {
-                                showAndCopySponsorshipKey(rs);
-                              }}
-                              variant="contained"
-                            >
-                              Copy sponsorship key
-                            </Button>
-                            <Divider />
-                            <Spacer height="10px" />
-                          </Box>
-                        ))}
-                    </Card>
-                  </>
-                )}
 
-                <Spacer height="10px" />
-
-                <Typography>Sponsor a new Minter</Typography>
-                <Card
-                  sx={{
-                    backgroundColor: "var(--bg-2)",
-                    padding: "10px",
-                    display: "flex",
-                    gap: "5px",
-                    flexDirection: "column",
-                  }}
-                >
-                  {rewardShares?.filter((item) => item?.recipient !== myAddress)
-                    ?.length > 0 ? (
-                    <>
-                      <Typography>
-                        You are currently sponsoring one account. To sponsor
-                        another account please remove the existing reward share.
-                      </Typography>
-                    </>
-                  ) : (
-                    <>
-                      <Typography>
-                        Enter in the new Minter's address or name into the
-                        input. Next, click on "Create reward share". If
-                        successful, you will see a rewardshare key generated.
-                        Copy the key and send it to your new Minter.
-                      </Typography>
-
-                      <InputBase
-                        value={rewardSharePublicKey}
-                        onChange={(e) =>
-                          setRewardSharePublicKey(e.target.value)
-                        }
-                        sx={{
-                          border: "0.5px solid var(--50-white, #FFFFFF80)",
-                          padding: "0px 15px",
-                          borderRadius: "5px",
-                          height: "36px",
-                          width: "350px",
-                          maxWidth: "95%",
-                        }}
-                        placeholder="New minter's address or name"
-                        inputProps={{
-                          "aria-label": "New minter's address or name",
-                          fontSize: "14px",
-                          fontWeight: 400,
-                        }}
-                      />
-                      <Button
-                        size="small"
-                        sx={{
-                          backgroundColor: "var(--green)",
-                          color: "black",
-                          fontWeight: "bold",
-                          opacity: 0.7,
-                          maxWidth: "90%",
-                          width: "200px",
-                          "&:hover": {
-                            backgroundColor: "var(--green)",
-                            color: "black",
-                            opacity: 1,
-                          },
-                        }}
-                        onClick={() => {
-                          createRewardShareForPotentialMinter(
-                            rewardSharePublicKey
-                          );
-                        }}
-                        disabled={!rewardSharePublicKey}
-                        variant="contained"
-                      >
-                        Create reward share
-                      </Button>
-                      {rewardsharekey && (
-                        <>
-                          <Spacer height="10px" />
-
-                          <Typography>
-                            Click to copy the reward share key and share it with
-                            your new minter
-                          </Typography>
-                          <Spacer height="10px" />
-                          <CopyToClipboard text={rewardsharekey}>
-                            <AddressBox
-                              sx={{
-                                width: "325px",
-                                maxWidth: "95%",
-                                height: "auto",
-                                lineHeight: 1.2,
-                                fontSize: "16px",
-                              }}
-                            >
-                              {rewardsharekey} <img src={Copy} />
-                            </AddressBox>
-                          </CopyToClipboard>
-                        </>
-                      )}
-                    </>
-                  )}
-                </Card>
-              </Box>
-            )}
-            {accountInfo?.level === 0 && !accountIsMinting && (
-              <>
-                <Typography>Become a minter!</Typography>
-                <Card
-                  sx={{
-                    backgroundColor: "var(--bg-2)",
-                    padding: "10px",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: "5px",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <Typography>
-                      Ask a level 5+ minter to send you a minting key
-                    </Typography>
-                    <Typography>
-                      Add the minting key in the input below and click "Add
-                      minting key"
-                    </Typography>
-                    <Spacer height="10px" />
-                    <InputBase
-                      value={mintingKey}
-                      onChange={(e) => setMintingKey(e.target.value)}
-                      sx={{
-                        border: "0.5px solid var(--50-white, #FFFFFF80)",
-                        padding: "0px 15px",
-                        borderRadius: "5px",
-                        height: "36px",
-                        width: "250px",
-                      }}
-                      placeholder="Add minting key"
-                      inputProps={{
-                        "aria-label": "Add minting key",
-                        fontSize: "14px",
-                        fontWeight: 400,
-                      }}
-                    />
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        addMintingAccount(mintingKey);
-                      }}
-                      sx={{
-                        backgroundColor: "var(--green)",
-                        color: "black",
-                        fontWeight: "bold",
-                        opacity: 0.7,
-                        maxWidth: "90%",
-                        width: "200px",
-                        "&:hover": {
-                          backgroundColor: "var(--green)",
-                          color: "black",
-                          opacity: 1,
-                        },
-                      }}
-                      disabled={!mintingKey}
-                      variant="contained"
-                    >
-                      Add minting key
-                    </Button>
-                  </Box>
-                </Card>
-              </>
-            )}
-            {accountInfo?.level === 0 && accountIsMinting && (
-              <Box
-                sx={{
-                  display: "flex",
-                  gap: "5px",
-                  flexDirection: "column",
-                }}
-              >
-                <Typography>
-                  You are currently on your way to level 1
-                </Typography>
-              </Box>
-            )}
-          </>
-        )} */}
-        {/* {isShow && (
+        {showWaitDialog && (
           <Dialog
-            open={isShow}
+            open={showWaitDialog}
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
           >
             <DialogTitle id="alert-dialog-title">
-              {"Copy sponsorship key"}
+              {isShowNext ? "Confirmed" : "Please Wait"}
             </DialogTitle>
             <DialogContent>
-              <Typography>
-                Click to copy the reward share key and share it with your new
-                minter
+              {!isShowNext && (
+                <Typography>
+                Confirming creation of rewardshare on chain. Please be patient, this could take up to 90 seconds.
               </Typography>
-              <Spacer height="10px" />
-              <CopyToClipboard text={message?.message}>
-                <AddressBox
-                  sx={{
-                    width: "325px",
-                    maxWidth: "95%",
-                    height: "auto",
-                    lineHeight: 1.2,
-                    fontSize: "16px",
-                  }}
-                >
-                  {message?.message} <img src={Copy} />
-                </AddressBox>
-              </CopyToClipboard>
+              )}
+              {isShowNext && (
+                <Typography>
+                Rewardshare confirmed. Please click Next.
+              </Typography>
+              )}
+              
             </DialogContent>
-            <DialogActions>
-              <Button variant="contained" onClick={onOk} autoFocus>
-                Close
+         
+              <DialogActions>
+              <Button disabled={!isShowNext} variant="contained" onClick={onOk} autoFocus>
+                Next
               </Button>
             </DialogActions>
+           
+            
           </Dialog>
-        )} */}
+        )}
       </DialogContent>
       <DialogActions>
         <Button

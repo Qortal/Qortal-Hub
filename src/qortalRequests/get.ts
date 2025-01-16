@@ -50,6 +50,7 @@ import DeleteTradeOffer from "../transactions/TradeBotDeleteRequest";
 import signTradeBotTransaction from "../transactions/signTradeBotTransaction";
 import { createTransaction } from "../transactions/transactions";
 import { executeEvent } from "../utils/events";
+import { fileToBase64 } from "../utils/fileReading";
 import { mimeToExtensionMap } from "../utils/memeTypes";
 import utils from "../utils/utils";
 
@@ -396,8 +397,8 @@ export const getUserAccount = async ({ isFromExtension, appInfo }) => {
 export const encryptData = async (data, sender) => {
   let data64 = data.data64 || data.base64;
   let publicKeys = data.publicKeys || [];
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
+  if (data?.file || data?.blob) {
+    data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
     throw new Error("Please include data to encrypt");
@@ -427,8 +428,8 @@ export const encryptQortalGroupData = async (data, sender) => {
   if(!groupId){
     throw new Error('Please provide a groupId')
   }
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
+  if (data?.file || data?.blob) {
+    data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
     throw new Error("Please include data to encrypt");
@@ -611,8 +612,8 @@ url
 export const encryptDataWithSharingKey = async (data, sender) => {
   let data64 = data.data64;
   let publicKeys = data.publicKeys || [];
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
+  if (data?.file || data?.blob) {
+    data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
     throw new Error("Please include data to encrypt");
@@ -962,7 +963,7 @@ export const publishQDNResource = async (
     const errorMsg = `Missing fields: ${missingFieldsString}`;
     throw new Error(errorMsg);
   }
-  if (!data.fileId && !data.data64 && !data.base64) {
+  if (!data.file && !data.data64 && !data.base64) {
     throw new Error("No data or file was submitted");
   }
   // Use "default" if user hasn't specified an identifer
@@ -999,8 +1000,8 @@ const { tag1, tag2, tag3, tag4, tag5 } = result;
   if (data.identifier == null) {
     identifier = "default";
   }
-  if (data.fileId) {
-    data64 = await getFileFromContentScript(data.fileId);
+  if (data?.file || data?.blob) {
+    data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (
     data.encrypt &&
@@ -1297,7 +1298,7 @@ export const publishMultipleQDNResources = async (
         });
         continue;
       }
-      if (!resource.fileId && !resource.data64 && !resource?.base64) {
+      if (!resource.file && !resource.data64 && !resource?.base64) {
         const errorMsg = "No data or file was submitted";
         failedPublishesIdentifiers.push({
           reason: errorMsg,
@@ -1334,8 +1335,8 @@ export const publishMultipleQDNResources = async (
         });
         continue;
       }
-      if (resource.fileId) {
-        data64 = await getFileFromContentScript(resource.fileId);
+      if (resource.file) {
+        data64 = await fileToBase64(resource.file);
       }
       if (resourceEncrypt) {
         try {
@@ -1800,7 +1801,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     }
     const filename = data.filename;
     const blob = data.blob;
-    const fileId = data.fileId;
     const resPermission = await getUserPermission(
       {
         text1: "Would you like to download:",
@@ -2424,7 +2424,7 @@ export const getForeignFee = async (data) => {
   }
 
   const { coin, type } = data;
-  const url = `/crosschain/${coin}/${type}`;
+  const url = `/crosschain/${coin.toLowerCase()}/${type}`;
 
   try {
     const endpoint = await createEndpoint(url);

@@ -29,32 +29,28 @@ let semaphore = new Semaphore(1)
 let reader = new FileReader()
 
 export const fileToBase64 = (file) => new Promise(async (resolve, reject) => {
-	if (!reader) {
-		reader = new FileReader()
-	}
-	await semaphore.acquire()
-	reader.readAsDataURL(file)
+	const reader = new FileReader(); // Create a new instance
+	await semaphore.acquire();
+	reader.readAsDataURL(file);
 	reader.onload = () => {
-		const dataUrl = reader.result
-		if (typeof dataUrl === "string") {
-			const base64String = dataUrl.split(',')[1]
-			reader.onload = null
-			reader.onerror = null
-			resolve(base64String)
-		} else {
-			reader.onload = null
-			reader.onerror = null
-			reject(new Error('Invalid data URL'))
-		}
-		semaphore.release()
-	}
+	  const dataUrl = reader.result;
+	  semaphore.release();
+	  if (typeof dataUrl === 'string') {
+		resolve(dataUrl.split(',')[1]);
+	  } else {
+		reject(new Error('Invalid data URL'));
+	  }
+	  reader.onload = null; // Clear the handler
+  	  reader.onerror = null; // Clear the handle
+	};
 	reader.onerror = (error) => {
-		reader.onload = null
-		reader.onerror = null
-		reject(error)
-		semaphore.release()
-	}
-})
+	  semaphore.release();
+	  reject(error);
+	  reader.onload = null; // Clear the handler
+  	 reader.onerror = null; // Clear the handle
+	};
+  });
+  
 
 export const base64ToBlobUrl = (base64, mimeType = "image/png") => {
     const binary = atob(base64);
