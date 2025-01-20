@@ -24,12 +24,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-} from "react-virtualized";
+
 import { getNameInfo } from "./Group";
 import { getBaseApi, getFee } from "../../background";
 import { LoadingButton } from "@mui/lab";
@@ -51,6 +46,8 @@ import ShortUniqueId from "short-unique-id";
 import { CustomizedSnackbars } from "../Snackbar/Snackbar";
 import { getGroupNames } from "./UserListOfInvites";
 import { WrapperUserAction } from "../WrapperUserAction";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import ErrorBoundary from "../../common/ErrorBoundary";
 
 export const requestQueuePromos = new RequestQueueWithPromise(20);
 
@@ -68,10 +65,7 @@ export function utf8ToBase64(inputString: string): string {
 
 const uid = new ShortUniqueId({ length: 8 });
 
-const cache = new CellMeasurerCache({
-  fixedWidth: true,
-  defaultHeight: 50,
-});
+
 
 export function getGroupId(str) {
   const match = str.match(/group-(\d+)-/);
@@ -102,6 +96,16 @@ export const ListOfGroupPromotions = () => {
   const { show, setTxList } = useContext(MyContext);
 
   const listRef = useRef();
+    const rowVirtualizer = useVirtualizer({
+      count: promotions.length,
+      getItemKey: React.useCallback(
+        (index) => promotions[index]?.identifier,
+        [promotions]
+      ),
+      getScrollElement: () => listRef.current,
+      estimateSize: () => 80, // Provide an estimated height of items, adjust this as needed
+      overscan: 10, // Number of items to render outside the visible area to improve smoothness
+    });
 
   useEffect(() => {
     try {
@@ -190,7 +194,7 @@ export const ListOfGroupPromotions = () => {
     }, initialDelay);
   
     return () => clearTimeout(initialTimeout);
-  }, [getPromotions]);
+  }, [getPromotions, promotionTimeInterval]);
 
   const handlePopoverOpen = (event, index) => {
     setPopoverAnchor(event.currentTarget);
@@ -324,69 +328,165 @@ export const ListOfGroupPromotions = () => {
     }
   };
 
-  // const handleCancelInvitation = async (address)=> {
-  //   try {
-  //     const fee = await getFee('CANCEL_GROUP_INVITE')
-  //     await show({
-  //       message: "Would you like to perform a CANCEL_GROUP_INVITE transaction?" ,
-  //       publishFee: fee.fee + ' QORT'
-  //     })
-  //     setIsLoadingCancelInvite(true)
-  //     await new Promise((res, rej)=> {
-  //       window.sendMessage("cancelInvitationToGroup", {
-  //         groupId,
-  //         qortalAddress: address,
-  //       })
-  //         .then((response) => {
-  //           if (!response?.error) {
-  //             setInfoSnack({
-  //               type: "success",
-  //               message: "Successfully canceled invitation. It may take a couple of minutes for the changes to propagate",
-  //             });
-  //             setOpenSnack(true);
-  //             handlePopoverClose();
-  //             setIsLoadingCancelInvite(true);
-  //             res(response);
-  //             return;
-  //           }
-  //           setInfoSnack({
-  //             type: "error",
-  //             message: response?.error,
-  //           });
-  //           setOpenSnack(true);
-  //           rej(response.error);
-  //         })
-  //         .catch((error) => {
-  //           setInfoSnack({
-  //             type: "error",
-  //             message: error.message || "An error occurred",
-  //           });
-  //           setOpenSnack(true);
-  //           rej(error);
-  //         });
 
-  //       })
-  //   } catch (error) {
 
-  //   } finally {
-  //     setIsLoadingCancelInvite(false)
-  //   }
-  // }
-
-  const rowRenderer = ({ index, key, parent, style }) => {
-    const promotion = promotions[index];
-
-    return (
-      <CellMeasurer
-        key={key}
-        cache={cache}
-        parent={parent}
-        columnIndex={0}
-        rowIndex={index}
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        marginTop: "25px",
+      }}
+    >
+      <Box
+        sx={{
+          width: isMobile ? "320px" : "750px",
+          maxWidth: "90%",
+          display: "flex",
+          flexDirection: "column",
+          padding: "0px 20px",
+        }}
       >
-        {({ measure }) => (
-          <div style={style} onLoad={measure}>
-            <Box
+        <Box
+          sx={{
+            width: "100%",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: "13px",
+              fontWeight: 600,
+            }}
+          >
+            Group Promotions
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => setIsShowModal(true)}
+            sx={{
+              fontSize: "12px",
+            }}
+          >
+            Add Promotion
+          </Button>
+        </Box>
+        <Spacer height="10px" />
+      </Box>
+
+      <Box
+        sx={{
+          width: isMobile ? "320px" : "750px",
+          maxWidth: "90%",
+          maxHeight: "700px",
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "background.paper",
+          padding: "20px 0px",
+          borderRadius: "19px",
+        }}
+      >
+        {loading && promotions.length === 0 && (
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <CustomLoader />
+          </Box>
+        )}
+        {!loading && promotions.length === 0 && (
+          <Box
+            sx={{
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "100%",
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: "11px",
+                fontWeight: 400,
+                color: "rgba(255, 255, 255, 0.2)",
+              }}
+            >
+              Nothing to display
+            </Typography>
+          </Box>
+        )}
+            <div
+              style={{
+                height: "600px",
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                width: "100%",
+              }}
+            >
+              <div
+                ref={listRef}
+                className="scrollable-container"
+                style={{
+                  flexGrow: 1,
+                  overflow: "auto",
+                  position: "relative",
+                  display: "flex",
+                  height: "0px",
+                }}
+              >
+                <div
+                  style={{
+                    height: rowVirtualizer.getTotalSize(),
+                    width: "100%",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                    }}
+                  >
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const index = virtualRow.index;
+                      const promotion = promotions[index];
+                      return (
+                    
+                        <div
+                          data-index={virtualRow.index} //needed for dynamic row height measurement
+                          ref={rowVirtualizer.measureElement} //measure dynamic row height
+                          key={promotion?.identifier}
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: "50%", // Move to the center horizontally
+                            transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
+                            width: "100%", // Control width (90% of the parent)
+                            padding: "10px 0",
+                            display: "flex",
+                            alignItems: "center",
+                            overscrollBehavior: "none",
+                            flexDirection: "column",
+                            gap: "5px",
+                          }}
+                        >
+                              <ErrorBoundary
+                        fallback={
+                          <Typography>
+                            Error loading content: Invalid Data
+                          </Typography>
+                        }
+                      >
+                           <Box
               sx={{
                 display: "flex",
                 flexDirection: "column",
@@ -598,125 +698,16 @@ export const ListOfGroupPromotions = () => {
               </Box>
             </Box>
             <Spacer height="50px" />
-          </div>
-        )}
-      </CellMeasurer>
-    );
-  };
+                          </ErrorBoundary>
+                        </div>
+                    
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-
-  return (
-    <Box
-      sx={{
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        marginTop: "25px",
-      }}
-    >
-      <Box
-        sx={{
-          width: isMobile ? "320px" : "750px",
-          maxWidth: "90%",
-          display: "flex",
-          flexDirection: "column",
-          padding: "0px 20px",
-        }}
-      >
-        <Box
-          sx={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: "13px",
-              fontWeight: 600,
-            }}
-          >
-            Group Promotions
-          </Typography>
-          <Button
-            variant="contained"
-            onClick={() => setIsShowModal(true)}
-            sx={{
-              fontSize: "12px",
-            }}
-          >
-            Add Promotion
-          </Button>
-        </Box>
-        <Spacer height="10px" />
-      </Box>
-
-      <Box
-        sx={{
-          width: isMobile ? "320px" : "750px",
-          maxWidth: "90%",
-          maxHeight: "700px",
-          display: "flex",
-          flexDirection: "column",
-          bgcolor: "background.paper",
-          padding: "20px 0px",
-          borderRadius: "19px",
-        }}
-      >
-        {loading && promotions.length === 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-            }}
-          >
-            <CustomLoader />
-          </Box>
-        )}
-        {!loading && promotions.length === 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              height: "100%",
-            }}
-          >
-            <Typography
-              sx={{
-                fontSize: "11px",
-                fontWeight: 400,
-                color: "rgba(255, 255, 255, 0.2)",
-              }}
-            >
-              Nothing to display
-            </Typography>
-          </Box>
-        )}
-        <div
-          style={{
-            height: "600px",
-          }}
-        >
-          <AutoSizer>
-            {({ height, width }) => (
-              <List
-                ref={listRef}
-                width={width}
-                height={height}
-                rowCount={promotions.length}
-                rowHeight={cache.rowHeight}
-                rowRenderer={rowRenderer}
-                deferredMeasurementCache={cache}
-                className="scrollable-container"
-              />
-            )}
-          </AutoSizer>
-        </div>
       </Box>
       <Spacer height="20px" />
 
