@@ -332,7 +332,7 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
             isSelected={tab?.tabId === selectedTab?.tabId}
             app={tab}
             ref={iframeRefs.current[tab.tabId]}
-            isDevMode={true}
+            isDevMode={tab?.service ? false : true}
           />
         );
       })}
