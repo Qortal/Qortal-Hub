@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { saveToLocalStorage } from "../Apps/AppsNavBar";
+import creationImg from './img/creation.webp'
+import dashboardImg from './img/dashboard.webp'
+import groupsImg from './img/groups.webp'
+import importantImg from './img/important.webp'
+import navigationImg from './img/navigation.webp'
+import overviewImg from './img/overview.webp'
+import startedImg from './img/started.webp'
 
 
 const checkIfGatewayIsOnline = async () => {
@@ -70,6 +77,7 @@ useEffect(()=> {
                     name: "a-test",
                     service: "VIDEO",
                     identifier: "account-creation-hub",
+                    poster: creationImg
                   },
                 });
               }
@@ -85,6 +93,7 @@ useEffect(()=> {
                     name: "a-test",
                     service: "VIDEO",
                     identifier: "important-information-hub",
+                    poster: importantImg
                   },
                 });
               }
@@ -103,6 +112,7 @@ useEffect(()=> {
                         name: "a-test",
                         service: "VIDEO",
                         identifier: "getting-started-hub",
+                        poster: startedImg
                       },
                     },
                     {
@@ -111,6 +121,7 @@ useEffect(()=> {
                           name: "a-test",
                           service: "VIDEO",
                           identifier: "overview-hub",
+                          poster: overviewImg
                         },
                       },
                     {
@@ -119,6 +130,7 @@ useEffect(()=> {
                         name: "a-test",
                         service: "VIDEO",
                         identifier: "groups-hub",
+                        poster: groupsImg
                       },
                     },
                   ],
@@ -138,6 +150,7 @@ useEffect(()=> {
                             name: "a-test",
                             service: "VIDEO",
                             identifier: "apps-dashboard-hub",
+                            poster: dashboardImg
                           },
                         },
                         {
@@ -146,9 +159,9 @@ useEffect(()=> {
                             name: "a-test",
                             service: "VIDEO",
                             identifier: "apps-navigation-hub",
+                            poster: navigationImg
                           },
                         }
-                       
                       ],
                     });
                   }

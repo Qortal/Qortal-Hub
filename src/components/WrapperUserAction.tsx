@@ -80,7 +80,8 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
               }, 200);
             }}
             sx={{
-                color: 'white'
+                color: 'white',
+                justifyContent: 'flex-start'
             }}
           >
             Message
@@ -98,10 +99,25 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
              
             }}
             sx={{
-                color: 'white'
+                color: 'white',
+                justifyContent: 'flex-start'
             }}
           >
             Send QORT
+          </Button>
+          <Button
+            variant="text"
+            onClick={() => {
+              navigator.clipboard.writeText(address|| "");
+              handleClose();
+             
+            }}
+            sx={{
+                color: 'white',
+                justifyContent: 'flex-start'
+            }}
+          >
+            Copy address
           </Button>
         </Box>
       </Popover>
