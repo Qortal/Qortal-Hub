@@ -26,7 +26,7 @@ import { cleanUrl, gateways, isUsingLocal } from "../background";
 import { GlobalContext } from "../App";
 
 const manifestData = {
-  version: "0.5.0",
+  version: "0.5.1",
 };
 
 
