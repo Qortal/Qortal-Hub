@@ -1265,6 +1265,7 @@ function App() {
   const registerName = async () => {
     try {
       if (!userInfo?.address) throw new Error("Your address was not found");
+      if(!registerNameValue) throw new Error('Enter a name')
       const fee = await getFee("REGISTER_NAME");
       await show({
         message: "Would you like to register this name?",

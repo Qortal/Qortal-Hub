@@ -481,7 +481,10 @@ isDOMContentLoaded: false
           if (response.error) {
             eventPort.postMessage({
               result: null,
-              error: response,
+              error: {
+                error: response?.error,
+                message: typeof response?.error === 'string' ? response?.error : 'An error has occurred'
+              },
             });
           } else {
             eventPort.postMessage({
