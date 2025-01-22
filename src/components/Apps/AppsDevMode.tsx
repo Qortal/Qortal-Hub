@@ -266,14 +266,14 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
           }}
         >
         <IconWrapper
-            color={desktopViewMode === 'chat' ? 'white' :"rgba(250, 250, 250, 0.5)"}
+            color={(hasUnreadDirects || hasUnreadGroups) ? "var(--unread)" : desktopViewMode === 'chat' ? 'white' :"rgba(250, 250, 250, 0.5)"}
             label="Chat"
             disableWidth
           >
             <MessagingIcon
               height={30}
               color={
-                hasUnreadDirects
+                (hasUnreadDirects || hasUnreadGroups)
                   ? "var(--unread)"
                   : desktopViewMode === 'chat'
                   ? "white"
