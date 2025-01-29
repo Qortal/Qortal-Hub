@@ -2076,7 +2076,7 @@ export async function cancelBan({ groupId, qortalAddress }) {
     throw new Error("Transaction was not able to be processed");
   return res;
 }
-export async function registerName({ name }) {
+export async function registerName({ name, description = "" }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2091,7 +2091,34 @@ export async function registerName({ name }) {
   const tx = await createTransaction(3, keyPair, {
     fee: feeres.fee,
     name,
-    value: "",
+    value: description || "",
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
+export async function updateName({ newName, oldName, description }) {
+  const lastReference = await getLastRef();
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+  const feeres = await getFee("UPDATE_NAME");
+
+  const tx = await createTransaction(4, keyPair, {
+    fee: feeres.fee,
+    name: oldName,
+    newName,
+    newData: description || "",
     lastReference: lastReference,
   });
 

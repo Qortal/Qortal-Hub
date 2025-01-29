@@ -17,6 +17,8 @@ import {
   performPowTask,
   parseErrorResponse,
   groupSecretkeys,
+  registerName,
+  updateName,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -3851,4 +3853,61 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       throw new Error('Invalid type')
   }
 
+};
+
+export const registerNameRequest = async (data, isFromExtension) => {
+  const requiredFields = ["name"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to register this name?`,
+      highlightedText: data.name,
+      text2: data?.description
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const name = data.name
+  const description = data?.description
+  const response = await registerName({ name, description });
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const updateNameRequest = async (data, isFromExtension) => {
+  const requiredFields = ["newName", "oldName"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const oldName = data.oldName
+  const newName = data.newName
+  const description = data?.description
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to register this name?`,
+      highlightedText: data.newName,
+      text2: data?.description
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await updateName({ oldName, newName, description });
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
 };

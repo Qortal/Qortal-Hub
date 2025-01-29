@@ -19,10 +19,12 @@ import CreatePollTransaction from './CreatePollTransaction.js'
 import DeployAtTransaction from './DeployAtTransaction.js'
 import RewardShareTransaction from './RewardShareTransaction.js'
 import RemoveRewardShareTransaction from './RemoveRewardShareTransaction.js'
+import UpdateNameTransaction from './UpdateNameTransaction.js'
 
 
 export const transactionTypes = {
 	3: RegisterNameTransaction,
+	4: UpdateNameTransaction,
 	2: PaymentTransaction,
 	8: CreatePollTransaction,
 	9: VoteOnPollTransaction,
