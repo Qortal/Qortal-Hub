@@ -19,6 +19,9 @@ import {
   groupSecretkeys,
   registerName,
   updateName,
+  leaveGroup,
+  inviteToGroup,
+  getNameInfoForOthers,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -3863,11 +3866,13 @@ export const registerNameRequest = async (data, isFromExtension) => {
       missingFields.push(field);
     }
   });
+  const fee = await getFee("REGISTER_NAME");
   const resPermission = await getUserPermission(
     {
       text1: `Do you give this application permission to register this name?`,
       highlightedText: data.name,
-      text2: data?.description
+      text2: data?.description,
+      fee: fee.fee
     },
     isFromExtension
   );
@@ -3894,17 +3899,108 @@ export const updateNameRequest = async (data, isFromExtension) => {
   const oldName = data.oldName
   const newName = data.newName
   const description = data?.description
+  const fee = await getFee("UPDATE_NAME");
   const resPermission = await getUserPermission(
     {
       text1: `Do you give this application permission to register this name?`,
       highlightedText: data.newName,
-      text2: data?.description
+      text2: data?.description,
+      fee: fee.fee,
     },
     isFromExtension
   );
   const { accepted } = resPermission;
   if (accepted) {
   const response = await updateName({ oldName, newName, description });
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const leaveGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = data.groupId
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const fee = await getFee("LEAVE_GROUP");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to leave the following group?`,
+      highlightedText: `${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await leaveGroup({ groupId });
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const inviteToGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "inviteTime", "inviteeAddress"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = data.groupId
+  const qortalAddress = data?.inviteeAddress
+  const inviteTime = data?.inviteTime
+
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const displayInvitee = await getNameInfoForOthers(qortalAddress)
+
+  const fee = await getFee("GROUP_INVITE");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to invite ${displayInvitee || qortalAddress}?`,
+      highlightedText: `Group: ${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await inviteToGroup({
+        groupId,
+        qortalAddress,
+        inviteTime,
+      })
   return response
 
   } else {

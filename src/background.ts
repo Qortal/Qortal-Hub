@@ -833,6 +833,17 @@ export async function getNameInfo() {
     return "";
   }
 }
+
+export async function getNameInfoForOthers(address) {
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + "/names/address/" + address);
+  const nameData = await response.json();
+  if (nameData?.length > 0) {
+    return nameData[0].name;
+  } else {
+    return "";
+  }
+}
 async function getAddressInfo(address) {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + "/addresses/" + address);
