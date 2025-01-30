@@ -22,6 +22,8 @@ import {
   leaveGroup,
   inviteToGroup,
   getNameInfoForOthers,
+  kickFromGroup,
+  banFromGroup,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -2854,7 +2856,7 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: "Do you give this application permission to send coins?",
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
-        fee: fee * QORT_DECIMALS,
+        fee: fee,
       },
       isFromExtension
     );
@@ -4000,6 +4002,105 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
         groupId,
         qortalAddress,
         inviteTime,
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const kickFromGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "qortalAddress"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = data.groupId
+  const qortalAddress = data?.qortalAddress
+  const reason = data?.reason
+
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const displayInvitee = await getNameInfoForOthers(qortalAddress)
+
+  const fee = await getFee("GROUP_KICK");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to kick ${displayInvitee || qortalAddress} from the group?`,
+      highlightedText: `Group: ${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await kickFromGroup({
+        groupId,
+        qortalAddress,
+        rBanReason: reason
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const banFromGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "qortalAddress"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = data.groupId
+  const qortalAddress = data?.qortalAddress
+  const rBanTime = data?.banTime
+  const reason = data?.reason
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const displayInvitee = await getNameInfoForOthers(qortalAddress)
+
+  const fee = await getFee("GROUP_BAN");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to ban ${displayInvitee || qortalAddress} from the group?`,
+      highlightedText: `Group: ${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await banFromGroup({
+        groupId,
+        qortalAddress,
+        rBanTime,
+        rBanReason: reason
       })
   return response
 
