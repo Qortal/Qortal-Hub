@@ -175,6 +175,7 @@ useEffect(()=> {
   }, [shownTutorials]);
   return {
     showTutorial,
+    hasSeenGettingStarted: shownTutorials === null ? null : !!(shownTutorials || {})['getting-started'],
     openTutorialModal,
     setOpenTutorialModal,
     shownTutorialsInitiated: !!shownTutorials

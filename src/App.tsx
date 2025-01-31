@@ -357,7 +357,7 @@ function App() {
   const {downloadResource} = useFetchResources()
   const holdRefExtState = useRef<extStates>("not-authenticated");
   const isFocusedRef = useRef<boolean>(true);
-  const {showTutorial, openTutorialModal, shownTutorialsInitiated, setOpenTutorialModal} = useHandleTutorials()
+  const {showTutorial, openTutorialModal, shownTutorialsInitiated, setOpenTutorialModal, hasSeenGettingStarted} = useHandleTutorials()
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     isShow: isShowUnsavedChanges,
@@ -1708,7 +1708,8 @@ function App() {
             showTutorial,
             openTutorialModal,
             setOpenTutorialModal,
-            downloadResource
+            downloadResource,
+            hasSeenGettingStarted
       }}>
             <Tutorials />
       {extState === "not-authenticated" && (
@@ -2277,8 +2278,7 @@ function App() {
               height: "154px",
             }}
           >
-            <img src={Logo1} className="base-image" />
-            <img src={Logo1Dark} className="hover-image" />
+            <img src={Logo1Dark} className="base-image" />
           </div>
           <Spacer height="38px" />
           <TextP
@@ -2340,8 +2340,7 @@ function App() {
               height: "154px",
             }}
           >
-            <img src={Logo1} className="base-image" />
-            <img src={Logo1Dark} className="hover-image" />
+            <img src={Logo1Dark} className="base-image" />
           </div>
           <Spacer height="38px" />
           <TextP
@@ -2437,8 +2436,7 @@ function App() {
               height: "154px",
             }}
           >
-            <img src={Logo1} className="base-image" />
-            <img src={Logo1Dark} className="hover-image" />
+            <img src={Logo1Dark} className="base-image" />
           </div>
           <Spacer height="35px" />
           <Box
@@ -2539,8 +2537,7 @@ function App() {
               height: "154px",
             }}
           >
-            <img src={Logo1} className="base-image" />
-            <img src={Logo1Dark} className="hover-image" />
+    <img src={Logo1Dark} className="base-image" />
           </div>
           <Spacer height="35px" />
           <Box
@@ -2640,14 +2637,14 @@ function App() {
                   height: "154px",
                 }}
               >
-                <img src={Logo1} className="base-image" />
-                <img src={Logo1Dark} className="hover-image" />
+               <img src={Logo1Dark} className="base-image" />
               </div>
               <Spacer height="38px" />
               <TextP
                 sx={{
                   textAlign: "center",
-                  lineHeight: "15px",
+                  lineHeight: 1.2,
+                  fontSize: '18px'
                 }}
               >
                 Set up your Qortal account
@@ -2686,7 +2683,7 @@ function App() {
                 If you wish to VIEW THE SEEDPHRASE, click the word 'SEEDPHRASE' in this text. Seedphrases are used to generate the private key for your Qortal account. For security by default, seedphrases are NOT displayed unless specifically chosen.
                 </Typography>
                 <Typography sx={{
-                  fontSize: '16px',
+                  fontSize: '18px',
                   marginTop: '15px',
                  
                   textAlign: 'center'
