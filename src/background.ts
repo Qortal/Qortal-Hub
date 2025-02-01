@@ -2001,7 +2001,7 @@ export async function leaveGroup({ groupId }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2057,7 +2057,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2084,7 +2084,7 @@ export async function cancelBan({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 export async function registerName({ name, description = "" }) {
@@ -2163,7 +2163,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2190,7 +2190,7 @@ export async function removeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2224,7 +2224,7 @@ export async function banFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2256,7 +2256,7 @@ export async function kickFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
