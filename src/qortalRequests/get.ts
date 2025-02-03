@@ -1,3 +1,4 @@
+import { Sha256 } from "asmcrypto.js";
 import {
   computePow,
   createEndpoint,
@@ -27,6 +28,7 @@ import {
   cancelBan,
   makeAdmin,
   removeAdmin,
+  cancelInvitationToGroup,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -35,6 +37,7 @@ import { extractComponents } from "../components/Chat/MessageDisplay";
 import { decryptResource, getGroupAdmins, getPublishesFromAdmins, validateSecretKey } from "../components/Group/Group";
 import { QORT_DECIMALS } from "../constants/constants";
 import Base58 from "../deps/Base58";
+import ed2curve from "../deps/ed2curve";
 import nacl from "../deps/nacl-fast";
 
 
@@ -4250,5 +4253,106 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
 
   } else {
     throw new Error("User declined request");
+  }
+};
+
+export const cancelGroupInviteRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "qortalAddress"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = data.groupId
+  const qortalAddress = data?.qortalAddress
+
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const displayInvitee = await getNameInfoForOthers(qortalAddress)
+
+  const fee = await getFee("CANCEL_GROUP_INVITE");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to cancel the group invite for ${displayInvitee || qortalAddress}?`,
+      highlightedText: `Group: ${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await cancelInvitationToGroup({
+        groupId,
+        qortalAddress,
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+export const decryptAESGCMRequest = async (data, isFromExtension) => {
+  const requiredFields = ["encryptedData", "iv", "senderPublicKey"];
+  requiredFields.forEach((field) => {
+      if (!data[field]) {
+          throw new Error(`Missing required field: ${field}`);
+      }
+  });
+
+  const encryptedData = data.encryptedData;
+  const iv = data.iv;
+  const senderPublicKeyBase58 = data.senderPublicKey;
+
+
+  // Decode keys and IV
+  const senderPublicKey = Base58.decode(senderPublicKeyBase58);
+  const resKeyPair = await getKeyPair(); // Assume this retrieves the current user's keypair
+  const uint8PrivateKey = Base58.decode(resKeyPair.privateKey);
+
+  // Convert ed25519 keys to Curve25519
+  const convertedPrivateKey = ed2curve.convertSecretKey(uint8PrivateKey);
+  const convertedPublicKey = ed2curve.convertPublicKey(senderPublicKey);
+
+  // Generate shared secret
+  const sharedSecret = new Uint8Array(32);
+  nacl.lowlevel.crypto_scalarmult(sharedSecret, convertedPrivateKey, convertedPublicKey);
+
+  // Derive encryption key
+  const encryptionKey: Uint8Array = new Sha256().process(sharedSecret).finish().result;
+
+  // Convert IV and ciphertext from Base64
+  const base64ToUint8Array = (base64) => Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+  const ivUint8Array = base64ToUint8Array(iv);
+  const ciphertext = base64ToUint8Array(encryptedData);
+  // Validate IV and key lengths
+  if (ivUint8Array.length !== 12) {
+      throw new Error("Invalid IV: AES-GCM requires a 12-byte IV.");
+  }
+  if (encryptionKey.length !== 32) {
+      throw new Error("Invalid key: AES-GCM requires a 256-bit key.");
+  }
+
+  try {
+      // Decrypt data
+      const algorithm = { name: "AES-GCM", iv: ivUint8Array };
+      const cryptoKey = await crypto.subtle.importKey("raw", encryptionKey, algorithm, false, ["decrypt"]);
+      const decryptedArrayBuffer = await crypto.subtle.decrypt(algorithm, cryptoKey, ciphertext);
+
+      // Return decrypted data as Base64
+      return uint8ArrayToBase64(new Uint8Array(decryptedArrayBuffer));
+  } catch (error) {
+      console.error("Decryption failed:", error);
+      throw new Error("Failed to decrypt the message. Ensure the data and keys are correct.");
   }
 };
