@@ -692,13 +692,13 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
-        case "IS_USING_GATEWAY": {
+        case "IS_USING_PUBLIC_NODE": {
           try {
             let isGateway =  await isRunningGateway()
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,
-              payload: {isGateway},
+              payload: isGateway,
               type: "backgroundMessageResponse",
             }, event.origin);
           } catch (error) {
