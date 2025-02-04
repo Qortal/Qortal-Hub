@@ -29,6 +29,7 @@ import {
   makeAdmin,
   removeAdmin,
   cancelInvitationToGroup,
+  createGroup,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -4302,6 +4303,50 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     throw new Error("User declined request");
   }
 };
+
+
+export const createGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "qortalAddress"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  const groupName = data.groupName
+  const description = data?.description
+  const type = +data.type
+  const approvalThreshold = +data?.approvalThreshold
+  const minBlock = +data?.minBlock
+  const maxBlock = +data.maxBlock
+
+
+  const fee = await getFee("CREATE_GROUP");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to create a group?`,
+      highlightedText: `Group name: ${groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await createGroup({
+        groupName,
+        groupDescription: description,
+        groupType: type,
+        groupApprovalThreshold: approvalThreshold,
+        minBlock,
+        maxBlock
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
 export const decryptAESGCMRequest = async (data, isFromExtension) => {
   const requiredFields = ["encryptedData", "iv", "senderPublicKey"];
   requiredFields.forEach((field) => {
