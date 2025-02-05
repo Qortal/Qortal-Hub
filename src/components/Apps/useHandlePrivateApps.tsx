@@ -8,6 +8,9 @@ import {
   sortablePinnedAppsAtom,
 } from "../../atoms/global";
 import { saveToLocalStorage } from "./AppsNavBarDesktop";
+import { base64ToBlobUrl } from "../../utils/fileReading";
+import { base64ToUint8Array } from "../../qdn/encryption/group-encryption";
+import { uint8ArrayToObject } from "../../backgroundFunctions/encryption";
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState("");
@@ -58,6 +61,10 @@ export const useHandlePrivateApps = () => {
         }
       );
       if(decryptedData?.error) throw new Error(decryptedData?.error)
+        
+        const convertToUint = base64ToUint8Array(decryptedData)
+        const UintToObject = uint8ArrayToObject(convertToUint)
+        
       if (decryptedData) {
         setInfoSnackCustom({
           type: "info",
@@ -71,7 +78,7 @@ export const useHandlePrivateApps = () => {
           headers: {
             "Content-Type": "text/plain",
           },
-          body: decryptedData,
+          body: UintToObject?.app,
         });
         const previewPath = await response.text();
         setOpenSnackGlobal(false);
@@ -81,12 +88,15 @@ export const useHandlePrivateApps = () => {
           });
         };
 
+        const appName = UintToObject?.name
+        const logo = UintToObject?.logo ? `data:image/png;base64,${UintToObject?.logo}` : null
+
         executeEvent("addTab", {
           data: {
             url: await createEndpoint(previewPath),
             isPreview: true,
             isPrivate: true,
-            privateAppProperties: { ...privateAppProperties },
+            privateAppProperties: { ...privateAppProperties, logo, appName  },
             filePath: "",
             refreshFunc: (tabId) => {
               refreshfunc(tabId);
@@ -101,7 +111,7 @@ export const useHandlePrivateApps = () => {
               {
                 isPrivate: true,
                 isPreview: true,
-                privateAppProperties: { ...privateAppProperties },
+                privateAppProperties: { ...privateAppProperties, logo, appName },
               },
             ];
 

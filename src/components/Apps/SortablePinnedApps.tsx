@@ -58,7 +58,7 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                     border: "none",
                   }}
                 >
-                  {app?.isPrivate ? (
+                  {app?.isPrivate && !app?.privateAppProperties?.logo ? (
           <LockIcon
             sx={{
               height: "42px",
@@ -75,7 +75,7 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                       }
                     }}
                     alt={app?.metadata?.title || app?.name}
-                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                    src={ app?.privateAppProperties?.logo ? app?.privateAppProperties?.logo :`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
                       app?.name
                     }/qortal_avatar?async=true`}
                   >
@@ -93,7 +93,7 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                 </AppCircle>
                 {app?.isPrivate ? (
                    <AppCircleLabel>
-                   Private
+                   {`${app?.privateAppProperties?.appName || "Private"}`}
                  </AppCircleLabel>
                 ) : (
                   <AppCircleLabel>

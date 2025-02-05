@@ -9,7 +9,7 @@ import {
   PublishQAppChoseFile,
   PublishQAppInfo,
 } from "./Apps-styles";
-import { Avatar, Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Input, MenuItem, Select, Tab, Tabs } from "@mui/material";
+import { Avatar, Box, Button, ButtonBase, Dialog, DialogActions, DialogContent, DialogTitle, Input, MenuItem, Select, Tab, Tabs, Typography } from "@mui/material";
 import { Add } from "@mui/icons-material";
 import { getBaseApiReact, isMobile, MyContext } from "../../App";
 import LogoSelected from "../../assets/svgs/LogoSelected.svg";
@@ -25,6 +25,9 @@ import { saveToLocalStorage } from "./AppsNavBarDesktop";
 import { Label } from "../Group/AddGroup";
 import { useHandlePrivateApps } from "./useHandlePrivateApps";
 import { useDropzone } from "react-dropzone";
+import ImageUploader from "../../common/ImageUploader";
+import { base64ToBlobUrl, fileToBase64 } from "../../utils/fileReading";
+import { objectToBase64 } from "../../qdn/encryption/group-encryption";
 
 const maxFileSize = 50 * 1024 * 1024 ; // 50MB or 400MB
 
@@ -37,6 +40,7 @@ export const AppsHomeDesktop = ({
 }) => {
     const {openApp} = useHandlePrivateApps()
     const [file, setFile] = useState(null)
+    const [logo, setLogo] = useState(null)
     const { getRootProps, getInputProps } = useDropzone({
       accept: {
         "application/zip": [".zip"], // Only accept zip files
@@ -91,7 +95,8 @@ const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useRecoilState(
 
   const [newPrivateAppValues, setNewPrivateAppValues] = useState({
     service: 'DOCUMENT',
-    identifier: ''
+    identifier: '',
+    name: '',
   })
 
   const addPrivateApp = async ()=> {
@@ -114,23 +119,35 @@ const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useRecoilState(
     })
     setNewPrivateAppValues({
 service: 'DOCUMENT',
-    identifier: ''
+    identifier: '',
+    name: ''
     })
     setFile(null)
     setValueTabPrivateApp(0)
-    setSelectedGroup(null)
+    setSelectedGroup(0)
+    setLogo(null)
     
   }
 
   const publishPrivateApp = async ()=> {
     try {
       if(selectedGroup === 0) return
+      if(!logo) throw new Error('Please select an image for a logo')
       if(!myName) throw new Error('You need a Qortal name to publish')
+        if(!newPrivateAppValues?.name) throw new Error('Your app needs a name')
+      const base64Logo = await fileToBase64(logo)
+      const base64App = await fileToBase64(file)
+      const objectToSave = {
+        app: base64App,
+        logo: base64Logo,
+        name: newPrivateAppValues.name
+      }
+      const object64 = await objectToBase64(objectToSave);
       const decryptedData = await window.sendMessage(
         "ENCRYPT_QORTAL_GROUP_DATA",
 
         {
-          file: file,
+          base64: object64,
           groupId: selectedGroup,
         }
       );
@@ -598,6 +615,35 @@ service: 'DOCUMENT',
                 })}
               />
             </Box>
+            <Spacer height="10px"/>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "5px",
+                marginTop: "15px",
+              }}
+            >
+              <Label>App name</Label>
+              <Input
+                placeholder="App name"
+                value={newPrivateAppValues?.name}
+                onChange={(e) => setNewPrivateAppValues((prev)=> {
+                  return {
+                    ...prev,
+                    name: e.target.value
+                  }
+                })}
+              />
+            </Box>
+
+          <Spacer height="10px" />
+        <ImageUploader onPick={(file) => setLogo(file)}>
+          <Button variant="contained">Choose logo</Button>
+        </ImageUploader>
+        {logo?.name}
+        <Spacer height="25px" />
+
           </DialogContent>
           <DialogActions>
             <Button variant="contained" onClick={()=> {

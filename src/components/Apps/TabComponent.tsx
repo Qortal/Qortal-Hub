@@ -37,7 +37,7 @@ const TabComponent = ({ isSelected, app }) => {
             src={NavCloseTab}
           />
         )}
-        {app?.isPrivate ? (
+        {app?.isPrivate && !app?.privateAppProperties?.logo ? (
           <LockIcon
             sx={{
               height: "28px",
@@ -51,7 +51,7 @@ const TabComponent = ({ isSelected, app }) => {
               width: "28px",
             }}
             alt={app?.name}
-            src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+            src={app?.privateAppProperties?.logo ? app?.privateAppProperties?.logo :`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
               app?.name
             }/qortal_avatar?async=true`}
           >
