@@ -310,6 +310,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
     };
   }, [tabs]);
 
+
   return (
     <AppsParent
       sx={{
@@ -450,7 +451,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-        <AppsHomeDesktop availableQapps={availableQapps}  setMode={setMode} myApp={myApp} myWebsite={myWebsite} />
+        <AppsHomeDesktop availableQapps={availableQapps}  setMode={setMode} myApp={myApp} myWebsite={myWebsite} myName={myName}/>
         </Box>
       )}
     
@@ -479,6 +480,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             isSelected={tab?.tabId === selectedTab?.tabId}
             app={tab}
             ref={iframeRefs.current[tab.tabId]}
+            isDevMode={tab?.service ? false : true}
           />
         );
       })}
@@ -494,7 +496,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-          <AppsHomeDesktop availableQapps={availableQapps} setMode={setMode} myApp={myApp} myWebsite={myWebsite}  />
+          <AppsHomeDesktop availableQapps={availableQapps} setMode={setMode} myApp={myApp} myWebsite={myWebsite} myName={myName}  />
           </Box>
         </>
       )}

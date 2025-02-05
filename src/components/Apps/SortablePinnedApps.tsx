@@ -11,8 +11,11 @@ import { settingsLocalLastUpdatedAtom, sortablePinnedAppsAtom } from '../../atom
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { saveToLocalStorage } from './AppsNavBar';
 import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
+import LockIcon from "@mui/icons-material/Lock";
+import { useHandlePrivateApps } from './useHandlePrivateApps';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {
+  const {openApp} = useHandlePrivateApps()
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -36,9 +39,14 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                 transition,
               }}
               onClick={()=> {
-                executeEvent("addTab", {
-                  data: app
-                })
+                if(app?.isPrivate){
+                  openApp(app?.privateAppProperties)
+                } else {
+                  executeEvent("addTab", {
+                    data: app
+                  })
+                }
+                
               }}
             >
               <AppCircleContainer  sx={{
@@ -50,7 +58,15 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                     border: "none",
                   }}
                 >
-                  <Avatar
+                  {app?.isPrivate ? (
+          <LockIcon
+            sx={{
+              height: "42px",
+                      width: "42px",
+            }}
+          />
+        ) : (
+          <Avatar
                     sx={{
                       height: "42px",
                       width: "42px",
@@ -72,10 +88,19 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                       alt="center-icon"
                     />
                   </Avatar>
+        )}
+                  
                 </AppCircle>
-                <AppCircleLabel>
+                {app?.isPrivate ? (
+                   <AppCircleLabel>
+                   Private
+                 </AppCircleLabel>
+                ) : (
+                  <AppCircleLabel>
                   {app?.metadata?.title || app?.name}
                 </AppCircleLabel>
+                )}
+               
               </AppCircleContainer>
             </ButtonBase>
             </ContextMenuPinnedApps>
@@ -85,7 +110,6 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
 export const SortablePinnedApps = ({  isDesktop, myWebsite, myApp, availableQapps = [] }) => {
     const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
     const setSettingsLocalLastUpdated = useSetRecoilState(settingsLocalLastUpdatedAtom);
-
     const transformPinnedApps = useMemo(() => {
   
       // Clone the existing pinned apps list

@@ -40,15 +40,17 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
   }, [url, isDevMode])
 
 
+
   const refreshAppFunc = (e) => {
     const {tabId} = e.detail
     if(tabId === app?.tabId){
       if(isDevMode){
         
         resetHistory()
-        if(!app?.isPreview){
+        if(!app?.isPreview || app?.isPrivate){
           setUrl(app?.url + `?time=${Date.now()}`)
         }
+        
         return
 
       }

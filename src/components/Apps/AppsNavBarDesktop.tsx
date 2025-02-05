@@ -31,6 +31,7 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from "../../atoms/global";
+import { useHandlePrivateApps } from "./useHandlePrivateApps";
 
 export function saveToLocalStorage(key, subKey, newValue) {
   try {
@@ -133,10 +134,24 @@ export const AppsNavBarDesktop = ({disableBack}) => {
 
  
 
-  const isSelectedAppPinned = !!sortablePinnedApps?.find(
-    (item) =>
-      item?.name === selectedTab?.name && item?.service === selectedTab?.service
-  );
+  // const isSelectedAppPinned = !!sortablePinnedApps?.find(
+  //   (item) =>
+  //     item?.name === selectedTab?.name && item?.service === selectedTab?.service
+  // );
+
+  const isSelectedAppPinned = useMemo(()=> {
+    if(selectedTab?.isPrivate){
+      return !!sortablePinnedApps?.find(
+        (item) =>
+          item?.privateAppProperties?.name === selectedTab?.privateAppProperties?.name && item?.privateAppProperties?.service === selectedTab?.privateAppProperties?.service && item?.privateAppProperties?.identifier === selectedTab?.privateAppProperties?.identifier
+      );
+    } else {
+      return !!sortablePinnedApps?.find(
+        (item) =>
+          item?.name === selectedTab?.name && item?.service === selectedTab?.service
+      );
+    }
+  }, [selectedTab,sortablePinnedApps])
 
   return (
     <AppsNavBarParent
@@ -282,22 +297,51 @@ export const AppsNavBarDesktop = ({disableBack}) => {
 
               if (isSelectedAppPinned) {
                 // Remove the selected app if it is pinned
-                updatedApps = prev.filter(
-                  (item) =>
-                    !(
-                      item?.name === selectedTab?.name &&
-                      item?.service === selectedTab?.service
-                    )
-                );
+                if(selectedTab?.isPrivate){
+                  updatedApps = prev.filter(
+                    (item) =>
+                      !(
+                        item?.privateAppProperties?.name === selectedTab?.privateAppProperties?.name &&
+                        item?.privateAppProperties?.service === selectedTab?.privateAppProperties?.service &&
+                        item?.privateAppProperties?.identifier === selectedTab?.privateAppProperties?.identifier
+                      )
+                  );
+                } else {
+                  updatedApps = prev.filter(
+                    (item) =>
+                      !(
+                        item?.name === selectedTab?.name &&
+                        item?.service === selectedTab?.service
+                      )
+                  );
+                }
+                
               } else {
                 // Add the selected app if it is not pinned
-                updatedApps = [
+                if(selectedTab?.isPrivate){
+                  updatedApps = [
                   ...prev,
                   {
-                    name: selectedTab?.name,
-                    service: selectedTab?.service,
+                    isPreview: true,
+                    isPrivate: true,
+                    privateAppProperties: {
+                      name: selectedTab?.privateAppProperties?.name,
+                    service: selectedTab?.privateAppProperties?.service,
+                    identifier: selectedTab?.privateAppProperties?.identifier,
+                    }
+                    
                   },
                 ];
+                } else {
+                  updatedApps = [
+                    ...prev,
+                    {
+                      name: selectedTab?.name,
+                      service: selectedTab?.service,
+                    },
+                  ];
+                }
+                
               }
 
               saveToLocalStorage(
@@ -338,6 +382,10 @@ export const AppsNavBarDesktop = ({disableBack}) => {
         </MenuItem>
         <MenuItem
           onClick={() => {
+                        if(selectedTab?.refreshFunc){
+                          selectedTab.refreshFunc(selectedTab?.tabId)
+                          return
+                        }
             executeEvent("refreshApp", {
               tabId: selectedTab?.tabId,
             });
@@ -368,38 +416,41 @@ export const AppsNavBarDesktop = ({disableBack}) => {
             primary="Refresh"
           />
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            executeEvent("copyLink", {
-              tabId: selectedTab?.tabId,
-            });
-            handleClose();
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
+        {!selectedTab?.isPrivate && (
+            <MenuItem
+            onClick={() => {
+              executeEvent("copyLink", {
+                tabId: selectedTab?.tabId,
+              });
+              handleClose();
             }}
           >
-            <ContentCopyIcon
-              height={20}
+            <ListItemIcon
               sx={{
-                color: "rgba(250, 250, 250, 0.5)",
+                minWidth: "24px !important",
+                marginRight: "5px",
               }}
+            >
+              <ContentCopyIcon
+                height={20}
+                sx={{
+                  color: "rgba(250, 250, 250, 0.5)",
+                }}
+              />
+            </ListItemIcon>
+            <ListItemText
+              sx={{
+                "& .MuiTypography-root": {
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "rgba(250, 250, 250, 0.5)",
+                },
+              }}
+              primary="Copy link"
             />
-          </ListItemIcon>
-          <ListItemText
-            sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
-                fontWeight: 600,
-                color: "rgba(250, 250, 250, 0.5)",
-              },
-            }}
-            primary="Copy link"
-          />
-        </MenuItem>
+          </MenuItem>
+        )}
+      
       </Menu>
     </AppsNavBarParent>
   );
