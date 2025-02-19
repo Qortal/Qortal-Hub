@@ -7,7 +7,7 @@ import importantImg from './img/important.webp'
 import navigationImg from './img/navigation.webp'
 import overviewImg from './img/overview.webp'
 import startedImg from './img/started.webp'
-
+import obtainingImg from './img/obtaining-qort.jpg'
 
 const checkIfGatewayIsOnline = async () => {
     try {
@@ -131,6 +131,15 @@ useEffect(()=> {
                         service: "VIDEO",
                         identifier: "groups-hub",
                         poster: groupsImg
+                      },
+                    },
+                    {
+                      title: "4. Obtaining Qort",
+                      resource: {
+                        name: "a-test",
+                        service: "VIDEO",
+                        identifier: "obtaining-qort",
+                        poster: obtainingImg
                       },
                     },
                   ],

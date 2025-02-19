@@ -40,6 +40,7 @@ import { CopyToClipboard } from "react-copy-to-clipboard";
 import Download from "./assets/svgs/Download.svg";
 import Logout from "./assets/svgs/Logout.svg";
 import Return from "./assets/svgs/Return.svg";
+import WarningIcon from '@mui/icons-material/Warning';
 import Success from "./assets/svgs/Success.svg";
 import Info from "./assets/svgs/Info.svg";
 import CloseIcon from "@mui/icons-material/Close";
@@ -2784,6 +2785,8 @@ function App() {
                   setWalletToBeDownloadedPasswordConfirm(e.target.value)
                 }
               />
+               <Spacer height="5px" />
+              <Typography variant="body2">There is no minimum length requirement</Typography>
               <Spacer height="17px" />
 
               <CustomButton onClick={createAccountFunc}>
@@ -2807,7 +2810,17 @@ function App() {
               >
                 Congrats, you’re all set up!
               </TextP>
-              <Spacer height="100px" />
+              <Spacer height="50px"/>
+              <Box sx={{
+                display: 'flex',
+                gap: '15px',
+                alignItems: 'center',
+                padding: '10px'
+              }}>
+                <WarningIcon color="warning" />
+                <Typography>Save your account in a place where you will remember it!</Typography>
+              </Box>
+              <Spacer height="50px" />
               <CustomButton
                 onClick={async () => {
                   await saveFileToDiskFunc();
