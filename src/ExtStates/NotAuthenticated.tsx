@@ -197,18 +197,13 @@ export const NotAuthenticated = ({
           url: key?.url,
           apikey: key?.apikey,
         });
-        const url = `${key?.url}/admin/apikey/test`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            accept: "text/plain",
-            "X-API-KEY": key?.apikey, // Include the API key here
-          },
-        });
+        const url = `${key?.url}/lists/testlist?apiKey=${key?.apikey}`;
+        const response = await fetch(url);
   
         // Assuming the response is in plain text and will be 'true' or 'false'
-        const data = await response.text();
-        if (data === "true") {
+        const data = await response.json();
+
+        if (data && !data?.error) {
           setIsValidApiKey(true);
         setUseLocalNode(true);
         return
@@ -240,18 +235,13 @@ export const NotAuthenticated = ({
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
-      const url = `${payload?.url}/admin/apikey/test`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          accept: "text/plain",
-          "X-API-KEY": payload?.apikey, // Include the API key here
-        },
-      });
+      const url = `${payload?.url}/lists/testlist?apiKey=${payload?.apikey}`;
+      const response = await fetch(url);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
-      const data = await response.text();
-      if (data === "true") {
+      const data = await response.json();
+
+      if (data && !data?.error) {
         window
           .sendMessage("setApiKey", payload)
           .then((response) => {
