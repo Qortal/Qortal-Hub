@@ -157,7 +157,9 @@ export const NotAuthenticated = ({
       .then((response) => {
       
           setCustomNodes(response || []);
-          window.electronAPI.setAllowedDomains(response?.map((node)=> node.url))
+          if(window?.electronAPI?.setAllowedDomains){
+            window.electronAPI.setAllowedDomains(response?.map((node)=> node.url))
+          }
           if(Array.isArray(response)){
             const findLocal = response?.find((item)=> item?.url === 'http://127.0.0.1:12391')
             if(findLocal && findLocal?.apikey){
@@ -334,8 +336,9 @@ export const NotAuthenticated = ({
     }
 
     setCustomNodes(nodes);
+    if(window?.electronAPI?.setAllowedDomains){
     window.electronAPI.setAllowedDomains(nodes?.map((node)=> node.url))
-
+    }
     setCustomNodeToSaveIndex(null);
     if (!nodes) return;
     window
