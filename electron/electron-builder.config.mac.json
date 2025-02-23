@@ -1,0 +1,81 @@
+{
+  "appId": "org.Qortal.Qortal-Hub",
+  "productName": "Qortal Hub",
+  "copyright": "Copyright © 2021 - 2025  Qortal",
+  "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+
+  "compression": "normal",
+
+  "asar": true,
+
+  "afterPack": "scripts/afterPack.js",
+
+  "afterSign": "scripts/notarize.js",
+
+  "files": [
+    "assets/**/*",
+    "build/**/*",
+    "capacitor.config.*",
+    "app/**/*",
+    "scripts/**/*"
+  ],
+
+  "mac": {
+    "icon": "assets/mac/appIcon.icns",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "buildmac/entitlements.mac.plist",
+    "entitlementsInherit": "buildmac/entitlements.mac.plist",
+    "category": "public.app-category.utilities",
+    "asarUnpack": ["**/*.node"],
+    "target": ["dmg", "pkg"]
+  },
+
+  "dmg": {
+    "sign": false,
+    "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+    "icon": "assets/mac/appIcon.icns",
+    "iconSize": 100,
+    "contents": [
+      {
+        "x": 130,
+        "y": 220
+      },
+      {
+        "x": 410,
+        "y": 220,
+        "type": "link",
+        "path": "/Applications"
+      }
+    ]
+  },
+
+  "pkg": {
+    "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+    "installLocation": "/Applications",
+    "background": {
+      "file": "buildmac/logo-hub.png",
+      "alignment": "bottomleft",
+      "scaling": "none"
+    },
+    "allowAnywhere": true,
+    "allowCurrentUserHome": true,
+    "allowRootDirectory": true,
+    "isVersionChecked": true,
+    "isRelocatable": false,
+    "overwriteAction": "upgrade"
+  },
+
+  "directories": {
+    "buildResources": "resources"
+  },
+
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Qortal",
+      "repo": "Qortal-Hub",
+      "releaseType": "draft"
+    }
+  ]
+}
