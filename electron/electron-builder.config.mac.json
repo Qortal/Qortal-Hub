@@ -2,7 +2,7 @@
   "appId": "org.Qortal.Qortal-Hub",
   "productName": "Qortal Hub",
   "copyright": "Copyright © 2021 - 2025  Qortal",
-  "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+  "artifactName": "Qortal-Hub-Setup-macOS_${version}.${ext}",
 
   "compression": "normal",
 
@@ -33,7 +33,7 @@
 
   "dmg": {
     "sign": false,
-    "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+    "artifactName": "Qortal-Hub-Setup-macOS_${version}.${ext}",
     "icon": "assets/mac/appIcon.icns",
     "iconSize": 100,
     "contents": [
@@ -51,7 +51,7 @@
   },
 
   "pkg": {
-    "artifactName": "Qortal-Hub-Setup-macOS.${ext}",
+    "artifactName": "Qortal-Hub-Setup-macOS_${version}.${ext}",
     "installLocation": "/Applications",
     "background": {
       "file": "buildmac/logo-hub.png",

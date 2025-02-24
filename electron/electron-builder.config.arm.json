@@ -14,7 +14,8 @@
   ],
   "linux": {
     "target": [
-      "AppImage"
+      "AppImage",
+      "deb"
     ],
     "category": "Network",
     "packageCategory": "Network",
@@ -25,7 +26,7 @@
     "icon": "assets/png"
   },
   "appImage": {
-    "artifactName": "Qortal-Hub-Setup-arm64_${version}.${ext}"
+    "artifactName": "Qortal-Hub-arm64_${version}.${ext}"
   },
   "deb": {
     "artifactName": "Qortal-Hub-Setup-arm64_${version}.${ext}",
