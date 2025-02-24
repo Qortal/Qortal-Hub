@@ -74,7 +74,7 @@ export const NotAuthenticated = ({
   // });
   const [importedApiKey, setImportedApiKey] = React.useState(null);
   //add and edit states
-  const [url, setUrl] = React.useState("http://");
+  const [url, setUrl] = React.useState("https://");
   const [customApikey, setCustomApiKey] = React.useState("");
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
@@ -348,15 +348,14 @@ export const NotAuthenticated = ({
   const addCustomNode = () => {
     setMode("add-node");
   };
-
-  const saveCustomNodes = (myNodes) => {
+  const saveCustomNodes = (myNodes, isFullListOfNodes) => {
     let nodes = [...(myNodes || [])];
-    if (customNodeToSaveIndex !== null) {
+    if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
       nodes.splice(customNodeToSaveIndex, 1, {
         url: removeTrailingSlash(url),
         apikey: customApikey,
       });
-    } else if (url) {
+    } else if (!isFullListOfNodes && url) {
       nodes.push({
         url: removeTrailingSlash(url),
         apikey: customApikey,
@@ -372,7 +371,7 @@ export const NotAuthenticated = ({
       .then((response) => {
         if (response) {
           setMode("list");
-          setUrl("http://");
+          setUrl("https://");
           setCustomApiKey("");
           if(window?.electronAPI?.setAllowedDomains){
             window.electronAPI.setAllowedDomains(nodes?.map((node) => node.url))
@@ -776,7 +775,7 @@ export const NotAuthenticated = ({
                                 ...(customNodes || []),
                               ].filter((item) => item?.url !== node?.url);
 
-                              saveCustomNodes(nodesToSave);
+                              saveCustomNodes(nodesToSave, true);
                             }}
                             variant="contained"
                           >
