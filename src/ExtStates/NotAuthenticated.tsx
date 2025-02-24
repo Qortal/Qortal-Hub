@@ -191,28 +191,45 @@ export const NotAuthenticated = ({
 
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
+      if(key === "isGateway") return
       const isLocalKey = cleanUrl(key?.url) === "127.0.0.1:12391";
-      if(fromStartUp && key?.url && key?.apikey && !isLocalKey && !gateways.some(gateway => apiKey?.url?.includes(gateway))){
+      if (fromStartUp && key?.url && key?.apikey && !isLocalKey && !gateways.some(gateway => key?.url?.includes(gateway))) {
         setCurrentNode({
           url: key?.url,
           apikey: key?.apikey,
         });
-        const url = `${key?.url}/lists/testlist?apiKey=${key?.apikey}`;
-        const response = await fetch(url);
-  
-        // Assuming the response is in plain text and will be 'true' or 'false'
-        const data = await response.json();
 
-        if (data && !data?.error) {
-          setIsValidApiKey(true);
-        setUseLocalNode(true);
-        return
-        }
+        let isValid = false
+
         
+        const url = `${key?.url}/admin/settings/localAuthBypassEnabled`;
+        const response = await fetch(url);
+
+        // Assuming the response is in plain text and will be 'true' or 'false'
+        const data = await response.text();
+        if(data && data === 'true'){
+          isValid = true
+        } else {
+          const url2 = `${key?.url}/admin/apikey/test?apiKey=${key?.apikey}`;
+          const response2 = await fetch(url2);
+    
+          // Assuming the response is in plain text and will be 'true' or 'false'
+          const data2 = await response2.text();
+          if (data2 === "true") {
+            isValid = true
+          }
+        }
+       
+        if (isValid) {
+          setIsValidApiKey(true);
+          setUseLocalNode(true);
+          return
+        }
+
       }
       if (!currentNodeRef.current) return;
       const stillHasLocal = await checkIfUserHasLocalNode()
-      
+
       if (isLocalKey && !stillHasLocal && !fromStartUp) {
         throw new Error("Please turn on your local node");
       }
@@ -235,13 +252,29 @@ export const NotAuthenticated = ({
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
-      const url = `${payload?.url}/lists/testlist?apiKey=${payload?.apikey}`;
+      let isValid = false
+
+        
+      const url = `${payload?.url}/admin/settings/localAuthBypassEnabled`;
       const response = await fetch(url);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
-      const data = await response.json();
+      const data = await response.text();
+      if(data && data === 'true'){
+        isValid = true
+      } else {
+        const url2 = `${payload?.url}/admin/apikey/test?apiKey=${payload?.apikey}`;
+        const response2 = await fetch(url2);
+  
+        // Assuming the response is in plain text and will be 'true' or 'false'
+        const data2 = await response2.text();
+        if (data2 === "true") {
+          isValid = true
+        }
+      }
+     
 
-      if (data && !data?.error) {
+      if (isValid) {
         window
           .sendMessage("setApiKey", payload)
           .then((response) => {
@@ -263,21 +296,24 @@ export const NotAuthenticated = ({
       } else {
         setIsValidApiKey(false);
         setUseLocalNode(false);
-        setInfoSnack({
-          type: "error",
-          message: "Select a valid apikey",
-        });
-        setOpenSnack(true);
+        if(!fromStartUp){
+          setInfoSnack({
+            type: "error",
+            message: "Select a valid apikey",
+          });
+          setOpenSnack(true);
+        }
+        
       }
     } catch (error) {
       setIsValidApiKey(false);
       setUseLocalNode(false);
-      if(fromStartUp){
+      if (fromStartUp) {
         setCurrentNode({
           url: "http://127.0.0.1:12391",
         });
         window
-          .sendMessage("setApiKey", null)
+          .sendMessage("setApiKey", "isGateway")
           .then((response) => {
             if (response) {
               setApiKey(null);
@@ -292,11 +328,13 @@ export const NotAuthenticated = ({
           });
         return
       }
+      if(!fromStartUp){
       setInfoSnack({
         type: "error",
         message: error?.message || "Select a valid apikey",
       });
       setOpenSnack(true);
+    }
       console.error("Error validating API key:", error);
     }
   }, []);
@@ -318,7 +356,7 @@ export const NotAuthenticated = ({
         url: removeTrailingSlash(url),
         apikey: customApikey,
       });
-    } else if (url && customApikey) {
+    } else if (url) {
       nodes.push({
         url: removeTrailingSlash(url),
         apikey: customApikey,
@@ -326,9 +364,7 @@ export const NotAuthenticated = ({
     }
 
     setCustomNodes(nodes);
-    if(window?.electronAPI?.setAllowedDomains){
-    window.electronAPI.setAllowedDomains(nodes?.map((node)=> node.url))
-    }
+  
     setCustomNodeToSaveIndex(null);
     if (!nodes) return;
     window
@@ -338,6 +374,9 @@ export const NotAuthenticated = ({
           setMode("list");
           setUrl("http://");
           setCustomApiKey("");
+          if(window?.electronAPI?.setAllowedDomains){
+            window.electronAPI.setAllowedDomains(nodes?.map((node) => node.url))
+            }
           // add alert if needed
         }
       })
@@ -810,7 +849,7 @@ export const NotAuthenticated = ({
 
                 <Button
                   variant="contained"
-                  disabled={!customApikey || !url}
+                  disabled={!url}
                   onClick={() => saveCustomNodes(customNodes)}
                   autoFocus
                 >

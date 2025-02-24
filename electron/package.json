@@ -47,7 +47,7 @@
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
-    "electron": "^26.2.2",
+    "electron": "^32.3.1",
     "electron-builder": "^25.1.8",
     "@electron/notarize": "^2.5.0",
     "typescript": "^5.0.4",
