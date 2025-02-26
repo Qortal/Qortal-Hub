@@ -90,7 +90,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
         'width', 'height', 'style', 'align', 'valign', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'data-url'
       ],
     }).replace(/<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g, '');
-  }, [])
+  }, [htmlContent])
 
   const handleClick = async (e) => {
     e.preventDefault();
