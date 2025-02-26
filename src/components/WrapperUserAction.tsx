@@ -46,81 +46,83 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
       </Box>
 
       {/* Popover */}
-      <Popover
-        id={id}
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handleClose} // Close popover on click outside
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        componentsProps={{
-          paper: {
-            onClick: (event) => event.stopPropagation(), // Stop propagation inside popover
-          },
-        }}
-      >
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {/* Option 1: Message */}
-          <Button
-            variant="text"
-            onClick={() => {
-             
-              handleClose();
-              setTimeout(() => {
-                executeEvent('openDirectMessageInternal', {
-                  address,
-                  name,
-                });
-              }, 200);
-            }}
-            sx={{
-                color: 'white',
-                justifyContent: 'flex-start'
-            }}
-          >
-            Message
-          </Button>
-
-          {/* Option 2: Send QORT */}
-          <Button
-            variant="text"
-            onClick={() => {
-            executeEvent('openPaymentInternal', {
-                    address,
-                    name,
-            });
-              handleClose();
-             
-            }}
-            sx={{
-                color: 'white',
-                justifyContent: 'flex-start'
-            }}
-          >
-            Send QORT
-          </Button>
-          <Button
-            variant="text"
-            onClick={() => {
-              navigator.clipboard.writeText(address|| "");
-              handleClose();
-             
-            }}
-            sx={{
-                color: 'white',
-                justifyContent: 'flex-start'
-            }}
-          >
-            Copy address
-          </Button>
-        </Box>
-      </Popover>
+      {open && (
+           <Popover
+           id={id}
+           open={open}
+           anchorEl={anchorEl}
+           onClose={handleClose} // Close popover on click outside
+           anchorOrigin={{
+             vertical: 'bottom',
+             horizontal: 'center',
+           }}
+           transformOrigin={{
+             vertical: 'top',
+             horizontal: 'center',
+           }}
+           componentsProps={{
+             paper: {
+               onClick: (event) => event.stopPropagation(), // Stop propagation inside popover
+             },
+           }}
+         >
+           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+             {/* Option 1: Message */}
+             <Button
+               variant="text"
+               onClick={() => {
+                
+                 handleClose();
+                 setTimeout(() => {
+                   executeEvent('openDirectMessageInternal', {
+                     address,
+                     name,
+                   });
+                 }, 200);
+               }}
+               sx={{
+                   color: 'white',
+                   justifyContent: 'flex-start'
+               }}
+             >
+               Message
+             </Button>
+   
+             {/* Option 2: Send QORT */}
+             <Button
+               variant="text"
+               onClick={() => {
+               executeEvent('openPaymentInternal', {
+                       address,
+                       name,
+               });
+                 handleClose();
+                
+               }}
+               sx={{
+                   color: 'white',
+                   justifyContent: 'flex-start'
+               }}
+             >
+               Send QORT
+             </Button>
+             <Button
+               variant="text"
+               onClick={() => {
+                 navigator.clipboard.writeText(address|| "");
+                 handleClose();
+                
+               }}
+               sx={{
+                   color: 'white',
+                   justifyContent: 'flex-start'
+               }}
+             >
+               Copy address
+             </Button>
+           </Box>
+         </Popover>
+      )}
     </>
   );
 };

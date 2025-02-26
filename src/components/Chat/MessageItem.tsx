@@ -1,5 +1,5 @@
 import { Message } from "@chatscope/chat-ui-kit-react";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useInView } from "react-intersection-observer";
 import { MessageDisplay } from "./MessageDisplay";
 import { Avatar, Box, Button, ButtonBase, List, ListItem, ListItemText, Popover, Tooltip, Typography } from "@mui/material";
@@ -50,7 +50,7 @@ const getBadgeImg = (level)=> {
     default: return level0Img
   }
 }
-export const MessageItem = ({
+export const MessageItem = React.memo(({
   message,
   onSeen,
   isLast,
@@ -68,36 +68,78 @@ export const MessageItem = ({
   onEdit,
   isPrivate
 }) => {
-  const { ref, inView } = useInView({
-    threshold: 0.7, // Fully visible
-    triggerOnce: false, // Only trigger once when it becomes visible
-  });
+
 const {getIndividualUserInfo} = useContext(MyContext)
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedReaction, setSelectedReaction] = useState(null);
-  const userInfo = useRecoilValue(addressInfoKeySelector(message?.sender));
+  const [userInfo, setUserInfo] = useState(null)
 
-  useEffect(() => {
-    if (inView && isLast && onSeen) {
-      onSeen(message.id);
-    }
-  }, [inView, message.id, isLast]);
 
 useEffect(()=> {
-  if(message?.sender){
-    getIndividualUserInfo(message?.sender)
+  const getInfo = async ()=> {
+    if(!message?.sender) return
+    try {
+      const res =  await getIndividualUserInfo(message?.sender)
+    if(!res) return null
+    setUserInfo(res)
+    } catch (error) {
+      //
+    }
   }
-}, [message?.sender])
+
+   getInfo()
+}, [message?.sender, getIndividualUserInfo])
+
+const htmlText = useMemo(()=> {
+  
+  if(message?.messageText){
+    return generateHTML(message?.messageText, [
+      StarterKit,
+      Underline,
+      Highlight,
+      Mention,
+      TextStyle
+    ])
+  }
+  
+}, [])
+
+
+
+const htmlReply = useMemo(()=> {
+  
+  if(reply?.messageText){
+    return generateHTML(reply?.messageText, [
+      StarterKit,
+      Underline,
+      Highlight,
+      Mention,
+      TextStyle
+    ])
+  }
+  
+}, [])
+
+const userAvatarUrl = useMemo(()=> {
+  return message?.senderName ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+    message?.senderName
+  }/qortal_avatar?async=true` : ''
+}, [])
+
+const onSeenFunc = useCallback(()=> {
+  onSeen(message.id);
+}, [message?.id])
+
 
   return (
-    <>
+    <MessageWragger lastMessage={lastSignature === message?.signature} isLast={isLast} onSeen={onSeenFunc}>
+
     {message?.divide && (
      <div className="unread-divider" id="unread-divider-id">
      Unread messages below
    </div>
     )}
     <div
-      ref={lastSignature === message?.signature ? ref : null}
       style={{
         padding: "10px",
         backgroundColor: "#232428",
@@ -132,25 +174,25 @@ useEffect(()=> {
             sx={{
               backgroundColor: "#27282c",
               color: "white",
+              height: '40px',
+              width: '40px'
             }}
             alt={message?.senderName}
-            src={message?.senderName ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-              message?.senderName
-            }/qortal_avatar?async=true` : ''}
+            src={userAvatarUrl}
           >
             {message?.senderName?.charAt(0)}
           </Avatar>
           
           
         </WrapperUserAction>
-        <Tooltip disableFocusListener title={`level ${userInfo?.level}`}>
+        <Tooltip disableFocusListener title={`level ${userInfo}`}>
             
          
             <img style={{
-              visibility: userInfo?.level !== undefined ? 'visible' : 'hidden',
+              visibility: userInfo !== undefined ? 'visible' : 'hidden',
               width: '30px',
               height: 'auto'
-            }} src={getBadgeImg(userInfo?.level)} /> 
+            }} src={getBadgeImg(userInfo)} /> 
         </Tooltip>
         </Box>
       )}
@@ -257,13 +299,7 @@ useEffect(()=> {
               }}>Replied to {reply?.senderName || reply?.senderAddress}</Typography>
               {reply?.messageText && (
                 <MessageDisplay
-                  htmlContent={generateHTML(reply?.messageText, [
-                    StarterKit,
-                    Underline,
-                    Highlight,
-                    Mention,
-                    TextStyle
-                  ])}
+                  htmlContent={htmlReply}
                 />
               )}
               {reply?.decryptedData?.type === "notification" ? (
@@ -275,17 +311,11 @@ useEffect(()=> {
           </Box>
           </>
         )}
-        {message?.messageText && (
+      
           <MessageDisplay
-            htmlContent={generateHTML(message?.messageText, [
-              StarterKit,
-              Underline,
-              Highlight,
-              Mention,
-              TextStyle
-            ])}
+            htmlContent={htmlText}
           />
-        )}
+      
         {message?.decryptedData?.type === "notification" ? (
           <MessageDisplay htmlContent={message.decryptedData?.data?.message} />
         ) : (
@@ -457,21 +487,11 @@ useEffect(()=> {
         </Box>
       </Box>
 
-      {/* <Message
-      model={{
-        direction: 'incoming',
-        message: message.text,
-        position: 'single',
-        sender: message.senderName,
-        sentTime: message.timestamp
-      }}
-      
-    ></Message> */}
-      {/* {!message.unread && <span style={{ color: 'green' }}> Seen</span>} */}
+ 
     </div>
-    </>
+    </MessageWragger>
   );
-};
+});
 
 
 export const ReplyPreview = ({message, isEdit})=> {
@@ -530,4 +550,36 @@ export const ReplyPreview = ({message, isEdit})=> {
           </Box>
           
   )
+}
+
+const MessageWragger = ({lastMessage, onSeen, isLast, children})=> {
+
+  if(lastMessage){
+    return (
+      <WatchComponent onSeen={onSeen} isLast={isLast}>{children}</WatchComponent>
+    ) 
+  }
+  return children
+}
+
+const WatchComponent = ({onSeen, isLast, children})=> {
+  const { ref, inView } = useInView({
+    threshold: 0.7, // Fully visible
+    triggerOnce: true, // Only trigger once when it becomes visible
+  });
+
+  useEffect(() => {
+    if (inView && isLast && onSeen) {
+      onSeen();
+    }
+  }, [inView, isLast, onSeen]);
+
+  return <div ref={ref} style={{
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center'
+  }}>
+    {children}
+  </div>
+
 }

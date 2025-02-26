@@ -447,11 +447,13 @@ export const Group = ({
   const setUserInfoForLevels = useSetRecoilState(addressInfoControllerAtom);
 
   const isPrivate = useMemo(()=> {
+    if(selectedGroup?.groupId === '0') return false
     if(!selectedGroup?.groupId || !groupsProperties[selectedGroup?.groupId]) return null
     if(groupsProperties[selectedGroup?.groupId]?.isOpen === true) return false
     if(groupsProperties[selectedGroup?.groupId]?.isOpen === false) return true
     return null
   }, [selectedGroup])
+
 
   const setSelectedGroupId = useSetRecoilState(selectedGroupIdAtom)
   const toggleSideViewDirects = ()=> {
@@ -1937,7 +1939,7 @@ export const Group = ({
                       
                     </ListItemAvatar>
                     <ListItemText
-                      primary={group.groupName}
+                      primary={group.groupId === '0' ? 'General' : group.groupName}
                       secondary={!group?.timestamp ? 'no messages' :`last message: ${formatEmailDate(group?.timestamp)}`}
                       primaryTypographyProps={{
                         style: {

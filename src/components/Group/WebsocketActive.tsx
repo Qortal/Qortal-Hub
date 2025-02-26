@@ -78,7 +78,15 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
       
               }
               const data = JSON.parse(e.data);
-              const filteredGroups = data.groups?.filter(item => item?.groupId !== 0) || [];
+              const copyGroups = [...(data?.groups || [])]
+              const findIndex = copyGroups?.findIndex(item => item?.groupId === 0)
+              if(findIndex !== -1){
+                copyGroups[findIndex] = {
+                  ...(copyGroups[findIndex] || {}),
+                  groupId: "0"
+                }
+              }
+              const filteredGroups = copyGroups
               const sortedGroups = filteredGroups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
               const sortedDirects = (data?.direct || []).filter(item =>
                 item?.name !== 'extension-proxy' && item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH'

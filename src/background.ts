@@ -673,7 +673,7 @@ const handleNotification = async (groups) => {
 
   let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
   if (!isArray(mutedGroups)) mutedGroups = [];
-
+  mutedGroups.push('0')
   let isFocused;
   const data = groups.filter(
     (group) =>
@@ -3182,6 +3182,7 @@ export const checkNewMessages = async () => {
   try {
     let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
     if (!isArray(mutedGroups)) mutedGroups = [];
+    mutedGroups.push('0')
     let myName = "";
     const userData = await getUserInfo();
     if (userData?.name) {

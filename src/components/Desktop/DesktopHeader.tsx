@@ -118,7 +118,7 @@ export const DesktopHeader = ({
             fontWeight: 600,
           }}
         >
-          {selectedGroup?.groupName}
+          {selectedGroup?.groupId === '0' ? 'General' :selectedGroup?.groupName}
         </Typography>
       </Box>
       <Box
@@ -126,76 +126,10 @@ export const DesktopHeader = ({
           display: "flex",
           gap: "20px",
           alignItems: "center",
+          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile'
         }}
       >
-        {/* <ButtonBase
-          onClick={() => {
-            goToHome();
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Home"
-            selected={isHome}
-          >
-            <HomeIcon
-              height={25}
-              color={isHome ? "white" : "rgba(250, 250, 250, 0.5)"}
-            />
-          </IconWrapper>
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Groups"
-            selected={isGroups}
-          >
-            <HubsIcon
-              height={25}
-              color={
-                hasUnreadGroups
-                  ? "var(--danger)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-          </IconWrapper>
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("directs");
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Messaging"
-            selected={isDirects}
-          >
-            <MessagingIcon
-              height={25}
-              color={
-                hasUnreadDirects
-                  ? "var(--danger)"
-                  : isDirects
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-          </IconWrapper>
-        </ButtonBase> */}
-        {/* <Box
-          sx={{
-            width: "1px",
-            height: "50px",
-            background: "white",
-            borderRadius: "50px",
-          }}
-        /> */}
+      
         <ButtonBase
           onClick={() => {
             goToAnnouncements()
