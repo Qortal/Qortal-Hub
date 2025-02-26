@@ -34,7 +34,7 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
       setLoading(true)
    
       let groupsAsAdmin = []
-      const getAllGroupsAsAdmin = groups.map(async (group)=> {
+      const getAllGroupsAsAdmin = groups.filter((item)=> item.groupId !== '0').map(async (group)=> {
    
         const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(()=> {
           return fetch(
