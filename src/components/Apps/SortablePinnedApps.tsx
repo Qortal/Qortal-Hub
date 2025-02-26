@@ -1,18 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable';
 import { KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Avatar, ButtonBase } from '@mui/material';
 import { AppCircle, AppCircleContainer, AppCircleLabel } from './Apps-styles';
-import { getBaseApiReact } from '../../App';
+import { getBaseApiReact, MyContext } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { settingsLocalLastUpdatedAtom, sortablePinnedAppsAtom } from '../../atoms/global';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import { saveToLocalStorage } from './AppsNavBar';
 import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
-
+import LockIcon from "@mui/icons-material/Lock";
+import { useHandlePrivateApps } from './useHandlePrivateApps';
 const SortableItem = ({ id, name, app, isDesktop }) => {
+  const {openApp} = useHandlePrivateApps()
+
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -28,17 +31,27 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
 
     return (
       <ContextMenuPinnedApps app={app} isMine={!!app?.isMine}>
-        <ButtonBase
+     <ButtonBase
         ref={setNodeRef} {...attributes} {...listeners}
               sx={{
                 width: "80px",
                 transform: CSS.Transform.toString(transform),
                 transition,
               }}
-              onClick={()=> {
-                executeEvent("addTab", {
-                  data: app
-                })
+              onClick={async ()=> {
+                if(app?.isPrivate){
+                  try {
+                      await openApp(app?.privateAppProperties)
+                  } catch (error) {
+                    console.error(error)
+                  }
+                
+                } else {
+                  executeEvent("addTab", {
+                    data: app
+                  })
+                }
+                
               }}
             >
               <AppCircleContainer  sx={{
@@ -50,7 +63,15 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                     border: "none",
                   }}
                 >
-                  <Avatar
+                  {app?.isPrivate && !app?.privateAppProperties?.logo ? (
+          <LockIcon
+            sx={{
+              height: "42px",
+                      width: "42px",
+            }}
+          />
+        ) : (
+          <Avatar
                     sx={{
                       height: "42px",
                       width: "42px",
@@ -59,7 +80,7 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                       }
                     }}
                     alt={app?.metadata?.title || app?.name}
-                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                    src={ app?.privateAppProperties?.logo ? app?.privateAppProperties?.logo :`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
                       app?.name
                     }/qortal_avatar?async=true`}
                   >
@@ -72,10 +93,19 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                       alt="center-icon"
                     />
                   </Avatar>
+        )}
+                  
                 </AppCircle>
-                <AppCircleLabel>
+                {app?.isPrivate ? (
+                   <AppCircleLabel>
+                   {`${app?.privateAppProperties?.appName || "Private"}`}
+                 </AppCircleLabel>
+                ) : (
+                  <AppCircleLabel>
                   {app?.metadata?.title || app?.name}
                 </AppCircleLabel>
+                )}
+               
               </AppCircleContainer>
             </ButtonBase>
             </ContextMenuPinnedApps>

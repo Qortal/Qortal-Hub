@@ -46,7 +46,7 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
       if(isDevMode){
         
         resetHistory()
-        if(!app?.isPreview){
+        if(!app?.isPreview || app?.isPrivate){
           setUrl(app?.url + `?time=${Date.now()}`)
         }
         return
