@@ -12,6 +12,7 @@ import {
   checkNewMessages,
   checkThreads,
   clearAllNotifications,
+  createEndpoint,
   createGroup,
   decryptDirectFunc,
   decryptSingleForPublishes,
@@ -1276,6 +1277,85 @@ export async function getTimestampEnterChatCase(request, event) {
       {
         requestId: request.requestId,
         action: "getTimestampEnterChat",
+        error: error?.message,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  }
+}
+
+export async function listActionsCase(request, event) {
+  try {
+    const { type, listName = '', items = [] } = request.payload;
+    let responseData 
+
+    if(type === 'get'){
+      const url = await createEndpoint(`/lists/${listName}`);
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("Failed to fetch");
+      
+          responseData = await response.json();
+    } else if(type === 'remove'){
+      const url = await createEndpoint(`/lists/${listName}`);
+          const body = {
+            items: items ,
+          };
+          const bodyToString = JSON.stringify(body);
+          const response = await fetch(url, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: bodyToString,
+          });
+
+          if (!response.ok) throw new Error("Failed to remove from list");
+          let res;
+          try {
+            res = await response.clone().json();
+          } catch (e) {
+            res = await response.text();
+          }
+          responseData = res;
+          } else if(type === 'add'){
+            const url = await createEndpoint(`/lists/${listName}`);
+                const body = {
+                  items: items ,
+                };
+                const bodyToString = JSON.stringify(body);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: bodyToString,
+    });
+      
+                if (!response.ok) throw new Error("Failed to add to list");
+                let res;
+                try {
+                  res = await response.clone().json();
+                } catch (e) {
+                  res = await response.text();
+                }
+                responseData = res;
+                }
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "listActions",
+        payload: responseData,
+        type: "backgroundMessageResponse",
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: "listActions",
         error: error?.message,
         type: "backgroundMessageResponse",
       },

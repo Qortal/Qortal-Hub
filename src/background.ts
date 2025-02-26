@@ -74,6 +74,7 @@ import {
   joinGroupCase,
   kickFromGroupCase,
   leaveGroupCase,
+  listActionsCase,
   ltcBalanceCase,
   makeAdminCase,
   nameCase,
@@ -3022,6 +3023,9 @@ function setupMessageListener() {
       case "getTimestampEnterChat":
         getTimestampEnterChatCase(request, event);
         break;
+        case "listActions":
+          listActionsCase(request, event);
+          break;
         case "addTimestampMention":
           addTimestampMentionCase(request, event);
           break;
@@ -3154,9 +3158,16 @@ const checkGroupList = async () => {
       },
     });
     const data = await response.json();
+    const copyGroups = [...(data?.groups || [])]
+              const findIndex = copyGroups?.findIndex(item => item?.groupId === 0)
+              if(findIndex !== -1){
+                copyGroups[findIndex] = {
+                  ...(copyGroups[findIndex] || {}),
+                  groupId: "0"
+                }
+              }
+              const filteredGroups = copyGroups
 
-    const filteredGroups =
-      data.groups?.filter((item) => item?.groupId !== 0) || [];
     const sortedGroups = filteredGroups.sort(
       (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
     );

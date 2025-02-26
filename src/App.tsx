@@ -143,6 +143,7 @@ import { Minting } from "./components/Minting/Minting";
 import { isRunningGateway } from "./qortalRequests";
 import { QMailStatus } from "./components/QMailStatus";
 import { GlobalActions } from "./components/GlobalActions/GlobalActions";
+import { useBlockedAddresses } from "./components/Group/useBlockUsers";
 
 type extStates =
   | "not-authenticated"
@@ -402,6 +403,9 @@ function App() {
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
   const [rootHeight, setRootHeight] = useState("100%");
+  const {isUserBlocked,
+    addToBlockList,
+    removeBlockFromList, getAllBlockedUsers} = useBlockedAddresses()
    const [currentNode, setCurrentNode] = useState({
       url: "http://127.0.0.1:12391",
     });
@@ -1630,7 +1634,11 @@ function App() {
                  infoSnackCustom: infoSnack,
                  setInfoSnackCustom: setInfoSnack,
                  downloadResource,
-                 getIndividualUserInfo
+                 getIndividualUserInfo,
+                 isUserBlocked,
+    addToBlockList,
+    removeBlockFromList,
+    getAllBlockedUsers
                }}
              >
                  <TaskManager getUserInfo={getUserInfo} />
@@ -1751,7 +1759,11 @@ function App() {
             infoSnackCustom: infoSnack,
             setInfoSnackCustom: setInfoSnack,
             downloadResource,
-            getIndividualUserInfo
+            getIndividualUserInfo,
+            isUserBlocked,
+            addToBlockList,
+            removeBlockFromList,
+            getAllBlockedUsers
           }}
         >
           <Box

@@ -132,13 +132,16 @@ const onSeenFunc = useCallback(()=> {
 
 
   return (
-    <MessageWragger lastMessage={lastSignature === message?.signature} isLast={isLast} onSeen={onSeenFunc}>
-
-    {message?.divide && (
+    <>
+     {message?.divide && (
      <div className="unread-divider" id="unread-divider-id">
      Unread messages below
    </div>
     )}
+  
+    <MessageWragger lastMessage={lastSignature === message?.signature} isLast={isLast} onSeen={onSeenFunc}>
+
+   
     <div
       style={{
         padding: "10px",
@@ -492,6 +495,7 @@ const onSeenFunc = useCallback(()=> {
  
     </div>
     </MessageWragger>
+    </>
   );
 });
 

@@ -77,9 +77,10 @@ import { AdminSpace } from "../Chat/AdminSpace";
 import { useSetRecoilState } from "recoil";
 import { addressInfoControllerAtom, selectedGroupIdAtom } from "../../atoms/global";
 import { sortArrayByTimestampAndGroupName } from "../../utils/time";
-
+import BlockIcon from '@mui/icons-material/Block';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
+import { BlockedUsersModal } from "./BlockedUsersModal";
 
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
@@ -419,6 +420,8 @@ export const Group = ({
   const [groupAnnouncements, setGroupAnnouncements] = React.useState({});
   const [defaultThread, setDefaultThread] = React.useState(null);
   const [isOpenDrawer, setIsOpenDrawer] = React.useState(false);
+  const [isOpenBlockedUserModal, setIsOpenBlockedUserModal] = React.useState(false);
+
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = React.useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = React.useState("");
   const [drawerMode, setDrawerMode] = React.useState("groups");
@@ -768,7 +771,10 @@ export const Group = ({
     }
     if(isPrivate === false){
       setTriedToFetchSecretKey(true);
-      getAdminsForPublic(selectedGroup)
+      if(selectedGroup?.groupId !== '0'){
+         getAdminsForPublic(selectedGroup)
+      }
+     
 
     }
   }, [selectedGroup, isPrivate]);
@@ -853,7 +859,7 @@ export const Group = ({
         // Update the component state with the received 'sendqort' state
         setGroups(sortArrayByTimestampAndGroupName(message.payload));
         getLatestRegularChat(message.payload);
-        setMemberGroups(message.payload);
+        setMemberGroups(message.payload?.filter((item)=> item?.groupId !== '0'));
   
         if (selectedGroupRef.current && groupSectionRef.current === "chat") {
           window.sendMessage("addTimestampEnterChat", {
@@ -944,7 +950,7 @@ export const Group = ({
       !initiatedGetMembers.current &&
       selectedGroup?.groupId &&
       secretKey &&
-      admins.includes(myAddress)
+      admins.includes(myAddress) && selectedGroup?.groupId !== '0'
     ) {
       // getAdmins(selectedGroup?.groupId);
       getMembers(selectedGroup?.groupId);
@@ -1998,9 +2004,11 @@ export const Group = ({
             width: "100%",
             justifyContent: "center",
             padding: "10px",
+            gap: '10px'
           }}
         >
           {chatMode === "groups" && (
+            <>
             <CustomButton
               onClick={() => {
                 setOpenAddGroup(true);
@@ -2013,6 +2021,22 @@ export const Group = ({
               />
               Group Mgmt
             </CustomButton>
+            <CustomButton
+              onClick={() => {
+                setIsOpenBlockedUserModal(true);
+              }}
+              sx={{
+                minWidth: 'unset',
+                padding: '10px'
+              }}
+            >
+              <BlockIcon
+                sx={{
+                  color: "white",
+                }}
+              />
+            </CustomButton>
+            </>
           )}
           {chatMode === "directs" && (
             <CustomButton
@@ -2438,7 +2462,11 @@ export const Group = ({
                 />
               )}
             </div>
-       
+       {isOpenBlockedUserModal && (
+        <BlockedUsersModal close={()=> {
+          setIsOpenBlockedUserModal(false)
+        }} />
+       )}
 
           {selectedDirect && !newChat && (
             <>

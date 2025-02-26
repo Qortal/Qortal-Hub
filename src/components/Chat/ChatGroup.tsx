@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { CreateCommonSecret } from './CreateCommonSecret'
 import { reusableGet } from '../../qdn/publish/pubish'
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption'
@@ -10,11 +10,11 @@ import Tiptap from './TipTap'
 import { CustomButton } from '../../App-styles'
 import CircularProgress from '@mui/material/CircularProgress';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar'
-import { getBaseApiReact, getBaseApiReactSocket, isMobile, pauseAllQueues, resumeAllQueues } from '../../App'
+import { getBaseApiReact, getBaseApiReactSocket, isMobile, MyContext, pauseAllQueues, resumeAllQueues } from '../../App'
 import { CustomizedSnackbars } from '../Snackbar/Snackbar'
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/codes'
 import { useMessageQueue } from '../../MessageQueueContext'
-import { executeEvent } from '../../utils/events'
+import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../utils/events'
 import { Box, ButtonBase, Divider, Typography } from '@mui/material'
 import ShortUniqueId from "short-unique-id";
 import { ReplyPreview } from './MessageItem'
@@ -28,6 +28,7 @@ import { throttle } from 'lodash'
 const uid = new ShortUniqueId({ length: 5 });
 
 export const ChatGroup = ({selectedGroup, secretKey, setSecretKey, getSecretKey, myAddress, handleNewEncryptionNotification, hide, handleSecretKeyCreationInProgress, triedToFetchSecretKey, myName, balance, getTimestampEnterChatParent, hideView, isPrivate}) => {
+  const {isUserBlocked} = useContext(MyContext)
   const [messages, setMessages] = useState([])
   const [chatReferences, setChatReferences] = useState({})
   const [isSending, setIsSending] = useState(false)
@@ -158,10 +159,28 @@ const [messageSize, setMessageSize] = useState(0)
     })
    }
 
+     const updateChatMessagesWithBlocksFunc = (e) => {
+       if(e.detail){
+        setMessages((prev)=> prev?.filter((item)=> {
+          return !isUserBlocked(item?.sender, item?.senderName)
+        }))
+       }
+     };
+   
+     useEffect(() => {
+       subscribeToEvent("updateChatMessagesWithBlocks", updateChatMessagesWithBlocksFunc);
+   
+       return () => {
+         unsubscribeFromEvent("updateChatMessagesWithBlocks", updateChatMessagesWithBlocksFunc);
+       };
+     }, []);
+
    const middletierFunc = async (data: any, groupId: string) => {
     try {
       if (hasInitialized.current) {
-        decryptMessages(data, true);
+        const dataRemovedBlock = data?.filter((item)=> !isUserBlocked(item?.sender, item?.senderName))
+
+        decryptMessages(dataRemovedBlock, true);
         return;
       }
       hasInitialized.current = true;
@@ -173,7 +192,11 @@ const [messageSize, setMessageSize] = useState(0)
         },
       });
       const responseData = await response.json();
-      decryptMessages(responseData, false);
+      const dataRemovedBlock = responseData?.filter((item)=> {
+        return !isUserBlocked(item?.sender, item?.senderName)
+      })
+
+      decryptMessages(dataRemovedBlock, false);
     } catch (error) {
       console.error(error);
     }
