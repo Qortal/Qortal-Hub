@@ -80,6 +80,7 @@ export class ElectronCapacitorApp {
   private AppMenuBarMenuTemplate: (MenuItem | MenuItemConstructorOptions)[] = [
     { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
     { role: 'viewMenu' },
+    { role: 'editMenu' },
   ];
   private mainWindowState;
   private loadWebApp;
