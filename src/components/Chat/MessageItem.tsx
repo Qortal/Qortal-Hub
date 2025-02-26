@@ -311,10 +311,12 @@ const onSeenFunc = useCallback(()=> {
           </Box>
           </>
         )}
-      
+        {htmlText && (
           <MessageDisplay
-            htmlContent={htmlText}
-          />
+          htmlContent={htmlText}
+        />
+        )}
+          
       
         {message?.decryptedData?.type === "notification" ? (
           <MessageDisplay htmlContent={message.decryptedData?.data?.message} />
