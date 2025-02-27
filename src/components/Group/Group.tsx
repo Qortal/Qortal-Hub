@@ -1299,11 +1299,11 @@ export const Group = ({
     if (isLoadingOpenSectionFromNotification.current) return;
 
     const groupId = e.detail?.from;
-
     const findGroup = groups?.find((group) => +group?.groupId === +groupId);
     if (findGroup?.groupId === selectedGroup?.groupId) {
       isLoadingOpenSectionFromNotification.current = false;
-
+      setChatMode("groups");
+      setDesktopViewMode('chat')
       return;
     }
     if (findGroup) {

@@ -64,6 +64,7 @@ if(hasDoneNameAndBalanceAndIsLoaded){
    <QMailMessages userAddress={userInfo?.address} userName={userInfo?.name} />
   );
 }
+if(!isLoaded) return null
 
   return (
     <Box
@@ -84,7 +85,7 @@ if(hasDoneNameAndBalanceAndIsLoaded){
       >
         <Typography
           sx={{
-            fontSize: "13px",
+            fontSize: "1rem",
             fontWeight: 600,
           }}
         >
@@ -96,7 +97,6 @@ if(hasDoneNameAndBalanceAndIsLoaded){
       <Box
         sx={{
           width: "322px",
-          height: isMobile ? "165px" : "250px",
           display: "flex",
           flexDirection: "column",
           bgcolor: "background.paper",
