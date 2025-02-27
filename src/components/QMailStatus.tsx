@@ -3,7 +3,7 @@ import QMailLogo from '../assets/QMailLogo.png'
 import { useRecoilState } from 'recoil'
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global'
 import { isLessThanOneWeekOld } from './Group/QMailMessages'
-import { ButtonBase } from '@mui/material'
+import { ButtonBase, Tooltip } from '@mui/material'
 import { executeEvent } from '../utils/events'
 export const QMailStatus = () => {
      const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(qMailLastEnteredTimestampAtom)
@@ -23,7 +23,8 @@ export const QMailStatus = () => {
                             setLastEnteredTimestamp(Date.now())
                         }} style={{
         position: 'relative'
-    }}>{hasNewMail && (
+    }}>
+      {hasNewMail && (
         <div style={{
             position: 'absolute',
             zIndex: 1,
@@ -35,9 +36,28 @@ export const QMailStatus = () => {
             borderRadius: '50%',
             outline: '1px solid white'
         }} />
-    )}<img style={{
-        width: '24px',
-        height: 'auto'
-    }} src={QMailLogo} /></ButtonBase>
+      )}
+      <Tooltip
+        title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>Q-MAIL</span>} 
+        placement="left"
+        arrow
+        sx={{ fontSize: "24" }}
+        slotProps={{
+          tooltip: {
+            sx: {
+              color: "#ffffff",
+              backgroundColor: "#444444",
+            },
+          },
+          arrow: {
+            sx: {
+              color: "#444444",
+            },
+          },
+        }}
+      >
+        <img style={{ width: '24px', height: 'auto' }} src={QMailLogo} />
+      </Tooltip>
+  </ButtonBase>
   )
 }
