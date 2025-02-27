@@ -113,6 +113,11 @@
     pointer-events: none;
   }
 
+  .tiptap p:empty::before {
+    content: '';
+    display: inline-block;
+  }
+
 .tiptap a {
   color: cadetblue
 }
