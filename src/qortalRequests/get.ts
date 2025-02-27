@@ -2357,6 +2357,99 @@ if (resPermission) {
   }
 };
 
+export const getUserWalletTransactions = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ["coin"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(", ");
+    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    throw new Error(errorMsg);
+  }
+
+  const value =
+  (await getPermission(
+    `getUserWalletTransactions-${appInfo?.name}-${data.coin}`
+  )) || false;
+let skip = false;
+if (value) {
+  skip = true;
+}
+  let resPermission;
+
+  if (!skip) {
+
+   resPermission = await getUserPermission(
+    {
+      text1:
+        "Do you give this application permission to retrieve your wallet transactions",
+        highlightedText: `coin: ${data.coin}`,
+        checkbox1: {
+          value: true,
+          label: "Always allow wallet txs to be retrieved automatically",
+        },
+    },
+    isFromExtension
+  );
+}
+const { accepted = false, checkbox1 = false } = resPermission || {};
+
+if (resPermission) {
+  setPermission(
+    `getUserWalletTransactions-${appInfo?.name}-${data.coin}`,
+    checkbox1
+  );
+}
+
+  if (accepted || skip) {
+    const coin = data.coin;
+    const walletKeys = await getUserWalletFunc(coin);
+    let publicKey
+    if(data?.coin === 'ARRR'){
+    const resKeyPair = await getKeyPair();
+    const parsedData = resKeyPair;
+    publicKey = parsedData.arrrSeed58;
+    } else {
+      publicKey = walletKeys["publickey"]
+    }
+   
+    const _url = await createEndpoint(
+      `/crosschain/` + data.coin.toLowerCase() + `/wallettransactions`
+    );
+    const _body = publicKey;
+    try {
+      const response = await fetch(_url, {
+        method: "POST",
+        headers: {
+          Accept: "*/*",
+          "Content-Type": "application/json",
+        },
+        body: _body,
+      });
+      if (!response?.ok) throw new Error("Unable to fetch wallet transactions");
+      let res;
+      try {
+        res = await response.clone().json();
+      } catch (e) {
+        res = await response.text();
+      }
+      if (res?.error && res?.message) {
+        throw new Error(res.message);
+      }
+
+      return res;
+    } catch (error) {
+      throw new Error(error?.message || "Fetch Wallet Transactions Failed");
+    }
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
 export const getCrossChainServerInfo = async (data) => {
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
