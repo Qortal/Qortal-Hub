@@ -1547,18 +1547,38 @@ function App() {
             {!isMobile && (
               <>
                 <Spacer height="20px" />
-                <img
-                  src={Logout}
-                  onClick={() => {
-                    logoutFunc();
-                    setIsOpenDrawerProfile(false);
+                <Tooltip
+                  title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>LOG OUT</span>} 
+                  placement="left"
+                  arrow
+                  sx={{ fontSize: "24" }}
+                  slotProps={{
+                    tooltip: {
+                      sx: {
+                        color: "#ffffff",
+                        backgroundColor: "#444444",
+                      },
+                    },
+                    arrow: {
+                      sx: {
+                        color: "#444444",
+                      },
+                    },
                   }}
-                  style={{
-                    cursor: "pointer",
-                    width: '20px',
-                    height: 'auto'
-                  }}
-                />
+                >
+                  <img
+                    src={Logout}
+                    onClick={() => {
+                      logoutFunc();
+                      setIsOpenDrawerProfile(false);
+                    }}
+                    style={{
+                      cursor: "pointer",
+                      width: '20px',
+                      height: 'auto'
+                    }}
+                  />
+                </Tooltip>
               </>
             )}
             <Spacer height="20px" />
@@ -1568,38 +1588,98 @@ function App() {
                 setIsSettingsOpen(true);
               }}
             >
-              <SettingsIcon
-                sx={{
-                  color: "rgba(255, 255, 255, 0.5)",
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>SETTINGS</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
                 }}
-              />
+              >
+                <SettingsIcon
+                  sx={{
+                    color: "rgba(255, 255, 255, 0.5)",
+                  }}
+                />
+              </Tooltip>
             </ButtonBase>
             <Spacer height="20px" />
             {authenticatedMode === "qort" && (
-              <img
-                onClick={() => {
-                  setAuthenticatedMode("ltc");
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>LITECOIN WALLET</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
                 }}
-                src={ltcLogo}
-                style={{
-                  cursor: "pointer",
-                  width: "20px",
-                  height: "auto",
-                }}
-              />
+              >
+                <img
+                  onClick={() => {
+                    setAuthenticatedMode("ltc");
+                  }}
+                  src={ltcLogo}
+                  style={{
+                    cursor: "pointer",
+                    width: "20px",
+                    height: "auto",
+                  }}
+                />
+              </Tooltip>
             )}
             {authenticatedMode === "ltc" && (
-              <img
-                onClick={() => {
-                  setAuthenticatedMode("qort");
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>QORTAL WALLET</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
                 }}
-                src={qortLogo}
-                style={{
-                  cursor: "pointer",
-                  width: "20px",
-                  height: "auto",
-                }}
-              />
+              >
+                <img
+                  onClick={() => {
+                    setAuthenticatedMode("qort");
+                  }}
+                  src={qortLogo}
+                  style={{
+                    cursor: "pointer",
+                    width: "20px",
+                    height: "auto",
+                  }}
+                />
+              </Tooltip>
             )}
             <Spacer height="20px" />
             <CoreSyncStatus />
@@ -1636,9 +1716,9 @@ function App() {
                  downloadResource,
                  getIndividualUserInfo,
                  isUserBlocked,
-    addToBlockList,
-    removeBlockFromList,
-    getAllBlockedUsers
+                 addToBlockList,
+                 removeBlockFromList,
+                 getAllBlockedUsers
                }}
              >
                  <TaskManager getUserInfo={getUserInfo} />
@@ -1661,30 +1741,82 @@ function App() {
                 })
               }
             }}>
-              <EngineeringIcon sx={{
-                color: 'var(--unread)'
-                 }} />
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>MINTING STATUS</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
+                <EngineeringIcon sx={{ color: 'var(--unread)' }} />
+              </Tooltip>
             </ButtonBase>
           
-           
             <Spacer height="20px" />
             {(desktopViewMode === "apps" || desktopViewMode === "home") && (
                <ButtonBase onClick={()=> {
                 if(desktopViewMode === "apps"){
                   showTutorial('qapps', true)
-  
                 } else {
                   showTutorial('getting-started', true)
-  
                 }
                 }} >
-                  <HelpIcon sx={{
-                color: 'var(--unread)'
-                 }} />
+                  <Tooltip
+                    title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>TUTORIAL</span>} 
+                    placement="left"
+                    arrow
+                    sx={{ fontSize: "24" }}
+                    slotProps={{
+                      tooltip: {
+                        sx: {
+                          color: "#ffffff",
+                          backgroundColor: "#444444",
+                        },
+                      },
+                      arrow: {
+                        sx: {
+                          color: "#444444",
+                        },
+                      },
+                    }}
+                  >
+                    <HelpIcon sx={{ color: 'var(--unread)' }} />
+                  </Tooltip>
                 </ButtonBase>
               )}
             
         <Spacer height="20px" />
+        <Tooltip
+          title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>BACKUP WALLET</span>} 
+          placement="left"
+          arrow
+          sx={{ fontSize: "24" }}
+          slotProps={{
+            tooltip: {
+              sx: {
+                color: "#ffffff",
+                backgroundColor: "#444444",
+              },
+            },
+            arrow: {
+              sx: {
+                color: "#444444",
+              },
+            },
+          }}
+        >
           <img
               onClick={() => {
                 setExtstate("download-wallet");
@@ -1696,6 +1828,7 @@ function App() {
                 width: '20px'
               }}
             />
+        </Tooltip>
             <Spacer height="40px" />
             </Box>
         </AuthenticatedContainerInnerRight>

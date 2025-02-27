@@ -6,6 +6,7 @@ import {
   MenuItem,
   Select,
   Typography,
+  Tooltip
 } from "@mui/material";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
@@ -575,7 +576,27 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
         <ButtonBase onClick={() => {
             setMode("search")
         }}>
-          <SearchIcon />
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>SEARCH</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <SearchIcon />
+          </Tooltip>
         </ButtonBase>
         <ButtonBase onClick={() => {
             setMode("default")
@@ -583,9 +604,27 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
             setSelectedMember(0)
             openQManager()
         }}>
-          <InsertLinkIcon sx={{
-            color: 'white'
-          }} />
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>Q-MANAGER</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <InsertLinkIcon sx={{ color: 'white' }} />
+          </Tooltip>
         </ButtonBase>
         <ContextMenuMentions getTimestampMention={getTimestampMention} groupId={selectedGroup}>
         <ButtonBase onClick={() => {
@@ -593,9 +632,29 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
             setSearchValue('')
             setSelectedMember(0)
         }}>
-          <AlternateEmailIcon sx={{
-            color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
-          }} />
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>MENTIONED</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <AlternateEmailIcon sx={{
+              color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
+            }} />
+          </Tooltip>
         </ButtonBase>
       
         </ContextMenuMentions>
