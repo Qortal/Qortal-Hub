@@ -1,0 +1,58 @@
+{
+  "appId": "org.qortal.Qortal-Hub",
+  "productName": "Qortal Hub",
+  "copyright": "Copyright © 2021 - 2025 Qortal",
+  "compression": "normal",
+  "asar": "true",
+  "afterPack": "scripts/afterPack.js",
+  "files": [
+    "assets/**/*",
+    "build/**/*",
+    "capacitor.config.*",
+    "app/**/*",
+    "scripts/**/*"  
+  ],
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb",
+      "snap",
+      "rpm"
+    ],
+    "category": "Network",
+    "packageCategory": "Network",
+    "desktop": {
+      "StartupWMClass": "qortal-hub"
+    },
+    "executableName": "Qortal Hub",
+    "icon": "assets/png"
+  },
+  "appImage": {
+    "artifactName": "Qortal-Hub_${version}.${ext}"
+  },
+  "deb": {
+    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "synopsis": "Qortal Hub for Linux",
+    "afterInstall": "scripts/add-debian-apt-repo.sh"  
+  },
+  "snap": {
+    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "synopsis": "Qortal Hub for Linux"
+  },
+  "rpm": {
+    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "synopsis": "Qortal Hub for Linux"
+  },
+  "directories": {
+    "output": "dist",
+    "buildResources": "resources"
+  },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Qortal",
+      "repo": "Qortal-Hub",
+      "releaseType": "draft"
+    }
+  ]
+}

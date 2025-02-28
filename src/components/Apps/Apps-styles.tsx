@@ -94,13 +94,17 @@ import {
     
   }));
   export const AppCircleLabel = styled(Typography)(({ theme }) => ({
-    fontSize: '12px',
+    fontSize: '14px',
     fontWeight: 500,
     lineHeight: 1.2,
-    whiteSpace: 'nowrap',   
+    // whiteSpace: 'nowrap',   
   overflow: 'hidden',     
   textOverflow: 'ellipsis', 
-  width: '100%'
+  width: '120%',
+  '-webkit-line-clamp': '2',
+  '-webkit-box-orient': 'vertical',
+  'display': '-webkit-box',
+    
   }));
   export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
     fontSize: '16px',
@@ -109,9 +113,9 @@ import {
   }));
   export const AppCircle = styled(Box)(({ theme }) => ({
     display: "flex",
-      width: "60px",
+      width: "75px",
       flexDirection: "column",
-      height: "60px",
+      height: "75px",
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: '50%',

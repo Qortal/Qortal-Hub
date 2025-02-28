@@ -118,9 +118,9 @@ export const ChatDirect = ({ myAddress, isNewChat, selectedDirect, setSelectedDi
             data: encryptedMessages,
             involvingAddress: selectedDirect?.address,
           })
-            .then((response) => {
-              if (!response?.error) {
-                processWithNewMessages(response, selectedDirect?.address);
+            .then((decryptResponse) => {
+              if (!decryptResponse?.error) {
+                const response = processWithNewMessages(decryptResponse, selectedDirect?.address);
                 res(response);
           
                 if (isInitiated) {
@@ -363,7 +363,7 @@ useEffect(() => {
     const htmlContent = editorRef?.current.getHTML();
     const stringified = JSON.stringify(htmlContent);
     const size = new Blob([stringified]).size;
-    setMessageSize(size + 100);
+    setMessageSize(size + 200);
   };
 
   // Add a listener for the editorRef?.current's content updates
@@ -377,7 +377,8 @@ useEffect(() => {
 
     const sendMessage = async ()=> {
       try {
-  
+        if(messageSize > 4000) return
+
         
         if(+balance < 4) throw new Error('You need at least 4 QORT to send a message')
         if(isSending) return
@@ -646,21 +647,22 @@ useEffect(() => {
       )}
      
       <Tiptap isFocusedParent={isFocusedParent} setEditorRef={setEditorRef} onEnter={sendMessage} isChat disableEnter={isMobile ? true : false} setIsFocusedParent={setIsFocusedParent}/>
-      </div>
       {messageSize > 750 && (
         <Box sx={{
           display: 'flex',
           width: '100%',
-          justifyContent: 'flex-end',
+          justifyContent: 'flex-start',
           position: 'relative',
         }}>
                 <Typography sx={{
                   fontSize: '12px',
-                  color: messageSize > 4000 ? 'var(--unread)' : 'unset'
+                  color: messageSize > 4000 ? 'var(--danger)' : 'unset'
                 }}>{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
 
           </Box>
       )}
+      </div>
+    
       <Box sx={{
         display: 'flex',
         width: '100px',
@@ -673,7 +675,6 @@ useEffect(() => {
 
       <CustomButton
               onClick={()=> {
-                if(messageSize > 4000) return
 
                 if(isSending) return
                 sendMessage()

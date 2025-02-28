@@ -1,30 +1,21 @@
-# React + TypeScript + Vite
+# Qortal Hub - Desktop Interface for Qortal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Qortal Hub is the newest interface for Qortal, part of the 'Qortal Trifecta' series of new User Interfaces for the platform/network. 
 
-Currently, two official plugins are available:
+It is likely that Qortal Hub will become the new 'primary interface' for Qortal, and that the primary development focus surrounding Qortal Interface development, will be focused here instead of the previous 'qortal-ui' repo.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Qortal Hub - Next-Level Secure Communications and More
 
-## Expanding the ESLint configuration
+Qortal Hub came along with the new Group Encryption methodologies applied, which provide **encrypted chat in Q-Chat for private groups.** Qortal Hub was the first to implement the new method of group encryption, which allows new users to see previously published data, unlike the previous group encryption methodology of things like 'threads' in Q-Mail.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Allowing new users to view older messages also comes along with a massive boost to the usability of the group encryption, and as such has been leveraged in multiple places inside Qortal Hub, Qortal Extension, and Qortal Go. 
 
-- Configure the top-level `parserOptions` property like this:
+## Ease of Use Expanded
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
-```
+Qortal Hub has a focus on ease of use for new users. Providing both the ability to utlilize Qortal without needing to run a local node (though running a local node is still the recommended method to access Qortal), and multiple built-in (QDN-published) walk-thru videos (by Qortal Justin) that explain the various basics of any given section of the application. This allows new users to 'jump right in' to utilizing Qortal Hub, and Qortal overall, in a much more streamlined fashion than that which was previously required by the 'legacy UI' (qortal-ui). 
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+Leveraging a redundant set of publicly accessible nodes provided by crowetic, Qortal Hub, Qortal Go, and Qortal Extension, all allow the use of Qortal without running a node, making it very simple to 'install and go' and start making use of the extensive functionality provided within the Qortal Ecosystem. 
+
+Many additional details and a fully featured wiki will be created over time. Reach out on the chat on https://qortal.dev or in any of the community locations for Qortal, if you have any issues. Thank you!
+
+

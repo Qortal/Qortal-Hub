@@ -26,7 +26,9 @@ import _ from "lodash";
 import { MyContext, getBaseApiReact } from "../../App";
 import { LoadingButton } from "@mui/lab";
 import { getBaseApi, getFee } from "../../background";
-
+import LockIcon from '@mui/icons-material/Lock';
+import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
+import { Spacer } from "../../common/Spacer";
 const cache = new CellMeasurerCache({
   fixedWidth: true,
   defaultHeight: 50,
@@ -231,7 +233,17 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
-    
+                {group?.isOpen === false && (
+          <LockIcon sx={{
+            color: 'var(--green)'
+          }} />
+        )}
+        {group?.isOpen === true && (
+          <NoEncryptionGmailerrorredIcon sx={{
+            color: 'var(--danger)'
+          }} />
+        )}
+        <Spacer width="15px" />
                 <ListItemText
                   primary={group?.groupName}
                   secondary={group?.description}
@@ -245,7 +257,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   };
 
   return (
-    <div>
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      flexGrow: 1
+    }}>
       <p>Groups list</p>
       <TextField
         label="Search for Groups"
@@ -257,11 +273,10 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       <div
         style={{
           position: "relative",
-          height: "500px",
           width: "100%",
           display: "flex",
           flexDirection: "column",
-          flexShrink: 1,
+          flexGrow: 1,
         }}
       >
         <AutoSizer>
@@ -278,6 +293,6 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
           )}
         </AutoSizer>
       </div>
-    </div>
+    </Box>
   );
 };

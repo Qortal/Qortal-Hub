@@ -12,6 +12,7 @@ import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
+import { executeEvent } from "../../utils/events";
 
 export const TaskManager = ({ getUserInfo }) => {
   const { txList, setTxList, memberGroups } = useContext(MyContext);
@@ -39,7 +40,7 @@ export const TaskManager = ({ getUserInfo }) => {
             await new Promise((res) =>
               setTimeout(() => {
                 res(null);
-              }, 300000)
+              }, 60000)
             );
             setTxList((prev) => {
               let previousData = [...prev];
@@ -62,7 +63,7 @@ export const TaskManager = ({ getUserInfo }) => {
       }
     };
 
-    intervals.current[signature] = setInterval(getAnswer, 120000);
+    intervals.current[signature] = setInterval(getAnswer, 60000);
   };
 
   useEffect(() => {
@@ -96,7 +97,15 @@ export const TaskManager = ({ getUserInfo }) => {
         }
       });
 
-      prev.forEach((tx) => {
+     
+
+      return previousData;
+    });
+  }, [memberGroups, getUserInfo]);
+
+  useEffect(()=> {
+ 
+      txList.forEach((tx) => {
         if (
           ["created-common-secret", "joined-group-request", "join-request-accept"].includes(
             tx?.type
@@ -113,11 +122,17 @@ export const TaskManager = ({ getUserInfo }) => {
             getStatus({ signature: tx.signature }, getUserInfo);
           }
         }
+        if((tx?.type === "remove-rewardShare" || tx?.type === "add-rewardShare") && tx?.signature && !tx.done){
+          if (!intervals.current[tx.signature]) {
+            const sendEventForRewardShare = ()=> {
+              executeEvent('refresh-rewardshare-list', {})
+            }
+            getStatus({ signature: tx.signature }, sendEventForRewardShare);
+          }
+        }
       });
 
-      return previousData;
-    });
-  }, [memberGroups, getUserInfo]);
+  }, [txList])
 
   if (isMobile || txList?.length === 0 || txList.every((item) => item?.done))
     return null;
@@ -128,9 +143,9 @@ export const TaskManager = ({ getUserInfo }) => {
         <IconButton
           onClick={handleClick}
           sx={{
-            position: "fixed",
-            bottom: 16,
-            right: 16,
+            // position: "fixed",
+            // bottom: 16,
+            // right: 16,
             bgcolor: "primary.main",
             color: "white",
             ":hover": { bgcolor: "primary.dark" },

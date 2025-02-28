@@ -80,6 +80,7 @@ export class ElectronCapacitorApp {
   private AppMenuBarMenuTemplate: (MenuItem | MenuItemConstructorOptions)[] = [
     { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
     { role: 'viewMenu' },
+    { role: 'editMenu' },
   ];
   private mainWindowState;
   private loadWebApp;
@@ -324,7 +325,9 @@ export function setupContentSecurityPolicy(customScheme: string): void {
 
 // IPC listener for updating allowed domains
 ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
-
+  if (!Array.isArray(domains)) {
+    return;
+  }
   // Validate and transform user-provided domains
   const validatedUserDomains = domains
   .flatMap((domain) => {

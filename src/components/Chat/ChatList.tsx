@@ -28,22 +28,21 @@ export const ChatList = ({
   selectedGroup,
   enableMentions,
   openQManager,
-  hasSecretKey
+  hasSecretKey,
+  isPrivate
 }) => {
   const parentRef = useRef();
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
-
   const hasLoadedInitialRef = useRef(false);
   const scrollingIntervalRef = useRef(null);
   const lastSeenUnreadMessageTimestamp = useRef(null);
 
-
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
-    getItemKey: (index) => messages[index].signature,
+    getItemKey: (index) => messages[index]?.tempSignature || messages[index].signature,
     getScrollElement: () => parentRef?.current,
     estimateSize: useCallback(() => 80, []), // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
@@ -273,7 +272,10 @@ export const ChatList = ({
                         message.text = chatReferences[message.signature]?.edit?.message;
                         message.isEdit = true
                       }
-
+                      if (chatReferences[message.signature]?.edit?.messageText && message?.messageText) {
+                        message.messageText = chatReferences[message.signature]?.edit?.messageText;
+                        message.isEdit = true
+                      }
                     
                     }
               
@@ -316,7 +318,6 @@ export const ChatList = ({
                     );
                   }
 
-
                 return (
                   <div
                     data-index={virtualRow.index} //needed for dynamic row height measurement
@@ -358,6 +359,7 @@ export const ChatList = ({
                       handleReaction={handleReaction}
                       reactions={reactions}
                       isUpdating={isUpdating}
+                      isPrivate={isPrivate}
                     />
                      </ErrorBoundary>
                   </div>
@@ -375,7 +377,7 @@ export const ChatList = ({
               position: "absolute",
               right: 20,
               backgroundColor: "var(--unread)",
-              color: "white",
+              color: "black",
               padding: "10px 20px",
               borderRadius: "20px",
               cursor: "pointer",
@@ -409,7 +411,7 @@ export const ChatList = ({
           </button>
         )}
       </div>
-      {enableMentions && hasSecretKey && (
+      {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
         openQManager={openQManager}
           messages={messages}
@@ -417,6 +419,7 @@ export const ChatList = ({
           members={members}
           myName={myName}
           selectedGroup={selectedGroup}
+          isPrivate={isPrivate}
         />
       )}
     </Box>

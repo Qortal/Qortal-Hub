@@ -174,16 +174,55 @@ export function openIndexedDB() {
   }
 
 
-
-const UIQortalRequests = [
+export const listOfAllQortalRequests = [
   'GET_USER_ACCOUNT', 'DECRYPT_DATA', 'SEND_COIN', 'GET_LIST_ITEMS',
   'ADD_LIST_ITEMS', 'DELETE_LIST_ITEM', 'VOTE_ON_POLL', 'CREATE_POLL',
   'SEND_CHAT_MESSAGE', 'JOIN_GROUP', 'DEPLOY_AT', 'GET_USER_WALLET',
   'GET_WALLET_BALANCE', 'GET_USER_WALLET_INFO', 'GET_CROSSCHAIN_SERVER_INFO',
   'GET_TX_ACTIVITY_SUMMARY', 'GET_FOREIGN_FEE', 'UPDATE_FOREIGN_FEE',
   'GET_SERVER_CONNECTION_HISTORY', 'SET_CURRENT_FOREIGN_SERVER',
-  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER', 'CREATE_TRADE_SELL_ORDER', 'CANCEL_TRADE_SELL_ORDER', 'IS_USING_GATEWAY', 'ADMIN_ACTION', 'SIGN_TRANSACTION', 'OPEN_NEW_TAB', 'CREATE_AND_COPY_EMBED_LINK',  'DECRYPT_QORTAL_GROUP_DATA'
+  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER', 'CREATE_TRADE_SELL_ORDER', 'CANCEL_TRADE_SELL_ORDER', 'IS_USING_PUBLIC_NODE', 'ADMIN_ACTION', 'SIGN_TRANSACTION', 'OPEN_NEW_TAB', 'CREATE_AND_COPY_EMBED_LINK',  'DECRYPT_QORTAL_GROUP_DATA', 'DECRYPT_DATA_WITH_SHARING_KEY', 'DELETE_HOSTED_DATA', 'GET_HOSTED_DATA',  'PUBLISH_MULTIPLE_QDN_RESOURCES',
+  'PUBLISH_QDN_RESOURCE',
+  'ENCRYPT_DATA',
+  'ENCRYPT_DATA_WITH_SHARING_KEY',
+  'ENCRYPT_QORTAL_GROUP_DATA',
+  'SAVE_FILE',
+  'GET_ACCOUNT_DATA',
+    'GET_ACCOUNT_NAMES',
+    'SEARCH_NAMES',
+    'GET_NAME_DATA',
+    'GET_QDN_RESOURCE_URL',
+    'LINK_TO_QDN_RESOURCE',
+    'LIST_QDN_RESOURCES',
+    'SEARCH_QDN_RESOURCES',
+    'FETCH_QDN_RESOURCE',
+    'GET_QDN_RESOURCE_STATUS',
+    'GET_QDN_RESOURCE_PROPERTIES',
+    'GET_QDN_RESOURCE_METADATA',
+    'SEARCH_CHAT_MESSAGES',
+    'LIST_GROUPS',
+    'GET_BALANCE',
+    'GET_AT',
+    'GET_AT_DATA',
+    'LIST_ATS',
+    'FETCH_BLOCK',
+    'FETCH_BLOCK_RANGE',
+    'SEARCH_TRANSACTIONS',
+    'GET_PRICE',
+    'SHOW_ACTIONS',
+    'GET_USER_WALLET_TRANSACTIONS'
+]
+
+export const UIQortalRequests = [
+  'GET_USER_ACCOUNT', 'DECRYPT_DATA', 'SEND_COIN', 'GET_LIST_ITEMS',
+  'ADD_LIST_ITEMS', 'DELETE_LIST_ITEM', 'VOTE_ON_POLL', 'CREATE_POLL',
+  'SEND_CHAT_MESSAGE', 'JOIN_GROUP', 'DEPLOY_AT', 'GET_USER_WALLET',
+  'GET_WALLET_BALANCE', 'GET_USER_WALLET_INFO', 'GET_CROSSCHAIN_SERVER_INFO',
+  'GET_TX_ACTIVITY_SUMMARY', 'GET_FOREIGN_FEE', 'UPDATE_FOREIGN_FEE',
+  'GET_SERVER_CONNECTION_HISTORY', 'SET_CURRENT_FOREIGN_SERVER',
+  'ADD_FOREIGN_SERVER', 'REMOVE_FOREIGN_SERVER', 'GET_DAY_SUMMARY', 'CREATE_TRADE_BUY_ORDER', 'CREATE_TRADE_SELL_ORDER', 'CANCEL_TRADE_SELL_ORDER', 'IS_USING_PUBLIC_NODE', 'ADMIN_ACTION', 'SIGN_TRANSACTION', 'OPEN_NEW_TAB', 'CREATE_AND_COPY_EMBED_LINK',  'DECRYPT_QORTAL_GROUP_DATA', 'DECRYPT_DATA_WITH_SHARING_KEY', 'DELETE_HOSTED_DATA', 'GET_HOSTED_DATA', 'SHOW_ACTIONS', 'REGISTER_NAME', 'UPDATE_NAME', 'LEAVE_GROUP', 'INVITE_TO_GROUP', 'KICK_FROM_GROUP', 'BAN_FROM_GROUP', 'CANCEL_GROUP_BAN', 'ADD_GROUP_ADMIN', 'REMOVE_GROUP_ADMIN', 'DECRYPT_AESGCM', 'CANCEL_GROUP_INVITE', 'CREATE_GROUP', 'GET_USER_WALLET_TRANSACTIONS'
 ];
+// TODO listOfAllQortalRequests
 
 
 
@@ -320,7 +359,7 @@ const UIQortalRequests = [
   
     // Handle the obj.file if it exists and is a File instance
     if (obj.file) {
-      const fileId = "objFile_qortalfile";
+      const fileId = Date.now() + "objFile_qortalfile";
   
       // Store the file in IndexedDB
       const fileData = {
@@ -334,7 +373,7 @@ const UIQortalRequests = [
       delete obj.file;
     }
     if (obj.blob) {
-      const fileId = "objFile_qortalfile";
+      const fileId = Date.now() +  "objFile_qortalfile";
   
       // Store the file in IndexedDB
       const fileData = {
@@ -355,8 +394,8 @@ const UIQortalRequests = [
     // Iterate through resources to find files and save them to IndexedDB
     for (let resource of (obj?.resources || [])) {
       if (resource.file) {
-        const fileId = resource.identifier + "_qortalfile";
-  
+        const fileId = resource.identifier + Date.now()  + "_qortalfile";
+        
         // Store the file in IndexedDB
         const fileData = {
           id: fileId,
@@ -444,7 +483,10 @@ isDOMContentLoaded: false
           if (response.error) {
             eventPort.postMessage({
               result: null,
-              error: response,
+              error: {
+                error: response?.error,
+                message: typeof response?.error === 'string' ? response?.error : 'An error has occurred'
+              },
             });
           } else {
             eventPort.postMessage({
@@ -484,17 +526,8 @@ isDOMContentLoaded: false
         event?.data?.action === 'ENCRYPT_DATA' || event?.data?.action === 'ENCRYPT_DATA_WITH_SHARING_KEY' || event?.data?.action === 'ENCRYPT_QORTAL_GROUP_DATA'
         
       ) {
-        let data;
-        try {
-          data = await storeFilesInIndexedDB(event.data);
-        } catch (error) {
-          console.error('Error storing files in IndexedDB:', error);
-          event.ports[0].postMessage({
-            result: null,
-            error: 'Failed to store files in IndexedDB',
-          });
-          return;
-        }
+        const data = event.data;
+
         if (data) {
           sendMessageToRuntime(
             { action: event.data.action, type: 'qortalRequest', payload: data, isExtension: true },

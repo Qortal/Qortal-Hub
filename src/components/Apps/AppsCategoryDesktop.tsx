@@ -97,6 +97,7 @@ export const AppsCategoryDesktop = ({
   const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
+    if(category?.id === 'all') return availableQapps
     return availableQapps.filter(
       (app) => app?.metadata?.category === category?.id
     );
@@ -108,8 +109,13 @@ export const AppsCategoryDesktop = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
+     
     }, 350);
-
+    setTimeout(() => {
+      virtuosoRef.current.scrollToIndex({
+        index: 0
+      });
+    }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);
@@ -121,7 +127,7 @@ export const AppsCategoryDesktop = ({
   const searchedList = useMemo(() => {
     if (!debouncedValue) return categoryList;
     return categoryList.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase())
+      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue, categoryList]);
 
@@ -133,6 +139,9 @@ export const AppsCategoryDesktop = ({
         app={app}
         myName={myName}
         isFromCategory={true}
+        parentStyles={{
+          padding: '0px 10px'
+        }}
       />
     );
   };
@@ -206,7 +215,7 @@ export const AppsCategoryDesktop = ({
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
              sx={{
-              height: `calc(100vh - 36px - 90px)`,
+              height: `calc(100vh - 36px - 90px - 25px)`,
             }}
           >
             <Virtuoso
@@ -215,9 +224,9 @@ export const AppsCategoryDesktop = ({
               itemContent={rowRenderer}
               atBottomThreshold={50}
               followOutput="smooth"
-              components={{
-                Scroller: ScrollerStyled, // Use the styled scroller component
-              }}
+              // components={{
+              //   Scroller: ScrollerStyled, // Use the styled scroller component
+              // }}
             />
           </StyledVirtuosoContainer>
         </AppsWidthLimiter>

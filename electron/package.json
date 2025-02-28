@@ -1,16 +1,18 @@
 {
   "name": "qortal-hub",
-  "version": "0.3.7",
+  "version": "0.5.2",
   "description": "A desktop app that gives you access to the Qortal network",
   "author": {
-    "name": ""
+    "name": "",
+    "email": "qortalblockchain@gmail.com"
   },
+  "homepage": "https://qortal.dev",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git+https://github.com/Qortal/Qortal-Hub.git"
   },
   "build": {
-    "appId": "com.github.Qortal.Qortal-Hub",
+    "appId": "org.Qortal.Qortal-Hub",
     "publish": [
       {
         "provider": "github",
@@ -27,7 +29,12 @@
     "electron:start": "npm run build && electron --inspect=5858 ./",
     "electron:pack": "npm run build && electron-builder build --dir -c ./electron-builder.config.json",
     "electron:make": "npm run build && electron-builder build -c ./electron-builder.config.json -p always",
-    "electron:make-local": "npm run build && electron-builder build -c ./electron-builder.config.json --publish=never"
+    "electron:make-local": "npm run build && electron-builder build -c ./electron-builder.config.json --publish=never",
+    "electron:make-lin": "npm run build && electron-builder build -c ./electron-builder.config.lin.json --publish=never -l",
+    "electron:make-mac": "npm run build && electron-builder build -c ./electron-builder.config.mac.json --publish=never --mac dmg && electron-builder build -c ./electron-builder.config.mac.json --publish=never --mac pkg && electron-builder build -c ./electron-builder.config.mac.json --publish=never --mac zip",
+    "electron:make-win": "npm run build && electron-builder build -c ./electron-builder.config.win.json --publish=never -w",
+    "electron:make-arm": "npm run build && electron-builder build -c ./electron-builder.config.arm.json --publish=never --linux --arm64",
+    "electron:make-all": "npm run build && electron-builder build -c ./electron-builder.config.win.json --publish=never -w && electron-builder build -c ./electron-builder.config.lin.json --publish=never -l && electron-builder build -c ./electron-builder.config.arm.json --publish=never --linux --arm64"
   },
   "dependencies": {
     "@capacitor-community/electron": "^5.0.0",
@@ -40,10 +47,11 @@
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
-    "electron": "^26.2.2",
-    "electron-builder": "~23.6.0",
-    "electron-rebuild": "^3.2.9",
-    "typescript": "^5.0.4"
+    "electron": "^32.3.1",
+    "electron-builder": "^25.1.8",
+    "@electron/notarize": "^2.5.0",
+    "typescript": "^5.0.4",
+    "shelljs": "^0.8.5"
   },
   "keywords": [
     "capacitor",

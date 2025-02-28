@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react'
 import { useRecoilState, useSetRecoilState } from 'recoil';
-import { canSaveSettingToQdnAtom, oldPinnedAppsAtom, settingsLocalLastUpdatedAtom, settingsQDNLastUpdatedAtom, sortablePinnedAppsAtom } from './atoms/global';
+import { canSaveSettingToQdnAtom, isUsingImportExportSettingsAtom, oldPinnedAppsAtom, settingsLocalLastUpdatedAtom, settingsQDNLastUpdatedAtom, sortablePinnedAppsAtom } from './atoms/global';
 import { getArbitraryEndpointReact, getBaseApiReact } from './App';
 import { decryptResource } from './components/Group/Group';
 import { base64ToUint8Array, uint8ArrayToObject } from './backgroundFunctions/encryption';
@@ -40,7 +40,6 @@ const getPublishRecord = async (myName) => {
       );
       data = await res.text();
     
-
     if(!data) throw new Error('Unable to fetch publish')
 
     const decryptedKey: any = await decryptResource(data);
@@ -53,11 +52,14 @@ const getPublishRecord = async (myName) => {
     }
   };
 
-export const useQortalGetSaveSettings = (myName) => {
+
+export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
     const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
     const setCanSave = useSetRecoilState(canSaveSettingToQdnAtom);
     const setSettingsQDNLastUpdated = useSetRecoilState(settingsQDNLastUpdatedAtom);
     const [settingsLocalLastUpdated] = useRecoilState(settingsLocalLastUpdatedAtom);
+    const [isUsingImportExportSettings] = useRecoilState(isUsingImportExportSettingsAtom);
+
     const [oldPinnedApps, setOldPinnedApps] =  useRecoilState(oldPinnedAppsAtom)
 
     const getSavedSettings = useCallback(async (myName, settingsLocalLastUpdated)=> {
@@ -67,7 +69,7 @@ export const useQortalGetSaveSettings = (myName) => {
             const settings = await getPublish(myName)
             if(settings?.sortablePinnedApps && timestamp > settingsLocalLastUpdated){
                 setSortablePinnedApps(settings.sortablePinnedApps)
-              
+                
                 setSettingsQDNLastUpdated(timestamp || 0)
             } else if(settings?.sortablePinnedApps){
                 setSettingsQDNLastUpdated(timestamp || 0)
@@ -87,8 +89,9 @@ export const useQortalGetSaveSettings = (myName) => {
         }
     }, [])
     useEffect(()=> {
-        if(!myName || !settingsLocalLastUpdated) return
+        if(!myName || !settingsLocalLastUpdated || !isAuthenticated || isUsingImportExportSettings === null) return
+        if(isUsingImportExportSettings) return
         getSavedSettings(myName, settingsLocalLastUpdated)
-    }, [getSavedSettings, myName, settingsLocalLastUpdated])
+    }, [getSavedSettings, myName, settingsLocalLastUpdated, isAuthenticated, isUsingImportExportSettings])
  
 }

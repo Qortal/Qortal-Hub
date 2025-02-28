@@ -6,6 +6,7 @@ import {
   MenuItem,
   Select,
   Typography,
+  Tooltip
 } from "@mui/material";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import SearchIcon from "@mui/icons-material/Search";
@@ -13,6 +14,10 @@ import { Spacer } from "../../common/Spacer";
 import AlternateEmailIcon from "@mui/icons-material/AlternateEmail";
 import CloseIcon from "@mui/icons-material/Close";
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
+import Highlight from "@tiptap/extension-highlight";
+import Mention from "@tiptap/extension-mention";
+import StarterKit from "@tiptap/starter-kit";
+import Underline from "@tiptap/extension-underline";
 import {
   AppsSearchContainer,
   AppsSearchLeft,
@@ -32,6 +37,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { formatTimestamp } from "../../utils/time";
 import { ContextMenuMentions } from "../ContextMenuMentions";
 import { convert } from 'html-to-text';
+import { generateHTML } from "@tiptap/react";
+import ErrorBoundary from "../../common/ErrorBoundary";
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
@@ -43,7 +50,7 @@ const cache = new CellMeasurerCache({
   defaultHeight: 50,
 });
 
-export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGroup, openQManager }) => {
+export const ChatOptions = ({ messages : untransformedMessages, goToMessage, members, myName, selectedGroup, openQManager, isPrivate }) => {
   const [mode, setMode] = useState("default");
   const [searchValue, setSearchValue] = useState("");
   const [selectedMember, setSelectedMember] = useState(0);
@@ -52,7 +59,27 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
   const parentRefMentions = useRef();
   const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null)
   const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
-
+  const messages = useMemo(()=> {
+    return untransformedMessages?.map((item)=> {
+      if(item?.messageText){
+        let transformedMessage = item?.messageText
+        try {
+            transformedMessage = generateHTML(item?.messageText, [
+              StarterKit,
+              Underline,
+              Highlight,
+              Mention
+            ])
+            return {
+              ...item,
+              messageText: transformedMessage
+            }
+        } catch (error) {
+          // error
+        }
+      } else return item
+    })
+  }, [untransformedMessages])
   const getTimestampMention = async () => {
     try {
       return new Promise((res, rej) => {
@@ -124,7 +151,7 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
         .filter(
           (message) =>
             message?.senderName === selectedMember &&
-            extractTextFromHTML(message?.decryptedData?.message)?.includes(
+            extractTextFromHTML(isPrivate ? message?.messageText : message?.decryptedData?.message)?.includes(
               debouncedValue.toLowerCase()
             )
         )
@@ -132,20 +159,27 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
     }
     return messages
       .filter((message) =>
-      extractTextFromHTML(message?.decryptedData?.message)?.includes(debouncedValue.toLowerCase())
+      extractTextFromHTML(isPrivate === false ? message?.messageText : message?.decryptedData?.message)?.includes(debouncedValue.toLowerCase())
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
-  }, [debouncedValue, messages, selectedMember]);
+  }, [debouncedValue, messages, selectedMember, isPrivate]);
 
   const mentionList = useMemo(() => {
     if(!messages || messages.length === 0 || !myName) return []
-
-    return messages
+    if(isPrivate === false){
+      return messages
       .filter((message) =>
-      extractTextFromHTML(message?.decryptedData?.message)?.includes(`@${myName}`)
+      extractTextFromHTML(message?.messageText)?.includes(`@${myName?.toLowerCase()}`)
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
-  }, [messages, myName]);
+      
+    }
+    return messages
+      .filter((message) =>
+      extractTextFromHTML(message?.decryptedData?.message)?.includes(`@${myName?.toLowerCase()}`)
+      )
+      ?.sort((a, b) => b?.timestamp - a?.timestamp);
+  }, [messages, myName, isPrivate]);
 
   const rowVirtualizer = useVirtualizer({
     count: searchedList.length,
@@ -291,79 +325,8 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                             gap: "5px",
                           }}
                         >
-                          <Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              width: "100%",
-                              padding: "0px 20px",
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                width: "100%",
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "15px",
-                                }}
-                              >
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: "#27282c",
-                                    color: "white",
-                                    height: "25px",
-                                    width: "25px",
-                                  }}
-                                  alt={message?.senderName}
-                                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                                    message?.senderName
-                                  }/qortal_avatar?async=true`}
-                                >
-                                  {message?.senderName?.charAt(0)}
-                                </Avatar>
-                                <Typography
-                                  sx={{
-                                    fontWight: 600,
-                                    fontFamily: "Inter",
-                                    color: "cadetBlue",
-                                  }}
-                                >
-                                  {message?.senderName}
-                                </Typography>
-                              </Box>
-                            </Box>
-                            <Spacer height="5px" />
-                            <Typography sx={{
-                                fontSize: '12px'
-                            }}>{formatTimestamp(message.timestamp)}</Typography>
-                            <Box
-                              style={{
-                                cursor: "pointer",
-                              }}
-                              onClick={() => {
-                                const findMsgIndex = messages.findIndex(
-                                  (item) =>
-                                    item?.signature === message?.signature
-                                );
-                                if (findMsgIndex !== -1) {
-                                  goToMessage(findMsgIndex);
-                                }
-                              }}
-                            >
-                              <MessageDisplay
-                                htmlContent={
-                                  message?.decryptedData?.message || "<p></p>"
-                                }
-                              />
-                            </Box>
-                          </Box>
+                          <ShowMessage messages={messages} goToMessage={goToMessage} message={message} />
+                         
                         </div>
                       );
                     })}
@@ -544,6 +507,7 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                       const index = virtualRow.index;
                       let message = searchedList[index];
                       return (
+                    
                         <div
                           data-index={virtualRow.index} //needed for dynamic row height measurement
                           ref={rowVirtualizer.measureElement} //measure dynamic row height
@@ -562,7 +526,150 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                             gap: "5px",
                           }}
                         >
-                          <Box
+                              <ErrorBoundary
+                        fallback={
+                          <Typography>
+                            Error loading content: Invalid Data
+                          </Typography>
+                        }
+                      >
+                          <ShowMessage message={message} goToMessage={goToMessage} messages={messages} />
+                          </ErrorBoundary>
+                        </div>
+                    
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+  return (
+    <Box
+      sx={{
+        width: "50px",
+        height: "100%",
+        gap: "20px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}
+    >
+      <Box
+        sx={{
+          width: "100%",
+          padding: "10px",
+          gap: "20px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          backgroundColor: "#1F2023",
+          borderBottomLeftRadius: "20px",
+          borderTopLeftRadius: "20px",
+          minHeight: "200px",
+        }}
+      >
+        <ButtonBase onClick={() => {
+            setMode("search")
+        }}>
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>SEARCH</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <SearchIcon />
+          </Tooltip>
+        </ButtonBase>
+        <ButtonBase onClick={() => {
+            setMode("default")
+            setSearchValue('')
+            setSelectedMember(0)
+            openQManager()
+        }}>
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>Q-MANAGER</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <InsertLinkIcon sx={{ color: 'white' }} />
+          </Tooltip>
+        </ButtonBase>
+        <ContextMenuMentions getTimestampMention={getTimestampMention} groupId={selectedGroup}>
+        <ButtonBase onClick={() => {
+            setMode("mentions")
+            setSearchValue('')
+            setSelectedMember(0)
+        }}>
+          <Tooltip
+            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>MENTIONED</span>} 
+            placement="left"
+            arrow
+            sx={{ fontSize: "24" }}
+            slotProps={{
+              tooltip: {
+                sx: {
+                  color: "#ffffff",
+                  backgroundColor: "#444444",
+                },
+              },
+              arrow: {
+                sx: {
+                  color: "#444444",
+                },
+              },
+            }}
+          >
+            <AlternateEmailIcon sx={{
+              color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
+            }} />
+          </Tooltip>
+        </ButtonBase>
+      
+        </ContextMenuMentions>
+       
+        
+      </Box>
+    </Box>
+  );
+};
+
+
+const ShowMessage = ({message, goToMessage, messages})=> {
+
+  return (
+<Box
                             sx={{
                               display: "flex",
                               flexDirection: "column",
@@ -628,80 +735,20 @@ export const ChatOptions = ({ messages, goToMessage, members, myName, selectedGr
                                 }
                               }}
                             >
-                              <MessageDisplay
-                                htmlContent={
-                                  message?.decryptedData?.message || "<p></p>"
-                                }
-                              />
+                              {message?.messageText && (
+                                  <MessageDisplay
+                                htmlContent={message?.messageText}
+                                  />
+                                )}
+                          {message?.decryptedData?.message && (
+                             <MessageDisplay
+                             htmlContent={
+                               message?.decryptedData?.message || "<p></p>"
+                             }
+                           />
+                          )}
+                             
                             </Box>
                           </Box>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Box>
-        </Box>
-      </Box>
-    );
-  }
-  return (
-    <Box
-      sx={{
-        width: "50px",
-        height: "100%",
-        gap: "20px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}
-    >
-      <Box
-        sx={{
-          width: "100%",
-          padding: "10px",
-          gap: "20px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          backgroundColor: "#1F2023",
-          borderBottomLeftRadius: "20px",
-          borderTopLeftRadius: "20px",
-          minHeight: "200px",
-        }}
-      >
-        <ButtonBase onClick={() => {
-            setMode("search")
-        }}>
-          <SearchIcon />
-        </ButtonBase>
-        <ButtonBase onClick={() => {
-            setMode("default")
-            setSearchValue('')
-            setSelectedMember(0)
-            openQManager()
-        }}>
-          <InsertLinkIcon sx={{
-            color: 'white'
-          }} />
-        </ButtonBase>
-        <ContextMenuMentions getTimestampMention={getTimestampMention} groupId={selectedGroup}>
-        <ButtonBase onClick={() => {
-            setMode("mentions")
-            setSearchValue('')
-            setSelectedMember(0)
-        }}>
-          <AlternateEmailIcon sx={{
-            color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
-          }} />
-        </ButtonBase>
-      
-        </ContextMenuMentions>
-       
-        
-      </Box>
-    </Box>
-  );
-};
+  )
+}

@@ -22,7 +22,7 @@ import { useRecoilState, useSetRecoilState } from "recoil";
 import { settingsLocalLastUpdatedAtom, sortablePinnedAppsAtom } from "../../atoms/global";
 import { saveToLocalStorage } from "./AppsNavBar";
 
-export const AppInfoSnippet = ({ app, myName, isFromCategory }) => {
+export const AppInfoSnippet = ({ app, myName, isFromCategory, parentStyles = {} }) => {
 
   const isInstalled = app?.status?.status === 'READY'
    const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(sortablePinnedAppsAtom);
@@ -30,7 +30,9 @@ export const AppInfoSnippet = ({ app, myName, isFromCategory }) => {
   const isSelectedAppPinned = !!sortablePinnedApps?.find((item)=> item?.name === app?.name && item?.service === app?.service)
   const setSettingsLocalLastUpdated = useSetRecoilState(settingsLocalLastUpdatedAtom);
   return (
-    <AppInfoSnippetContainer>
+    <AppInfoSnippetContainer sx={{
+      ...parentStyles
+    }}>
       <AppInfoSnippetLeft>
       <ButtonBase
         sx={{
@@ -57,8 +59,8 @@ export const AppInfoSnippet = ({ app, myName, isFromCategory }) => {
           >
             <Avatar
               sx={{
-                height: "31px",
-                width: "31px",
+                height: "42px",
+                width: "42px",
                 '& img': { 
                   objectFit: 'fill',
                 }

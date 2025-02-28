@@ -228,7 +228,7 @@ export const AttachmentCard = ({
               <Typography
                 sx={{
                   fontSize: "14px",
-                  color: "var(--unread)",
+                  color: "var(--danger)",
                 }}
               >
                 {errorMsg}
@@ -263,7 +263,7 @@ export const AttachmentCard = ({
           }}>
              
           <FileAttachmentContainer >
-            <Typography>{resourceDetails?.status?.status}</Typography>
+            <Typography>{resourceDetails?.status?.status === 'DOWNLOADED' ? 'BUILDING' : resourceDetails?.status?.status}</Typography>
             {!resourceDetails && (
               <>
                         <DownloadIcon />
@@ -271,7 +271,7 @@ export const AttachmentCard = ({
   
               </>
             )}
-            {resourceDetails && resourceDetails?.status?.status !== 'READY' && (
+            {resourceDetails && resourceDetails?.status?.status !== 'READY' && resourceDetails?.status?.status !== 'FAILED_TO_DOWNLOAD' && (
               <>
                         <CircularProgress sx={{
                           color: 'white'

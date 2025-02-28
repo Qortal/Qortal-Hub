@@ -24,7 +24,7 @@ import {
   PublishQAppCTARight,
   PublishQAppDotsBG,
 } from "./Apps-styles";
-import { Avatar, Box, ButtonBase, InputBase, styled } from "@mui/material";
+import { Avatar, Box, ButtonBase, InputBase, Typography, styled } from "@mui/material";
 import { Add } from "@mui/icons-material";
 import { MyContext, getBaseApiReact } from "../../App";
 import LogoSelected from "../../assets/svgs/LogoSelected.svg";
@@ -59,7 +59,8 @@ const officialAppList = [
   "q-trade",
   "q-support",
   "nodeinfo",
-  "q-manager"
+  "q-manager",
+  "q-mintership"
 ];
 
 const ScrollerStyled = styled("div")({
@@ -122,7 +123,11 @@ export const AppsLibraryDesktop = ({
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
     }, 350);
-
+    setTimeout(() => {
+      virtuosoRef.current.scrollToIndex({
+        index: 0
+      });
+    }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);
@@ -134,7 +139,7 @@ export const AppsLibraryDesktop = ({
   const searchedList = useMemo(() => {
     if (!debouncedValue) return [];
     return availableQapps.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase())
+      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue]);
 
@@ -145,6 +150,9 @@ export const AppsLibraryDesktop = ({
         key={`${app?.service}-${app?.name}`}
         app={app}
         myName={myName}
+        parentStyles={{
+          padding: '0px 10px'
+        }}
       />
     );
   };
@@ -261,7 +269,7 @@ export const AppsLibraryDesktop = ({
             <AppsWidthLimiter>
               <StyledVirtuosoContainer
                 sx={{
-                  height: `calc(100vh - 36px - 90px)`,
+                  height: `calc(100vh - 36px - 90px - 90px)`,
                 }}
               >
                 <Virtuoso
@@ -270,11 +278,15 @@ export const AppsLibraryDesktop = ({
                   itemContent={rowRenderer}
                   atBottomThreshold={50}
                   followOutput="smooth"
-                  components={{
-                    Scroller: ScrollerStyled, // Use the styled scroller component
-                  }}
+                  // components={{
+                  //   Scroller: ScrollerStyled, // Use the styled scroller component
+                  // }}
                 />
               </StyledVirtuosoContainer>
+            </AppsWidthLimiter>
+          ) : searchedList?.length === 0 && debouncedValue ? (
+            <AppsWidthLimiter>
+              <Typography>No results</Typography>
             </AppsWidthLimiter>
           ) : (
             <>
@@ -286,13 +298,16 @@ export const AppsLibraryDesktop = ({
                 Official Apps
               </AppLibrarySubTitle>
               <Spacer height="45px" />
-              <AppsContainer>
+              <AppsContainer sx={{
+                gap: '50px',
+                justifyContent: 'flex-start'
+              }}>
                 {officialApps?.map((qapp) => {
                   return (
                     <ButtonBase
                       sx={{
-                        height: "80px",
-                        width: "60px",
+                        // height: "80px",
+                        width: "80px",
                       }}
                       onClick={() => {
                         // executeEvent("addTab", {
@@ -315,8 +330,8 @@ export const AppsLibraryDesktop = ({
                         >
                           <Avatar
                             sx={{
-                              height: "31px",
-                              width: "31px",
+                              height: "42px",
+                              width: "42px",
                             }}
                             alt={qapp?.name}
                             src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -411,6 +426,32 @@ export const AppsLibraryDesktop = ({
                       flexWrap: "wrap",
                     }}
                   >
+                     <ButtonBase
+                        
+                          onClick={() => {
+                            executeEvent("selectedCategory", {
+                              data: {
+                                id: 'all',
+                                name: 'All'
+                              },
+                            });
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              height: "60px",
+                              padding: "0px 24px",
+                              border: "4px solid #10242F",
+                              borderRadius: "6px",
+                              boxShadow: "2px 4px 0px 0px #000000",
+                            }}
+                          >
+                            All
+                          </Box>
+                        </ButtonBase>
                     {categories?.map((category) => {
                       return (
                         <ButtonBase

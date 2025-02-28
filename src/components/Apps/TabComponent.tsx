@@ -5,6 +5,7 @@ import { getBaseApiReact } from '../../App';
 import { Avatar, ButtonBase } from '@mui/material';
 import LogoSelected from "../../assets/svgs/LogoSelected.svg";
 import { executeEvent } from '../../utils/events';
+import LockIcon from "@mui/icons-material/Lock";
 
 const TabComponent = ({isSelected, app}) => {
   return (
@@ -34,25 +35,34 @@ const TabComponent = ({isSelected, app}) => {
             } src={NavCloseTab}/>
            
         ) }
-         <Avatar
-                          sx={{
-                            height: "28px",
-                            width: "28px",
-                          }}
-                          alt={app?.name}
-                          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                            app?.name
-                          }/qortal_avatar?async=true`}
-                        >
-                          <img
-                            style={{
-                              width: "28px",
-                              height: "auto",
-                            }}
-                            src={LogoSelected}
-                            alt="center-icon"
-                          />
-                        </Avatar>
+       {app?.isPrivate && !app?.privateAppProperties?.logo ? (
+          <LockIcon
+            sx={{
+              height: "28px",
+              width: "28px",
+            }}
+          />
+        ) : (
+          <Avatar
+            sx={{
+              height: "28px",
+              width: "28px",
+            }}
+            alt={app?.name}
+            src={app?.privateAppProperties?.logo ? app?.privateAppProperties?.logo :`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+              app?.name
+            }/qortal_avatar?async=true`}
+          >
+            <img
+              style={{
+                width: "28px",
+                height: "auto",
+              }}
+              src={LogoSelected}
+              alt="center-icon"
+            />
+          </Avatar>
+        )}
     </TabParent>
     </ButtonBase>
   )

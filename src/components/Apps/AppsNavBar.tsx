@@ -31,8 +31,12 @@ import {
   sortablePinnedAppsAtom,
 } from "../../atoms/global";
 
-export function saveToLocalStorage(key, subKey, newValue) {
+export function saveToLocalStorage(key, subKey, newValue, otherRootData = {}, deleteWholeKey) {
   try {
+    if(deleteWholeKey){
+      localStorage.setItem(key, null);
+      return
+    }
     // Fetch existing data
     const existingData = localStorage.getItem(key);
     let combinedData = {};
@@ -43,12 +47,14 @@ export function saveToLocalStorage(key, subKey, newValue) {
       // Merge with the new data under the subKey
       combinedData = {
         ...parsedData,
+        ...otherRootData,
         timestamp: Date.now(), // Update the root timestamp
         [subKey]: newValue, // Assuming the data is an array
       };
     } else {
       // If no existing data, just use the new data under the subKey
       combinedData = {
+        ...otherRootData,
         timestamp: Date.now(), // Set the initial root timestamp
         [subKey]: newValue,
       };

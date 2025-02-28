@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import Divider from "@mui/material/Divider";
@@ -19,6 +19,8 @@ import { decryptStoredWalletFromSeedPhrase } from "./utils/decryptWallet";
 import { crypto } from "./constants/decryptWallet";
 import { LoadingButton } from "@mui/lab";
 import { PasswordField } from "./components";
+import { HtmlTooltip } from "./ExtStates/NotAuthenticated";
+import { GlobalContext } from "./App";
 
 const parsefilenameQortal = (filename)=> {
     return filename.startsWith("qortal_backup_") ? filename.slice(14) : filename;
@@ -30,6 +32,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState("");
   const [seedName, setSeedName] = useState("");
   const [seedError, setSeedError] = useState("");
+    const {  hasSeenGettingStarted  } = useContext(GlobalContext);
 
   const [password, setPassword] = useState("");
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
@@ -197,9 +200,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
          sx={{
            width: "100%",
            maxWidth: "500px",
-           bgcolor: "background.paper",
            maxHeight: "60vh",
-           overflow: "auto",
+           overflowY: "auto",
+           overflowX: "hidden",
+           backgroundColor: "rgb(30 30 32 / 70%)",
+           
          }}
        >
          {wallets?.map((wallet, idx) => {
@@ -229,18 +234,42 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           right:  wallets?.length === 0 ? 'unset' : '20px'
         }}
       >
+          <HtmlTooltip
+        disableHoverListener={hasSeenGettingStarted === true}
+       
+        title={
+          <React.Fragment>
+            <Typography color="inherit" sx={{
+              fontSize: '16px'
+             }}>Already have a Qortal account? Enter your secret backup phrase here to access it. This phrase is one of the ways to recover your account.</Typography>
+          </React.Fragment>
+        }
+      >
         <CustomButton onClick={handleSetSeedValue} sx={{
           padding: '10px'
         }} >
          
           Add seed-phrase
         </CustomButton>
+        </HtmlTooltip>
+        <HtmlTooltip
+        disableHoverListener={hasSeenGettingStarted === true}
+       
+        title={
+          <React.Fragment>
+            <Typography color="inherit" sx={{
+              fontSize: '16px'
+             }}>Use this option to connect additional Qortal wallets you've already made, in order to login with them afterwards. You will need access to your backup JSON file in order to do so.</Typography>
+          </React.Fragment>
+        }
+      >
         <CustomButton sx={{
           padding: '10px'
         }} {...getRootProps()}>
           <input {...getInputProps()} />
           Add wallets
         </CustomButton>
+        </HtmlTooltip>
       </Box>
 
        <Dialog
@@ -344,33 +373,26 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           setSelectedWallet(wallet);
         }}
         sx={{
-            width: '100%'
+          width: '100%',
+          padding: '10px'
         }}
+
       >
         <ListItem
-        
-          secondaryAction={
-            <IconButton
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEdit(true);
-              }}
-              edge="end"
-              aria-label="edit"
-            >
-              <EditIcon
-                sx={{
-                  color: "white",
-                }}
-              />
-            </IconButton>
-          }
+          sx={{
+            bgcolor: "background.paper",
+            flexGrow: 1,
+            "&:hover": { backgroundColor: "secondary.main", transform: "scale(1.01)" },
+            transition: "all 0.1s ease-in-out",
+          }}
+
           alignItems="flex-start"
         >
           <ListItemAvatar>
             <Avatar alt="" src="/static/images/avatar/1.jpg" />
           </ListItemAvatar>
           <ListItemText
+          
             primary={wallet?.name ? wallet.name : wallet?.filename ? parsefilenameQortal(wallet?.filename)  : "No name"}
             secondary={
               <Box
@@ -387,10 +409,31 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                   {wallet?.address0}
                 </Typography>
                 {wallet?.note}
+                <Typography sx={{
+                  textAlign: 'end',
+                  marginTop: '5px'
+                }}>Login</Typography>
               </Box>
             }
           />
         </ListItem>
+        <IconButton
+              sx={{
+                alignSelf: 'flex-start'
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsEdit(true);
+              }}
+              edge="end"
+              aria-label="edit"
+            >
+              <EditIcon
+                sx={{
+                  color: "white",
+                }}
+              />
+            </IconButton>
       </ButtonBase>
       {isEdit && (
         <Box
@@ -434,12 +477,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             </Button>
             <Button
             sx={{
-                backgroundColor: 'var(--unread)',
+                backgroundColor: 'var(--danger)',
                 "&:hover": {
-                    backgroundColor: "var(--unread)", 
+                    backgroundColor: "var(--danger)", 
                   },
                   "&:focus": {
-                    backgroundColor: "var(--unread)", 
+                    backgroundColor: "var(--danger)", 
                   },
             }}
             size="small"

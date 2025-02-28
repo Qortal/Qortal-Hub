@@ -11,16 +11,20 @@ import InfoIcon from "@mui/icons-material/Info";
 import { RequestQueueWithPromise } from "../../utils/queue/queue";
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { executeEvent } from "../../utils/events";
-import { Box, Typography } from "@mui/material";
+import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
 import { Spacer } from "../../common/Spacer";
 import { CustomLoader } from "../../common/CustomLoader";
 import { getBaseApi } from "../../background";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
 import { myGroupsWhereIAmAdminAtom } from "../../atoms/global";
 import { useSetRecoilState } from "recoil";
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2)
 
 export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, getTimestampEnterChat, setSelectedGroup, setGroupSection, setMobileViewMode, setDesktopViewMode }) => {
+    const [isExpanded, setIsExpanded] = React.useState(false)
+  
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState([])
   const [loading, setLoading] = React.useState(true)
   const {txList, setTxList} = React.useContext(MyContext)
@@ -34,7 +38,7 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
       setLoading(true)
    
       let groupsAsAdmin = []
-      const getAllGroupsAsAdmin = groups.map(async (group)=> {
+      const getAllGroupsAsAdmin = groups.filter((item)=> item.groupId !== '0').map(async (group)=> {
    
         const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(()=> {
           return fetch(
@@ -109,26 +113,33 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
       flexDirection: "column",
       alignItems: 'center'
     }}>
-      <Box
+      <ButtonBase
         sx={{
           width: "322px",
           display: "flex",
-          flexDirection: "column",
+          flexDirection: "row",
           padding: '0px 20px',
-
+          gap: '10px',
+          justifyContent: 'flex-start'
         }}
+        onClick={()=> setIsExpanded((prev)=> !prev)}
       >
         <Typography
           sx={{
-            fontSize: "13px",
-            fontWeight: 600,
+            fontSize: "1rem",
           }}
         >
-          Join Requests:
+          Join Requests {filteredJoinRequests?.filter((group)=> group?.data?.length > 0)?.length > 0 && ` (${filteredJoinRequests?.filter((group)=> group?.data?.length > 0)?.length})`}
         </Typography>
-        <Spacer height="10px" /> 
-      </Box>
-
+        {isExpanded ? <ExpandLessIcon sx={{
+      marginLeft: 'auto'
+     }}  /> : (
+      <ExpandMoreIcon sx={{
+        marginLeft: 'auto'
+       }}/>
+     )}
+      </ButtonBase>
+<Collapse in={isExpanded} timeout="auto" unmountOnExit>
       <Box
         sx={{
           width: "322px",
@@ -227,6 +238,7 @@ export const GroupJoinRequests = ({ myAddress, groups, setOpenManageMembers, get
       
     </List>
     </Box>
+    </Collapse>
     </Box>
   );
 };

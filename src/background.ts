@@ -30,6 +30,7 @@ import { RequestQueueWithPromise } from "./utils/queue/queue";
 import { validateAddress } from "./utils/validateAddress";
 import { Sha256 } from "asmcrypto.js";
 import { TradeBotRespondMultipleRequest } from "./transactions/TradeBotRespondMultipleRequest";
+
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from "./constants/resourceTypes";
 import {
   addDataPublishesCase,
@@ -46,6 +47,7 @@ import {
   clearAllNotificationsCase,
   createGroupCase,
   createPollCase,
+  createRewardShareCase,
   decryptDirectCase,
   decryptGroupEncryptionCase,
   decryptSingleCase,
@@ -60,6 +62,7 @@ import {
   getEnteredQmailTimestampCase,
   getGroupDataSingleCase,
   getGroupNotificationTimestampCase,
+  getRewardSharePrivateKeyCase,
   getTempPublishCase,
   getThreadActivityCase,
   getTimestampEnterChatCase,
@@ -71,6 +74,7 @@ import {
   joinGroupCase,
   kickFromGroupCase,
   leaveGroupCase,
+  listActionsCase,
   ltcBalanceCase,
   makeAdminCase,
   nameCase,
@@ -81,6 +85,7 @@ import {
   publishOnQDNCase,
   registerNameCase,
   removeAdminCase,
+  removeRewardShareCase,
   resumeAllQueuesCase,
   saveTempPublishCase,
   sendChatDirectCase,
@@ -98,6 +103,7 @@ import {
   voteOnPollCase,
 } from "./background-cases";
 import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
+import TradeBotRespondRequest from "./transactions/TradeBotRespondRequest";
 // import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
 
 export let groupSecretkeys = {}
@@ -239,7 +245,16 @@ export const getForeignKey = async (foreignBlockchain)=> {
   switch (foreignBlockchain) {
     case "LITECOIN":
       return parsedData.ltcPrivateKey
-
+      case "DOGECOIN":
+        return parsedData.dogePrivateKey
+      case "BITCOIN":
+        return parsedData.btcPrivateKey
+      case "DIGIBYTE":
+        return parsedData.dgbPrivateKey
+      case "RAVENCOIN":
+        return parsedData.rvnPrivateKey
+      case "PIRATECHAIN":
+        return parsedData.arrrSeed58
       default:
         return null
   }
@@ -659,13 +674,12 @@ const handleNotification = async (groups) => {
 
   let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
   if (!isArray(mutedGroups)) mutedGroups = [];
-
+  mutedGroups.push('0')
   let isFocused;
   const data = groups.filter(
     (group) =>
       group?.sender !== address &&
-      !mutedGroups.includes(group.groupId) &&
-      !isUpdateMsg(group?.data)
+      !mutedGroups.includes(group.groupId)
   );
   const dataWithUpdates = groups.filter(
     (group) => group?.sender !== address && !mutedGroups.includes(group.groupId)
@@ -716,8 +730,7 @@ const handleNotification = async (groups) => {
         Date.now() - lastGroupNotification >= 120000
       ) {
         if (
-          !newestLatestTimestamp?.data ||
-          !isExtMsg(newestLatestTimestamp?.data)
+          !newestLatestTimestamp?.data
         )
           return;
 
@@ -812,6 +825,17 @@ const forceCloseWebSocket = () => {
 export async function getNameInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + "/names/address/" + address);
+  const nameData = await response.json();
+  if (nameData?.length > 0) {
+    return nameData[0].name;
+  } else {
+    return "";
+  }
+}
+
+export async function getNameInfoForOthers(address) {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + "/names/address/" + address);
   const nameData = await response.json();
@@ -1096,7 +1120,7 @@ export const sendQortFee = async (): Promise<number> => {
   return qortFee;
 };
 
-async function getNameOrAddress(receiver) {
+export async function getNameOrAddress(receiver) {
   try {
     const isAddress = validateAddress(receiver);
     if (isAddress) {
@@ -1453,7 +1477,7 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
   } catch (error) {}
 }
 
-async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses }) {
+async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses, isSingle }) {
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
 
@@ -1478,7 +1502,9 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   };
   const finalJson = {
     callRequest: jsonData,
-    extra: "whatever additional data goes here",
+    extra: {
+      type: isSingle ? "single" : "multiple"
+    },
   };
   const messageStringified = JSON.stringify(finalJson);
 
@@ -1529,7 +1555,6 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
       signature
     }
   }
-  const path = `${import.meta.env.BASE_URL}memory-pow.wasm.full`;
 
 
   const chatBytes = tx.chatBytes;
@@ -1764,20 +1789,40 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       const wallet = await getSaveWallet();
 
       const address = wallet.address0;
-
-      const message = {
-        addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
-        foreignKey: await getForeignKey(foreignBlockchain),
-        receivingAddress: address,
-      };
-      let responseVar;
-      const txn = new TradeBotRespondMultipleRequest().createTransaction(
-        message
-      );
+      let message
+      if(foreignBlockchain === 'PIRATECHAIN'){
+         message = {
+          atAddress: crosschainAtInfo[0].qortalAtAddress,
+          foreignKey: await getForeignKey(foreignBlockchain),
+          receivingAddress: address,
+        };
+      } else {
+         message = {
+          addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+          foreignKey: await getForeignKey(foreignBlockchain),
+          receivingAddress: address,
+        };
+      }
      
-   
-       const url =  await createEndpoint('/crosschain/tradebot/respondmultiple')
-      
+      let responseVar;
+      let txn
+      let url
+      if(foreignBlockchain === 'PIRATECHAIN'){
+         txn = new TradeBotRespondRequest().createTransaction(
+          message
+        );
+       
+     
+          url =  await createEndpoint('/crosschain/tradebot/respond')
+      } else {
+         txn = new TradeBotRespondMultipleRequest().createTransaction(
+          message
+        );
+       
+     
+          url =  await createEndpoint('/crosschain/tradebot/respondmultiple')
+      }
+    
       const responseFetch = await fetch(
         url,
         {
@@ -1790,6 +1835,10 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       );
 
       const res = await responseFetch.json();
+      if(res?.error && res?.message){
+        throw new Error(res?.message)
+      }
+      if(!responseFetch?.ok) throw new Error('Failed to submit buy order')
 
       if (res === false) {
         responseVar = {
@@ -1806,7 +1855,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
           callResponse: response,
           extra: {
             message: "Transaction processed successfully!",
-            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             senderAddress: address,
             node: url
           },
@@ -1816,7 +1865,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
           callResponse: "ERROR",
           extra: {
             message: response,
-            atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             senderAddress: address,
             node: url
           },
@@ -1830,7 +1879,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
 
  
     const message = {
-      addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      addresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
       foreignKey: await getForeignKey(foreignBlockchain),
       receivingAddress: address,
     };
@@ -1838,7 +1887,8 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       qortAddress: proxyAccountAddress,
       recipientPublicKey: proxyAccountPublicKey,
       message,
-      atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      isSingle: foreignBlockchain === 'PIRATECHAIN'
     });
 
     
@@ -1857,7 +1907,7 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
               message: message?.extra?.message,
               senderAddress: address,
               node: buyTradeNodeBaseUrl,
-              atAddresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+              atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
             }
           }
     
@@ -1952,7 +2002,7 @@ export async function leaveGroup({ groupId }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2008,7 +2058,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2035,10 +2085,10 @@ export async function cancelBan({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
-export async function registerName({ name }) {
+export async function registerName({ name, description = "" }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2053,7 +2103,7 @@ export async function registerName({ name }) {
   const tx = await createTransaction(3, keyPair, {
     fee: feeres.fee,
     name,
-    value: "",
+    value: description || "",
     lastReference: lastReference,
   });
 
@@ -2061,7 +2111,34 @@ export async function registerName({ name }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
+export async function updateName({ newName, oldName, description }) {
+  const lastReference = await getLastRef();
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+  const feeres = await getFee("UPDATE_NAME");
+
+  const tx = await createTransaction(4, keyPair, {
+    fee: feeres.fee,
+    name: oldName,
+    newName,
+    newData: description || "",
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 export async function makeAdmin({ groupId, qortalAddress }) {
@@ -2087,7 +2164,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2114,7 +2191,7 @@ export async function removeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2148,7 +2225,7 @@ export async function banFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2180,7 +2257,7 @@ export async function kickFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 
@@ -2222,7 +2299,7 @@ export async function createGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
 export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
@@ -2267,6 +2344,7 @@ export async function sendCoin(
     let keyPair = "";
     if (skipConfirmPassword) {
       const resKeyPair = await getKeyPair();
+  
       const parsedData = resKeyPair;
       const uint8PrivateKey = Base58.decode(parsedData.privateKey);
       const uint8PublicKey = Base58.decode(parsedData.publicKey);
@@ -2276,14 +2354,14 @@ export async function sendCoin(
       };
     } else {
       const response = await decryptStoredWallet(password, wallet);
-      const wallet2 = new PhraseWallet(response, walletVersion);
+      const wallet2 = new PhraseWallet(response, wallet?.version || walletVersion);
 
       keyPair = wallet2._addresses[0].keyPair;
     }
 
     const lastRef = await getLastRef();
     const fee = await sendQortFee();
-    const validApi = await findUsableApi();
+    const validApi = null;
 
     const res = await makeTransactionRequest(
       confirmReceiver,
@@ -2945,6 +3023,9 @@ function setupMessageListener() {
       case "getTimestampEnterChat":
         getTimestampEnterChatCase(request, event);
         break;
+        case "listActions":
+          listActionsCase(request, event);
+          break;
         case "addTimestampMention":
           addTimestampMentionCase(request, event);
           break;
@@ -2965,6 +3046,9 @@ function setupMessageListener() {
         break;
       case "publishOnQDN":
         publishOnQDNCase(request, event);
+        break;
+      case "getUserSettings":
+        getUserSettingsCase(request, event);
         break;
       case "handleActiveGroupDataFromSocket":
         handleActiveGroupDataFromSocketCase(request, event);
@@ -3006,6 +3090,15 @@ function setupMessageListener() {
         break;
       case "setupGroupWebsocket":
         setupGroupWebsocketCase(request, event);
+        break;
+      case "createRewardShare":
+        createRewardShareCase(request, event);
+        break;
+        case "getRewardSharePrivateKey":
+          getRewardSharePrivateKeyCase(request, event);
+          break;
+      case "removeRewardShare" :
+        removeRewardShareCase(request, event);
         break;
       case "addEnteredQmailTimestamp":
         addEnteredQmailTimestampCase(request, event);
@@ -3065,9 +3158,16 @@ const checkGroupList = async () => {
       },
     });
     const data = await response.json();
+    const copyGroups = [...(data?.groups || [])]
+              const findIndex = copyGroups?.findIndex(item => item?.groupId === 0)
+              if(findIndex !== -1){
+                copyGroups[findIndex] = {
+                  ...(copyGroups[findIndex] || {}),
+                  groupId: "0"
+                }
+              }
+              const filteredGroups = copyGroups
 
-    const filteredGroups =
-      data.groups?.filter((item) => item?.groupId !== 0) || [];
     const sortedGroups = filteredGroups.sort(
       (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
     );
@@ -3093,6 +3193,7 @@ export const checkNewMessages = async () => {
   try {
     let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
     if (!isArray(mutedGroups)) mutedGroups = [];
+    mutedGroups.push('0')
     let myName = "";
     const userData = await getUserInfo();
     if (userData?.name) {

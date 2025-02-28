@@ -19,6 +19,8 @@ import { ChatIcon } from "../../assets/Icons/ChatIcon";
 import { ThreadsIcon } from "../../assets/Icons/ThreadsIcon";
 import { MembersIcon } from "../../assets/Icons/MembersIcon";
 import { AdminsIcon } from "../../assets/Icons/AdminsIcon";
+import LockIcon from '@mui/icons-material/Lock';
+import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 
 const IconWrapper = ({ children, label, color, selected, selectColor, customHeight }) => {
   return (
@@ -80,7 +82,8 @@ export const DesktopHeader = ({
   hasUnreadChat,
   isChat,
   isForum,
-  setGroupSection
+  setGroupSection,
+  isPrivate
 }) => {
   const [value, setValue] = React.useState(0);
   return (
@@ -95,14 +98,27 @@ export const DesktopHeader = ({
         padding: "10px",
       }}
     >
-      <Box>
+      <Box sx={{
+        display: 'flex',
+        gap: '10px'
+      }}>
+        {isPrivate && (
+          <LockIcon sx={{
+            color: 'var(--green)'
+          }} />
+        )}
+        {isPrivate === false && (
+          <NoEncryptionGmailerrorredIcon sx={{
+            color: 'var(--danger)'
+          }} />
+        )}
         <Typography
           sx={{
             fontSize: "16px",
             fontWeight: 600,
           }}
         >
-          {selectedGroup?.groupName}
+          {selectedGroup?.groupId === '0' ? 'General' :selectedGroup?.groupName}
         </Typography>
       </Box>
       <Box
@@ -110,76 +126,10 @@ export const DesktopHeader = ({
           display: "flex",
           gap: "20px",
           alignItems: "center",
+          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile'
         }}
       >
-        {/* <ButtonBase
-          onClick={() => {
-            goToHome();
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Home"
-            selected={isHome}
-          >
-            <HomeIcon
-              height={25}
-              color={isHome ? "white" : "rgba(250, 250, 250, 0.5)"}
-            />
-          </IconWrapper>
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Groups"
-            selected={isGroups}
-          >
-            <HubsIcon
-              height={25}
-              color={
-                hasUnreadGroups
-                  ? "var(--unread)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-          </IconWrapper>
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("directs");
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Messaging"
-            selected={isDirects}
-          >
-            <MessagingIcon
-              height={25}
-              color={
-                hasUnreadDirects
-                  ? "var(--unread)"
-                  : isDirects
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-          </IconWrapper>
-        </ButtonBase> */}
-        {/* <Box
-          sx={{
-            width: "1px",
-            height: "50px",
-            background: "white",
-            borderRadius: "50px",
-          }}
-        /> */}
+      
         <ButtonBase
           onClick={() => {
             goToAnnouncements()

@@ -24,7 +24,8 @@ export const GroupForum = ({
   myAddress,
   hide,
   defaultThread, 
-  setDefaultThread
+  setDefaultThread,
+  isPrivate
 }) => {
   const {  rootHeight } = useContext(MyContext);
   const [isMoved, setIsMoved] = useState(false);
@@ -50,7 +51,7 @@ export const GroupForum = ({
     left: hide && '-1000px'
     }}
   >
-   <GroupMail hide={hide} getSecretKey={getSecretKey} selectedGroup={selectedGroup} userInfo={userInfo} secretKey={secretKey} defaultThread={defaultThread} setDefaultThread={setDefaultThread} />
+   <GroupMail isPrivate={isPrivate} hide={hide} getSecretKey={getSecretKey} selectedGroup={selectedGroup} userInfo={userInfo} secretKey={secretKey} defaultThread={defaultThread} setDefaultThread={setDefaultThread} />
 
    </div>
   );

@@ -17,9 +17,9 @@ import { InviteMember } from "./InviteMember";
 import { ListOfInvites } from "./ListOfInvites";
 import { ListOfBans } from "./ListOfBans";
 import { ListOfJoinRequests } from "./ListOfJoinRequests";
-import { Box, Tab, Tabs } from "@mui/material";
+import { Box, Card, Tab, Tabs } from "@mui/material";
 import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { MyContext, isMobile } from "../../App";
+import { MyContext, getBaseApiReact, isMobile } from "../../App";
 import { getGroupMembers, getNames } from "./Group";
 import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
 import { getFee } from "../../background";
@@ -59,6 +59,7 @@ export const ManageMembers = ({
   const [infoSnack, setInfoSnack] = React.useState(null);
   const [isLoadingMembers, setIsLoadingMembers] = React.useState(false)
   const [isLoadingLeave, setIsLoadingLeave] = React.useState(false)
+  const [groupInfo, setGroupInfo] = React.useState(null)
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
@@ -67,6 +68,7 @@ export const ManageMembers = ({
   const handleClose = () => {
     setOpen(false);
   };
+
 
   const handleLeaveGroup = async () => {
     try {
@@ -130,10 +132,20 @@ export const ManageMembers = ({
       setMembersWithNames(res?.members || []);
     } catch (error) {}
   };
+  const getGroupInfo = async (groupId) => {
+    try {
+       const response = await fetch(
+         `${getBaseApiReact()}/groups/${groupId}`
+       );
+       const groupData = await response.json();
+       setGroupInfo(groupData)
+    } catch (error) {}
+  };
 
   React.useEffect(()=> {
     if(selectedGroup?.groupId){
       getMembers(selectedGroup?.groupId)
+      getGroupInfo(selectedGroup?.groupId)
     }
   }, [selectedGroup?.groupId])
 
@@ -248,14 +260,23 @@ export const ManageMembers = ({
       />
     </Tabs>
           </Box>
-
+          <Card sx={{
+            padding: '10px',
+            cursor: 'default',
+          }}>
+            <Box>
+            <Typography>GroupId: {groupInfo?.groupId}</Typography>
+            <Typography>GroupName: {groupInfo?.groupName}</Typography>
+            <Typography>Number of members: {groupInfo?.memberCount}</Typography>
+            </Box>
+           <Spacer height="20px" />
           {selectedGroup?.groupId && !isOwner &&  (
-            <LoadingButton loading={isLoadingLeave}  loadingPosition="start"
+            <LoadingButton size="small" loading={isLoadingLeave}  loadingPosition="start"
             variant="contained" onClick={handleLeaveGroup}>
               Leave Group
             </LoadingButton>
           )}
-
+          </Card>
           {value === 0 && (
             <Box
               sx={{

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import './styles.css';
 import { executeEvent } from '../../utils/events';
@@ -63,30 +63,34 @@ function processText(input) {
   return wrapper.innerHTML;
 }
 
-export const MessageDisplay = ({ htmlContent, isReply }) => {
-  const linkify = (text) => {
-    if (!text) return ""; // Return an empty string if text is null or undefined
-  
-    let textFormatted = text;
-    const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
-    textFormatted = text.replace(urlPattern, (url) => {
-      const href = url.startsWith('http') ? url : `https://${url}`;
-      return `<a href="${DOMPurify.sanitize(href)}" class="auto-link">${DOMPurify.sanitize(url)}</a>`;
-    });
-    return processText(textFormatted);
-  };
-  
+const linkify = (text) => {
+  if (!text) return ""; // Return an empty string if text is null or undefined
 
-  const sanitizedContent = DOMPurify.sanitize(linkify(htmlContent), {
-    ALLOWED_TAGS: [
-      'a', 'b', 'i', 'em', 'strong', 'p', 'br', 'div', 'span', 'img', 
-      'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td'
-    ],
-    ALLOWED_ATTR: [
-      'href', 'target', 'rel', 'class', 'src', 'alt', 'title', 
-      'width', 'height', 'style', 'align', 'valign', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'data-url'
-    ],
-  }).replace(/<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g, '');;
+  let textFormatted = text;
+  const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
+  textFormatted = text.replace(urlPattern, (url) => {
+    const href = url.startsWith('http') ? url : `https://${url}`;
+    return `<a href="${DOMPurify.sanitize(href)}" class="auto-link">${DOMPurify.sanitize(url)}</a>`;
+  });
+  return processText(textFormatted);
+};
+
+
+export const MessageDisplay = ({ htmlContent, isReply }) => {
+
+
+  const sanitizedContent = useMemo(()=> {
+    return DOMPurify.sanitize(linkify(htmlContent), {
+      ALLOWED_TAGS: [
+        'a', 'b', 'i', 'em', 'strong', 'p', 'br', 'div', 'span', 'img', 
+        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 's', 'hr'
+      ],
+      ALLOWED_ATTR: [
+        'href', 'target', 'rel', 'class', 'src', 'alt', 'title', 
+        'width', 'height', 'style', 'align', 'valign', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'data-url'
+      ],
+    }).replace(/<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g, '');
+  }, [htmlContent])
 
   const handleClick = async (e) => {
     e.preventDefault();
@@ -97,6 +101,28 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
       window.electronAPI.openExternal(href);
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
+
+      let copyUrl = url
+
+     try {
+      copyUrl = copyUrl.replace(/^(qortal:\/\/)/, '')
+      if (copyUrl.startsWith('use-')) {
+        // Handle the new 'use' format
+        const parts = copyUrl.split('/')
+        const type = parts[0].split('-')[1] // e.g., 'group' from 'use-group'
+        parts.shift()
+        const action = parts.length > 0 ? parts[0].split('-')[1] : null // e.g., 'invite' from 'action-invite'
+        parts.shift()
+        const idPrefix = parts.length > 0 ? parts[0].split('-')[0] : null // e.g., 'groupid' from 'groupid-321'
+        const id = parts.length > 0 ? parts[0].split('-')[1] : null // e.g., '321' from 'groupid-321'
+        if(action === 'join'){
+          executeEvent("globalActionJoinGroup", { groupId: id});
+          return
+        }
+      }
+     } catch (error) {
+      //error
+     }
       const res = extractComponents(url);
       if (res) {
         const { service, name, identifier, path } = res;
@@ -106,7 +132,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     }
   };
 
-  const embedLink = htmlContent.match(/qortal:\/\/use-embed\/[^\s<>]+/);
+  const embedLink = htmlContent?.match(/qortal:\/\/use-embed\/[^\s<>]+/);
 
   let embedData = null;
 

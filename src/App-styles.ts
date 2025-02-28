@@ -136,6 +136,47 @@ border-radius: 5px;
     }
   }
 `;
+interface CustomButtonProps {
+  bgColor?: string;
+  color?: string;
+}
+export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
+  ({ bgColor, color }) => ({
+    boxSizing: "border-box",
+    padding: "15px 20px",
+    gap: "10px",
+    border: "0.5px solid rgba(255, 255, 255, 0.5)",
+    filter: "drop-shadow(1px 4px 10.5px rgba(0,0,0,0.3))",
+    borderRadius: 5,
+    display: "inline-flex",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "fit-content",
+    transition: "all 0.2s",
+    minWidth: 160,
+    cursor: "pointer",
+    fontWeight: 600,
+    fontFamily: "Inter",
+    textAlign: "center",
+    opacity: 0.7,
+    // Use the passed-in props or fallback defaults
+    backgroundColor: bgColor || "transparent",
+    color: color || "white",
+
+    "&:hover": {
+      opacity: 1,
+      backgroundColor: bgColor
+        ? bgColor
+        : "rgba(41, 41, 43, 1)",  // fallback hover bg
+      color: color || "white",
+      svg: {
+        path: {
+          fill: color || "white", 
+        },
+      },
+    },
+  })
+);
 
 
 export const CustomInput = styled(TextField)({

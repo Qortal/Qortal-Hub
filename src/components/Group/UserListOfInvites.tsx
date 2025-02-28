@@ -4,7 +4,9 @@ import { AutoSizer, CellMeasurer, CellMeasurerCache, List } from 'react-virtuali
 import { MyContext, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApi, getFee } from '../../background';
-
+import LockIcon from '@mui/icons-material/Lock';
+import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
+import { Spacer } from "../../common/Spacer";
 
 const cache = new CellMeasurerCache({
     fixedWidth: true,
@@ -183,7 +185,17 @@ export const UserListOfInvites = ({myAddress, setInfoSnack, setOpenSnack}) => {
                   </Box>
                 </Popover>
                 <ListItemButton onClick={(event) => handlePopoverOpen(event, index)}>
-
+                {invite?.isOpen === false && (
+          <LockIcon sx={{
+            color: 'var(--green)'
+          }} />
+        )}
+        {invite?.isOpen === true && (
+          <NoEncryptionGmailerrorredIcon sx={{
+            color: 'var(--danger)'
+          }} />
+        )}
+        <Spacer width="15px" />
                   <ListItemText primary={invite?.groupName} secondary={invite?.description} />
                 </ListItemButton>
               </ListItem>
@@ -194,9 +206,21 @@ export const UserListOfInvites = ({myAddress, setInfoSnack, setOpenSnack}) => {
     };
   
     return (
-      <div>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        flexGrow: 1
+      }}>
         <p>Invite list</p>
-        <div style={{ position: 'relative', height: '500px', width: '100%', display: 'flex', flexDirection: 'column', flexShrink: 1 }}>
+        <div
+        style={{
+          position: "relative",
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
+          flexGrow: 1,
+        }}
+      >
           <AutoSizer>
             {({ height, width }) => (
               <List
@@ -211,6 +235,6 @@ export const UserListOfInvites = ({myAddress, setInfoSnack, setOpenSnack}) => {
             )}
           </AutoSizer>
         </div>
-      </div>
+        </Box>
     );
 }

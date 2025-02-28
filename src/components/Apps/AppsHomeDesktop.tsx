@@ -16,11 +16,13 @@ import { Spacer } from "../../common/Spacer";
 import { SortablePinnedApps } from "./SortablePinnedApps";
 import { extractComponents } from "../Chat/MessageDisplay";
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
+import { AppsPrivate } from "./AppsPrivate";
 export const AppsHomeDesktop = ({
   setMode,
   myApp,
   myWebsite,
   availableQapps,
+  myName
 }) => {
   const [qortalUrl, setQortalUrl] = useState('')
 
@@ -115,7 +117,7 @@ export const AppsHomeDesktop = ({
       <Spacer height="45px" />
       <AppsContainer
         sx={{
-          gap: "75px",
+          gap: "50px",
           justifyContent: "flex-start",
         }}
       >
@@ -135,7 +137,7 @@ export const AppsHomeDesktop = ({
             <AppCircleLabel>Library</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
-
+          <AppsPrivate myName={myName} />
         <SortablePinnedApps
           isDesktop={true}
           availableQapps={availableQapps}

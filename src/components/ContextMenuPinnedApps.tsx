@@ -124,11 +124,19 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
                 <MenuItem onClick={(e) => {
                     handleClose(e);
                     setSortablePinnedApps((prev) => {
-                        const updatedApps = prev.filter(
-                            (item) => !(item?.name === app?.name && item?.service === app?.service)
-                        );
-                        saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
-                        return updatedApps;
+                        if(app?.isPrivate){
+                            const updatedApps = prev.filter(
+                                (item) => !(item?.privateAppProperties?.name === app?.privateAppProperties?.name && item?.privateAppProperties?.service === app?.privateAppProperties?.service && item?.privateAppProperties?.identifier === app?.privateAppProperties?.identifier)
+                            );
+                            saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
+                            return updatedApps;
+                        } else {
+                            const updatedApps = prev.filter(
+                                (item) => !(item?.name === app?.name && item?.service === app?.service)
+                            );
+                            saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
+                            return updatedApps;
+                        }
                     });
                 }}>
                     <ListItemIcon sx={{ minWidth: '32px' }}>

@@ -145,7 +145,7 @@ export const encryptDataGroup = ({ data64, publicKeys, privateKey, userPublicKey
 	}
 }
 
-export const encryptSingle = async ({ data64, secretKeyObject, typeNumber = 1 }: any) => {
+export const encryptSingle = async ({ data64, secretKeyObject, typeNumber = 2 }: any) => {
 	// Find the highest key in the secretKeyObject
 	const highestKey = Math.max(...Object.keys(secretKeyObject).filter(item => !isNaN(+item)).map(Number));
 	const highestKeyObject = secretKeyObject[highestKey];
@@ -188,7 +188,22 @@ export const encryptSingle = async ({ data64, secretKeyObject, typeNumber = 1 }:
   
 	  // Concatenate the highest key, type number, nonce, and encrypted data (new format)
 	  const highestKeyStr = highestKey.toString().padStart(10, '0');  // Fixed length of 10 digits
-	  finalEncryptedData = btoa(highestKeyStr + typeNumberStr + nonceBase64 + encryptedDataBase64);
+
+	  const highestKeyBytes = new TextEncoder().encode(highestKeyStr.padStart(10, '0'));
+const typeNumberBytes = new TextEncoder().encode(typeNumberStr.padStart(3, '0'));
+
+// Step 3: Concatenate all binary
+const combinedBinary = new Uint8Array(
+  highestKeyBytes.length + typeNumberBytes.length + nonce.length + encryptedData.length
+);
+	//   finalEncryptedData = btoa(highestKeyStr) + btoa(typeNumberStr) + nonceBase64 + encryptedDataBase64;
+	  combinedBinary.set(highestKeyBytes, 0);
+combinedBinary.set(typeNumberBytes, highestKeyBytes.length);
+combinedBinary.set(nonce, highestKeyBytes.length + typeNumberBytes.length);
+combinedBinary.set(encryptedData, highestKeyBytes.length + typeNumberBytes.length + nonce.length);
+
+// Step 4: Base64 encode once
+ finalEncryptedData = uint8ArrayToBase64(combinedBinary);
 	}
   
 	return finalEncryptedData;
@@ -202,22 +217,20 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 		try {
 			const decoded = atob(msg?.data);
 			const parseDecoded =JSON.parse(decodeURIComponent(escape(decoded)))
-			if(parseDecoded?.messageText){
+		
 				msgs.push({
 					...msg,
 					...parseDecoded
 				})
-			}
+		
 		} catch (error) {
 			
 		}
 	}
 	return msgs
 }
-  
-  
 
-  export const decryptSingle = async ({ data64, secretKeyObject, skipDecodeBase64 }: any) => {
+export const decryptSingle = async ({ data64, secretKeyObject, skipDecodeBase64 }: any) => {
 	// First, decode the base64-encoded input (if skipDecodeBase64 is not set)
 	const decodedData = skipDecodeBase64 ? data64 : atob(data64);
 	
@@ -249,6 +262,28 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 	  encryptedDataBase64 = decodeForNumber.slice(10); // The remaining part is the encrypted data
 	} else {
 	  if (hasTypeNumber) {
+		// const typeNumberStr = new TextDecoder().decode(typeNumberBytes);
+		if(decodeForNumber.slice(10, 13) !== '001'){
+			const decodedBinary = base64ToUint8Array(decodedData);
+			const highestKeyBytes = decodedBinary.slice(0, 10); // if ASCII digits only
+			const highestKeyStr = new TextDecoder().decode(highestKeyBytes);
+
+const nonce = decodedBinary.slice(13, 13 + 24);
+const encryptedData = decodedBinary.slice(13 + 24);
+const highestKey = parseInt(highestKeyStr, 10);
+
+const messageKey = base64ToUint8Array(secretKeyObject[+highestKey].messageKey);
+const decryptedBytes = nacl.secretbox.open(encryptedData, nonce, messageKey);
+  
+	// Check if decryption was successful
+	if (!decryptedBytes) {
+	  throw new Error("Decryption failed");
+	}
+  
+	// Convert the decrypted Uint8Array back to a Base64 string
+	return uint8ArrayToBase64(decryptedBytes);
+		
+		}
 		// New format: Extract type number and nonce
 		typeNumberStr = possibleTypeNumberStr;  // Extract type number
 		nonceBase64 = decodeForNumber.slice(13, 45);   // Extract nonce (next 32 characters after type number)
@@ -280,6 +315,9 @@ export const decodeBase64ForUIChatMessages = (messages)=> {
 	// Convert the decrypted Uint8Array back to a Base64 string
 	return uint8ArrayToBase64(decryptedData);
   };
+  
+
+
 
   export const decryptGroupEncryptionWithSharingKey = async ({ data64EncryptedData, key }: any) => {
 

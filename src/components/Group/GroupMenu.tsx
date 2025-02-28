@@ -73,13 +73,13 @@ export const GroupMenu = ({ setGroupSection, groupSection, setOpenManageMembers,
             }}
           >
             {groupSection === "announcement" &&(
-                 <> <NotificationIcon2 color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'}  /> {" Announcements"}</>
+                 <> <NotificationIcon2 color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--danger)' : 'white'}  /> {" Announcements"}</>
             )}
              {groupSection === "chat" &&(
-                 <> <ChatIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'} /> {" Group Chats"}</>
+                 <> <ChatIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--danger)' : 'white'} /> {" Group Chats"}</>
             )}
              {groupSection === "forum" &&(
-                 <> <ThreadsIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--unread)' : 'white'} /> {" Threads"}</>
+                 <> <ThreadsIcon color={hasUnreadAnnouncements || hasUnreadChat ? 'var(--danger)' : 'white'} /> {" Threads"}</>
             )}
           </Box>
           <ArrowDownIcon color="white" />
@@ -128,13 +128,13 @@ export const GroupMenu = ({ setGroupSection, groupSection, setOpenManageMembers,
             
             minWidth: '24px !important'
           }}>
-            <ChatIcon color={hasUnreadChat ? 'var(--unread)' : "#fff"}  />
+            <ChatIcon color={hasUnreadChat ? 'var(--danger)' : "#fff"}  />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadChat ? "var(--unread)" :"#fff"
+                    color: hasUnreadChat ? "var(--danger)" :"#fff"
                   },
                 }} primary="Chat" />
         </MenuItem>
@@ -148,13 +148,13 @@ export const GroupMenu = ({ setGroupSection, groupSection, setOpenManageMembers,
             
             minWidth: '24px !important'
           }}>
-          <NotificationIcon2 color={hasUnreadAnnouncements ? 'var(--unread)' : "#fff" } />
+          <NotificationIcon2 color={hasUnreadAnnouncements ? 'var(--danger)' : "#fff" } />
           </ListItemIcon>
           <ListItemText sx={{
                   "& .MuiTypography-root": {
                     fontSize: "12px",
                     fontWeight: 600,
-                    color: hasUnreadAnnouncements ? "var(--unread)" :"#fff"
+                    color: hasUnreadAnnouncements ? "var(--danger)" :"#fff"
                   },
                 }} primary="Announcements" />
         </MenuItem>

@@ -1,7 +1,7 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppsHomeDesktop } from "./AppsHomeDesktop";
 import { Spacer } from "../../common/Spacer";
-import { MyContext, getBaseApiReact } from "../../App";
+import { GlobalContext, MyContext, getBaseApiReact } from "../../App";
 import { AppInfo } from "./AppInfo";
 import {
   executeEvent,
@@ -39,6 +39,8 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
   const [categories, setCategories] = useState([])
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+  const { showTutorial } = useContext(GlobalContext);
+
   const myApp = useMemo(()=> {
    
    return availableQapps.find((app)=> app.name === myName && app.service === 'APP')
@@ -47,6 +49,13 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
    
     return availableQapps.find((app)=> app.name === myName && app.service === 'WEBSITE')
    }, [myName, availableQapps])
+
+
+   useEffect(()=> {
+    if(show){
+      showTutorial('qapps')
+    }
+  }, [show])
 
   useEffect(() => {
     setTimeout(() => {
@@ -381,7 +390,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
               height={30}
               color={
                 hasUnreadDirects
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isDirects
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"
@@ -399,7 +408,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
               height={30}
               color={
                 hasUnreadGroups
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isGroups
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"
@@ -407,7 +416,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             />
      
         </ButtonBase> */}
-        <Save isDesktop disableWidth />
+        <Save isDesktop disableWidth myName={myName}/>
         {isEnabledDevMode && (
            <ButtonBase
            onClick={() => {
@@ -441,7 +450,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-        <AppsHomeDesktop availableQapps={availableQapps}  setMode={setMode} myApp={myApp} myWebsite={myWebsite} />
+        <AppsHomeDesktop myName={myName} availableQapps={availableQapps}  setMode={setMode} myApp={myApp} myWebsite={myWebsite} />
         </Box>
       )}
     
@@ -470,6 +479,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
             isSelected={tab?.tabId === selectedTab?.tabId}
             app={tab}
             ref={iframeRefs.current[tab.tabId]}
+            isDevMode={tab?.service ? false : true}
           />
         );
       })}
@@ -485,7 +495,7 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
         }}>
 
          <Spacer height="30px" />
-          <AppsHomeDesktop availableQapps={availableQapps} setMode={setMode} myApp={myApp} myWebsite={myWebsite}  />
+          <AppsHomeDesktop myName={myName} availableQapps={availableQapps} setMode={setMode} myApp={myApp} myWebsite={myWebsite}  />
           </Box>
         </>
       )}

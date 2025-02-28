@@ -92,21 +92,6 @@ export const MessageQueueProvider = ({ children }) => {
 
         // Remove the message from the queue after successful sending
         messageQueueRef.current.shift();
-        // Remove the message from queueChats
-        setQueueChats((prev) => {
-          const updatedChats = { ...prev };
-          if (updatedChats[groupDirectId]) {
-            updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
-              (item) => item.identifier !== identifier
-            );
-
-            // If no more chats for this group, delete the groupDirectId entry
-            if (updatedChats[groupDirectId].length === 0) {
-              delete updatedChats[groupDirectId];
-            }
-          }
-          return updatedChats;
-        });
 
       } catch (error) {
         console.error('Message sending failed', error);
@@ -142,15 +127,25 @@ export const MessageQueueProvider = ({ children }) => {
 
   // Method to process with new messages and groupDirectId
   const processWithNewMessages = (newMessages, groupDirectId) => {
+    let updatedNewMessages = newMessages
     if (newMessages.length > 0) {
-      messageQueueRef.current = messageQueueRef.current.filter((msg) => {
-        return !newMessages.some(newMsg => newMsg?.specialId === msg?.specialId);
-      });
-
       // Remove corresponding entries in queueChats for the provided groupDirectId
       setQueueChats((prev) => {
         const updatedChats = { ...prev };
         if (updatedChats[groupDirectId]) {
+  
+          updatedNewMessages = newMessages?.map((msg)=> {
+            const findTempMsg = updatedChats[groupDirectId]?.find((msg2)=> msg2?.message?.specialId === msg?.specialId)
+            if(findTempMsg){
+              return {
+                ...msg,
+                tempSignature: findTempMsg?.signature
+              }
+            }
+            return msg
+          })
+        
+
           updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
             return !newMessages.some(newMsg => newMsg?.specialId === chat?.message?.specialId);
           });
@@ -167,8 +162,23 @@ export const MessageQueueProvider = ({ children }) => {
         }
         return updatedChats;
       });
+      
     }
-
+    setTimeout(() => {
+      if(!messageQueueRef.current.find((msg) => msg?.groupDirectId === groupDirectId)){
+        setQueueChats((prev) => {
+          const updatedChats = { ...prev };
+          if (updatedChats[groupDirectId]) {
+            delete  updatedChats[groupDirectId]
+          }
+  
+          return updatedChats
+        }
+          )
+      }
+    }, 300);
+    
+    return updatedNewMessages
   };
 
   return (

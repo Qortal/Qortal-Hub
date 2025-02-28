@@ -46,7 +46,7 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
       if(isDevMode){
         
         resetHistory()
-        if(!app?.isPreview){
+        if(!app?.isPreview || app?.isPrivate){
           setUrl(app?.url + `?time=${Date.now()}`)
         }
         return
@@ -189,7 +189,8 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) 
           height: !isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px )`,
           border: 'none',
           width: '100%'
-        }} id="browser-iframe" src={defaultUrl} sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals" allow="fullscreen">
+        }} id="browser-iframe" src={defaultUrl}   sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals" 
+        allow="fullscreen; clipboard-read; clipboard-write">
     						
     						</iframe>
     </Box>

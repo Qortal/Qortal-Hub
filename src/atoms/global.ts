@@ -40,6 +40,14 @@ export const sortablePinnedAppsAtom = atom({
   {
     name: 'Q-Manager',
     service: 'APP'
+  },
+  {
+    name: 'Q-Blog',
+    service: 'APP'
+  },
+  {
+    name: 'Q-Mintership',
+    service: 'APP'
   }
 ], 
 });
@@ -63,6 +71,11 @@ export const oldPinnedAppsAtom = atom({
   key: 'oldPinnedAppsAtom', 
   default: [], 
 });
+export const isUsingImportExportSettingsAtom = atom({
+  key: 'isUsingImportExportSettingsAtom', 
+  default: null, 
+});
+
 
 export const fullScreenAtom = atom({
   key: 'fullScreenAtom', 
@@ -128,4 +141,32 @@ export const blobKeySelector = selectorFamily({
 export const selectedGroupIdAtom = atom({
   key: 'selectedGroupIdAtom', 
   default: null, 
+});
+
+export const addressInfoControllerAtom = atom({
+  key: 'addressInfoControllerAtom', 
+  default: {}, 
+});
+
+export const addressInfoKeySelector = selectorFamily({
+  key: 'addressInfoKeySelector',
+  get: (key) => ({ get }) => {
+    const userInfo = get(addressInfoControllerAtom);
+    return userInfo[key] || null; // Return the value for the key or null if not found
+  },
+});
+
+export const isDisabledEditorEnterAtom = atom({
+  key: 'isDisabledEditorEnterAtom', 
+  default: false, 
+});
+
+export const qMailLastEnteredTimestampAtom = atom({
+  key: 'qMailLastEnteredTimestampAtom', 
+  default: null, 
+});
+
+export const mailsAtom = atom({
+  key: 'mailsAtom', 
+  default: [], 
 });

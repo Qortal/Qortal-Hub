@@ -11,7 +11,7 @@ import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../atoms/global';
 import { AppsIcon } from '../assets/Icons/AppsIcon';
 
-export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDirects, hasUnreadDirects, isDirects, toggleSideViewGroups,hasUnreadGroups, isGroups, isApps, setDesktopViewMode, desktopViewMode }) => {
+export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDirects, hasUnreadDirects, isDirects, toggleSideViewGroups,hasUnreadGroups, isGroups, isApps, setDesktopViewMode, desktopViewMode, myName }) => {
     const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
 
   return (
@@ -90,7 +90,7 @@ export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDire
               height={30}
               color={
                 hasUnreadGroups
-                  ? "var(--unread)"
+                  ? "var(--danger)"
                   : isGroups
                   ? "white"
                   : "rgba(250, 250, 250, 0.5)"
@@ -98,7 +98,7 @@ export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDire
             />
      
         </ButtonBase> */}
-        <Save isDesktop disableWidth />
+        <Save isDesktop disableWidth myName={myName} />
         {/* <CoreSyncStatus imageSize="30px" position="left" /> */}
         {isEnabledDevMode && (
           <ButtonBase
