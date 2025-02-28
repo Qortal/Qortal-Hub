@@ -12,7 +12,7 @@ export function formatTimestamp(timestamp: number): string {
     } else if (elapsedTime < 1440) {
       return `${Math.floor(elapsedTime / 60)}h ago`
     } else {
-      return timestampMoment.format('MMM D')
+      return timestampMoment.format('MMM D, YYYY')
     }
   }
   export function formatTimestampForum(timestamp: number): string {

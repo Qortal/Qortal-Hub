@@ -1,4 +1,4 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useMemo, useState } from "react";
 import {
   Avatar,
   Box,
@@ -18,7 +18,7 @@ import {
 import { useDropzone } from "react-dropzone";
 import { useHandlePrivateApps } from "./useHandlePrivateApps";
 import { useRecoilState, useSetRecoilState } from "recoil";
-import { myGroupsWhereIAmAdminAtom } from "../../atoms/global";
+import { groupsPropertiesAtom, myGroupsWhereIAmAdminAtom } from "../../atoms/global";
 import { Label } from "../Group/AddGroup";
 import { Spacer } from "../../common/Spacer";
 import {
@@ -43,14 +43,22 @@ export const AppsPrivate = ({myName}) => {
   const [logo, setLogo] = useState(null);
   const [qortalUrl, setQortalUrl] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(0);
-
+  const [groupsProperties] = useRecoilState(groupsPropertiesAtom)
   const [valueTabPrivateApp, setValueTabPrivateApp] = useState(0);
-  const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useRecoilState(
+  const [myGroupsWhereIAmAdminFromGlobal] = useRecoilState(
     myGroupsWhereIAmAdminAtom
   );
+
+  const myGroupsWhereIAmAdmin = useMemo(()=> {
+    return myGroupsWhereIAmAdminFromGlobal?.filter((group)=> groupsProperties[group?.groupId]?.isOpen === false)
+  }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties])
   const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
   const { show, setInfoSnackCustom, setOpenSnackGlobal, memberGroups } = useContext(MyContext);
+  
 
+  const myGroupsPrivate = useMemo(()=> {
+    return memberGroups?.filter((group)=> groupsProperties[group?.groupId]?.isOpen === false)
+  }, [memberGroups, groupsProperties])
   const [privateAppValues, setPrivateAppValues] = useState({
     name: "",
     service: "DOCUMENT",
@@ -95,7 +103,7 @@ export const AppsPrivate = ({myName}) => {
       
      await openApp(privateAppValues, true);
     } catch (error) {
-        console.log('error', error?.message)
+        console.error(error)
       
     }
   };
@@ -311,7 +319,7 @@ export const AppsPrivate = ({myName}) => {
                   >
                     <MenuItem value={0}>No group selected</MenuItem>
 
-                    {memberGroups
+                    {myGroupsPrivate
                       ?.filter((item) => !item?.isOpen)
                       .map((group) => {
                         return (

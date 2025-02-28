@@ -35,6 +35,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import Logo2 from "./assets/svgs/Logo2.svg";
 import Copy from "./assets/svgs/Copy.svg";
 import ltcLogo from "./assets/ltc.png";
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from "./assets/qort.png";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import Download from "./assets/svgs/Download.svg";
@@ -113,6 +114,7 @@ import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
   fullScreenAtom,
+  groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isUsingImportExportSettingsAtom,
@@ -145,6 +147,8 @@ import { QMailStatus } from "./components/QMailStatus";
 import { GlobalActions } from "./components/GlobalActions/GlobalActions";
 import { useBlockedAddresses } from "./components/Group/useBlockUsers";
 import { WalletIcon } from "./assets/Icons/WalletIcon";
+import { DrawerUserLookup } from "./components/Drawer/DrawerUserLookup";
+import { UserLookup } from "./components/UserLookup.tsx/UserLookup";
 
 type extStates =
   | "not-authenticated"
@@ -400,6 +404,7 @@ function App() {
   const [openSnack, setOpenSnack] = useState(false);
   const [hasLocalNode, setHasLocalNode] = useState(false);
   const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
+  const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false)
   const [apiKey, setApiKey] = useState("");
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
@@ -488,7 +493,7 @@ function App() {
   const resetAtomOldPinnedAppsAtom = useResetRecoilState(oldPinnedAppsAtom);
   const resetAtomQMailLastEnteredTimestampAtom = useResetRecoilState(qMailLastEnteredTimestampAtom)
   const resetAtomMailsAtom = useResetRecoilState(mailsAtom)
-
+  const resetGroupPropertiesAtom = useResetRecoilState(groupsPropertiesAtom)
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
@@ -498,6 +503,8 @@ function App() {
     resetAtomIsUsingImportExportSettingsAtom()
     resetAtomQMailLastEnteredTimestampAtom()
     resetAtomMailsAtom()
+    resetGroupPropertiesAtom()
+    
   };
   useEffect(() => {
     if (!isMobile) return;
@@ -1696,6 +1703,38 @@ function App() {
                 />
               </Tooltip>
             </ButtonBase>
+            <Spacer height="20px" />
+            <ButtonBase
+              onClick={() => {
+                setIsOpenDrawerLookup(true);
+              }}
+            >
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>USER LOOKUP</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
+                <PersonSearchIcon
+                  sx={{
+                    color: "rgba(255, 255, 255, 0.5)",
+                  }}
+                />
+              </Tooltip>
+            </ButtonBase>
           
             {desktopViewMode !== 'home' && (
               <>
@@ -2055,7 +2094,7 @@ function App() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            zIndex: 6,
+            zIndex: 10000,
           }}
         >
           <Spacer height="22px" />
@@ -3110,7 +3149,7 @@ function App() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            zIndex: 6,
+            zIndex: 10000,
           }}
         >
           <Spacer height="48px" />
@@ -3210,6 +3249,9 @@ function App() {
           open={isShow}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
+          sx={{
+            zIndex: 10001
+          }}
         >
           <DialogTitle id="alert-dialog-title">{message.paymentFee ? "Payment"  : "Publish"}</DialogTitle>
           <DialogContent>
@@ -3635,7 +3677,7 @@ function App() {
       >
         {renderProfileLeft()}
       </DrawerComponent>
-
+      <UserLookup isOpenDrawerLookup={isOpenDrawerLookup} setIsOpenDrawerLookup={setIsOpenDrawerLookup} />
       </GlobalContext.Provider>
       {extState === "create-wallet" && walletToBeDownloaded && (
          <ButtonBase onClick={()=> {
