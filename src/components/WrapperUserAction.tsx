@@ -121,24 +121,6 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
              >
                Copy address
              </Button>
-
-             <Button
-               variant="text"
-               onClick={() => {
-               executeEvent('openPaymentInternal', {
-                       address,
-                       name,
-               });
-                 handleClose();
-                
-               }}
-               sx={{
-                   color: 'white',
-                   justifyContent: 'flex-start'
-               }}
-             >
-               Send QORT
-             </Button>
              <Button
                variant="text"
                onClick={() => {
