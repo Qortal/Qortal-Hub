@@ -126,6 +126,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
           }}
         >
           <TextField
+          autoFocus
             value={nameOrAddress}
             onChange={(e) => setNameOrAddress(e.target.value)}
             size="small"
