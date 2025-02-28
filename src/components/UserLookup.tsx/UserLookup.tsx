@@ -102,7 +102,16 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
       };
     }, [openUserLookupDrawerFunc]);
 
-  
+ const onClose = ()=> {
+    setIsOpenDrawerLookup(false)
+    setNameOrAddress('')
+    setErrorMessage('')
+    setPayments([])
+    setIsLoadingUser(false)
+    setIsLoadingPayments(false)
+    setAddressInfo(null)
+ }
+
 
   return (
     <DrawerUserLookup open={isOpenDrawerLookup} setOpen={setIsOpenDrawerLookup}>
@@ -138,7 +147,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
               }
             }}
           />
-          <ButtonBase onClick={lookupFunc} >
+          <ButtonBase onClick={()=> {
+            lookupFunc();
+          }} >
            <SearchIcon sx={{
             color: 'white',
              marginRight: '20px'
@@ -148,7 +159,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             marginLeft: 'auto',
            
           }} onClick={()=> {
-            setIsOpenDrawerLookup(false)
+           onClose()
           }}>
             <CloseFullscreenIcon sx={{
                 color: 'white'
