@@ -144,6 +144,7 @@ import { isRunningGateway } from "./qortalRequests";
 import { QMailStatus } from "./components/QMailStatus";
 import { GlobalActions } from "./components/GlobalActions/GlobalActions";
 import { useBlockedAddresses } from "./components/Group/useBlockUsers";
+import { WalletIcon } from "./assets/Icons/WalletIcon";
 
 type extStates =
   | "not-authenticated"
@@ -1334,6 +1335,244 @@ function App() {
     }
   };
 
+  const renderProfileLeft = ()=> {
+
+    return <AuthenticatedContainerInnerLeft
+    sx={{
+      overflowY: isMobile && "auto",
+      padding: "0px 20px",
+      minWidth: "225px",
+    }}
+  >
+    <Spacer height="20px" />
+    <Box sx={{
+      width: '100%',
+      display: 'flex',
+      justifyContent: 'flex-start'
+    }}>
+        {authenticatedMode === "qort" && (
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>LITECOIN WALLET</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
+                <img
+                  onClick={() => {
+                   
+                    setAuthenticatedMode("ltc");
+                  }}
+                  src={ltcLogo}
+                  style={{
+                    cursor: "pointer",
+                    width: "20px",
+                    height: "auto",
+                  }}
+                />
+              </Tooltip>
+            )}
+            {authenticatedMode === "ltc" && (
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>QORTAL WALLET</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
+                <img
+                  onClick={() => {
+                    setAuthenticatedMode("qort");
+                  }}
+                  src={qortLogo}
+                  style={{
+                    cursor: "pointer",
+                    width: "20px",
+                    height: "auto",
+                  }}
+                />
+              </Tooltip>
+            )}
+            </Box>
+    <Spacer height="48px" />
+
+    {authenticatedMode === "ltc" ? (
+      <>
+        <img src={ltcLogo} />
+        <Spacer height="32px" />
+        <CopyToClipboard text={rawWallet?.ltcAddress}>
+          <AddressBox>
+            {rawWallet?.ltcAddress?.slice(0, 6)}...
+            {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
+          </AddressBox>
+        </CopyToClipboard>
+        <Spacer height="10px" />
+        {ltcBalanceLoading && (
+          <CircularProgress color="success" size={16} />
+        )}
+        {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
+          <Box
+            sx={{
+              gap: "10px",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <TextP
+              sx={{
+                textAlign: "center",
+                lineHeight: "24px",
+                fontSize: "20px",
+                fontWeight: 700,
+              }}
+            >
+              {ltcBalance} LTC
+            </TextP>
+            <RefreshIcon
+              onClick={getLtcBalanceFunc}
+              sx={{
+                fontSize: "16px",
+                color: "white",
+                cursor: "pointer",
+              }}
+            />
+          </Box>
+        )}
+        <AddressQRCode targetAddress={rawWallet?.ltcAddress} />
+      </>
+    ) : (
+      <>
+        <MainAvatar myName={userInfo?.name} />
+        <Spacer height="32px" />
+        <TextP
+          sx={{
+            textAlign: "center",
+            lineHeight: "24px",
+            fontSize: "20px",
+          }}
+        >
+          {userInfo?.name}
+        </TextP>
+        <Spacer height="10px" />
+        <CopyToClipboard text={rawWallet?.address0}>
+          <AddressBox>
+            {rawWallet?.address0?.slice(0, 6)}...
+            {rawWallet?.address0?.slice(-4)} <img src={Copy} />
+          </AddressBox>
+        </CopyToClipboard>
+        <Spacer height="10px" />
+        {qortBalanceLoading && (
+          <CircularProgress color="success" size={16} />
+        )}
+        {!qortBalanceLoading && balance >= 0 && (
+          <Box
+            sx={{
+              gap: "10px",
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            <TextP
+              sx={{
+                textAlign: "center",
+                lineHeight: "24px",
+                fontSize: "20px",
+                fontWeight: 700,
+              }}
+            >
+              {balance?.toFixed(2)} QORT
+            </TextP>
+            <RefreshIcon
+              onClick={getBalanceFunc}
+              sx={{
+                fontSize: "16px",
+                color: "white",
+                cursor: "pointer",
+              }}
+            />
+          </Box>
+        )}
+
+        <Spacer height="35px" />
+        {userInfo && !userInfo?.name && (
+          <TextP
+            ref={registerNamePopoverRef}
+            sx={{
+              textAlign: "center",
+              lineHeight: 1.2,
+              fontSize: "16px",
+              fontWeight: 500,
+              cursor: "pointer",
+              marginTop: "10px",
+              color: "red",
+              textDecoration: "underline",
+            }}
+            onClick={() => {
+              setOpenRegisterName(true);
+            }}
+          >
+            REGISTER NAME
+          </TextP>
+        )}
+        <Spacer height="20px" />
+        <CustomButton
+          onClick={() => {
+            setIsOpenSendQort(true);
+            // setExtstate("send-qort");
+            setIsOpenDrawerProfile(false);
+          }}
+        >
+          Transfer QORT
+        </CustomButton>
+        <AddressQRCode targetAddress={rawWallet?.address0} />
+      </>
+    )}
+    <TextP
+      sx={{
+        textAlign: "center",
+        lineHeight: "24px",
+        fontSize: "12px",
+        fontWeight: 500,
+        cursor: "pointer",
+        marginTop: "10px",
+        textDecoration: "underline",
+      }}
+      onClick={async () => {
+        executeEvent("addTab", {
+          data: { service: "APP", name: "q-trade" },
+        });
+        executeEvent("open-apps-mode", {});
+      }}
+    >
+      Get QORT at Q-Trade
+    </TextP>
+  </AuthenticatedContainerInnerLeft>
+  }
+
   const renderProfile = () => {
     return (
       <AuthenticatedContainer
@@ -1366,166 +1605,9 @@ function App() {
         {desktopViewMode !== "apps" &&
           desktopViewMode !== "dev" &&
           desktopViewMode !== "chat" && (
-            <AuthenticatedContainerInnerLeft
-              sx={{
-                overflowY: isMobile && "auto",
-                padding: "0px 20px",
-                minWidth: "225px",
-              }}
-            >
-              <Spacer height="48px" />
-
-              {authenticatedMode === "ltc" ? (
-                <>
-                  <img src={ltcLogo} />
-                  <Spacer height="32px" />
-                  <CopyToClipboard text={rawWallet?.ltcAddress}>
-                    <AddressBox>
-                      {rawWallet?.ltcAddress?.slice(0, 6)}...
-                      {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
-                    </AddressBox>
-                  </CopyToClipboard>
-                  <Spacer height="10px" />
-                  {ltcBalanceLoading && (
-                    <CircularProgress color="success" size={16} />
-                  )}
-                  {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
-                    <Box
-                      sx={{
-                        gap: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      <TextP
-                        sx={{
-                          textAlign: "center",
-                          lineHeight: "24px",
-                          fontSize: "20px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {ltcBalance} LTC
-                      </TextP>
-                      <RefreshIcon
-                        onClick={getLtcBalanceFunc}
-                        sx={{
-                          fontSize: "16px",
-                          color: "white",
-                          cursor: "pointer",
-                        }}
-                      />
-                    </Box>
-                  )}
-                  <AddressQRCode targetAddress={rawWallet?.ltcAddress} />
-                </>
-              ) : (
-                <>
-                  <MainAvatar myName={userInfo?.name} />
-                  <Spacer height="32px" />
-                  <TextP
-                    sx={{
-                      textAlign: "center",
-                      lineHeight: "24px",
-                      fontSize: "20px",
-                    }}
-                  >
-                    {userInfo?.name}
-                  </TextP>
-                  <Spacer height="10px" />
-                  <CopyToClipboard text={rawWallet?.address0}>
-                    <AddressBox>
-                      {rawWallet?.address0?.slice(0, 6)}...
-                      {rawWallet?.address0?.slice(-4)} <img src={Copy} />
-                    </AddressBox>
-                  </CopyToClipboard>
-                  <Spacer height="10px" />
-                  {qortBalanceLoading && (
-                    <CircularProgress color="success" size={16} />
-                  )}
-                  {!qortBalanceLoading && balance >= 0 && (
-                    <Box
-                      sx={{
-                        gap: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                      }}
-                    >
-                      <TextP
-                        sx={{
-                          textAlign: "center",
-                          lineHeight: "24px",
-                          fontSize: "20px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {balance?.toFixed(2)} QORT
-                      </TextP>
-                      <RefreshIcon
-                        onClick={getBalanceFunc}
-                        sx={{
-                          fontSize: "16px",
-                          color: "white",
-                          cursor: "pointer",
-                        }}
-                      />
-                    </Box>
-                  )}
-
-                  <Spacer height="35px" />
-                  {userInfo && !userInfo?.name && (
-                    <TextP
-                      ref={registerNamePopoverRef}
-                      sx={{
-                        textAlign: "center",
-                        lineHeight: 1.2,
-                        fontSize: "16px",
-                        fontWeight: 500,
-                        cursor: "pointer",
-                        marginTop: "10px",
-                        color: "red",
-                        textDecoration: "underline",
-                      }}
-                      onClick={() => {
-                        setOpenRegisterName(true);
-                      }}
-                    >
-                      REGISTER NAME
-                    </TextP>
-                  )}
-                  <Spacer height="20px" />
-                  <CustomButton
-                    onClick={() => {
-                      setIsOpenSendQort(true);
-                      // setExtstate("send-qort");
-                      setIsOpenDrawerProfile(false);
-                    }}
-                  >
-                    Transfer QORT
-                  </CustomButton>
-                  <AddressQRCode targetAddress={rawWallet?.address0} />
-                </>
-              )}
-              <TextP
-                sx={{
-                  textAlign: "center",
-                  lineHeight: "24px",
-                  fontSize: "12px",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  marginTop: "10px",
-                  textDecoration: "underline",
-                }}
-                onClick={async () => {
-                  executeEvent("addTab", {
-                    data: { service: "APP", name: "q-trade" },
-                  });
-                  executeEvent("open-apps-mode", {});
-                }}
-              >
-                Get QORT at Q-Trade
-              </TextP>
-            </AuthenticatedContainerInnerLeft>
+            <>
+            {renderProfileLeft()}
+            </>
           )}
 
         <AuthenticatedContainerInnerRight
@@ -1614,8 +1696,42 @@ function App() {
                 />
               </Tooltip>
             </ButtonBase>
-            <Spacer height="20px" />
-            {authenticatedMode === "qort" && (
+          
+            {desktopViewMode !== 'home' && (
+              <>
+                <Spacer height="20px" />
+             
+               <Tooltip
+               title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>WALLET</span>} 
+               placement="left"
+               arrow
+               sx={{ fontSize: "24" }}
+               slotProps={{
+                 tooltip: {
+                   sx: {
+                     color: "#ffffff",
+                     backgroundColor: "#444444",
+                   },
+                 },
+                 arrow: {
+                   sx: {
+                     color: "#444444",
+                   },
+                 },
+               }}
+             >
+                <ButtonBase onClick={() => {
+                  setIsOpenDrawerProfile(true);
+                }}>
+
+              <WalletIcon width={25} color="rgba(250, 250, 250, 0.5)" />
+
+              </ButtonBase>
+              </Tooltip>
+              </>
+            )}
+          
+            {/* {authenticatedMode === "qort" && (
               <Tooltip
                 title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>LITECOIN WALLET</span>} 
                 placement="left"
@@ -1637,6 +1753,9 @@ function App() {
               >
                 <img
                   onClick={() => {
+                    if(desktopViewMode !== 'home'){
+                      setIsOpenDrawerProfile((prev)=> !prev)
+                    }
                     setAuthenticatedMode("ltc");
                   }}
                   src={ltcLogo}
@@ -1680,7 +1799,7 @@ function App() {
                   }}
                 />
               </Tooltip>
-            )}
+            )} */}
             <Spacer height="20px" />
             <CoreSyncStatus />
             <Spacer height="20px" />
@@ -3514,7 +3633,7 @@ function App() {
         open={isOpenDrawerProfile}
         setOpen={setIsOpenDrawerProfile}
       >
-        {renderProfile()}
+        {renderProfileLeft()}
       </DrawerComponent>
 
       </GlobalContext.Provider>
