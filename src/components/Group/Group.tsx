@@ -74,8 +74,8 @@ import { HubsIcon } from "../../assets/Icons/HubsIcon";
 import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { formatEmailDate } from "./QMailMessages";
 import { AdminSpace } from "../Chat/AdminSpace";
-import { useSetRecoilState } from "recoil";
-import { addressInfoControllerAtom, selectedGroupIdAtom } from "../../atoms/global";
+import { useRecoilState, useSetRecoilState } from "recoil";
+import { addressInfoControllerAtom, groupsPropertiesAtom, selectedGroupIdAtom } from "../../atoms/global";
 import { sortArrayByTimestampAndGroupName } from "../../utils/time";
 import BlockIcon from '@mui/icons-material/Block';
 import LockIcon from '@mui/icons-material/Lock';
@@ -446,7 +446,7 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false)
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] = useState(false)
 
-  const [groupsProperties, setGroupsProperties] = useState({})
+  const [groupsProperties, setGroupsProperties] = useRecoilState(groupsPropertiesAtom)
   const setUserInfoForLevels = useSetRecoilState(addressInfoControllerAtom);
 
   const isPrivate = useMemo(()=> {

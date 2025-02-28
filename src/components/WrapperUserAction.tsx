@@ -121,6 +121,42 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
              >
                Copy address
              </Button>
+
+             <Button
+               variant="text"
+               onClick={() => {
+               executeEvent('openPaymentInternal', {
+                       address,
+                       name,
+               });
+                 handleClose();
+                
+               }}
+               sx={{
+                   color: 'white',
+                   justifyContent: 'flex-start'
+               }}
+             >
+               Send QORT
+             </Button>
+             <Button
+               variant="text"
+               onClick={() => {
+                 executeEvent('openUserLookupDrawer', {
+                  addressOrName: name || address
+                 })
+                 handleClose();
+                
+               }}
+               sx={{
+                   color: 'white',
+                   justifyContent: 'flex-start'
+               }}
+             >
+              User lookup
+             </Button>
+
+             
              <BlockUser handleClose={handleClose} address={address} name={name} />
            </Box>
          </Popover>

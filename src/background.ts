@@ -845,7 +845,7 @@ export async function getNameInfoForOthers(address) {
     return "";
   }
 }
-async function getAddressInfo(address) {
+export async function getAddressInfo(address) {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + "/addresses/" + address);
   const data = await response.json();

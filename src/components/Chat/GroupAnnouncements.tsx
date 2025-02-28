@@ -194,7 +194,7 @@ export const GroupAnnouncements = ({
         };
       });
     } catch (error) {
-      console.log("error", error);
+      console.error("error", error);
     }
   };
 
