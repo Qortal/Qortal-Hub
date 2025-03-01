@@ -12,27 +12,17 @@ import { Box, Typography } from "@mui/material";
 import { Spacer } from "../../common/Spacer";
 import { isMobile } from "../../App";
 import { QMailMessages } from "./QMailMessages";
+import { executeEvent } from "../../utils/events";
 
 export const ThingsToDoInitial = ({ myAddress, name, hasGroups, balance, userInfo }) => {
   const [checked1, setChecked1] = React.useState(false);
   const [checked2, setChecked2] = React.useState(false);
-  const [checked3, setChecked3] = React.useState(false);
+  // const [checked3, setChecked3] = React.useState(false);
 
-  //   const getAddressInfo = async (address) => {
-  //     const response = await fetch(getBaseApiReact() + "/addresses/" + address);
-  //     const data = await response.json();
-  //     if (data.error && data.error === 124) {
-  //       setChecked1(false);
-  //     } else if (data.address) {
-  //       setChecked1(true);
-  //     }
-  //   };
+  // React.useEffect(() => {
+  //   if (hasGroups) setChecked3(true);
+  // }, [hasGroups]);
 
-  //   const checkInfo = async () => {
-  //     try {
-  //       getAddressInfo(myAddress);
-  //     } catch (error) {}
-  //   };
 
   React.useEffect(() => {
     if (balance && +balance >= 6) {
@@ -40,9 +30,6 @@ export const ThingsToDoInitial = ({ myAddress, name, hasGroups, balance, userInf
     }
   }, [balance]);
 
-  React.useEffect(() => {
-    if (hasGroups) setChecked3(true);
-  }, [hasGroups]);
 
   React.useEffect(() => {
     if (name) setChecked2(true);
@@ -120,11 +107,14 @@ if(!isLoaded) return null
                disableRipple
                role={undefined}
                dense
+               onClick={()=> {
+                executeEvent("openBuyQortInfo", {})
+               }}
              >
                <ListItemText
                  sx={{
                    "& .MuiTypography-root": {
-                     fontSize: "13px",
+                     fontSize: "1rem",
                      fontWeight: 400,
                    },
                  }}
@@ -181,9 +171,11 @@ if(!isLoaded) return null
                  padding: "0px",
                }} disableRipple role={undefined} dense>
                
-               <ListItemText   sx={{
+               <ListItemText  onClick={() => {
+                             executeEvent('openRegisterName', {})
+                           }}  sx={{
                    "& .MuiTypography-root": {
-                     fontSize: "13px",
+                     fontSize: "1rem",
                      fontWeight: 400,
                    },
                  }} primary={`Register a name`} />
@@ -202,16 +194,7 @@ if(!isLoaded) return null
                </ListItemIcon>
              </ListItemButton>
            </ListItem>
-           <ListItem
-             //  secondaryAction={
-             //     <IconButton edge="end" aria-label="comments">
-             //       <InfoIcon
-             //         sx={{
-             //           color: "white",
-             //         }}
-             //       />
-             //     </IconButton>
-             //   }
+           {/* <ListItem
              disablePadding
            >
              <ListItemButton sx={{
@@ -238,7 +221,7 @@ if(!isLoaded) return null
                  />
                </ListItemIcon>
              </ListItemButton>
-           </ListItem>
+           </ListItem> */}
          </List>
         )}
        
