@@ -24,6 +24,10 @@ const theme = createTheme({
       secondary: '#b0b0b0',  // Light gray for secondary text
       disabled: '#808080',  // Gray for disabled text
     },
+    action: {
+      // disabledBackground: 'set color of background here',
+      disabled: 'rgb(255 255 255 / 70%)'
+    }
   },
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif', // Font family

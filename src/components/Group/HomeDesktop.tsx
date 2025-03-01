@@ -14,6 +14,7 @@ import { NewUsersCTA } from "../Home/NewUsersCTA";
 export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
+  name,
   isLoadingGroups,
   balance,
   userInfo,
@@ -27,6 +28,31 @@ export const HomeDesktop = ({
   setDesktopViewMode,
   desktopViewMode,
 }) => {
+  const [checked1, setChecked1] = React.useState(false);
+  const [checked2, setChecked2] = React.useState(false);
+  React.useEffect(() => {
+      if (balance && +balance >= 6) {
+        setChecked1(true);
+      }
+    }, [balance]);
+  
+  
+    React.useEffect(() => {
+      if (name) setChecked2(true);
+    }, [name]);
+  
+  
+    const isLoaded = React.useMemo(()=> {
+        if(userInfo !== null) return true
+      return false
+    }, [ userInfo])
+  
+    const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(()=> {
+      if(isLoaded && checked1 && checked2) return true
+    return false
+  }, [checked1, isLoaded, checked2])
+
+ 
   return (
     <Box
       sx={{
@@ -114,7 +140,9 @@ export const HomeDesktop = ({
           }}>
           <ListOfThreadPostsWatched />
           </Box> */}
-                  <Box
+              {hasDoneNameAndBalanceAndIsLoaded && (
+                <>
+ <Box
                     sx={{
                       width: "330px",
                       display: "flex",
@@ -148,6 +176,9 @@ export const HomeDesktop = ({
                       setMobileViewMode={setMobileViewMode}
                     />
                   </Box>
+                </>
+              )}
+                 
                 </>
               )}
             </Box>
@@ -185,6 +216,9 @@ export const HomeDesktop = ({
             </Typography>{" "}
           </Box>
         </Divider>
+        {!hasDoneNameAndBalanceAndIsLoaded && (
+            <Spacer height="40px" />
+          )}
           <Box
             sx={{
               display: "flex",
@@ -194,9 +228,14 @@ export const HomeDesktop = ({
               justifyContent: "center",
             }}
           >
-            <ListOfGroupPromotions />
+          {hasDoneNameAndBalanceAndIsLoaded && (
+                        <ListOfGroupPromotions />
+
+          )}
+           
             <Explore setDesktopViewMode={setDesktopViewMode} />
           </Box>
+        
           <NewUsersCTA balance={balance} />
           </>
           

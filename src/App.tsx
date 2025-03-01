@@ -149,6 +149,8 @@ import { useBlockedAddresses } from "./components/Group/useBlockUsers";
 import { WalletIcon } from "./assets/Icons/WalletIcon";
 import { DrawerUserLookup } from "./components/Drawer/DrawerUserLookup";
 import { UserLookup } from "./components/UserLookup.tsx/UserLookup";
+import { RegisterName } from "./components/RegisterName";
+import { BuyQortInformation } from "./components/BuyQortInformation";
 
 type extStates =
   | "not-authenticated"
@@ -361,6 +363,7 @@ function App() {
   const [hasSettingsChanged, setHasSettingsChanged] = useRecoilState(
     hasSettingsChangedAtom
   );
+  const balanceSetIntervalRef = useRef(null)
   const {downloadResource} = useFetchResources()
   const holdRefExtState = useRef<extStates>("not-authenticated");
   const isFocusedRef = useRef<boolean>(true);
@@ -396,10 +399,7 @@ function App() {
     message: messageQortalRequestExtension,
   } = useModal();
 
-  const [openRegisterName, setOpenRegisterName] = useState(false);
-  const registerNamePopoverRef = useRef(null);
-  const [isLoadingRegisterName, setIsLoadingRegisterName] = useState(false);
-  const [registerNameValue, setRegisterNameValue] = useState("");
+
   const [infoSnack, setInfoSnack] = useState(null);
   const [openSnack, setOpenSnack] = useState(false);
   const [hasLocalNode, setHasLocalNode] = useState(false);
@@ -702,6 +702,35 @@ function App() {
     };
   };
 
+
+  const balanceSetInterval = ()=> {
+    try {
+      if(balanceSetIntervalRef?.current){
+        clearInterval(balanceSetIntervalRef?.current);
+      }
+
+      let isCalling = false;
+      balanceSetIntervalRef.current =  setInterval(async () => {
+        if (isCalling) return;
+        isCalling = true;
+        window
+        .sendMessage("balance")
+        .then((response) => {
+          if (!response?.error && !isNaN(+response)) {
+            setBalance(response);
+          }
+               isCalling = false;
+        })
+        .catch((error) => {
+          console.error("Failed to get balance:", error);
+               isCalling = false;
+        });
+      }, 40000);
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   const getBalanceFunc = () => {
     setQortBalanceLoading(true);
     window
@@ -710,11 +739,14 @@ function App() {
         if (!response?.error && !isNaN(+response)) {
           setBalance(response);
         }
+        
         setQortBalanceLoading(false);
       })
       .catch((error) => {
         console.error("Failed to get balance:", error);
         setQortBalanceLoading(false);
+      }).finally(()=> {
+        balanceSetInterval()
       });
   };
   const getLtcBalanceFunc = () => {
@@ -1121,6 +1153,9 @@ function App() {
     setTxList([]);
     setMemberGroups([]);
     resetAllRecoil();
+    if(balanceSetIntervalRef?.current){
+      clearInterval(balanceSetIntervalRef?.current);
+    }
   };
 
   function roundUpToDecimals(number, decimals = 8) {
@@ -1275,72 +1310,7 @@ function App() {
     };
   }, []);
 
-  const registerName = async () => {
-    try {
-      if (!userInfo?.address) throw new Error("Your address was not found");
-      if(!registerNameValue) throw new Error('Enter a name')
-      const fee = await getFee("REGISTER_NAME");
-      await show({
-        message: "Would you like to register this name?",
-        publishFee: fee.fee + " QORT",
-      });
-      setIsLoadingRegisterName(true);
-      new Promise((res, rej) => {
-        window
-          .sendMessage("registerName", {
-            name: registerNameValue,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              setIsLoadingRegisterName(false);
-              setInfoSnack({
-                type: "success",
-                message:
-                  "Successfully registered. It may take a couple of minutes for the changes to propagate",
-              });
-              setOpenRegisterName(false);
-              setRegisterNameValue("");
-              setOpenSnack(true);
-              setTxList((prev) => [
-                {
-                  ...response,
-                  type: "register-name",
-                  label: `Registered name: awaiting confirmation. This may take a couple minutes.`,
-                  labelDone: `Registered name: success!`,
-                  done: false,
-                },
-                ...prev.filter((item) => !item.done),
-              ]);
-              return;
-            }
-            setInfoSnack({
-              type: "error",
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
-      });
-    } catch (error) {
-      if (error?.message) {
-        setInfoSnack({
-          type: "error",
-          message: error?.message,
-        });
-      }
-    } finally {
-      setIsLoadingRegisterName(false);
-    }
-  };
+ 
 
   const renderProfileLeft = ()=> {
 
@@ -1527,7 +1497,6 @@ function App() {
         <Spacer height="35px" />
         {userInfo && !userInfo?.name && (
           <TextP
-            ref={registerNamePopoverRef}
             sx={{
               textAlign: "center",
               lineHeight: 1.2,
@@ -1539,7 +1508,7 @@ function App() {
               textDecoration: "underline",
             }}
             onClick={() => {
-              setOpenRegisterName(true);
+              executeEvent('openRegisterName', {})
             }}
           >
             REGISTER NAME
@@ -3616,52 +3585,6 @@ function App() {
           </Box>
         </Dialog>
       )}
-      <Popover
-        open={openRegisterName}
-        anchorEl={registerNamePopoverRef.current}
-        onClose={() => {
-          setOpenRegisterName(false);
-          setRegisterNameValue("");
-        }}
-        anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
-        }}
-        transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
-        }}
-        style={{ marginTop: "8px" }}
-      >
-        <Box
-          sx={{
-            width: "325px",
-            height: "250px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "10px",
-            padding: "10px",
-          }}
-        >
-          <Label>Choose a name</Label>
-          <Input
-            onChange={(e) => setRegisterNameValue(e.target.value)}
-            value={registerNameValue}
-            placeholder="Choose a name"
-          />
-          <Spacer height="25px" />
-          <LoadingButton
-            loading={isLoadingRegisterName}
-            loadingPosition="start"
-            variant="contained"
-            disabled={!registerNameValue}
-            onClick={registerName}
-          >
-            Register Name
-          </LoadingButton>
-        </Box>
-      </Popover>
       {isSettingsOpen && (
         <Settings open={isSettingsOpen} setOpen={setIsSettingsOpen} />
       )}
@@ -3678,6 +3601,8 @@ function App() {
         {renderProfileLeft()}
       </DrawerComponent>
       <UserLookup isOpenDrawerLookup={isOpenDrawerLookup} setIsOpenDrawerLookup={setIsOpenDrawerLookup} />
+      <RegisterName balance={balance}  show={show} setTxList={setTxList} userInfo={userInfo} setOpenSnack={setOpenSnack}  setInfoSnack={setInfoSnack}/>
+      <BuyQortInformation balance={balance} />
       </GlobalContext.Provider>
       {extState === "create-wallet" && walletToBeDownloaded && (
          <ButtonBase onClick={()=> {

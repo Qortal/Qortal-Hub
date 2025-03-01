@@ -2528,6 +2528,7 @@ export const Group = ({
        
        
         <HomeDesktop
+        name={userInfo?.name}
   refreshHomeDataFunc={refreshHomeDataFunc}
   myAddress={myAddress}
   isLoadingGroups={isLoadingGroups}
