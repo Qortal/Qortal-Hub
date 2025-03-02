@@ -407,12 +407,10 @@ export const NotAuthenticated = ({
           fontSize: '18px'
         }}
       >
-        WELCOME TO <TextItalic sx={{
-          fontSize: '18px'
-        }}>YOUR</TextItalic> <br></br>
+        WELCOME TO 
         <TextSpan sx={{
           fontSize: '18px'
-        }}> QORTAL WALLET</TextSpan>
+        }}> QORTAL</TextSpan>
       </TextP>
       
       <Spacer height="30px" />
@@ -436,7 +434,7 @@ export const NotAuthenticated = ({
       >
         <CustomButton onClick={()=> setExtstate('wallets')}>
           {/* <input {...getInputProps()} /> */}
-          Wallets
+          Accounts
         </CustomButton>
         </HtmlTooltip>
         {/* <Tooltip title="Authenticate by importing your Qortal JSON file" arrow>
@@ -482,7 +480,7 @@ export const NotAuthenticated = ({
             }
           }}
         >
-          Create wallet
+          Create account
         </CustomButton>
         </HtmlTooltip>
       

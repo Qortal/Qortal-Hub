@@ -134,11 +134,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         setPassword('')
         setSeedError('')
       } else {
-        setSeedError('Could not create wallet.')
+        setSeedError('Could not create account.')
       }
 
     } catch (error) {
-      setSeedError(error?.message || 'Could not create wallet.')
+      setSeedError(error?.message || 'Could not create account.')
     } finally {
       setIsLoadingEncryptSeed(false)
     }
@@ -176,19 +176,19 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       {(wallets?.length === 0 ||
         !wallets) ? (
           <>
-            <Typography>No wallets saved</Typography>
+            <Typography>No accounts saved</Typography>
             <Spacer height="75px" />
           </>
         ): (
             <>
-            <Typography>Your saved wallets</Typography>
+            <Typography>Your saved accounts</Typography>
             <Spacer height="30px" />
           </>
         )}
 
       {rawWallet && (
         <Box>
-          <Typography>Selected Wallet:</Typography>
+          <Typography>Selected Account:</Typography>
           {rawWallet?.name && <Typography>{rawWallet.name}</Typography>}
           {rawWallet?.address0 && (
             <Typography>{rawWallet?.address0}</Typography>
@@ -267,7 +267,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           padding: '10px'
         }} {...getRootProps()}>
           <input {...getInputProps()} />
-          Add wallets
+          Add account
         </CustomButton>
         </HtmlTooltip>
       </Box>
