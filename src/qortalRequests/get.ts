@@ -679,7 +679,7 @@ export const decryptDataWithSharingKey = async (data, sender) => {
 export const getHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const resPermission = await getUserPermission(
     {
@@ -715,7 +715,7 @@ export const getHostedData = async (data, isFromExtension) => {
 export const deleteHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["hostedData"];
   const missingFields: string[] = [];
@@ -800,7 +800,7 @@ export const decryptData = async (data) => {
 export const getListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["list_name"];
   const missingFields: string[] = [];
@@ -857,7 +857,7 @@ export const getListItems = async (data, isFromExtension) => {
 export const addListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["list_name", "items"];
   const missingFields: string[] = [];
@@ -915,7 +915,7 @@ export const addListItems = async (data, isFromExtension) => {
 export const deleteListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["list_name"];
   const missingFields: string[] = [];
@@ -2575,7 +2575,7 @@ export const getForeignFee = async (data) => {
 export const updateForeignFee = async (data) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["coin", "type", "value"];
   const missingFields: string[] = [];
@@ -2675,7 +2675,7 @@ export const getServerConnectionHistory = async (data) => {
 export const setCurrentForeignServer = async (data) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
@@ -2735,7 +2735,7 @@ export const setCurrentForeignServer = async (data) => {
 export const addForeignServer = async (data) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
@@ -2795,7 +2795,7 @@ export const addForeignServer = async (data) => {
 export const removeForeignServer = async (data) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
   const requiredFields = ["coin"];
   const missingFields: string[] = [];
@@ -3362,7 +3362,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
           }, 0)
         )}
       ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
-        highlightedText: `Is using gateway: ${isGateway}`,
+        highlightedText: `Is using public node: ${isGateway}`,
         fee: "",
         foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`,
       },
@@ -3692,7 +3692,7 @@ export const adminAction = async (data, isFromExtension) => {
   }
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error("This action cannot be done through a gateway");
+    throw new Error("This action cannot be done through a public node");
   }
 
   let apiEndpoint = "";

@@ -97,7 +97,7 @@ export const CoreSyncStatus = ({imageSize, position}) => {
           <h4 className="lineHeight">{message}</h4>
           <h4 className="lineHeight">Block Height: <span style={{ color: '#03a9f4' }}>{height || ''}</span></h4>
           <h4 className="lineHeight">Connected Peers: <span style={{ color: '#03a9f4' }}>{numberOfConnections || ''}</span></h4>
-          <h4 className="lineHeight">Using gateway: <span style={{ color: '#03a9f4' }}>{isUsingGateway?.toString()}</span></h4>
+          <h4 className="lineHeight">Using public node: <span style={{ color: '#03a9f4' }}>{isUsingGateway?.toString()}</span></h4>
           <i></i>
         </div>
       </div>

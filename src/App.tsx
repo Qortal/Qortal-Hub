@@ -2769,7 +2769,7 @@ function App() {
                          fontSize: "12px",
                        }}
                      >
-                       {"Using gateway"} 
+                       {"Using public node"} 
                      </Typography>
                  </>
             )}
