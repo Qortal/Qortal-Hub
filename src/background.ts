@@ -941,7 +941,7 @@ export async function getBalanceInfo() {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + "/addresses/balance/" + address);
 
-  if (!response?.ok) throw new Error("Cannot fetch balance");
+  if (!response?.ok) throw new Error("0 QORT in your balance");
   const data = await response.json();
   return data;
 }
@@ -1101,7 +1101,7 @@ export const getLastRef = async () => {
   const response = await fetch(
     validApi + "/addresses/lastreference/" + address
   );
-  if (!response?.ok) throw new Error("Cannot fetch balance");
+  if (!response?.ok) throw new Error("0 QORT in your balance");
   const data = await response.text();
   return data;
 };
