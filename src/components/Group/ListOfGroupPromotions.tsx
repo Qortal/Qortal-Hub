@@ -809,6 +809,7 @@ export const ListOfGroupPromotions = () => {
                 value={selectedGroup}
                 label="Groups where you are an admin"
                 onChange={(e) => setSelectedGroup(e.target.value)}
+                variant="outlined"
               >
                 {myGroupsWhereIAmAdmin?.map((group) => {
                   return (

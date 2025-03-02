@@ -1443,7 +1443,7 @@ function App() {
       </>
     ) : (
       <>
-        <MainAvatar myName={userInfo?.name} />
+        <MainAvatar setOpenSnack={setOpenSnack}  setInfoSnack={setInfoSnack} myName={userInfo?.name} balance={balance} />
         <Spacer height="32px" />
         <TextP
           sx={{
@@ -3294,7 +3294,7 @@ function App() {
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">{"Warning"}</DialogTitle>
+          <DialogTitle id="alert-dialog-title">{"LOGOUT"}</DialogTitle>
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
               {messageUnsavedChanges.message}
@@ -3336,7 +3336,6 @@ function App() {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "flex-start",
-              minHeight: "400px",
               maxHeight: "90vh",
               overflow: "auto",
             }}

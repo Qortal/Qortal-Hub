@@ -249,11 +249,12 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived((details: any, callback) => {
     const allowedSources = ["'self'", customScheme, ...domainHolder.allowedDomains];
-    const connectSources = [...allowedSources];
     const frameSources = [
       "'self'",
       'http://localhost:*',
       'https://localhost:*',
+      'ws://localhost:*',
+      'ws://127.0.0.1:*',
       'http://127.0.0.1:*',
       'https://127.0.0.1:*',
       ...allowedSources,
@@ -261,13 +262,13 @@ export function setupContentSecurityPolicy(customScheme: string): void {
 
     // Create the Content Security Policy (CSP) string
     const csp = `
-    default-src 'self' ${allowedSources.join(' ')};
+    default-src 'self' ${frameSources.join(' ')};
     frame-src ${frameSources.join(' ')};
-    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${allowedSources.join(' ')};
+    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${frameSources.join(' ')};
     object-src 'self';
-    connect-src 'self' blob: ${connectSources.join(' ')};
-    img-src 'self' data: blob: ${allowedSources.join(' ')};
-    media-src 'self' blob: ${allowedSources.join(' ')};  
+    connect-src 'self' blob: ${frameSources.join(' ')};
+    img-src 'self' data: blob: ${frameSources.join(' ')};
+    media-src 'self' blob: ${frameSources.join(' ')};  
     style-src 'self' 'unsafe-inline';
     font-src 'self' data:;
   `.replace(/\s+/g, ' ').trim();

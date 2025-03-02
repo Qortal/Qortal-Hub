@@ -44,6 +44,24 @@ const theme = createTheme({
       color: '#b0b0b0',  // Lighter text for body2, often used for secondary text
     },
   },
+  components: {
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          ".MuiOutlinedInput-notchedOutline": {
+            borderColor: "white", // ⚪ Default outline color
+          },
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        icon: {
+          color: "white", // ✅ Caret (dropdown arrow) color
+        },
+      },
+    },
+  },
 });
 
 export default theme;
