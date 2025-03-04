@@ -88,10 +88,12 @@ import {
   cleanUrl,
   getFee,
   getProtocol,
+  getWallets,
   groupApi,
   groupApiLocal,
   groupApiSocket,
   groupApiSocketLocal,
+  storeWallets,
 } from "./background";
 import {
   executeEvent,
@@ -1007,6 +1009,26 @@ function App() {
     }
   };
 
+  const saveWalletToLocalStorage = async (newWallet)=> {
+    try {
+       getWallets().then((res)=> {
+            
+              if(res && Array.isArray(res)){
+                 const wallets = [...res, newWallet]
+                 storeWallets(wallets)
+              } else {
+                storeWallets([newWallet])
+              }
+              setIsLoading(false)
+          }).catch((error)=> {
+              console.error(error)
+              setIsLoading(false)
+          })
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   const createAccountFunc = async () => {
     try {
       if (!walletToBeDownloadedPassword) {
@@ -1043,6 +1065,7 @@ function App() {
         .then((response) => {
           if (response && !response.error) {
             setRawWallet(wallet);
+            saveWalletToLocalStorage(wallet)
             setWalletToBeDownloaded({
               wallet,
               qortAddress: wallet.address0,
