@@ -89,6 +89,7 @@
     "tippy.js": "^6.3.7",
     "tiptap-extension-resize-image": "^1.1.8",
     "ts-key-enum": "^2.0.12",
+    "vite-plugin-pwa": "^0.21.1",
     "vite-plugin-top-level-await": "^1.4.4",
     "vite-plugin-wasm": "^3.3.0"
   },
