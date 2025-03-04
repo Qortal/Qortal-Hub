@@ -2883,6 +2883,68 @@ export const getDaySummary = async () => {
   }
 };
 
+export const getNodeInfo = async () => {
+  const url = `/admin/info`; // Simplified endpoint URL
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to retrieve node info");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in retrieving node info");
+  }
+};
+
+export const getNodeStatus = async () => {
+  const url = `/admin/status`; // Simplified endpoint URL
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Accept: "*/*",
+      },
+    });
+
+    if (!response.ok) throw new Error("Failed to retrieve node status");
+
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in retrieving node status");
+  }
+};
+
 export const sendCoin = async (data, isFromExtension) => {
   const requiredFields = ["coin", "amount"];
   const missingFields: string[] = [];
