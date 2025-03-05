@@ -2862,7 +2862,7 @@ function App() {
                 fontWeight: 600,
               }}
             >
-              Download Wallet
+              Download Account
             </TextP>
           </Box>
           <Spacer height="35px" />
@@ -2894,11 +2894,11 @@ function App() {
                 onClick={async () => {
                   await saveFileToDiskFunc();
                   await showInfo({
-                    message: `Keep your wallet file secure.`,
+                    message: `Keep your account file secure.`,
                   });
                 }}
               >
-                Download wallet
+                Download account
               </CustomButton>
             </>
           )}
