@@ -1,6 +1,7 @@
-import { Button, InputAdornment, TextField, TextFieldProps, styled } from "@mui/material";
+import { Button, ButtonBase, InputAdornment, TextField, TextFieldProps, styled } from "@mui/material";
 import { forwardRef, useState } from 'react'
-
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 export const CustomInput = styled(TextField)({
     width: "183px", // Adjust the width as needed
     borderRadius: "5px",
@@ -51,7 +52,11 @@ export const PasswordField = forwardRef<HTMLInputElement, TextFieldProps>( ({ ..
                         <InputAdornment position="end" data-testid="toggle-view-password-btn" onClick={() => {
                             setCanViewPassword((prevState) => !prevState)
                         }}>
-                            {canViewPassword ? <Button data-testid="plain-text-indicator" sx={{ minWidth: 0, p: 0 }}>👁️</Button> : <Button data-testid="password-text-indicator" sx={{ minWidth: 0, p: 0 }}>👁️‍🗨️</Button>}
+                            {canViewPassword ? <ButtonBase data-testid="plain-text-indicator" sx={{ minWidth: 0, p: 0 }}><VisibilityOffIcon sx={{
+                                color: 'white'
+                            }}/></ButtonBase> : <ButtonBase data-testid="password-text-indicator" sx={{ minWidth: 0, p: 0 }}><VisibilityIcon sx={{
+                                color: 'white'
+                            }} /></ButtonBase>}
                         </InputAdornment>
                     )
                 }}

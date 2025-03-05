@@ -401,6 +401,7 @@ function App() {
     message: messageQortalRequestExtension,
   } = useModal();
 
+  const [isRunningPublicNode, setIsRunningPublicNode] = useState(false)
 
   const [infoSnack, setInfoSnack] = useState(null);
   const [openSnack, setOpenSnack] = useState(false);
@@ -449,6 +450,14 @@ function App() {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
     }
   }, []);
+
+   useEffect(()=> {
+      isRunningGateway().then((res)=> {
+        setIsRunningPublicNode(res)
+      }).catch((error)=> {
+        console.error(error)
+      })
+    }, [extState])
 
   useEffect(()=> {
     if(!shownTutorialsInitiated) return
@@ -1868,7 +1877,8 @@ function App() {
                  isUserBlocked,
                  addToBlockList,
                  removeBlockFromList,
-                 getAllBlockedUsers
+                 getAllBlockedUsers,
+                 isRunningPublicNode
                }}
              >
                  <TaskManager getUserInfo={getUserInfo} />
@@ -2046,7 +2056,8 @@ function App() {
             isUserBlocked,
             addToBlockList,
             removeBlockFromList,
-            getAllBlockedUsers
+            getAllBlockedUsers,
+            isRunningPublicNode
           }}
         >
           <Box
