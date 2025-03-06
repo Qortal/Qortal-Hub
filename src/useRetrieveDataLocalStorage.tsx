@@ -15,7 +15,7 @@ function fetchFromLocalStorage(key) {
     }
 }
 
-export const useRetrieveDataLocalStorage = () => {
+export const useRetrieveDataLocalStorage = (address) => {
     const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
     const setSettingsLocalLastUpdated = useSetRecoilState(settingsLocalLastUpdatedAtom);
     const setIsUsingImportExportSettings = useSetRecoilState(isUsingImportExportSettingsAtom)
@@ -50,6 +50,6 @@ export const useRetrieveDataLocalStorage = () => {
       
         getSortablePinnedApps()
         getSortablePinnedAppsImportExport()
-    }, [getSortablePinnedApps])
+    }, [getSortablePinnedApps, address])
  
 }
