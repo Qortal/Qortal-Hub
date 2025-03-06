@@ -428,7 +428,7 @@ function App() {
   const [creationStep, setCreationStep] = useState(1)
   const {getIndividualUserInfo} = useHandleUserInfo()
   const qortalRequestCheckbox1Ref = useRef(null);
-  useRetrieveDataLocalStorage();
+  useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === "authenticated");
   const [fullScreen, setFullScreen] = useRecoilState(fullScreenAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] =
