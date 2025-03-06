@@ -239,6 +239,18 @@ export const listOfAllQortalRequests = [
   'SEARCH_TRANSACTIONS',
   'GET_PRICE',
   'SHOW_ACTIONS',
+  'REGISTER_NAME',
+  'UPDATE_NAME',
+  'LEAVE_GROUP',
+  'INVITE_TO_GROUP',
+  'KICK_FROM_GROUP',
+  'BAN_FROM_GROUP',
+  'CANCEL_GROUP_BAN',
+  'ADD_GROUP_ADMIN',
+  'REMOVE_GROUP_ADMIN',
+  'DECRYPT_AESGCM',
+  'CANCEL_GROUP_INVITE',
+  'CREATE_GROUP',
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS'
@@ -297,7 +309,6 @@ export const UIQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS'
 ];
-// TODO listOfAllQortalRequests
 
 
 
