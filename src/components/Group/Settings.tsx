@@ -186,7 +186,8 @@ export const Settings = ({
             }
             label="Disable all push notifications"
           />
-          <FormControlLabel
+          {window?.electronAPI && (
+            <FormControlLabel
             sx={{
               color: "white",
             }}
@@ -198,6 +199,7 @@ export const Settings = ({
             }
             label="Enable dev mode"
           />
+          )}
         </Box>
       </Dialog>
     </React.Fragment>
