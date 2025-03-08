@@ -24,13 +24,13 @@ window.addEventListener("message", (event) => {
   }
 });
 
-export const sendMessageBackground = (action, data = {}, timeout = 180000, isExtension, appInfo) => {
+export const sendMessageBackground = (action, data = {}, timeout = 180000, isExtension, appInfo, skipAuth) => {
   return new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
     callbackMap.set(requestId, { resolve, reject }); // Store both resolve and reject callbacks
     const targetOrigin = window.location.origin
     // Send the message with `backgroundMessage` type
-    window.postMessage({ type: "backgroundMessage", action, requestId, payload: data, isExtension, appInfo }, targetOrigin);
+    window.postMessage({ type: "backgroundMessage", action, requestId, payload: data, isExtension, appInfo, skipAuth }, targetOrigin);
 
     // Set up a timeout to automatically reject if no response is received
     const timeoutId = setTimeout(() => {

@@ -4,6 +4,7 @@ import { getData, storeData } from '../utils/chromeStorage';
 import { checkDifference, getNameInfoForOthers } from '../background';
 import { useRecoilState } from 'recoil';
 import { lastPaymentSeenTimestampAtom } from '../atoms/global';
+import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 
 export const useHandlePaymentNotification = (address) => {
     const [latestTx, setLatestTx] = useState(null);
@@ -106,6 +107,21 @@ export const useHandlePaymentNotification = (address) => {
         window.removeEventListener("message", messageHandler);
       };
       }, [getLastSeenData]);
+
+      const setLastEnteredTimestampPaymentEventFunc = useCallback(
+        (e) => {
+            setLastEnteredTimestampPayment(Date.now)
+        },
+        [setLastEnteredTimestampPayment]
+      );
+    
+      useEffect(() => {
+        subscribeToEvent("setLastEnteredTimestampPaymentEvent", setLastEnteredTimestampPaymentEventFunc);
+    
+        return () => {
+          unsubscribeFromEvent("setLastEnteredTimestampPaymentEvent", setLastEnteredTimestampPaymentEventFunc);
+        };
+      }, [setLastEnteredTimestampPaymentEventFunc]);
   return {
     latestTx,
     getNameOrAddressOfSenderMiddle,

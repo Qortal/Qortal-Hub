@@ -4,6 +4,9 @@ import ChatIcon from "@mui/icons-material/Chat";
 import qTradeLogo from "../../assets/Icons/q-trade-logo.webp";
 import AppsIcon from "@mui/icons-material/Apps";
 import { executeEvent } from "../../utils/events";
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+
+
 export const Explore = ({setDesktopViewMode}) => {
   return (
     <Box
@@ -94,6 +97,33 @@ export const Explore = ({setDesktopViewMode}) => {
           }}
         >
           General Chat
+        </Typography>
+      </ButtonBase>
+      <ButtonBase
+        sx={{
+          "&:hover": { backgroundColor: "secondary.main" },
+          transition: "all 0.1s ease-in-out",
+          padding: "5px",
+          borderRadius: "5px",
+          gap: "5px",
+        }}
+        onClick={async () => {
+            executeEvent("openWalletsApp", {
+           
+            });
+          }}
+      >
+        <AccountBalanceWalletIcon
+          sx={{
+            color: "white",
+          }}
+        />
+        <Typography
+          sx={{
+            fontSize: "1rem",
+          }}
+        >
+          Wallets
         </Typography>
       </ButtonBase>
     </Box>

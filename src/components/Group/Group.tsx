@@ -81,6 +81,7 @@ import BlockIcon from '@mui/icons-material/Block';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { BlockedUsersModal } from "./BlockedUsersModal";
+import { WalletsAppWrapper } from "./WalletsAppWrapper";
 
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
@@ -2579,6 +2580,7 @@ export const Group = ({
             message: "Setting up groups... please wait.",
           }}
         />
+        <WalletsAppWrapper />
       </div>
     </>
   );

@@ -11,11 +11,11 @@ import { useQortalMessageListener } from "./useQortalMessageListener";
 
 
 
-export const AppViewer = React.forwardRef(({ app , hide, isDevMode}, iframeRef) => {
+export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, iframeRef) => {
   const { rootHeight } = useContext(MyContext);
   // const iframeRef = useRef(null);
   const { document, window: frameWindow } = useFrame();
-  const {path, history, changeCurrentIndex, resetHistory} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode, app?.name, app?.service) 
+  const {path, history, changeCurrentIndex, resetHistory} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode, app?.name, app?.service, skipAuth) 
   const [url, setUrl] = useState('')
 
 

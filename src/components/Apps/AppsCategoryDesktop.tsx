@@ -48,7 +48,8 @@ const officialAppList = [
   "q-shop",
   "q-trade",
   "q-support",
-  "q-manager"
+  "q-manager",
+  "q-wallets"
 ];
 
 const ScrollerStyled = styled("div")({
