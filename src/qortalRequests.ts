@@ -70,6 +70,7 @@ export const isRunningGateway = async ()=> {
       // Ensure the message is from a trusted source
       const isFromExtension = request?.isExtension;
       const appInfo = request?.appInfo;
+      const skipAuth = request?.skipAuth || false
       if (request?.type !== "backgroundMessage") return; // Only process messages of type 'backgroundMessage'
   
   
@@ -77,7 +78,7 @@ export const isRunningGateway = async ()=> {
       switch (request.action) {
         case "GET_USER_ACCOUNT": {
           try {
-            const res = await getUserAccount({isFromExtension, appInfo});
+            const res = await getUserAccount({isFromExtension, appInfo, skipAuth});
             event.source.postMessage({
               requestId: request.requestId,
               action: request.action,

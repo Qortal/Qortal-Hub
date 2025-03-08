@@ -47,6 +47,7 @@ import Info from "./assets/svgs/Info.svg";
 import CloseIcon from "@mui/icons-material/Close";
 import './utils/seedPhrase/RandomSentenceGenerator';
 import EngineeringIcon from '@mui/icons-material/Engineering';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   createAccount,
   generateRandomSentence,
@@ -1698,13 +1699,46 @@ function App() {
                 />
               </Tooltip>
             </ButtonBase>
+            <Spacer height="20px" />
+            <ButtonBase
+              onClick={() => {
+                executeEvent('openWalletsApp', {})
+              }}
+            >
+              <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>WALLETS</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
+                <AccountBalanceWalletIcon
+                  sx={{
+                    color: "rgba(255, 255, 255, 0.5)",
+                  }}
+                />
+              </Tooltip>
+            </ButtonBase>
+            
           
             {desktopViewMode !== 'home' && (
               <>
                 <Spacer height="20px" />
              
                <Tooltip
-               title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>WALLET</span>} 
+               title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>YOUR ACCOUNT</span>} 
                placement="left"
                arrow
                sx={{ fontSize: "24" }}
@@ -1733,75 +1767,7 @@ function App() {
               </>
             )}
           
-            {/* {authenticatedMode === "qort" && (
-              <Tooltip
-                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>LITECOIN WALLET</span>} 
-                placement="left"
-                arrow
-                sx={{ fontSize: "24" }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: "#ffffff",
-                      backgroundColor: "#444444",
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: "#444444",
-                    },
-                  },
-                }}
-              >
-                <img
-                  onClick={() => {
-                    if(desktopViewMode !== 'home'){
-                      setIsOpenDrawerProfile((prev)=> !prev)
-                    }
-                    setAuthenticatedMode("ltc");
-                  }}
-                  src={ltcLogo}
-                  style={{
-                    cursor: "pointer",
-                    width: "20px",
-                    height: "auto",
-                  }}
-                />
-              </Tooltip>
-            )}
-            {authenticatedMode === "ltc" && (
-              <Tooltip
-                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>QORTAL WALLET</span>} 
-                placement="left"
-                arrow
-                sx={{ fontSize: "24" }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: "#ffffff",
-                      backgroundColor: "#444444",
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: "#444444",
-                    },
-                  },
-                }}
-              >
-                <img
-                  onClick={() => {
-                    setAuthenticatedMode("qort");
-                  }}
-                  src={qortLogo}
-                  style={{
-                    cursor: "pointer",
-                    width: "20px",
-                    height: "auto",
-                  }}
-                />
-              </Tooltip>
-            )} */}
+          
             <Spacer height="20px" />
             <CoreSyncStatus />
             <Spacer height="20px" />

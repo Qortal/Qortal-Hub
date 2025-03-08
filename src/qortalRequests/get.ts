@@ -371,13 +371,16 @@ async function getUserPermission(payload, isFromExtension) {
   });
 }
 
-export const getUserAccount = async ({ isFromExtension, appInfo }) => {
+export const getUserAccount = async ({ isFromExtension, appInfo, skipAuth }) => {
   try {
     const value =
       (await getPermission(`qAPPAutoAuth-${appInfo?.name}`)) || false;
     let skip = false;
     if (value) {
       skip = true;
+    }
+    if(skipAuth){
+      skip = true
     }
     let resPermission;
     if (!skip) {

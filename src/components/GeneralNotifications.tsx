@@ -13,6 +13,7 @@ import NotificationsIcon from "@mui/icons-material/Notifications";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import { formatDate } from "../utils/time";
 import { useHandlePaymentNotification } from "../hooks/useHandlePaymentNotification";
+import { executeEvent } from "../utils/events";
 
 export const GeneralNotifications = ({ address }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -35,11 +36,31 @@ export const GeneralNotifications = ({ address }) => {
         }}
         style={{}}
       >
+         <Tooltip
+                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>PAYMENT NOTIFICATION</span>} 
+                placement="left"
+                arrow
+                sx={{ fontSize: "24" }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: "#ffffff",
+                      backgroundColor: "#444444",
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: "#444444",
+                    },
+                  },
+                }}
+              >
         <NotificationsIcon
           sx={{
             color: hasNewPayment ? "var(--unread)" : "rgba(255, 255, 255, 0.5)",
           }}
         />
+        </Tooltip>
       </ButtonBase>
 
       <Popover
@@ -77,11 +98,10 @@ export const GeneralNotifications = ({ address }) => {
                 width: "100%",
                 alignItems: "flex-start",
                 textWrap: "auto",
-                cursor: 'default'
               }}
-              onClick={(e) => {
-                     // executeEvent("addTab", { data: { service: 'APP', name: 'q-mail' } });
-          // executeEvent("open-apps-mode", { });
+             onClick={() => {
+              setAnchorEl(null)
+                executeEvent('openWalletsApp', {})
               }}
             >
               <Card sx={{
