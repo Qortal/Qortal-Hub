@@ -262,11 +262,12 @@ export const getForeignKey = async (foreignBlockchain)=> {
 
 export const pauseAllQueues = () => controlAllQueues("pause");
 export const resumeAllQueues = () => controlAllQueues("resume");
-const checkDifference = (createdTimestamp) => {
+export const checkDifference = (createdTimestamp, diff = timeDifferenceForNotificationChatsBackground) => {
   return (
-    Date.now() - createdTimestamp < timeDifferenceForNotificationChatsBackground
+    Date.now() - createdTimestamp < diff
   );
 };
+
 export const getApiKeyFromStorage = async (): Promise<string | null> => {
   return getData<string>("apiKey").catch(() => null);
 };
@@ -518,6 +519,7 @@ const handleNotificationDirect = async (directs) => {
         `_from=${newestLatestTimestamp.address}`);
       const notification = new window.Notification(title, {
         body,
+        icon: window.location.origin + "/qortal192.png",
         data: { id: notificationId },
       });
 
@@ -559,6 +561,7 @@ const handleNotificationDirect = async (directs) => {
 
       const notification = new window.Notification(title, {
         body,
+        icon: window.location.origin + "/qortal192.png",
         data: { id: notificationId },
       });
 
@@ -746,6 +749,7 @@ const handleNotification = async (groups) => {
 
         const notification = new window.Notification(title, {
           body,
+          icon: window.location.origin + "/qortal192.png",
           data: { id: notificationId },
         });
 
@@ -788,6 +792,7 @@ const handleNotification = async (groups) => {
       // Create and show the notification immediately
       const notification = new window.Notification(title, {
         body,
+        icon: window.location.origin + "/qortal192.png",
         data: { id: notificationId },
       });
 
@@ -2739,6 +2744,31 @@ export async function addTimestampGroupAnnouncement({
   });
 }
 
+export async function getTimestampLatestPayment() {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const key = `latest-payment-${address}`;
+  const res = await getData<any>(key).catch(() => null);
+  if (res) {
+    const parsedData = res;
+    return parsedData;
+  } else return 0
+}
+
+export async function addTimestampLatestPayment(timestamp) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  
+  return await new Promise((resolve, reject) => {
+    storeData(`latest-payment-${address}`, timestamp)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || "Error saving data"));
+      });
+  });
+}
+
+
 export async function addEnteredQmailTimestamp() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -3273,6 +3303,7 @@ export const checkNewMessages = async () => {
       // Create and show the notification
       const notification = new window.Notification(title, {
         body,
+        icon: window.location.origin + "/qortal192.png",
         data: { id: notificationId },
       });
 
@@ -3300,6 +3331,95 @@ export const checkNewMessages = async () => {
   } catch (error) {
   } finally {
   }
+};
+
+export const checkPaymentsForNotifications = async (address) => {
+  try {
+    const isDisableNotifications =
+    (await getUserSettings({ key: "disable-push-notifications" })) || false;
+    if(isDisableNotifications) return
+      let latestPayment = null
+          const savedtimestamp = await getTimestampLatestPayment();
+
+          const url = await createEndpoint(
+            `/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
+          );
+         
+         const response =   await fetch(url, {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+        
+          const responseData = await response.json();
+
+          const latestTx = responseData.filter(
+            (tx) => tx?.creatorAddress !== address && tx?.recipient === address
+          )[0];
+          if (!latestTx) {
+            return; // continue to the next group
+          }
+          if (
+            checkDifference(latestTx.timestamp) &&
+            (!savedtimestamp ||
+              latestTx.timestamp >
+                savedtimestamp)
+          ) {
+            if(latestTx.timestamp){
+              latestPayment = latestTx
+              await addTimestampLatestPayment(latestTx.timestamp);
+            }
+           
+            // save new timestamp
+          }
+       
+ 
+
+    if (
+      latestPayment
+    ) {
+      // Create a unique notification ID with type and group announcement details
+      const notificationId =
+      encodeURIComponent("payment_notification_" +
+        Date.now() +
+        "_type=payment-announcement");
+
+      const title = "New payment!";
+      const body = `You have received a new payment of ${latestPayment?.amount} QORT`;
+
+      // Create and show the notification
+      const notification = new window.Notification(title, {
+        body,
+        icon: window.location.origin + "/qortal192.png",
+        data: { id: notificationId },
+      });
+
+      // Handle notification click with specific actions based on `notificationId`
+      notification.onclick = () => {
+        handleNotificationClick(notificationId);
+        notification.close(); // Clean up the notification on click
+      };
+
+      // Automatically close the notification after 5 seconds if it’s not clicked
+      setTimeout(() => {
+        notification.close();
+      }, 10000); // Close after 5 seconds
+
+      const targetOrigin = window.location.origin;
+
+      window.postMessage(
+        {
+          action: "SET_PAYMENT_ANNOUNCEMENT",
+          payload: latestPayment,
+        },
+        targetOrigin
+      );
+    }
+   
+  } catch (error) {
+    console.error(error)
+  } 
 };
 
 const checkActiveChatsForNotifications = async () => {
@@ -3437,6 +3557,7 @@ export const checkThreads = async (bringBack) => {
           // Create and show the notification
           const notification = new window.Notification(title, {
             body,
+            icon: window.location.origin + "/qortal192.png",
             data: { id: notificationId },
           });
 
@@ -3494,6 +3615,7 @@ export const checkThreads = async (bringBack) => {
 // });
 
 let notificationCheckInterval
+let paymentsCheckInterval
 
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
@@ -3512,6 +3634,22 @@ const createNotificationCheck = () => {
         console.error('Error checking notifications:', error);
       }
     }, 10 * 60 * 1000); // 10 minutes
+  }
+
+  if (!paymentsCheckInterval) {
+    paymentsCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
+
+        checkPaymentsForNotifications(address);
+        
+      } catch (error) {
+        console.error('Error checking payments:', error);
+      }
+    }, 3 * 60 * 1000); // 3 minutes
   }
 };
 

@@ -156,6 +156,11 @@ export const qMailLastEnteredTimestampAtom = atom({
   default: null, 
 });
 
+export const lastPaymentSeenTimestampAtom = atom<null | number>({
+  key: 'lastPaymentSeenTimestampAtom', 
+  default: null, 
+});
+
 export const mailsAtom = atom({
   key: 'mailsAtom', 
   default: [], 
