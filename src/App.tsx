@@ -120,6 +120,7 @@ import {
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isUsingImportExportSettingsAtom,
+  lastPaymentSeenTimestampAtom,
   mailsAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
@@ -154,6 +155,7 @@ import { UserLookup } from "./components/UserLookup.tsx/UserLookup";
 import { RegisterName } from "./components/RegisterName";
 import { BuyQortInformation } from "./components/BuyQortInformation";
 import { QortPayment } from "./components/QortPayment";
+import { GeneralNotifications } from "./components/GeneralNotifications";
 
 type extStates =
   | "not-authenticated"
@@ -508,6 +510,7 @@ function App() {
   const resetAtomQMailLastEnteredTimestampAtom = useResetRecoilState(qMailLastEnteredTimestampAtom)
   const resetAtomMailsAtom = useResetRecoilState(mailsAtom)
   const resetGroupPropertiesAtom = useResetRecoilState(groupsPropertiesAtom)
+  const resetLastPaymentSeenTimestampAtom = useResetRecoilState(lastPaymentSeenTimestampAtom)
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
@@ -518,6 +521,7 @@ function App() {
     resetAtomQMailLastEnteredTimestampAtom()
     resetAtomMailsAtom()
     resetGroupPropertiesAtom()
+    resetLastPaymentSeenTimestampAtom()
     
   };
   useEffect(() => {
@@ -1802,6 +1806,11 @@ function App() {
             <CoreSyncStatus />
             <Spacer height="20px" />
             <QMailStatus />
+            <Spacer height="20px"/>
+            {extState === 'authenticated' && (
+              <GeneralNotifications address={userInfo?.address} />
+            )}
+            
           </Box>
           <Box
             sx={{
