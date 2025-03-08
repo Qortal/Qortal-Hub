@@ -98,7 +98,11 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     const target = e.target;
     if (target.tagName === 'A') {
       const href = target.getAttribute('href');
-      window.electronAPI.openExternal(href);
+      if(window?.electronAPI){
+        window.electronAPI.openExternal(href);
+      } else {
+        window.open(href, '_system');
+      }
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
 
