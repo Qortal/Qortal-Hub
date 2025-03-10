@@ -245,6 +245,7 @@ export const ChatList = ({
                       if (chatReferences?.[reply?.signature]?.edit) {
                         reply.decryptedData = chatReferences[reply?.signature]?.edit;
                         reply.text = chatReferences[reply?.signature]?.edit?.message;
+                        reply.editTimestamp = chatReferences[reply?.signature]?.edit?.timestamp
                       }
                     }
               
@@ -271,10 +272,12 @@ export const ChatList = ({
                       if (chatReferences[message.signature]?.edit?.message && message?.text) {
                         message.text = chatReferences[message.signature]?.edit?.message;
                         message.isEdit = true
+                        message.editTimestamp = chatReferences[message.signature]?.edit?.timestamp
                       }
                       if (chatReferences[message.signature]?.edit?.messageText && message?.messageText) {
                         message.messageText = chatReferences[message.signature]?.edit?.messageText;
                         message.isEdit = true
+                        message.editTimestamp = chatReferences[message.signature]?.edit?.timestamp
                       }
                     
                     }
@@ -360,6 +363,7 @@ export const ChatList = ({
                       reactions={reactions}
                       isUpdating={isUpdating}
                       isPrivate={isPrivate}
+            
                     />
                      </ErrorBoundary>
                   </div>
