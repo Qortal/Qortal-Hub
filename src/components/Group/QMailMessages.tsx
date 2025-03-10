@@ -103,16 +103,16 @@ export const QMailMessages = ({userName, userAddress}) => {
          
       }, [getMails, userName, userAddress]);
 
-    const anyUnread = useMemo(()=> {
-      let unread = false
-
-      mails.forEach((mail)=> {
-        if(lastEnteredTimestamp && isLessThanOneWeekOld(mail?.created)){
-          unread = true
-        }
-      })
-      return unread
-    }, [mails, lastEnteredTimestamp])
+      const anyUnread = useMemo(()=> {
+        let unread = false
+  
+        mails.forEach((mail)=> {
+          if(!lastEnteredTimestamp && isLessThanOneWeekOld(mail?.created) || (lastEnteredTimestamp && isLessThanOneWeekOld(mail?.created) && lastEnteredTimestamp < mail?.created)){
+            unread = true
+          }
+        })
+        return unread
+      }, [mails, lastEnteredTimestamp])
 
   return (
     <Box
@@ -143,13 +143,13 @@ export const QMailMessages = ({userName, userAddress}) => {
         Latest Q-Mails
       </Typography>
       <MarkEmailUnreadIcon sx={{
-        color: anyUnread ? '--unread' : 'white'
+        color: anyUnread ? 'var(--unread)' : 'white'
       }}/>
      {isExpanded ? <ExpandLessIcon sx={{
       marginLeft: 'auto'
      }} /> : (
       <ExpandMoreIcon sx={{
-        color: anyUnread ? '--unread' : 'white',
+        color: anyUnread ? 'var(--unread)' : 'white',
          marginLeft: 'auto'
        }}  />
      )}
