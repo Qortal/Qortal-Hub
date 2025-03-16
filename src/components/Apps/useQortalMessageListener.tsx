@@ -253,7 +253,8 @@ export const listOfAllQortalRequests = [
   'CREATE_GROUP',
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_NODE_INFO',
-  'GET_NODE_STATUS'
+  'GET_NODE_STATUS',
+  'GET_ARRR_SYNC_STATUS'
 ]
 
 export const UIQortalRequests = [
@@ -307,7 +308,8 @@ export const UIQortalRequests = [
   'CREATE_GROUP',
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_NODE_INFO',
-  'GET_NODE_STATUS'
+  'GET_NODE_STATUS',
+  'GET_ARRR_SYNC_STATUS'
 ];
 
 
