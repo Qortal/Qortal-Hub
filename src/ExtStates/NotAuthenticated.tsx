@@ -19,6 +19,7 @@ import {
   Input,
   styled,
   Switch,
+  TextField,
   Typography,
 } from "@mui/material";
 import Logo1Dark from "../assets/svgs/Logo1Dark.svg";
@@ -77,6 +78,8 @@ export const NotAuthenticated = ({
   //add and edit states
   const [url, setUrl] = React.useState("https://");
   const [customApikey, setCustomApiKey] = React.useState("");
+  const [showSelectApiKey, setShowSelectApiKey] = useState(false)
+  const [enteredApiKey, setEnteredApiKey] = useState('')
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
   const { showTutorial, hasSeenGettingStarted } = useContext(GlobalContext);
@@ -86,6 +89,7 @@ export const NotAuthenticated = ({
   const hasLocalNodeRef = useRef(null);
   const isLocal = cleanUrl(currentNode?.url) === "127.0.0.1:12391";
   const handleFileChangeApiKey = (event) => {
+    setShowSelectApiKey(false)
     const file = event.target.files[0]; // Get the selected file
     if (file) {
       const reader = new FileReader();
@@ -250,6 +254,57 @@ export const NotAuthenticated = ({
           apikey: importedApiKeyRef.current || key?.apikey,
           url: currentNodeRef.current?.url,
         };
+        if(!payload?.apikey){
+          try {
+            const generateUrl = "http://127.0.0.1:12391/admin/apikey/generate";
+            const generateRes = await fetch(generateUrl, {
+              method: "POST",
+            })
+            let res;
+      try {
+        res = await generateRes.clone().json();
+      } catch (e) {
+        res = await generateRes.text();
+      }
+            if (res != null && !res.error && res.length >= 8) {
+              payload = {
+                apikey: res,
+                url: currentNodeRef.current?.url,
+              };
+  
+              setImportedApiKey(res); // Store the file content in the state
+         
+            setCustomNodes((prev)=> {
+              const copyPrev = [...prev]
+              const findLocalIndex = copyPrev?.findIndex((item)=> item?.url === 'http://127.0.0.1:12391')
+              if(findLocalIndex === -1){
+                copyPrev.unshift({
+                  url: "http://127.0.0.1:12391",
+                  apikey: res
+                })
+              } else {
+                copyPrev[findLocalIndex] = {
+                  url: "http://127.0.0.1:12391",
+                  apikey: res
+                }
+              }
+              window
+              .sendMessage("setCustomNodes", copyPrev)
+              .catch((error) => {
+                console.error(
+                  "Failed to set custom nodes:",
+                  error.message || "An error occurred"
+                );
+              });
+              return copyPrev
+            })
+         
+         
+            }
+          } catch (error) {
+            console.error(error)
+          }
+        }
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
@@ -603,14 +658,8 @@ export const NotAuthenticated = ({
             </Box>
             {currentNode?.url === "http://127.0.0.1:12391" && (
               <>
-                <Button size="small" variant="contained" component="label">
-                  {apiKey ? "Change " : "Import "} apiKey.txt
-                  <input
-                    type="file"
-                    accept=".txt"
-                    hidden
-                    onChange={handleFileChangeApiKey} // File input handler
-                  />
+                <Button onClick={()=> setShowSelectApiKey(true)} size="small" variant="contained" component="label">
+                  {apiKey ? "Change " : "Import "} apikey
                 </Button>
                 <Typography
                   sx={{
