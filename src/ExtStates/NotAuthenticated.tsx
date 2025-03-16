@@ -14,6 +14,7 @@ import {
   Input,
   styled,
   Switch,
+  TextField,
   Typography,
 } from "@mui/material";
 import Logo1 from "../assets/svgs/Logo1.svg";
@@ -76,6 +77,8 @@ export const NotAuthenticated = ({
   //add and edit states
   const [url, setUrl] = React.useState("https://");
   const [customApikey, setCustomApiKey] = React.useState("");
+  const [showSelectApiKey, setShowSelectApiKey] = useState(false)
+  const [enteredApiKey, setEnteredApiKey] = useState('')
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
     const { showTutorial, hasSeenGettingStarted  } = useContext(GlobalContext);
@@ -85,6 +88,7 @@ export const NotAuthenticated = ({
   const hasLocalNodeRef = useRef(null);
   const isLocal = cleanUrl(currentNode?.url) === "127.0.0.1:12391";
   const handleFileChangeApiKey = (event) => {
+    setShowSelectApiKey(false)
     const file = event.target.files[0]; // Get the selected file
     if (file) {
       const reader = new FileReader();
@@ -249,6 +253,57 @@ export const NotAuthenticated = ({
           apikey: importedApiKeyRef.current || key?.apikey,
           url: currentNodeRef.current?.url,
         };
+        if(!payload?.apikey){
+          try {
+            const generateUrl = "http://127.0.0.1:12391/admin/apikey/generate";
+            const generateRes = await fetch(generateUrl, {
+              method: "POST",
+            })
+            let res;
+      try {
+        res = await generateRes.clone().json();
+      } catch (e) {
+        res = await generateRes.text();
+      }
+            if (res != null && !res.error && res.length >= 8) {
+              payload = {
+                apikey: res,
+                url: currentNodeRef.current?.url,
+              };
+  
+              setImportedApiKey(res); // Store the file content in the state
+         
+            setCustomNodes((prev)=> {
+              const copyPrev = [...prev]
+              const findLocalIndex = copyPrev?.findIndex((item)=> item?.url === 'http://127.0.0.1:12391')
+              if(findLocalIndex === -1){
+                copyPrev.unshift({
+                  url: "http://127.0.0.1:12391",
+                  apikey: res
+                })
+              } else {
+                copyPrev[findLocalIndex] = {
+                  url: "http://127.0.0.1:12391",
+                  apikey: res
+                }
+              }
+              window
+              .sendMessage("setCustomNodes", copyPrev)
+              .catch((error) => {
+                console.error(
+                  "Failed to set custom nodes:",
+                  error.message || "An error occurred"
+                );
+              });
+              return copyPrev
+            })
+         
+         
+            }
+          } catch (error) {
+            console.error(error)
+          }
+        }
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
@@ -573,14 +628,8 @@ export const NotAuthenticated = ({
             </Box>
             {currentNode?.url === "http://127.0.0.1:12391" && (
               <>
-                <Button size="small" variant="contained" component="label">
-                  {apiKey ? "Change " : "Import "} apiKey.txt
-                  <input
-                    type="file"
-                    accept=".txt"
-                    hidden
-                    onChange={handleFileChangeApiKey} // File input handler
-                  />
+                <Button onClick={()=> setShowSelectApiKey(true)} size="small" variant="contained" component="label">
+                  {apiKey ? "Change " : "Import "} apikey
                 </Button>
                 <Typography
                   sx={{
@@ -854,6 +903,95 @@ export const NotAuthenticated = ({
                 </Button>
               </>
             )}
+          </DialogActions>
+        </Dialog>
+      )}
+
+       {showSelectApiKey && (
+        <Dialog
+          open={showSelectApiKey}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+          
+        >
+          <DialogTitle id="alert-dialog-title">{"Enter apikey"}</DialogTitle>
+          <DialogContent>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: '20px'
+              }}
+            >
+              <TextField value={enteredApiKey} onChange={(e)=> setEnteredApiKey(e.target.value)}/>
+                <Button disabled={!!enteredApiKey} variant="contained"  component="label">Alternative: File select
+                <input
+                    type="file"
+                    accept=".txt"
+                    hidden
+                    onChange={handleFileChangeApiKey} // File input handler
+                  />
+                </Button>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+           
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                   setEnteredApiKey("")
+                   setShowSelectApiKey(false)
+                  }}
+                >
+                  Close
+                </Button>
+
+                <Button
+                  variant="contained"
+                  disabled={!enteredApiKey}
+                  onClick={() => {
+                    try {
+                      setImportedApiKey(enteredApiKey); // Store the file content in the state
+        if(customNodes){
+          setCustomNodes((prev)=> {
+            const copyPrev = [...prev]
+            const findLocalIndex = copyPrev?.findIndex((item)=> item?.url === 'http://127.0.0.1:12391')
+            if(findLocalIndex === -1){
+              copyPrev.unshift({
+                url: "http://127.0.0.1:12391",
+                apikey: enteredApiKey
+              })
+            } else {
+              copyPrev[findLocalIndex] = {
+                url: "http://127.0.0.1:12391",
+                apikey: enteredApiKey
+              }
+            }
+            window
+            .sendMessage("setCustomNodes", copyPrev)
+            .catch((error) => {
+              console.error(
+                "Failed to set custom nodes:",
+                error.message || "An error occurred"
+              );
+            });
+            return copyPrev
+          })
+       
+        }
+        setUseLocalNode(false);
+        setShowSelectApiKey(false)
+        setEnteredApiKey("")
+                    } catch (error) {
+                      console.error(error)
+                    }
+                  }}
+                  autoFocus
+                >
+                  Save
+                </Button>
+           
+          
           </DialogActions>
         </Dialog>
       )}
