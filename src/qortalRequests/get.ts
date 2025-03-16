@@ -2948,6 +2948,36 @@ export const getNodeStatus = async () => {
   }
 };
 
+export const getArrrSyncStatus = async () => {
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const arrrSeed = parsedData.arrrSeed58;
+  const url = `/crosschain/arrr/syncstatus`; // Simplified endpoint URL
+
+  try {
+    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available for constructing the full URL
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "*/*",
+      },
+      body: arrrSeed
+    });
+
+    let res;
+
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+
+    return res; // Return the full response
+  } catch (error) {
+    throw new Error(error?.message || "Error in retrieving arrr sync status");
+  }
+};
+
 export const sendCoin = async (data, isFromExtension) => {
   const requiredFields = ["coin", "amount"];
   const missingFields: string[] = [];

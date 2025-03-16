@@ -1,9 +1,7 @@
 import { gateways, getApiKeyFromStorage } from "./background";
 import { listOfAllQortalRequests } from "./components/Apps/useQortalMessageListener";
-import { addForeignServer, addGroupAdminRequest, addListItems, adminAction, banFromGroupRequest, cancelGroupBanRequest, cancelGroupInviteRequest, cancelSellOrder, createAndCopyEmbedLink, createBuyOrder, createGroupRequest, createPoll, createSellOrder, decryptAESGCMRequest, decryptData, decryptDataWithSharingKey, decryptQortalGroupData, deleteHostedData, deleteListItems, deployAt, encryptData, encryptDataWithSharingKey, encryptQortalGroupData, getCrossChainServerInfo, getDaySummary, getNodeInfo, getNodeStatus, getForeignFee, getHostedData, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getUserWalletTransactions, getWalletBalance, inviteToGroupRequest, joinGroup, kickFromGroupRequest, leaveGroupRequest, openNewTab, publishMultipleQDNResources, publishQDNResource, registerNameRequest, removeForeignServer, removeGroupAdminRequest, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, signTransaction, updateForeignFee, updateNameRequest, voteOnPoll } from "./qortalRequests/get";
+import { addForeignServer, addGroupAdminRequest, addListItems, adminAction, banFromGroupRequest, cancelGroupBanRequest, cancelGroupInviteRequest, cancelSellOrder, createAndCopyEmbedLink, createBuyOrder, createGroupRequest, createPoll, createSellOrder, decryptAESGCMRequest, decryptData, decryptDataWithSharingKey, decryptQortalGroupData, deleteHostedData, deleteListItems, deployAt, encryptData, encryptDataWithSharingKey, encryptQortalGroupData, getCrossChainServerInfo, getDaySummary, getNodeInfo, getNodeStatus, getForeignFee, getHostedData, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getUserWalletTransactions, getWalletBalance, inviteToGroupRequest, joinGroup, kickFromGroupRequest, leaveGroupRequest, openNewTab, publishMultipleQDNResources, publishQDNResource, registerNameRequest, removeForeignServer, removeGroupAdminRequest, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, signTransaction, updateForeignFee, updateNameRequest, voteOnPoll, getArrrSyncStatus } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
-
-
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -19,6 +17,7 @@ function setLocalStorage(key, data) {
     throw error;
   });
 }
+
 export const isRunningGateway = async ()=> {
             let isGateway = true;
             const apiKey = await getApiKeyFromStorage();
@@ -115,6 +114,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "ENCRYPT_QORTAL_GROUP_DATA": {
           try {
             const res = await encryptQortalGroupData(request.payload, event.source);
@@ -134,6 +134,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "DECRYPT_QORTAL_GROUP_DATA": {
           try {
             const res = await decryptQortalGroupData(request.payload, event.source);
@@ -353,9 +354,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
-  
-     
-  
+
         case "DEPLOY_AT": {
           try {
             const res = await deployAt(request.payload, isFromExtension);
@@ -715,6 +714,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "CREATE_TRADE_SELL_ORDER": {
           try {
             const res = await createSellOrder(request.payload, isFromExtension);
@@ -734,6 +734,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "CANCEL_TRADE_SELL_ORDER": {
           try {
             const res = await cancelSellOrder(request.payload, isFromExtension);
@@ -753,6 +754,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "IS_USING_PUBLIC_NODE": {
           try {
             let isGateway =  await isRunningGateway()
@@ -772,6 +774,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "ADMIN_ACTION": {
           try {
             const res =  await adminAction(request.payload, isFromExtension)
@@ -791,6 +794,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "SIGN_TRANSACTION": {
           try {
             const res =  await signTransaction(request.payload, isFromExtension)
@@ -810,6 +814,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "OPEN_NEW_TAB": {
           try {
             const res =  await openNewTab(request.payload, isFromExtension)
@@ -928,6 +933,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "SHOW_ACTIONS" : {
           try {
            
@@ -947,6 +953,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "REGISTER_NAME" : {
           try {
             const res =  await registerNameRequest(request.payload, isFromExtension)
@@ -966,6 +973,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "UPDATE_NAME" : {
           try {
             const res =  await updateNameRequest(request.payload, isFromExtension)
@@ -1025,6 +1033,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "KICK_FROM_GROUP" : {
           try {
             const res =  await kickFromGroupRequest(request.payload, isFromExtension)
@@ -1044,6 +1053,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "BAN_FROM_GROUP" : {
           try {
             const res =  await banFromGroupRequest(request.payload, isFromExtension)
@@ -1083,6 +1093,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "ADD_GROUP_ADMIN" : {
           try {
             const res =  await addGroupAdminRequest(request.payload, isFromExtension)
@@ -1103,6 +1114,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "DECRYPT_AESGCM" : {
           try {
             const res =  await decryptAESGCMRequest(request.payload, isFromExtension)
@@ -1122,6 +1134,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "REMOVE_GROUP_ADMIN" : {
           try {
             const res =  await removeGroupAdminRequest(request.payload, isFromExtension)
@@ -1161,6 +1174,7 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
         case "CREATE_GROUP" : {
           try {
             const res =  await createGroupRequest(request.payload, isFromExtension)
@@ -1180,6 +1194,27 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
+
+        case "GET_ARRR_SYNC_STATUS": {
+          try {
+            const res = await getArrrSyncStatus(request.payload);
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
+
         default:
           break;
       }
@@ -1188,4 +1223,3 @@ export const isRunningGateway = async ()=> {
   
   // Initialize the message listener
   setupMessageListenerQortalRequest();
-  
