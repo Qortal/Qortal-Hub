@@ -31,7 +31,7 @@ import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
 import ThemeSelector from "../components/Theme/ThemeSelector";
 
 const manifestData = {
-  version: "0.5.2",
+  version: "0.5.3",
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
