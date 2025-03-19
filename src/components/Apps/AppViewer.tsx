@@ -25,8 +25,12 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
       setUrl(app?.url)
       return
     }
-   
-    setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}?theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
+    let hasQueryParam = false
+    if(app?.path && app.path.includes('?')){
+      hasQueryParam = true
+    }
+
+    setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? "&": "?" }theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
   }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview])
 
   useEffect(()=> {
@@ -44,7 +48,6 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
     const {tabId} = e.detail
     if(tabId === app?.tabId){
       if(isDevMode){
-        
         resetHistory()
         if(!app?.isPreview || app?.isPrivate){
           setUrl(app?.url + `?time=${Date.now()}`)
@@ -52,7 +55,6 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
         return
 
       }
-
       const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=dark&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`
       setUrl(constructUrl)
     }

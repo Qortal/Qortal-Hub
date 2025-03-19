@@ -29,7 +29,7 @@ export const WalletsAppWrapper = () => {
     tabId: "5558589",
     name: "Q-Wallets",
     service: "APP",
-    path: '/qortal'
+    path: 'qortal?authOnMount=true'
   });
 
   const isDisableBackButton = useMemo(() => {
@@ -66,11 +66,8 @@ export const WalletsAppWrapper = () => {
         <Box
           sx={{
             position: "fixed",
-            height: "1000px",
-
-            maxHeight: "100vh",
-            width: "1200px",
-            maxWidth: "100vw",
+            height: "100vh",
+            width: "100vw",
             backgroundColor: "#27282c",
             zIndex: 100,
             bottom: 0,
