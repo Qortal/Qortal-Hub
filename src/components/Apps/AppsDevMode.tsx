@@ -217,8 +217,8 @@ export const AppsDevMode = ({ mode, setMode, show , myName, goToHome, setDesktop
     <AppsParent
       sx={{
         flexDirection:  'row' ,
-        position: !show && 'fixed',
-        left: !show && '-10000000px',
+        position: !show && 'absolute',
+        left: !show && '10000000px',
       }}
     >
      
