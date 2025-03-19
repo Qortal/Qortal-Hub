@@ -313,8 +313,8 @@ export const AppsDesktop = ({ mode, setMode, show , myName, goToHome, setDesktop
   return (
     <AppsParent
       sx={{
-        position: !show && 'absolute',
-        left: !show && '10000000px',
+        position: !show && 'fixed',
+        left: !show && '-10000000px',
         flexDirection:  'row' 
       }}
     >

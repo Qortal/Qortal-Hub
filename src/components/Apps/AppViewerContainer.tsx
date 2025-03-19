@@ -35,8 +35,8 @@ const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode,
         </>
       }
       style={{
-        position: (!isSelected || hide) && 'absolute',
-        left: (!isSelected || hide) && '10000000px',
+        position: (!isSelected || hide) && 'fixed',
+        left: (!isSelected || hide) && '-10000000px',
         height: customHeight ? customHeight : !isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px)`,
         border: 'none',
         width: '100%',
