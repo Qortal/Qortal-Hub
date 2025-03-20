@@ -16,7 +16,8 @@ export const AppContainer = styled(Box)(({ theme }) => ({
   width: "100vw",
   background: "rgba(39, 40, 44, 1)",
   height: "100vh",
-  radius: "15px"
+  radius: "15px",
+  overflow: 'hidden'
 }));
 export const AuthenticatedContainer = styled(Box)(({ theme }) => ({
   display: "flex",
