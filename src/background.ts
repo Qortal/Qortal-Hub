@@ -291,7 +291,8 @@ export const getBaseApi = async (customApi?: string) => {
   }
 
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  if (apiKey) {
+  
+  if (apiKey?.url) {
     return apiKey?.url;
   } else {
     return groupApi;
@@ -299,7 +300,7 @@ export const getBaseApi = async (customApi?: string) => {
 };
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  if (apiKey) {
+  if (apiKey?.url) {
     return true;
   } else {
     return false;
@@ -313,7 +314,7 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
 
-  if (apiKey) {
+  if (apiKey?.url) {
     // Check if the endpoint already contains a query string
     const separator = endpoint.includes("?") ? "&" : "?";
     return `${apiKey?.url}${endpoint}${separator}apiKey=${apiKey?.apikey}`;
@@ -944,6 +945,7 @@ export async function getBalanceInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
+
   const response = await fetch(validApi + "/addresses/balance/" + address);
 
   if (!response?.ok) throw new Error("0 QORT in your balance");
