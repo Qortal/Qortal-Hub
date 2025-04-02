@@ -133,6 +133,7 @@ import { BuyQortInformation } from "./components/BuyQortInformation";
 import { QortPayment } from "./components/QortPayment";
 import { GeneralNotifications } from "./components/GeneralNotifications";
 import ThemeSelector from "./components/Theme/ThemeSelector";
+import { PdfViewer } from "./common/PdfViewer";
 
 type extStates =
   | "not-authenticated"
@@ -2019,32 +2020,31 @@ function App() {
         // backgroundRepeat: desktopViewMode === "apps" && "no-repeat",
       }}
     >
-      <GlobalContext.Provider
-        value={{
-          showTutorial,
-          openTutorialModal,
-          setOpenTutorialModal,
-          downloadResource,
-          hasSeenGettingStarted,
-        }}
-      >
-        <Tutorials />
-        {extState === "not-authenticated" && (
-          <NotAuthenticated
-            getRootProps={getRootProps}
-            getInputProps={getInputProps}
-            setExtstate={setExtstate}
-            apiKey={apiKey}
-            globalApiKey={globalApiKey}
-            setApiKey={setApiKey}
-            handleSetGlobalApikey={handleSetGlobalApikey}
-            currentNode={currentNode}
-            setCurrentNode={setCurrentNode}
-            setUseLocalNode={setUseLocalNode}
-            useLocalNode={useLocalNode}
-          />
-        )}
-        {/* {extState !== "not-authenticated" && (
+      <PdfViewer />
+      <GlobalContext.Provider value={{
+            showTutorial,
+            openTutorialModal,
+            setOpenTutorialModal,
+            downloadResource,
+            hasSeenGettingStarted
+      }}>
+            <Tutorials />
+      {extState === "not-authenticated" && (
+        <NotAuthenticated
+          getRootProps={getRootProps}
+          getInputProps={getInputProps}
+          setExtstate={setExtstate}
+          apiKey={apiKey}
+          globalApiKey={globalApiKey}
+          setApiKey={setApiKey}
+          handleSetGlobalApikey={handleSetGlobalApikey}
+          currentNode={currentNode}
+          setCurrentNode={setCurrentNode}
+          setUseLocalNode={setUseLocalNode}
+          useLocalNode={useLocalNode}
+        />
+      )}
+      {/* {extState !== "not-authenticated" && (
         <button onClick={logoutFunc}>logout</button>
       )} */}
         {extState === "authenticated" && isMainWindow && (

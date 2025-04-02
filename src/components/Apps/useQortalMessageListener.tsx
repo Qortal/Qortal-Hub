@@ -254,7 +254,8 @@ export const listOfAllQortalRequests = [
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
-  'GET_ARRR_SYNC_STATUS'
+  'GET_ARRR_SYNC_STATUS',
+  'SHOW_PDF_READER'
 ]
 
 export const UIQortalRequests = [
@@ -309,7 +310,8 @@ export const UIQortalRequests = [
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
-  'GET_ARRR_SYNC_STATUS'
+  'GET_ARRR_SYNC_STATUS',
+  'SHOW_PDF_READER'
 ];
 
 

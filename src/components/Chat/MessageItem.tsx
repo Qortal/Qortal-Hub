@@ -572,11 +572,17 @@ const WatchComponent = ({onSeen, isLast, children})=> {
   const { ref, inView } = useInView({
     threshold: 0.7, // Fully visible
     triggerOnce: true, // Only trigger once when it becomes visible
+    delay: 100,
+    trackVisibility: false,
   });
 
   useEffect(() => {
     if (inView && isLast && onSeen) {
+     
+     setTimeout(() => {
       onSeen();
+      }, 100);
+     
     }
   }, [inView, isLast, onSeen]);
 
