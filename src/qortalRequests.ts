@@ -2,6 +2,7 @@ import { gateways, getApiKeyFromStorage } from "./background";
 import { listOfAllQortalRequests } from "./components/Apps/useQortalMessageListener";
 import { addForeignServer, addGroupAdminRequest, addListItems, adminAction, banFromGroupRequest, cancelGroupBanRequest, cancelGroupInviteRequest, cancelSellOrder, createAndCopyEmbedLink, createBuyOrder, createGroupRequest, createPoll, createSellOrder, decryptAESGCMRequest, decryptData, decryptDataWithSharingKey, decryptQortalGroupData, deleteHostedData, deleteListItems, deployAt, encryptData, encryptDataWithSharingKey, encryptQortalGroupData, getCrossChainServerInfo, getDaySummary, getNodeInfo, getNodeStatus, getForeignFee, getHostedData, getListItems, getServerConnectionHistory, getTxActivitySummary, getUserAccount, getUserWallet, getUserWalletInfo, getUserWalletTransactions, getWalletBalance, inviteToGroupRequest, joinGroup, kickFromGroupRequest, leaveGroupRequest, openNewTab, publishMultipleQDNResources, publishQDNResource, registerNameRequest, removeForeignServer, removeGroupAdminRequest, saveFile, sendChatMessage, sendCoin, setCurrentForeignServer, signTransaction, updateForeignFee, updateNameRequest, voteOnPoll, getArrrSyncStatus } from "./qortalRequests/get";
 import { getData, storeData } from "./utils/chromeStorage";
+import { executeEvent } from "./utils/events";
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -1214,7 +1215,29 @@ export const isRunningGateway = async ()=> {
           }
           break;
         }
-
+        case "SHOW_PDF_READER" : {
+          try {
+            if(!request.payload?.blob){
+              throw new Error('Missing blob')
+            }
+            if(request.payload?.blob?.type !== "application/pdf") throw new Error('blob type must be application/pdf')
+              executeEvent("openPdf", { blob:  request.payload?.blob});
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              payload: true,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          } catch (error) {
+            event.source.postMessage({
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: "backgroundMessageResponse",
+            }, event.origin);
+          }
+          break;
+        }
         default:
           break;
       }

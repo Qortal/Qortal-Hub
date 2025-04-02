@@ -157,6 +157,7 @@ import { RegisterName } from "./components/RegisterName";
 import { BuyQortInformation } from "./components/BuyQortInformation";
 import { QortPayment } from "./components/QortPayment";
 import { GeneralNotifications } from "./components/GeneralNotifications";
+import { PdfViewer } from "./common/PdfViewer";
 
 type extStates =
   | "not-authenticated"
@@ -1939,6 +1940,7 @@ function App() {
         // backgroundRepeat: desktopViewMode === "apps" && "no-repeat",
       }}
     >
+      <PdfViewer />
       <GlobalContext.Provider value={{
             showTutorial,
             openTutorialModal,

@@ -17,7 +17,7 @@ import { InviteMember } from "./InviteMember";
 import { ListOfInvites } from "./ListOfInvites";
 import { ListOfBans } from "./ListOfBans";
 import { ListOfJoinRequests } from "./ListOfJoinRequests";
-import { Box, Card, Tab, Tabs } from "@mui/material";
+import { Box, ButtonBase, Card, Tab, Tabs } from "@mui/material";
 import { CustomizedSnackbars } from "../Snackbar/Snackbar";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
 import { getGroupMembers, getNames } from "./Group";
@@ -26,7 +26,7 @@ import { getFee } from "../../background";
 import { LoadingButton } from "@mui/lab";
 import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import { Spacer } from "../../common/Spacer";
-
+import InsertLinkIcon from '@mui/icons-material/InsertLink';
 function a11yProps(index: number) {
   return {
     id: `simple-tab-${index}`,
@@ -268,6 +268,12 @@ export const ManageMembers = ({
             <Typography>GroupId: {groupInfo?.groupId}</Typography>
             <Typography>GroupName: {groupInfo?.groupName}</Typography>
             <Typography>Number of members: {groupInfo?.memberCount}</Typography>
+            <ButtonBase sx={{
+              gap: '10px'
+            }} onClick={async ()=> {
+              const link = `qortal://use-group/action-join/groupid-${groupInfo?.groupId}`
+              await navigator.clipboard.writeText(link);
+            }}><InsertLinkIcon /> <Typography>Join Group Link</Typography></ButtonBase>
             </Box>
            <Spacer height="20px" />
           {selectedGroup?.groupId && !isOwner &&  (
