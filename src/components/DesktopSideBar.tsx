@@ -1,8 +1,12 @@
-import { Box, ButtonBase, useTheme } from "@mui/material";
+import { Box, ButtonBase } from "@mui/material";
+import React from "react";
 import { HomeIcon } from "../assets/Icons/HomeIcon";
 import { MessagingIcon } from "../assets/Icons/MessagingIcon";
 import { Save } from "./Save/Save";
+import { HubsIcon } from "../assets/Icons/HubsIcon";
+import { CoreSyncStatus } from "./CoreSyncStatus";
 import { IconWrapper } from "./Desktop/DesktopFooter";
+import AppIcon from "./../assets/svgs/AppIcon.svg";
 import { useRecoilState } from "recoil";
 import { enabledDevModeAtom } from "../atoms/global";
 import { AppsIcon } from "../assets/Icons/AppsIcon";
@@ -50,6 +54,12 @@ export const DesktopSideBar = ({
       >
         <HomeIcon
           height={34}
+<<<<<<< HEAD
+=======
+          color={
+            desktopViewMode === "home" ? "white" : "rgba(250, 250, 250, 0.5)"
+          }
+>>>>>>> b721248 (Add themeSelector component)
         />
       </ButtonBase>
       <ButtonBase
@@ -60,16 +70,27 @@ export const DesktopSideBar = ({
         }}
       >
         <IconWrapper
+<<<<<<< HEAD
+=======
+          color={isApps ? "white" : "rgba(250, 250, 250, 0.5)"}
+>>>>>>> b721248 (Add themeSelector component)
           label="Apps"
           selected={isApps}
           disableWidth
         >
           <AppsIcon
+<<<<<<< HEAD
+=======
+            color={isApps ? "white" : "rgba(250, 250, 250, 0.5)"}
+>>>>>>> b721248 (Add themeSelector component)
             height={30}
           />
         </IconWrapper>
       </ButtonBase>
+<<<<<<< HEAD
 
+=======
+>>>>>>> b721248 (Add themeSelector component)
       <ButtonBase
         onClick={() => {
           setDesktopViewMode("chat");
@@ -79,7 +100,13 @@ export const DesktopSideBar = ({
           color={
             hasUnreadDirects || hasUnreadGroups
               ? "var(--unread)"
+<<<<<<< HEAD
               : theme.palette.text.primary
+=======
+              : desktopViewMode === "chat"
+              ? "white"
+              : "rgba(250, 250, 250, 0.5)"
+>>>>>>> b721248 (Add themeSelector component)
           }
           label="Chat"
           disableWidth
@@ -89,7 +116,13 @@ export const DesktopSideBar = ({
             color={
               hasUnreadDirects || hasUnreadGroups
                 ? "var(--unread)"
+<<<<<<< HEAD
                 : theme.palette.text.primary
+=======
+                : desktopViewMode === "chat"
+                ? "white"
+                : "rgba(250, 250, 250, 0.5)"
+>>>>>>> b721248 (Add themeSelector component)
             }
           />
         </IconWrapper>
@@ -121,10 +154,22 @@ export const DesktopSideBar = ({
           }}
         >
           <IconWrapper
+<<<<<<< HEAD
+=======
+            color={
+              desktopViewMode === "dev" ? "white" : "rgba(250, 250, 250, 0.5)"
+            }
+>>>>>>> b721248 (Add themeSelector component)
             label="Dev"
             disableWidth
           >
             <AppsIcon
+<<<<<<< HEAD
+=======
+              color={
+                desktopViewMode === "dev" ? "white" : "rgba(250, 250, 250, 0.5)"
+              }
+>>>>>>> b721248 (Add themeSelector component)
               height={30}
             />
           </IconWrapper>

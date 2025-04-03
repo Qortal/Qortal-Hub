@@ -939,22 +939,68 @@ export const NotAuthenticated = ({
 
       <ThemeSelector style={{ position: "fixed", bottom: "1%", left: "1%" }}/>
 
-      <ButtonBase
-        onClick={() => {
-          showTutorial("create-account", true);
-        }}
-        sx={{
-          position: "fixed",
-          bottom: "25px",
-          right: "25px",
-        }}
-      >
-        <HelpIcon
-          sx={{
-            color: "var(--unread)",
-          }}
-        />
-      </ButtonBase>
+                <Button
+                  variant="contained"
+                  disabled={!enteredApiKey}
+                  onClick={() => {
+                    try {
+                      setImportedApiKey(enteredApiKey); // Store the file content in the state
+        if(customNodes){
+          setCustomNodes((prev)=> {
+            const copyPrev = [...prev]
+            const findLocalIndex = copyPrev?.findIndex((item)=> item?.url === 'http://127.0.0.1:12391')
+            if(findLocalIndex === -1){
+              copyPrev.unshift({
+                url: "http://127.0.0.1:12391",
+                apikey: enteredApiKey
+              })
+            } else {
+              copyPrev[findLocalIndex] = {
+                url: "http://127.0.0.1:12391",
+                apikey: enteredApiKey
+              }
+            }
+            window
+            .sendMessage("setCustomNodes", copyPrev)
+            .catch((error) => {
+              console.error(
+                "Failed to set custom nodes:",
+                error.message || "An error occurred"
+              );
+            });
+            return copyPrev
+          })
+       
+        }
+        setUseLocalNode(false);
+        setShowSelectApiKey(false)
+        setEnteredApiKey("")
+                    } catch (error) {
+                      console.error(error)
+                    }
+                  }}
+                  autoFocus
+                >
+                  Save
+                </Button>
+           
+          
+          </DialogActions>
+        </Dialog>
+      )}
+      <ButtonBase onClick={()=> {
+         showTutorial('create-account', true)
+      }} sx={{
+        position: 'fixed',
+        bottom: '25px',
+        right: '25px'
+      }}>
+        <HelpIcon sx={{
+          color: 'var(--unread)'
+        }} />
+        </ButtonBase>
+
+        <ThemeSelector style={{ position: "fixed", bottom: "1%", left: "1%" }}/>
     </>
   );
 };
