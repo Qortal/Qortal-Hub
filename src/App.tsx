@@ -1596,7 +1596,7 @@ function App() {
             }}
           >
             <Spacer height="20px" />
-            
+
             {!isMobile && (
               <>
                 <Spacer height="20px" />
