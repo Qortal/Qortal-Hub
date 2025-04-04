@@ -16,8 +16,8 @@ const ThemeSelector = ({ style }) => {
         ...style,
       }}
     >
-      {themeMode === "dark" ? <LightModeIcon /> : <NightlightIcon />}
-      <Switch checked={themeMode === "dark"} onChange={toggleTheme} />
+      {themeMode === "light" ? <LightModeIcon /> : <NightlightIcon />}
+      <Switch checked={themeMode === "light"} onChange={toggleTheme} />
     </div>
   );
 };
