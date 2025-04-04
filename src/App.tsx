@@ -1667,7 +1667,9 @@ function App() {
                 />
               </Tooltip>
             </ButtonBase>
+
             <Spacer height="20px" />
+
             <ButtonBase
               onClick={() => {
                 setIsOpenDrawerLookup(true);
@@ -1699,7 +1701,9 @@ function App() {
                 />
               </Tooltip>
             </ButtonBase>
+
             <Spacer height="20px" />
+
             <ButtonBase
               onClick={() => {
                 executeEvent('openWalletsApp', {})
@@ -1732,7 +1736,6 @@ function App() {
               </Tooltip>
             </ButtonBase>
             
-          
             {desktopViewMode !== 'home' && (
               <>
                 <Spacer height="20px" />
