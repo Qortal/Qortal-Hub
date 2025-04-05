@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from "react";
-import "./App.css";
 import { useDropzone } from "react-dropzone";
 import {
   Box,
