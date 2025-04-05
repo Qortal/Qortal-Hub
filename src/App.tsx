@@ -18,9 +18,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Input,
-  InputLabel,
-  Popover,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -28,10 +25,8 @@ import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
 import { decryptStoredWallet } from "./utils/decryptWallet";
 import { CountdownCircleTimer } from "react-countdown-circle-timer";
-import Logo1 from "./assets/svgs/Logo1.svg";
 import Logo1Dark from "./assets/svgs/Logo1Dark.svg";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import Logo2 from "./assets/svgs/Logo2.svg";
 import Copy from "./assets/svgs/Copy.svg";
 import ltcLogo from "./assets/ltc.png";
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
@@ -42,19 +37,16 @@ import Logout from "./assets/svgs/Logout.svg";
 import Return from "./assets/svgs/Return.svg";
 import WarningIcon from '@mui/icons-material/Warning';
 import Success from "./assets/svgs/Success.svg";
-import Info from "./assets/svgs/Info.svg";
 import CloseIcon from "@mui/icons-material/Close";
 import './utils/seedPhrase/RandomSentenceGenerator';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   createAccount,
-  generateRandomSentence,
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from "./utils/generateWallet/generateWallet";
 import { kdf } from "./deps/kdf";
-import { generateSaveWalletData } from "./utils/generateWallet/storeWallet";
 import { crypto, walletVersion } from "./constants/decryptWallet";
 import PhraseWallet from "./utils/generateWallet/phrase-wallet";
 import {
@@ -65,7 +57,6 @@ import {
   AuthenticatedContainerInnerRight,
   CustomButton,
   CustomButtonAccept,
-  CustomInput,
   CustomLabel,
   TextItalic,
   TextP,
@@ -74,25 +65,19 @@ import {
 import { Spacer } from "./common/Spacer";
 import { Loader } from "./components/Loader";
 import { PasswordField, ErrorText } from "./components";
-import { ChatGroup } from "./components/Chat/ChatGroup";
 import { Group, requestQueueMemberNames } from "./components/Group/Group";
 import { TaskManager } from "./components/TaskManager/TaskManger";
 import { useModal } from "./common/useModal";
-import { LoadingButton } from "@mui/lab";
-import { Label } from "./components/Group/AddGroup";
 import { CustomizedSnackbars } from "./components/Snackbar/Snackbar";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HelpIcon from '@mui/icons-material/Help';
 
 import {
   cleanUrl,
-  getFee,
   getProtocol,
   getWallets,
   groupApi,
-  groupApiLocal,
   groupApiSocket,
-  groupApiSocketLocal,
   storeWallets,
 } from "./background";
 import {
@@ -130,19 +115,12 @@ import {
 } from "./atoms/global";
 import { useAppFullScreen } from "./useAppFullscreen";
 import { NotAuthenticated } from "./ExtStates/NotAuthenticated";
-import {
-  openIndexedDB,
-  showSaveFilePicker,
-} from "./components/Apps/useQortalMessageListener";
-import { fileToBase64 } from "./utils/fileReading";
 import { handleGetFileFromIndexedDB } from "./utils/indexedDB";
 import { CoreSyncStatus } from "./components/CoreSyncStatus";
 import { Wallets } from "./Wallets";
-import { RandomSentenceGenerator } from "./utils/seedPhrase/RandomSentenceGenerator";
 import { useFetchResources } from "./common/useFetchResources";
 import { Tutorials } from "./components/Tutorials/Tutorials";
 import { useHandleTutorials } from "./components/Tutorials/useHandleTutorials";
-import BoundedNumericTextField from "./common/BoundedNumericTextField";
 import { useHandleUserInfo } from "./components/Group/useHandleUserInfo";
 import { Minting } from "./components/Minting/Minting";
 import { isRunningGateway } from "./qortalRequests";
@@ -150,7 +128,6 @@ import { QMailStatus } from "./components/QMailStatus";
 import { GlobalActions } from "./components/GlobalActions/GlobalActions";
 import { useBlockedAddresses } from "./components/Group/useBlockUsers";
 import { WalletIcon } from "./assets/Icons/WalletIcon";
-import { DrawerUserLookup } from "./components/Drawer/DrawerUserLookup";
 import { UserLookup } from "./components/UserLookup.tsx/UserLookup";
 import { RegisterName } from "./components/RegisterName";
 import { BuyQortInformation } from "./components/BuyQortInformation";
