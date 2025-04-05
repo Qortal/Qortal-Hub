@@ -20,7 +20,7 @@ const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode,
                 padding: 0;
               }
               * {
-                -ms-overflow-style: none;  /* IE and Edge */
+                -msOverflowStyle: none;  /* IE and Edge */
                 scrollbar-width: none;  /* Firefox */
               }
               *::-webkit-scrollbar {
