@@ -69,7 +69,7 @@ const ThemeSelector = ({ style }) => {
         ...style,
       }}
     >
-      <ThemeSwitch checked={themeMode === "light"} onChange={toggleTheme} />
+      <ThemeSwitch checked={themeMode === "dark"} onChange={toggleTheme} />
     </div>
   );
 };
