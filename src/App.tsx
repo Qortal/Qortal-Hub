@@ -47,6 +47,7 @@ import {
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from "./utils/generateWallet/generateWallet";
+import { kdf } from "./deps/kdf";
 import { crypto, walletVersion } from "./constants/decryptWallet";
 import PhraseWallet from "./utils/generateWallet/phrase-wallet";
 import {
