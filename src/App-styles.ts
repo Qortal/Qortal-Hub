@@ -204,11 +204,13 @@ export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
   })
 );
 
-export const CustomInput = styled(TextField)({
+export const CustomInput = styled(TextField)(({ theme }) => ({
   width: "183px", // Adjust the width as needed
   borderRadius: "5px",
   // backgroundColor: "rgba(30, 30, 32, 1)",
   outline: "none",
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   input: {
     fontSize: 10,
     fontFamily: "Inter",
@@ -241,7 +243,7 @@ export const CustomInput = styled(TextField)({
   "& .MuiInput-underline:after": {
     borderBottom: "none",
   },
-});
+}));
 
 export const CustomLabel = styled(InputLabel)(({ theme }) => ({
   fontWeight: 400,
