@@ -47,7 +47,6 @@ import {
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from "./utils/generateWallet/generateWallet";
-import { kdf } from "./deps/kdf";
 import { crypto, walletVersion } from "./constants/decryptWallet";
 import PhraseWallet from "./utils/generateWallet/phrase-wallet";
 import {
@@ -136,6 +135,7 @@ import { QortPayment } from "./components/QortPayment";
 import { GeneralNotifications } from "./components/GeneralNotifications";
 import ThemeSelector from "./components/Theme/ThemeSelector";
 import { PdfViewer } from "./common/PdfViewer";
+import ThemeSelector from "./components/Theme/ThemeSelector";
 
 type extStates =
   | "not-authenticated"
