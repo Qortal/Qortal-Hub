@@ -66,7 +66,7 @@ export const CreateCommonSecret = ({groupId, secretKey, isOwner,  myAddress, sec
       const res = await fetch(
         `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
-        }?encoding=base64`
+        }?encoding=base64&rebuild=true`
       );
       const data = await res.text();
    
