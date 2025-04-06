@@ -79,7 +79,7 @@ export const AdminSpaceInner = ({
       const res = await fetch(
         `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${
           getLatestPublish.name
-        }/${getLatestPublish.identifier}?encoding=base64`
+        }/${getLatestPublish.identifier}?encoding=base64&rebuild=true`
       );
       data = await res.text();
 
