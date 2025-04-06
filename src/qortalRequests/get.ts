@@ -3088,7 +3088,7 @@ export const sendCoin = async (data, isFromExtension) => {
         { amount, password: null, receiver: recipient },
         true
       );
-      return makePayment.res;
+      return makePayment.res?.data;
     } else {
       throw new Error("User declined request");
     }
