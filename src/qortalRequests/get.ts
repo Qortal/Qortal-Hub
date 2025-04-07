@@ -30,6 +30,7 @@ import {
   removeAdmin,
   cancelInvitationToGroup,
   createGroup,
+  updateGroup,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -122,7 +123,7 @@ export async function retryTransaction(fn, args, throwError, retries = MAX_RETRI
         if(throwError){
           throw new Error(error?.message || "Unable to process transaction")
         } else {
-          return null
+          throw new Error(error?.message || "Unable to process transaction")
         }
       }
       await new Promise(res => setTimeout(res, 10000)); 
@@ -391,7 +392,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 30000); // 30-second timeout
+    }, 60000); // 30-second timeout
   });
 }
 
@@ -1349,6 +1350,7 @@ export const publishMultipleQDNResources = async (
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
+          service: resource.service,
         });
         continue;
       }
@@ -1357,6 +1359,7 @@ export const publishMultipleQDNResources = async (
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
+          service: resource.service,
         });
         continue;
       }
@@ -1386,6 +1389,7 @@ export const publishMultipleQDNResources = async (
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
+          service: resource.service,
         });
         continue;
       }
@@ -1413,6 +1417,7 @@ export const publishMultipleQDNResources = async (
           failedPublishesIdentifiers.push({
             reason: errorMsg,
             identifier: resource.identifier,
+            service: resource.service,
           });
           continue;
         }
@@ -1439,7 +1444,7 @@ export const publishMultipleQDNResources = async (
           apiVersion: 2,
           withFee: true,
           },
-        ], false);
+        ], true);
         await new Promise((res) => {
           setTimeout(() => {
             res();
@@ -1450,17 +1455,21 @@ export const publishMultipleQDNResources = async (
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
+          service: resource.service,
         });
       }
     } catch (error) {
       failedPublishesIdentifiers.push({
         reason: error?.message || "Unknown error",
         identifier: resource.identifier,
+        service: resource.service,
       });
     }
   }
   if (failedPublishesIdentifiers.length > 0) {
-    const obj = {};
+    const obj = {
+       message: "Some resources have failed to publish.",
+    };
     obj["error"] = {
       unsuccessfulPublishes: failedPublishesIdentifiers,
     };
@@ -3078,6 +3087,7 @@ export const sendCoin = async (data, isFromExtension) => {
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         fee: fee,
+        confirmCheckbox: true
       },
       isFromExtension
     );
@@ -4522,15 +4532,15 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
 
 
 export const createGroupRequest = async (data, isFromExtension) => {
-  const requiredFields = ["groupId", "qortalAddress"];
+  const requiredFields = ["groupId", "qortalAddress", "groupName", "type", "approvalThreshold", "minBlock", "maxBlock"];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (!data[field]) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
   const groupName = data.groupName
-  const description = data?.description
+  const description = data?.description || ""
   const type = +data.type
   const approvalThreshold = +data?.approvalThreshold
   const minBlock = +data?.minBlock
@@ -4555,6 +4565,65 @@ export const createGroupRequest = async (data, isFromExtension) => {
         groupApprovalThreshold: approvalThreshold,
         minBlock,
         maxBlock
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const updateGroupRequest = async (data, isFromExtension) => {
+  const requiredFields = ["groupId", "newOwner",  "type", "approvalThreshold", "minBlock", "maxBlock"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (data[field] !== undefined && data[field] !== null) {
+      missingFields.push(field);
+    }
+  });
+  const groupId = +data.groupId
+  const newOwner = data.newOwner
+  const description = data?.description || ""
+  const type = +data.type
+  const approvalThreshold = +data?.approvalThreshold
+  const minBlock = +data?.minBlock
+  const maxBlock = +data.maxBlock
+
+  let groupInfo = null;
+  try {
+    const url = await createEndpoint(`/groups/${groupId}`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Failed to fetch group");
+
+    groupInfo = await response.json();
+  } catch (error) {
+    const errorMsg = (error && error.message) || "Group not found";
+    throw new Error(errorMsg);
+  }
+
+  const displayInvitee = await getNameInfoForOthers(newOwner)
+
+
+  const fee = await getFee("CREATE_GROUP");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to update this group?`,
+      text2: `New owner: ${displayInvitee || newOwner}`,
+      highlightedText: `Group: ${groupInfo.groupName}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await updateGroup({
+    groupId,
+    newOwner,
+    newIsOpen: type,
+    newDescription: description,
+    newApprovalThreshold: approvalThreshold,
+    newMinimumBlockDelay: minBlock,
+    newMaximumBlockDelay: maxBlock
       })
   return response
 

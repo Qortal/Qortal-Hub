@@ -20,6 +20,7 @@ import DeployAtTransaction from './DeployAtTransaction.js'
 import RewardShareTransaction from './RewardShareTransaction.js'
 import RemoveRewardShareTransaction from './RemoveRewardShareTransaction.js'
 import UpdateNameTransaction from './UpdateNameTransaction.js'
+import UpdateGroupTransaction from './UpdateGroupTransaction.js'
 
 
 export const transactionTypes = {
@@ -32,6 +33,7 @@ export const transactionTypes = {
 	18: ChatTransaction,
 	181: GroupChatTransaction,
 	22: CreateGroupTransaction,
+	23: UpdateGroupTransaction,
 	24: AddGroupAdminTransaction,
 	25: RemoveGroupAdminTransaction,
 	26: GroupBanTransaction,

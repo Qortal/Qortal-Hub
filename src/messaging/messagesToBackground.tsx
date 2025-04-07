@@ -24,7 +24,7 @@ window.addEventListener("message", (event) => {
   }
 });
 
-export const sendMessageBackground = (action, data = {}, timeout = 180000, isExtension, appInfo, skipAuth) => {
+export const sendMessageBackground = (action, data = {}, timeout = 240000, isExtension, appInfo, skipAuth) => {
   return new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
     callbackMap.set(requestId, { resolve, reject }); // Store both resolve and reject callbacks
