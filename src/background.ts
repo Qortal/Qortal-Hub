@@ -2309,6 +2309,48 @@ export async function createGroup({
     throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
+export async function updateGroup({
+  groupId,
+  newOwner,
+  newIsOpen,
+  newDescription,
+  newApprovalThreshold,
+  newMinimumBlockDelay,
+  newMaximumBlockDelay
+}) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (!address) throw new Error("Cannot find user");
+  const lastReference = await getLastRef();
+  const feeres = await getFee("UPDATE_GROUP");
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+
+  const tx = await createTransaction(23, keyPair, {
+    fee: feeres.fee,
+    _groupId: groupId,
+     newOwner,
+     newIsOpen,
+    newDescription,
+    newApprovalThreshold,
+    newMinimumBlockDelay,
+    newMaximumBlockDelay,
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
 export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
   const address = await getNameOrAddress(qortalAddress);
   if (!address) throw new Error("Cannot find user");

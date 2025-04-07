@@ -255,7 +255,8 @@ export const listOfAllQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_ARRR_SYNC_STATUS',
-  'SHOW_PDF_READER'
+  'SHOW_PDF_READER',
+  'UPDATE_GROUP'
 ]
 
 export const UIQortalRequests = [
@@ -311,7 +312,8 @@ export const UIQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_ARRR_SYNC_STATUS',
-  'SHOW_PDF_READER'
+  'SHOW_PDF_READER',
+  'UPDATE_GROUP'
 ];
 
 
@@ -575,7 +577,7 @@ isDOMContentLoaded: false
               result: null,
               error: {
                 error: response?.error,
-                message: typeof response?.error === 'string' ? response?.error : 'An error has occurred'
+                message: typeof response?.error === 'string' ? response?.error : typeof response?.message === 'string' ? response?.message : 'An error has occurred'
               },
             });
           } else {
