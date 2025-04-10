@@ -1,9 +1,4 @@
-import {
-  Typography,
-  Box,
-  TextField,
-  InputLabel,
-} from "@mui/material";
+import { Typography, Box, TextField, InputLabel } from "@mui/material";
 import { styled } from "@mui/system";
 
 export const AppContainer = styled(Box)(({ theme }) => ({
@@ -11,9 +6,9 @@ export const AppContainer = styled(Box)(({ theme }) => ({
   alignItems: "center",
   flexDirection: "column",
   width: "100vw",
+  background: "rgba(39, 40, 44, 1)",
   height: "100vh",
   radius: "15px",
-  overflow: 'hidden',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
 }));
@@ -85,44 +80,70 @@ export const TextSpan = styled("span")(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-export const AddressBox = styled(Box)`
-  display: flex;
-  border: 1px solid var(--50-white, rgba(255, 255, 255, 0.5));
-  justify-content: space-between;
-  align-items: center;
-  width: auto;
-  height: 25px;
-  padding: 5px 15px 5px 15px;
-  gap: 5px;
-  border-radius: 100px;
-  font-family: Inter;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 14.52px;
-  text-align: left;
-  color: var(--50-white, rgba(255, 255, 255, 0.5));
-  cursor: pointer;
-  transition: all 0.2s;
-  &:hover {
-    background-color: rgba(41, 41, 43, 1);
-    color: white;
-    svg path {
-      fill: white; // Fill color changes to white on hover
-    }
-  }
-`;
+export const AddressBox = styled(Box)(({ theme }) => ({
+  display: "flex",
+  border: `1px solid ${
+    theme.palette.mode === "dark"
+      ? "rgba(255, 255, 255, 0.5)"
+      : "rgba(0, 0, 0, 0.3)"
+  }`,
+  justifyContent: "space-between",
+  alignItems: "center",
+  width: "auto",
+  height: "25px",
+  padding: "5px 15px",
+  gap: "5px",
+  borderRadius: "100px",
+  fontFamily: "Inter",
+  fontSize: "12px",
+  fontWeight: 600,
+  lineHeight: "14.52px",
+  textAlign: "left",
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  cursor: "pointer",
+  transition: "all 0.2s",
 
-export const CustomButton = styled(Box)`
-  /* Authenticate */
+  "&:hover": {
+    backgroundColor:
+      theme.palette.mode === "dark"
+        ? "rgba(41, 41, 43, 1)"
+        : "rgba(240, 240, 240, 1)",
+    color: theme.palette.mode === "dark" ? "#fff" : "#000",
 
-  box-sizing: border-box;
+    "svg path": {
+      fill: theme.palette.mode === "dark" ? "#fff" : "#000",
+    },
+  },
+}));
 
-  padding: 15px 20px;
-  gap: 10px;
+export const CustomButton = styled(Box)(({ theme }) => ({
+  boxSizing: "border-box",
+  padding: "15px 20px",
+  gap: "10px",
 
-  border: 0.5px solid rgba(255, 255, 255, 0.5);
-  filter: drop-shadow(1px 4px 10.5px rgba(0, 0, 0, 0.3));
-  border-radius: 5px;
+  border: `0.5px solid ${
+    theme.palette.mode === "dark"
+      ? "rgba(255, 255, 255, 0.5)"
+      : "rgba(0, 0, 0, 0.3)"
+  }`,
+  filter: "drop-shadow(1px 4px 10.5px rgba(0, 0, 0, 0.3))",
+  borderRadius: "5px",
+
+  display: "inline-flex",
+  justifyContent: "center",
+  alignItems: "center",
+
+  width: "fit-content",
+  minWidth: "160px",
+  cursor: "pointer",
+  transition: "all 0.2s",
+
+  fontWeight: 600,
+  fontFamily: "Inter",
+  textAlign: "center",
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
 
   "&:hover": {
     backgroundColor:
@@ -172,30 +193,18 @@ export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
 
     "&:hover": {
       opacity: 1,
-<<<<<<< HEAD
       backgroundColor: bgColor || (theme.palette.mode === "dark" ? "rgba(41, 41, 43, 1)" : "rgba(230, 230, 230, 1)"),
       color: color || "#fff",
       svg: {
         path: {
           fill: color || "#fff",
-=======
-      backgroundColor: bgColor ? bgColor : "rgba(41, 41, 43, 1)", // fallback hover bg
-      color: color || "white",
-      svg: {
-        path: {
-          fill: color || "white",
->>>>>>> ffb39b3 (Bind color and background to selected theme)
         },
       },
     },
   })
 );
 
-<<<<<<< HEAD
 export const CustomInput = styled(TextField)(({ theme }) => ({
-=======
-export const CustomInput = styled(TextField)({
->>>>>>> ffb39b3 (Bind color and background to selected theme)
   width: "183px", // Adjust the width as needed
   borderRadius: "5px",
   // backgroundColor: "rgba(30, 30, 32, 1)",
@@ -236,7 +245,6 @@ export const CustomInput = styled(TextField)({
   },
 }));
 
-<<<<<<< HEAD
 export const CustomLabel = styled(InputLabel)(({ theme }) => ({
   fontWeight: 400,
   fontFamily: "Inter",
@@ -247,13 +255,3 @@ export const CustomLabel = styled(InputLabel)(({ theme }) => ({
       ? "rgba(255, 255, 255, 0.5)"
       : "rgba(0, 0, 0, 0.5)",
 }));
-
-=======
-export const CustomLabel = styled(InputLabel)`
-  font-weight: 400;
-  font-family: Inter;
-  font-size: 10px;
-  line-height: 12px;
-  color: rgba(255, 255, 255, 0.5);
-`;
->>>>>>> ffb39b3 (Bind color and background to selected theme)

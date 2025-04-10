@@ -94,7 +94,6 @@ export const DesktopSideBar = ({
               hasUnreadDirects || hasUnreadGroups
                 ? "var(--unread)"
                 : theme.palette.text.primary
-                ? "rgba(250, 250, 250, 0.5)"
             }
           />
         </IconWrapper>

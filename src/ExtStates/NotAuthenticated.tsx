@@ -1,16 +1,11 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { Spacer } from "../common/Spacer";
-import { CustomButton, TextP, TextSpan } from "../App-styles";
+import { CustomButton, TextItalic, TextP, TextSpan } from "../App-styles";
 import {
   Box,
   Button,
   ButtonBase,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
@@ -22,32 +17,36 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import Logo1 from "../assets/svgs/Logo1.svg";
 import Logo1Dark from "../assets/svgs/Logo1Dark.svg";
-import HelpIcon from "@mui/icons-material/Help";
+import Info from "../assets/svgs/Info.svg";
+import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from "../components/Snackbar/Snackbar";
-import { cleanUrl, gateways } from "../background";
+import { set } from "lodash";
+import { cleanUrl, gateways, isUsingLocal } from "../background";
 import { GlobalContext } from "../App";
-import Tooltip, { TooltipProps, tooltipClasses } from "@mui/material/Tooltip";
-import ThemeSelector from "../components/Theme/ThemeSelector";
+import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 
 const manifestData = {
   version: "0.5.3",
 };
 
+
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
   <Tooltip {...props} classes={{ popper: className }} />
 ))(({ theme }) => ({
   [`& .${tooltipClasses.tooltip}`]: {
-    backgroundColor: "#232428",
-    color: "white",
+    backgroundColor: '#232428',
+    color: 'white',
     maxWidth: 320,
-    padding: "20px",
+    padding: '20px',
     fontSize: theme.typography.pxToRem(12),
   },
 }));
 function removeTrailingSlash(url) {
-  return url.replace(/\/+$/, "");
+  return url.replace(/\/+$/, '');
 }
+
 
 export const NotAuthenticated = ({
   getRootProps,
@@ -60,8 +59,8 @@ export const NotAuthenticated = ({
   handleSetGlobalApikey,
   currentNode,
   setCurrentNode,
-  useLocalNode,
-  setUseLocalNode,
+  useLocalNode, 
+  setUseLocalNode
 }) => {
   const [isValidApiKey, setIsValidApiKey] = useState<boolean | null>(null);
   const [hasLocalNode, setHasLocalNode] = useState<boolean | null>(null);
@@ -82,7 +81,7 @@ export const NotAuthenticated = ({
   const [enteredApiKey, setEnteredApiKey] = useState('')
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
-  const { showTutorial, hasSeenGettingStarted } = useContext(GlobalContext);
+    const { showTutorial, hasSeenGettingStarted  } = useContext(GlobalContext);
 
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
@@ -97,32 +96,34 @@ export const NotAuthenticated = ({
         const text = e.target.result; // Get the file content
 
         setImportedApiKey(text); // Store the file content in the state
-        if (customNodes) {
-          setCustomNodes((prev) => {
-            const copyPrev = [...prev];
-            const findLocalIndex = copyPrev?.findIndex(
-              (item) => item?.url === "http://127.0.0.1:12391"
-            );
-            if (findLocalIndex === -1) {
+        if(customNodes){
+          setCustomNodes((prev)=> {
+            const copyPrev = [...prev]
+            const findLocalIndex = copyPrev?.findIndex((item)=> item?.url === 'http://127.0.0.1:12391')
+            if(findLocalIndex === -1){
               copyPrev.unshift({
                 url: "http://127.0.0.1:12391",
-                apikey: text,
-              });
+                apikey: text
+              })
             } else {
               copyPrev[findLocalIndex] = {
                 url: "http://127.0.0.1:12391",
-                apikey: text,
-              };
+                apikey: text
+              }
             }
-            window.sendMessage("setCustomNodes", copyPrev).catch((error) => {
+            window
+            .sendMessage("setCustomNodes", copyPrev)
+            .catch((error) => {
               console.error(
                 "Failed to set custom nodes:",
                 error.message || "An error occurred"
               );
             });
-            return copyPrev;
-          });
+            return copyPrev
+          })
+       
         }
+        
       };
       reader.readAsText(file); // Read the file as text
     }
@@ -140,12 +141,14 @@ export const NotAuthenticated = ({
       const data = await response.json();
       if (data?.height) {
         setHasLocalNode(true);
-        return true;
+        return true
       }
-      return false;
+      return false
+      
     } catch (error) {
-      return false;
-    }
+      return false
+      
+    } 
   }, []);
 
   useEffect(() => {
@@ -156,20 +159,18 @@ export const NotAuthenticated = ({
     window
       .sendMessage("getCustomNodesFromStorage")
       .then((response) => {
-        setCustomNodes(response || []);
-        if (window?.electronAPI?.setAllowedDomains) {
-          window.electronAPI.setAllowedDomains(
-            response?.map((node) => node.url)
-          );
-        }
-        if (Array.isArray(response)) {
-          const findLocal = response?.find(
-            (item) => item?.url === "http://127.0.0.1:12391"
-          );
-          if (findLocal && findLocal?.apikey) {
-            setImportedApiKey(findLocal?.apikey);
+      
+          setCustomNodes(response || []);
+          if(window?.electronAPI?.setAllowedDomains){
+            window.electronAPI.setAllowedDomains(response?.map((node)=> node.url))
           }
-        }
+          if(Array.isArray(response)){
+            const findLocal = response?.find((item)=> item?.url === 'http://127.0.0.1:12391')
+            if(findLocal && findLocal?.apikey){
+              setImportedApiKey(findLocal?.apikey)
+            }
+          }
+        
       })
       .catch((error) => {
         console.error(
@@ -190,50 +191,48 @@ export const NotAuthenticated = ({
     hasLocalNodeRef.current = hasLocalNode;
   }, [hasLocalNode]);
 
+
+
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
-      if (key === "isGateway") return;
+      if(key === "isGateway") return
       const isLocalKey = cleanUrl(key?.url) === "127.0.0.1:12391";
-      if (
-        fromStartUp &&
-        key?.url &&
-        key?.apikey &&
-        !isLocalKey &&
-        !gateways.some((gateway) => key?.url?.includes(gateway))
-      ) {
+      if (fromStartUp && key?.url && key?.apikey && !isLocalKey && !gateways.some(gateway => key?.url?.includes(gateway))) {
         setCurrentNode({
           url: key?.url,
           apikey: key?.apikey,
         });
 
-        let isValid = false;
+        let isValid = false
 
+        
         const url = `${key?.url}/admin/settings/localAuthBypassEnabled`;
         const response = await fetch(url);
 
         // Assuming the response is in plain text and will be 'true' or 'false'
         const data = await response.text();
-        if (data && data === "true") {
-          isValid = true;
+        if(data && data === 'true'){
+          isValid = true
         } else {
           const url2 = `${key?.url}/admin/apikey/test?apiKey=${key?.apikey}`;
           const response2 = await fetch(url2);
-
+    
           // Assuming the response is in plain text and will be 'true' or 'false'
           const data2 = await response2.text();
           if (data2 === "true") {
-            isValid = true;
+            isValid = true
           }
         }
-
+       
         if (isValid) {
           setIsValidApiKey(true);
           setUseLocalNode(true);
-          return;
+          return
         }
+
       }
       if (!currentNodeRef.current) return;
-      const stillHasLocal = await checkIfUserHasLocalNode();
+      const stillHasLocal = await checkIfUserHasLocalNode()
 
       if (isLocalKey && !stillHasLocal && !fromStartUp) {
         throw new Error("Please turn on your local node");
@@ -308,25 +307,27 @@ export const NotAuthenticated = ({
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
-      let isValid = false;
+      let isValid = false
 
+        
       const url = `${payload?.url}/admin/settings/localAuthBypassEnabled`;
       const response = await fetch(url);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
       const data = await response.text();
-      if (data && data === "true") {
-        isValid = true;
+      if(data && data === 'true'){
+        isValid = true
       } else {
         const url2 = `${payload?.url}/admin/apikey/test?apiKey=${payload?.apikey}`;
         const response2 = await fetch(url2);
-
+  
         // Assuming the response is in plain text and will be 'true' or 'false'
         const data2 = await response2.text();
         if (data2 === "true") {
-          isValid = true;
+          isValid = true
         }
       }
+     
 
       if (isValid) {
         window
@@ -350,13 +351,14 @@ export const NotAuthenticated = ({
       } else {
         setIsValidApiKey(false);
         setUseLocalNode(false);
-        if (!fromStartUp) {
+        if(!fromStartUp){
           setInfoSnack({
             type: "error",
             message: "Select a valid apikey",
           });
           setOpenSnack(true);
         }
+        
       }
     } catch (error) {
       setIsValidApiKey(false);
@@ -379,15 +381,15 @@ export const NotAuthenticated = ({
               error.message || "An error occurred"
             );
           });
-        return;
+        return
       }
-      if (!fromStartUp) {
-        setInfoSnack({
-          type: "error",
-          message: error?.message || "Select a valid apikey",
-        });
-        setOpenSnack(true);
-      }
+      if(!fromStartUp){
+      setInfoSnack({
+        type: "error",
+        message: error?.message || "Select a valid apikey",
+      });
+      setOpenSnack(true);
+    }
       console.error("Error validating API key:", error);
     }
   }, []);
@@ -416,7 +418,7 @@ export const NotAuthenticated = ({
     }
 
     setCustomNodes(nodes);
-
+  
     setCustomNodeToSaveIndex(null);
     if (!nodes) return;
     window
@@ -426,11 +428,9 @@ export const NotAuthenticated = ({
           setMode("list");
           setUrl("https://");
           setCustomApiKey("");
-          if (window?.electronAPI?.setAllowedDomains) {
-            window.electronAPI.setAllowedDomains(
-              nodes?.map((node) => node.url)
-            );
-          }
+          if(window?.electronAPI?.setAllowedDomains){
+            window.electronAPI.setAllowedDomains(nodes?.map((node) => node.url))
+            }
           // add alert if needed
         }
       })
@@ -459,20 +459,15 @@ export const NotAuthenticated = ({
         sx={{
           textAlign: "center",
           lineHeight: 1.2,
-          fontSize: "18px",
+          fontSize: '18px'
         }}
       >
-        WELCOME TO
-        <TextSpan
-          sx={{
-            fontSize: "18px",
-          }}
-        >
-          {" "}
-          QORTAL
-        </TextSpan>
+        WELCOME TO 
+        <TextSpan sx={{
+          fontSize: '18px'
+        }}> QORTAL</TextSpan>
       </TextP>
-
+      
       <Spacer height="30px" />
       <Box
         sx={{
@@ -481,31 +476,21 @@ export const NotAuthenticated = ({
           alignItems: "center",
         }}
       >
-        <HtmlTooltip
-          disableHoverListener={hasSeenGettingStarted === true}
-          placement="left"
-          title={
-            <React.Fragment>
-              <Typography
-                color="inherit"
-                sx={{
-                  fontSize: "16px",
-                }}
-              >
-                Your wallet is like your digital ID on Qortal, and is how you
-                will login to the Qortal User Interface. It holds your public
-                address and the Qortal name you will eventually choose. Every
-                transaction you make is linked to your ID, and this is where you
-                manage all your QORT and other tradeable cryptocurrencies on
-                Qortal.
-              </Typography>
-            </React.Fragment>
-          }
-        >
-          <CustomButton onClick={() => setExtstate("wallets")}>
-            {/* <input {...getInputProps()} /> */}
-            Accounts
-          </CustomButton>
+         <HtmlTooltip
+        disableHoverListener={hasSeenGettingStarted === true}
+       placement="left"
+        title={
+          <React.Fragment>
+            <Typography color="inherit" sx={{
+              fontSize: '16px'
+             }}>Your wallet is like your digital ID on Qortal, and is how you will login to the Qortal User Interface. It holds your public address and the Qortal name you will eventually choose. Every transaction you make is linked to your ID, and this is where you manage all your QORT and other tradeable cryptocurrencies on Qortal.</Typography>
+          </React.Fragment>
+        }
+      >
+        <CustomButton onClick={()=> setExtstate('wallets')}>
+          {/* <input {...getInputProps()} /> */}
+          Accounts
+        </CustomButton>
         </HtmlTooltip>
         {/* <Tooltip title="Authenticate by importing your Qortal JSON file" arrow>
           <img src={Info} />
@@ -518,55 +503,42 @@ export const NotAuthenticated = ({
           display: "flex",
           gap: "10px",
           alignItems: "center",
+         
         }}
       >
         <HtmlTooltip
-          disableHoverListener={hasSeenGettingStarted === true}
-          placement="right"
-          title={
-            <React.Fragment>
-              <Typography
-                color="inherit"
-                sx={{
-                  fontWeight: "bold",
-                  fontSize: "18px",
-                }}
-              >
-                New users start here!
-              </Typography>
-              <Spacer height="10px" />
-              <Typography
-                color="inherit"
-                sx={{
-                  fontSize: "16px",
-                }}
-              >
-                Creating an account means creating a new wallet and digital ID
-                to start using Qortal. Once you have made your account, you can
-                start doing things like obtaining some QORT, buying a name and
-                avatar, publishing videos and blogs, and much more.
-              </Typography>
-            </React.Fragment>
-          }
+        disableHoverListener={hasSeenGettingStarted === true}
+        placement="right"
+        title={
+          <React.Fragment>
+             <Typography color="inherit" sx={{
+              fontWeight: 'bold',
+              fontSize: '18px'
+             }}>New users start here!</Typography>
+             <Spacer height='10px'/>
+            <Typography color="inherit" sx={{
+              fontSize: '16px'
+             }}>Creating an account means creating a new wallet and digital ID to start using Qortal. Once you have made your account, you can start doing things like obtaining some QORT, buying a name and avatar, publishing videos and blogs, and much more.</Typography>
+          </React.Fragment>
+        }
+      >
+        <CustomButton
+          onClick={() => {
+            setExtstate("create-wallet");
+          }}
+          sx={{
+            backgroundColor: hasSeenGettingStarted === false && 'var(--green)',
+            color: hasSeenGettingStarted === false && 'black',
+            "&:hover": {
+              backgroundColor: hasSeenGettingStarted === false && 'var(--green)',
+              color: hasSeenGettingStarted === false && 'black'
+            }
+          }}
         >
-          <CustomButton
-            onClick={() => {
-              setExtstate("create-wallet");
-            }}
-            sx={{
-              backgroundColor:
-                hasSeenGettingStarted === false && "var(--green)",
-              color: hasSeenGettingStarted === false && "black",
-              "&:hover": {
-                backgroundColor:
-                  hasSeenGettingStarted === false && "var(--green)",
-                color: hasSeenGettingStarted === false && "black",
-              },
-            }}
-          >
-            Create account
-          </CustomButton>
+          Create account
+        </CustomButton>
         </HtmlTooltip>
+      
       </Box>
       <Spacer height="15px" />
 
@@ -586,19 +558,15 @@ export const NotAuthenticated = ({
             gap: "10px",
             alignItems: "center",
             flexDirection: "column",
-            outline: "0.5px solid rgba(255, 255, 255, 0.5)",
-            padding: "20px 30px",
-            borderRadius: "5px",
+            outline: '0.5px solid rgba(255, 255, 255, 0.5)',
+            padding: '20px 30px',
+            borderRadius: '5px',
           }}
         >
           <>
-            <Typography
-              sx={{
-                textDecoration: "underline",
-              }}
-            >
-              For advanced users
-            </Typography>
+          <Typography sx={{
+            textDecoration: 'underline'
+          }}>For advanced users</Typography>
             <Box
               sx={{
                 display: "flex",
@@ -609,11 +577,12 @@ export const NotAuthenticated = ({
               }}
             >
               <FormControlLabel
-                sx={{
-                  "& .MuiFormControlLabel-label": {
-                    fontSize: "14px",
-                  },
-                }}
+              sx={{
+                "& .MuiFormControlLabel-label": {
+                  fontSize: '14px'
+                }
+                
+              }}
                 control={
                   <Switch
                     sx={{
@@ -651,6 +620,7 @@ export const NotAuthenticated = ({
                       }
                     }}
                     disabled={false}
+                    defaultChecked
                   />
                 }
                 label={`Use ${isLocal ? "Local" : "Custom"} Node`}
@@ -937,7 +907,44 @@ export const NotAuthenticated = ({
         </Dialog>
       )}
 
-      <ThemeSelector style={{ position: "fixed", bottom: "1%", left: "1%" }}/>
+       {showSelectApiKey && (
+        <Dialog
+          open={showSelectApiKey}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+          
+        >
+          <DialogTitle id="alert-dialog-title">{"Enter apikey"}</DialogTitle>
+          <DialogContent>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: '20px'
+              }}
+            >
+              <TextField value={enteredApiKey} onChange={(e)=> setEnteredApiKey(e.target.value)}/>
+                <Button disabled={!!enteredApiKey} variant="contained"  component="label">Alternative: File select
+                <input
+                    type="file"
+                    accept=".txt"
+                    hidden
+                    onChange={handleFileChangeApiKey} // File input handler
+                  />
+                </Button>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+           
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                   setEnteredApiKey("")
+                   setShowSelectApiKey(false)
+                  }}
+                >
+                  Close
+                </Button>
 
                 <Button
                   variant="contained"
@@ -999,8 +1006,6 @@ export const NotAuthenticated = ({
           color: 'var(--unread)'
         }} />
         </ButtonBase>
-
-        <ThemeSelector style={{ position: "fixed", bottom: "1%", left: "1%" }}/>
     </>
   );
 };

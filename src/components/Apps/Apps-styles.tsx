@@ -358,7 +358,6 @@ export const AppsCategoryInfoLabel = styled(Typography)(({ theme }) => ({
   fontSize: "12px",
   fontWeight: 700,
   lineHeight: 1.2,
-  color: "#8D8F93",
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
 }));
