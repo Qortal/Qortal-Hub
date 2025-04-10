@@ -11,6 +11,7 @@ export const AppContainer = styled(Box)(({ theme }) => ({
   radius: "15px",
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  overflow: 'hidden'
 }));
 
 export const AuthenticatedContainer = styled(Box)(({ theme }) => ({

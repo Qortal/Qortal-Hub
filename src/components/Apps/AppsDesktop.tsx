@@ -331,8 +331,9 @@ export const AppsDesktop = ({
   return (
     <AppsParent
       sx={{
-        display: !show && "none",
-        flexDirection: "row",
+        position: !show && 'fixed',
+        left: !show && '-200vw',
+        flexDirection:  'row' 
       }}
     >
       <Box
