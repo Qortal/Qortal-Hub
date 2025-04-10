@@ -2309,6 +2309,110 @@ export async function createGroup({
     throw new Error(res?.message || "Transaction was not able to be processed");
   return res;
 }
+export async function sellName({
+  name,
+  sellPrice
+}) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (!address) throw new Error("Cannot find user");
+  const lastReference = await getLastRef();
+  const feeres = await getFee("SELL_NAME");
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+
+  const tx = await createTransaction(5, keyPair, {
+    fee: feeres.fee,
+    name,
+    sellPrice: sellPrice,
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
+
+export async function cancelSellName({
+  name
+}) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (!address) throw new Error("Cannot find user");
+  const lastReference = await getLastRef();
+  const feeres = await getFee("SELL_NAME");
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+
+  const tx = await createTransaction(6, keyPair, {
+    fee: feeres.fee,
+    name,
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
+
+export async function buyName({
+  name,
+  sellerAddress,
+  sellPrice
+}) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (!address) throw new Error("Cannot find user");
+  const lastReference = await getLastRef();
+  const feeres = await getFee("BUY_NAME");
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+  console.log('tester', {
+    fee: feeres.fee,
+    name,
+		sellPrice,
+		recipient: sellerAddress,
+    lastReference: lastReference,
+  })
+  const tx = await createTransaction(7, keyPair, {
+    fee: feeres.fee,
+    name,
+		sellPrice,
+		recipient: sellerAddress,
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || "Transaction was not able to be processed");
+  return res;
+}
 export async function updateGroup({
   groupId,
   newOwner,

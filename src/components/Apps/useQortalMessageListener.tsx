@@ -256,7 +256,10 @@ export const listOfAllQortalRequests = [
   'GET_NODE_STATUS',
   'GET_ARRR_SYNC_STATUS',
   'SHOW_PDF_READER',
-  'UPDATE_GROUP'
+  'UPDATE_GROUP',
+  'SELL_NAME',
+  'CANCEL_SELL_NAME',
+  'BUY_NAME'
 ]
 
 export const UIQortalRequests = [
@@ -313,7 +316,10 @@ export const UIQortalRequests = [
   'GET_NODE_STATUS',
   'GET_ARRR_SYNC_STATUS',
   'SHOW_PDF_READER',
-  'UPDATE_GROUP'
+  'UPDATE_GROUP',
+  'SELL_NAME',
+  'CANCEL_SELL_NAME',
+  'BUY_NAME'
 ];
 
 

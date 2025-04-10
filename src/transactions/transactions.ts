@@ -21,12 +21,18 @@ import RewardShareTransaction from './RewardShareTransaction.js'
 import RemoveRewardShareTransaction from './RemoveRewardShareTransaction.js'
 import UpdateNameTransaction from './UpdateNameTransaction.js'
 import UpdateGroupTransaction from './UpdateGroupTransaction.js'
+import SellNameTransacion from './SellNameTransacion.js'
+import CancelSellNameTransacion from './CancelSellNameTransacion.js'
+import BuyNameTransacion from './BuyNameTransacion.js'
 
 
 export const transactionTypes = {
+	2: PaymentTransaction,
 	3: RegisterNameTransaction,
 	4: UpdateNameTransaction,
-	2: PaymentTransaction,
+	5: SellNameTransacion,
+	6: CancelSellNameTransacion,
+	7: BuyNameTransacion,
 	8: CreatePollTransaction,
 	9: VoteOnPollTransaction,
 	16: DeployAtTransaction,

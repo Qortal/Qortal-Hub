@@ -31,6 +31,10 @@ import {
   cancelInvitationToGroup,
   createGroup,
   updateGroup,
+  sellName,
+  cancelSellName,
+  buyName,
+  getBaseApi,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -4684,5 +4688,124 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   } catch (error) {
       console.error("Decryption failed:", error);
       throw new Error("Failed to decrypt the message. Ensure the data and keys are correct.");
+  }
+};
+
+
+export const sellNameRequest = async (data, isFromExtension) => {
+  const requiredFields = ["salePrice", "nameForSale"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (data[field] !== undefined && data[field] !== null) {
+      missingFields.push(field);
+    }
+  });
+  const name = data.nameForSale
+  const sellPrice = +data.salePrice
+
+  const validApi = await getBaseApi();
+
+  const response = await fetch(validApi + "/names/" + name);
+  const nameData = await response.json();
+if(!nameData) throw new Error("This name does not exist")
+
+if(nameData?.isForSale) throw new Error("This name is already for sale")
+  const fee = await getFee("SELL_NAME");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to create a sell name transaction?`,
+      highlightedText: `Sell ${name} for ${sellPrice} QORT`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await sellName({
+        name,
+        sellPrice
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const cancelSellNameRequest = async (data, isFromExtension) => {
+  const requiredFields = ["nameForSale"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (data[field] !== undefined && data[field] !== null) {
+      missingFields.push(field);
+    }
+  });
+  const name = data.nameForSale
+  const validApi = await getBaseApi();
+
+  const response = await fetch(validApi + "/names/" + name);
+  const nameData = await response.json();
+if(!nameData?.isForSale) throw new Error("This name is not for sale")
+
+  const fee = await getFee("CANCEL_SELL_NAME");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to cancel the selling of a name?`,
+      highlightedText: `Name: ${name}`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await cancelSellName({
+        name
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
+  }
+};
+
+export const buyNameRequest = async (data, isFromExtension) => {
+  const requiredFields = ["nameForSale"];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (data[field] !== undefined && data[field] !== null) {
+      missingFields.push(field);
+    }
+  });
+  const name = data.nameForSale
+
+  const validApi = await getBaseApi();
+  
+      const response = await fetch(validApi + "/names/" + name);
+      const nameData = await response.json();
+  if(!nameData?.isForSale) throw new Error("This name is not for sale")
+  const sellerAddress = nameData.owner
+  const sellPrice = +nameData.salePrice
+  
+
+  const fee = await getFee("BUY_NAME");
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to buy a name?`,
+      highlightedText: `Buying ${name} for ${sellPrice} QORT`,
+      fee: fee.fee,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+  const response = await buyName({
+        name,
+        sellerAddress,
+        sellPrice
+      })
+  return response
+
+  } else {
+    throw new Error("User declined request");
   }
 };
