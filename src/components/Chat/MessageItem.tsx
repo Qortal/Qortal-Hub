@@ -74,7 +74,6 @@ const {getIndividualUserInfo} = useContext(MyContext)
   const [selectedReaction, setSelectedReaction] = useState(null);
   const [userInfo, setUserInfo] = useState(null)
 
-
 useEffect(()=> {
   const getInfo = async ()=> {
     if(!message?.sender) return

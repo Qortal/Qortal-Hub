@@ -1,17 +1,6 @@
-import * as React from "react";
-import {
-  BottomNavigation,
-  BottomNavigationAction,
-  ButtonBase,
-  Typography,
-} from "@mui/material";
-import { Home, Groups, Message, ShowChart } from "@mui/icons-material";
+import { ButtonBase, Typography, useTheme } from "@mui/material";
 import Box from "@mui/material/Box";
-import BottomLogo from "../../assets/svgs/BottomLogo5.svg";
-import { CustomSvg } from "../../common/CustomSvg";
-import { WalletIcon } from "../../assets/Icons/WalletIcon";
 import { HubsIcon } from "../../assets/Icons/HubsIcon";
-import { TradingIcon } from "../../assets/Icons/TradingIcon";
 import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import AppIcon from "../../assets/svgs/AppIcon.svg";
 
@@ -20,19 +9,31 @@ import { Save } from "../Save/Save";
 import { useRecoilState } from "recoil";
 import { enabledDevModeAtom } from "../../atoms/global";
 
-export const IconWrapper = ({ children, label, color, selected, disableWidth, customWidth }) => {
+export const IconWrapper = ({
+  children,
+  label,
+  color,
+  selected,
+  disableWidth,
+  customWidth,
+}) => {
+  const theme = useTheme();
+
   return (
     <Box
       sx={{
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        gap:  "5px",
+        gap: "5px",
         flexDirection: "column",
-        height: customWidth ? customWidth : disableWidth ? 'auto' :  "89px",
-        width: customWidth? customWidth : disableWidth ? 'auto' : "89px",
+        height: customWidth ? customWidth : disableWidth ? "auto" : "89px",
+        width: customWidth ? customWidth : disableWidth ? "auto" : "89px",
         borderRadius: "50%",
-        backgroundColor: selected ? "rgba(28, 29, 32, 1)" : "transparent",
+        backgroundColor: selected
+          ? theme.palette.background.default
+          : "transparent",
+        color: color ? color : theme.palette.text.primary,
       }}
     >
       {children}
@@ -41,7 +42,7 @@ export const IconWrapper = ({ children, label, color, selected, disableWidth, cu
           fontFamily: "Inter",
           fontSize: "12px",
           fontWeight: 500,
-          color: color,
+          color: theme.palette.text.primary,
         }}
       >
         {label}
@@ -51,24 +52,7 @@ export const IconWrapper = ({ children, label, color, selected, disableWidth, cu
 };
 
 export const DesktopFooter = ({
-  selectedGroup,
-  groupSection,
-  isUnread,
-  goToAnnouncements,
-  isUnreadChat,
-  goToChat,
-  goToThreads,
-  setOpenManageMembers,
-  groupChatHasUnread,
-  groupsAnnHasUnread,
-  directChatHasUnread,
-  chatMode,
-  openDrawerGroups,
   goToHome,
-  setIsOpenDrawerProfile,
-  mobileViewMode,
-  setMobileViewMode,
-  setMobileViewModeKeepOpen,
   hasUnreadGroups,
   hasUnreadDirects,
   isHome,
@@ -77,15 +61,14 @@ export const DesktopFooter = ({
   setDesktopSideView,
   isApps,
   setDesktopViewMode,
-  desktopViewMode,
   hide,
   setIsOpenSideViewDirects,
-  setIsOpenSideViewGroups
-  
+  setIsOpenSideViewGroups,
 }) => {
-  const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+  const [isEnabledDevMode, setIsEnabledDevMode] =
+    useRecoilState(enabledDevModeAtom);
 
-  if(hide) return
+  if (hide) return;
   return (
     <Box
       sx={{
@@ -110,42 +93,31 @@ export const DesktopFooter = ({
             goToHome();
           }}
         >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Home"
-            selected={isHome}
-          >
+          <IconWrapper label="Home" selected={isHome}>
             <HomeIcon
               height={30}
-              color={isHome ? "white" : "rgba(250, 250, 250, 0.5)"}
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode('apps')
-            setIsOpenSideViewDirects(false)
-            setIsOpenSideViewGroups(false)
+            setDesktopViewMode("apps");
+            setIsOpenSideViewDirects(false);
+            setIsOpenSideViewGroups(false);
           }}
         >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Apps"
-            selected={isApps}
-          >
-          <img src={AppIcon} />
+          <IconWrapper label="Apps" selected={isApps}>
+            <img src={AppIcon} />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setDesktopSideView("groups");
           }}
         >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Groups"
-            selected={isGroups}
-          >
+          <IconWrapper label="Groups" selected={isGroups}>
             <HubsIcon
               height={30}
               color={
@@ -158,16 +130,13 @@ export const DesktopFooter = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setDesktopSideView("directs");
           }}
         >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Messaging"
-            selected={isDirects}
-          >
+          <IconWrapper label="Messaging" selected={isDirects}>
             <MessagingIcon
               height={30}
               color={
@@ -180,26 +149,21 @@ export const DesktopFooter = ({
             />
           </IconWrapper>
         </ButtonBase>
-        
+
         <Save isDesktop />
         {isEnabledDevMode && (
           <ButtonBase
-          onClick={() => {
-            setDesktopViewMode('dev')
-            setIsOpenSideViewDirects(false)
-            setIsOpenSideViewGroups(false)
-          }}
-        >
-          <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Dev Mode"
-            selected={isApps}
+            onClick={() => {
+              setDesktopViewMode("dev");
+              setIsOpenSideViewDirects(false);
+              setIsOpenSideViewGroups(false);
+            }}
           >
-          <img src={AppIcon} />
-          </IconWrapper>
-        </ButtonBase>
+            <IconWrapper label="Dev Mode" selected={isApps}>
+              <img src={AppIcon} />
+            </IconWrapper>
+          </ButtonBase>
         )}
-        
       </Box>
     </Box>
   );

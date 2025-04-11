@@ -1,43 +1,40 @@
 @font-face {
-  font-family: 'Inter';
-  src: url('./styles/fonts/Inter-SemiBold.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("./styles/fonts/Inter-SemiBold.ttf") format("truetype");
   font-weight: 600;
 }
-
 @font-face {
-  font-family: 'Inter';
-  src: url('./styles/fonts/Inter-ExtraBold.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("./styles/fonts/Inter-ExtraBold.ttf") format("truetype");
   font-weight: 800;
 }
 @font-face {
-  font-family: 'Inter';
-  src: url('./styles/fonts/Inter-Bold.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("./styles/fonts/Inter-Bold.ttf") format("truetype");
   font-weight: 700;
 }
 @font-face {
-  font-family: 'Inter';
-  src: url('./styles/fonts/Inter-Regular.ttf') format('truetype');
+  font-family: "Inter";
+  src: url("./styles/fonts/Inter-Regular.ttf") format("truetype");
   font-weight: 400;
 }
-
 
 :root {
   padding: 0px;
   margin: 0px;
   box-sizing: border-box !important;
   word-break: break-word;
-  --color-instance : #1E1E20;
+  --color-instance: #1e1e20;
   --color-instance-popover-bg: #222222;
   --Mail-Background: rgba(49, 51, 56, 1);
   --new-message-text: black;
-
-  --bg-primary : rgba(31, 32, 35, 1);
+  --bg-primary: rgba(31, 32, 35, 1);
   --bg-2: #27282c;
   --bg-3: rgba(0, 0, 0, 0.1);
-  --unread: #4297e2; 
-  --danger: #B14646;
-  --apps-circle: #1F2023;
-  --green: #5EB049;
+  --unread: #4297e2;
+  --danger: #b14646;
+  --apps-circle: #1f2023;
+  --green: #5eb049;
 }
 
 body {
@@ -97,10 +94,8 @@ body {
   initial-value: transparent;
 }
 
-
 .scrollable-container {
   transition: --var1 0.4s;
-
 }
 
 .scrollable-container:hover {
@@ -114,11 +109,6 @@ body {
   border: 4px solid transparent;
   opacity: 0;
 }
-
-
-
-
-
 
 /* Mobile-specific scrollbar styles */
 @media only screen and (max-width: 600px) {
@@ -137,11 +127,11 @@ body {
   background-color: whitesmoke;
 }
 
-html, body {
-  overscroll-behavior:none !important;
+html,
+body {
+  overscroll-behavior: none !important;
 }
 
 .swiper {
   width: 100%;
 }
-

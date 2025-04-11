@@ -56,7 +56,7 @@ const ScrollerStyled = styled('div')({
     scrollbarWidth: "none",
   
     // Hide scrollbar for IE and older Edge
-    "-ms-overflow-style": "none",
+    "-msOverflowStyle": "none",
   });
   
   const StyledVirtuosoContainer = styled('div')({
@@ -75,7 +75,7 @@ const ScrollerStyled = styled('div')({
     scrollbarWidth: "none",
   
     // Hide scrollbar for IE and older Edge
-    "-ms-overflow-style": "none",
+    "-msOverflowStyle": "none",
   });
 
 export const AppsCategory = ({  availableQapps,  myName, category, isShow }) => {
