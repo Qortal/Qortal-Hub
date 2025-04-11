@@ -25,7 +25,7 @@ export const BlockedUsersModal = () => {
   const [value, setValue] = useState("");
   const [addressesWithNames, setAddressesWithNames] = useState({})
   const { isShow, onCancel, onOk, show, message } = useModal();
-  const { getAllBlockedUsers, removeBlockFromList, addToBlockList } =
+  const { getAllBlockedUsers, removeBlockFromList, addToBlockList, setOpenSnackGlobal, setInfoSnackCustom } =
     useContext(MyContext);
   const [blockedUsers, setBlockedUsers] = useState({
     addresses: {},
@@ -115,7 +115,12 @@ export const BlockedUsersModal = () => {
         executeEvent('updateChatMessagesWithBlocks', true)
       }
     } catch (error) {
-      console.error(error);
+      setOpenSnackGlobal(true);
+
+        setInfoSnackCustom({
+          type: "error",
+          message: error?.message || "Unable to block user",
+        });
     }
   };
   const blockUserFromOutsideModalFunc = (e) => {
