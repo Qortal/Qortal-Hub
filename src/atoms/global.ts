@@ -178,3 +178,8 @@ export const groupsPropertiesAtom = atom({
   key: 'groupsPropertiesAtom', 
   default: {}, 
 });
+
+export const isOpenBlockedModalAtom = atom({
+  key: 'isOpenBlockedModalAtom', 
+  default: false, 
+});

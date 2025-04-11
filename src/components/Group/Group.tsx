@@ -75,9 +75,9 @@ import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
 import { formatEmailDate } from "./QMailMessages";
 import { AdminSpace } from "../Chat/AdminSpace";
 import { useRecoilState, useSetRecoilState } from "recoil";
-import { addressInfoControllerAtom, groupsPropertiesAtom, selectedGroupIdAtom } from "../../atoms/global";
+import { addressInfoControllerAtom, groupsPropertiesAtom, isOpenBlockedModalAtom, selectedGroupIdAtom } from "../../atoms/global";
 import { sortArrayByTimestampAndGroupName } from "../../utils/time";
-import BlockIcon from '@mui/icons-material/Block';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { BlockedUsersModal } from "./BlockedUsersModal";
@@ -421,7 +421,7 @@ export const Group = ({
   const [groupAnnouncements, setGroupAnnouncements] = React.useState({});
   const [defaultThread, setDefaultThread] = React.useState(null);
   const [isOpenDrawer, setIsOpenDrawer] = React.useState(false);
-  const [isOpenBlockedUserModal, setIsOpenBlockedUserModal] = React.useState(false);
+  const setIsOpenBlockedUserModal = useSetRecoilState(isOpenBlockedModalAtom)
 
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = React.useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = React.useState("");
@@ -2035,7 +2035,7 @@ export const Group = ({
                  padding: '10px'
                }}
              >
-               <BlockIcon
+               <PersonOffIcon
                  sx={{
                    color: "white",
                  }}
@@ -2469,11 +2469,8 @@ export const Group = ({
                 />
               )}
             </div>
-       {isOpenBlockedUserModal && (
-        <BlockedUsersModal close={()=> {
-          setIsOpenBlockedUserModal(false)
-        }} />
-       )}
+        <BlockedUsersModal />
+      
 
           {selectedDirect && !newChat && (
             <>
