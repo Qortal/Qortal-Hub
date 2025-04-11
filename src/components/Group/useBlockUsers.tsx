@@ -19,7 +19,7 @@ export const useBlockedAddresses = () => {
   const isUserBlocked = useCallback((address, name)=> {
     try {
       if(!address) return false
-      if(userBlockedRef.current[address] || userNamesBlockedRef.current[name]) return true
+      if(userBlockedRef.current[address]) return true
       return false
 
      
@@ -90,43 +90,13 @@ export const useBlockedAddresses = () => {
   }, [])
 
   const removeBlockFromList = useCallback(async (address, name)=> {
-    await new Promise((res, rej) => {
-      window.sendMessage("listActions", {
-      
-          type: 'remove',
-          items: name ? [name] : [address],
-          listName: name ? 'blockedNames' : 'blockedAddresses'
-     
-      })
-      .then((response) => {
-        if (response.error) {
-          rej(response?.message);
-          return;
-        } else {
-          if(!name){
-            const copyObject = {...userBlockedRef.current}
-            delete copyObject[address]
-            userBlockedRef.current = copyObject
-          } else {
-            const copyObject = {...userNamesBlockedRef.current}
-            delete copyObject[name]
-            userNamesBlockedRef.current = copyObject
-          }
-        
-          res(response);
-        }
-      })
-      .catch((error) => {
-        console.error("Failed qortalRequest", error);
-      });
-    })
-    if(name && userBlockedRef.current[address]){
+    if(name){
       await new Promise((res, rej) => {
         window.sendMessage("listActions", {
         
             type: 'remove',
-            items: !name ? [name] : [address],
-            listName: !name ? 'blockedNames' : 'blockedAddresses'
+            items:  [name] ,
+            listName: 'blockedNames' 
        
         })
         .then((response) => {
@@ -134,9 +104,12 @@ export const useBlockedAddresses = () => {
             rej(response?.message);
             return;
           } else {
-            const copyObject = {...userBlockedRef.current}
-            delete copyObject[address]
-            userBlockedRef.current = copyObject
+           
+              const copyObject = {...userNamesBlockedRef.current}
+              delete copyObject[name]
+              userNamesBlockedRef.current = copyObject
+            
+          
             res(response);
           }
         })
@@ -145,42 +118,95 @@ export const useBlockedAddresses = () => {
         });
       })
     }
+
+    if(address){
+      await new Promise((res, rej) => {
+        window.sendMessage("listActions", {
+        
+            type: 'remove',
+            items: [address],
+            listName: 'blockedAddresses'
+       
+        })
+        .then((response) => {
+          if (response.error) {
+            rej(response?.message);
+            return;
+          } else {
+        
+              const copyObject = {...userBlockedRef.current}
+              delete copyObject[address]
+              userBlockedRef.current = copyObject
+            
+          
+            res(response);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed qortalRequest", error);
+        });
+      })
+    }
+ 
     
   }, [])
 
   const addToBlockList = useCallback(async (address, name)=> {
-    await new Promise((res, rej) => {
-      window.sendMessage("listActions", {
-      
-          type: 'add',
-          items: name ? [name] : [address],
-          listName: name ? 'blockedNames' : 'blockedAddresses'
-     
-      })
-      .then((response) => {
-        if (response.error) {
-          rej(response?.message);
-          return;
-        } else {
-          if(name){
-            
-            const copyObject = {...userNamesBlockedRef.current}
-            copyObject[name] = true
-             userNamesBlockedRef.current = copyObject
-          }else { 
-            const copyObject = {...userBlockedRef.current}
-            copyObject[address] = true
-             userBlockedRef.current = copyObject
-            
-          }
+    if(name){
+      await new Promise((res, rej) => {
+        window.sendMessage("listActions", {
         
-          res(response);
-        }
+            type: 'add',
+            items: [name],
+            listName: 'blockedNames'
+       
+        })
+        .then((response) => {
+          if (response.error) {
+            rej(response?.message);
+            return;
+          } else {
+              const copyObject = {...userNamesBlockedRef.current}
+              copyObject[name] = true
+               userNamesBlockedRef.current = copyObject
+            
+          
+            res(response);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed qortalRequest", error);
+        });
       })
-      .catch((error) => {
-        console.error("Failed qortalRequest", error);
-      });
-    })
+    }
+    if(address){
+      await new Promise((res, rej) => {
+        window.sendMessage("listActions", {
+        
+            type: 'add',
+            items: [address],
+            listName: 'blockedAddresses'
+       
+        })
+        .then((response) => {
+          if (response.error) {
+            rej(response?.message);
+            return;
+          } else {
+           
+              const copyObject = {...userBlockedRef.current}
+              copyObject[address] = true
+               userBlockedRef.current = copyObject
+          
+            res(response);
+          }
+        })
+        .catch((error) => {
+          console.error("Failed qortalRequest", error);
+        });
+      })
+    }
+   
   }, [])
 
   return {
