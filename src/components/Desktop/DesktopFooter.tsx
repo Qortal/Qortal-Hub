@@ -1,13 +1,13 @@
-import { ButtonBase, Typography, useTheme } from "@mui/material";
-import Box from "@mui/material/Box";
-import { HubsIcon } from "../../assets/Icons/HubsIcon";
-import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
-import AppIcon from "../../assets/svgs/AppIcon.svg";
+import { ButtonBase, Typography, useTheme } from '@mui/material';
+import Box from '@mui/material/Box';
+import { HubsIcon } from '../../assets/Icons/HubsIcon';
+import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
+import AppIcon from '../../assets/svgs/AppIcon.svg';
 
-import { HomeIcon } from "../../assets/Icons/HomeIcon";
-import { Save } from "../Save/Save";
-import { useRecoilState } from "recoil";
-import { enabledDevModeAtom } from "../../atoms/global";
+import { HomeIcon } from '../../assets/Icons/HomeIcon';
+import { Save } from '../Save/Save';
+import { useRecoilState } from 'recoil';
+import { enabledDevModeAtom } from '../../atoms/global';
 
 export const IconWrapper = ({
   children,
@@ -22,25 +22,25 @@ export const IconWrapper = ({
   return (
     <Box
       sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: "5px",
-        flexDirection: "column",
-        height: customWidth ? customWidth : disableWidth ? "auto" : "89px",
-        width: customWidth ? customWidth : disableWidth ? "auto" : "89px",
-        borderRadius: "50%",
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: '5px',
+        flexDirection: 'column',
+        height: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
+        width: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
+        borderRadius: '50%',
         backgroundColor: selected
           ? theme.palette.background.default
-          : "transparent",
+          : 'transparent',
         color: color ? color : theme.palette.text.primary,
       }}
     >
       {children}
       <Typography
         sx={{
-          fontFamily: "Inter",
-          fontSize: "12px",
+          fontFamily: 'Inter',
+          fontSize: '12px',
           fontWeight: 500,
           color: theme.palette.text.primary,
         }}
@@ -72,20 +72,20 @@ export const DesktopFooter = ({
   return (
     <Box
       sx={{
-        width: "100%",
-        position: "absolute",
+        width: '100%',
+        position: 'absolute',
         bottom: 0,
-        display: "flex",
-        alignItems: "center",
-        height: "100px", // Footer height
+        display: 'flex',
+        alignItems: 'center',
+        height: '100px', // Footer height
         zIndex: 1,
-        justifyContent: "center",
+        justifyContent: 'center',
       }}
     >
       <Box
         sx={{
-          display: "flex",
-          gap: "20px",
+          display: 'flex',
+          gap: '20px',
         }}
       >
         <ButtonBase
@@ -94,15 +94,13 @@ export const DesktopFooter = ({
           }}
         >
           <IconWrapper label="Home" selected={isHome}>
-            <HomeIcon
-              height={30}
-            />
+            <HomeIcon height={30} />
           </IconWrapper>
         </ButtonBase>
 
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode("apps");
+            setDesktopViewMode('apps');
             setIsOpenSideViewDirects(false);
             setIsOpenSideViewGroups(false);
           }}
@@ -114,7 +112,7 @@ export const DesktopFooter = ({
 
         <ButtonBase
           onClick={() => {
-            setDesktopSideView("groups");
+            setDesktopSideView('groups');
           }}
         >
           <IconWrapper label="Groups" selected={isGroups}>
@@ -122,10 +120,10 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadGroups
-                  ? "var(--danger)"
+                  ? 'var(--danger)'
                   : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
+                    ? 'white'
+                    : 'rgba(250, 250, 250, 0.5)'
               }
             />
           </IconWrapper>
@@ -133,7 +131,7 @@ export const DesktopFooter = ({
 
         <ButtonBase
           onClick={() => {
-            setDesktopSideView("directs");
+            setDesktopSideView('directs');
           }}
         >
           <IconWrapper label="Messaging" selected={isDirects}>
@@ -141,10 +139,10 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadDirects
-                  ? "var(--danger)"
+                  ? 'var(--danger)'
                   : isDirects
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
+                    ? 'white'
+                    : 'rgba(250, 250, 250, 0.5)'
               }
             />
           </IconWrapper>
@@ -154,7 +152,7 @@ export const DesktopFooter = ({
         {isEnabledDevMode && (
           <ButtonBase
             onClick={() => {
-              setDesktopViewMode("dev");
+              setDesktopViewMode('dev');
               setIsOpenSideViewDirects(false);
               setIsOpenSideViewGroups(false);
             }}

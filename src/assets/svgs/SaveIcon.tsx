@@ -1,9 +1,10 @@
-import { useTheme } from "@mui/material";
+import { useTheme } from '@mui/material';
 
+// TODO: extend interface
 export const SaveIcon = ({ color }) => {
   const theme = useTheme();
 
-  const setColor = color ? color : theme.palette.text.primary
+  const setColor = color ? color : theme.palette.text.primary;
 
   return (
     <svg
