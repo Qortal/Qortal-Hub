@@ -102,7 +102,6 @@ const lightTheme = createTheme({
       secondary: '#525252',
     },
   },
-
   components: {
     MuiCard: {
       styleOverrides: {

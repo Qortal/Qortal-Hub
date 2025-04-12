@@ -34,8 +34,8 @@ import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
-import Download from './assets/svgs/Download.svg';
-import Logout from './assets/svgs/Logout.svg';
+import { Download } from './assets/svgs/Download.tsx';
+import { Logout } from './assets/svgs/Logout.tsx';
 import { Return } from './assets/svgs/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
 import Success from './assets/svgs/Success.svg';
@@ -45,7 +45,6 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import {
   createAccount,
-  generateRandomSentence,
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from './utils/generateWallet/generateWallet';
@@ -61,16 +60,14 @@ import {
   AuthenticatedContainerInnerRight,
   CustomButton,
   CustomButtonAccept,
-  CustomInput,
   CustomLabel,
   TextItalic,
   TextP,
   TextSpan,
-} from './App-styles';
+} from './styles/App-styles.ts';
 import { Spacer } from './common/Spacer';
 import { Loader } from './components/Loader';
 import { PasswordField, ErrorText } from './components';
-import { ChatGroup } from './components/Chat/ChatGroup';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
 import { TaskManager } from './components/TaskManager/TaskManger';
 import { useModal } from './common/useModal';
@@ -149,7 +146,7 @@ import { BuyQortInformation } from './components/BuyQortInformation';
 import { QortPayment } from './components/QortPayment';
 import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
-import ThemeSelector from './styles/ThemeSelector.tsx';
+import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -1652,16 +1649,16 @@ function App() {
                     },
                   }}
                 >
-                  <img
-                    src={Logout}
-                    onClick={() => {
-                      logoutFunc();
-                      setIsOpenDrawerProfile(false);
-                    }}
+                  <Logout
                     style={{
                       cursor: 'pointer',
                       width: '20px',
                       height: 'auto',
+                      color: 'rgba(255, 255, 255, 0.5)',
+                    }}
+                    onClick={() => {
+                      logoutFunc();
+                      setIsOpenDrawerProfile(false);
                     }}
                   />
                 </Tooltip>
@@ -2020,15 +2017,16 @@ function App() {
                 },
               }}
             >
-              <img
-                onClick={() => {
-                  setExtstate('download-wallet');
-                  setIsOpenDrawerProfile(false);
-                }}
-                src={Download}
+              <Download
                 style={{
                   cursor: 'pointer',
                   width: '20px',
+                  height: 'auto',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                }}
+                onClick={() => {
+                  setExtstate('download-wallet');
+                  setIsOpenDrawerProfile(false);
                 }}
               />
             </Tooltip>
@@ -2155,18 +2153,6 @@ function App() {
                 maxWidth: '700px',
               }}
             >
-              {/* <img
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.5)'
-                      : 'rgba(0, 0, 0, 0.3)',
-                }}
-                onClick={returnToMain}
-                src={Return}
-              /> */}
               <Return
                 style={{
                   cursor: 'pointer',
