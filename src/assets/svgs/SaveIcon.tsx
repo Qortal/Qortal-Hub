@@ -1,13 +1,14 @@
 import { useTheme } from '@mui/material';
+import { SVGProps } from './interfaces';
 
-// TODO: extend interface
-export const SaveIcon = ({ color }) => {
+export const SaveIcon: React.FC<SVGProps> = ({ color, ...children }) => {
   const theme = useTheme();
 
   const setColor = color ? color : theme.palette.text.primary;
 
   return (
     <svg
+      {...children}
       width="24"
       height="24"
       viewBox="0 0 24 24"
