@@ -6,7 +6,7 @@ import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
 
-export const CoreSyncStatus = ({ imageSize, position }) => {
+export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
   const [coreInfos, setCoreInfos] = useState({});
   const [isUsingGateway, setIsUsingGateway] = useState(false);
