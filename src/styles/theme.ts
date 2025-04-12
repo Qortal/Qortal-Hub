@@ -122,6 +122,7 @@ const lightTheme = createTheme({
       defaultProps: {
         style: {
           color: '#000000',
+          opacity: 0.5,
         },
       },
     },
@@ -169,6 +170,7 @@ const darkTheme = createTheme({
       defaultProps: {
         style: {
           color: '#ffffff',
+          opacity: 0.5,
         },
       },
     },

@@ -9,7 +9,7 @@ export const Download: React.FC<SVGProps> = ({
   const theme = useTheme();
 
   const setColor = color ? color : theme.palette.text.primary;
-  const setOpacity = opacity ? opacity : 0.5;
+  const setOpacity = opacity ? opacity : 1;
 
   return (
     <svg

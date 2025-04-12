@@ -5,7 +5,7 @@ export const Logout: React.FC<SVGProps> = ({ color, opacity, ...children }) => {
   const theme = useTheme();
 
   const setColor = color ? color : theme.palette.text.primary;
-  const setOpacity = opacity ? opacity : 0.3;
+  const setOpacity = opacity ? opacity : 1;
 
   return (
     <svg
