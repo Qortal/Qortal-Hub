@@ -15,7 +15,8 @@ import { SortablePinnedApps } from './SortablePinnedApps';
 import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
-import ThemeSelector from '../../styles/ThemeSelector';
+import ThemeSelector from '../Theme/ThemeSelector';
+
 export const AppsHomeDesktop = ({
   setMode,
   myApp,

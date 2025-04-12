@@ -6,7 +6,7 @@ import { IconWrapper } from './Desktop/DesktopFooter';
 import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../atoms/global';
 import { AppsIcon } from '../assets/Icons/AppsIcon';
-import ThemeSelector from '../styles/ThemeSelector';
+import ThemeSelector from './Theme/ThemeSelector';
 
 export const DesktopSideBar = ({
   goToHome,

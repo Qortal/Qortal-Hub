@@ -6,7 +6,7 @@ import React, {
   useState,
 } from 'react';
 import { Spacer } from '../common/Spacer';
-import { CustomButton, TextP, TextSpan } from '../App-styles';
+import { CustomButton, TextP, TextSpan } from '../styles/App-styles';
 import {
   Box,
   Button,
@@ -29,7 +29,7 @@ import { CustomizedSnackbars } from '../components/Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background';
 import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
-import ThemeSelector from '../styles/ThemeSelector';
+import ThemeSelector from '../components/Theme/ThemeSelector';
 
 const manifestData = {
   version: '0.5.3',
