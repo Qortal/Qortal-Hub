@@ -58,6 +58,8 @@ const officialAppList = [
   'q-search',
 ];
 
+// TODO: apply dark/light style
+
 const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
   '::-webkit-scrollbar': {
