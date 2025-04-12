@@ -423,7 +423,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
       >
         <ListItem
           sx={{
-            bgcolor: 'background.paper',
+            bgcolor: 'background.paper', // TODO: set background color
             flexGrow: 1,
             '&:hover': {
               backgroundColor: 'secondary.main',

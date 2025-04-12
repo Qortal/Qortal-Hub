@@ -149,7 +149,7 @@ import { BuyQortInformation } from './components/BuyQortInformation';
 import { QortPayment } from './components/QortPayment';
 import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
-import ThemeSelector from './components/Theme/ThemeSelector';
+import ThemeSelector from './styles/ThemeSelector.tsx';
 
 type extStates =
   | 'not-authenticated'

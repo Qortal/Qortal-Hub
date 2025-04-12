@@ -29,7 +29,7 @@ import { CustomizedSnackbars } from '../components/Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background';
 import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
-import ThemeSelector from '../components/Theme/ThemeSelector';
+import ThemeSelector from '../styles/ThemeSelector';
 
 const manifestData = {
   version: '0.5.3',
