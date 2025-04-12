@@ -71,28 +71,14 @@ export const PasswordField = forwardRef<HTMLInputElement, TextFieldProps>(
                   data-testid="plain-text-indicator"
                   sx={{ minWidth: 0, p: 0 }}
                 >
-                  <VisibilityOffIcon
-                    sx={{
-                      color:
-                        theme.palette.mode === 'dark'
-                          ? 'rgba(255, 255, 255, 0.5)'
-                          : 'rgba(0, 0, 0, 0.3)',
-                    }}
-                  />
+                  <VisibilityOffIcon />
                 </ButtonBase>
               ) : (
                 <ButtonBase
                   data-testid="password-text-indicator"
                   sx={{ minWidth: 0, p: 0 }}
                 >
-                  <VisibilityIcon
-                    sx={{
-                      color:
-                        theme.palette.mode === 'dark'
-                          ? 'rgba(255, 255, 255, 0.5)'
-                          : 'rgba(0, 0, 0, 0.3)',
-                    }}
-                  />
+                  <VisibilityIcon />
                 </ButtonBase>
               )}
             </InputAdornment>

@@ -1654,7 +1654,6 @@ function App() {
                       cursor: 'pointer',
                       width: '20px',
                       height: 'auto',
-                      color: 'rgba(255, 255, 255, 0.5)',
                     }}
                     onClick={() => {
                       logoutFunc();
@@ -1700,14 +1699,7 @@ function App() {
                   },
                 }}
               >
-                <SettingsIcon
-                  sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? 'rgba(255, 255, 255, 0.5)'
-                        : 'rgba(0, 0, 0, 0.3)',
-                  }}
-                />
+                <SettingsIcon />
               </Tooltip>
             </ButtonBase>
             <Spacer height="20px" />
@@ -1745,14 +1737,7 @@ function App() {
                   },
                 }}
               >
-                <PersonSearchIcon
-                  sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? 'rgba(255, 255, 255, 0.5)'
-                        : 'rgba(0, 0, 0, 0.3)',
-                  }}
-                />
+                <PersonSearchIcon />
               </Tooltip>
             </ButtonBase>
             <Spacer height="20px" />
@@ -1790,14 +1775,7 @@ function App() {
                   },
                 }}
               >
-                <AccountBalanceWalletIcon
-                  sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? 'rgba(255, 255, 255, 0.5)'
-                        : 'rgba(0, 0, 0, 0.3)',
-                  }}
-                />
+                <AccountBalanceWalletIcon />
               </Tooltip>
             </ButtonBase>
 
@@ -1942,7 +1920,7 @@ function App() {
                   },
                 }}
               >
-                <EngineeringIcon sx={{ color: 'var(--unread)' }} />
+                <EngineeringIcon />
               </Tooltip>
             </ButtonBase>
 
@@ -1986,7 +1964,7 @@ function App() {
                     },
                   }}
                 >
-                  <HelpIcon sx={{ color: 'var(--unread)' }} />
+                  <HelpIcon />
                 </Tooltip>
               </ButtonBase>
             )}
@@ -2022,7 +2000,6 @@ function App() {
                   cursor: 'pointer',
                   width: '20px',
                   height: 'auto',
-                  color: 'rgba(255, 255, 255, 0.5)',
                 }}
                 onClick={() => {
                   setExtstate('download-wallet');
@@ -2157,10 +2134,6 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.5)'
-                      : 'rgba(0, 0, 0, 0.3)',
                 }}
                 onClick={returnToMain}
               />
@@ -2668,10 +2641,6 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.5)'
-                      : 'rgba(0, 0, 0, 0.3)',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2704,10 +2673,6 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.5)'
-                      : 'rgba(0, 0, 0, 0.3)',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2812,17 +2777,12 @@ function App() {
                 maxWidth: '700px',
               }}
             >
-              <img
+              <Return
                 style={{
                   cursor: 'pointer',
                   height: '24px',
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255, 255, 255, 0.5)'
-                      : 'rgba(0, 0, 0, 0.3)',
                 }}
                 onClick={returnToMain}
-                src={Return}
               />
             </Box>
             <Spacer height="10px" />
@@ -2907,14 +2867,10 @@ function App() {
                     maxWidth: '700px',
                   }}
                 >
-                  <img
+                  <Return
                     style={{
                       cursor: 'pointer',
                       height: '24px',
-                      color:
-                        theme.palette.mode === 'dark'
-                          ? 'rgba(255, 255, 255, 0.5)'
-                          : 'rgba(0, 0, 0, 0.3)',
                     }}
                     onClick={() => {
                       if (creationStep === 2) {
@@ -2927,7 +2883,6 @@ function App() {
                       setWalletToBeDownloadedPasswordConfirm('');
                       setWalletToBeDownloadedPassword('');
                     }}
-                    src={Return}
                   />
                 </Box>
 
