@@ -91,7 +91,7 @@ const lightTheme = createTheme({
       light: '#f9f9fd',
     },
     secondary: {
-      main: '#1EAAF1',
+      main: '#c2deec',
     },
     background: {
       default: '#fafafa',
@@ -108,7 +108,7 @@ const lightTheme = createTheme({
       styleOverrides: {
         root: {
           boxShadow:
-            'rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px;',
+            'rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(230, 200, 200, 0.06) 0px 1px 2px 0px;',
           borderRadius: '8px',
           transition: 'all 0.3s ease-in-out',
           '&:hover': {
