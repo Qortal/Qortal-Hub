@@ -1817,7 +1817,7 @@ function App() {
                       setIsOpenDrawerProfile(true);
                     }}
                   >
-                    <WalletIcon width={25} color="rgba(250, 250, 250, 0.5)" />
+                    <WalletIcon width="25" />
                   </ButtonBase>
                 </Tooltip>
               </>
