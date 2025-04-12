@@ -32,7 +32,7 @@ const commonThemeOptions = {
       fontSize: '23px',
       fontWeight: 400,
       lineHeight: 1.5,
-      letterSpacing: '0.5px',
+      letterSpacing: 'normal',
     },
 
     body2: {
