@@ -17,7 +17,7 @@ import {
   IconButton,
   Input,
 } from '@mui/material';
-import { CustomButton } from './App-styles';
+import { CustomButton } from './styles/App-styles';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
 import { Label } from './components/Group/AddGroup';
