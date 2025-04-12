@@ -101,15 +101,15 @@ export const CoreSyncStatus = () => {
         <span>
           <img
             src={imagePath}
-            style={{ height: 'auto', width: imageSize ? imageSize : '24px' }}
+            style={{ height: 'auto', width: '24px' }}
             alt="sync status"
           />
         </span>
         <div
           className="bottom"
           style={{
-            right: position && 'unset',
-            left: position && '0px',
+            right: 'unset',
+            left: '0px',
           }}
         >
           <h3>Core Information</h3>
