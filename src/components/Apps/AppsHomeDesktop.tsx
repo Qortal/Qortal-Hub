@@ -6,7 +6,7 @@ import {
   AppLibrarySubTitle,
   AppsContainer,
 } from './Apps-styles';
-import { Box, ButtonBase, Input } from '@mui/material';
+import { Box, ButtonBase, Input, useTheme } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { isMobile } from '../../App';
 import { executeEvent } from '../../utils/events';
@@ -25,6 +25,7 @@ export const AppsHomeDesktop = ({
   myName,
 }) => {
   const [qortalUrl, setQortalUrl] = useState('');
+  const theme = useTheme();
 
   const openQortalUrl = () => {
     try {
@@ -36,7 +37,9 @@ export const AppsHomeDesktop = ({
         executeEvent('open-apps-mode', {});
         setQortalUrl('qortal://');
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
   return (
     <>
@@ -66,7 +69,10 @@ export const AppsHomeDesktop = ({
             display: 'flex',
             gap: '20px',
             alignItems: 'center',
-            backgroundColor: '#1f2023',
+            backgroundColor:
+              theme.palette.mode === 'dark'
+                ? 'rgba(41, 41, 43, 1)'
+                : 'rgb(209, 209, 209)',
             padding: '7px',
             borderRadius: '20px',
             width: '100%',
@@ -85,7 +91,7 @@ export const AppsHomeDesktop = ({
             placeholder="qortal://"
             sx={{
               width: '100%',
-              color: 'white',
+              color: theme.palette.mode === 'dark' ? 'white' : 'black',
               '& .MuiInput-input::placeholder': {
                 color: 'rgba(84, 84, 84, 0.70) !important',
                 fontSize: '20px',
