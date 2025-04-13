@@ -56,6 +56,7 @@ const officialAppList = [
   'q-manager',
   'q-wallets',
   'q-search',
+  'q-nodecontrol',
 ];
 
 // TODO: apply dark/light style

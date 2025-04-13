@@ -71,6 +71,7 @@ const officialAppList = [
   'q-mintership',
   'q-wallets',
   'q-search',
+  'q-nodecontrol',
 ];
 
 const ScrollerStyled = styled('div')({
