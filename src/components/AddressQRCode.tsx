@@ -1,57 +1,57 @@
-import React, { useState } from "react";
-import QRCode from "react-qr-code";
-import { TextP } from "../App-styles";
-import { Box, Typography } from "@mui/material";
+import React, { useState } from 'react';
+import QRCode from 'react-qr-code';
+import { TextP } from '../styles/App-styles';
+import { Box, Typography } from '@mui/material';
 
 export const AddressQRCode = ({ targetAddress }) => {
   const [open, setOpen] = useState(false);
   return (
     <Box
       sx={{
-        display: "flex",
-        gap: "10px",
-        alignItems: "center",
-        flexDirection: "column",
-        marginTop: '10px'
+        display: 'flex',
+        gap: '10px',
+        alignItems: 'center',
+        flexDirection: 'column',
+        marginTop: '10px',
       }}
     >
       <Typography
         sx={{
-          cursor: "pointer",
-          fontSize: "14px",
+          cursor: 'pointer',
+          fontSize: '14px',
         }}
         onClick={() => {
-          setOpen((prev)=> !prev);
+          setOpen((prev) => !prev);
         }}
       >
-        {open ? 'Hide QR code' :'See QR code'}
+        {open ? 'Hide QR code' : 'See QR code'}
       </Typography>
 
       {open && (
         <Box
           sx={{
-            display: "flex",
-            gap: "10px",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
+            display: 'flex',
+            gap: '10px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
           }}
         >
           <Box
             sx={{
-              display: "flex",
-              gap: "10px",
-              width: "100%",
-              alignItems: "center",
-              flexDirection: "column",
-              marginTop: "20px",
+              display: 'flex',
+              gap: '10px',
+              width: '100%',
+              alignItems: 'center',
+              flexDirection: 'column',
+              marginTop: '20px',
             }}
           >
             <TextP
               sx={{
-                textAlign: "center",
+                textAlign: 'center',
                 lineHeight: 1.2,
-                fontSize: "16px",
+                fontSize: '16px',
                 fontWeight: 500,
               }}
             >

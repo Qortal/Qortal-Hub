@@ -1,21 +1,22 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   AppLibrarySubTitle,
   AppsContainer,
-} from "./Apps-styles";
-import { Box, ButtonBase, Input } from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { isMobile } from "../../App";
-import { executeEvent } from "../../utils/events";
-import { Spacer } from "../../common/Spacer";
-import { SortablePinnedApps } from "./SortablePinnedApps";
-import { extractComponents } from "../Chat/MessageDisplay";
-import ArrowOutwardIcon from "@mui/icons-material/ArrowOutward";
-import { AppsPrivate } from "./AppsPrivate";
-import ThemeSelector from "../Theme/ThemeSelector";
+} from './Apps-styles';
+import { Box, ButtonBase, Input, useTheme } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { isMobile } from '../../App';
+import { executeEvent } from '../../utils/events';
+import { Spacer } from '../../common/Spacer';
+import { SortablePinnedApps } from './SortablePinnedApps';
+import { extractComponents } from '../Chat/MessageDisplay';
+import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
+import { AppsPrivate } from './AppsPrivate';
+import ThemeSelector from '../Theme/ThemeSelector';
+
 export const AppsHomeDesktop = ({
   setMode,
   myApp,
@@ -23,7 +24,8 @@ export const AppsHomeDesktop = ({
   availableQapps,
   myName,
 }) => {
-  const [qortalUrl, setQortalUrl] = useState("");
+  const [qortalUrl, setQortalUrl] = useState('');
+  const theme = useTheme();
 
   const openQortalUrl = () => {
     try {
@@ -31,22 +33,24 @@ export const AppsHomeDesktop = ({
       const res = extractComponents(qortalUrl);
       if (res) {
         const { service, name, identifier, path } = res;
-        executeEvent("addTab", { data: { service, name, identifier, path } });
-        executeEvent("open-apps-mode", {});
-        setQortalUrl("qortal://");
+        executeEvent('addTab', { data: { service, name, identifier, path } });
+        executeEvent('open-apps-mode', {});
+        setQortalUrl('qortal://');
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
   return (
     <>
       <AppsContainer
         sx={{
-          justifyContent: "flex-start",
+          justifyContent: 'flex-start',
         }}
       >
         <AppLibrarySubTitle
           sx={{
-            fontSize: "30px",
+            fontSize: '30px',
           }}
         >
           Apps Dashboard
@@ -57,19 +61,22 @@ export const AppsHomeDesktop = ({
 
       <AppsContainer
         sx={{
-          justifyContent: "flex-start",
+          justifyContent: 'flex-start',
         }}
       >
         <Box
           sx={{
-            display: "flex",
-            gap: "20px",
-            alignItems: "center",
-            backgroundColor: "#1f2023",
-            padding: "7px",
-            borderRadius: "20px",
-            width: "100%",
-            maxWidth: "500px",
+            display: 'flex',
+            gap: '20px',
+            alignItems: 'center',
+            backgroundColor:
+              theme.palette.mode === 'dark'
+                ? 'rgba(41, 41, 43, 1)'
+                : 'rgb(209, 209, 209)',
+            padding: '7px',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '500px',
           }}
         >
           <Input
@@ -83,24 +90,24 @@ export const AppsHomeDesktop = ({
             autoCorrect="off"
             placeholder="qortal://"
             sx={{
-              width: "100%",
-              color: "white",
-              "& .MuiInput-input::placeholder": {
-                color: "rgba(84, 84, 84, 0.70) !important",
-                fontSize: "20px",
-                fontStyle: "normal",
+              width: '100%',
+              color: theme.palette.mode === 'dark' ? 'white' : 'black',
+              '& .MuiInput-input::placeholder': {
+                color: 'rgba(84, 84, 84, 0.70) !important',
+                fontSize: '20px',
+                fontStyle: 'normal',
                 fontWeight: 400,
-                lineHeight: "120%", // 24px
-                letterSpacing: "0.15px",
+                lineHeight: '120%', // 24px
+                letterSpacing: '0.15px',
                 opacity: 1,
               },
-              "&:focus": {
-                outline: "none",
+              '&:focus': {
+                outline: 'none',
               },
               // Add any additional styles for the input here
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && qortalUrl) {
+              if (e.key === 'Enter' && qortalUrl) {
                 openQortalUrl();
               }
             }}
@@ -108,7 +115,7 @@ export const AppsHomeDesktop = ({
           <ButtonBase onClick={() => openQortalUrl()}>
             <ArrowOutwardIcon
               sx={{
-                color: qortalUrl ? "white" : "rgba(84, 84, 84, 0.70)",
+                color: qortalUrl ? 'white' : 'rgba(84, 84, 84, 0.70)',
               }}
             />
           </ButtonBase>
@@ -119,18 +126,18 @@ export const AppsHomeDesktop = ({
 
       <AppsContainer
         sx={{
-          gap: "50px",
-          justifyContent: "flex-start",
+          gap: '50px',
+          justifyContent: 'flex-start',
         }}
       >
         <ButtonBase
           onClick={() => {
-            setMode("library");
+            setMode('library');
           }}
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: !isMobile ? '10px' : '5px',
             }}
           >
             <AppCircle>
@@ -150,7 +157,7 @@ export const AppsHomeDesktop = ({
         />
       </AppsContainer>
 
-      <ThemeSelector style={{ position: "fixed", bottom: "1%", left: "0%" }} />
+      <ThemeSelector style={{ position: 'fixed', bottom: '1%', left: '0%' }} />
     </>
   );
 };

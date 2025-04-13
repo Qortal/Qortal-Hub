@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -23,77 +23,87 @@ import {
   PublishQAppCTAParent,
   PublishQAppCTARight,
   PublishQAppDotsBG,
-} from "./Apps-styles";
-import { Avatar, Box, ButtonBase, InputBase, Typography, styled } from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { MyContext, getBaseApiReact } from "../../App";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import IconSearch from "../../assets/svgs/Search.svg";
-import IconClearInput from "../../assets/svgs/ClearInput.svg";
-import qappDevelopText from "../../assets/svgs/qappDevelopText.svg";
-import qappLibraryText from "../../assets/svgs/qappLibraryText.svg";
-import RefreshIcon from "@mui/icons-material/Refresh";
+} from './Apps-styles';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  InputBase,
+  Typography,
+  styled,
+} from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { MyContext, getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import IconSearch from '../../assets/svgs/Search.svg';
+import IconClearInput from '../../assets/svgs/ClearInput.svg';
+import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
+import qappLibraryText from '../../assets/svgs/qappLibraryText.svg';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
-import qappDots from "../../assets/svgs/qappDots.svg";
+import qappDots from '../../assets/svgs/qappDots.svg';
 
-import { Spacer } from "../../common/Spacer";
-import { AppInfoSnippet } from "./AppInfoSnippet";
-import { Virtuoso } from "react-virtuoso";
-import { executeEvent } from "../../utils/events";
+import { Spacer } from '../../common/Spacer';
+import { AppInfoSnippet } from './AppInfoSnippet';
+import { Virtuoso } from 'react-virtuoso';
+import { executeEvent } from '../../utils/events';
 import {
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
-} from "./AppsDesktop-styles";
-import { AppsNavBarDesktop } from "./AppsNavBarDesktop";
-import ReturnSVG from '../../assets/svgs/Return.svg'
-import { ComposeP, MailIconImg, ShowMessageReturnButton } from "../Group/Forum/Mail-styles";
+} from './AppsDesktop-styles';
+import ReturnSVG from '../../assets/svgs/Return.svg';
+import {
+  ComposeP,
+  MailIconImg,
+  ShowMessageReturnButton,
+} from '../Group/Forum/Mail-styles';
 const officialAppList = [
-  "q-tube",
-  "q-blog",
-  "q-share",
-  "q-support",
-  "q-mail",
-  "q-fund",
-  "q-shop",
-  "q-trade",
-  "q-support",
-  "q-manager",
-  "q-mintership",
-  "q-wallets",
-  "q-search"
+  'q-tube',
+  'q-blog',
+  'q-share',
+  'q-support',
+  'q-mail',
+  'q-fund',
+  'q-shop',
+  'q-trade',
+  'q-support',
+  'q-manager',
+  'q-mintership',
+  'q-wallets',
+  'q-search',
 ];
 
-const ScrollerStyled = styled("div")({
+const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  "::-webkit-scrollbar": {
-    width: "0px",
-    height: "0px",
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
   },
 
   // Hide scrollbar for Firefox
-  scrollbarWidth: "none",
+  scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  "-msOverflowStyle": "none",
+  '-msOverflowStyle': 'none',
 });
 
-const StyledVirtuosoContainer = styled("div")({
-  position: "relative",
-  width: "100%",
-  display: "flex",
-  flexDirection: "column",
+const StyledVirtuosoContainer = styled('div')({
+  position: 'relative',
+  width: '100%',
+  display: 'flex',
+  flexDirection: 'column',
 
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  "::-webkit-scrollbar": {
-    width: "0px",
-    height: "0px",
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
   },
 
   // Hide scrollbar for Firefox
-  scrollbarWidth: "none",
+  scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  "-msOverflowStyle": "none",
+  '-msOverflowStyle': 'none',
 });
 
 export const AppsLibraryDesktop = ({
@@ -103,20 +113,20 @@ export const AppsLibraryDesktop = ({
   hasPublishApp,
   isShow,
   categories,
-  getQapps
+  getQapps,
 }) => {
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(
       (app) =>
-        app.service === "APP" &&
+        app.service === 'APP' &&
         officialAppList.includes(app?.name?.toLowerCase())
     );
   }, [availableQapps]);
 
-  const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
+  const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
 
   // Debounce logic
   useEffect(() => {
@@ -125,7 +135,7 @@ export const AppsLibraryDesktop = ({
     }, 350);
     setTimeout(() => {
       virtuosoRef.current.scrollToIndex({
-        index: 0
+        index: 0,
       });
     }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
@@ -138,8 +148,13 @@ export const AppsLibraryDesktop = ({
 
   const searchedList = useMemo(() => {
     if (!debouncedValue) return [];
-    return availableQapps.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
+    return availableQapps.filter(
+      (app) =>
+        app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
+        (app?.metadata?.title &&
+          app?.metadata?.title
+            ?.toLowerCase()
+            .includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue]);
 
@@ -151,7 +166,7 @@ export const AppsLibraryDesktop = ({
         app={app}
         myName={myName}
         parentStyles={{
-          padding: '0px 10px'
+          padding: '0px 10px',
         }}
       />
     );
@@ -160,111 +175,112 @@ export const AppsLibraryDesktop = ({
   return (
     <AppsLibraryContainer
       sx={{
-        display: !isShow && "none",
-        padding: "0px",
-        height: "100vh",
-        overflow: "hidden",
-        paddingTop: '30px'
+        display: !isShow && 'none',
+        padding: '0px',
+        height: '100vh',
+        overflow: 'hidden',
+        paddingTop: '30px',
       }}
     >
-  
       <AppsDesktopLibraryHeader
         sx={{
-          maxWidth: "1500px",
-          width: "90%",
+          maxWidth: '1500px',
+          width: '90%',
         }}
       >
         <AppsWidthLimiter>
           <Box
             sx={{
-              display: "flex",
-              width: "100%",
-              justifyContent: "space-between",
+              display: 'flex',
+              width: '100%',
+              justifyContent: 'space-between',
             }}
           >
             <img src={qappLibraryText} />
-            <Box sx={{
-              display: 'flex',
-              gap: '20px',
-              alignItems: 'center'
-            }}>
-            <AppsSearchContainer
+            <Box
               sx={{
-                width: "412px",
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'center',
               }}
             >
-              <AppsSearchLeft>
-                <img src={IconSearch} />
-                <InputBase
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  sx={{ ml: 1, flex: 1 }}
-                  placeholder="Search for apps"
-                  inputProps={{
-                    "aria-label": "Search for apps",
-                    fontSize: "16px",
-                    fontWeight: 400,
+              <AppsSearchContainer
+                sx={{
+                  width: '412px',
+                }}
+              >
+                <AppsSearchLeft>
+                  <img src={IconSearch} />
+                  <InputBase
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    sx={{ ml: 1, flex: 1 }}
+                    placeholder="Search for apps"
+                    inputProps={{
+                      'aria-label': 'Search for apps',
+                      fontSize: '16px',
+                      fontWeight: 400,
+                    }}
+                  />
+                </AppsSearchLeft>
+                <AppsSearchRight>
+                  {searchValue && (
+                    <ButtonBase
+                      onClick={() => {
+                        setSearchValue('');
+                      }}
+                    >
+                      <img src={IconClearInput} />
+                    </ButtonBase>
+                  )}
+                </AppsSearchRight>
+              </AppsSearchContainer>
+              <ButtonBase
+                onClick={(e) => {
+                  getQapps();
+                }}
+              >
+                <RefreshIcon
+                  sx={{
+                    color: 'rgba(250, 250, 250, 0.5)',
+                    width: '40px',
+                    height: 'auto',
                   }}
                 />
-              </AppsSearchLeft>
-              <AppsSearchRight>
-                {searchValue && (
-                  <ButtonBase
-                    onClick={() => {
-                      setSearchValue("");
-                    }}
-                  >
-                    <img src={IconClearInput} />
-                  </ButtonBase>
-                )}
-              </AppsSearchRight>
-            </AppsSearchContainer>
-            <ButtonBase
-          onClick={(e) => {
-            getQapps()
-          }}
-        >
-          <RefreshIcon
-             
-              sx={{
-                color: "rgba(250, 250, 250, 0.5)",
-                width: '40px',
-                height: 'auto'
-              }}
-            />
-        </ButtonBase>
+              </ButtonBase>
             </Box>
-        
           </Box>
         </AppsWidthLimiter>
       </AppsDesktopLibraryHeader>
       <AppsDesktopLibraryBody
         sx={{
           height: `calc(100vh - 36px)`,
-          overflow: "auto",
-          padding: "0px",
-          alignItems: "center",
+          overflow: 'auto',
+          padding: '0px',
+          alignItems: 'center',
         }}
       >
         <AppsDesktopLibraryBody
           sx={{
             height: `calc(100vh - 36px)`,
-            flexGrow: "unset",
-            maxWidth: "1500px",
-            width: "90%",
+            flexGrow: 'unset',
+            maxWidth: '1500px',
+            width: '90%',
           }}
         >
-           
           <Spacer height="70px" />
-          <ShowMessageReturnButton sx={{
-            padding: '2px'
-          }} onClick={() => {
-            executeEvent("navigateBack", {});
-                  }}>
-                    <MailIconImg src={ReturnSVG} />
-                    <ComposeP>Return to Apps Dashboard</ComposeP>
-                  </ShowMessageReturnButton>
-                  <Spacer height="20px" />
+          <ShowMessageReturnButton
+            sx={{
+              padding: '2px',
+            }}
+            onClick={() => {
+              executeEvent('navigateBack', {});
+            }}
+          >
+            <MailIconImg src={ReturnSVG} />
+            <ComposeP>Return to Apps Dashboard</ComposeP>
+          </ShowMessageReturnButton>
+          <Spacer height="20px" />
           {searchedList?.length > 0 ? (
             <AppsWidthLimiter>
               <StyledVirtuosoContainer
@@ -292,46 +308,48 @@ export const AppsLibraryDesktop = ({
             <>
               <AppLibrarySubTitle
                 sx={{
-                  fontSize: "30px",
+                  fontSize: '30px',
                 }}
               >
                 Official Apps
               </AppLibrarySubTitle>
               <Spacer height="45px" />
-              <AppsContainer sx={{
-                gap: '50px',
-                justifyContent: 'flex-start'
-              }}>
+              <AppsContainer
+                sx={{
+                  gap: '50px',
+                  justifyContent: 'flex-start',
+                }}
+              >
                 {officialApps?.map((qapp) => {
                   return (
                     <ButtonBase
                       sx={{
                         // height: "80px",
-                        width: "80px",
+                        width: '80px',
                       }}
                       onClick={() => {
                         // executeEvent("addTab", {
                         //   data: qapp
                         // })
-                        executeEvent("selectedAppInfo", {
+                        executeEvent('selectedAppInfo', {
                           data: qapp,
                         });
                       }}
                     >
                       <AppCircleContainer
                         sx={{
-                          gap: "10px",
+                          gap: '10px',
                         }}
                       >
                         <AppCircle
                           sx={{
-                            border: "none",
+                            border: 'none',
                           }}
                         >
                           <Avatar
                             sx={{
-                              height: "42px",
-                              width: "42px",
+                              height: '42px',
+                              width: '42px',
                             }}
                             alt={qapp?.name}
                             src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -340,8 +358,8 @@ export const AppsLibraryDesktop = ({
                           >
                             <img
                               style={{
-                                width: "31px",
-                                height: "auto",
+                                width: '31px',
+                                height: 'auto',
                               }}
                               src={LogoSelected}
                               alt="center-icon"
@@ -359,30 +377,30 @@ export const AppsLibraryDesktop = ({
               <Spacer height="80px" />
               <Box
                 sx={{
-                  width: "100%",
-                  gap: "250px",
-                  display: "flex",
+                  width: '100%',
+                  gap: '250px',
+                  display: 'flex',
                 }}
               >
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
                   <AppLibrarySubTitle
                     sx={{
-                      fontSize: "30px",
-                      width: "100%",
-                      textAlign: "start",
+                      fontSize: '30px',
+                      width: '100%',
+                      textAlign: 'start',
                     }}
                   >
-                    {hasPublishApp ? "Update Apps!" : "Create Apps!"}
+                    {hasPublishApp ? 'Update Apps!' : 'Create Apps!'}
                   </AppLibrarySubTitle>
                   <Spacer height="18px" />
                   <PublishQAppCTAParent
                     sx={{
-                      gap: "25px",
+                      gap: '25px',
                     }}
                   >
                     <PublishQAppCTALeft>
@@ -394,11 +412,11 @@ export const AppsLibraryDesktop = ({
                     </PublishQAppCTALeft>
                     <PublishQAppCTARight
                       onClick={() => {
-                        setMode("publish");
+                        setMode('publish');
                       }}
                     >
                       <PublishQAppCTAButton>
-                        {hasPublishApp ? "Update" : "Publish"}
+                        {hasPublishApp ? 'Update' : 'Publish'}
                       </PublishQAppCTAButton>
                       <Spacer width="20px" />
                     </PublishQAppCTARight>
@@ -406,13 +424,13 @@ export const AppsLibraryDesktop = ({
                 </Box>
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
                   <AppLibrarySubTitle
                     sx={{
-                      fontSize: "30px",
+                      fontSize: '30px',
                     }}
                   >
                     Categories
@@ -420,58 +438,57 @@ export const AppsLibraryDesktop = ({
                   <Spacer height="18px" />
                   <Box
                     sx={{
-                      width: "100%",
-                      display: "flex",
-                      gap: "20px",
-                      flexWrap: "wrap",
+                      width: '100%',
+                      display: 'flex',
+                      gap: '20px',
+                      flexWrap: 'wrap',
                     }}
                   >
-                     <ButtonBase
-                        
-                          onClick={() => {
-                            executeEvent("selectedCategory", {
-                              data: {
-                                id: 'all',
-                                name: 'All'
-                              },
-                            });
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              height: "60px",
-                              padding: "0px 24px",
-                              border: "4px solid #10242F",
-                              borderRadius: "6px",
-                              boxShadow: "2px 4px 0px 0px #000000",
-                            }}
-                          >
-                            All
-                          </Box>
-                        </ButtonBase>
+                    <ButtonBase
+                      onClick={() => {
+                        executeEvent('selectedCategory', {
+                          data: {
+                            id: 'all',
+                            name: 'All',
+                          },
+                        });
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '60px',
+                          padding: '0px 24px',
+                          border: '4px solid #10242F',
+                          borderRadius: '6px',
+                          boxShadow: '2px 4px 0px 0px #000000',
+                        }}
+                      >
+                        All
+                      </Box>
+                    </ButtonBase>
                     {categories?.map((category) => {
                       return (
                         <ButtonBase
                           key={category?.id}
                           onClick={() => {
-                            executeEvent("selectedCategory", {
+                            executeEvent('selectedCategory', {
                               data: category,
                             });
                           }}
                         >
                           <Box
                             sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              height: "60px",
-                              padding: "0px 24px",
-                              border: "4px solid #10242F",
-                              borderRadius: "6px",
-                              boxShadow: "2px 4px 0px 0px #000000",
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              height: '60px',
+                              padding: '0px 24px',
+                              border: '4px solid #10242F',
+                              borderRadius: '6px',
+                              boxShadow: '2px 4px 0px 0px #000000',
                             }}
                           >
                             {category?.name}

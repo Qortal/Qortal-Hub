@@ -1,12 +1,12 @@
-import { Box, ButtonBase, useTheme } from "@mui/material";
-import { HomeIcon } from "../assets/Icons/HomeIcon";
-import { MessagingIcon } from "../assets/Icons/MessagingIcon";
-import { Save } from "./Save/Save";
-import { IconWrapper } from "./Desktop/DesktopFooter";
-import { useRecoilState } from "recoil";
-import { enabledDevModeAtom } from "../atoms/global";
-import { AppsIcon } from "../assets/Icons/AppsIcon";
-import ThemeSelector from "./Theme/ThemeSelector";
+import { Box, ButtonBase, useTheme } from '@mui/material';
+import { HomeIcon } from '../assets/Icons/HomeIcon';
+import { MessagingIcon } from '../assets/Icons/MessagingIcon';
+import { Save } from './Save/Save';
+import { IconWrapper } from './Desktop/DesktopFooter';
+import { useRecoilState } from 'recoil';
+import { enabledDevModeAtom } from '../atoms/global';
+import { AppsIcon } from '../assets/Icons/AppsIcon';
+import ThemeSelector from './Theme/ThemeSelector';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -24,25 +24,25 @@ export const DesktopSideBar = ({
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
-  
+
   const theme = useTheme();
 
   return (
     <Box
       sx={{
-        width: "60px",
-        flexDirection: "column",
-        height: "100vh",
-        alignItems: "center",
-        display: "flex",
-        gap: "25px",
+        width: '60px',
+        flexDirection: 'column',
+        height: '100vh',
+        alignItems: 'center',
+        display: 'flex',
+        gap: '25px',
       }}
     >
       <ButtonBase
         sx={{
-          width: "60px",
-          height: "60px",
-          paddingTop: "23px",
+          width: '60px',
+          height: '60px',
+          paddingTop: '23px',
         }}
         onClick={() => {
           goToHome();
@@ -51,39 +51,39 @@ export const DesktopSideBar = ({
         <HomeIcon
           height={34}
           color={
-            desktopViewMode === "home" ? "white" : "rgba(250, 250, 250, 0.5)"
+            desktopViewMode === 'home' ? 'white' : 'rgba(250, 250, 250, 0.5)'
           }
         />
       </ButtonBase>
       <ButtonBase
         onClick={() => {
-          setDesktopViewMode("apps");
+          setDesktopViewMode('apps');
           // setIsOpenSideViewDirects(false)
           // setIsOpenSideViewGroups(false)
         }}
       >
         <IconWrapper
-          color={isApps ? "white" : "rgba(250, 250, 250, 0.5)"}
+          color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
           label="Apps"
           selected={isApps}
           disableWidth
         >
           <AppsIcon
-            color={isApps ? "white" : "rgba(250, 250, 250, 0.5)"}
+            color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
             height={30}
           />
         </IconWrapper>
       </ButtonBase>
       <ButtonBase
         onClick={() => {
-          setDesktopViewMode("chat");
+          setDesktopViewMode('chat');
         }}
       >
         <IconWrapper
           color={
             hasUnreadDirects || hasUnreadGroups
-              ? "var(--unread)"
-              : theme.palette.text.primary              
+              ? 'var(--unread)'
+              : theme.palette.text.primary
           }
           label="Chat"
           disableWidth
@@ -92,7 +92,7 @@ export const DesktopSideBar = ({
             height={30}
             color={
               hasUnreadDirects || hasUnreadGroups
-                ? "var(--unread)"
+                ? 'var(--unread)'
                 : theme.palette.text.primary
             }
           />
@@ -121,24 +121,22 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode("dev");
+            setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
             color={
-              desktopViewMode === "dev" ? "white" : "rgba(250, 250, 250, 0.5)"
+              desktopViewMode === 'dev' ? 'white' : 'rgba(250, 250, 250, 0.5)'
             }
             label="Dev"
             disableWidth
           >
-            <AppsIcon
-              height={30}
-            />
+            <AppsIcon height={30} />
           </IconWrapper>
         </ButtonBase>
       )}
 
-      <ThemeSelector style={{ position: "fixed", bottom: "1%" }} />
+      <ThemeSelector style={{ position: 'fixed', bottom: '1%' }} />
     </Box>
   );
 };

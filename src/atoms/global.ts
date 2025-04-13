@@ -1,180 +1,195 @@
 import { atom, selectorFamily } from 'recoil';
 
-
 export const sortablePinnedAppsAtom = atom({
-  key: 'sortablePinnedAppsFromAtom', 
-  default: [{
-    name: 'Q-Tube',
-    service: 'APP'
-  }, {
-    name: 'Q-Mail',
-    service: 'APP'
-  },  {
-    name: 'Q-Share',
-    service: 'APP'
-  }, {
-    name: 'Q-Fund',
-    service: 'APP'
-  }, {
-    name: 'Q-Shop',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Trade',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Support',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Manager',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Blog',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Mintership',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Wallets',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Search',
-    service: 'APP'
-  },
-], 
+  key: 'sortablePinnedAppsFromAtom',
+  default: [
+    {
+      name: 'Q-Tube',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Mail',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Share',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Fund',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Shop',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Trade',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Support',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Manager',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Blog',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Mintership',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Wallets',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Search',
+      service: 'APP',
+    },
+  ],
 });
 
 export const canSaveSettingToQdnAtom = atom({
-  key: 'canSaveSettingToQdnAtom', 
-  default: false, 
+  key: 'canSaveSettingToQdnAtom',
+  default: false,
 });
 
 export const settingsQDNLastUpdatedAtom = atom({
-  key: 'settingsQDNLastUpdatedAtom', 
-  default: -100, 
+  key: 'settingsQDNLastUpdatedAtom',
+  default: -100,
 });
 
 export const settingsLocalLastUpdatedAtom = atom({
-  key: 'settingsLocalLastUpdatedAtom', 
-  default: 0, 
+  key: 'settingsLocalLastUpdatedAtom',
+  default: 0,
 });
 
 export const oldPinnedAppsAtom = atom({
-  key: 'oldPinnedAppsAtom', 
-  default: [], 
-});
-export const isUsingImportExportSettingsAtom = atom({
-  key: 'isUsingImportExportSettingsAtom', 
-  default: null, 
+  key: 'oldPinnedAppsAtom',
+  default: [],
 });
 
+export const isUsingImportExportSettingsAtom = atom({
+  key: 'isUsingImportExportSettingsAtom',
+  default: null,
+});
 
 export const fullScreenAtom = atom({
-  key: 'fullScreenAtom', 
-  default: false, 
+  key: 'fullScreenAtom',
+  default: false,
 });
 
 export const hasSettingsChangedAtom = atom({
-  key: 'hasSettingsChangedAtom', 
-  default: false, 
+  key: 'hasSettingsChangedAtom',
+  default: false,
 });
 
 export const navigationControllerAtom = atom({
-  key: 'navigationControllerAtom', 
-  default: {}, 
+  key: 'navigationControllerAtom',
+  default: {},
 });
 
 export const enabledDevModeAtom = atom({
-  key: 'enabledDevModeAtom', 
-  default: false, 
+  key: 'enabledDevModeAtom',
+  default: false,
 });
 
 export const myGroupsWhereIAmAdminAtom = atom({
-  key: 'myGroupsWhereIAmAdminAtom', 
-  default: [], 
+  key: 'myGroupsWhereIAmAdminAtom',
+  default: [],
 });
 
 export const promotionTimeIntervalAtom = atom({
-  key: 'promotionTimeIntervalAtom', 
-  default: 0, 
+  key: 'promotionTimeIntervalAtom',
+  default: 0,
 });
 
 export const promotionsAtom = atom({
-  key: 'promotionsAtom', 
-  default: [], 
+  key: 'promotionsAtom',
+  default: [],
 });
 
 export const resourceDownloadControllerAtom = atom({
-  key: 'resourceDownloadControllerAtom', 
-  default: {}, 
+  key: 'resourceDownloadControllerAtom',
+  default: {},
 });
 
 export const resourceKeySelector = selectorFamily({
   key: 'resourceKeySelector',
-  get: (key) => ({ get }) => {
-    const resources = get(resourceDownloadControllerAtom);
-    return resources[key] || null; // Return the value for the key or null if not found
-  },
+  get:
+    (key) =>
+    ({ get }) => {
+      const resources = get(resourceDownloadControllerAtom);
+      return resources[key] || null; // Return the value for the key or null if not found
+    },
 });
 
 export const blobControllerAtom = atom({
-  key: 'blobControllerAtom', 
-  default: {}, 
+  key: 'blobControllerAtom',
+  default: {},
 });
 
 export const blobKeySelector = selectorFamily({
   key: 'blobKeySelector',
-  get: (key) => ({ get }) => {
-    const blobs = get(blobControllerAtom);
-    return blobs[key] || null; // Return the value for the key or null if not found
-  },
+  get:
+    (key) =>
+    ({ get }) => {
+      const blobs = get(blobControllerAtom);
+      return blobs[key] || null; // Return the value for the key or null if not found
+    },
 });
 
 export const selectedGroupIdAtom = atom({
-  key: 'selectedGroupIdAtom', 
-  default: null, 
+  key: 'selectedGroupIdAtom',
+  default: null,
 });
 
 export const addressInfoControllerAtom = atom({
-  key: 'addressInfoControllerAtom', 
-  default: {}, 
+  key: 'addressInfoControllerAtom',
+  default: {},
 });
 
 export const addressInfoKeySelector = selectorFamily({
   key: 'addressInfoKeySelector',
-  get: (key) => ({ get }) => {
-    const userInfo = get(addressInfoControllerAtom);
-    return userInfo[key] || null; // Return the value for the key or null if not found
-  },
+  get:
+    (key) =>
+    ({ get }) => {
+      const userInfo = get(addressInfoControllerAtom);
+      return userInfo[key] || null; // Return the value for the key or null if not found
+    },
 });
 
 export const isDisabledEditorEnterAtom = atom({
-  key: 'isDisabledEditorEnterAtom', 
-  default: false, 
+  key: 'isDisabledEditorEnterAtom',
+  default: false,
 });
 
 export const qMailLastEnteredTimestampAtom = atom({
-  key: 'qMailLastEnteredTimestampAtom', 
-  default: null, 
+  key: 'qMailLastEnteredTimestampAtom',
+  default: null,
 });
 
 export const lastPaymentSeenTimestampAtom = atom<null | number>({
-  key: 'lastPaymentSeenTimestampAtom', 
-  default: null, 
+  key: 'lastPaymentSeenTimestampAtom',
+  default: null,
 });
 
 export const mailsAtom = atom({
-  key: 'mailsAtom', 
-  default: [], 
+  key: 'mailsAtom',
+  default: [],
 });
 
 export const groupsPropertiesAtom = atom({
-  key: 'groupsPropertiesAtom', 
-  default: {}, 
+  key: 'groupsPropertiesAtom',
+  default: {},
+});
+
+export const isOpenBlockedModalAtom = atom({
+  key: 'isOpenBlockedModalAtom',
+  default: false,
 });

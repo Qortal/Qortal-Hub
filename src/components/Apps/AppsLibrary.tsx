@@ -1,4 +1,11 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -16,84 +23,97 @@ import {
   PublishQAppCTAParent,
   PublishQAppCTARight,
   PublishQAppDotsBG,
-} from "./Apps-styles";
-import { Avatar, Box, ButtonBase, InputBase, styled } from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { MyContext, getBaseApiReact } from "../../App";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import IconSearch from "../../assets/svgs/Search.svg";
-import IconClearInput from "../../assets/svgs/ClearInput.svg";
-import qappDevelopText from "../../assets/svgs/qappDevelopText.svg";
-import qappDots from "../../assets/svgs/qappDots.svg";
-import ReturnSVG from '../../assets/svgs/Return.svg'
+} from './Apps-styles';
+import { Avatar, Box, ButtonBase, InputBase, styled } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { MyContext, getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import IconSearch from '../../assets/svgs/Search.svg';
+import IconClearInput from '../../assets/svgs/ClearInput.svg';
+import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
+import qappDots from '../../assets/svgs/qappDots.svg';
+import ReturnSVG from '../../assets/svgs/Return.svg';
 
-import { Spacer } from "../../common/Spacer";
-import { AppInfoSnippet } from "./AppInfoSnippet";
-import { Virtuoso } from "react-virtuoso";
-import { executeEvent } from "../../utils/events";
-import { ComposeP, MailIconImg, ShowMessageReturnButton } from "../Group/Forum/Mail-styles";
+import { Spacer } from '../../common/Spacer';
+import { AppInfoSnippet } from './AppInfoSnippet';
+import { Virtuoso } from 'react-virtuoso';
+import { executeEvent } from '../../utils/events';
+import {
+  ComposeP,
+  MailIconImg,
+  ShowMessageReturnButton,
+} from '../Group/Forum/Mail-styles';
 const officialAppList = [
-  "q-tube",
-  "q-blog",
-  "q-share",
-  "q-support",
-  "q-mail",
-  "q-fund",
-  "q-shop",
-   "q-trade",
-   "q-support",
-  "q-manager",
-  "q-wallets",
-  "q-search"
+  'q-tube',
+  'q-blog',
+  'q-share',
+  'q-support',
+  'q-mail',
+  'q-fund',
+  'q-shop',
+  'q-trade',
+  'q-support',
+  'q-manager',
+  'q-wallets',
+  'q-search',
 ];
 
-const ScrollerStyled = styled('div')({
-    // Hide scrollbar for WebKit browsers (Chrome, Safari)
-    "::-webkit-scrollbar": {
-      width: "0px",
-      height: "0px",
-    },
-    
-    // Hide scrollbar for Firefox
-    scrollbarWidth: "none",
-  
-    // Hide scrollbar for IE and older Edge
-    "-msOverflowStyle": "none",
-  });
-  
-  const StyledVirtuosoContainer = styled('div')({
-    position: 'relative',
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    
-    // Hide scrollbar for WebKit browsers (Chrome, Safari)
-    "::-webkit-scrollbar": {
-      width: "0px",
-      height: "0px",
-    },
-    
-    // Hide scrollbar for Firefox
-    scrollbarWidth: "none",
-  
-    // Hide scrollbar for IE and older Edge
-    "-msOverflowStyle": "none",
-  });
+// TODO: apply dark/light style
 
-export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, isShow, categories={categories} }) => {
-  const [searchValue, setSearchValue] = useState("");
+const ScrollerStyled = styled('div')({
+  // Hide scrollbar for WebKit browsers (Chrome, Safari)
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
+  },
+
+  // Hide scrollbar for Firefox
+  scrollbarWidth: 'none',
+
+  // Hide scrollbar for IE and older Edge
+  '-msOverflowStyle': 'none',
+});
+
+const StyledVirtuosoContainer = styled('div')({
+  position: 'relative',
+  width: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+
+  // Hide scrollbar for WebKit browsers (Chrome, Safari)
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
+  },
+
+  // Hide scrollbar for Firefox
+  scrollbarWidth: 'none',
+
+  // Hide scrollbar for IE and older Edge
+  '-msOverflowStyle': 'none',
+});
+
+export const AppsLibrary = ({
+  availableQapps,
+  setMode,
+  myName,
+  hasPublishApp,
+  isShow,
+  categories = { categories },
+}) => {
+  const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
   const { rootHeight } = useContext(MyContext);
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(
       (app) =>
-        app.service === "APP" &&
+        app.service === 'APP' &&
         officialAppList.includes(app?.name?.toLowerCase())
     );
   }, [availableQapps]);
 
-  const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
+  const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
 
   // Debounce logic
   useEffect(() => {
@@ -117,23 +137,28 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
   }, [debouncedValue]);
 
   const rowRenderer = (index) => {
-   
     let app = searchedList[index];
-    return <AppInfoSnippet key={`${app?.service}-${app?.name}`} app={app} myName={myName} />;
+    return (
+      <AppInfoSnippet
+        key={`${app?.service}-${app?.name}`}
+        app={app}
+        myName={myName}
+      />
+    );
   };
 
-
-
   return (
-      <AppsLibraryContainer sx={{
-        display: !isShow && 'none'
-      }}>
-        <AppsWidthLimiter>
+    <AppsLibraryContainer
+      sx={{
+        display: !isShow && 'none',
+      }}
+    >
+      <AppsWidthLimiter>
         <Box
           sx={{
-            display: "flex",
-            width: "100%",
-            justifyContent: "center",
+            display: 'flex',
+            width: '100%',
+            justifyContent: 'center',
           }}
         >
           <AppsSearchContainer>
@@ -145,8 +170,8 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
                 sx={{ ml: 1, flex: 1 }}
                 placeholder="Search for apps"
                 inputProps={{
-                  "aria-label": "Search for apps",
-                  fontSize: "16px",
+                  'aria-label': 'Search for apps',
+                  fontSize: '16px',
                   fontWeight: 400,
                 }}
               />
@@ -155,7 +180,7 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
               {searchValue && (
                 <ButtonBase
                   onClick={() => {
-                    setSearchValue("");
+                    setSearchValue('');
                   }}
                 >
                   <img src={IconClearInput} />
@@ -164,23 +189,27 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
             </AppsSearchRight>
           </AppsSearchContainer>
         </Box>
-        </AppsWidthLimiter>
-        <Spacer height="25px" />
-        <ShowMessageReturnButton sx={{
-            padding: '2px'
-          }} onClick={() => {
-            executeEvent("navigateBack", {});
-
-                  }}>
-                    <MailIconImg src={ReturnSVG} />
-                    <ComposeP>Return to Apps Dashboard</ComposeP>
-                  </ShowMessageReturnButton>
-        <Spacer height="25px" />
-        {searchedList?.length > 0 ? (
-           <AppsWidthLimiter>
-          <StyledVirtuosoContainer sx={{
-            height: rootHeight
-          }}>
+      </AppsWidthLimiter>
+      <Spacer height="25px" />
+      <ShowMessageReturnButton
+        sx={{
+          padding: '2px',
+        }}
+        onClick={() => {
+          executeEvent('navigateBack', {});
+        }}
+      >
+        <MailIconImg src={ReturnSVG} />
+        <ComposeP>Return to Apps Dashboard</ComposeP>
+      </ShowMessageReturnButton>
+      <Spacer height="25px" />
+      {searchedList?.length > 0 ? (
+        <AppsWidthLimiter>
+          <StyledVirtuosoContainer
+            sx={{
+              height: rootHeight,
+            }}
+          >
             <Virtuoso
               ref={virtuosoRef}
               data={searchedList}
@@ -188,14 +217,14 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
               atBottomThreshold={50}
               followOutput="smooth"
               components={{
-                Scroller: ScrollerStyled // Use the styled scroller component
+                Scroller: ScrollerStyled, // Use the styled scroller component
               }}
             />
           </StyledVirtuosoContainer>
-          </AppsWidthLimiter>
-        ) : (
-          <>
-            <AppsWidthLimiter>
+        </AppsWidthLimiter>
+      ) : (
+        <>
+          <AppsWidthLimiter>
             <AppLibrarySubTitle>Official Apps</AppLibrarySubTitle>
             <Spacer height="18px" />
             <AppsContainer>
@@ -203,14 +232,14 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
                 return (
                   <ButtonBase
                     sx={{
-                      height: "80px",
-                      width: "60px",
+                      height: '80px',
+                      width: '60px',
                     }}
-                    onClick={()=> {
+                    onClick={() => {
                       // executeEvent("addTab", {
                       //   data: qapp
                       // })
-                      executeEvent("selectedAppInfo", {
+                      executeEvent('selectedAppInfo', {
                         data: qapp,
                       });
                     }}
@@ -218,13 +247,13 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
                     <AppCircleContainer>
                       <AppCircle
                         sx={{
-                          border: "none",
+                          border: 'none',
                         }}
                       >
                         <Avatar
                           sx={{
-                            height: "31px",
-                            width: "31px",
+                            height: '31px',
+                            width: '31px',
                           }}
                           alt={qapp?.name}
                           src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -233,8 +262,8 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
                         >
                           <img
                             style={{
-                              width: "31px",
-                              height: "auto",
+                              width: '31px',
+                              height: 'auto',
                             }}
                             src={LogoSelected}
                             alt="center-icon"
@@ -250,77 +279,87 @@ export const AppsLibrary = ({  availableQapps, setMode, myName, hasPublishApp, i
               })}
             </AppsContainer>
             <Spacer height="30px" />
-            <AppLibrarySubTitle>{hasPublishApp ? 'Update Apps!' : 'Create Apps!'}</AppLibrarySubTitle>
+            <AppLibrarySubTitle>
+              {hasPublishApp ? 'Update Apps!' : 'Create Apps!'}
+            </AppLibrarySubTitle>
             <Spacer height="18px" />
-            </AppsWidthLimiter>
-            <PublishQAppCTAParent>
-              <PublishQAppCTALeft>
-                <PublishQAppDotsBG>
-
-              <img src={qappDots} />
+          </AppsWidthLimiter>
+          <PublishQAppCTAParent>
+            <PublishQAppCTALeft>
+              <PublishQAppDotsBG>
+                <img src={qappDots} />
               </PublishQAppDotsBG>
-                <Spacer width="29px" />
+              <Spacer width="29px" />
               <img src={qappDevelopText} />
-              </PublishQAppCTALeft>
-              <PublishQAppCTARight onClick={()=> {
-                setMode('publish')
-              }}>
-                <PublishQAppCTAButton>
-                  {hasPublishApp ? 'Update' : 'Publish'}
-                </PublishQAppCTAButton>
-                <Spacer width="20px" />
-                </PublishQAppCTARight>
-            </PublishQAppCTAParent>
-            <AppsWidthLimiter>
-           
+            </PublishQAppCTALeft>
+            <PublishQAppCTARight
+              onClick={() => {
+                setMode('publish');
+              }}
+            >
+              <PublishQAppCTAButton>
+                {hasPublishApp ? 'Update' : 'Publish'}
+              </PublishQAppCTAButton>
+              <Spacer width="20px" />
+            </PublishQAppCTARight>
+          </PublishQAppCTAParent>
+          <AppsWidthLimiter>
             <Spacer height="18px" />
             <AppLibrarySubTitle>Categories</AppLibrarySubTitle>
             <Spacer height="18px" />
-            <AppsWidthLimiter sx={{
-              flexDirection: 'row',
-              overflowX: 'auto',
-              width: '100%',
-              gap: '5px',
-              "::-webkit-scrollbar": {
-                width: "0px",
-                height: "0px",
-              },
-              
-              // Hide scrollbar for Firefox
-              scrollbarWidth: "none",
-            
-              // Hide scrollbar for IE and older Edge
-              "-msOverflowStyle": "none",
-            }}>
-            {categories?.map((category)=> {
-              return (
-                <ButtonBase key={category?.id} onClick={()=> {
-                  executeEvent('selectedCategory', {
-                    data: category
-                  })
-                }}>
-                <Box sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '110px',
-                  width: '110px',
-                  background: 'linear-gradient(163.47deg, #4BBCFE 27.55%, #1386C9 86.56%)',
-                  color: '#1D1D1E',
-                  fontWeight: 700,
-                  fontSize: '16px',
-                  flexShrink: 0,
-                  borderRadius: '11px'
-                }}>
-                  {category?.name}
-                </Box>
-                </ButtonBase>
-              )
-            })}
+            <AppsWidthLimiter
+              sx={{
+                flexDirection: 'row',
+                overflowX: 'auto',
+                width: '100%',
+                gap: '5px',
+                '::-webkit-scrollbar': {
+                  width: '0px',
+                  height: '0px',
+                },
+
+                // Hide scrollbar for Firefox
+                scrollbarWidth: 'none',
+
+                // Hide scrollbar for IE and older Edge
+                '-msOverflowStyle': 'none',
+              }}
+            >
+              {categories?.map((category) => {
+                return (
+                  <ButtonBase
+                    key={category?.id}
+                    onClick={() => {
+                      executeEvent('selectedCategory', {
+                        data: category,
+                      });
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '110px',
+                        width: '110px',
+                        background:
+                          'linear-gradient(163.47deg, #4BBCFE 27.55%, #1386C9 86.56%)',
+                        color: '#1D1D1E',
+                        fontWeight: 700,
+                        fontSize: '16px',
+                        flexShrink: 0,
+                        borderRadius: '11px',
+                      }}
+                    >
+                      {category?.name}
+                    </Box>
+                  </ButtonBase>
+                );
+              })}
             </AppsWidthLimiter>
-            </AppsWidthLimiter>
-          </>
-        )}
-      </AppsLibraryContainer>
+          </AppsWidthLimiter>
+        </>
+      )}
+    </AppsLibraryContainer>
   );
 };

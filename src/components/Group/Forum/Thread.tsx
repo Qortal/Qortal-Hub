@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 import {
   Avatar,
   Box,
@@ -14,8 +14,8 @@ import {
   IconButton,
   Skeleton,
   Typography,
-} from "@mui/material";
-import { ShowMessage } from "./ShowMessageWithoutModal";
+} from '@mui/material';
+import { ShowMessage } from './ShowMessageWithoutModal';
 import {
   ComposeP,
   GroupContainer,
@@ -28,34 +28,33 @@ import {
   ThreadInfoColumn,
   ThreadInfoColumnNameP,
   ThreadInfoColumnTime,
-} from "./Mail-styles";
-import { Spacer } from "../../../common/Spacer";
-import { threadIdentifier } from "./GroupMail";
-import LazyLoad from "../../../common/LazyLoad";
-import ReturnSVG from "../../../assets/svgs/Return.svg";
-import { NewThread } from "./NewThread";
+} from './Mail-styles';
+import { Spacer } from '../../../common/Spacer';
+import { threadIdentifier } from './GroupMail';
+import ReturnSVG from '../../../assets/svgs/Return.svg';
+import { NewThread } from './NewThread';
 import {
   decryptPublishes,
   getTempPublish,
   handleUnencryptedPublishes,
-} from "../../Chat/GroupAnnouncements";
-import { LoadingSnackbar } from "../../Snackbar/LoadingSnackbar";
-import { subscribeToEvent, unsubscribeFromEvent } from "../../../utils/events";
-import RefreshIcon from "@mui/icons-material/Refresh";
+} from '../../Chat/GroupAnnouncements';
+import { LoadingSnackbar } from '../../Snackbar/LoadingSnackbar';
+import { subscribeToEvent, unsubscribeFromEvent } from '../../../utils/events';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   getArbitraryEndpointReact,
   getBaseApiReact,
   isMobile,
-} from "../../../App";
+} from '../../../App';
 import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
-} from "@mui/icons-material";
-import { addDataPublishesFunc, getDataPublishesFunc } from "../Group";
-import { RequestQueueWithPromise } from "../../../utils/queue/queue";
-import { CustomLoader } from "../../../common/CustomLoader";
-import { WrapperUserAction } from "../../WrapperUserAction";
-import { formatTimestampForum } from "../../../utils/time";
+} from '@mui/icons-material';
+import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
+import { RequestQueueWithPromise } from '../../../utils/queue/queue';
+import { CustomLoader } from '../../../common/CustomLoader';
+import { WrapperUserAction } from '../../WrapperUserAction';
+import { formatTimestampForum } from '../../../utils/time';
 const requestQueueSaveToLocal = new RequestQueueWithPromise(1);
 const requestQueueDownloadPost = new RequestQueueWithPromise(3);
 interface ThreadProps {
@@ -65,14 +64,10 @@ interface ThreadProps {
   members: any;
 }
 
-const getEncryptedResource = async ({
-  name,
-  identifier,
-  secretKey,
-  resource,
-  groupId,
-  dataPublishes,
-}, isPrivate) => {
+const getEncryptedResource = async (
+  { name, identifier, secretKey, resource, groupId, dataPublishes },
+  isPrivate
+) => {
   let data = dataPublishes[`${name}-${identifier}`];
   if (
     !data ||
@@ -92,15 +87,18 @@ const getEncryptedResource = async ({
       };
     }
     data = await res.text();
-   
-    if (data?.error || typeof data !== "string") return;
+
+    if (data?.error || typeof data !== 'string') return;
     await requestQueueSaveToLocal.enqueue(() => {
-      return addDataPublishesFunc({ ...resource, data }, groupId, "thmsg");
+      return addDataPublishesFunc({ ...resource, data }, groupId, 'thmsg');
     });
   } else {
     data = data.data;
   }
-  const response = isPrivate === false ? handleUnencryptedPublishes([data]) : await decryptPublishes([{ data }], secretKey);
+  const response =
+    isPrivate === false
+      ? handleUnencryptedPublishes([data])
+      : await decryptPublishes([{ data }], secretKey);
 
   const messageData = response[0];
   return messageData.decryptedData;
@@ -115,7 +113,7 @@ export const Thread = ({
   secretKey,
   getSecretKey,
   updateThreadActivityCurrentThread,
-  isPrivate
+  isPrivate,
 }: ThreadProps) => {
   const [tempPublishedList, setTempPublishedList] = useState([]);
   const [messages, setMessages] = useState<any[]>([]);
@@ -129,7 +127,7 @@ export const Thread = ({
 
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);
-  const threadBeginningRef = useRef(null)
+  const threadBeginningRef = useRef(null);
   // New state variables
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [isAtBottom, setIsAtBottom] = useState(false);
@@ -140,7 +138,7 @@ export const Thread = ({
   const dataPublishes = useRef({});
 
   const getSavedData = useCallback(async (groupId) => {
-    const res = await getDataPublishesFunc(groupId, "thmsg");
+    const res = await getDataPublishesFunc(groupId, 'thmsg');
     dataPublishes.current = res || {};
   }, []);
 
@@ -159,14 +157,17 @@ export const Thread = ({
 
   const getIndividualMsg = async (message: any) => {
     try {
-      const responseDataMessage = await getEncryptedResource({
-        identifier: message.identifier,
-        name: message.name,
-        secretKey,
-        resource: message,
-        groupId: groupInfo?.groupId,
-        dataPublishes: dataPublishes.current,
-      }, isPrivate);
+      const responseDataMessage = await getEncryptedResource(
+        {
+          identifier: message.identifier,
+          name: message.name,
+          secretKey,
+          resource: message,
+          groupId: groupInfo?.groupId,
+          dataPublishes: dataPublishes.current,
+        },
+        isPrivate
+      );
 
       if (responseDataMessage?.error) {
         const fullObject = {
@@ -201,7 +202,7 @@ export const Thread = ({
     try {
       let threadId = currentThread.threadId;
 
-      const keyTemp = "thread-post";
+      const keyTemp = 'thread-post';
       const getTempAnnouncements = await getTempPublish();
 
       if (getTempAnnouncements?.[keyTemp]) {
@@ -232,10 +233,10 @@ export const Thread = ({
         const identifier = `thmsg-${threadId}`;
         let url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=20&includemetadata=false&prefix=true`;
         if (!isReverse) {
-          url = url + "&reverse=false";
+          url = url + '&reverse=false';
         }
         if (isReverse) {
-          url = url + "&reverse=true";
+          url = url + '&reverse=true';
         }
         if (after) {
           url = url + `&after=${after}`;
@@ -245,9 +246,9 @@ export const Thread = ({
         }
 
         const response = await fetch(url, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseData = await response.json();
@@ -263,14 +264,13 @@ export const Thread = ({
         setMessages(fullArrayMsg);
         if (before === null && after === null && isReverse) {
           setTimeout(() => {
-            containerRef.current.scrollIntoView({ behavior: "smooth" });
+            containerRef.current.scrollIntoView({ behavior: 'smooth' });
           }, 300);
         }
-        if(after || before === null && after === null && !isReverse){
+        if (after || (before === null && after === null && !isReverse)) {
           setTimeout(() => {
             threadBeginningRef.current.scrollIntoView();
           }, 100);
-          
         }
 
         if (fullArrayMsg.length === 0) {
@@ -282,9 +282,9 @@ export const Thread = ({
           fullArrayMsg[0].created
         }`;
         const responseNewer = await fetch(urlNewer, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseDataNewer = await responseNewer.json();
@@ -300,9 +300,9 @@ export const Thread = ({
           fullArrayMsg[fullArrayMsg.length - 1].created
         }`;
         const responseOlder = await fetch(urlOlder, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseDataOlder = await responseOlder.json();
@@ -316,7 +316,7 @@ export const Thread = ({
           updateThreadActivityCurrentThread();
         }
       } catch (error) {
-        console.log("error", error);
+        console.log('error', error);
       } finally {
         setIsLoading(false);
         getSavedData(groupId);
@@ -325,9 +325,21 @@ export const Thread = ({
     [messages, secretKey]
   );
   const getMessages = React.useCallback(async () => {
-    if (!currentThread || (!secretKey && isPrivate) || !groupInfo?.groupId || isPrivate === null) return;
+    if (
+      !currentThread ||
+      (!secretKey && isPrivate) ||
+      !groupInfo?.groupId ||
+      isPrivate === null
+    )
+      return;
     await getMailMessages(currentThread, null, null, false, groupInfo?.groupId);
-  }, [getMailMessages, currentThread, secretKey, groupInfo?.groupId, isPrivate]);
+  }, [
+    getMailMessages,
+    currentThread,
+    secretKey,
+    groupInfo?.groupId,
+    isPrivate,
+  ]);
   const firstMount = useRef(false);
 
   const saveTimestamp = useCallback((currentThread: any, username?: string) => {
@@ -339,7 +351,7 @@ export const Thread = ({
       return;
     const threadIdForLocalStorage = `qmail_threads_${currentThread?.threadData?.groupId}_${currentThread?.threadId}`;
     const threads = JSON.parse(
-      localStorage.getItem(`qmail_threads_viewedtimestamp_${username}`) || "{}"
+      localStorage.getItem(`qmail_threads_viewedtimestamp_${username}`) || '{}'
     );
     // Convert to an array of objects with identifier and all fields
     let dataArray = Object.entries(threads).map(([identifier, value]) => ({
@@ -382,8 +394,8 @@ export const Thread = ({
     if (currentThreadRef.current?.threadId !== currentThread?.threadId) {
       firstMount.current = false;
     }
-    if(!secretKey && isPrivate) return
-    if (currentThread &&  !firstMount.current && isPrivate !== null) {
+    if (!secretKey && isPrivate) return;
+    if (currentThread && !firstMount.current && isPrivate !== null) {
       getMessagesMiddleware();
     }
   }, [currentThread, secretKey, isPrivate]);
@@ -402,9 +414,9 @@ export const Thread = ({
         const identifier = `thmsg-${threadId}`;
         const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=20&includemetadata=false&offset=${0}&reverse=true&prefix=true`;
         const response = await fetch(url, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseData = await response.json();
@@ -469,17 +481,17 @@ export const Thread = ({
 
   const threadFetchModeFunc = (e) => {
     const mode = e.detail?.mode;
-    if (mode === "last-page") {
+    if (mode === 'last-page') {
       getMailMessages(currentThread, null, null, true, groupInfo?.groupId);
     }
     firstMount.current = true;
   };
 
   React.useEffect(() => {
-    subscribeToEvent("threadFetchMode", threadFetchModeFunc);
+    subscribeToEvent('threadFetchMode', threadFetchModeFunc);
 
     return () => {
-      unsubscribeFromEvent("threadFetchMode", threadFetchModeFunc);
+      unsubscribeFromEvent('threadFetchMode', threadFetchModeFunc);
     };
   }, []);
 
@@ -526,11 +538,11 @@ export const Thread = ({
       handleScroll();
     }, 400);
 
-    container.addEventListener("scroll", handleScroll);
+    container.addEventListener('scroll', handleScroll);
 
     // Cleanup
     return () => {
-      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener('scroll', handleScroll);
     };
   }, [messages]);
 
@@ -540,9 +552,9 @@ export const Thread = ({
     if (!container) return;
 
     if (isAtBottom) {
-      container.scrollTo({ top: 0, behavior: "smooth" }); // Scroll to top
+      container.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top
     } else {
-      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" }); // Scroll to bottom
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' }); // Scroll to bottom
     }
   };
 
@@ -550,19 +562,19 @@ export const Thread = ({
   return (
     <GroupContainer
       sx={{
-        position: "relative",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
+        position: 'relative',
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
       }}
       // Removed the ref from here since the scrollable area has changed
     >
       <Box
         sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           flexShrink: 0, // Corrected property name
         }}
       >
@@ -583,16 +595,16 @@ export const Thread = ({
         />
         <Box
           sx={{
-            display: "flex",
-            gap: isMobile ? "45px" : "35px",
-            alignItems: "center",
-            padding: isMobile && "5px",
+            display: 'flex',
+            gap: isMobile ? '45px' : '35px',
+            alignItems: 'center',
+            padding: isMobile && '5px',
           }}
         >
           <ShowMessageReturnButton
             sx={{
-              padding: isMobile && "5px",
-              minWidth: isMobile && "50px",
+              padding: isMobile && '5px',
+              minWidth: isMobile && '50px',
             }}
             onClick={() => {
               setMessages([]);
@@ -608,9 +620,9 @@ export const Thread = ({
               <ButtonBase onClick={scrollToPosition}>
                 <ArrowUpwardIcon
                   sx={{
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: isMobile ? "28px" : "36px",
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: isMobile ? '28px' : '36px',
                   }}
                 />
               </ButtonBase>
@@ -618,9 +630,9 @@ export const Thread = ({
               <ButtonBase onClick={scrollToPosition}>
                 <ArrowDownwardIcon
                   sx={{
-                    color: "white",
-                    cursor: "pointer",
-                    fontSize: isMobile ? "28px" : "36px",
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontSize: isMobile ? '28px' : '36px',
                   }}
                 />
               </ButtonBase>
@@ -631,45 +643,45 @@ export const Thread = ({
       <ThreadContainerFullWidth
         sx={{
           flexGrow: 1,
-          overflow: "auto",
+          overflow: 'auto',
         }}
         ref={threadContainerRef} // Updated ref attached here
       >
-        <div ref={threadBeginningRef}/>
+        <div ref={threadBeginningRef} />
         <ThreadContainer>
-          <Spacer height={isMobile ? "10px" : "30px"} />
+          <Spacer height={isMobile ? '10px' : '30px'} />
           <Box
             sx={{
-              width: "100%",
-              alignItems: "center",
-              display: "flex",
-              justifyContent: "space-between",
+              width: '100%',
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
             }}
           >
             <GroupNameP
               sx={{
-                fontSize: isMobile && "18px",
+                fontSize: isMobile && '18px',
               }}
             >
               {currentThread?.threadData?.title}
             </GroupNameP>
           </Box>
-          <Spacer height={"15px"} />
+          <Spacer height={'15px'} />
 
           <Box
             sx={{
-              width: "100%",
-              alignItems: "center",
-              display: "flex",
-              justifyContent: "center",
-              gap: "5px",
+              width: '100%',
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '5px',
             }}
           >
             <Button
               sx={{
-                padding: isMobile && "5px",
-                fontSize: isMobile && "14px",
-                textTransformation: "capitalize",
+                padding: isMobile && '5px',
+                fontSize: isMobile && '14px',
+                textTransformation: 'capitalize',
               }}
               onClick={() => {
                 getMailMessages(
@@ -687,9 +699,9 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && "5px",
-                fontSize: isMobile && "14px",
-                textTransformation: "capitalize",
+                padding: isMobile && '5px',
+                fontSize: isMobile && '14px',
+                textTransformation: 'capitalize',
               }}
               onClick={() => {
                 getMailMessages(
@@ -707,9 +719,9 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && "5px",
-                fontSize: isMobile && "14px",
-                textTransformation: "capitalize",
+                padding: isMobile && '5px',
+                fontSize: isMobile && '14px',
+                textTransformation: 'capitalize',
               }}
               onClick={() => {
                 getMailMessages(
@@ -727,9 +739,9 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && "5px",
-                fontSize: isMobile && "14px",
-                textTransformation: "capitalize",
+                padding: isMobile && '5px',
+                fontSize: isMobile && '14px',
+                textTransformation: 'capitalize',
               }}
               onClick={() => {
                 getMailMessages(
@@ -746,35 +758,34 @@ export const Thread = ({
               Last
             </Button>
           </Box>
-          <Spacer height={isMobile ? "10px" : "30px"} />
+          <Spacer height={isMobile ? '10px' : '30px'} />
           {combinedListTempAndReal.map((message, index, list) => {
             let fullMessage = message;
 
             if (hashMapMailMessages[message?.identifier]) {
               fullMessage = hashMapMailMessages[message.identifier];
-             
 
               if (fullMessage?.error) {
                 return (
                   <SingleThreadParent
                     sx={{
-                      height: "auto",
+                      height: 'auto',
                     }}
                   >
                     <Box
                       style={{
-                        width: "100%",
-                        borderRadius: "8px",
-                        overflow: "hidden",
-                        position: "relative",
-                        flexDirection: "column",
+                        width: '100%',
+                        borderRadius: '8px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        flexDirection: 'column',
                       }}
                     >
                       <Box
                         sx={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "10px",
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '10px',
                         }}
                       >
                         <WrapperUserAction
@@ -784,8 +795,8 @@ export const Thread = ({
                         >
                           <Avatar
                             sx={{
-                              height: "50px",
-                              width: "50px",
+                              height: '50px',
+                              width: '50px',
                             }}
                             src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
                               message?.name
@@ -812,23 +823,22 @@ export const Thread = ({
                       </Box>
                       <Box
                         sx={{
-                          width: "100%",
-                          display: "flex",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          flexDirection: "column",
+                          width: '100%',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          flexDirection: 'column',
                         }}
                       >
                         <Typography
                           sx={{
-                            fontSize: "18px",
-                            color: "white",
+                            fontSize: '18px',
+                            color: 'white',
                           }}
                         >
                           {fullMessage?.error}
                         </Typography>
                       </Box>
-                    
                     </Box>
                   </SingleThreadParent>
                 );
@@ -855,23 +865,23 @@ export const Thread = ({
             return (
               <SingleThreadParent
                 sx={{
-                  height: "auto",
+                  height: 'auto',
                 }}
               >
                 <Box
                   style={{
-                    width: "100%",
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    position: "relative",
-                    flexDirection: "column",
+                    width: '100%',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                    flexDirection: 'column',
                   }}
                 >
                   <Box
                     sx={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "10px",
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '10px',
                     }}
                   >
                     <WrapperUserAction
@@ -881,8 +891,8 @@ export const Thread = ({
                     >
                       <Avatar
                         sx={{
-                          height: "50px",
-                          width: "50px",
+                          height: '50px',
+                          width: '50px',
                         }}
                         src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
                           message?.name
@@ -909,37 +919,36 @@ export const Thread = ({
                   </Box>
                   <Box
                     sx={{
-                      width: "100%",
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      flexDirection: "column",
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      flexDirection: 'column',
                     }}
                   >
                     <CustomLoader />
                     <Typography
                       sx={{
-                        fontSize: "18px",
-                        color: "white",
+                        fontSize: '18px',
+                        color: 'white',
                       }}
                     >
                       Downloading from QDN
                     </Typography>
                   </Box>
-                  
                 </Box>
               </SingleThreadParent>
             );
           })}
-         
+
           {!hasLastPage && !isLoading && (
             <>
               <Spacer height="20px" />
               <Box
                 sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "flex-end",
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
                 }}
               >
                 <Button
@@ -955,7 +964,7 @@ export const Thread = ({
                     );
                   }}
                   sx={{
-                    color: "white",
+                    color: 'white',
                   }}
                 >
                   Refetch page
@@ -964,112 +973,113 @@ export const Thread = ({
             </>
           )}
 
-       
-            <Box sx={{
+          <Box
+            sx={{
               width: '100%',
-              visibility: messages?.length > 4 ? 'visible' : 'hidden'
-            }}>
-              <Spacer height="30px" />
-              <Box
+              visibility: messages?.length > 4 ? 'visible' : 'hidden',
+            }}
+          >
+            <Spacer height="30px" />
+            <Box
+              sx={{
+                width: '100%',
+                alignItems: 'center',
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '5px',
+              }}
+            >
+              <Button
                 sx={{
-                  width: "100%",
-                  alignItems: "center",
-                  display: "flex",
-                  justifyContent: "center",
-                  gap: "5px",
+                  padding: isMobile && '5px',
+                  fontSize: isMobile && '14px',
+                  textTransformation: 'capitalize',
                 }}
+                onClick={() => {
+                  getMailMessages(
+                    currentThread,
+                    null,
+                    null,
+                    false,
+                    groupInfo?.groupId
+                  );
+                }}
+                disabled={!hasFirstPage}
+                variant="contained"
               >
-                <Button
-                  sx={{
-                    padding: isMobile && "5px",
-                    fontSize: isMobile && "14px",
-                    textTransformation: "capitalize",
-                  }}
-                  onClick={() => {
-                    getMailMessages(
-                      currentThread,
-                      null,
-                      null,
-                      false,
-                      groupInfo?.groupId
-                    );
-                  }}
-                  disabled={!hasFirstPage}
-                  variant="contained"
-                >
-                  First
-                </Button>
-                <Button
-                  sx={{
-                    padding: isMobile && "5px",
-                    fontSize: isMobile && "14px",
-                    textTransformation: "capitalize",
-                  }}
-                  onClick={() => {
-                    getMailMessages(
-                      currentThread,
-                      messages[0].created,
-                      null,
-                      false,
-                      groupInfo?.groupId
-                    );
-                  }}
-                  disabled={!hasPreviousPage}
-                  variant="contained"
-                >
-                  Previous
-                </Button>
-                <Button
-                  sx={{
-                    padding: isMobile && "5px",
-                    fontSize: isMobile && "14px",
-                    textTransformation: "capitalize",
-                  }}
-                  onClick={() => {
-                    getMailMessages(
-                      currentThread,
-                      null,
-                      messages[messages.length - 1].created,
-                      false,
-                      groupInfo?.groupId
-                    );
-                  }}
-                  disabled={!hasNextPage}
-                  variant="contained"
-                >
-                  Next
-                </Button>
-                <Button
-                  sx={{
-                    padding: isMobile && "5px",
-                    fontSize: isMobile && "14px",
-                    textTransformation: "capitalize",
-                  }}
-                  onClick={() => {
-                    getMailMessages(
-                      currentThread,
-                      null,
-                      null,
-                      true,
-                      groupInfo?.groupId
-                    );
-                  }}
-                  disabled={!hasLastPage}
-                  variant="contained"
-                >
-                  Last
-                </Button>
-              </Box>
-              <Spacer height="30px" />
+                First
+              </Button>
+              <Button
+                sx={{
+                  padding: isMobile && '5px',
+                  fontSize: isMobile && '14px',
+                  textTransformation: 'capitalize',
+                }}
+                onClick={() => {
+                  getMailMessages(
+                    currentThread,
+                    messages[0].created,
+                    null,
+                    false,
+                    groupInfo?.groupId
+                  );
+                }}
+                disabled={!hasPreviousPage}
+                variant="contained"
+              >
+                Previous
+              </Button>
+              <Button
+                sx={{
+                  padding: isMobile && '5px',
+                  fontSize: isMobile && '14px',
+                  textTransformation: 'capitalize',
+                }}
+                onClick={() => {
+                  getMailMessages(
+                    currentThread,
+                    null,
+                    messages[messages.length - 1].created,
+                    false,
+                    groupInfo?.groupId
+                  );
+                }}
+                disabled={!hasNextPage}
+                variant="contained"
+              >
+                Next
+              </Button>
+              <Button
+                sx={{
+                  padding: isMobile && '5px',
+                  fontSize: isMobile && '14px',
+                  textTransformation: 'capitalize',
+                }}
+                onClick={() => {
+                  getMailMessages(
+                    currentThread,
+                    null,
+                    null,
+                    true,
+                    groupInfo?.groupId
+                  );
+                }}
+                disabled={!hasLastPage}
+                variant="contained"
+              >
+                Last
+              </Button>
             </Box>
-       
-           <div ref={containerRef} />
+            <Spacer height="30px" />
+          </Box>
+
+          <div ref={containerRef} />
         </ThreadContainer>
       </ThreadContainerFullWidth>
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: "Loading posts... please wait.",
+          message: 'Loading posts... please wait.',
         }}
       />
     </GroupContainer>
