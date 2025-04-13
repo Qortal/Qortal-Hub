@@ -2,52 +2,61 @@ import { atom, selectorFamily } from 'recoil';
 
 
 export const sortablePinnedAppsAtom = atom({
-  key: 'sortablePinnedAppsFromAtom', 
-  default: [{
-    name: 'Q-Tube',
-    service: 'APP'
-  }, {
-    name: 'Q-Mail',
-    service: 'APP'
-  },  {
-    name: 'Q-Share',
-    service: 'APP'
-  }, {
-    name: 'Q-Fund',
-    service: 'APP'
-  }, {
-    name: 'Q-Shop',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Trade',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Support',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Manager',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Blog',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Mintership',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Wallets',
-    service: 'APP'
-  },
-  {
-    name: 'Q-Search',
-    service: 'APP'
-  },
-], 
+  key: 'sortablePinnedAppsFromAtom',
+  default: [
+    {
+      name: 'Q-Tube',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Mail',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Share',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Fund',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Shop',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Trade',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Support',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Manager',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Blog',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Mintership',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Wallets',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Search',
+      service: 'APP',
+    },
+    {
+      name: 'Q-Nodecontrol',
+      service: 'APP'
+    }
+  ],
 });
 
 export const canSaveSettingToQdnAtom = atom({

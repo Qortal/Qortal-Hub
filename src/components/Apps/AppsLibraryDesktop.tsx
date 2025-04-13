@@ -48,19 +48,20 @@ import { AppsNavBarDesktop } from "./AppsNavBarDesktop";
 import ReturnSVG from '../../assets/svgs/Return.svg'
 import { ComposeP, MailIconImg, ShowMessageReturnButton } from "../Group/Forum/Mail-styles";
 const officialAppList = [
-  "q-tube",
-  "q-blog",
-  "q-share",
-  "q-support",
-  "q-mail",
-  "q-fund",
-  "q-shop",
-  "q-trade",
-  "q-support",
-  "q-manager",
-  "q-mintership",
-  "q-wallets",
-  "q-search"
+  'q-tube',
+  'q-blog',
+  'q-share',
+  'q-support',
+  'q-mail',
+  'q-fund',
+  'q-shop',
+  'q-trade',
+  'q-support',
+  'q-manager',
+  'q-mintership',
+  'q-wallets',
+  'q-search',
+  "q-nodecontrol"
 ];
 
 const ScrollerStyled = styled("div")({
