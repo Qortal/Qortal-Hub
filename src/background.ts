@@ -2391,13 +2391,7 @@ export async function buyName({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  console.log('tester', {
-    fee: feeres.fee,
-    name,
-		sellPrice,
-		recipient: sellerAddress,
-    lastReference: lastReference,
-  })
+
   const tx = await createTransaction(7, keyPair, {
     fee: feeres.fee,
     name,
