@@ -146,8 +146,8 @@ export const CustomButton = styled(Box)(({ theme }) => ({
   '&:hover': {
     backgroundColor:
       theme.palette.mode === 'dark'
-        ? 'rgba(41, 41, 43, 1)'
-        : 'rgba(230, 230, 230, 1)',
+        ? 'rgb(136, 130, 130)'
+        : 'rgb(173, 173, 180)',
     color: '#fff',
 
     'svg path': {
