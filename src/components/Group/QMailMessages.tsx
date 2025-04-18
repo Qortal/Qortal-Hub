@@ -5,7 +5,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import moment from 'moment';
-import { Box, ButtonBase, Collapse, Typography } from '@mui/material';
+import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import { getBaseApiReact, isMobile } from '../../App';
 import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
@@ -51,6 +51,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
     qMailLastEnteredTimestampAtom
   );
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
 
   const getMails = useCallback(async () => {
     try {
@@ -175,14 +176,14 @@ export const QMailMessages = ({ userName, userAddress }) => {
         <Box
           className="scrollable-container"
           sx={{
-            width: '322px',
-            height: isMobile ? '165px' : '250px',
+            bgcolor: theme.palette.background.paper,
+            borderRadius: '19px',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: 'background.paper',
-            padding: '20px',
-            borderRadius: '19px',
+            height: isMobile ? '165px' : '250px',
             overflow: 'auto',
+            padding: '20px',
+            width: '322px',
           }}
         >
           {loading && mails.length === 0 && (
@@ -210,7 +211,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
                 sx={{
                   fontSize: '11px',
                   fontWeight: 400,
-                  color: 'rgba(255, 255, 255, 0.2)',
+                  color: theme.palette.primary,
                 }}
               >
                 Nothing to display

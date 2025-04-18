@@ -5,6 +5,7 @@ import {
   ListItemText,
   Collapse,
   IconButton,
+  useTheme,
 } from '@mui/material';
 import React, { useContext, useEffect, useRef } from 'react';
 import PendingIcon from '@mui/icons-material/Pending';
@@ -18,6 +19,7 @@ export const TaskManager = ({ getUserInfo }) => {
   const { txList, setTxList, memberGroups } = useContext(MyContext);
   const [open, setOpen] = React.useState(false);
   const intervals = useRef({});
+  const theme = useTheme();
 
   const handleClick = () => {
     setOpen((prev) => !prev);
@@ -146,12 +148,9 @@ export const TaskManager = ({ getUserInfo }) => {
         <IconButton
           onClick={handleClick}
           sx={{
-            // position: "fixed",
-            // bottom: 16,
-            // right: 16,
-            bgcolor: 'primary.main',
-            color: 'white',
-            ':hover': { bgcolor: 'primary.dark' },
+            bgcolor: theme.palette.primary.main,
+            color: theme.palette.text.primary,
+            ':hover': { bgcolor: theme.palette.primary },
           }}
         >
           {txList.some((item) => !item.done) ? (
@@ -164,16 +163,16 @@ export const TaskManager = ({ getUserInfo }) => {
       {open && (
         <List
           sx={{
-            position: 'fixed',
+            bgcolor: theme.palette.background.paper,
             bottom: 16,
+            boxShadow: 4,
+            maxHeight: '400px',
+            overflow: 'auto',
+            padding: '0px',
+            position: 'fixed',
             right: 16,
             width: '300px',
-            maxHeight: '400px',
-            bgcolor: 'background.paper',
-            boxShadow: 4,
-            overflow: 'auto',
             zIndex: 10,
-            padding: '0px',
           }}
           component="nav"
         >
@@ -182,13 +181,13 @@ export const TaskManager = ({ getUserInfo }) => {
               {txList.some((item) => !item.done) ? (
                 <PendingIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.primary,
                   }}
                 />
               ) : (
                 <TaskAltIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.primary,
                   }}
                 />
               )}
