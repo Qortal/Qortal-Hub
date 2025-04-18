@@ -20,6 +20,7 @@ import {
   Tab,
   Tabs,
   styled,
+  useTheme,
 } from '@mui/material';
 import { AddGroupList } from './AddGroupList';
 import { UserListOfInvites } from './UserListOfInvites';
@@ -83,6 +84,8 @@ export const AddGroup = ({ address, open, setOpen }) => {
   const handleChangeMaxBlock = (event: SelectChangeEvent) => {
     setMaxBlock(event.target.value as string);
   };
+
+  const theme = useTheme();
 
   const handleCreateGroup = async () => {
     try {
@@ -187,17 +190,22 @@ export const AddGroup = ({ address, open, setOpen }) => {
         onClose={handleClose}
         TransitionComponent={Transition}
       >
-        <AppBar sx={{ position: 'relative', bgcolor: '#232428' }}>
+        <AppBar
+          sx={{
+            position: 'relative',
+            bgcolor: theme.palette.background.default,
+          }}
+        >
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
               Group Mgmt
             </Typography>
 
             <IconButton
-              edge="start"
-              color="inherit"
-              onClick={handleClose}
               aria-label="close"
+              color="inherit"
+              edge="start"
+              onClick={handleClose}
             >
               <CloseIcon />
             </IconButton>
@@ -209,15 +217,17 @@ export const AddGroup = ({ address, open, setOpen }) => {
         </AppBar>
         <Box
           sx={{
-            bgcolor: '#27282c',
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
+            display: 'flex',
+            flexDirection: 'column',
             flexGrow: 1,
             overflowY: 'auto',
-            color: 'white',
-            flexDirection: 'column',
-            display: 'flex',
           }}
         >
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Box
+            sx={{ borderBottom: 1, borderColor: theme.palette.text.secondary }}
+          >
             <Tabs
               value={value}
               onChange={handleChange}
@@ -227,7 +237,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               allowScrollButtonsMobile
               sx={{
                 '& .MuiTabs-indicator': {
-                  backgroundColor: 'white',
+                  backgroundColor: theme.palette.background.default,
                 },
               }}
             >
@@ -236,7 +246,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 {...a11yProps(0)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
                 }}
@@ -246,7 +256,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 {...a11yProps(1)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
                 }}
@@ -256,7 +266,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 {...a11yProps(2)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
                 }}
@@ -454,11 +464,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
           {value === 1 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
+                display: 'flex',
                 flexDirection: 'column',
                 flexGrow: 1,
-                display: 'flex',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <AddGroupList
@@ -471,11 +481,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
           {value === 2 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
+                display: 'flex',
                 flexDirection: 'column',
                 flexGrow: 1,
-                display: 'flex',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <UserListOfInvites
@@ -486,6 +496,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
             </Box>
           )}
         </Box>
+
         <CustomizedSnackbars
           open={openSnack}
           setOpen={setOpenSnack}
