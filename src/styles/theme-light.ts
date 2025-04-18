@@ -6,20 +6,20 @@ const lightTheme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#f4f4fb',
-      dark: '#eaecf4',
-      light: '#f9f9fd',
+      main: 'rgba(244, 244, 251, 1)',
+      dark: 'rgb(113, 198, 212)',
+      light: 'rgb(162, 162, 221)',
     },
     secondary: {
-      main: '#c2deec',
+      main: 'rgba(194, 222, 236, 1)',
     },
     background: {
-      default: '#fafafa',
-      paper: '#f0f0f0',
+      default: 'rgba(250, 250, 250, 1)',
+      paper: 'rgb(240, 239, 202)',
     },
     text: {
-      primary: '#000000',
-      secondary: '#525252',
+      primary: 'rgba(0, 0, 0, 1)',
+      secondary: 'rgba(82, 82, 82, 1)',
     },
   },
   components: {
@@ -41,7 +41,7 @@ const lightTheme = createTheme({
     MuiIcon: {
       defaultProps: {
         style: {
-          color: '#000000',
+          color: 'rgba(0, 0, 0, 1)',
           opacity: 0.5,
         },
       },
@@ -49,18 +49,17 @@ const lightTheme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         ':root': {
-          '--color-instance': '#1e1e20',
-          '--color-instance-popover-bg': '#222222',
+          '--color-instance': 'rgba(30, 30, 32, 1)',
+          '--color-instance-popover-bg': 'rgba(34, 34, 34, 1)',
           '--Mail-Background': 'rgba(49, 51, 56, 1)',
-          '--new-message-text': 'black',
+          '--new-message-text': 'rgba(0, 0, 0, 1)',
           '--bg-primary': 'rgba(31, 32, 35, 1)',
-          '--bg-2': '#27282c',
+          '--bg-2': 'rgba(39, 40, 44, 1)',
           '--bg-3': 'rgba(0, 0, 0, 0.1)',
-          '--unread': '#4297e2',
-          '--danger': '#b14646',
-          '--apps-circle': '#1f2023',
-          '--green': '#5eb049',
-          '--pollo': 'pollo',
+          '--unread': 'rgba(66, 151, 226, 1)',
+          '--danger': 'rgba(177, 70, 70, 1)',
+          '--apps-circle': 'rgba(31, 32, 35, 1)',
+          '--green': 'rgba(94, 176, 73, 1)',
         },
         '*, *::before, *::after': {
           boxSizing: 'border-box',
