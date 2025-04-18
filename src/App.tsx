@@ -626,7 +626,9 @@ function App() {
           setIsDisabledEditorEnter(parsedVal);
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   useEffect(() => {
@@ -684,7 +686,9 @@ function App() {
       try {
         if (typeof fileContents !== 'string') return;
         pf = JSON.parse(fileContents);
-      } catch (e) {}
+      } catch (e) {
+        console.log(error);
+      }
 
       try {
         const requiredFields = [
@@ -932,7 +936,9 @@ function App() {
         });
 
       getBalanceFunc();
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   useEffect(() => {
@@ -985,7 +991,6 @@ function App() {
       );
     } catch (error: any) {
       setWalletToBeDownloadedError(error?.message);
-    } finally {
     }
   };
 
@@ -1107,7 +1112,9 @@ function App() {
             error.message || 'An error occurred'
           );
         });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const returnToMain = () => {
@@ -2387,17 +2394,7 @@ function App() {
               )}
               {` ${requestBuyOrder?.crosschainAtInfo?.[0]?.foreignBlockchain}`}
             </TextP>
-            {/* <Spacer height="29px" />
 
-          <CustomLabel htmlFor="standard-adornment-password">
-            Confirm Wallet Password
-          </CustomLabel>
-          <Spacer height="5px" />
-          <PasswordField
-            id="standard-adornment-password"
-            value={paymentPassword}
-            onChange={(e) => setPaymentPassword(e.target.value)}
-          /> */}
             <Spacer height="29px" />
             <Box
               sx={{
