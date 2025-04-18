@@ -24,6 +24,7 @@ export const QMailStatus = () => {
       return true;
     return false;
   }, [lastEnteredTimestamp, mails]);
+
   return (
     <ButtonBase
       onClick={() => {

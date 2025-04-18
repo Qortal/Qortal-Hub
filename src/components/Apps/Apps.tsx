@@ -1,45 +1,47 @@
-import React, {  useEffect, useMemo, useRef, useState } from "react";
-import { AppsHome } from "./AppsHome";
-import { Spacer } from "../../common/Spacer";
-import {  getBaseApiReact } from "../../App";
-import { AppInfo } from "./AppInfo";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AppsHome } from './AppsHome';
+import { Spacer } from '../../common/Spacer';
+import { getBaseApiReact } from '../../App';
+import { AppInfo } from './AppInfo';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
-} from "../../utils/events";
-import { AppsParent } from "./Apps-styles";
-import AppViewerContainer from "./AppViewerContainer";
-import ShortUniqueId from "short-unique-id";
-import { AppPublish } from "./AppPublish";
-import { AppsCategory } from "./AppsCategory";
-import { AppsLibrary } from "./AppsLibrary";
+} from '../../utils/events';
+import { AppsParent } from './Apps-styles';
+import AppViewerContainer from './AppViewerContainer';
+import ShortUniqueId from 'short-unique-id';
+import { AppPublish } from './AppPublish';
+import { AppsCategory } from './AppsCategory';
+import { AppsLibrary } from './AppsLibrary';
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const Apps = ({ mode, setMode, show , myName}) => {
+export const Apps = ({ mode, setMode, show, myName }) => {
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
-  const [categories, setCategories] = useState([])
+  const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
 
+  const myApp = useMemo(() => {
+    return availableQapps.find(
+      (app) => app.name === myName && app.service === 'APP'
+    );
+  }, [myName, availableQapps]);
 
-  const myApp = useMemo(()=> {
-   
-   return availableQapps.find((app)=> app.name === myName && app.service === 'APP')
-  }, [myName, availableQapps])
-  const myWebsite = useMemo(()=> {
-   
-    return availableQapps.find((app)=> app.name === myName && app.service === 'WEBSITE')
-   }, [myName, availableQapps])
+  const myWebsite = useMemo(() => {
+    return availableQapps.find(
+      (app) => app.name === myName && app.service === 'WEBSITE'
+    );
+  }, [myName, availableQapps]);
 
   useEffect(() => {
     setTimeout(() => {
-      executeEvent("setTabsToNav", {
+      executeEvent('setTabsToNav', {
         data: {
           tabs: tabs,
           selectedTab: selectedTab,
@@ -54,17 +56,17 @@ export const Apps = ({ mode, setMode, show , myName}) => {
       const url = `${getBaseApiReact()}/arbitrary/categories`;
 
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       if (!response?.ok) return;
       const responseData = await response.json();
-     
+
       setCategories(responseData);
-     
     } catch (error) {
+      console.log(error);
     } finally {
       // dispatch(setIsLoadingGlobal(false))
     }
@@ -78,9 +80,9 @@ export const Apps = ({ mode, setMode, show , myName}) => {
       const url = `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       if (!response?.ok) return;
@@ -88,75 +90,84 @@ export const Apps = ({ mode, setMode, show , myName}) => {
       const urlWebsites = `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const responseWebsites = await fetch(urlWebsites, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       if (!responseWebsites?.ok) return;
       const responseDataWebsites = await responseWebsites.json();
-    
+
       apps = responseData;
       websites = responseDataWebsites;
       const combine = [...apps, ...websites];
       setAvailableQapps(combine);
     } catch (error) {
+      console.log(error);
     } finally {
       // dispatch(setIsLoadingGlobal(false))
     }
   }, []);
   useEffect(() => {
     getQapps();
-    getCategories()
+    getCategories();
   }, [getQapps, getCategories]);
 
   const selectedAppInfoFunc = (e) => {
     const data = e.detail?.data;
     setSelectedAppInfo(data);
-    setMode("appInfo");
+    setMode('appInfo');
   };
 
   useEffect(() => {
-    subscribeToEvent("selectedAppInfo", selectedAppInfoFunc);
+    subscribeToEvent('selectedAppInfo', selectedAppInfoFunc);
 
     return () => {
-      unsubscribeFromEvent("selectedAppInfo", selectedAppInfoFunc);
+      unsubscribeFromEvent('selectedAppInfo', selectedAppInfoFunc);
     };
   }, []);
 
   const selectedAppInfoCategoryFunc = (e) => {
     const data = e.detail?.data;
     setSelectedAppInfo(data);
-    setMode("appInfo-from-category");
+    setMode('appInfo-from-category');
   };
 
   useEffect(() => {
-    subscribeToEvent("selectedAppInfoCategory", selectedAppInfoCategoryFunc);
+    subscribeToEvent('selectedAppInfoCategory', selectedAppInfoCategoryFunc);
 
     return () => {
-      unsubscribeFromEvent("selectedAppInfoCategory", selectedAppInfoCategoryFunc);
+      unsubscribeFromEvent(
+        'selectedAppInfoCategory',
+        selectedAppInfoCategoryFunc
+      );
     };
   }, []);
-
-  
 
   const selectedCategoryFunc = (e) => {
     const data = e.detail?.data;
     setSelectedCategory(data);
-    setMode("category");
+    setMode('category');
   };
 
   useEffect(() => {
-    subscribeToEvent("selectedCategory", selectedCategoryFunc);
+    subscribeToEvent('selectedCategory', selectedCategoryFunc);
 
     return () => {
-      unsubscribeFromEvent("selectedCategory", selectedCategoryFunc);
+      unsubscribeFromEvent('selectedCategory', selectedCategoryFunc);
     };
   }, []);
 
-  
   const navigateBackFunc = (e) => {
-    if (['category', 'appInfo-from-category', 'appInfo', 'library', 'publish'].includes(mode)) {
+    if (
+      [
+        'category',
+        'appInfo-from-category',
+        'appInfo',
+        'library',
+        'publish',
+      ].includes(mode)
+    ) {
       // Handle the various modes as needed
       if (mode === 'category') {
         setMode('library');
@@ -174,16 +185,16 @@ export const Apps = ({ mode, setMode, show , myName}) => {
       } else if (mode === 'publish') {
         setMode('library');
       }
-    } else if(selectedTab?.tabId) {
-      executeEvent(`navigateBackApp-${selectedTab?.tabId}`, {})
+    } else if (selectedTab?.tabId) {
+      executeEvent(`navigateBackApp-${selectedTab?.tabId}`, {});
     }
   };
 
   useEffect(() => {
-    subscribeToEvent("navigateBack", navigateBackFunc);
+    subscribeToEvent('navigateBack', navigateBackFunc);
 
     return () => {
-      unsubscribeFromEvent("navigateBack", navigateBackFunc);
+      unsubscribeFromEvent('navigateBack', navigateBackFunc);
     };
   }, [mode, selectedTab]);
 
@@ -195,16 +206,16 @@ export const Apps = ({ mode, setMode, show , myName}) => {
     };
     setTabs((prev) => [...prev, newTab]);
     setSelectedTab(newTab);
-    setMode("viewer");
+    setMode('viewer');
 
     setIsNewTabWindow(false);
   };
 
   useEffect(() => {
-    subscribeToEvent("addTab", addTabFunc);
+    subscribeToEvent('addTab', addTabFunc);
 
     return () => {
-      unsubscribeFromEvent("addTab", addTabFunc);
+      unsubscribeFromEvent('addTab', addTabFunc);
     };
   }, [tabs]);
 
@@ -213,7 +224,7 @@ export const Apps = ({ mode, setMode, show , myName}) => {
 
     setSelectedTab(data);
     setTimeout(() => {
-      executeEvent("setTabsToNav", {
+      executeEvent('setTabsToNav', {
         data: {
           tabs: tabs,
           selectedTab: data,
@@ -225,10 +236,10 @@ export const Apps = ({ mode, setMode, show , myName}) => {
   };
 
   useEffect(() => {
-    subscribeToEvent("setSelectedTab", setSelectedTabFunc);
+    subscribeToEvent('setSelectedTab', setSelectedTabFunc);
 
     return () => {
-      unsubscribeFromEvent("setSelectedTab", setSelectedTabFunc);
+      unsubscribeFromEvent('setSelectedTab', setSelectedTabFunc);
     };
   }, [tabs, isNewTabWindow]);
 
@@ -236,14 +247,14 @@ export const Apps = ({ mode, setMode, show , myName}) => {
     const data = e.detail?.data;
     const copyTabs = [...tabs].filter((tab) => tab?.tabId !== data?.tabId);
     if (copyTabs?.length === 0) {
-      setMode("home");
+      setMode('home');
     } else {
       setSelectedTab(copyTabs[0]);
     }
     setTabs(copyTabs);
     setSelectedTab(copyTabs[0]);
     setTimeout(() => {
-      executeEvent("setTabsToNav", {
+      executeEvent('setTabsToNav', {
         data: {
           tabs: copyTabs,
           selectedTab: copyTabs[0],
@@ -253,59 +264,74 @@ export const Apps = ({ mode, setMode, show , myName}) => {
   };
 
   useEffect(() => {
-    subscribeToEvent("removeTab", removeTabFunc);
+    subscribeToEvent('removeTab', removeTabFunc);
 
     return () => {
-      unsubscribeFromEvent("removeTab", removeTabFunc);
+      unsubscribeFromEvent('removeTab', removeTabFunc);
     };
   }, [tabs]);
 
   const setNewTabWindowFunc = (e) => {
     setIsNewTabWindow(true);
-    setSelectedTab(null)
+    setSelectedTab(null);
   };
 
   useEffect(() => {
-    subscribeToEvent("newTabWindow", setNewTabWindowFunc);
+    subscribeToEvent('newTabWindow', setNewTabWindowFunc);
 
     return () => {
-      unsubscribeFromEvent("newTabWindow", setNewTabWindowFunc);
+      unsubscribeFromEvent('newTabWindow', setNewTabWindowFunc);
     };
   }, [tabs]);
-
 
   return (
     <AppsParent
       sx={{
-        display: !show && "none",
+        display: !show && 'none',
       }}
     >
-      {mode !== "viewer" && !selectedTab  && <Spacer height="30px" />}
-      {mode === "home" && (
-        <AppsHome availableQapps={availableQapps}  setMode={setMode} myApp={myApp} myWebsite={myWebsite} />
-      )}
-    
-        <AppsLibrary
-        isShow={mode === "library" && !selectedTab}
+      {mode !== 'viewer' && !selectedTab && <Spacer height="30px" />}
+      {mode === 'home' && (
+        <AppsHome
           availableQapps={availableQapps}
           setMode={setMode}
-          myName={myName}
-          hasPublishApp={!!(myApp || myWebsite)}
-          categories={categories}
+          myApp={myApp}
+          myWebsite={myWebsite}
         />
-   
-      {mode === "appInfo" && !selectedTab && <AppInfo app={selectedAppInfo} myName={myName} />}
-      {mode === "appInfo-from-category" && !selectedTab && <AppInfo app={selectedAppInfo} myName={myName} />}
-      <AppsCategory  availableQapps={availableQapps} isShow={mode === 'category' && !selectedTab} category={selectedCategory} myName={myName} />
-      {mode === "publish" && !selectedTab &&  <AppPublish names={myName ?  [myName] : []} categories={categories} />}
+      )}
+
+      <AppsLibrary
+        isShow={mode === 'library' && !selectedTab}
+        availableQapps={availableQapps}
+        setMode={setMode}
+        myName={myName}
+        hasPublishApp={!!(myApp || myWebsite)}
+        categories={categories}
+      />
+
+      {mode === 'appInfo' && !selectedTab && (
+        <AppInfo app={selectedAppInfo} myName={myName} />
+      )}
+      {mode === 'appInfo-from-category' && !selectedTab && (
+        <AppInfo app={selectedAppInfo} myName={myName} />
+      )}
+      <AppsCategory
+        availableQapps={availableQapps}
+        isShow={mode === 'category' && !selectedTab}
+        category={selectedCategory}
+        myName={myName}
+      />
+      {mode === 'publish' && !selectedTab && (
+        <AppPublish names={myName ? [myName] : []} categories={categories} />
+      )}
 
       {tabs.map((tab) => {
-          if (!iframeRefs.current[tab.tabId]) {
-            iframeRefs.current[tab.tabId] = React.createRef();
-          }
+        if (!iframeRefs.current[tab.tabId]) {
+          iframeRefs.current[tab.tabId] = React.createRef();
+        }
         return (
           <AppViewerContainer
-          key={tab?.tabId}
+            key={tab?.tabId}
             hide={isNewTabWindow}
             isSelected={tab?.tabId === selectedTab?.tabId}
             app={tab}
@@ -314,13 +340,18 @@ export const Apps = ({ mode, setMode, show , myName}) => {
         );
       })}
 
-      {isNewTabWindow && mode === "viewer" && (
+      {isNewTabWindow && mode === 'viewer' && (
         <>
           <Spacer height="30px" />
-          <AppsHome availableQapps={availableQapps} setMode={setMode} myApp={myApp} myWebsite={myWebsite}  />
+          <AppsHome
+            availableQapps={availableQapps}
+            setMode={setMode}
+            myApp={myApp}
+            myWebsite={myWebsite}
+          />
         </>
       )}
-      {mode !== "viewer" && !selectedTab  && <Spacer height="180px" />}
+      {mode !== 'viewer' && !selectedTab && <Spacer height="180px" />}
     </AppsParent>
   );
 };

@@ -89,7 +89,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   useEffect(() => {
@@ -168,6 +170,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
           />
         )}
       </ButtonBase>
+
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <Box
           className="scrollable-container"
