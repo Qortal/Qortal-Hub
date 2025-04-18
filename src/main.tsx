@@ -5,10 +5,12 @@ import './messaging/messagesToBackground';
 import { MessageQueueProvider } from './MessageQueueContext.tsx';
 import { RecoilRoot } from 'recoil';
 import { ThemeProvider } from './components/Theme/ThemeContext.tsx';
+import { CssBaseline } from '@mui/material';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <>
     <ThemeProvider>
+      <CssBaseline />
       <MessageQueueProvider>
         <RecoilRoot>
           <App />
