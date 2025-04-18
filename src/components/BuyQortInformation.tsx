@@ -57,8 +57,8 @@ export const BuyQortInformation = ({ balance }) => {
             display: 'flex',
             flexDirection: 'column',
             gap: '10px',
-            height: '400px',
-            maxHeight: '90vh',
+            height: '350px',
+            maxHeight: '80vh',
             maxWidth: '90vw',
             padding: '10px',
             width: '400px',
@@ -98,7 +98,9 @@ export const BuyQortInformation = ({ balance }) => {
               Trade QORT
             </Typography>
           </ButtonBase>
-          <Spacer height="40px" />
+
+          <Spacer height="15px" />
+
           <Typography
             sx={{
               textDecoration: 'underline',
@@ -108,9 +110,9 @@ export const BuyQortInformation = ({ balance }) => {
           </Typography>
           <List
             sx={{
-              width: '100%',
+              bgcolor: theme.palette.background.default,
               maxWidth: 360,
-              bgcolor: theme.palette.background.paper,
+              width: '100%',
             }}
             aria-label="contacts"
           >
@@ -118,7 +120,7 @@ export const BuyQortInformation = ({ balance }) => {
               <ListItemIcon>
                 <RadioButtonCheckedIcon
                   sx={{
-                    color: theme.palette.primary.main,
+                    color: theme.palette.primary.dark,
                   }}
                 />
               </ListItemIcon>
@@ -128,7 +130,7 @@ export const BuyQortInformation = ({ balance }) => {
               <ListItemIcon>
                 <RadioButtonCheckedIcon
                   sx={{
-                    color: theme.palette.primary.main,
+                    color: theme.palette.primary.dark,
                   }}
                 />
               </ListItemIcon>
