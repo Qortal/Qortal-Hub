@@ -29,15 +29,14 @@ import { getFee } from '../../background';
 import { MyContext, isMobile } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 
-export const Label = styled('label')(
-  ({ theme }) => `
+export const Label = styled('label')`
+  display: block;
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 14px;
-  display: block;
-  margin-bottom: 4px;
   font-weight: 400;
-  `
-);
+  margin-bottom: 4px;
+`;
+
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
     children: React.ReactElement;

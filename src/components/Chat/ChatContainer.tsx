@@ -1,16 +1,14 @@
-import React, { useState } from "react";
-import InfiniteScroll from "react-infinite-scroller";
 import {
   MainContainer,
   ChatContainer,
   MessageList,
   Message,
   MessageInput,
-  Avatar
-} from "@chatscope/chat-ui-kit-react";
-import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
+  Avatar,
+} from '@chatscope/chat-ui-kit-react';
+import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 
-export const ChatContainerComp = ({messages}) => {
+export const ChatContainerComp = ({ messages }) => {
   // const [messages, setMessages] = useState([
   //   { id: 1, text: "Hello! How are you?", sender: "Joe"},
   //   { id: 2, text: "I'm good, thank you!", sender: "Me" }
@@ -26,31 +24,31 @@ export const ChatContainerComp = ({messages}) => {
   // };
 
   return (
-    <div style={{ height: "500px", width: "300px" }}>
+    <div style={{ height: '500px', width: '300px' }}>
       <MainContainer>
         <ChatContainer>
-            <MessageList>
-              {messages.map((msg) => (
-                <Message
-                  key={msg.id}
-                  model={{
-                    message: msg.text,
-                    sentTime: "just now",
-                    sender: msg.senderName,
-                    direction: 'incoming',
-                    position: "single"
-                  }}
-                >
-                  {msg.direction === "incoming" && <Avatar name={msg.senderName} />}
-                </Message>
-              ))}
-            </MessageList>
-          
+          <MessageList>
+            {messages.map((msg) => (
+              <Message
+                key={msg.id}
+                model={{
+                  message: msg.text,
+                  sentTime: 'just now',
+                  sender: msg.senderName,
+                  direction: 'incoming',
+                  position: 'single',
+                }}
+              >
+                {msg.direction === 'incoming' && (
+                  <Avatar name={msg.senderName} />
+                )}
+              </Message>
+            ))}
+          </MessageList>
+
           <MessageInput placeholder="Type a message..." />
         </ChatContainer>
       </MainContainer>
     </div>
   );
 };
-
-
