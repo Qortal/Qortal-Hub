@@ -24,7 +24,6 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import { AddGroup } from './AddGroup';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CreateIcon from '@mui/icons-material/Create';
-
 import {
   AuthenticatedContainerInnerRight,
   CustomButton,
@@ -46,7 +45,6 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { GroupAnnouncements } from '../Chat/GroupAnnouncements';
-
 import { GroupForum } from '../Chat/GroupForum';
 import {
   executeEvent,
@@ -56,9 +54,7 @@ import {
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
 import { useMessageQueue } from '../../MessageQueueContext';
-import { isExtMsg, isUpdateMsg } from '../../background';
 import { ContextMenu } from '../ContextMenu';
-
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { HomeDesktop } from './HomeDesktop';
@@ -113,6 +109,7 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
 
   return sortedData[0];
 };
+
 interface GroupProps {
   myAddress: string;
   isFocused: boolean;
@@ -134,7 +131,7 @@ export const getGroupAdminsAddress = async (groupNumber: number) => {
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  let members: any = [];
+  const members: any = [];
   if (groupData && Array.isArray(groupData?.members)) {
     for (const member of groupData.members) {
       if (member.member) {
@@ -153,7 +150,7 @@ export function validateSecretKey(obj) {
   }
 
   // Iterate over each key in the object
-  for (let key in obj) {
+  for (const key in obj) {
     // Ensure the key is a string representation of a positive integer
     if (!/^\d+$/.test(key)) {
       return false;
@@ -224,7 +221,9 @@ export const decryptResource = async (data: string, fromQortalRequest) => {
           }
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export const addDataPublishesFunc = async (data: string, groupId, type) => {
@@ -247,7 +246,9 @@ export const addDataPublishesFunc = async (data: string, groupId, type) => {
           rej(error.message || 'An error occurred');
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export const getDataPublishesFunc = async (groupId, type) => {
@@ -269,7 +270,9 @@ export const getDataPublishesFunc = async (groupId, type) => {
           rej(error.message || 'An error occurred');
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export async function getNameInfo(address: string) {
@@ -337,6 +340,7 @@ export const getNames = async (listOfMembers) => {
 
   return members;
 };
+
 export const getNamesForAdmins = async (admins) => {
   let members: any = [];
 
@@ -538,7 +542,9 @@ export const Group = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const refreshHomeDataFunc = () => {
@@ -565,7 +571,9 @@ export const Group = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   useEffect(() => {
@@ -586,7 +594,9 @@ export const Group = ({
         data.name = name;
       }
       setGroupOwner(data);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const directChatHasUnread = useMemo(() => {
@@ -755,7 +765,7 @@ export const Group = ({
       setAdmins(addresses);
       setAdminsWithNames(both);
     } catch (error) {
-      //error
+      console.log(error);
     }
   };
 
@@ -783,7 +793,9 @@ export const Group = ({
       );
       const data = await response.json();
       if (data && data[0]) return data[0].timestamp;
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getLatestRegularChat = async (groups) => {
@@ -811,7 +823,9 @@ export const Group = ({
 
       await Promise.all(getGroupData);
       setGroupChatTimestamps(groupData);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getGroupsProperties = useCallback(async (address) => {
@@ -826,7 +840,7 @@ export const Group = ({
       }, {});
       setGroupsProperties(transformToObject);
     } catch (error) {
-      // error
+      console.log(error);
     }
   }, []);
 
@@ -958,7 +972,9 @@ export const Group = ({
       const res = await getGroupMembers(groupId);
       if (groupId !== selectedGroupRef.current?.groupId) return;
       setMembers(res);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
   useEffect(() => {
     if (
@@ -1594,8 +1610,8 @@ export const Group = ({
           flexDirection: 'column',
           alignItems: 'flex-start',
           height: isMobile ? `calc(${rootHeight} - 45px)` : '100%',
-          background: !isMobile && 'var(--bg-primary)',
-          borderRadius: !isMobile && '0px 15px 15px 0px',
+          background: 'var(--bg-primary)',
+          borderRadius: '0px 15px 15px 0px',
         }}
       >
         {!isMobile && (
