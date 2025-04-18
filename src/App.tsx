@@ -69,7 +69,7 @@ import { Spacer } from './common/Spacer';
 import { Loader } from './components/Loader';
 import { PasswordField, ErrorText } from './components';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
-import { TaskManager } from './components/TaskManager/TaskManger';
+import { TaskManager } from './components/TaskManager/TaskManager.tsx';
 import { useModal } from './common/useModal';
 import { Label } from './components/Group/AddGroup';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
