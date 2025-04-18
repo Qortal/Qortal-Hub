@@ -1,42 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorProvider, useCurrentEditor, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { Color } from "@tiptap/extension-color";
-import ListItem from "@tiptap/extension-list-item";
-import TextStyle from "@tiptap/extension-text-style";
-import Placeholder from "@tiptap/extension-placeholder";
-import Image from "@tiptap/extension-image";
-import IconButton from "@mui/material/IconButton";
-import FormatBoldIcon from "@mui/icons-material/FormatBold";
-import FormatItalicIcon from "@mui/icons-material/FormatItalic";
-import StrikethroughSIcon from "@mui/icons-material/StrikethroughS";
-import FormatClearIcon from "@mui/icons-material/FormatClear";
-import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import CodeIcon from "@mui/icons-material/Code";
-import ImageIcon from "@mui/icons-material/Image"; // Import Image icon
-import FormatQuoteIcon from "@mui/icons-material/FormatQuote";
-import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
-import UndoIcon from "@mui/icons-material/Undo";
-import RedoIcon from "@mui/icons-material/Redo";
-import FormatHeadingIcon from "@mui/icons-material/FormatSize";
-import DeveloperModeIcon from "@mui/icons-material/DeveloperMode";
-import Compressor from "compressorjs";
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { EditorProvider, useCurrentEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { Color } from '@tiptap/extension-color';
+import ListItem from '@tiptap/extension-list-item';
+import TextStyle from '@tiptap/extension-text-style';
+import Placeholder from '@tiptap/extension-placeholder';
+import IconButton from '@mui/material/IconButton';
+import FormatBoldIcon from '@mui/icons-material/FormatBold';
+import FormatItalicIcon from '@mui/icons-material/FormatItalic';
+import StrikethroughSIcon from '@mui/icons-material/StrikethroughS';
+import FormatClearIcon from '@mui/icons-material/FormatClear';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
+import CodeIcon from '@mui/icons-material/Code';
+import ImageIcon from '@mui/icons-material/Image'; // Import Image icon
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
+import FormatHeadingIcon from '@mui/icons-material/FormatSize';
+import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
+import Compressor from 'compressorjs';
 import Mention from '@tiptap/extension-mention';
-import ImageResize from "tiptap-extension-resize-image"; // Import the ResizeImage extension
-import { isMobile } from "../../App";
-import tippy from "tippy.js";
-import "tippy.js/dist/tippy.css";
-import Popover from '@mui/material/Popover';
-import List from '@mui/material/List';
-import ListItemMui from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import { ReactRenderer } from '@tiptap/react'
-import MentionList from './MentionList.jsx'
-import { useRecoilState } from "recoil";
-import { isDisabledEditorEnterAtom } from "../../atoms/global.js";
-import { Box, Checkbox, Typography } from "@mui/material";
+import ImageResize from 'tiptap-extension-resize-image'; // Import the ResizeImage extension
+import { isMobile } from '../../App';
+import tippy from 'tippy.js';
+import 'tippy.js/dist/tippy.css';
+import { ReactRenderer } from '@tiptap/react';
+import MentionList from './MentionList.jsx';
+import { useRecoilState } from 'recoil';
+import { isDisabledEditorEnterAtom } from '../../atoms/global.js';
+import { Box, Checkbox, Typography, useTheme } from '@mui/material';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -47,9 +41,16 @@ function textMatcher(doc, from) {
   const query = match[0];
   return { start, query };
 }
-const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEditorEnter }) => {
+
+const MenuBar = ({
+  setEditorRef,
+  isChat,
+  isDisabledEditorEnter,
+  setIsDisabledEditorEnter,
+}) => {
   const { editor } = useCurrentEditor();
   const fileInputRef = useRef(null);
+  const theme = useTheme();
 
   if (!editor) {
     return null;
@@ -67,15 +68,15 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
       new Compressor(file, {
         quality: 0.6,
         maxWidth: 1200,
-        mimeType: "image/webp",
+        mimeType: 'image/webp',
         success(result) {
-          compressedFile = new File([result], "image.webp", {
-            type: "image/webp",
+          compressedFile = new File([result], 'image.webp', {
+            type: 'image/webp',
           });
           resolve();
         },
         error(err) {
-          console.error("Image compression error:", err);
+          console.error('Image compression error:', err);
         },
       });
     });
@@ -87,9 +88,9 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         editor
           .chain()
           .focus()
-          .setImage({ src: url, style: "width: auto" })
+          .setImage({ src: url, style: 'width: auto' })
           .run();
-        fileInputRef.current.value = "";
+        fileInputRef.current.value = '';
       };
       reader.readAsDataURL(compressedFile);
     }
@@ -102,7 +103,7 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
   const handlePaste = (event) => {
     const items = event.clipboardData.items;
     for (const item of items) {
-      if (item.type.startsWith("image/")) {
+      if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
           event.preventDefault(); // Prevent the default paste behavior
@@ -114,24 +115,29 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
 
   useEffect(() => {
     if (editor) {
-      editor.view.dom.addEventListener("paste", handlePaste);
+      editor.view.dom.addEventListener('paste', handlePaste);
       return () => {
-        editor.view.dom.removeEventListener("paste", handlePaste);
+        editor.view.dom.removeEventListener('paste', handlePaste);
       };
     }
   }, [editor]);
 
   return (
     <div className="control-group">
-      <div className="button-group" style={{
-        display: 'flex'
-      }}>
+      <div
+        className="button-group"
+        style={{
+          display: 'flex',
+        }}
+      >
         <IconButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
           sx={{
-            color: editor.isActive("bold") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('bold')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatBoldIcon />
@@ -140,8 +146,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
           onClick={() => editor.chain().focus().toggleItalic().run()}
           disabled={!editor.can().chain().focus().toggleItalic().run()}
           sx={{
-            color: editor.isActive("italic") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('italic')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatItalicIcon />
@@ -150,8 +158,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
           onClick={() => editor.chain().focus().toggleStrike().run()}
           disabled={!editor.can().chain().focus().toggleStrike().run()}
           sx={{
-            color: editor.isActive("strike") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('strike')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <StrikethroughSIcon />
@@ -160,8 +170,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
           onClick={() => editor.chain().focus().toggleCode().run()}
           disabled={!editor.can().chain().focus().toggleCode().run()}
           sx={{
-            color: editor.isActive("code") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('code')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <CodeIcon />
@@ -170,13 +182,13 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
           onClick={() => editor.chain().focus().unsetAllMarks().run()}
           sx={{
             color:
-              editor.isActive("bold") ||
-              editor.isActive("italic") ||
-              editor.isActive("strike") ||
-              editor.isActive("code")
-                ? "white"
-                : "gray",
-            padding: isMobile ? "5px" : "revert",
+              editor.isActive('bold') ||
+              editor.isActive('italic') ||
+              editor.isActive('strike') ||
+              editor.isActive('code')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatClearIcon />
@@ -184,8 +196,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           sx={{
-            color: editor.isActive("bulletList") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('bulletList')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatListBulletedIcon />
@@ -193,8 +207,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           sx={{
-            color: editor.isActive("orderedList") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('orderedList')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatListNumberedIcon />
@@ -202,8 +218,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
           sx={{
-            color: editor.isActive("codeBlock") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('codeBlock')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <DeveloperModeIcon />
@@ -211,8 +229,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
           sx={{
-            color: editor.isActive("blockquote") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('blockquote')
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatQuoteIcon />
@@ -220,7 +240,7 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
           disabled={!editor.can().chain().focus().setHorizontalRule().run()}
-          sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
+          sx={{ color: 'gray', padding: isMobile ? '5px' : 'revert' }}
         >
           <HorizontalRuleIcon />
         </IconButton>
@@ -229,8 +249,10 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
             editor.chain().focus().toggleHeading({ level: 1 }).run()
           }
           sx={{
-            color: editor.isActive("heading", { level: 1 }) ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+            color: editor.isActive('heading', { level: 1 })
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary,
+            padding: isMobile ? '5px' : 'revert',
           }}
         >
           <FormatHeadingIcon fontSize="small" />
@@ -238,66 +260,68 @@ const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEdi
         <IconButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().chain().focus().undo().run()}
-          sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
+          sx={{ color: 'gray', padding: isMobile ? '5px' : 'revert' }}
         >
           <UndoIcon />
         </IconButton>
         <IconButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().chain().focus().redo().run()}
-          sx={{ color: "gray" }}
+          sx={{ color: 'gray' }}
         >
           <RedoIcon />
         </IconButton>
         {isChat && (
           <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            marginLeft: '5px',
-            cursor: 'pointer'
-          }}
-          onClick={()=> {
-            setIsDisabledEditorEnter(!isDisabledEditorEnter)
-          }}
-        >
-          <Checkbox
-          edge="start"
-          tabIndex={-1}
-          disableRipple
-          
-          checked={isDisabledEditorEnter}
-          sx={{
-            "&.Mui-checked": {
-              color: "gray", // Customize the color when checked
-            },
-            "& .MuiSvgIcon-root": {
-              color: "gray",
-            },
-          }}
-        />
-         <Typography
-                sx={{
-                  fontSize: "14px",
-                  color: 'gray'
-                }}
-              >
-                disable enter
-              </Typography>
-        </Box>
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              marginLeft: '5px',
+              cursor: 'pointer',
+            }}
+            onClick={() => {
+              setIsDisabledEditorEnter(!isDisabledEditorEnter);
+            }}
+          >
+            <Checkbox
+              edge="start"
+              tabIndex={-1}
+              disableRipple
+              checked={isDisabledEditorEnter}
+              sx={{
+                '&.Mui-checked': {
+                  color: theme.palette.text.secondary,
+                },
+                '& .MuiSvgIcon-root': {
+                  color: theme.palette.text.secondary,
+                },
+              }}
+            />
+            <Typography
+              sx={{
+                fontSize: '14px',
+                color: theme.palette.text.primary,
+              }}
+            >
+              disable enter
+            </Typography>
+          </Box>
         )}
         {!isChat && (
           <>
             <IconButton
               onClick={triggerImageUpload}
-              sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
+              sx={{
+                color: theme.palette.text.secondary,
+                padding: isMobile ? '5px' : 'revert',
+              }}
             >
               <ImageIcon />
             </IconButton>
             <input
               type="file"
               ref={fileInputRef}
-              style={{ display: "none" }}
+              style={{ display: 'none' }}
               onChange={(event) => handleImageUpload(event.target.files[0])}
               accept="image/*"
             />
@@ -322,7 +346,7 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: "Start typing here...",
+    placeholder: 'Start typing here...',
   }),
   ImageResize,
 ];
@@ -340,12 +364,13 @@ export default ({
   overrideMobile,
   customEditorHeight,
   membersWithNames,
-  enableMentions
+  enableMentions,
 }) => {
-  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(isDisabledEditorEnterAtom)
-
+  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(
+    isDisabledEditorEnterAtom
+  );
   const extensionsFiltered = isChat
-    ? extensions.filter((item) => item?.name !== "image")
+    ? extensions.filter((item) => item?.name !== 'image')
     : extensions;
   const editorRef = useRef(null);
   const setEditorRefFunc = (editorInstance) => {
@@ -359,20 +384,14 @@ export default ({
   //   { id: 3, label: 'Charlie' },
   // ];
 
-
-
-  const users = useMemo(()=> {
-    return (membersWithNames || [])?.map((item)=> {
+  const users = useMemo(() => {
+    return (membersWithNames || [])?.map((item) => {
       return {
         id: item,
-        label: item
-      }
-    })
-  }, [membersWithNames])
-
-
-
-
+        label: item,
+      };
+    });
+  }, [membersWithNames]);
 
   const usersRef = useRef([]);
   useEffect(() => {
@@ -386,13 +405,13 @@ export default ({
 
   const handleBlur = () => {
     const htmlContent = editorRef.current.getHTML();
-    if (!htmlContent?.trim() || htmlContent?.trim() === "<p></p>") {
+    if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
       // Set focus state based on content
     }
   };
 
-  const additionalExtensions = useMemo(()=> {
-    if(!enableMentions) return []
+  const additionalExtensions = useMemo(() => {
+    if (!enableMentions) return [];
     return [
       Mention.configure({
         HTMLAttributes: {
@@ -409,122 +428,129 @@ export default ({
             let popup; // Reference to the Tippy.js instance
             let component;
 
-           return {
-            onStart: props => {
-              component = new ReactRenderer(MentionList, {
-                props,
-                editor: props.editor,
-              })
-      
-              if (!props.clientRect) {
-                return
-              }
-      
-              popup = tippy('body', {
-                getReferenceClientRect: props.clientRect,
-                appendTo: () => document.body,
-                content: component.element,
-                showOnCreate: true,
-                interactive: true,
-                trigger: 'manual',
-                placement: 'bottom-start',
-              })
-            },
-      
-            onUpdate(props) {
-              component.updateProps(props)
-      
-              if (!props.clientRect) {
-                return
-              }
-      
-              popup[0].setProps({
-                getReferenceClientRect: props.clientRect,
-              })
-            },
-      
-            onKeyDown(props) {
-              if (props.event.key === 'Escape') {
-                popup[0].hide()
-      
-                return true
-              }
-      
-              return component.ref?.onKeyDown(props)
-            },
-      
-            onExit() {
-              popup[0].destroy()
-              component.destroy()
-            },
-           }
+            return {
+              onStart: (props) => {
+                component = new ReactRenderer(MentionList, {
+                  props,
+                  editor: props.editor,
+                });
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup = tippy('body', {
+                  getReferenceClientRect: props.clientRect,
+                  appendTo: () => document.body,
+                  content: component.element,
+                  showOnCreate: true,
+                  interactive: true,
+                  trigger: 'manual',
+                  placement: 'bottom-start',
+                });
+              },
+
+              onUpdate(props) {
+                component.updateProps(props);
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              },
+
+              onKeyDown(props) {
+                if (props.event.key === 'Escape') {
+                  popup[0].hide();
+
+                  return true;
+                }
+
+                return component.ref?.onKeyDown(props);
+              },
+
+              onExit() {
+                popup[0].destroy();
+                component.destroy();
+              },
+            };
           },
         },
-      })
-    ]
-  }, [enableMentions])
+      }),
+    ];
+  }, [enableMentions]);
 
-  const handleSetIsDisabledEditorEnter = useCallback((val)=> {
-    setIsDisabledEditorEnter(val)
+  const handleSetIsDisabledEditorEnter = useCallback((val) => {
+    setIsDisabledEditorEnter(val);
     localStorage.setItem('settings-disable-editor-enter', JSON.stringify(val));
-
-  }, [])
-
+  }, []);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      height: '100%'
-    }}>
-    <EditorProvider
-      slotBefore={
-        (isFocusedParent || !isMobile || overrideMobile) && (
-          <MenuBar setEditorRef={setEditorRefFunc} isChat={isChat} isDisabledEditorEnter={isDisabledEditorEnter} setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter} />
-        )
-      }
-      extensions={[...extensionsFiltered,   ...additionalExtensions
-    ]}
-      content={content}
-      onCreate={({ editor }) => {
-        editor.on("focus", handleFocus); // Listen for focus event
-        editor.on("blur", handleBlur); // Listen for blur event
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        justifyContent: 'space-between',
       }}
-      onUpdate={({ editor }) => {
-      editor.on('focus', handleFocus);   // Ensure focus is updated
-      editor.on('blur', handleBlur);     // Ensure blur is updated
-    }}
-      editorProps={{
-        attributes: {
-          class: "tiptap-prosemirror",
-          style:
-            isMobile ?
-            `overflow: auto; min-height: ${
-              customEditorHeight ? "200px" : "0px"
-            }; max-height:calc(100svh - ${customEditorHeight || "140px"})`: `overflow: auto; max-height: 250px`,
-        },
-        handleKeyDown(view, event) {
-          if (!disableEnter && !isDisabledEditorEnter && event.key === "Enter") {
-            if (event.shiftKey) {
-              view.dispatch(
-                view.state.tr.replaceSelectionWith(
-                  view.state.schema.nodes.hardBreak.create()
-                )
-              );
-              return true;
-            } else {
-              if (typeof onEnter === "function") {
-                onEnter();
+    >
+      <EditorProvider
+        slotBefore={
+          (isFocusedParent || !isMobile || overrideMobile) && (
+            <MenuBar
+              setEditorRef={setEditorRefFunc}
+              isChat={isChat}
+              isDisabledEditorEnter={isDisabledEditorEnter}
+              setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter}
+            />
+          )
+        }
+        extensions={[...extensionsFiltered, ...additionalExtensions]}
+        content={content}
+        onCreate={({ editor }) => {
+          editor.on('focus', handleFocus); // Listen for focus event
+          editor.on('blur', handleBlur); // Listen for blur event
+        }}
+        onUpdate={({ editor }) => {
+          editor.on('focus', handleFocus); // Ensure focus is updated
+          editor.on('blur', handleBlur); // Ensure blur is updated
+        }}
+        editorProps={{
+          attributes: {
+            class: 'tiptap-prosemirror',
+            style: isMobile
+              ? `overflow: auto; min-height: ${
+                  customEditorHeight ? '200px' : '0px'
+                }; max-height:calc(100svh - ${customEditorHeight || '140px'})`
+              : `overflow: auto; max-height: 250px`,
+          },
+          handleKeyDown(view, event) {
+            if (
+              !disableEnter &&
+              !isDisabledEditorEnter &&
+              event.key === 'Enter'
+            ) {
+              if (event.shiftKey) {
+                view.dispatch(
+                  view.state.tr.replaceSelectionWith(
+                    view.state.schema.nodes.hardBreak.create()
+                  )
+                );
+                return true;
+              } else {
+                if (typeof onEnter === 'function') {
+                  onEnter();
+                }
+                return true;
               }
-              return true;
             }
-          }
-          return false;
-        },
-      }}
-    />
+            return false;
+          },
+        }}
+      />
     </div>
-
   );
 };

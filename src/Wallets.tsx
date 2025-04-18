@@ -457,7 +457,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                 <Typography
                   component="span"
                   variant="body2"
-                  sx={{ color: 'text.primary', display: 'inline' }}
+                  sx={{ color: theme.palette.text.primary, display: 'inline' }}
                 >
                   {wallet?.address0}
                 </Typography>

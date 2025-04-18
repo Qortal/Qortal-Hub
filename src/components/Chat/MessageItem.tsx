@@ -167,7 +167,7 @@ export const MessageItem = React.memo(
         >
           <div
             style={{
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.paper,
               borderRadius: '7px',
               display: 'flex',
               gap: '7px',

@@ -15,7 +15,7 @@ const darkThemeOptions: ThemeOptions = {
     },
     background: {
       default: 'rgb(49, 51, 56)',
-      paper: 'rgb(46, 46, 49)',
+      paper: 'rgb(96, 96, 97)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
