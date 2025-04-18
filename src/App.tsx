@@ -1762,7 +1762,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: '#ffffff',
-                      backgroundColor: '#444444',
+                      backgroundColor: '#444444', // TODO: use theme and adapt colors
                     },
                   },
                   arrow: {
