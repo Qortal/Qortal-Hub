@@ -1,6 +1,6 @@
 .tiptap {
   margin-top: 0;
-  color: white; /* Set default font color to white */
+  color: ''; /* Set default font color to white */
   width: 100%;
 }
 
@@ -105,46 +105,45 @@
   color: white; /* Ensure paragraph text color is white */
   margin: 0px;
 }
-  .tiptap p.is-editor-empty:first-child::before {
-    color: #adb5bd;
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-  }
+.tiptap p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
 
-  .tiptap p:empty::before {
-    content: '';
-    display: inline-block;
-  }
+.tiptap p:empty::before {
+  content: '';
+  display: inline-block;
+}
 
 .tiptap a {
-  color: cadetblue
+  color: cadetblue;
 }
 
 .tiptap img {
   display: block;
-  max-width: 100%; 
+  max-width: 100%;
 }
 
 .isReply p {
   font-size: 12px !important;
 }
 
-.tiptap [data-type="mention"] {
+.tiptap [data-type='mention'] {
   box-decoration-break: clone;
   color: lightblue;
   padding: 0.1rem 0.3rem;
 }
 
-
 .unread-divider {
   width: 90%;
-        color: white;
-        border-bottom: 1px solid white;
-        display: flex;
-        justify-content: center;
-        border-radius: 2px;
+  color: white;
+  border-bottom: 1px solid white;
+  display: flex;
+  justify-content: center;
+  border-radius: 2px;
 }
 
 .mention-item {
