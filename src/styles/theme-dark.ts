@@ -15,7 +15,7 @@ const darkTheme = createTheme({
     },
     background: {
       default: 'rgb(49, 51, 56)',
-      paper: 'rgb(30, 30, 32)',
+      paper: 'rgb(46, 46, 49)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
@@ -50,7 +50,7 @@ const darkTheme = createTheme({
         ':root': {
           '--color-instance': 'rgb(30, 30, 32)',
           '--color-instance-popover-bg': 'rgb(34, 34, 34)',
-          '--Mail-Background': 'rgb(101, 248, 174)',
+          '--Mail-Background': 'rgb(43, 43, 43)',
           '--new-message-text': 'rgb(0, 0, 0)',
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgb(39, 40, 44)',
