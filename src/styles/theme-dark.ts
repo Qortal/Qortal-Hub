@@ -1,7 +1,7 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const darkTheme = createTheme({
+const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
@@ -37,14 +37,6 @@ const darkTheme = createTheme({
         },
       },
     },
-    MuiIcon: {
-      defaultProps: {
-        style: {
-          color: 'rgb(255, 255, 255)',
-          opacity: 0.5,
-        },
-      },
-    },
     MuiCssBaseline: {
       styleOverrides: {
         ':root': {
@@ -76,7 +68,17 @@ const darkTheme = createTheme({
         },
       },
     },
+    MuiIcon: {
+      defaultProps: {
+        style: {
+          color: 'rgb(255, 255, 255)',
+          opacity: 0.5,
+        },
+      },
+    },
   },
-});
+};
+
+const darkTheme = createTheme(darkThemeOptions);
 
 export { darkTheme };

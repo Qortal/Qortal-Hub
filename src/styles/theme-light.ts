@@ -1,7 +1,7 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const lightTheme = createTheme({
+const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
@@ -38,14 +38,6 @@ const lightTheme = createTheme({
         },
       },
     },
-    MuiIcon: {
-      defaultProps: {
-        style: {
-          color: 'rgba(0, 0, 0, 1)',
-          opacity: 0.5,
-        },
-      },
-    },
     MuiCssBaseline: {
       styleOverrides: {
         ':root': {
@@ -77,7 +69,17 @@ const lightTheme = createTheme({
         },
       },
     },
+    MuiIcon: {
+      defaultProps: {
+        style: {
+          color: 'rgba(0, 0, 0, 1)',
+          opacity: 0.5,
+        },
+      },
+    },
   },
-});
+};
+
+const lightTheme = createTheme(lightThemeOptions);
 
 export { lightTheme };
