@@ -657,7 +657,6 @@ export const NotAuthenticated = ({
                       }
                     }}
                     disabled={false}
-                    defaultChecked
                   />
                 }
                 label={`Use ${isLocal ? 'Local' : 'Custom'} Node`}
