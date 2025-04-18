@@ -1333,9 +1333,7 @@ function App() {
           {authenticatedMode === 'qort' && (
             <Tooltip
               title={
-                <span
-                  style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}
-                >
+                <span style={{ fontSize: '14px', fontWeight: 700 }}>
                   LITECOIN WALLET
                 </span>
               }
@@ -1372,9 +1370,7 @@ function App() {
           {authenticatedMode === 'ltc' && (
             <Tooltip
               title={
-                <span
-                  style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}
-                >
+                <span style={{ fontSize: '14px', fontWeight: 700 }}>
                   QORTAL WALLET
                 </span>
               }
@@ -1447,7 +1443,6 @@ function App() {
                   onClick={getLtcBalanceFunc}
                   sx={{
                     fontSize: '16px',
-                    color: 'white',
                     cursor: 'pointer',
                   }}
                 />
@@ -1506,7 +1501,6 @@ function App() {
                   onClick={getBalanceFunc}
                   sx={{
                     fontSize: '16px',
-                    color: 'white',
                     cursor: 'pointer',
                   }}
                 />
@@ -1593,7 +1587,6 @@ function App() {
               }}
               sx={{
                 cursor: 'pointer',
-                color: 'white',
               }}
             />
           </Box>
@@ -1625,7 +1618,6 @@ function App() {
                   title={
                     <span
                       style={{
-                        color: 'white',
                         fontSize: '14px',
                         fontWeight: 700,
                       }}
@@ -1675,7 +1667,6 @@ function App() {
                 title={
                   <span
                     style={{
-                      color: 'white',
                       fontSize: '14px',
                       fontWeight: 700,
                     }}
@@ -1713,7 +1704,6 @@ function App() {
                 title={
                   <span
                     style={{
-                      color: 'white',
                       fontSize: '14px',
                       fontWeight: 700,
                     }}
@@ -1751,7 +1741,6 @@ function App() {
                 title={
                   <span
                     style={{
-                      color: 'white',
                       fontSize: '14px',
                       fontWeight: 700,
                     }}
@@ -1788,7 +1777,6 @@ function App() {
                   title={
                     <span
                       style={{
-                        color: 'white',
                         fontSize: '14px',
                         fontWeight: 700,
                       }}
@@ -1896,7 +1884,6 @@ function App() {
                 title={
                   <span
                     style={{
-                      color: 'white',
                       fontSize: '14px',
                       fontWeight: 700,
                     }}
@@ -1940,7 +1927,6 @@ function App() {
                   title={
                     <span
                       style={{
-                        color: 'white',
                         fontSize: '14px',
                         fontWeight: 700,
                       }}
@@ -1973,9 +1959,7 @@ function App() {
             <Spacer height="20px" />
             <Tooltip
               title={
-                <span
-                  style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}
-                >
+                <span style={{ fontSize: '14px', fontWeight: 700 }}>
                   BACKUP WALLET
                 </span>
               }

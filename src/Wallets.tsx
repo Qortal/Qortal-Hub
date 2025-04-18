@@ -486,11 +486,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           edge="end"
           aria-label="edit"
         >
-          <EditIcon
-            sx={{
-              color: 'white',
-            }}
-          />
+          <EditIcon />
         </IconButton>
       </ButtonBase>
       {isEdit && (
