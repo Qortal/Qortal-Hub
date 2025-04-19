@@ -497,6 +497,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                           </ButtonBase>
                         </Tooltip>
                       </TableCell>
+
                       <TableCell>
                         <Tooltip
                           title={

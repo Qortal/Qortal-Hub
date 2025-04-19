@@ -71,11 +71,9 @@ import { PasswordField, ErrorText } from './components';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
 import { TaskManager } from './components/TaskManager/TaskManager.tsx';
 import { useModal } from './common/useModal';
-import { Label } from './components/Group/AddGroup';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HelpIcon from '@mui/icons-material/Help';
-
 import {
   cleanUrl,
   getProtocol,
@@ -119,11 +117,6 @@ import {
 } from './atoms/global';
 import { useAppFullScreen } from './useAppFullscreen';
 import { NotAuthenticated } from './ExtStates/NotAuthenticated';
-import {
-  openIndexedDB,
-  showSaveFilePicker,
-} from './components/Apps/useQortalMessageListener';
-import { fileToBase64 } from './utils/fileReading';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
 import { CoreSyncStatus } from './components/CoreSyncStatus';
 import { Wallets } from './Wallets';
@@ -131,7 +124,6 @@ import { RandomSentenceGenerator } from './utils/seedPhrase/RandomSentenceGenera
 import { useFetchResources } from './common/useFetchResources';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './components/Tutorials/useHandleTutorials';
-import BoundedNumericTextField from './common/BoundedNumericTextField';
 import { useHandleUserInfo } from './components/Group/useHandleUserInfo';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortalRequests';
@@ -139,7 +131,6 @@ import { QMailStatus } from './components/QMailStatus';
 import { GlobalActions } from './components/GlobalActions/GlobalActions';
 import { useBlockedAddresses } from './components/Group/useBlockUsers';
 import { WalletIcon } from './assets/Icons/WalletIcon';
-import { DrawerUserLookup } from './components/Drawer/DrawerUserLookup';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';
 import { BuyQortInformation } from './components/BuyQortInformation';
@@ -1350,13 +1341,13 @@ function App() {
               slotProps={{
                 tooltip: {
                   sx: {
-                    color: '#ffffff',
-                    backgroundColor: '#444444',
+                    color: theme.palette.text.primary,
+                    backgroundColor: theme.palette.background.default,
                   },
                 },
                 arrow: {
                   sx: {
-                    color: '#444444',
+                    color: theme.palette.text.primary,
                   },
                 },
               }}
@@ -1387,13 +1378,13 @@ function App() {
               slotProps={{
                 tooltip: {
                   sx: {
-                    color: '#ffffff',
-                    backgroundColor: '#444444',
+                    color: theme.palette.text.primary,
+                    backgroundColor: theme.palette.background.default,
                   },
                 },
                 arrow: {
                   sx: {
-                    color: '#444444',
+                    color: theme.palette.text.primary,
                   },
                 },
               }}
@@ -1438,10 +1429,10 @@ function App() {
               >
                 <TextP
                   sx={{
-                    textAlign: 'center',
-                    lineHeight: '24px',
                     fontSize: '20px',
                     fontWeight: 700,
+                    lineHeight: '24px',
+                    textAlign: 'center',
                   }}
                 >
                   {ltcBalance} LTC
@@ -1496,10 +1487,10 @@ function App() {
               >
                 <TextP
                   sx={{
-                    textAlign: 'center',
-                    lineHeight: '24px',
                     fontSize: '20px',
                     fontWeight: 700,
+                    lineHeight: '24px',
+                    textAlign: 'center',
                   }}
                 >
                   {balance?.toFixed(2)} QORT
@@ -1518,13 +1509,13 @@ function App() {
             {userInfo && !userInfo?.name && (
               <TextP
                 sx={{
-                  textAlign: 'center',
-                  lineHeight: 1.2,
+                  color: 'red',
+                  cursor: 'pointer',
                   fontSize: '16px',
                   fontWeight: 500,
-                  cursor: 'pointer',
+                  lineHeight: 1.2,
                   marginTop: '10px',
-                  color: 'red',
+                  textAlign: 'center',
                   textDecoration: 'underline',
                 }}
                 onClick={() => {
@@ -1549,12 +1540,12 @@ function App() {
         )}
         <TextP
           sx={{
-            textAlign: 'center',
-            lineHeight: '24px',
+            cursor: 'pointer',
             fontSize: '12px',
             fontWeight: 500,
-            cursor: 'pointer',
+            lineHeight: '24px',
             marginTop: '10px',
+            textAlign: 'center',
             textDecoration: 'underline',
           }}
           onClick={async () => {
@@ -1574,18 +1565,18 @@ function App() {
     return (
       <AuthenticatedContainer
         sx={{
-          width: isMobile ? '100vw' : 'auto',
+          backgroundColor: theme.palette.background.default,
           display: 'flex',
-          backgroundColor: 'var(--bg-2)',
           justifyContent: 'flex-end',
+          width: isMobile ? '100vw' : 'auto',
         }}
       >
         {isMobile && (
           <Box
             sx={{
-              padding: '10px',
               display: 'flex',
               justifyContent: 'flex-end',
+              padding: '10px',
             }}
           >
             <CloseIcon
@@ -1610,10 +1601,10 @@ function App() {
         >
           <Box
             sx={{
-              width: '100%',
+              alignItems: 'center',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              width: '100%',
             }}
           >
             <Spacer height="20px" />
@@ -1638,13 +1629,13 @@ function App() {
                   slotProps={{
                     tooltip: {
                       sx: {
-                        color: '#ffffff',
-                        backgroundColor: '#444444',
+                        color: theme.palette.text.primary,
+                        backgroundColor: theme.palette.background.default,
                       },
                     },
                     arrow: {
                       sx: {
-                        color: '#444444',
+                        color: theme.palette.text.primary,
                       },
                     },
                   }}
@@ -1687,13 +1678,13 @@ function App() {
                 slotProps={{
                   tooltip: {
                     sx: {
-                      color: '#ffffff',
-                      backgroundColor: '#444444',
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
                     },
                   },
                   arrow: {
                     sx: {
-                      color: '#444444',
+                      color: theme.palette.text.primary,
                     },
                   },
                 }}
@@ -1724,13 +1715,13 @@ function App() {
                 slotProps={{
                   tooltip: {
                     sx: {
-                      color: '#ffffff',
-                      backgroundColor: '#444444',
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
                     },
                   },
                   arrow: {
                     sx: {
-                      color: '#444444',
+                      color: theme.palette.text.primary,
                     },
                   },
                 }}
@@ -1761,13 +1752,13 @@ function App() {
                 slotProps={{
                   tooltip: {
                     sx: {
-                      color: '#ffffff',
-                      backgroundColor: '#444444', // TODO: use theme and adapt colors
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
                     },
                   },
                   arrow: {
                     sx: {
-                      color: '#444444',
+                      color: theme.palette.text.primary,
                     },
                   },
                 }}
@@ -1797,13 +1788,13 @@ function App() {
                   slotProps={{
                     tooltip: {
                       sx: {
-                        color: '#ffffff',
-                        backgroundColor: '#444444',
+                        color: theme.palette.text.primary,
+                        backgroundColor: theme.palette.background.default,
                       },
                     },
                     arrow: {
                       sx: {
-                        color: '#444444',
+                        color: theme.palette.text.primary,
                       },
                     },
                   }}
@@ -1904,13 +1895,13 @@ function App() {
                 slotProps={{
                   tooltip: {
                     sx: {
-                      color: '#ffffff',
-                      backgroundColor: '#444444',
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
                     },
                   },
                   arrow: {
                     sx: {
-                      color: '#444444',
+                      color: theme.palette.text.primary,
                     },
                   },
                 }}
@@ -1947,13 +1938,13 @@ function App() {
                   slotProps={{
                     tooltip: {
                       sx: {
-                        color: '#ffffff',
-                        backgroundColor: '#444444',
+                        color: theme.palette.text.primary,
+                        backgroundColor: theme.palette.background.default,
                       },
                     },
                     arrow: {
                       sx: {
-                        color: '#444444',
+                        color: theme.palette.text.primary,
                       },
                     },
                   }}
@@ -1976,13 +1967,13 @@ function App() {
               slotProps={{
                 tooltip: {
                   sx: {
-                    color: '#ffffff',
-                    backgroundColor: '#444444',
+                    color: theme.palette.text.primary,
+                    backgroundColor: theme.palette.background.default,
                   },
                 },
                 arrow: {
                   sx: {
-                    color: '#444444',
+                    color: theme.palette.text.primary,
                   },
                 },
               }}
@@ -2104,7 +2095,7 @@ function App() {
               width: '100%',
               height: '100%',
               position: 'fixed',
-              background: '#27282c',
+              background: theme.palette.background.default,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -2573,6 +2564,7 @@ function App() {
               <img src={Logo1Dark} className="base-image" />
             </div>
             <Spacer height="38px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2583,7 +2575,9 @@ function App() {
               <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
               <TextSpan>requests authentication</TextSpan>
             </TextP>
+
             <Spacer height="38px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2591,12 +2585,16 @@ function App() {
                 gap: '14px',
               }}
             ></Box>
+
             <Spacer height="38px" />
+
             <CustomButton {...getRootProps()}>
               <input {...getInputProps()} />
               Authenticate
             </CustomButton>
+
             <Spacer height="6px" />
+
             <CustomButton
               onClick={() => {
                 setExtstate('create-wallet');
@@ -2609,14 +2607,15 @@ function App() {
         {extState === 'wallets' && (
           <>
             <Spacer height="22px" />
+
             <Box
               sx={{
-                display: 'flex',
-                width: '100%',
-                justifyContent: 'flex-start',
-                paddingLeft: '22px',
                 boxSizing: 'border-box',
+                display: 'flex',
+                justifyContent: 'flex-start',
                 maxWidth: '700px',
+                paddingLeft: '22px',
+                width: '100%',
               }}
             >
               <Return
@@ -2631,6 +2630,7 @@ function App() {
                 }}
               />
             </Box>
+
             <Wallets
               setRawWallet={setRawWallet}
               setExtState={setExtstate}
@@ -2643,12 +2643,12 @@ function App() {
             <Spacer height="22px" />
             <Box
               sx={{
-                display: 'flex',
-                width: '100%',
-                justifyContent: 'flex-start',
-                paddingLeft: '22px',
                 boxSizing: 'border-box',
+                display: 'flex',
+                justifyContent: 'flex-start',
                 maxWidth: '700px',
+                paddingLeft: '22px',
+                width: '100%',
               }}
             >
               <Return
@@ -2684,7 +2684,9 @@ function App() {
               <Typography>
                 {rawWallet?.name ? rawWallet?.name : rawWallet?.address0}
               </Typography>
+
               <Spacer height="10px" />
+
               <TextP
                 sx={{
                   textAlign: 'start',
@@ -2696,13 +2698,16 @@ function App() {
                 Authenticate
               </TextP>
             </Box>
+
             <Spacer height="35px" />
 
             <>
               <CustomLabel htmlFor="standard-adornment-password">
                 Wallet Password
               </CustomLabel>
+
               <Spacer height="5px" />
+
               <PasswordField
                 id="standard-adornment-password"
                 value={authenticatePassword}
@@ -2739,9 +2744,11 @@ function App() {
               )}
 
               <Spacer height="20px" />
+
               <CustomButton onClick={authenticateWallet}>
                 Authenticate
               </CustomButton>
+
               <ErrorText>{walletToBeDecryptedError}</ErrorText>
             </>
           </>
@@ -2751,12 +2758,12 @@ function App() {
             <Spacer height="22px" />
             <Box
               sx={{
-                display: 'flex',
-                width: '100%',
-                justifyContent: 'flex-start',
-                paddingLeft: '22px',
                 boxSizing: 'border-box',
+                display: 'flex',
+                justifyContent: 'flex-start',
                 maxWidth: '700px',
+                paddingLeft: '22px',
+                width: '100%',
               }}
             >
               <Return
@@ -2777,7 +2784,9 @@ function App() {
             >
               <img src={Logo1Dark} className="base-image" />
             </div>
+
             <Spacer height="35px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2796,7 +2805,9 @@ function App() {
                 Download Account
               </TextP>
             </Box>
+
             <Spacer height="35px" />
+
             {!walletToBeDownloaded && (
               <>
                 <CustomLabel htmlFor="standard-adornment-password">
@@ -2841,12 +2852,12 @@ function App() {
                 <Spacer height="22px" />
                 <Box
                   sx={{
-                    display: 'flex',
-                    width: '100%',
-                    justifyContent: 'flex-start',
-                    paddingLeft: '22px',
                     boxSizing: 'border-box',
+                    display: 'flex',
+                    justifyContent: 'flex-start',
                     maxWidth: '700px',
+                    paddingLeft: '22px',
+                    width: '100%',
                   }}
                 >
                   <Return
@@ -2947,7 +2958,6 @@ function App() {
                       sx={{
                         fontSize: '18px',
                         marginTop: '15px',
-
                         textAlign: 'center',
                       }}
                     >
@@ -2988,11 +2998,11 @@ function App() {
                     <DialogContent>
                       <Box
                         sx={{
-                          flexDirection: 'column',
-                          maxWidth: '400px',
                           alignItems: 'center',
-                          gap: '10px',
                           display: showSeed ? 'flex' : 'none',
+                          flexDirection: 'column',
+                          gap: '10px',
+                          maxWidth: '400px',
                         }}
                       >
                         <Typography
@@ -3005,11 +3015,11 @@ function App() {
 
                         <Box
                           sx={{
-                            textAlign: 'center',
-                            width: '100%',
-                            backgroundColor: '#1f2023',
+                            background: theme.palette.background.paper,
                             borderRadius: '5px',
                             padding: '10px',
+                            textAlign: 'center',
+                            width: '100%',
                           }}
                         >
                           {generatorRef.current?.parsedString}
@@ -3036,6 +3046,7 @@ function App() {
                     </DialogActions>
                   </Dialog>
                 </Box>
+
                 <Box
                   sx={{
                     display: creationStep === 2 ? 'flex' : 'none',
@@ -3044,10 +3055,13 @@ function App() {
                   }}
                 >
                   <Spacer height="14px" />
+
                   <CustomLabel htmlFor="standard-adornment-password">
                     Wallet Password
                   </CustomLabel>
+
                   <Spacer height="5px" />
+
                   <PasswordField
                     id="standard-adornment-password"
                     value={walletToBeDownloadedPassword}
@@ -3055,11 +3069,15 @@ function App() {
                       setWalletToBeDownloadedPassword(e.target.value)
                     }
                   />
+
                   <Spacer height="6px" />
+
                   <CustomLabel htmlFor="standard-adornment-password">
                     Confirm Wallet Password
                   </CustomLabel>
+
                   <Spacer height="5px" />
+
                   <PasswordField
                     id="standard-adornment-password"
                     value={walletToBeDownloadedPasswordConfirm}
@@ -3068,9 +3086,11 @@ function App() {
                     }
                   />
                   <Spacer height="5px" />
+
                   <Typography variant="body2">
                     There is no minimum length requirement
                   </Typography>
+
                   <Spacer height="17px" />
 
                   <CustomButton onClick={createAccountFunc}>
@@ -3127,13 +3147,13 @@ function App() {
         {isOpenSendQortSuccess && (
           <Box
             sx={{
-              width: '100%',
-              height: '100%',
-              position: 'fixed',
-              background: '#27282c',
+              alignItems: 'center',
+              background: theme.palette.background.default,
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              height: '100%',
+              position: 'fixed',
+              width: '100%',
               zIndex: 10000,
             }}
           >
@@ -3260,7 +3280,7 @@ function App() {
               <Button
                 sx={{
                   backgroundColor: 'var(--green)',
-                  color: 'black',
+                  color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
