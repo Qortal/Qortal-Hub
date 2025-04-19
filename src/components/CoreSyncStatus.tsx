@@ -73,6 +73,7 @@ export const CoreSyncStatus = () => {
 
     let imagePath = syncingImg;
     let message = `Synchronizing`;
+
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
       message = `${isSynchronizing ? 'Synchronizing' : 'Synchronized'} ${'(Minting)'}`;
@@ -101,7 +102,7 @@ export const CoreSyncStatus = () => {
         <span>
           <img
             src={imagePath}
-            style={{ height: 'auto', width: '24px' }}
+            style={{ height: 'auto', width: '35px' }}
             alt="sync status"
           />
         </span>

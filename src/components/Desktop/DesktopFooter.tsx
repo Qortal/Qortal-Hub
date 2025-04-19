@@ -22,27 +22,27 @@ export const IconWrapper = ({
   return (
     <Box
       sx={{
-        display: 'flex',
-        justifyContent: 'center',
         alignItems: 'center',
-        gap: '5px',
-        flexDirection: 'column',
-        height: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
-        width: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
-        borderRadius: '50%',
         backgroundColor: selected
           ? theme.palette.background.default
           : 'transparent',
+        borderRadius: '50%',
         color: color ? color : theme.palette.text.primary,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '5px',
+        height: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
+        justifyContent: 'center',
+        width: customWidth ? customWidth : disableWidth ? 'auto' : '89px',
       }}
     >
       {children}
       <Typography
         sx={{
+          color: theme.palette.text.primary,
           fontFamily: 'Inter',
           fontSize: '12px',
           fontWeight: 500,
-          color: theme.palette.text.primary,
         }}
       >
         {label}
@@ -68,18 +68,20 @@ export const DesktopFooter = ({
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
 
+  const theme = useTheme();
+
   if (hide) return;
   return (
     <Box
       sx={{
-        width: '100%',
-        position: 'absolute',
+        alignItems: 'center',
         bottom: 0,
         display: 'flex',
-        alignItems: 'center',
         height: '100px', // Footer height
-        zIndex: 1,
         justifyContent: 'center',
+        position: 'absolute',
+        width: '100%',
+        zIndex: 1,
       }}
     >
       <Box
@@ -122,8 +124,8 @@ export const DesktopFooter = ({
                 hasUnreadGroups
                   ? 'var(--danger)'
                   : isGroups
-                    ? 'white'
-                    : 'rgba(250, 250, 250, 0.5)'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -141,8 +143,8 @@ export const DesktopFooter = ({
                 hasUnreadDirects
                   ? 'var(--danger)'
                   : isDirects
-                    ? 'white'
-                    : 'rgba(250, 250, 250, 0.5)'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>

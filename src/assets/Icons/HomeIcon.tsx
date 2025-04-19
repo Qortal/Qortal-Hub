@@ -1,4 +1,4 @@
-import { useTheme } from "@mui/material";
+import { useTheme } from '@mui/material';
 
 export const HomeIcon = ({ height = 20, width = 23 }) => {
   const theme = useTheme();

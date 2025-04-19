@@ -1817,10 +1817,6 @@ function App() {
 
             <Spacer height="20px" />
 
-            <CoreSyncStatus />
-
-            <Spacer height="20px" />
-
             <QMailStatus />
 
             <Spacer height="20px" />
