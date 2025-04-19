@@ -106,11 +106,13 @@ export const CoreSyncStatus = () => {
             alt="sync status"
           />
         </span>
+
         <div
           className="bottom"
           style={{
             right: 'unset',
-            left: '0px',
+            left: '55px',
+            top: '10px',
           }}
         >
           <h3>Core Information</h3>
@@ -135,7 +137,6 @@ export const CoreSyncStatus = () => {
               {isUsingGateway?.toString()}
             </span>
           </h4>
-          <i></i>
         </div>
       </div>
     );
