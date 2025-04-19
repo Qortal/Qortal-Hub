@@ -1654,6 +1654,7 @@ function App() {
                 </Tooltip>
               </>
             )}
+
             <Spacer height="20px" />
 
             <ButtonBase
@@ -1692,7 +1693,9 @@ function App() {
                 <SettingsIcon />
               </Tooltip>
             </ButtonBase>
+
             <Spacer height="20px" />
+
             <ButtonBase
               onClick={() => {
                 setIsOpenDrawerLookup(true);
@@ -1729,7 +1732,9 @@ function App() {
                 <PersonSearchIcon />
               </Tooltip>
             </ButtonBase>
+
             <Spacer height="20px" />
+
             <ButtonBase
               onClick={() => {
                 executeEvent('openWalletsApp', {});
@@ -1811,20 +1816,25 @@ function App() {
             )}
 
             <Spacer height="20px" />
+
             <CoreSyncStatus />
+
             <Spacer height="20px" />
+
             <QMailStatus />
+
             <Spacer height="20px" />
             {extState === 'authenticated' && (
               <GeneralNotifications address={userInfo?.address} />
             )}
           </Box>
+
           <Box
             sx={{
-              width: '100%',
+              alignItems: 'center',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              width: '100%',
             }}
           >
             {extState === 'authenticated' && isMainWindow && (
@@ -1859,7 +1869,9 @@ function App() {
                 <GlobalActions memberGroups={memberGroups} />
               </MyContext.Provider>
             )}
+
             <Spacer height="20px" />
+
             <ButtonBase
               onClick={async () => {
                 try {
@@ -1911,6 +1923,7 @@ function App() {
             </ButtonBase>
 
             <Spacer height="20px" />
+
             {(desktopViewMode === 'apps' || desktopViewMode === 'home') && (
               <ButtonBase
                 onClick={() => {
