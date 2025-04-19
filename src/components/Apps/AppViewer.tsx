@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useMemo,  useState } from "react";
 
-import { Avatar, Box,  } from "@mui/material";
-import { Add } from "@mui/icons-material";
+import {  Box,  } from "@mui/material";
 import { MyContext, getBaseApiReact, isMobile } from "../../App";
 
-import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
+import {  subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
 import { useFrame } from "react-frame-component";
 import { useQortalMessageListener } from "./useQortalMessageListener";
+import { useThemeContext } from "../Theme/ThemeContext";
 
 
 
@@ -14,10 +14,10 @@ import { useQortalMessageListener } from "./useQortalMessageListener";
 export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, iframeRef) => {
   const { rootHeight } = useContext(MyContext);
   // const iframeRef = useRef(null);
-  const { document, window: frameWindow } = useFrame();
+  const {  window: frameWindow } = useFrame();
   const {path, history, changeCurrentIndex, resetHistory} = useQortalMessageListener(frameWindow, iframeRef, app?.tabId, isDevMode, app?.name, app?.service, skipAuth) 
   const [url, setUrl] = useState('')
-
+ const { themeMode } = useThemeContext();
 
   useEffect(()=> {
     if(app?.isPreview) return
@@ -30,7 +30,7 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
       hasQueryParam = true
     }
 
-    setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? "&": "?" }theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
+    setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? "&": "?" }theme=${themeMode}&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}`)
   }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview])
 
   useEffect(()=> {
@@ -55,7 +55,7 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
         return
 
       }
-      const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=dark&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`
+      const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`
       setUrl(constructUrl)
     }
   };
@@ -67,6 +67,15 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
       unsubscribeFromEvent("refreshApp", refreshAppFunc);
     };
   }, [app, path, isDevMode]);
+
+  useEffect(()=> {
+    if(!iframeRef?.current) return
+    const targetOrigin = iframeRef.current ? new URL(iframeRef.current.src).origin : "*"; 
+    // Send the navigation command after setting up the listener and timeout
+    iframeRef.current.contentWindow.postMessage(
+      { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' }, targetOrigin
+    );
+  }, [themeMode])
 
   const removeTrailingSlash = (str) => str.replace(/\/$/, '');
   const copyLinkFunc = (e) => {
@@ -139,10 +148,10 @@ export const AppViewer = React.forwardRef(({ app , hide, isDevMode, skipAuth}, i
       await navigationPromise;
     } catch (error) {
      if(isDevMode){
-        setUrl(`${url}${previousPath != null ? previousPath : ''}?theme=dark&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
+        setUrl(`${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
       return
      }
-      setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=dark&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
+      setUrl(`${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&identifier=${(app?.identifier != null && app?.identifier != 'null') ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`)
       // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
     }
   } else {
