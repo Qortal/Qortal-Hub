@@ -565,7 +565,7 @@ export const MessageItem = React.memo(
   }
 );
 
-export const ReplyPreview = ({ message, isEdit }) => {
+export const ReplyPreview = ({ message, isEdit = false }) => {
   const theme = useTheme();
 
   return (
