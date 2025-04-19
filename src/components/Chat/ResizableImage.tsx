@@ -1,8 +1,10 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
+import { useTheme } from '@mui/material';
 
 const ResizableImage = ({ node, updateAttributes, selected }) => {
   const imgRef = useRef(null);
+  const theme = useTheme();
 
   const startResizing = (e) => {
     e.preventDefault();
@@ -40,18 +42,23 @@ const ResizableImage = ({ node, updateAttributes, selected }) => {
         src={node.attrs.src}
         alt={node.attrs.alt || ''}
         title={node.attrs.title || ''}
-        style={{ width: node.attrs.width || 'auto', display: 'block', margin: '0 auto' }}
+        style={{
+          width: node.attrs.width || 'auto',
+          display: 'block',
+          margin: '0 auto',
+        }}
         draggable={false} // Prevent image dragging
       />
+
       <div
         style={{
+          backgroundColor: theme.palette.background.paper,
+          bottom: 0,
+          cursor: 'nwse-resize',
+          height: '10px',
           position: 'absolute',
           right: 0,
-          bottom: 0,
           width: '10px',
-          height: '10px',
-          backgroundColor: 'gray',
-          cursor: 'nwse-resize',
           zIndex: 1, // Ensure the resize handle is above other content
         }}
         onMouseDown={startResizing}

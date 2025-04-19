@@ -7,15 +7,10 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CreateCommonSecret } from './CreateCommonSecret';
-import { reusableGet } from '../../qdn/publish/pubish';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import {
-  base64ToUint8Array,
   decodeBase64ForUIChatMessages,
   objectToBase64,
 } from '../../qdn/encryption/group-encryption';
-import { ChatContainerComp } from './ChatContainer';
 import { ChatList } from './ChatList';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import Tiptap from './TipTap';
@@ -38,7 +33,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { Box, ButtonBase, Divider, Typography } from '@mui/material';
+import { Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
@@ -1001,16 +996,18 @@ export const ChatGroup = ({
     setIsOpenQManager(true);
   }, []);
 
+  const theme = useTheme();
+
   return (
     <div
       style={{
-        height: isMobile ? '100%' : '100%',
         display: 'flex',
         flexDirection: 'column',
-        width: '100%',
+        height: '100%',
+        left: hide && '-100000px',
         opacity: hide ? 0 : 1,
         position: hide ? 'absolute' : 'relative',
-        left: hide && '-100000px',
+        width: '100%',
       }}
     >
       <ChatList
@@ -1035,40 +1032,38 @@ export const ChatGroup = ({
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
-            // position: 'fixed',
-            // bottom: '0px',
-            backgroundColor: '#232428',
-            minHeight: isMobile ? '0px' : '150px',
+            backgroundColor: theme.palette.background.default,
+            bottom: isFocusedParent ? '0px' : 'unset',
+            boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'row',
-            overflow: 'hidden',
-            width: '100%',
-            boxSizing: 'border-box',
-            padding: isMobile ? '10px' : '20px',
-            position: isFocusedParent ? 'fixed' : 'relative',
-            bottom: isFocusedParent ? '0px' : 'unset',
-            top: isFocusedParent ? '0px' : 'unset',
-            zIndex: isFocusedParent ? 5 : 'unset',
             flexShrink: 0,
+            minHeight: '150px',
+            overflow: 'hidden',
+            padding: '20px',
+            position: isFocusedParent ? 'fixed' : 'relative',
+            top: isFocusedParent ? '0px' : 'unset',
+            width: '100%',
+            zIndex: isFocusedParent ? 5 : 'unset',
           }}
         >
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
-              flexGrow: isMobile && 1,
-              overflow: !isMobile && 'auto',
+              flexGrow: 1,
               flexShrink: 0,
-              width: 'calc(100% - 100px)',
               justifyContent: 'flex-end',
+              overflow: 'auto',
+              width: 'calc(100% - 100px)',
             }}
           >
             {replyMessage && (
               <Box
                 sx={{
+                  alignItems: 'flex-start',
                   display: 'flex',
                   gap: '5px',
-                  alignItems: 'flex-start',
                   width: '100%',
                 }}
               >
@@ -1088,9 +1083,9 @@ export const ChatGroup = ({
             {onEditMessage && (
               <Box
                 sx={{
+                  alignItems: 'flex-start',
                   display: 'flex',
                   gap: '5px',
-                  alignItems: 'flex-start',
                   width: '100%',
                 }}
               >
@@ -1123,9 +1118,9 @@ export const ChatGroup = ({
               <Box
                 sx={{
                   display: 'flex',
-                  width: '100%',
                   justifyContent: 'flex-start',
                   position: 'relative',
+                  width: '100%',
                 }}
               >
                 <Typography
@@ -1141,11 +1136,11 @@ export const ChatGroup = ({
           <Box
             sx={{
               display: 'flex',
-              width: '100px',
+              flexShrink: 0,
               gap: '10px',
               justifyContent: 'center',
-              flexShrink: 0,
               position: 'relative',
+              width: '100px',
             }}
           >
             <CustomButton
@@ -1154,26 +1149,28 @@ export const ChatGroup = ({
                 sendMessage();
               }}
               style={{
-                marginTop: 'auto',
                 alignSelf: 'center',
+                background: isSending
+                  ? theme.palette.background.default
+                  : theme.palette.background.paper,
                 cursor: isSending ? 'default' : 'pointer',
-                background: isSending && 'rgba(0, 0, 0, 0.8)',
                 flexShrink: 0,
+                marginTop: 'auto',
+                minWidth: 'auto',
                 padding: '5px',
                 width: '100px',
-                minWidth: 'auto',
               }}
             >
               {isSending && (
                 <CircularProgress
                   size={18}
                   sx={{
+                    color: theme.palette.text.primary,
+                    left: '50%',
+                    marginLeft: '-12px',
+                    marginTop: '-12px',
                     position: 'absolute',
                     top: '50%',
-                    left: '50%',
-                    marginTop: '-12px',
-                    marginLeft: '-12px',
-                    color: 'white',
                   }}
                 />
               )}
@@ -1185,25 +1182,24 @@ export const ChatGroup = ({
       {isOpenQManager !== null && (
         <Box
           sx={{
-            position: 'fixed',
-            height: '600px',
-
-            maxHeight: '100vh',
-            width: '400px',
-            maxWidth: '100vw',
-            backgroundColor: '#27282c',
-            zIndex: 100,
-            bottom: 0,
-            right: 0,
-            overflow: 'hidden',
+            backgroundColor: theme.palette.background.default,
             borderTopLeftRadius: '10px',
             borderTopRightRadius: '10px',
+            bottom: 0,
+            boxShadow: 4,
             display: hideView
               ? 'none'
               : isOpenQManager === true
                 ? 'block'
                 : 'none',
-            boxShadow: 4,
+            height: '600px',
+            maxHeight: '100vh',
+            maxWidth: '100vw',
+            overflow: 'hidden',
+            position: 'fixed',
+            right: 0,
+            width: '400px',
+            zIndex: 100,
           }}
         >
           <Box
@@ -1214,12 +1210,11 @@ export const ChatGroup = ({
           >
             <Box
               sx={{
-                height: '40px',
-                display: 'flex',
                 alignItems: 'center',
-                padding: '5px',
-
+                display: 'flex',
+                height: '40px',
                 justifyContent: 'space-between',
+                padding: '5px',
               }}
             >
               <Typography>Q-Manager</Typography>
@@ -1251,12 +1246,14 @@ export const ChatGroup = ({
       )}
 
       {/* <ChatContainerComp messages={formatMessages} /> */}
+
       <LoadingSnackbar
         open={isLoading}
         info={{
           message: 'Loading chat... please wait.',
         }}
       />
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}

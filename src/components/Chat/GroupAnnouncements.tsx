@@ -5,31 +5,22 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { CreateCommonSecret } from './CreateCommonSecret';
-import { reusableGet } from '../../qdn/publish/pubish';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import {
   base64ToUint8Array,
   objectToBase64,
 } from '../../qdn/encryption/group-encryption';
-import { ChatContainerComp } from './ChatContainer';
-import { ChatList } from './ChatList';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import Tiptap from './TipTap';
-import {
-  AuthenticatedContainerInnerTop,
-  CustomButton,
-} from '../../styles/App-styles';
+import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { getBaseApi, getFee } from '../../background';
+import { getFee } from '../../background';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import ShortUniqueId from 'short-unique-id';
 import { AnnouncementList } from './AnnouncementList';
-const uid = new ShortUniqueId({ length: 8 });
 import CampaignIcon from '@mui/icons-material/Campaign';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { AnnouncementDiscussion } from './AnnouncementDiscussion';
 import {
   MyContext,
@@ -42,9 +33,11 @@ import {
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
-import { getRootHeight } from '../../utils/mobile/mobileUtils';
+
+const uid = new ShortUniqueId({ length: 8 });
 
 export const requestQueueCommentCount = new RequestQueueWithPromise(3);
+
 export const requestQueuePublishedAccouncements = new RequestQueueWithPromise(
   3
 );
@@ -125,6 +118,7 @@ export const handleUnencryptedPublishes = (publishes) => {
   });
   return publishesData;
 };
+
 export const GroupAnnouncements = ({
   selectedGroup,
   secretKey,
@@ -264,6 +258,7 @@ export const GroupAnnouncements = ({
         });
     });
   };
+
   const clearEditorContent = () => {
     if (editorRef.current) {
       editorRef.current.chain().focus().clearContent().run();
@@ -301,10 +296,12 @@ export const GroupAnnouncements = ({
     try {
       pauseAllQueues();
       const fee = await getFee('ARBITRARY');
+
       await show({
         message: 'Would you like to perform a ARBITRARY transaction?',
         publishFee: fee.fee + ' QORT',
       });
+
       if (isSending) return;
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
@@ -387,8 +384,7 @@ export const GroupAnnouncements = ({
           );
         }
       } catch (error) {
-      } finally {
-        // dispatch(setIsLoadingGlobal(false))
+        console.log(error);
       }
     },
     [secretKey]
@@ -436,6 +432,8 @@ export const GroupAnnouncements = ({
   };
 
   const interval = useRef<any>(null);
+
+  const theme = useTheme();
 
   const checkNewMessages = React.useCallback(async () => {
     try {
@@ -485,7 +483,7 @@ export const GroupAnnouncements = ({
       }
       setAnnouncements((prev) => [...newArray, ...prev]);
     } catch (error) {
-    } finally {
+      console.log(error);
     }
   }, [announcements, secretKey, selectedGroup]);
 
@@ -537,10 +535,10 @@ export const GroupAnnouncements = ({
             : 'calc(100vh - 70px)',
           display: 'flex',
           flexDirection: 'column',
-          width: '100%',
-          visibility: hide && 'hidden',
-          position: hide && 'fixed',
           left: hide && '-1000px',
+          position: hide && 'fixed',
+          visibility: hide && 'hidden',
+          width: '100%',
         }}
       >
         <AnnouncementDiscussion
@@ -560,54 +558,54 @@ export const GroupAnnouncements = ({
   return (
     <div
       style={{
-        // reference to change height
-        height: isMobile ? `calc(${rootHeight} - 127px` : 'calc(100vh - 70px)',
         display: 'flex',
         flexDirection: 'column',
-        width: '100%',
-        visibility: hide && 'hidden',
-        position: hide && 'fixed',
+        height: 'calc(100vh - 70px)',
         left: hide && '-1000px',
+        position: hide && 'fixed',
+        visibility: hide && 'hidden',
+        width: '100%',
       }}
     >
       <div
         style={{
-          position: 'relative',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
+          position: 'relative',
+          width: '100%',
         }}
       >
         {!isMobile && (
           <Box
             sx={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'center',
-              padding: isMobile ? '8px' : '25px',
-              fontSize: isMobile ? '16px' : '20px',
-              gap: '20px',
               alignItems: 'center',
+              display: 'flex',
+              fontSize: '20px',
+              gap: '20px',
+              justifyContent: 'center',
+              padding: '25px',
+              width: '100%',
             }}
           >
             <CampaignIcon
               sx={{
-                fontSize: isMobile ? '16px' : '30px',
+                fontSize: '30px',
               }}
             />
             Group Announcements
           </Box>
         )}
 
-        <Spacer height={isMobile ? '0px' : '25px'} />
+        <Spacer height={'25px'} />
       </div>
+
       {!isLoading && combinedListTempAndReal?.length === 0 && (
         <Box
           sx={{
-            width: '100%',
             display: 'flex',
             justifyContent: 'center',
+            width: '100%',
           }}
         >
           <Typography
@@ -634,31 +632,28 @@ export const GroupAnnouncements = ({
       {isAdmin && (
         <div
           style={{
-            // position: 'fixed',
-            // bottom: '0px',
-            backgroundColor: '#232428',
-            minHeight: isMobile ? '0px' : '150px',
-            maxHeight: isMobile ? 'auto' : '400px',
+            backgroundColor: theme.palette.background.default,
+            bottom: isFocusedParent ? '0px' : 'unset',
+            boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden',
-            width: '100%',
-            boxSizing: 'border-box',
-            padding: isMobile ? '10px' : '20px',
-            position: isFocusedParent ? 'fixed' : 'relative',
-            bottom: isFocusedParent ? '0px' : 'unset',
-            top: isFocusedParent ? '0px' : 'unset',
-            zIndex: isFocusedParent ? 5 : 'unset',
             flexShrink: 0,
+            maxHeight: '400px',
+            minHeight: '150px',
+            overflow: 'hidden',
+            padding: '20px',
+            position: isFocusedParent ? 'fixed' : 'relative',
+            top: isFocusedParent ? '0px' : 'unset',
+            width: '100%',
+            zIndex: isFocusedParent ? 5 : 'unset',
           }}
         >
           <div
             style={{
               display: 'flex',
               flexDirection: 'column',
-              flexGrow: isMobile && 1,
+              flexGrow: 1,
               overflow: 'auto',
-              // height: '100%',
             }}
           >
             <Tiptap
@@ -670,14 +665,15 @@ export const GroupAnnouncements = ({
               setIsFocusedParent={setIsFocusedParent}
             />
           </div>
+
           <Box
             sx={{
               display: 'flex',
-              width: '100&',
+              flexShrink: 0,
               gap: '10px',
               justifyContent: 'center',
-              flexShrink: 0,
               position: 'relative',
+              width: '100&',
             }}
           >
             {isFocusedParent && (
@@ -692,43 +688,46 @@ export const GroupAnnouncements = ({
                   // Unfocus the editor
                 }}
                 style={{
-                  marginTop: 'auto',
                   alignSelf: 'center',
-                  cursor: isSending ? 'default' : 'pointer',
                   background: 'var(--danger)',
+                  cursor: isSending ? 'default' : 'pointer',
                   flexShrink: 0,
-                  padding: isMobile && '5px',
-                  fontSize: isMobile && '14px',
+                  fontSize: '14px',
+                  marginTop: 'auto',
+                  padding: '5px',
                 }}
               >
                 {` Close`}
               </CustomButton>
             )}
+
             <CustomButton
               onClick={() => {
                 if (isSending) return;
                 publishAnnouncement();
               }}
               style={{
-                marginTop: 'auto',
                 alignSelf: 'center',
+                background: isSending
+                  ? theme.palette.background.default
+                  : theme.palette.background.paper,
                 cursor: isSending ? 'default' : 'pointer',
-                background: isSending && 'rgba(0, 0, 0, 0.8)',
                 flexShrink: 0,
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
+                fontSize: '14px',
+                marginTop: 'auto',
+                padding: '5px',
               }}
             >
               {isSending && (
                 <CircularProgress
                   size={18}
                   sx={{
+                    color: theme.palette.text.primary,
+                    left: '50%',
+                    marginLeft: '-12px',
+                    marginTop: '-12px',
                     position: 'absolute',
                     top: '50%',
-                    left: '50%',
-                    marginTop: '-12px',
-                    marginLeft: '-12px',
-                    color: 'white',
                   }}
                 />
               )}
