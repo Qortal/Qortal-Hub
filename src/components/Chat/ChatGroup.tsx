@@ -128,7 +128,9 @@ export const ChatGroup = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   useEffect(() => {
@@ -192,7 +194,9 @@ export const ChatGroup = ({
           handleSecretKeyCreationInProgress();
           return;
         }
-      } catch (error) {}
+      } catch (error) {
+        console.log(error);
+      }
     });
   };
 
@@ -578,7 +582,9 @@ export const ChatGroup = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const forceCloseWebSocket = () => {
@@ -621,7 +627,9 @@ export const ChatGroup = ({
           middletierFunc(JSON.parse(e.data), selectedGroup);
           setIsLoading(false);
         }
-      } catch (error) {}
+      } catch (error) {
+        console.log(error);
+      }
     };
     socketRef.current.onclose = () => {
       clearTimeout(groupSocketTimeoutRef.current);
@@ -700,7 +708,9 @@ export const ChatGroup = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const sendChatGroup = async ({

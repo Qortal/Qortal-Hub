@@ -74,7 +74,9 @@ export const Minting = ({
       }
       const data = await response.json();
       setMintingAccounts(data);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const accountIsMinting = useMemo(() => {
@@ -199,7 +201,9 @@ export const Minting = ({
       const data = await response.json();
       setRewardShares(data);
       return data;
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const addMintingAccount = useCallback(async (val) => {

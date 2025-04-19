@@ -106,7 +106,9 @@ export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
           rej(error.message || 'An error occurred');
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 export const handleUnencryptedPublishes = (publishes) => {
   let publishesData = [];
@@ -117,7 +119,9 @@ export const handleUnencryptedPublishes = (publishes) => {
       if (decodedData) {
         publishesData.push({ decryptedData: decodedData });
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   });
   return publishesData;
 };
@@ -236,7 +240,9 @@ export const GroupAnnouncements = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnc = async ({ encryptedData, identifier }: any) => {
@@ -286,7 +292,9 @@ export const GroupAnnouncements = ({
           });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnnouncement = async () => {
@@ -422,7 +430,9 @@ export const GroupAnnouncements = ({
           isPrivate
         );
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const interval = useRef<any>(null);
@@ -449,7 +459,9 @@ export const GroupAnnouncements = ({
               },
               isPrivate
             );
-          } catch (error) {}
+          } catch (error) {
+            console.log(error);
+          }
         }
         setAnnouncements(responseData);
         return;
@@ -467,7 +479,9 @@ export const GroupAnnouncements = ({
             { name: data.name, identifier: data.identifier },
             isPrivate
           );
-        } catch (error) {}
+        } catch (error) {
+          console.log(error);
+        }
       }
       setAnnouncements((prev) => [...newArray, ...prev]);
     } catch (error) {

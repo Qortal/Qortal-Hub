@@ -1,11 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Box, Button, CircularProgress, Input, Typography } from "@mui/material";
-import ShortUniqueId from "short-unique-id";
-import CloseIcon from "@mui/icons-material/Close";
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Input,
+  Typography,
+} from '@mui/material';
+import ShortUniqueId from 'short-unique-id';
+import CloseIcon from '@mui/icons-material/Close';
 
-import ModalCloseSVG from "../../../assets/svgs/ModalClose.svg";
+import ModalCloseSVG from '../../../assets/svgs/ModalClose.svg';
 
-import ComposeIconSVG from "../../../assets/svgs/ComposeIcon.svg";
+import ComposeIconSVG from '../../../assets/svgs/ComposeIcon.svg';
 
 import {
   AttachmentContainer,
@@ -22,20 +28,25 @@ import {
   NewMessageInputRow,
   NewMessageSendButton,
   NewMessageSendP,
-} from "./Mail-styles";
+} from './Mail-styles';
 
-import { ReusableModal } from "./ReusableModal";
-import { Spacer } from "../../../common/Spacer";
-import { formatBytes } from "../../../utils/Size";
-import { CreateThreadIcon } from "../../../assets/svgs/CreateThreadIcon";
-import { SendNewMessage } from "../../../assets/svgs/SendNewMessage";
-import { TextEditor } from "./TextEditor";
-import { MyContext, isMobile, pauseAllQueues, resumeAllQueues } from "../../../App";
-import { getFee } from "../../../background";
-import TipTap from "../../Chat/TipTap";
-import { MessageDisplay } from "../../Chat/MessageDisplay";
-import { CustomizedSnackbars } from "../../Snackbar/Snackbar";
-import { saveTempPublish } from "../../Chat/GroupAnnouncements";
+import { ReusableModal } from './ReusableModal';
+import { Spacer } from '../../../common/Spacer';
+import { formatBytes } from '../../../utils/Size';
+import { CreateThreadIcon } from '../../../assets/svgs/CreateThreadIcon';
+import { SendNewMessage } from '../../../assets/svgs/SendNewMessage';
+import { TextEditor } from './TextEditor';
+import {
+  MyContext,
+  isMobile,
+  pauseAllQueues,
+  resumeAllQueues,
+} from '../../../App';
+import { getFee } from '../../../background';
+import TipTap from '../../Chat/TipTap';
+import { MessageDisplay } from '../../Chat/MessageDisplay';
+import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
+import { saveTempPublish } from '../../Chat/GroupAnnouncements';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -54,21 +65,21 @@ export function objectToBase64(obj: any) {
   const jsonString = JSON.stringify(obj);
 
   // Step 2: Create a Blob from the JSON string
-  const blob = new Blob([jsonString], { type: "application/json" });
+  const blob = new Blob([jsonString], { type: 'application/json' });
 
   // Step 3: Create a FileReader to read the Blob as a base64-encoded string
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      if (typeof reader.result === "string") {
+      if (typeof reader.result === 'string') {
         // Remove 'data:application/json;base64,' prefix
         const base64 = reader.result.replace(
-          "data:application/json;base64,",
-          ""
+          'data:application/json;base64,',
+          ''
         );
         resolve(base64);
       } else {
-        reject(new Error("Failed to read the Blob as a base64-encoded string"));
+        reject(new Error('Failed to read the Blob as a base64-encoded string'));
       }
     };
     reader.onerror = () => {
@@ -94,10 +105,11 @@ export const publishGroupEncryptedResource = async ({
   identifier,
 }) => {
   return new Promise((res, rej) => {
-    window.sendMessage("publishGroupEncryptedResource", {
-      encryptedData,
-      identifier,
-    })
+    window
+      .sendMessage('publishGroupEncryptedResource', {
+        encryptedData,
+        identifier,
+      })
       .then((response) => {
         if (!response?.error) {
           res(response);
@@ -106,19 +118,19 @@ export const publishGroupEncryptedResource = async ({
         rej(response.error);
       })
       .catch((error) => {
-        rej(error.message || "An error occurred");
+        rej(error.message || 'An error occurred');
       });
-    
   });
 };
 
 export const encryptSingleFunc = async (data: string, secretKeyObject: any) => {
   try {
     return new Promise((res, rej) => {
-      window.sendMessage("encryptSingle", {
-        data,
-        secretKeyObject,
-      })
+      window
+        .sendMessage('encryptSingle', {
+          data,
+          secretKeyObject,
+        })
         .then((response) => {
           if (!response?.error) {
             res(response);
@@ -127,11 +139,12 @@ export const encryptSingleFunc = async (data: string, secretKeyObject: any) => {
           rej(response.error);
         })
         .catch((error) => {
-          rej(error.message || "An error occurred");
+          rej(error.message || 'An error occurred');
         });
-      
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 export const NewThread = ({
   groupInfo,
@@ -145,14 +158,14 @@ export const NewThread = ({
   postReply,
   myName,
   setPostReply,
-  isPrivate
+  isPrivate,
 }: NewMessageProps) => {
   const { show } = React.useContext(MyContext);
 
   const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [threadTitle, setThreadTitle] = useState<string>("");
+  const [threadTitle, setThreadTitle] = useState<string>('');
   const [openSnack, setOpenSnack] = React.useState(false);
   const [infoSnack, setInfoSnack] = React.useState(null);
   const editorRef = useRef(null);
@@ -168,44 +181,42 @@ export const NewThread = ({
 
   const closeModal = () => {
     setIsOpen(false);
-    setValue("");
-    if(setPostReply){
-      setPostReply(null)
+    setValue('');
+    if (setPostReply) {
+      setPostReply(null);
     }
-   
   };
 
   async function publishQDNResource() {
     try {
-      pauseAllQueues()
-      if(isSending) return
-      setIsSending(true)
-      let name: string = "";
-      let errorMsg = "";
+      pauseAllQueues();
+      if (isSending) return;
+      setIsSending(true);
+      let name: string = '';
+      let errorMsg = '';
 
-      name = userInfo?.name || "";
+      name = userInfo?.name || '';
 
       const missingFields: string[] = [];
 
       if (!isMessage && !threadTitle) {
-        errorMsg = "Please provide a thread title";
+        errorMsg = 'Please provide a thread title';
       }
 
       if (!name) {
-        errorMsg = "Cannot send a message without a access to your name";
+        errorMsg = 'Cannot send a message without a access to your name';
       }
       if (!groupInfo) {
-        errorMsg = "Cannot access group information";
+        errorMsg = 'Cannot access group information';
       }
 
       // if (!description) missingFields.push('subject')
       if (missingFields.length > 0) {
-        const missingFieldsString = missingFields.join(", ");
+        const missingFieldsString = missingFields.join(', ');
         const errMsg = `Missing: ${missingFieldsString}`;
         errorMsg = errMsg;
       }
 
-     
       if (errorMsg) {
         // dispatch(
         //   setNotification({
@@ -217,17 +228,17 @@ export const NewThread = ({
       }
 
       const htmlContent = editorRef.current.getHTML();
-      
-      if (!htmlContent?.trim() || htmlContent?.trim() === "<p></p>")
-        throw new Error("Please provide a first message to the thread");
-      const fee = await getFee("ARBITRARY");
+
+      if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>')
+        throw new Error('Please provide a first message to the thread');
+      const fee = await getFee('ARBITRARY');
       let feeToShow = fee.fee;
       if (!isMessage) {
         feeToShow = +feeToShow * 2;
       }
       await show({
-        message: "Would you like to perform a ARBITRARY transaction?",
-        publishFee: feeToShow + " QORT",
+        message: 'Would you like to perform a ARBITRARY transaction?',
+        publishFee: feeToShow + ' QORT',
       });
 
       let reply = null;
@@ -245,20 +256,21 @@ export const NewThread = ({
         threadOwner: currentThread?.threadData?.name || name,
         reply,
       };
-    
-      const secretKey = isPrivate === false ? null : await getSecretKey(false, true);
+
+      const secretKey =
+        isPrivate === false ? null : await getSecretKey(false, true);
       if (!secretKey && isPrivate) {
-        throw new Error("Cannot get group secret key");
+        throw new Error('Cannot get group secret key');
       }
-    
+
       if (!isMessage) {
         const idThread = uid.rnd();
         const idMsg = uid.rnd();
         const messageToBase64 = await objectToBase64(mailObject);
-        const encryptSingleFirstPost = isPrivate === false ? messageToBase64 :  await encryptSingleFunc(
-          messageToBase64,
-          secretKey
-        );
+        const encryptSingleFirstPost =
+          isPrivate === false
+            ? messageToBase64
+            : await encryptSingleFunc(messageToBase64, secretKey);
         const threadObject = {
           title: threadTitle,
           groupId: groupInfo.id,
@@ -267,10 +279,10 @@ export const NewThread = ({
         };
         const threadToBase64 = await objectToBase64(threadObject);
 
-        const encryptSingleThread = isPrivate === false ? threadToBase64 :  await encryptSingleFunc(
-          threadToBase64,
-          secretKey
-        );
+        const encryptSingleThread =
+          isPrivate === false
+            ? threadToBase64
+            : await encryptSingleFunc(threadToBase64, secretKey);
         let identifierThread = `grp-${groupInfo.groupId}-thread-${idThread}`;
         await publishGroupEncryptedResource({
           identifier: identifierThread,
@@ -288,23 +300,27 @@ export const NewThread = ({
           service: 'DOCUMENT',
           tempData: threadObject,
           created: Date.now(),
-          groupId: groupInfo.groupId
-        }
+          groupId: groupInfo.groupId,
+        };
         const dataToSaveToStoragePost = {
           name: myName,
           identifier: identifierPost,
           service: 'DOCUMENT',
           tempData: mailObject,
           created: Date.now(),
-          threadId: identifierThread
-        }
-        await saveTempPublish({data: dataToSaveToStorage, key: 'thread'})
-        await saveTempPublish({data: dataToSaveToStoragePost, key: 'thread-post'})
-        setInfoSnack({
-          type: "success",
-          message: "Successfully created thread. It may take some time for the publish to propagate",
+          threadId: identifierThread,
+        };
+        await saveTempPublish({ data: dataToSaveToStorage, key: 'thread' });
+        await saveTempPublish({
+          data: dataToSaveToStoragePost,
+          key: 'thread-post',
         });
-        setOpenSnack(true)
+        setInfoSnack({
+          type: 'success',
+          message:
+            'Successfully created thread. It may take some time for the publish to propagate',
+        });
+        setOpenSnack(true);
 
         // dispatch(
         //   setNotification({
@@ -313,35 +329,36 @@ export const NewThread = ({
         //   })
         // );
         if (publishCallback) {
-          publishCallback()
-    
+          publishCallback();
         }
         closeModal();
       } else {
-      
-        if (!currentThread) throw new Error("unable to locate thread Id");
+        if (!currentThread) throw new Error('unable to locate thread Id');
         const idThread = currentThread.threadId;
         const messageToBase64 = await objectToBase64(mailObject);
-        const encryptSinglePost = isPrivate === false ? messageToBase64 :  await encryptSingleFunc(
-          messageToBase64,
-          secretKey
-        );
+        const encryptSinglePost =
+          isPrivate === false
+            ? messageToBase64
+            : await encryptSingleFunc(messageToBase64, secretKey);
         const idMsg = uid.rnd();
         let identifier = `thmsg-${idThread}-${idMsg}`;
         const res = await publishGroupEncryptedResource({
           identifier: identifier,
           encryptedData: encryptSinglePost,
         });
-    
+
         const dataToSaveToStoragePost = {
           threadId: idThread,
           name: myName,
           identifier: identifier,
           service: 'DOCUMENT',
           tempData: mailObject,
-          created: Date.now()
-        }
-        await saveTempPublish({data: dataToSaveToStoragePost, key: 'thread-post'})
+          created: Date.now(),
+        };
+        await saveTempPublish({
+          data: dataToSaveToStoragePost,
+          key: 'thread-post',
+        });
         // await qortalRequest(multiplePublishMsg);
         // dispatch(
         //   setNotification({
@@ -350,12 +367,13 @@ export const NewThread = ({
         //   })
         // );
         setInfoSnack({
-          type: "success",
-          message: "Successfully created post. It may take some time for the publish to propagate",
+          type: 'success',
+          message:
+            'Successfully created post. It may take some time for the publish to propagate',
         });
-        setOpenSnack(true)
-        if(publishCallback){
-          publishCallback()
+        setOpenSnack(true);
+        if (publishCallback) {
+          publishCallback();
         }
         // messageCallback({
         //   identifier,
@@ -369,17 +387,16 @@ export const NewThread = ({
 
       closeModal();
     } catch (error: any) {
-      if(error?.message){
+      if (error?.message) {
         setInfoSnack({
-          type: "error",
+          type: 'error',
           message: error?.message,
         });
-        setOpenSnack(true)
+        setOpenSnack(true);
       }
-      
     } finally {
       setIsSending(false);
-      resumeAllQueues()
+      resumeAllQueues();
     }
   }
 
@@ -389,56 +406,59 @@ export const NewThread = ({
   return (
     <Box
       sx={{
-        display: "flex",
+        display: 'flex',
       }}
     >
       <ComposeContainer
         sx={{
-          padding: isMobile ? '5px' : "15px",
-          justifyContent: isMobile ? 'flex-start' : 'revert'
+          padding: isMobile ? '5px' : '15px',
+          justifyContent: isMobile ? 'flex-start' : 'revert',
         }}
         onClick={() => setIsOpen(true)}
       >
         <ComposeIcon src={ComposeIconSVG} />
-        <ComposeP>{currentThread ? "New Post" : "New Thread"}</ComposeP>
+        <ComposeP>{currentThread ? 'New Post' : 'New Thread'}</ComposeP>
       </ComposeContainer>
 
       <ReusableModal
         open={isOpen}
         customStyles={{
-          maxHeight: isMobile ? '95svh' : "95vh",
-          maxWidth: "950px",
-          height: "700px",
-          borderRadius: "12px 12px 0px 0px",
-          background: "#434448",
-          padding: "0px",
-          gap: "0px",
+          maxHeight: isMobile ? '95svh' : '95vh',
+          maxWidth: '950px',
+          height: '700px',
+          borderRadius: '12px 12px 0px 0px',
+          background: '#434448',
+          padding: '0px',
+          gap: '0px',
         }}
       >
         <InstanceListHeader
           sx={{
-            height: isMobile ? 'auto' : "50px",
-            padding: isMobile ? '5px' : "20px 42px",
-            flexDirection: "row",
+            height: isMobile ? 'auto' : '50px',
+            padding: isMobile ? '5px' : '20px 42px',
+            flexDirection: 'row',
             alignItems: 'center',
-            justifyContent: "space-between",
-            backgroundColor: "#434448",
+            justifyContent: 'space-between',
+            backgroundColor: '#434448',
           }}
         >
           <NewMessageHeaderP>
-            {isMessage ? "Post Message" : "New Thread"}
+            {isMessage ? 'Post Message' : 'New Thread'}
           </NewMessageHeaderP>
-          <CloseContainer sx={{
-            height: '40px'
-          }} onClick={closeModal}>
+          <CloseContainer
+            sx={{
+              height: '40px',
+            }}
+            onClick={closeModal}
+          >
             <NewMessageCloseImg src={ModalCloseSVG} />
           </CloseContainer>
         </InstanceListHeader>
         <InstanceListContainer
           sx={{
-            backgroundColor: "#434448",
-            padding: isMobile ? '5px' : "20px 42px",
-            height: "calc(100% - 165px)",
+            backgroundColor: '#434448',
+            padding: isMobile ? '5px' : '20px 42px',
+            height: 'calc(100% - 165px)',
             flexShrink: 0,
           }}
         >
@@ -457,19 +477,19 @@ export const NewThread = ({
                   autoComplete="off"
                   autoCorrect="off"
                   sx={{
-                    width: "100%",
-                    color: "white",
-                    "& .MuiInput-input::placeholder": {
-                      color: "rgba(255,255,255, 0.70) !important",
-                      fontSize: isMobile ? '14px' : "20px",
-                      fontStyle: "normal",
+                    width: '100%',
+                    color: 'white',
+                    '& .MuiInput-input::placeholder': {
+                      color: 'rgba(255,255,255, 0.70) !important',
+                      fontSize: isMobile ? '14px' : '20px',
+                      fontStyle: 'normal',
                       fontWeight: 400,
-                      lineHeight: "120%", // 24px
-                      letterSpacing: "0.15px",
+                      lineHeight: '120%', // 24px
+                      letterSpacing: '0.15px',
                       opacity: 1,
                     },
-                    "&:focus": {
-                      outline: "none",
+                    '&:focus': {
+                      outline: 'none',
                     },
                     // Add any additional styles for the input here
                   }}
@@ -481,21 +501,18 @@ export const NewThread = ({
           {postReply && postReply.textContentV2 && (
             <Box
               sx={{
-                width: "100%",
-                maxHeight: "120px",
-                overflow: "auto",
+                width: '100%',
+                maxHeight: '120px',
+                overflow: 'auto',
               }}
             >
               <MessageDisplay htmlContent={postReply?.textContentV2} />
             </Box>
           )}
-          {!isMobile && (
-                      <Spacer height="30px" />
-
-          )}
+          {!isMobile && <Spacer height="30px" />}
           <Box
             sx={{
-              maxHeight: "40vh",
+              maxHeight: '40vh',
             }}
           >
             <TipTap
@@ -515,41 +532,44 @@ export const NewThread = ({
         </InstanceListContainer>
         <InstanceFooter
           sx={{
-            backgroundColor: "#434448",
-            padding: isMobile ? '5px' :  "20px 42px",
-            alignItems: "center",
-            height: isMobile ? 'auto' :  "90px",
+            backgroundColor: '#434448',
+            padding: isMobile ? '5px' : '20px 42px',
+            alignItems: 'center',
+            height: isMobile ? 'auto' : '90px',
           }}
         >
           <NewMessageSendButton onClick={sendMail}>
             {isSending && (
-              <Box sx={{height: '100%', position: 'absolute', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-                <CircularProgress sx={{
-
-                }} size={'12px'} />
+              <Box
+                sx={{
+                  height: '100%',
+                  position: 'absolute',
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <CircularProgress sx={{}} size={'12px'} />
               </Box>
             )}
             <NewMessageSendP>
-              {isMessage ? "Post" : "Create Thread"}
+              {isMessage ? 'Post' : 'Create Thread'}
             </NewMessageSendP>
             {isMessage ? (
-              <SendNewMessage
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
+              <SendNewMessage opacity={1} height="25px" width="25px" />
             ) : (
-              <CreateThreadIcon
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
+              <CreateThreadIcon opacity={1} height="25px" width="25px" />
             )}
           </NewMessageSendButton>
         </InstanceFooter>
-      
       </ReusableModal>
-      <CustomizedSnackbars open={openSnack} setOpen={setOpenSnack} info={infoSnack} setInfo={setInfoSnack}  />
+      <CustomizedSnackbars
+        open={openSnack}
+        setOpen={setOpenSnack}
+        info={infoSnack}
+        setInfo={setInfoSnack}
+      />
     </Box>
   );
 };

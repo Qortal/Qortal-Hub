@@ -83,7 +83,9 @@ export const AnnouncementDiscussion = ({
           [`${identifier}-${name}`]: messageData,
         };
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnc = async ({ encryptedData, identifier }: any) => {
@@ -107,7 +109,9 @@ export const AnnouncementDiscussion = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const setTempData = async () => {
@@ -123,7 +127,9 @@ export const AnnouncementDiscussion = ({
         });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishComment = async () => {
@@ -235,7 +241,9 @@ export const AnnouncementDiscussion = ({
       for (const data of responseData) {
         getData({ name: data.name, identifier: data.identifier }, isPrivate);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const combinedListTempAndReal = useMemo(() => {

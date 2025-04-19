@@ -106,7 +106,9 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
           setSettingsQDNLastUpdated(0);
         }
         setCanSave(true);
-      } catch (error) {}
+      } catch (error) {
+        console.log(error);
+      }
     },
     []
   );

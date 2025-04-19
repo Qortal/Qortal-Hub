@@ -7,13 +7,12 @@ import React, {
   useState,
 } from 'react';
 
-import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { ChatList } from './ChatList';
 import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { Box, ButtonBase, Input, Typography } from '@mui/material';
+import { Box, ButtonBase, Input, Typography, useTheme } from '@mui/material';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getNameInfo } from '../Group/Group';
 import { Spacer } from '../../common/Spacer';
@@ -36,7 +35,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ShortUniqueId from 'short-unique-id';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
-import { MessageItem, ReplyPreview } from './MessageItem';
+import { ReplyPreview } from './MessageItem';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -52,6 +51,7 @@ export const ChatDirect = ({
   close,
   setMobileViewModeKeepOpen,
 }) => {
+  const theme = useTheme();
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [onEditMessage, setOnEditMessage] = useState(null);
@@ -87,7 +87,9 @@ export const ChatDirect = ({
       const publicKey = await getPublicKey(address);
       if (publicKeyOfRecipientRef.current !== selectedDirect?.address) return;
       setPublicKeyOfRecipient(publicKey);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const tempMessages = useMemo(() => {
@@ -167,6 +169,7 @@ export const ChatDirect = ({
                     text: item.message,
                     unread: item?.sender === myAddress ? false : true,
                   }));
+
                 setMessages((prev) => [...prev, ...formatted]);
                 setChatReferences((prev) => {
                   const organizedChatReferences = { ...prev };
@@ -183,7 +186,9 @@ export const ChatDirect = ({
                             {}),
                           edit: item,
                         };
-                      } catch (error) {}
+                      } catch (error) {
+                        console.log(error);
+                      }
                     });
                   return organizedChatReferences;
                 });
@@ -214,7 +219,9 @@ export const ChatDirect = ({
                             {}),
                           edit: item,
                         };
-                      } catch (error) {}
+                      } catch (error) {
+                        console.log(error);
+                      }
                     });
                   return organizedChatReferences;
                 });
@@ -227,7 +234,9 @@ export const ChatDirect = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const forceCloseWebSocket = () => {
@@ -368,7 +377,6 @@ export const ChatDirect = ({
                   senderName: myName,
                 });
                 setNewChat(null);
-
                 window
                   .sendMessage('addTimestampEnterChat', {
                     timestamp: Date.now(),
@@ -396,7 +404,6 @@ export const ChatDirect = ({
       });
     } catch (error) {
       throw new Error(error);
-    } finally {
     }
   };
   const clearEditorContent = () => {
@@ -537,39 +544,39 @@ export const ChatDirect = ({
   return (
     <div
       style={{
-        height: isMobile ? '100%' : '100vh',
+        background: theme.palette.background.default,
         display: 'flex',
         flexDirection: 'column',
+        height: isMobile ? '100%' : '100vh',
         width: '100%',
-        background: !isMobile && 'var(--bg-2)',
       }}
     >
       {!isMobile && (
         <Box
           onClick={close}
           sx={{
-            display: 'flex',
             alignItems: 'center',
-            gap: '5px',
+            alignSelf: 'center',
+            background: theme.palette.background.default,
+            borderRadius: '3px',
             cursor: 'pointer',
+            display: 'flex',
+            gap: '5px',
+            margin: '10px 0px',
             padding: '4px 6px',
             width: 'fit-content',
-            borderRadius: '3px',
-            background: 'rgb(35, 36, 40)',
-            margin: '10px 0px',
-            alignSelf: 'center',
           }}
         >
           <ArrowBackIcon
             sx={{
-              color: 'white',
-              fontSize: isMobile ? '20px' : '20px',
+              color: theme.palette.text.primary,
+              fontSize: '20px',
             }}
           />
           <Typography
             sx={{
-              color: 'white',
-              fontSize: isMobile ? '14px' : '14px',
+              color: theme.palette.text.primary,
+              fontSize: '14px',
             }}
           >
             Close Direct Chat
@@ -579,26 +586,26 @@ export const ChatDirect = ({
       {isMobile && (
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'center',
-            width: '100%',
-            marginTop: '14px',
-            justifyContent: 'center',
+            display: 'flex',
             height: '15px',
+            justifyContent: 'center',
+            marginTop: '14px',
+            width: '100%',
           }}
         >
           <Box
             sx={{
-              display: 'flex',
               alignItems: 'center',
+              display: 'flex',
               justifyContent: 'space-between',
               width: '320px',
             }}
           >
             <Box
               sx={{
-                display: 'flex',
                 alignItems: 'center',
+                display: 'flex',
                 width: '50px',
               }}
             >
@@ -623,10 +630,10 @@ export const ChatDirect = ({
             </Typography>
             <Box
               sx={{
-                display: 'flex',
                 alignItems: 'center',
-                width: '50px',
+                display: 'flex',
                 justifyContent: 'flex-end',
+                width: '50px',
               }}
             >
               <ButtonBase
@@ -670,42 +677,40 @@ export const ChatDirect = ({
 
       <div
         style={{
-          // position: 'fixed',
-          // bottom: '0px',
-          backgroundColor: '#232428',
-          minHeight: isMobile ? '0px' : '150px',
+          backgroundColor: theme.palette.background.default,
+          bottom: isFocusedParent ? '0px' : 'unset',
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'row',
+          flexShrink: 0,
+          minHeight: '150px',
           overflow: 'hidden',
-          width: '100%',
-          boxSizing: 'border-box',
           padding: isMobile ? '10px' : '20px',
           position: isFocusedParent ? 'fixed' : 'relative',
-          bottom: isFocusedParent ? '0px' : 'unset',
           top: isFocusedParent ? '0px' : 'unset',
+          width: '100%',
           zIndex: isFocusedParent ? 5 : 'unset',
-          flexShrink: 0,
         }}
       >
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: isMobile && 1,
-            overflow: !isMobile && 'auto',
+            flexGrow: 1,
             flexShrink: 0,
-            width: 'calc(100% - 100px)',
             justifyContent: 'flex-end',
+            overflow: 'auto',
+            width: 'calc(100% - 100px)',
           }}
         >
           {replyMessage && (
             <Box
               sx={{
+                alignItems: 'flex-start',
                 display: 'flex',
                 gap: '5px',
-                alignItems: 'flex-start',
-                width: 'calc(100% - 100px)',
                 justifyContent: 'flex-end',
+                width: 'calc(100% - 100px)',
               }}
             >
               <ReplyPreview message={replyMessage} />
@@ -723,9 +728,9 @@ export const ChatDirect = ({
           {onEditMessage && (
             <Box
               sx={{
+                alignItems: 'flex-start',
                 display: 'flex',
                 gap: '5px',
-                alignItems: 'flex-start',
                 width: '100%',
               }}
             >
@@ -735,7 +740,6 @@ export const ChatDirect = ({
                 onClick={() => {
                   setReplyMessage(null);
                   setOnEditMessage(null);
-
                   clearEditorContent();
                 }}
               >
@@ -756,9 +760,9 @@ export const ChatDirect = ({
             <Box
               sx={{
                 display: 'flex',
-                width: '100%',
                 justifyContent: 'flex-start',
                 position: 'relative',
+                width: '100%',
               }}
             >
               <Typography
@@ -774,12 +778,11 @@ export const ChatDirect = ({
         <Box
           sx={{
             display: 'flex',
-            width: '100px',
-
+            flexShrink: 0,
             gap: '10px',
             justifyContent: 'center',
-            flexShrink: 0,
             position: 'relative',
+            width: '100px',
           }}
         >
           <CustomButton
@@ -788,26 +791,28 @@ export const ChatDirect = ({
               sendMessage();
             }}
             style={{
-              marginTop: 'auto',
               alignSelf: 'center',
+              background: isSending
+                ? theme.palette.background.default
+                : theme.palette.background.paper,
               cursor: isSending ? 'default' : 'pointer',
-              background: isSending && 'rgba(0, 0, 0, 0.8)',
               flexShrink: 0,
+              marginTop: 'auto',
+              minWidth: 'auto',
               padding: '5px',
               width: '100px',
-              minWidth: 'auto',
             }}
           >
             {isSending && (
               <CircularProgress
                 size={18}
                 sx={{
+                  color: theme.palette.text.primary,
+                  left: '50%',
+                  marginLeft: '-12px',
+                  marginTop: '-12px',
                   position: 'absolute',
                   top: '50%',
-                  left: '50%',
-                  marginTop: '-12px',
-                  marginLeft: '-12px',
-                  color: 'white',
                 }}
               />
             )}
@@ -815,12 +820,14 @@ export const ChatDirect = ({
           </CustomButton>
         </Box>
       </div>
+
       <LoadingSnackbar
         open={isLoading}
         info={{
           message: 'Loading chat... please wait.',
         }}
       />
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}

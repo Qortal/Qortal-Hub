@@ -187,7 +187,7 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
   outline: 'none',
   width: '183px', // Adjust the width as needed
   input: {
-    fontSize: 10,
+    fontSize: '12px',
     fontFamily: 'Inter',
     fontWeight: 400,
     color: theme.palette.text.primary,
@@ -230,7 +230,7 @@ export const CustomLabel = styled(InputLabel)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   fontFamily: 'Inter',
-  fontSize: '10px',
+  fontSize: '15px',
   fontWeight: 400,
   lineHeight: '12px',
 }));

@@ -60,7 +60,9 @@ export const TaskManager = ({ getUserInfo }) => {
             }
             clearInterval(intervals.current[signature]);
           }
-        } catch (error) {}
+        } catch (error) {
+          console.log(error);
+        }
         stop = false;
       }
     };
