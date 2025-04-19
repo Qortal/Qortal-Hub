@@ -196,8 +196,8 @@ export const AddGroup = ({ address, open, setOpen }) => {
           }}
         >
           <Toolbar>
-            <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-              Group Mgmt
+            <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
+              Group Management
             </Typography>
 
             <IconButton

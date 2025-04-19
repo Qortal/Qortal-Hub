@@ -2119,8 +2119,9 @@ export const Group = ({
                     color: theme.palette.text.primary,
                   }}
                 />
-                Group Mgmt
+                Group
               </CustomButton>
+
               {!isRunningPublicNode && (
                 <CustomButton
                   onClick={() => {
