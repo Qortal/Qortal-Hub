@@ -1,7 +1,7 @@
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
-    fontFamily: ['Roboto'].join(','),
+    fontFamily: ['Inter'].join(','),
     h1: {
       fontSize: '2rem',
       fontWeight: 600,
