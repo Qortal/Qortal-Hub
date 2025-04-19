@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import './chat.css';
 import { executeEvent } from '../../utils/events';
 import { Embed } from '../Embeds/Embed';
+import { Box, useTheme } from '@mui/material';
 
 export const extractComponents = (url) => {
   if (!url || !url.startsWith('qortal://')) {
@@ -75,6 +76,8 @@ const linkify = (text) => {
 };
 
 export const MessageDisplay = ({ htmlContent, isReply }) => {
+  const theme = useTheme();
+
   const sanitizedContent = useMemo(() => {
     return DOMPurify.sanitize(linkify(htmlContent), {
       ALLOWED_TAGS: [
@@ -188,13 +191,20 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
   }
 
   return (
-    <>
+    <Box
+      sx={{
+        '--text-primary': theme.palette.text.primary,
+        '--text-secondary': theme.palette.text.secondary,
+        '--background-default': theme.palette.background.default,
+        '--background-secondary': theme.palette.background.paper,
+      }}
+    >
       {embedLink && <Embed embedLink={embedData} />}
       <div
         className={`tiptap ${isReply ? 'isReply' : ''}`}
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         onClick={handleClick}
       />
-    </>
+    </Box>
   );
 };

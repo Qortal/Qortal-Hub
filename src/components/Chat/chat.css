@@ -1,6 +1,6 @@
 .tiptap {
   margin-top: 0;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   width: 100%;
 }
 
@@ -26,7 +26,7 @@
   line-height: 1.1;
   margin-top: 2.5rem;
   text-wrap: pretty;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
 }
 
 .tiptap h1,
@@ -55,18 +55,18 @@
 
 /* Code and preformatted text styles */
 .tiptap code {
-  background-color: theme => theme.palette.background.default;
+  background-color: var(--background-default);
   border-radius: 0.4rem;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   font-size: 0.85rem;
   padding: 0.25em 0.3em;
   text-wrap: pretty;
 }
 
 .tiptap pre {
-  background: theme => theme.palette.background.default;
+  background: var(--background-default);
   border-radius: 0.5rem;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   font-family: 'JetBrainsMono', monospace;
   margin: 1.5rem 0;
   padding: 0.75rem 1rem;
@@ -86,7 +86,7 @@
   border-left: 3px solid var(--gray-3);
   margin: 1.5rem 0;
   padding-left: 1rem;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   text-wrap: pretty;
 }
 
@@ -102,12 +102,12 @@
 
 .tiptap p {
   font-size: 16px;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   margin: 0px;
 }
 
 .tiptap p.is-editor-empty:first-child::before {
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -134,14 +134,14 @@
 
 .tiptap [data-type='mention'] {
   box-decoration-break: clone;
-  color: theme => theme.palette.text.secondary;
+  color: var(--text-secondary);
   padding: 0.1rem 0.3rem;
 }
 
 .unread-divider {
-  border-bottom: 1px solid white;
+  border-bottom: 1px solid var(--text-primary);
   border-radius: 2px;
-  color: theme => theme.palette.text.primary;
+  color: var(--text-primary);
   display: flex;
   justify-content: center;
   width: 90%;
@@ -169,11 +169,10 @@
     font-size: 16px;
     width: 100%;
     border: none;
-    color: theme => theme.palette.text.primary;
-    cursor: pointer;
+    color: var(--text-primary);
     &:hover,
     &:hover.is-selected {
-      background-color: theme => theme.palette.background.secondary;
+      background-color: var(--background-default);
     }
   }
 }
