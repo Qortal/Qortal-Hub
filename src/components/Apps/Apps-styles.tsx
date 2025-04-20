@@ -2,12 +2,12 @@ import { Typography, Box, ButtonBase } from '@mui/material';
 import { styled } from '@mui/system';
 
 export const AppsParent = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
   display: 'flex',
-  width: '100%',
   flexDirection: 'column',
   height: '100%',
-  alignItems: 'center',
   overflow: 'auto',
+  width: '100%',
   // For WebKit-based browsers (Chrome, Safari, etc.)
   '::-webkit-scrollbar': {
     width: '0px', // Set the width to 0 to hide the scrollbar
@@ -25,34 +25,34 @@ export const AppsParent = styled(Box)(({ theme }) => ({
 }));
 
 export const AppsContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '90%',
-  justifyContent: 'space-evenly',
-  gap: '24px',
-  flexWrap: 'wrap',
   alignItems: 'flex-start',
   alignSelf: 'center',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '24px',
+  justifyContent: 'space-evenly',
+  width: '90%',
 }));
 
 export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '100%',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
   alignItems: 'center',
   backgroundColor: theme.palette.background.paper,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-start',
+  width: '100%',
 }));
 
 export const AppsWidthLimiter = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '90%',
-  flexDirection: 'column',
-  justifyContent: 'flex-start',
   alignItems: 'flex-start',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-start',
+  width: '90%',
 }));
 
 export const AppsSearchContainer = styled(Box)(({ theme }) => ({
@@ -97,15 +97,6 @@ export const AppCircleContainer = styled(Box)(({ theme }) => ({
   flexDirection: 'column',
   gap: '5px',
   width: '100%',
-}));
-
-export const Add = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  fontSize: '36px',
-  fontWeight: 500,
-  lineHeight: '43.57px',
-  textAlign: 'left',
 }));
 
 export const AppCircleLabel = styled(Typography)(({ theme }) => ({

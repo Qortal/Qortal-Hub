@@ -23,13 +23,13 @@ import {
 import { Label } from '../Group/AddGroup';
 import { Spacer } from '../../common/Spacer';
 import {
-  Add,
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   PublishQAppChoseFile,
   PublishQAppInfo,
 } from './Apps-styles';
+import AddIcon from '@mui/icons-material/Add';
 import ImageUploader from '../../common/ImageUploader';
 import { MyContext } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
@@ -234,7 +234,7 @@ export const AppsPrivate = ({ myName }) => {
           }}
         >
           <AppCircle>
-            <Add>+</Add>
+            <AddIcon />
           </AppCircle>
 
           <AppCircleLabel>Private</AppCircleLabel>

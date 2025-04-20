@@ -7,7 +7,7 @@ import {
   AppsContainer,
 } from './Apps-styles';
 import { Box, ButtonBase, Input, useTheme } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import AddIcon from '@mui/icons-material/Add';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { SortablePinnedApps } from './SortablePinnedApps';
@@ -140,7 +140,7 @@ export const AppsHomeDesktop = ({
             }}
           >
             <AppCircle>
-              <Add>+</Add>
+              <AddIcon />
             </AppCircle>
 
             <AppCircleLabel>Library</AppCircleLabel>
