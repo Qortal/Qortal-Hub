@@ -289,7 +289,6 @@ export const isMainWindow = true;
 function App() {
   const [extState, setExtstate] = useState<extStates>('not-authenticated');
   const [desktopViewMode, setDesktopViewMode] = useState('home');
-
   const [backupjson, setBackupjson] = useState<any>(null);
   const [rawWallet, setRawWallet] = useState<any>(null);
   const [ltcBalanceLoading, setLtcBalanceLoading] = useState<boolean>(false);
@@ -2018,7 +2017,7 @@ function App() {
                 setIsOpenDrawerProfile={setIsOpenDrawerProfile}
                 userInfo={userInfo}
               />
-              renderProfile()
+              {renderProfile()}
             </Box>
           </MyContext.Provider>
         )}
