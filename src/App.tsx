@@ -2859,6 +2859,7 @@ function App() {
             {!walletToBeDownloaded && (
               <>
                 <Spacer height="22px" />
+
                 <Box
                   sx={{
                     boxSizing: 'border-box',
