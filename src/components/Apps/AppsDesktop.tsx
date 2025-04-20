@@ -478,13 +478,13 @@ export const AppsDesktop = ({
       )}
 
       <AppsLibraryDesktop
-        isShow={mode === 'library' && !selectedTab}
         availableQapps={availableQapps}
-        setMode={setMode}
-        myName={myName}
-        hasPublishApp={!!(myApp || myWebsite)}
         categories={categories}
         getQapps={getQapps}
+        hasPublishApp={!!(myApp || myWebsite)}
+        isShow={mode === 'library' && !selectedTab}
+        myName={myName}
+        setMode={setMode}
       />
 
       {mode === 'appInfo' && !selectedTab && (

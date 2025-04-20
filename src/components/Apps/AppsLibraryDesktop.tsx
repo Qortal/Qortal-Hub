@@ -42,7 +42,6 @@ import {
   AppsDesktopLibraryHeader,
 } from './AppsDesktop-styles';
 import { ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
-import { Theme } from 'emoji-picker-react';
 
 const officialAppList = [
   'q-tube',

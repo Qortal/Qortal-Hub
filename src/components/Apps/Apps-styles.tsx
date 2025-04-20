@@ -38,7 +38,7 @@ export const AppsContainer = styled(Box)(({ theme }) => ({
 
 export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.paper,
+  backgroundColor: theme.palette.background.default,
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'flex-start',
@@ -114,7 +114,7 @@ export const AppCircleLabel = styled(Typography)(({ theme }) => ({
 }));
 
 export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.paper,
+  backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   fontSize: '16px',
   fontWeight: 500,

@@ -9,7 +9,7 @@ import {
 } from './Apps-styles';
 import { ButtonBase, InputBase, styled } from '@mui/material';
 import { MyContext } from '../../App';
-import IconSearch from '../../assets/svgs/Search.svg';
+import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
@@ -18,22 +18,6 @@ import {
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
 } from './AppsDesktop-styles';
-
-const officialAppList = [
-  'q-tube',
-  'q-blog',
-  'q-share',
-  'q-support',
-  'q-mail',
-  'q-fund',
-  'q-shop',
-  'q-trade',
-  'q-support',
-  'q-manager',
-  'q-wallets',
-  'q-search',
-  'q-nodecontrol',
-];
 
 const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
@@ -136,15 +120,15 @@ export const AppsCategoryDesktop = ({
     <AppsLibraryContainer
       sx={{
         display: !isShow && 'none',
-        padding: '0px',
         height: '100vh',
         overflow: 'hidden',
+        padding: '0px',
         paddingTop: '30px',
       }}
     >
       <AppsDesktopLibraryHeader
         sx={{
-          maxWidth: '1500px',
+          maxWidth: '1200px',
           width: '90%',
         }}
       >
@@ -159,7 +143,8 @@ export const AppsCategoryDesktop = ({
             }}
           >
             <AppsSearchLeft>
-              <img src={IconSearch} />
+              <SearchIcon />
+
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
@@ -172,6 +157,7 @@ export const AppsCategoryDesktop = ({
                 }}
               />
             </AppsSearchLeft>
+
             <AppsSearchRight>
               {searchValue && (
                 <ButtonBase
@@ -186,20 +172,24 @@ export const AppsCategoryDesktop = ({
           </AppsSearchContainer>
         </AppsWidthLimiter>
       </AppsDesktopLibraryHeader>
+
       <AppsDesktopLibraryBody
         sx={{
+          alignItems: 'center',
           height: `calc(100vh - 36px)`,
           overflow: 'auto',
           padding: '0px',
-          alignItems: 'center',
+          width: '70%',
         }}
       >
         <Spacer height="25px" />
+
         <AppsWidthLimiter>
           <AppLibrarySubTitle>{`Category: ${category?.name}`}</AppLibrarySubTitle>
 
           <Spacer height="25px" />
         </AppsWidthLimiter>
+
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
             sx={{
