@@ -1,10 +1,5 @@
-import React, { useCallback, useState, useEffect, useRef } from 'react';
-import {
-  List,
-  AutoSizer,
-  CellMeasurerCache,
-  CellMeasurer,
-} from 'react-virtualized';
+import { useState, useEffect, useRef } from 'react';
+import { CellMeasurerCache } from 'react-virtualized';
 import { AnnouncementItem } from './AnnouncementItem';
 import { Box } from '@mui/material';
 import { CustomButton } from '../../styles/App-styles';
@@ -37,12 +32,12 @@ export const AnnouncementList = ({
   return (
     <div
       style={{
-        position: 'relative',
-        flexGrow: 1,
-        width: '100%',
         display: 'flex',
         flexDirection: 'column',
+        flexGrow: 1,
         flexShrink: 1,
+        position: 'relative',
+        width: '100%',
         overflow: 'auto',
       }}
     >
@@ -57,11 +52,11 @@ export const AnnouncementList = ({
           <div
             key={message?.identifier}
             style={{
-              marginBottom: '10px',
-              width: '100%',
+              alignItems: 'center',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              marginBottom: '10px',
+              width: '100%',
             }}
           >
             <AnnouncementItem
@@ -89,10 +84,10 @@ export const AnnouncementList = ({
       </AutoSizer> */}
       <Box
         sx={{
-          width: '100%',
-          marginTop: '25px',
           display: 'flex',
           justifyContent: 'center',
+          marginTop: '25px',
+          width: '100%',
         }}
       >
         {showLoadMore && (

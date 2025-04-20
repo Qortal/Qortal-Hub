@@ -1,12 +1,15 @@
 import { useMemo } from 'react';
-import QMailLogo from '../assets/QMailLogo.png';
+import EmailIcon from '@mui/icons-material/Email';
 import { useRecoilState } from 'recoil';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
 import { isLessThanOneWeekOld } from './Group/QMailMessages';
-import { ButtonBase, Tooltip } from '@mui/material';
+import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
+import { Mail } from '@mui/icons-material';
 
 export const QMailStatus = () => {
+  const theme = useTheme();
+
   const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(
     qMailLastEnteredTimestampAtom
   );
@@ -24,6 +27,7 @@ export const QMailStatus = () => {
       return true;
     return false;
   }, [lastEnteredTimestamp, mails]);
+
   return (
     <ButtonBase
       onClick={() => {
@@ -38,21 +42,27 @@ export const QMailStatus = () => {
       {hasNewMail && (
         <div
           style={{
-            position: 'absolute',
-            zIndex: 1,
-            top: '-7px',
-            right: '-7px',
             backgroundColor: 'var(--unread)',
-            height: '15px',
-            width: '15px',
             borderRadius: '50%',
+            height: '15px',
             outline: '1px solid white',
+            position: 'absolute',
+            right: '-7px',
+            top: '-7px',
+            width: '15px',
+            zIndex: 1,
           }}
         />
       )}
       <Tooltip
         title={
-          <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+          <span
+            style={{
+              color: theme.palette.text.primary,
+              fontSize: '14px',
+              fontWeight: 700,
+            }}
+          >
             Q-MAIL
           </span>
         }
@@ -62,18 +72,18 @@ export const QMailStatus = () => {
         slotProps={{
           tooltip: {
             sx: {
-              color: '#ffffff',
-              backgroundColor: '#444444',
+              color: theme.palette.text.primary,
+              backgroundColor: theme.palette.background.default,
             },
           },
           arrow: {
             sx: {
-              color: '#444444',
+              color: theme.palette.text.primary,
             },
           },
         }}
       >
-        <img style={{ width: '24px', height: 'auto' }} src={QMailLogo} />
+        <Mail />
       </Tooltip>
     </ButtonBase>
   );

@@ -195,7 +195,9 @@ export const Thread = ({
           [message.identifier]: fullObject,
         };
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const setTempData = async () => {
@@ -216,7 +218,9 @@ export const Thread = ({
         });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getMailMessages = React.useCallback(
@@ -461,7 +465,9 @@ export const Thread = ({
             } else {
               fullArrayMsg.unshift(fullObject);
             }
-          } catch (error) {}
+          } catch (error) {
+            console.log(error);
+          }
         }
         setMessages(fullArrayMsg);
       } catch (error) {

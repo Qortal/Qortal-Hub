@@ -7,6 +7,7 @@ import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../atoms/global';
 import { AppsIcon } from '../assets/Icons/AppsIcon';
 import ThemeSelector from './Theme/ThemeSelector';
+import { CoreSyncStatus } from './CoreSyncStatus';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -30,19 +31,28 @@ export const DesktopSideBar = ({
   return (
     <Box
       sx={{
-        width: '60px',
-        flexDirection: 'column',
-        height: '100vh',
         alignItems: 'center',
         display: 'flex',
+        flexDirection: 'column',
         gap: '25px',
+        height: '100vh',
+        width: '60px',
       }}
     >
       <ButtonBase
         sx={{
+          width: '70px',
+          height: '70px',
+          paddingTop: '23px',
+        }}
+      >
+        <CoreSyncStatus />
+      </ButtonBase>
+
+      <ButtonBase
+        sx={{
           width: '60px',
           height: '60px',
-          paddingTop: '23px',
         }}
         onClick={() => {
           goToHome();
@@ -51,10 +61,13 @@ export const DesktopSideBar = ({
         <HomeIcon
           height={34}
           color={
-            desktopViewMode === 'home' ? 'white' : 'rgba(250, 250, 250, 0.5)'
+            desktopViewMode === 'home'
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary
           }
         />
       </ButtonBase>
+
       <ButtonBase
         onClick={() => {
           setDesktopViewMode('apps');
@@ -63,17 +76,22 @@ export const DesktopSideBar = ({
         }}
       >
         <IconWrapper
-          color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
+          color={
+            isApps ? theme.palette.text.primary : theme.palette.text.secondary
+          }
           label="Apps"
           selected={isApps}
           disableWidth
         >
           <AppsIcon
-            color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
+            color={
+              isApps ? theme.palette.text.primary : theme.palette.text.secondary
+            }
             height={30}
           />
         </IconWrapper>
       </ButtonBase>
+
       <ButtonBase
         onClick={() => {
           setDesktopViewMode('chat');
@@ -98,24 +116,7 @@ export const DesktopSideBar = ({
           />
         </IconWrapper>
       </ButtonBase>
-      {/* <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-            toggleSideViewGroups()
-          }}
-        >
-            <HubsIcon
-              height={30}
-              color={
-                hasUnreadGroups
-                  ? "var(--danger)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-     
-        </ButtonBase> */}
+
       <Save isDesktop disableWidth myName={myName} />
       {/* <CoreSyncStatus imageSize="30px" position="left" /> */}
       {isEnabledDevMode && (
@@ -126,7 +127,9 @@ export const DesktopSideBar = ({
         >
           <IconWrapper
             color={
-              desktopViewMode === 'dev' ? 'white' : 'rgba(250, 250, 250, 0.5)'
+              desktopViewMode === 'dev'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
             }
             label="Dev"
             disableWidth

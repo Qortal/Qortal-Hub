@@ -1,6 +1,6 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
-import { useRecoilState, useSetRecoilState } from "recoil";
-import isEqual from "lodash/isEqual"; // Import deep comparison utility
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useRecoilState, useSetRecoilState } from 'recoil';
+import isEqual from 'lodash/isEqual'; // Import deep comparison utility
 import {
   canSaveSettingToQdnAtom,
   hasSettingsChangedAtom,
@@ -9,35 +9,35 @@ import {
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from "../../atoms/global";
-import { Box, Button, ButtonBase, Popover, Typography } from "@mui/material";
-import { objectToBase64 } from "../../qdn/encryption/group-encryption";
-import { MyContext } from "../../App";
-import { getFee } from "../../background";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { SaveIcon } from "../../assets/svgs/SaveIcon";
-import { IconWrapper } from "../Desktop/DesktopFooter";
-import { Spacer } from "../../common/Spacer";
-import { LoadingButton } from "@mui/lab";
-import { saveToLocalStorage } from "../Apps/AppsNavBar";
-import { decryptData, encryptData } from "../../qortalRequests/get";
-import { saveFileToDiskGeneric } from "../../utils/generateWallet/generateWallet";
+} from '../../atoms/global';
+import { Box, Button, ButtonBase, Popover, Typography } from '@mui/material';
+import { objectToBase64 } from '../../qdn/encryption/group-encryption';
+import { MyContext } from '../../App';
+import { getFee } from '../../background';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { SaveIcon } from '../../assets/Icons/SaveIcon';
+import { IconWrapper } from '../Desktop/DesktopFooter';
+import { Spacer } from '../../common/Spacer';
+import { LoadingButton } from '@mui/lab';
+import { saveToLocalStorage } from '../Apps/AppsNavBar';
+import { decryptData, encryptData } from '../../qortalRequests/get';
+import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import {
   base64ToUint8Array,
   uint8ArrayToObject,
-} from "../../backgroundFunctions/encryption";
+} from '../../backgroundFunctions/encryption';
 
 export const handleImportClick = async () => {
-  const fileInput = document.createElement("input");
-  fileInput.type = "file";
-  fileInput.accept = ".base64,.txt";
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.base64,.txt';
 
   // Create a promise to handle file selection and reading synchronously
   return await new Promise((resolve, reject) => {
     fileInput.onchange = () => {
       const file = fileInput.files[0];
       if (!file) {
-        reject(new Error("No file selected"));
+        reject(new Error('No file selected'));
         return;
       }
 
@@ -46,7 +46,7 @@ export const handleImportClick = async () => {
         resolve(e.target.result); // Resolve with the file content
       };
       reader.onerror = () => {
-        reject(new Error("Error reading file"));
+        reject(new Error('Error reading file'));
       };
 
       reader.readAsText(file); // Read the file as text (Base64 string)
@@ -124,7 +124,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
       const encryptData = await new Promise((res, rej) => {
         window
           .sendMessage(
-            "ENCRYPT_DATA",
+            'ENCRYPT_DATA',
             {
               data64,
             },
@@ -139,23 +139,23 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             }
           })
           .catch((error) => {
-            console.error("Failed qortalRequest", error);
+            console.error('Failed qortalRequest', error);
           });
       });
       if (encryptData && !encryptData?.error) {
-        const fee = await getFee("ARBITRARY");
+        const fee = await getFee('ARBITRARY');
 
         await show({
           message:
-            "Would you like to publish your settings to QDN (encrypted) ?",
-          publishFee: fee.fee + " QORT",
+            'Would you like to publish your settings to QDN (encrypted) ?',
+          publishFee: fee.fee + ' QORT',
         });
         const response = await new Promise((res, rej) => {
           window
-            .sendMessage("publishOnQDN", {
+            .sendMessage('publishOnQDN', {
               data: encryptData,
-              identifier: "ext_saved_settings",
-              service: "DOCUMENT_PRIVATE",
+              identifier: 'ext_saved_settings',
+              service: 'DOCUMENT_PRIVATE',
             })
             .then((response) => {
               if (!response?.error) {
@@ -165,15 +165,15 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
               rej(response.error);
             })
             .catch((error) => {
-              rej(error.message || "An error occurred");
+              rej(error.message || 'An error occurred');
             });
         });
         if (response?.identifier) {
           setOldPinnedApps(pinnedApps);
           setSettingsQdnLastUpdated(Date.now());
           setInfoSnack({
-            type: "success",
-            message: "Sucessfully published to QDN",
+            type: 'success',
+            message: 'Sucessfully published to QDN',
           });
           setOpenSnack(true);
           setAnchorEl(null);
@@ -181,8 +181,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
       }
     } catch (error) {
       setInfoSnack({
-        type: "error",
-        message: error?.message || "Unable to save to QDN",
+        type: 'error',
+        message: error?.message || 'Unable to save to QDN',
       });
       setOpenSnack(true);
     } finally {
@@ -196,7 +196,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
 
   const revertChanges = () => {
     setPinnedApps(oldPinnedApps);
-    saveToLocalStorage("ext_saved_settings", "sortablePinnedApps", null);
+    saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', null);
     setAnchorEl(null);
   };
 
@@ -218,11 +218,11 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             selected={false}
           >
             <SaveIcon
-              color={hasChanged && !isLoading ? "#5EB049" : undefined}
+              color={hasChanged && !isLoading ? '#5EB049' : undefined}
             />
           </IconWrapper>
         ) : (
-          <SaveIcon color={hasChanged && !isLoading ? "#5EB049" : undefined} />
+          <SaveIcon color={hasChanged && !isLoading ? '#5EB049' : undefined} />
         )}
       </ButtonBase>
       <Popover
@@ -230,41 +230,41 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         anchorEl={anchorEl}
         onClose={() => setAnchorEl(null)} // Close popover on click outside
         anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
+          vertical: 'bottom',
+          horizontal: 'center',
         }}
         transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
+          vertical: 'top',
+          horizontal: 'center',
         }}
         sx={{
-          width: "300px",
-          maxWidth: "90%",
-          maxHeight: "80%",
-          overflow: "auto",
+          width: '300px',
+          maxWidth: '90%',
+          maxHeight: '80%',
+          overflow: 'auto',
         }}
       >
         {isUsingImportExportSettings && (
           <Box
             sx={{
-              padding: "15px",
-              display: "flex",
-              flexDirection: "column",
+              padding: '15px',
+              display: 'flex',
+              flexDirection: 'column',
               gap: 1,
-              width: "100%",
+              width: '100%',
             }}
           >
             <Box
               sx={{
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
               }}
             >
               <Typography
                 sx={{
-                  fontSize: "14px",
+                  fontSize: '14px',
                 }}
               >
                 You are using the export/import way of saving settings.
@@ -274,8 +274,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 size="small"
                 onClick={() => {
                   saveToLocalStorage(
-                    "ext_saved_settings_import_export",
-                    "sortablePinnedApps",
+                    'ext_saved_settings_import_export',
+                    'sortablePinnedApps',
                     null,
                     true
                   );
@@ -283,13 +283,13 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }}
                 variant="contained"
                 sx={{
-                  backgroundColor: "var(--danger)",
-                  color: "black",
-                  fontWeight: "bold",
+                  backgroundColor: 'var(--danger)',
+                  color: 'black',
+                  fontWeight: 'bold',
                   opacity: 0.7,
-                  "&:hover": {
-                    backgroundColor: "var(--danger)",
-                    color: "black",
+                  '&:hover': {
+                    backgroundColor: 'var(--danger)',
+                    color: 'black',
                     opacity: 1,
                   },
                 }}
@@ -302,25 +302,25 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         {!isUsingImportExportSettings && (
           <Box
             sx={{
-              padding: "15px",
-              display: "flex",
-              flexDirection: "column",
+              padding: '15px',
+              display: 'flex',
+              flexDirection: 'column',
               gap: 1,
-              width: "100%",
+              width: '100%',
             }}
           >
             {!myName ? (
               <Box
                 sx={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                 }}
               >
                 <Typography
                   sx={{
-                    fontSize: "14px",
+                    fontSize: '14px',
                   }}
                 >
                   You need a registered Qortal name to save your pinned apps to
@@ -332,15 +332,15 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 {hasChanged && (
                   <Box
                     sx={{
-                      width: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
                     }}
                   >
                     <Typography
                       sx={{
-                        fontSize: "14px",
+                        fontSize: '14px',
                       }}
                     >
                       You have unsaved changes to your pinned apps. Save them to
@@ -349,13 +349,13 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     <Spacer height="10px" />
                     <LoadingButton
                       sx={{
-                        backgroundColor: "var(--green)",
-                        color: "black",
+                        backgroundColor: 'var(--green)',
+                        color: 'black',
                         opacity: 0.7,
-                        fontWeight: "bold",
-                        "&:hover": {
-                          backgroundColor: "var(--green)",
-                          color: "black",
+                        fontWeight: 'bold',
+                        '&:hover': {
+                          backgroundColor: 'var(--green)',
+                          color: 'black',
                           opacity: 1,
                         },
                       }}
@@ -372,7 +372,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         <>
                           <Typography
                             sx={{
-                              fontSize: "14px",
+                              fontSize: '14px',
                             }}
                           >
                             Don't like your current local changes? Would you
@@ -385,13 +385,13 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             onClick={revertChanges}
                             variant="contained"
                             sx={{
-                              backgroundColor: "var(--danger)",
-                              color: "black",
-                              fontWeight: "bold",
+                              backgroundColor: 'var(--danger)',
+                              color: 'black',
+                              fontWeight: 'bold',
                               opacity: 0.7,
-                              "&:hover": {
-                                backgroundColor: "var(--danger)",
-                                color: "black",
+                              '&:hover': {
+                                backgroundColor: 'var(--danger)',
+                                color: 'black',
                                 opacity: 1,
                               },
                             }}
@@ -405,7 +405,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         <>
                           <Typography
                             sx={{
-                              fontSize: "14px",
+                              fontSize: '14px',
                             }}
                           >
                             Don't like your current local changes? Would you
@@ -428,15 +428,15 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   isUsingImportExportSettings !== true && (
                     <Box
                       sx={{
-                        width: "100%",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
+                        width: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
                       }}
                     >
                       <Typography
                         sx={{
-                          fontSize: "14px",
+                          fontSize: '14px',
                         }}
                       >
                         The app was unable to download your existing QDN-saved
@@ -449,13 +449,13 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         onClick={saveToQdn}
                         variant="contained"
                         sx={{
-                          backgroundColor: "var(--danger)",
-                          color: "black",
-                          fontWeight: "bold",
+                          backgroundColor: 'var(--danger)',
+                          color: 'black',
+                          fontWeight: 'bold',
                           opacity: 0.7,
-                          "&:hover": {
-                            backgroundColor: "var(--danger)",
-                            color: "black",
+                          '&:hover': {
+                            backgroundColor: 'var(--danger)',
+                            color: 'black',
                             opacity: 1,
                           },
                         }}
@@ -467,15 +467,15 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 {!hasChanged && (
                   <Box
                     sx={{
-                      width: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
                     }}
                   >
                     <Typography
                       sx={{
-                        fontSize: "14px",
+                        fontSize: '14px',
                       }}
                     >
                       You currently do not have any changes to your pinned apps
@@ -488,19 +488,19 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         )}
         <Box
           sx={{
-            padding: "15px",
-            display: "flex",
-            flexDirection: "column",
+            padding: '15px',
+            display: 'flex',
+            flexDirection: 'column',
             gap: 1,
-            width: "100%",
+            width: '100%',
           }}
         >
           <Box
             sx={{
-              display: "flex",
-              gap: "10px",
-              justifyContent: "flex-end",
-              width: "100%",
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'flex-end',
+              width: '100%',
             }}
           >
             <ButtonBase
@@ -517,8 +517,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   );
                   if (Array.isArray(responseData)) {
                     saveToLocalStorage(
-                      "ext_saved_settings_import_export",
-                      "sortablePinnedApps",
+                      'ext_saved_settings_import_export',
+                      'sortablePinnedApps',
                       responseData,
                       {
                         isUsingImportExport: true,
@@ -529,7 +529,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     setIsUsingImportExportSettings(true);
                   }
                 } catch (error) {
-                  console.log("error", error);
+                  console.log('error', error);
                 }
               }}
             >
@@ -544,14 +544,14 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     data64,
                   });
                   const blob = new Blob([encryptedData], {
-                    type: "text/plain",
+                    type: 'text/plain',
                   });
 
-                  const timestamp = new Date().toISOString().replace(/:/g, "-"); // Safe timestamp for filenames
+                  const timestamp = new Date().toISOString().replace(/:/g, '-'); // Safe timestamp for filenames
                   const filename = `qortal-new-ui-backup-settings-${timestamp}.txt`;
                   await saveFileToDiskGeneric(blob, filename);
                 } catch (error) {
-                  console.log("error", error);
+                  console.log('error', error);
                 }
               }}
             >

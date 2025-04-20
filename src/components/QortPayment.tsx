@@ -1,5 +1,5 @@
-import { Box, CircularProgress } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import { Box, CircularProgress, useTheme } from '@mui/material';
+import { useState } from 'react';
 import {
   CustomButton,
   CustomInput,
@@ -13,6 +13,7 @@ import { ErrorText } from './ErrorText/ErrorText';
 import { getFee } from '../background';
 
 export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
+  const theme = useTheme();
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
@@ -42,7 +43,9 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
         message: `Would you like to transfer ${Number(paymentAmount)} QORT?`,
         paymentFee: fee.fee + ' QORT',
       });
+
       setIsLoadingSendCoin(true);
+
       window
         .sendMessage('sendCoin', {
           amount: Number(paymentAmount),
@@ -62,65 +65,76 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
           setIsLoadingSendCoin(false);
         });
     } catch (error) {
-      // error
+      console.log(error);
     }
   };
+
   return (
     <>
       <Box
         sx={{
+          alignItems: 'flex-start',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'flex-start',
         }}
       >
         <TextP
           sx={{
-            textAlign: 'start',
-            lineHeight: '24px',
             fontSize: '20px',
             fontWeight: 600,
+            lineHeight: '24px',
+            textAlign: 'start',
           }}
         >
           Transfer QORT
         </TextP>
+
         <Spacer height="35px" />
+
         <TextP
           sx={{
-            textAlign: 'start',
-            lineHeight: '16px',
+            color: theme.palette.text.primary,
             fontSize: '20px',
             fontWeight: 600,
-            color: 'rgba(255, 255, 255, 0.5)',
+            lineHeight: '16px',
+            textAlign: 'start',
           }}
         >
           Balance:
         </TextP>
+
         <TextP
           sx={{
-            textAlign: 'start',
-            lineHeight: '24px',
             fontSize: '20px',
             fontWeight: 700,
+            lineHeight: '24px',
+            textAlign: 'start',
           }}
         >
           {balance?.toFixed(2)} QORT
         </TextP>
       </Box>
+
       <Spacer height="35px" />
 
       <Box>
         <CustomLabel htmlFor="standard-adornment-name">To</CustomLabel>
+
         <Spacer height="5px" />
+
         <CustomInput
           id="standard-adornment-name"
           value={paymentTo}
           onChange={(e) => setPaymentTo(e.target.value)}
           autoComplete="off"
         />
+
         <Spacer height="6px" />
+
         <CustomLabel htmlFor="standard-adornment-amount">Amount</CustomLabel>
+
         <Spacer height="5px" />
+
         <BoundedNumericTextField
           value={paymentAmount}
           minValue={0}
@@ -130,11 +144,15 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
           allowNegatives={false}
           afterChange={(e: string) => setPaymentAmount(+e)}
         />
+
         <Spacer height="6px" />
+
         <CustomLabel htmlFor="standard-adornment-password">
           Confirm Wallet Password
         </CustomLabel>
+
         <Spacer height="5px" />
+
         <PasswordField
           id="standard-adornment-password"
           value={paymentPassword}
@@ -142,10 +160,14 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
           autoComplete="off"
         />
       </Box>
+
       <Spacer height="10px" />
+
       <ErrorText>{sendPaymentError}</ErrorText>
       {/* <Typography>{sendPaymentSuccess}</Typography> */}
+
       <Spacer height="25px" />
+
       <CustomButton
         sx={{
           cursor: isLoadingSendCoin ? 'default' : 'pointer',
@@ -159,7 +181,7 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
           <CircularProgress
             size={16}
             sx={{
-              color: 'white',
+              color: theme.palette.text.primary,
             }}
           />
         )}

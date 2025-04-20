@@ -18,7 +18,7 @@ export const AppsParent = styled(Box)(({ theme }) => ({
   scrollbarWidth: 'none', // Hides the scrollbar in Firefox
 
   // Optional for better cross-browser consistency
-  '-msOverflowStyle': 'none', // Hides scrollbar in IE and Edge
+  msOverflowStyle: 'none', // Hides scrollbar in IE and Edge
 
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
@@ -56,61 +56,59 @@ export const AppsWidthLimiter = styled(Box)(({ theme }) => ({
 }));
 
 export const AppsSearchContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '90%',
-  justifyContent: 'space-between',
   alignItems: 'center',
-  borderRadius: '8px',
-  padding: '0px 10px',
-  height: '36px',
   backgroundColor: theme.palette.background.default,
+  borderRadius: '8px',
   color: theme.palette.text.primary,
+  display: 'flex',
+  height: '36px',
+  justifyContent: 'space-between',
+  padding: '0px 10px',
+  width: '90%',
 }));
 
 export const AppsSearchLeft = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '90%',
-  justifyContent: 'flex-start',
   alignItems: 'center',
-  gap: '10px',
-  flexGrow: 1,
-  flexShrink: 0,
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexGrow: 1,
+  flexShrink: 0,
+  gap: '10px',
+  justifyContent: 'flex-start',
+  width: '90%',
 }));
 
 export const AppsSearchRight = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '90%',
-  justifyContent: 'flex-end',
   alignItems: 'center',
-  flexShrink: 1,
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexShrink: 1,
+  justifyContent: 'flex-end',
+  width: '90%',
 }));
 
 export const AppCircleContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   display: 'flex',
   flexDirection: 'column',
   gap: '5px',
-  alignItems: 'center',
   width: '100%',
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const Add = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   fontSize: '36px',
   fontWeight: 500,
   lineHeight: '43.57px',
   textAlign: 'left',
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AppCircleLabel = styled(Typography)(({ theme }) => ({
-  '-webkit-box-orient': 'vertical',
-  '-webkit-line-clamp': '2',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   display: '-webkit-box',
@@ -119,15 +117,17 @@ export const AppCircleLabel = styled(Typography)(({ theme }) => ({
   lineHeight: 1.2,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: '2',
   width: '120%',
 }));
 
 export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   fontSize: '16px',
   fontWeight: 500,
   lineHeight: 1.2,
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AppCircle = styled(Box)(({ theme }) => ({
@@ -312,58 +312,58 @@ export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
 }));
 
 export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  width: '60px',
-  height: '60px',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  height: '60px',
+  justifyContent: 'center',
+  width: '60px',
 }));
 
 export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
-  fontSize: '10px',
-  fontWeight: 400,
-  lineHeight: 1.2,
-  fontStyle: 'italic',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  fontSize: '10px',
+  fontStyle: 'italic',
+  fontWeight: 400,
+  lineHeight: 1.2,
 }));
 
 export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
-  width: '101px',
-  height: '30px',
-  display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  borderRadius: '5px',
-  fontWeight: 600,
-  fontSize: '10px',
   backgroundColor: theme.palette.background.default,
+  borderRadius: '5px',
   color: theme.palette.text.primary,
+  display: 'flex',
+  fontSize: '10px',
+  fontWeight: 600,
+  height: '30px',
+  justifyContent: 'center',
+  width: '101px',
 }));
 
 export const AppsCategoryInfo = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
-  width: '100%',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  width: '100%',
 }));
 
 export const AppsCategoryInfoSub = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
 }));
 
 export const AppsCategoryInfoLabel = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   fontSize: '12px',
   fontWeight: 700,
   lineHeight: 1.2,
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AppsCategoryInfoValue = styled(Typography)(({ theme }) => ({

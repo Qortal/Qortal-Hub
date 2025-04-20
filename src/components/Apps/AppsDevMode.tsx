@@ -31,6 +31,7 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { AppsDevModeNavBar } from './AppsDevModeNavBar';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
+import { CoreSyncStatus } from '../CoreSyncStatus';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -245,9 +246,18 @@ export const AppsDevMode = ({
       >
         <ButtonBase
           sx={{
+            width: '70px',
+            height: '70px',
+            paddingTop: '23px',
+          }}
+        >
+          <CoreSyncStatus />
+        </ButtonBase>
+
+        <ButtonBase
+          sx={{
             width: '60px',
             height: '60px',
-            paddingTop: '23px',
           }}
           onClick={() => {
             goToHome();

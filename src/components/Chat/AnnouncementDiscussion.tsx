@@ -4,7 +4,7 @@ import {
   AuthenticatedContainerInnerTop,
   CustomButton,
 } from '../../styles/App-styles';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, useTheme } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import ShortUniqueId from 'short-unique-id';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
@@ -39,6 +39,7 @@ export const AnnouncementDiscussion = ({
   myName,
   isPrivate,
 }) => {
+  const theme = useTheme();
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
@@ -83,7 +84,9 @@ export const AnnouncementDiscussion = ({
           [`${identifier}-${name}`]: messageData,
         };
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnc = async ({ encryptedData, identifier }: any) => {
@@ -107,7 +110,9 @@ export const AnnouncementDiscussion = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const setTempData = async () => {
@@ -123,7 +128,9 @@ export const AnnouncementDiscussion = ({
         });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishComment = async () => {
@@ -206,6 +213,7 @@ export const AnnouncementDiscussion = ({
           getData({ name: data.name, identifier: data.identifier }, isPrivate);
         }
       } catch (error) {
+        console.log(error);
       } finally {
         setIsLoading(false);
 
@@ -235,7 +243,9 @@ export const AnnouncementDiscussion = ({
       for (const data of responseData) {
         getData({ name: data.name, identifier: data.identifier }, isPrivate);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const combinedListTempAndReal = useMemo(() => {
@@ -266,19 +276,19 @@ export const AnnouncementDiscussion = ({
   return (
     <div
       style={{
-        height: isMobile ? '100%' : '100%',
         display: 'flex',
         flexDirection: 'column',
+        height: isMobile ? '100%' : '100%',
         width: '100%',
       }}
     >
       <div
         style={{
-          position: 'relative',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 0,
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AuthenticatedContainerInnerTop
@@ -293,6 +303,7 @@ export const AnnouncementDiscussion = ({
             }}
           />
         </AuthenticatedContainerInnerTop>
+
         <Spacer height="20px" />
       </div>
       <AnnouncementList
@@ -306,30 +317,27 @@ export const AnnouncementDiscussion = ({
       />
       <div
         style={{
-          // position: 'fixed',
-          // bottom: '0px',
-          backgroundColor: '#232428',
-          minHeight: isMobile ? '0px' : '150px',
-          maxHeight: isMobile ? 'auto' : '400px',
+          backgroundColor: theme.palette.background.default,
+          bottom: isFocusedParent ? '0px' : 'unset',
+          boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
-          width: '100%',
-          boxSizing: 'border-box',
-          padding: isMobile ? '10px' : '20px',
-          position: isFocusedParent ? 'fixed' : 'relative',
-          bottom: isFocusedParent ? '0px' : 'unset',
-          top: isFocusedParent ? '0px' : 'unset',
-          zIndex: isFocusedParent ? 5 : 'unset',
           flexShrink: 0,
+          maxHeight: '400px',
+          minHeight: '150px',
+          overflow: 'hidden',
+          padding: '20px',
+          position: isFocusedParent ? 'fixed' : 'relative',
+          top: isFocusedParent ? '0px' : 'unset',
+          width: '100%',
+          zIndex: isFocusedParent ? 5 : 'unset',
         }}
       >
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            // height: '100%',
-            flexGrow: isMobile && 1,
+            flexGrow: 1,
             overflow: 'auto',
           }}
         >
@@ -345,11 +353,11 @@ export const AnnouncementDiscussion = ({
         <Box
           sx={{
             display: 'flex',
-            width: '100&',
+            flexShrink: 0,
             gap: '10px',
             justifyContent: 'center',
-            flexShrink: 0,
             position: 'relative',
+            width: '100&',
           }}
         >
           {isFocusedParent && (
@@ -361,13 +369,13 @@ export const AnnouncementDiscussion = ({
                 // Unfocus the editor
               }}
               style={{
-                marginTop: 'auto',
                 alignSelf: 'center',
+                background: 'red',
                 cursor: isSending ? 'default' : 'pointer',
                 flexShrink: 0,
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
-                background: 'red',
+                fontSize: '14px',
+                marginTop: 'auto',
+                padding: '5px',
               }}
             >
               {` Close`}
@@ -379,25 +387,25 @@ export const AnnouncementDiscussion = ({
               publishComment();
             }}
             style={{
-              marginTop: 'auto',
               alignSelf: 'center',
+              background: theme.palette.background.default,
               cursor: isSending ? 'default' : 'pointer',
-              background: isSending && 'rgba(0, 0, 0, 0.8)',
               flexShrink: 0,
-              padding: isMobile && '5px',
-              fontSize: isMobile && '14px',
+              fontSize: '14px',
+              marginTop: 'auto',
+              padding: '5px',
             }}
           >
             {isSending && (
               <CircularProgress
                 size={18}
                 sx={{
+                  color: theme.palette.text.primary,
+                  left: '50%',
+                  marginLeft: '-12px',
+                  marginTop: '-12px',
                   position: 'absolute',
                   top: '50%',
-                  left: '50%',
-                  marginTop: '-12px',
-                  marginLeft: '-12px',
-                  color: 'white',
                 }}
               />
             )}

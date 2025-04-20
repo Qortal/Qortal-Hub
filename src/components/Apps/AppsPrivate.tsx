@@ -1,6 +1,5 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useMemo, useState } from 'react';
 import {
-  Avatar,
   Box,
   Button,
   ButtonBase,
@@ -13,14 +12,17 @@ import {
   Select,
   Tab,
   Tabs,
-  Typography,
-} from "@mui/material";
-import { useDropzone } from "react-dropzone";
-import { useHandlePrivateApps } from "./useHandlePrivateApps";
-import { useRecoilState, useSetRecoilState } from "recoil";
-import { groupsPropertiesAtom, myGroupsWhereIAmAdminAtom } from "../../atoms/global";
-import { Label } from "../Group/AddGroup";
-import { Spacer } from "../../common/Spacer";
+  useTheme,
+} from '@mui/material';
+import { useDropzone } from 'react-dropzone';
+import { useHandlePrivateApps } from './useHandlePrivateApps';
+import { useRecoilState } from 'recoil';
+import {
+  groupsPropertiesAtom,
+  myGroupsWhereIAmAdminAtom,
+} from '../../atoms/global';
+import { Label } from '../Group/AddGroup';
+import { Spacer } from '../../common/Spacer';
 import {
   Add,
   AppCircle,
@@ -28,52 +30,59 @@ import {
   AppCircleLabel,
   PublishQAppChoseFile,
   PublishQAppInfo,
-} from "./Apps-styles";
-import ImageUploader from "../../common/ImageUploader";
-import { isMobile, MyContext } from "../../App";
-import { fileToBase64 } from "../../utils/fileReading";
-import { objectToBase64 } from "../../qdn/encryption/group-encryption";
-import { getFee } from "../../background";
+} from './Apps-styles';
+import ImageUploader from '../../common/ImageUploader';
+import { isMobile, MyContext } from '../../App';
+import { fileToBase64 } from '../../utils/fileReading';
+import { objectToBase64 } from '../../qdn/encryption/group-encryption';
+import { getFee } from '../../background';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
-export const AppsPrivate = ({myName}) => {
+export const AppsPrivate = ({ myName }) => {
   const { openApp } = useHandlePrivateApps();
   const [file, setFile] = useState(null);
   const [logo, setLogo] = useState(null);
-  const [qortalUrl, setQortalUrl] = useState("");
+  const [qortalUrl, setQortalUrl] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(0);
-  const [groupsProperties] = useRecoilState(groupsPropertiesAtom)
+  const [groupsProperties] = useRecoilState(groupsPropertiesAtom);
   const [valueTabPrivateApp, setValueTabPrivateApp] = useState(0);
   const [myGroupsWhereIAmAdminFromGlobal] = useRecoilState(
     myGroupsWhereIAmAdminAtom
   );
 
-  const myGroupsWhereIAmAdmin = useMemo(()=> {
-    return myGroupsWhereIAmAdminFromGlobal?.filter((group)=> groupsProperties[group?.groupId]?.isOpen === false)
-  }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties])
-  const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
-  const { show, setInfoSnackCustom, setOpenSnackGlobal, memberGroups } = useContext(MyContext);
-  
+  const myGroupsWhereIAmAdmin = useMemo(() => {
+    return myGroupsWhereIAmAdminFromGlobal?.filter(
+      (group) => groupsProperties[group?.groupId]?.isOpen === false
+    );
+  }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties]);
 
-  const myGroupsPrivate = useMemo(()=> {
-    return memberGroups?.filter((group)=> groupsProperties[group?.groupId]?.isOpen === false)
-  }, [memberGroups, groupsProperties])
+  const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
+  const { show, setInfoSnackCustom, setOpenSnackGlobal, memberGroups } =
+    useContext(MyContext);
+  const theme = useTheme();
+
+  const myGroupsPrivate = useMemo(() => {
+    return memberGroups?.filter(
+      (group) => groupsProperties[group?.groupId]?.isOpen === false
+    );
+  }, [memberGroups, groupsProperties]);
   const [privateAppValues, setPrivateAppValues] = useState({
-    name: "",
-    service: "DOCUMENT",
-    identifier: "",
+    name: '',
+    service: 'DOCUMENT',
+    identifier: '',
     groupId: 0,
   });
 
   const [newPrivateAppValues, setNewPrivateAppValues] = useState({
-    service: "DOCUMENT",
-    identifier: "",
-    name: "",
+    service: 'DOCUMENT',
+    identifier: '',
+    name: '',
   });
+
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
-      "application/zip": [".zip"], // Only accept zip files
+      'application/zip': ['.zip'], // Only accept zip files
     },
     maxSize: maxFileSize,
     multiple: false, // Disable multiple file uploads
@@ -85,7 +94,7 @@ export const AppsPrivate = ({myName}) => {
     onDropRejected: (fileRejections) => {
       fileRejections.forEach(({ file, errors }) => {
         errors.forEach((error) => {
-          if (error.code === "file-too-large") {
+          if (error.code === 'file-too-large') {
             console.error(
               `File ${file.name} is too large. Max size allowed is ${
                 maxFileSize / (1024 * 1024)
@@ -100,25 +109,24 @@ export const AppsPrivate = ({myName}) => {
   const addPrivateApp = async () => {
     try {
       if (privateAppValues?.groupId === 0) return;
-      
-     await openApp(privateAppValues, true);
+
+      await openApp(privateAppValues, true);
     } catch (error) {
-        console.error(error)
-      
+      console.error(error);
     }
   };
 
   const clearFields = () => {
     setPrivateAppValues({
-      name: "",
-      service: "DOCUMENT",
-      identifier: "",
+      name: '',
+      service: 'DOCUMENT',
+      identifier: '',
       groupId: 0,
     });
     setNewPrivateAppValues({
-      service: "DOCUMENT",
-      identifier: "",
-      name: "",
+      service: 'DOCUMENT',
+      identifier: '',
+      name: '',
     });
     setFile(null);
     setValueTabPrivateApp(0);
@@ -129,9 +137,9 @@ export const AppsPrivate = ({myName}) => {
   const publishPrivateApp = async () => {
     try {
       if (selectedGroup === 0) return;
-      if (!logo) throw new Error("Please select an image for a logo");
-      if (!myName) throw new Error("You need a Qortal name to publish");
-      if (!newPrivateAppValues?.name) throw new Error("Your app needs a name");
+      if (!logo) throw new Error('Please select an image for a logo');
+      if (!myName) throw new Error('You need a Qortal name to publish');
+      if (!newPrivateAppValues?.name) throw new Error('Your app needs a name');
       const base64Logo = await fileToBase64(logo);
       const base64App = await fileToBase64(file);
       const objectToSave = {
@@ -141,27 +149,29 @@ export const AppsPrivate = ({myName}) => {
       };
       const object64 = await objectToBase64(objectToSave);
       const decryptedData = await window.sendMessage(
-        "ENCRYPT_QORTAL_GROUP_DATA",
+        'ENCRYPT_QORTAL_GROUP_DATA',
 
         {
           base64: object64,
           groupId: selectedGroup,
         }
       );
+
       if (decryptedData?.error) {
         throw new Error(
-          decryptedData?.error || "Unable to encrypt app. App not published"
+          decryptedData?.error || 'Unable to encrypt app. App not published'
         );
       }
-      const fee = await getFee("ARBITRARY");
+
+      const fee = await getFee('ARBITRARY');
 
       await show({
-        message: "Would you like to publish this app?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to publish this app?',
+        publishFee: fee.fee + ' QORT',
       });
       await new Promise((res, rej) => {
         window
-          .sendMessage("publishOnQDN", {
+          .sendMessage('publishOnQDN', {
             data: decryptedData,
             identifier: newPrivateAppValues?.identifier,
             service: newPrivateAppValues?.service,
@@ -174,9 +184,10 @@ export const AppsPrivate = ({myName}) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || "An error occurred");
+            rej(error.message || 'An error occurred');
           });
       });
+
       openApp(
         {
           identifier: newPrivateAppValues?.identifier,
@@ -188,10 +199,10 @@ export const AppsPrivate = ({myName}) => {
       );
       clearFields();
     } catch (error) {
-        setOpenSnackGlobal(true)
+      setOpenSnackGlobal(true);
       setInfoSnackCustom({
-        type: "error",
-        message: error?.message || "Unable to publish app",
+        type: 'error',
+        message: error?.message || 'Unable to publish app',
       });
     }
   };
@@ -203,9 +214,10 @@ export const AppsPrivate = ({myName}) => {
   function a11yProps(index: number) {
     return {
       id: `simple-tab-${index}`,
-      "aria-controls": `simple-tabpanel-${index}`,
+      'aria-controls': `simple-tabpanel-${index}`,
     };
   }
+
   return (
     <>
       <ButtonBase
@@ -213,17 +225,18 @@ export const AppsPrivate = ({myName}) => {
           setIsOpenPrivateModal(true);
         }}
         sx={{
-          width: "80px",
+          width: '80px',
         }}
       >
         <AppCircleContainer
           sx={{
-            gap: !isMobile ? "10px" : "5px",
+            gap: !isMobile ? '10px' : '5px',
           }}
         >
           <AppCircle>
             <Add>+</Add>
           </AppCircle>
+
           <AppCircleLabel>Private</AppCircleLabel>
         </AppCircleContainer>
       </ButtonBase>
@@ -233,7 +246,7 @@ export const AppsPrivate = ({myName}) => {
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === 'Enter') {
               if (valueTabPrivateApp === 0) {
                 if (
                   !privateAppValues.name ||
@@ -249,23 +262,17 @@ export const AppsPrivate = ({myName}) => {
           maxWidth="md"
           fullWidth={true}
         >
-          <DialogTitle id="alert-dialog-title">
-            {valueTabPrivateApp === 0
-              ? "Access private app"
-              : "Publish private app"}
-          </DialogTitle>
-
           <Box>
             <Tabs
               value={valueTabPrivateApp}
               onChange={handleChange}
               aria-label="basic tabs example"
-              variant={isMobile ? "scrollable" : "fullWidth"} // Scrollable on mobile, full width on desktop
+              variant={isMobile ? 'scrollable' : 'fullWidth'} // Scrollable on mobile, full width on desktop
               scrollButtons="auto"
               allowScrollButtonsMobile
               sx={{
-                "& .MuiTabs-indicator": {
-                  backgroundColor: "white",
+                '& .MuiTabs-indicator': {
+                  backgroundColor: theme.palette.background.default,
                 },
               }}
             >
@@ -273,20 +280,20 @@ export const AppsPrivate = ({myName}) => {
                 label="Access app"
                 {...a11yProps(0)}
                 sx={{
-                  "&.Mui-selected": {
-                    color: "white",
+                  '&.Mui-selected': {
+                    color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? "0.75rem" : "1rem", // Adjust font size for mobile
+                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
                 }}
               />
               <Tab
                 label="Publish app"
                 {...a11yProps(1)}
                 sx={{
-                  "&.Mui-selected": {
-                    color: "white",
+                  '&.Mui-selected': {
+                    color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? "0.75rem" : "1rem", // Adjust font size for mobile
+                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
                 }}
               />
             </Tabs>
@@ -296,9 +303,9 @@ export const AppsPrivate = ({myName}) => {
               <DialogContent>
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
                   }}
                 >
                   <Label>Select a group</Label>
@@ -333,10 +340,10 @@ export const AppsPrivate = ({myName}) => {
                 <Spacer height="10px" />
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    marginTop: "15px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                    marginTop: '15px',
                   }}
                 >
                   <Label>name</Label>
@@ -355,10 +362,10 @@ export const AppsPrivate = ({myName}) => {
                 </Box>
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    marginTop: "15px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                    marginTop: '15px',
                   }}
                 >
                   <Label>identifier</Label>
@@ -376,6 +383,7 @@ export const AppsPrivate = ({myName}) => {
                   />
                 </Box>
               </DialogContent>
+
               <DialogActions>
                 <Button
                   variant="contained"
@@ -406,15 +414,19 @@ export const AppsPrivate = ({myName}) => {
               <DialogContent>
                 <PublishQAppInfo
                   sx={{
-                    fontSize: "14px",
+                    backgroundColor: theme.palette.background.paper,
+                    fontSize: '14px',
                   }}
                 >
-                  Select .zip file containing static content:{" "}
+                  Select .zip file containing static content:{' '}
                 </PublishQAppInfo>
+
                 <Spacer height="10px" />
+
                 <PublishQAppInfo
                   sx={{
-                    fontSize: "14px",
+                    backgroundColor: theme.palette.background.paper,
+                    fontSize: '14px',
                   }}
                 >{`
                        50mb MB maximum`}</PublishQAppInfo>
@@ -426,17 +438,26 @@ export const AppsPrivate = ({myName}) => {
                 )}
 
                 <Spacer height="18px" />
-                <PublishQAppChoseFile {...getRootProps()}>
-                  {" "}
+
+                <PublishQAppChoseFile
+                  sx={{
+                    backgroundColor: theme.palette.background.default,
+                    fontSize: '14px',
+                  }}
+                  {...getRootProps()}
+                >
+                  {' '}
                   <input {...getInputProps()} />
-                  {file ? "Change" : "Choose"} File
+                  {file ? 'Change' : 'Choose'} File
                 </PublishQAppChoseFile>
+
                 <Spacer height="20px" />
+
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
                   }}
                 >
                   <Label>Select a group</Label>
@@ -462,14 +483,15 @@ export const AppsPrivate = ({myName}) => {
                       })}
                   </Select>
                 </Box>
+
                 <Spacer height="20px" />
 
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    marginTop: "15px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                    marginTop: '15px',
                   }}
                 >
                   <Label>identifier</Label>
@@ -486,13 +508,15 @@ export const AppsPrivate = ({myName}) => {
                     }
                   />
                 </Box>
+
                 <Spacer height="10px" />
+
                 <Box
                   sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "5px",
-                    marginTop: "15px",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                    marginTop: '15px',
                   }}
                 >
                   <Label>App name</Label>
@@ -511,12 +535,15 @@ export const AppsPrivate = ({myName}) => {
                 </Box>
 
                 <Spacer height="10px" />
+
                 <ImageUploader onPick={(file) => setLogo(file)}>
                   <Button variant="contained">Choose logo</Button>
                 </ImageUploader>
+
                 {logo?.name}
                 <Spacer height="25px" />
               </DialogContent>
+
               <DialogActions>
                 <Button
                   variant="contained"
@@ -527,6 +554,7 @@ export const AppsPrivate = ({myName}) => {
                 >
                   Close
                 </Button>
+
                 <Button
                   disabled={
                     !newPrivateAppValues.name ||

@@ -7,6 +7,7 @@ import {
   ListItemAvatar,
   ListItemText,
   Typography,
+  useTheme,
 } from '@mui/material';
 import React, {
   useCallback,
@@ -24,7 +25,6 @@ import CampaignIcon from '@mui/icons-material/Campaign';
 import { AddGroup } from './AddGroup';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CreateIcon from '@mui/icons-material/Create';
-
 import {
   AuthenticatedContainerInnerRight,
   CustomButton,
@@ -46,7 +46,6 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { GroupAnnouncements } from '../Chat/GroupAnnouncements';
-
 import { GroupForum } from '../Chat/GroupForum';
 import {
   executeEvent,
@@ -56,9 +55,7 @@ import {
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
 import { useMessageQueue } from '../../MessageQueueContext';
-import { isExtMsg, isUpdateMsg } from '../../background';
 import { ContextMenu } from '../ContextMenu';
-
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { HomeDesktop } from './HomeDesktop';
@@ -113,6 +110,7 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
 
   return sortedData[0];
 };
+
 interface GroupProps {
   myAddress: string;
   isFocused: boolean;
@@ -134,7 +132,7 @@ export const getGroupAdminsAddress = async (groupNumber: number) => {
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  let members: any = [];
+  const members: any = [];
   if (groupData && Array.isArray(groupData?.members)) {
     for (const member of groupData.members) {
       if (member.member) {
@@ -153,7 +151,7 @@ export function validateSecretKey(obj) {
   }
 
   // Iterate over each key in the object
-  for (let key in obj) {
+  for (const key in obj) {
     // Ensure the key is a string representation of a positive integer
     if (!/^\d+$/.test(key)) {
       return false;
@@ -224,7 +222,9 @@ export const decryptResource = async (data: string, fromQortalRequest) => {
           }
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export const addDataPublishesFunc = async (data: string, groupId, type) => {
@@ -247,7 +247,9 @@ export const addDataPublishesFunc = async (data: string, groupId, type) => {
           rej(error.message || 'An error occurred');
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export const getDataPublishesFunc = async (groupId, type) => {
@@ -269,7 +271,9 @@ export const getDataPublishesFunc = async (groupId, type) => {
           rej(error.message || 'An error occurred');
         });
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export async function getNameInfo(address: string) {
@@ -337,6 +341,7 @@ export const getNames = async (listOfMembers) => {
 
   return members;
 };
+
 export const getNamesForAdmins = async (admins) => {
   let members: any = [];
 
@@ -473,22 +478,20 @@ export const Group = ({
     }
     setIsOpenSideViewGroups((prev) => !prev);
   };
+
   useEffect(() => {
     timestampEnterDataRef.current = timestampEnterData;
   }, [timestampEnterData]);
-
   useEffect(() => {
     isFocusedRef.current = isFocused;
   }, [isFocused]);
   useEffect(() => {
     groupSectionRef.current = groupSection;
   }, [groupSection]);
-
   useEffect(() => {
     selectedGroupRef.current = selectedGroup;
     setSelectedGroupId(selectedGroup?.groupId);
   }, [selectedGroup]);
-
   useEffect(() => {
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
@@ -538,7 +541,9 @@ export const Group = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const refreshHomeDataFunc = () => {
@@ -565,7 +570,9 @@ export const Group = ({
             rej(error.message || 'An error occurred');
           });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   useEffect(() => {
@@ -586,7 +593,9 @@ export const Group = ({
         data.name = name;
       }
       setGroupOwner(data);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const directChatHasUnread = useMemo(() => {
@@ -755,7 +764,7 @@ export const Group = ({
       setAdmins(addresses);
       setAdminsWithNames(both);
     } catch (error) {
-      //error
+      console.log(error);
     }
   };
 
@@ -783,7 +792,9 @@ export const Group = ({
       );
       const data = await response.json();
       if (data && data[0]) return data[0].timestamp;
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getLatestRegularChat = async (groups) => {
@@ -811,7 +822,9 @@ export const Group = ({
 
       await Promise.all(getGroupData);
       setGroupChatTimestamps(groupData);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getGroupsProperties = useCallback(async (address) => {
@@ -826,7 +839,7 @@ export const Group = ({
       }, {});
       setGroupsProperties(transformToObject);
     } catch (error) {
-      // error
+      console.log(error);
     }
   }, []);
 
@@ -838,6 +851,7 @@ export const Group = ({
         Object.keys(groupsProperties)
       )
     ) {
+      // TODO: empty block. Check it!
     } else {
       getGroupsProperties(myAddress);
     }
@@ -958,8 +972,11 @@ export const Group = ({
       const res = await getGroupMembers(groupId);
       if (groupId !== selectedGroupRef.current?.groupId) return;
       setMembers(res);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
+
   useEffect(() => {
     if (
       !initiatedGetMembers.current &&
@@ -1508,6 +1525,7 @@ export const Group = ({
       setMobileViewMode('home');
     }
     if (!isMobile) {
+      // TODO: empty block. Check it!
     }
     setDesktopViewMode('home');
 
@@ -1585,27 +1603,29 @@ export const Group = ({
     }
   };
 
+  const theme = useTheme();
+
   const renderDirects = () => {
     return (
       <div
         style={{
-          display: 'flex',
-          width: isMobile ? '100%' : '380px',
-          flexDirection: 'column',
           alignItems: 'flex-start',
+          background: theme.palette.background.default,
+          borderRadius: '0px 15px 15px 0px',
+          display: 'flex',
+          flexDirection: 'column',
           height: isMobile ? `calc(${rootHeight} - 45px)` : '100%',
-          background: !isMobile && 'var(--bg-primary)',
-          borderRadius: !isMobile && '0px 15px 15px 0px',
+          width: isMobile ? '100%' : '380px',
         }}
       >
         {!isMobile && (
           <Box
             sx={{
-              width: '100%',
               alignItems: 'center',
-              justifyContent: 'center',
               display: 'flex',
               gap: '10px',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <ButtonBase
@@ -1618,8 +1638,8 @@ export const Group = ({
                   groupChatHasUnread || groupsAnnHasUnread
                     ? 'var(--unread)'
                     : desktopSideView === 'groups'
-                      ? 'white'
-                      : 'rgba(250, 250, 250, 0.5)'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
                 }
                 label="Groups"
                 selected={desktopSideView === 'groups'}
@@ -1631,8 +1651,8 @@ export const Group = ({
                     groupChatHasUnread || groupsAnnHasUnread
                       ? 'var(--unread)'
                       : desktopSideView === 'groups'
-                        ? 'white'
-                        : 'rgba(250, 250, 250, 0.5)'
+                        ? theme.palette.text.primary
+                        : theme.palette.text.secondary
                   }
                 />
               </IconWrapper>
@@ -1648,8 +1668,8 @@ export const Group = ({
                   directChatHasUnread
                     ? 'var(--unread)'
                     : desktopSideView === 'directs'
-                      ? 'white'
-                      : 'rgba(250, 250, 250, 0.5)'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
                 }
                 label="Messaging"
                 selected={desktopSideView === 'directs'}
@@ -1660,8 +1680,8 @@ export const Group = ({
                     directChatHasUnread
                       ? 'var(--unread)'
                       : desktopSideView === 'directs'
-                        ? 'white'
-                        : 'rgba(250, 250, 250, 0.5)'
+                        ? theme.palette.text.primary
+                        : theme.palette.text.secondary
                   }
                 />
               </IconWrapper>
@@ -1671,12 +1691,12 @@ export const Group = ({
 
         <div
           style={{
-            display: 'flex',
-            width: '100%',
-            flexDirection: 'column',
             alignItems: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
             flexGrow: 1,
             overflowY: 'auto',
+            width: '100%',
           }}
         >
           {directs.map((direct: any) => (
@@ -1715,11 +1735,14 @@ export const Group = ({
                   width: '100%',
                   flexDirection: 'column',
                   cursor: 'pointer',
-                  border: '1px #232428 solid',
+                  borderColor: theme.palette.primary,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
                   padding: '2px',
                   borderRadius: '2px',
                   background:
-                    direct?.address === selectedDirect?.address && 'white',
+                    direct?.address === selectedDirect?.address &&
+                    theme.palette.background.default,
                 }}
               >
                 <Box
@@ -1732,8 +1755,8 @@ export const Group = ({
                   <ListItemAvatar>
                     <Avatar
                       sx={{
-                        background: '#232428',
-                        color: 'white',
+                        background: theme.palette.background.default,
+                        color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
                     >
@@ -1751,7 +1774,7 @@ export const Group = ({
                       style: {
                         color:
                           direct?.address === selectedDirect?.address &&
-                          'black',
+                          theme.palette.text.primary,
                         textWrap: 'wrap',
                         overflow: 'hidden',
                       },
@@ -1760,7 +1783,7 @@ export const Group = ({
                       style: {
                         color:
                           direct?.address === selectedDirect?.address &&
-                          'black',
+                          theme.palette.text.primary,
                         fontSize: '12px',
                       },
                     }}
@@ -1805,7 +1828,7 @@ export const Group = ({
           >
             <CreateIcon
               sx={{
-                color: 'white',
+                color: theme.palette.text.primary,
               }}
             />
             New Chat
@@ -1824,7 +1847,7 @@ export const Group = ({
           flexDirection: 'column',
           alignItems: 'flex-start',
           height: isMobile ? `calc(${rootHeight} - 45px)` : '100%',
-          background: !isMobile && 'var(--bg-primary)',
+          background: !isMobile && theme.palette.background.default,
           borderRadius: !isMobile && '0px 15px 15px 0px',
         }}
       >
@@ -1848,8 +1871,8 @@ export const Group = ({
                   groupChatHasUnread || groupsAnnHasUnread
                     ? 'var(--unread)'
                     : desktopSideView === 'groups'
-                      ? 'white'
-                      : 'rgba(250, 250, 250, 0.5)'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
                 }
                 label="Groups"
                 selected={desktopSideView === 'groups'}
@@ -1861,8 +1884,8 @@ export const Group = ({
                     groupChatHasUnread || groupsAnnHasUnread
                       ? 'var(--unread)'
                       : desktopSideView === 'groups'
-                        ? 'white'
-                        : 'rgba(250, 250, 250, 0.5)'
+                        ? theme.palette.text.primary
+                        : theme.palette.text.secondary
                   }
                 />
               </IconWrapper>
@@ -1878,8 +1901,8 @@ export const Group = ({
                   directChatHasUnread
                     ? 'var(--unread)'
                     : desktopSideView === 'directs'
-                      ? 'white'
-                      : 'rgba(250, 250, 250, 0.5)'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
                 }
                 label="Messaging"
                 selected={desktopSideView === 'directs'}
@@ -1890,8 +1913,8 @@ export const Group = ({
                     directChatHasUnread
                       ? 'var(--unread)'
                       : desktopSideView === 'directs'
-                        ? 'white'
-                        : 'rgba(250, 250, 250, 0.5)'
+                        ? theme.palette.text.primary
+                        : theme.palette.text.secondary
                   }
                 />
               </IconWrapper>
@@ -1901,15 +1924,15 @@ export const Group = ({
 
         <div
           style={{
-            display: 'flex',
-            width: '100%',
-            flexDirection: 'column',
             alignItems: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
             flexGrow: 1,
-            overflowY: 'auto',
-            visibility: chatMode === 'directs' && 'hidden',
-            position: chatMode === 'directs' && 'fixed',
             left: chatMode === 'directs' && '-1000px',
+            overflowY: 'auto',
+            position: chatMode === 'directs' && 'fixed',
+            visibility: chatMode === 'directs' && 'hidden',
+            width: '100%',
           }}
         >
           {groups.map((group: any) => (
@@ -1951,14 +1974,17 @@ export const Group = ({
                 }}
                 sx={{
                   display: 'flex',
-                  width: '100%',
-                  flexDirection: 'column',
-                  cursor: 'pointer',
-                  border: '1px #232428 solid',
-                  padding: '2px',
-                  borderRadius: '2px',
                   background:
-                    group?.groupId === selectedGroup?.groupId && 'white',
+                    group?.groupId === selectedGroup?.groupId &&
+                    theme.palette.background.default,
+                  borderColor: theme.palette.primary,
+                  borderRadius: '2px',
+                  borderStyle: 'solid',
+                  borderWidth: '1px',
+                  cursor: 'pointer',
+                  flexDirection: 'column',
+                  padding: '2px',
+                  width: '100%',
                 }}
               >
                 <ContextMenu
@@ -1968,22 +1994,22 @@ export const Group = ({
                 >
                   <Box
                     sx={{
+                      alignItems: 'center',
                       display: 'flex',
                       width: '100%',
-                      alignItems: 'center',
                     }}
                   >
                     <ListItemAvatar>
                       {groupsProperties[group?.groupId]?.isOpen === false ? (
                         <Box
                           sx={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            background: '#232428',
-                            display: 'flex',
                             alignItems: 'center',
+                            background: theme.palette.background.default,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            height: '40px',
                             justifyContent: 'center',
+                            width: '40px',
                           }}
                         >
                           <LockIcon
@@ -1995,13 +2021,13 @@ export const Group = ({
                       ) : (
                         <Box
                           sx={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '50%',
-                            background: '#232428',
-                            display: 'flex',
                             alignItems: 'center',
+                            background: theme.palette.background.default,
+                            borderRadius: '50%',
+                            display: 'flex',
+                            height: '40px',
                             justifyContent: 'center',
+                            width: '40px',
                           }}
                         >
                           <NoEncryptionGmailerrorredIcon
@@ -2010,15 +2036,6 @@ export const Group = ({
                             }}
                           />
                         </Box>
-                        //   <Avatar
-                        //   sx={{
-                        //     background: "#232428",
-                        //     color: "white",
-                        //   }}
-                        //   alt={group?.groupName}
-                        // >
-                        //   {group.groupName?.charAt(0)}
-                        // </Avatar>
                       )}
                     </ListItemAvatar>
                     <ListItemText
@@ -2034,14 +2051,14 @@ export const Group = ({
                         style: {
                           color:
                             group?.groupId === selectedGroup?.groupId &&
-                            'black',
+                            theme.palette.text.primary,
                         },
                       }} // Change the color of the primary text
                       secondaryTypographyProps={{
                         style: {
                           color:
                             group?.groupId === selectedGroup?.groupId &&
-                            'black',
+                            theme.palette.text.primary,
                           fontSize: '12px',
                         },
                       }}
@@ -2084,10 +2101,10 @@ export const Group = ({
         <div
           style={{
             display: 'flex',
-            width: '100%',
+            gap: '10px',
             justifyContent: 'center',
             padding: '10px',
-            gap: '10px',
+            width: '100%',
           }}
         >
           {chatMode === 'groups' && (
@@ -2099,11 +2116,12 @@ export const Group = ({
               >
                 <AddCircleOutlineIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
-                Group Mgmt
+                Group
               </CustomButton>
+
               {!isRunningPublicNode && (
                 <CustomButton
                   onClick={() => {
@@ -2116,7 +2134,7 @@ export const Group = ({
                 >
                   <PersonOffIcon
                     sx={{
-                      color: 'white',
+                      color: theme.palette.text.primary,
                     }}
                   />
                 </CustomButton>
@@ -2133,7 +2151,7 @@ export const Group = ({
             >
               <CreateIcon
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
               New Chat
@@ -2150,6 +2168,7 @@ export const Group = ({
         myAddress={myAddress}
         setIsLoadingGroups={setIsLoadingGroups}
       />
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}
@@ -2159,11 +2178,11 @@ export const Group = ({
 
       <div
         style={{
-          display: 'flex',
-          width: '100%',
-          height: isMobile ? '100%' : '100%',
-          flexDirection: 'row',
           alignItems: 'flex-start',
+          display: 'flex',
+          flexDirection: 'row',
+          height: isMobile ? '100%' : '100%',
+          width: '100%',
         }}
       >
         {!isMobile &&
@@ -2191,6 +2210,7 @@ export const Group = ({
           desktopViewMode === 'chat' &&
           desktopSideView !== 'directs' &&
           renderGroups()}
+
         {!isMobile &&
           desktopViewMode === 'chat' &&
           desktopSideView === 'directs' &&
@@ -2214,26 +2234,26 @@ export const Group = ({
               {isMobile && (
                 <Box
                   sx={{
-                    display: 'flex',
                     alignItems: 'center',
-                    width: '100%',
-                    marginTop: '14px',
-                    justifyContent: 'center',
+                    display: 'flex',
                     height: '15px',
+                    justifyContent: 'center',
+                    marginTop: '14px',
+                    width: '100%',
                   }}
                 >
                   <Box
                     sx={{
-                      display: 'flex',
                       alignItems: 'center',
+                      display: 'flex',
                       justifyContent: 'space-between',
                       width: '320px',
                     }}
                   >
                     <Box
                       sx={{
-                        display: 'flex',
                         alignItems: 'center',
+                        display: 'flex',
                         width: '50px',
                       }}
                     >
@@ -2248,10 +2268,10 @@ export const Group = ({
 
                     <Box
                       sx={{
-                        display: 'flex',
                         alignItems: 'center',
-                        width: '50px',
+                        display: 'flex',
                         justifyContent: 'flex-end',
+                        width: '50px',
                       }}
                     >
                       <ButtonBase
@@ -2268,17 +2288,15 @@ export const Group = ({
               )}
               <Box
                 sx={{
-                  position: 'absolute',
-
-                  right: !(desktopViewMode === 'chat') ? 'unset' : '0px',
+                  background: theme.palette.background.default,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  top: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  background: '#27282c',
-                  zIndex: 5,
                   height: isMobile && `calc(${rootHeight} - 45px)`,
-                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
-
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
+                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
+                  position: 'absolute',
+                  right: !(desktopViewMode === 'chat') ? 'unset' : '0px',
+                  top: !(desktopViewMode === 'chat') ? 'unset' : '0px',
+                  zIndex: 5,
                 }}
               >
                 <ChatDirect
@@ -2292,7 +2310,6 @@ export const Group = ({
                   balance={balance}
                   close={() => {
                     setSelectedDirect(null);
-
                     setNewChat(false);
                   }}
                   setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
@@ -2303,18 +2320,18 @@ export const Group = ({
           {desktopViewMode === 'chat' && !selectedGroup && (
             <Box
               sx={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
                 alignItems: 'center',
+                display: 'flex',
                 height: '100%',
+                justifyContent: 'center',
+                width: '100%',
               }}
             >
               <Typography
                 sx={{
                   fontSize: '14px',
                   fontWeight: 400,
-                  color: 'rgba(255, 255, 255, 0.2)',
+                  color: theme.palette.text.primary,
                 }}
               >
                 No group selected
@@ -2407,12 +2424,12 @@ export const Group = ({
                 !secretKeyPublishDate && (
                   <div
                     style={{
-                      display: 'flex',
-                      width: '100%',
-                      height: '100%',
-                      flexDirection: 'column',
                       alignItems: 'flex-start',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      height: '100%',
                       padding: '20px',
+                      width: '100%',
                     }}
                   >
                     {' '}
@@ -2534,9 +2551,9 @@ export const Group = ({
 
               <Box
                 sx={{
+                  bottom: '25px',
                   display: 'flex',
                   position: 'absolute',
-                  bottom: '25px',
                   right: '25px',
                   zIndex: 100,
                 }}
@@ -2586,24 +2603,23 @@ export const Group = ({
             <>
               <Box
                 sx={{
+                  background: theme.palette.background.default,
+                  bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
+                  height: isMobile && `calc(${rootHeight} - 45px)`,
+                  left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
+                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
                   position: 'absolute',
                   right: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
                   top: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  background: '#27282c',
                   zIndex: 5,
-                  height: isMobile && `calc(${rootHeight} - 45px)`,
-                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
-
-                  left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                 }}
               >
                 <Box
                   sx={{
-                    position: 'relative',
-                    flexGrow: 1,
                     display: 'flex',
+                    flexGrow: 1,
                     height: '100%',
+                    position: 'relative',
                   }}
                 >
                   <ChatDirect

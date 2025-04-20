@@ -5,7 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -23,67 +23,71 @@ import {
   PublishQAppCTAParent,
   PublishQAppCTARight,
   PublishQAppDotsBG,
-} from "./Apps-styles";
-import { Avatar, Box, ButtonBase, InputBase, styled } from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { MyContext, getBaseApiReact } from "../../App";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import IconSearch from "../../assets/svgs/Search.svg";
-import IconClearInput from "../../assets/svgs/ClearInput.svg";
-import qappDevelopText from "../../assets/svgs/qappDevelopText.svg";
-import qappDots from "../../assets/svgs/qappDots.svg";
+} from './Apps-styles';
+import { Avatar, Box, ButtonBase, InputBase, styled } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { MyContext, getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import IconSearch from '../../assets/svgs/Search.svg';
+import IconClearInput from '../../assets/svgs/ClearInput.svg';
+import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
+import qappDots from '../../assets/svgs/qappDots.svg';
 
-import { Spacer } from "../../common/Spacer";
-import { AppInfoSnippet } from "./AppInfoSnippet";
-import { Virtuoso } from "react-virtuoso";
-import { executeEvent } from "../../utils/events";
-import { AppsDesktopLibraryBody, AppsDesktopLibraryHeader } from "./AppsDesktop-styles";
+import { Spacer } from '../../common/Spacer';
+import { AppInfoSnippet } from './AppInfoSnippet';
+import { Virtuoso } from 'react-virtuoso';
+import { executeEvent } from '../../utils/events';
+import {
+  AppsDesktopLibraryBody,
+  AppsDesktopLibraryHeader,
+} from './AppsDesktop-styles';
 const officialAppList = [
-  "q-tube",
-  "q-blog",
-  "q-share",
-  "q-support",
-  "q-mail",
-  "q-fund",
-  "q-shop",
-  "q-trade",
-  "q-support",
-  "q-manager",
-  "q-wallets",
-  "q-search"
+  'q-tube',
+  'q-blog',
+  'q-share',
+  'q-support',
+  'q-mail',
+  'q-fund',
+  'q-shop',
+  'q-trade',
+  'q-support',
+  'q-manager',
+  'q-wallets',
+  'q-search',
+  'q-nodecontrol',
 ];
 
-const ScrollerStyled = styled("div")({
+const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  "::-webkit-scrollbar": {
-    width: "0px",
-    height: "0px",
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
   },
 
   // Hide scrollbar for Firefox
-  scrollbarWidth: "none",
+  scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  "-msOverflowStyle": "none",
+  '-msOverflowStyle': 'none',
 });
 
-const StyledVirtuosoContainer = styled("div")({
-  position: "relative",
-  width: "100%",
-  display: "flex",
-  flexDirection: "column",
+const StyledVirtuosoContainer = styled('div')({
+  position: 'relative',
+  width: '100%',
+  display: 'flex',
+  flexDirection: 'column',
 
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  "::-webkit-scrollbar": {
-    width: "0px",
-    height: "0px",
+  '::-webkit-scrollbar': {
+    width: '0px',
+    height: '0px',
   },
 
   // Hide scrollbar for Firefox
-  scrollbarWidth: "none",
+  scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  "-msOverflowStyle": "none",
+  '-msOverflowStyle': 'none',
 });
 
 export const AppsCategoryDesktop = ({
@@ -92,29 +96,28 @@ export const AppsCategoryDesktop = ({
   category,
   isShow,
 }) => {
-  const [searchValue, setSearchValue] = useState("");
+  const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
   const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
-    if(category?.id === 'all') return availableQapps
+    if (category?.id === 'all') return availableQapps;
     return availableQapps.filter(
       (app) => app?.metadata?.category === category?.id
     );
   }, [availableQapps, category]);
 
-  const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
+  const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
 
   // Debounce logic
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
-     
     }, 350);
     setTimeout(() => {
-      virtuosoRef.current.scrollToIndex({
-        index: 0
-      });
+      if (virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({ index: 0 });
+      }
     }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
@@ -126,8 +129,13 @@ export const AppsCategoryDesktop = ({
 
   const searchedList = useMemo(() => {
     if (!debouncedValue) return categoryList;
-    return categoryList.filter((app) =>
-      app.name.toLowerCase().includes(debouncedValue.toLowerCase()) || (app?.metadata?.title && app?.metadata?.title?.toLowerCase().includes(debouncedValue.toLowerCase()))
+    return categoryList.filter(
+      (app) =>
+        app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
+        (app?.metadata?.title &&
+          app?.metadata?.title
+            ?.toLowerCase()
+            .includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue, categoryList]);
 
@@ -140,7 +148,7 @@ export const AppsCategoryDesktop = ({
         myName={myName}
         isFromCategory={true}
         parentStyles={{
-          padding: '0px 10px'
+          padding: '0px 10px',
         }}
       />
     );
@@ -149,27 +157,29 @@ export const AppsCategoryDesktop = ({
   return (
     <AppsLibraryContainer
       sx={{
-        display: !isShow && "none",
-        padding: "0px",
-        height: "100vh",
-        overflow: "hidden",
-        paddingTop: "30px",
+        display: !isShow && 'none',
+        padding: '0px',
+        height: '100vh',
+        overflow: 'hidden',
+        paddingTop: '30px',
       }}
     >
       <AppsDesktopLibraryHeader
         sx={{
-          maxWidth: "1500px",
-          width: "90%",
+          maxWidth: '1500px',
+          width: '90%',
         }}
       >
         <AppsWidthLimiter
           sx={{
-            alignItems: "flex-end",
+            alignItems: 'flex-end',
           }}
         >
-          <AppsSearchContainer sx={{
-                width: "412px",
-              }}>
+          <AppsSearchContainer
+            sx={{
+              width: '412px',
+            }}
+          >
             <AppsSearchLeft>
               <img src={IconSearch} />
               <InputBase
@@ -178,8 +188,8 @@ export const AppsCategoryDesktop = ({
                 sx={{ ml: 1, flex: 1 }}
                 placeholder="Search for apps"
                 inputProps={{
-                  "aria-label": "Search for apps",
-                  fontSize: "16px",
+                  'aria-label': 'Search for apps',
+                  fontSize: '16px',
                   fontWeight: 400,
                 }}
               />
@@ -188,7 +198,7 @@ export const AppsCategoryDesktop = ({
               {searchValue && (
                 <ButtonBase
                   onClick={() => {
-                    setSearchValue("");
+                    setSearchValue('');
                   }}
                 >
                   <img src={IconClearInput} />
@@ -201,9 +211,9 @@ export const AppsCategoryDesktop = ({
       <AppsDesktopLibraryBody
         sx={{
           height: `calc(100vh - 36px)`,
-          overflow: "auto",
-          padding: "0px",
-          alignItems: "center",
+          overflow: 'auto',
+          padding: '0px',
+          alignItems: 'center',
         }}
       >
         <Spacer height="25px" />
@@ -214,7 +224,7 @@ export const AppsCategoryDesktop = ({
         </AppsWidthLimiter>
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
-             sx={{
+            sx={{
               height: `calc(100vh - 36px - 90px - 25px)`,
             }}
           >

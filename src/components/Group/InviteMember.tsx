@@ -1,4 +1,4 @@
-import { LoadingButton } from "@mui/lab";
+import { LoadingButton } from '@mui/lab';
 import {
   Box,
   Button,
@@ -6,45 +6,46 @@ import {
   MenuItem,
   Select,
   SelectChangeEvent,
-} from "@mui/material";
-import React, { useState } from "react";
-import { Spacer } from "../../common/Spacer";
-import { Label } from "./AddGroup";
-import { getFee } from "../../background";
+} from '@mui/material';
+import React, { useState } from 'react';
+import { Spacer } from '../../common/Spacer';
+import { Label } from './AddGroup';
+import { getFee } from '../../background';
 
 export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState('');
   const [expiryTime, setExpiryTime] = useState<string>('259200');
-  const [isLoadingInvite, setIsLoadingInvite] = useState(false)
+  const [isLoadingInvite, setIsLoadingInvite] = useState(false);
   const inviteMember = async () => {
     try {
-      const fee = await getFee('GROUP_INVITE')
+      const fee = await getFee('GROUP_INVITE');
       await show({
-        message: "Would you like to perform a GROUP_INVITE transaction?" ,
-        publishFee: fee.fee + ' QORT'
-      })
-      setIsLoadingInvite(true)
+        message: 'Would you like to perform a GROUP_INVITE transaction?',
+        publishFee: fee.fee + ' QORT',
+      });
+      setIsLoadingInvite(true);
       if (!expiryTime || !value) return;
       new Promise((res, rej) => {
-        window.sendMessage("inviteToGroup", {
-          groupId,
-          qortalAddress: value,
-          inviteTime: +expiryTime,
-        })
+        window
+          .sendMessage('inviteToGroup', {
+            groupId,
+            qortalAddress: value,
+            inviteTime: +expiryTime,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
+                type: 'success',
                 message: `Successfully invited ${value}. It may take a couple of minutes for the changes to propagate`,
               });
               setOpenSnack(true);
               res(response);
-        
-              setValue("");
+
+              setValue('');
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -52,16 +53,17 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error?.message || "An error occurred",
+              type: 'error',
+              message: error?.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
-    } catch (error) {} finally {
-      setIsLoadingInvite(false)
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsLoadingInvite(false);
     }
   };
 
@@ -72,8 +74,8 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: "column",
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       Invite member
@@ -83,8 +85,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         placeholder="Name or address"
         onChange={(e) => setValue(e.target.value)}
       />
-            <Spacer height="20px" />
-
+      <Spacer height="20px" />
       <Label>Invitation Expiry Time</Label>
       <Select
         labelId="demo-simple-select-label"
@@ -105,7 +106,14 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         <MenuItem value={2592000}>30 days</MenuItem>
       </Select>
       <Spacer height="20px" />
-      <LoadingButton  variant="contained"  loadingPosition="start" loading={isLoadingInvite} onClick={inviteMember}>Invite</LoadingButton>
+      <LoadingButton
+        variant="contained"
+        loadingPosition="start"
+        loading={isLoadingInvite}
+        onClick={inviteMember}
+      >
+        Invite
+      </LoadingButton>
     </Box>
   );
 };

@@ -1,54 +1,57 @@
-import { TabParent } from "./Apps-styles";
-import NavCloseTab from "../../assets/svgs/NavCloseTab.svg";
-import { getBaseApiReact } from "../../App";
-import { Avatar, ButtonBase } from "@mui/material";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import { executeEvent } from "../../utils/events";
-import LockIcon from "@mui/icons-material/Lock";
+import { TabParent } from './Apps-styles';
+import { NavCloseTab } from '../../assets/Icons/NavCloseTab.tsx';
+import { getBaseApiReact } from '../../App';
+import { Avatar, ButtonBase, useTheme } from '@mui/material';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import { executeEvent } from '../../utils/events';
+import LockIcon from '@mui/icons-material/Lock';
 
 const TabComponent = ({ isSelected, app }) => {
+  const theme = useTheme();
+
   return (
     <ButtonBase
       onClick={() => {
         if (isSelected) {
-          executeEvent("removeTab", {
+          executeEvent('removeTab', {
             data: app,
           });
           return;
         }
-        executeEvent("setSelectedTab", {
+        executeEvent('setSelectedTab', {
           data: app,
         });
       }}
     >
       <TabParent
         sx={{
-          border: isSelected && "1px solid #FFFFFF",
+          borderStyle: isSelected && 'solid',
+          borderWidth: isSelected && '1px',
+          borderColor: isSelected && theme.palette.text.primary,
         }}
       >
         {isSelected && (
-          <img
+          <NavCloseTab
             style={{
-              position: "absolute",
-              top: "-5px",
-              right: "-5px",
+              position: 'absolute',
+              top: '-5px',
+              right: '-5px',
               zIndex: 1,
             }}
-            src={NavCloseTab}
           />
         )}
         {app?.isPrivate && !app?.privateAppProperties?.logo ? (
           <LockIcon
             sx={{
-              height: "28px",
-              width: "28px",
+              height: '28px',
+              width: '28px',
             }}
           />
         ) : (
           <Avatar
             sx={{
-              height: "28px",
-              width: "28px",
+              height: '28px',
+              width: '28px',
             }}
             alt={app?.name}
             src={
@@ -61,8 +64,8 @@ const TabComponent = ({ isSelected, app }) => {
           >
             <img
               style={{
-                width: "28px",
-                height: "auto",
+                width: '28px',
+                height: 'auto',
               }}
               src={LogoSelected}
               alt="center-icon"

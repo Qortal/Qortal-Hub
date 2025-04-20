@@ -2,113 +2,106 @@ import { Typography, Box, TextField, InputLabel } from '@mui/material';
 import { styled } from '@mui/system';
 
 export const AppContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
-  flexDirection: 'column',
-  width: '100vw',
-  height: '100vh',
-  radius: '15px',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100vh',
   overflow: 'hidden',
+  radius: '15px',
+  width: '100vw',
 }));
 
 export const AuthenticatedContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  width: '100%',
-  height: '100%',
-  justifyContent: 'space-between',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  height: '100%',
+  justifyContent: 'space-between',
+  width: '100%',
 }));
 
 export const AuthenticatedContainerInnerLeft = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
   flexDirection: 'column',
   height: '100%',
   width: '100%',
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AuthenticatedContainerInnerRight = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
-  flexDirection: 'column',
-  width: '60px',
-  height: '100%',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  width: '60px',
 }));
 
 export const AuthenticatedContainerInnerTop = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
-  justifyContent: 'flex-start',
-  width: '100%px',
-  height: '60px',
-  padding: '20px',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  height: '60px',
+  justifyContent: 'flex-start',
+  padding: '20px',
+  width: '100%px',
 }));
 
 export const TextP = styled(Typography)(({ theme }) => ({
-  fontSize: '13px',
-  fontWeight: 600,
-  fontFamily: 'Inter',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '13px',
+  fontWeight: 600,
 }));
 
 export const TextItalic = styled('span')(({ theme }) => ({
-  fontSize: '13px',
-  fontWeight: 600,
-  fontFamily: 'Inter',
-  fontStyle: 'italic',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '13px',
+  fontStyle: 'italic',
+  fontWeight: 600,
 }));
 
 export const TextSpan = styled('span')(({ theme }) => ({
-  fontSize: '13px',
-  fontFamily: 'Inter',
-  fontWeight: 800,
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '13px',
+  fontWeight: 800,
 }));
 
 export const AddressBox = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  border: `1px solid ${
-    theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.5)'
-      : 'rgba(0, 0, 0, 0.3)'
-  }`,
-  justifyContent: 'space-between',
   alignItems: 'center',
-  width: 'auto',
-  height: '25px',
-  padding: '5px 15px',
-  gap: '5px',
+  backgroundColor: theme.palette.background.default,
+  borderColor: theme.palette.background.paper,
   borderRadius: '100px',
+  borderStyle: 'solid',
+  borderWidth: '1px',
+  color: theme.palette.text.primary,
+  cursor: 'pointer',
+  display: 'flex',
   fontFamily: 'Inter',
   fontSize: '12px',
   fontWeight: 600,
+  gap: '5px',
+  height: '25px',
+  justifyContent: 'space-between',
   lineHeight: '14.52px',
+  padding: '5px 15px',
   textAlign: 'left',
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
-  cursor: 'pointer',
   transition: 'all 0.2s',
-
+  width: 'auto',
   '&:hover': {
-    backgroundColor:
-      theme.palette.mode === 'dark'
-        ? 'rgba(41, 41, 43, 1)'
-        : 'rgba(240, 240, 240, 1)',
-    color: theme.palette.mode === 'dark' ? '#fff' : '#000',
-
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.secondary,
     'svg path': {
       fill: theme.palette.mode === 'dark' ? '#fff' : '#000',
     },
@@ -116,40 +109,29 @@ export const AddressBox = styled(Box)(({ theme }) => ({
 }));
 
 export const CustomButton = styled(Box)(({ theme }) => ({
-  boxSizing: 'border-box',
-  padding: '15px 20px',
-  gap: '10px',
-
-  border: `0.5px solid ${
-    theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.5)'
-      : 'rgba(0, 0, 0, 0.3)'
-  }`,
-  filter: 'drop-shadow(1px 4px 10.5px rgba(0, 0, 0, 0.3))',
-  borderRadius: '5px',
-
-  display: 'inline-flex',
-  justifyContent: 'center',
   alignItems: 'center',
-
-  width: 'fit-content',
-  minWidth: '160px',
-  cursor: 'pointer',
-  transition: 'all 0.2s',
-
-  fontWeight: 600,
-  fontFamily: 'Inter',
-  textAlign: 'center',
   backgroundColor: theme.palette.background.default,
+  borderColor: theme.palette.background.paper,
+  borderRadius: '5px',
+  borderStyle: 'solid',
+  borderWidth: '0.5px',
+  boxSizing: 'border-box',
   color: theme.palette.text.primary,
-
+  cursor: 'pointer',
+  display: 'inline-flex',
+  filter: 'drop-shadow(1px 4px 10.5px rgba(0, 0, 0, 0.3))',
+  fontFamily: 'Inter',
+  fontWeight: 600,
+  gap: '10px',
+  justifyContent: 'center',
+  minWidth: '160px',
+  padding: '15px 20px',
+  textAlign: 'center',
+  transition: 'all 0.2s',
+  width: 'fit-content',
   '&:hover': {
-    backgroundColor:
-      theme.palette.mode === 'dark'
-        ? 'rgba(41, 41, 43, 1)'
-        : 'rgba(230, 230, 230, 1)',
+    backgroundColor: theme.palette.background.default,
     color: '#fff',
-
     'svg path': {
       fill: '#fff',
     },
@@ -163,40 +145,30 @@ interface CustomButtonProps {
 
 export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
   ({ bgColor, color, theme }) => ({
-    boxSizing: 'border-box',
-    padding: '15px 20px',
-    gap: '10px',
-    border: `0.5px solid ${
-      theme.palette.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.5)'
-        : 'rgba(0, 0, 0, 0.3)'
-    }`,
-    filter: 'drop-shadow(1px 4px 10.5px rgba(0,0,0,0.3))',
-    borderRadius: 5,
-    display: 'inline-flex',
-    justifyContent: 'center',
     alignItems: 'center',
-    width: 'fit-content',
-    transition: 'all 0.2s',
-    minWidth: 160,
+    backgroundColor: bgColor || theme.palette.background.default,
+    borderColor: theme.palette.background.paper,
+    borderRadius: 5,
+    borderStyle: 'solid',
+    borderWidth: '0.5px',
+    boxSizing: 'border-box',
+    color: color || theme.palette.background.default,
     cursor: 'pointer',
-    fontWeight: 600,
+    display: 'inline-flex',
+    filter: 'drop-shadow(1px 4px 10.5px rgba(0,0,0,0.3))',
     fontFamily: 'Inter',
-    textAlign: 'center',
+    fontWeight: 600,
+    gap: '10px',
+    justifyContent: 'center',
+    minWidth: 160,
     opacity: 0.7,
-
-    // Color and backgroundColor with fallbacks
-    backgroundColor:
-      bgColor || (theme.palette.mode === 'dark' ? '#1d1d1d' : '#f5f5f5'),
-    color: color || (theme.palette.mode === 'dark' ? '#fff' : '#000'),
-
+    padding: '15px 20px',
+    textAlign: 'center',
+    transition: 'all 0.2s',
+    width: 'fit-content',
     '&:hover': {
       opacity: 1,
-      backgroundColor:
-        bgColor ||
-        (theme.palette.mode === 'dark'
-          ? 'rgba(41, 41, 43, 1)'
-          : 'rgba(230, 230, 230, 1)'),
+      backgroundColor: bgColor || theme.palette.background.default,
       color: color || '#fff',
       svg: {
         path: {
@@ -208,33 +180,39 @@ export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
 );
 
 export const CustomInput = styled(TextField)(({ theme }) => ({
-  width: '183px', // Adjust the width as needed
-  borderRadius: '5px',
-  // backgroundColor: "rgba(30, 30, 32, 1)",
-  outline: 'none',
   backgroundColor: theme.palette.background.default,
+  borderColor: theme.palette.background.paper,
+  borderRadius: '5px',
   color: theme.palette.text.primary,
+  outline: 'none',
+  width: '183px', // Adjust the width as needed
   input: {
-    fontSize: 10,
+    fontSize: '12px',
     fontFamily: 'Inter',
     fontWeight: 400,
-    color: 'white',
+    color: theme.palette.text.primary,
     '&::placeholder': {
       fontSize: 16,
-      color: 'rgba(255, 255, 255, 0.2)',
+      color: theme.palette.text.secondary,
     },
     outline: 'none',
     padding: '10px',
   },
   '& .MuiOutlinedInput-root': {
     '& fieldset': {
-      border: '0.5px solid rgba(255, 255, 255, 0.5)',
+      borderColor: theme.palette.background.paper,
+      borderRadius: '0.5px',
+      borderStyle: 'solid',
     },
     '&:hover fieldset': {
-      border: '0.5px solid rgba(255, 255, 255, 0.5)',
+      borderColor: theme.palette.background.paper,
+      borderRadius: '0.5px',
+      borderStyle: 'solid',
     },
     '&.Mui-focused fieldset': {
-      border: '0.5px solid rgba(255, 255, 255, 0.5)',
+      borderColor: theme.palette.background.paper,
+      borderRadius: '0.5px',
+      borderStyle: 'solid',
     },
   },
   '& .MuiInput-underline:before': {
@@ -249,12 +227,10 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
 }));
 
 export const CustomLabel = styled(InputLabel)(({ theme }) => ({
-  fontWeight: 400,
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   fontFamily: 'Inter',
-  fontSize: '10px',
+  fontSize: '15px',
+  fontWeight: 400,
   lineHeight: '12px',
-  color:
-    theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.5)'
-      : 'rgba(0, 0, 0, 0.5)',
 }));

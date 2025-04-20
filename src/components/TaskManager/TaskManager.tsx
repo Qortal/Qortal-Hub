@@ -5,19 +5,21 @@ import {
   ListItemText,
   Collapse,
   IconButton,
-} from "@mui/material";
-import React, { useContext, useEffect, useRef } from "react";
-import PendingIcon from "@mui/icons-material/Pending";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
-import ExpandLess from "@mui/icons-material/ExpandLess";
-import ExpandMore from "@mui/icons-material/ExpandMore";
-import { MyContext, getBaseApiReact, isMobile } from "../../App";
-import { executeEvent } from "../../utils/events";
+  useTheme,
+} from '@mui/material';
+import React, { useContext, useEffect, useRef } from 'react';
+import PendingIcon from '@mui/icons-material/Pending';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import { MyContext, getBaseApiReact, isMobile } from '../../App';
+import { executeEvent } from '../../utils/events';
 
 export const TaskManager = ({ getUserInfo }) => {
   const { txList, setTxList, memberGroups } = useContext(MyContext);
   const [open, setOpen] = React.useState(false);
   const intervals = useRef({});
+  const theme = useTheme();
 
   const handleClick = () => {
     setOpen((prev) => !prev);
@@ -58,7 +60,9 @@ export const TaskManager = ({ getUserInfo }) => {
             }
             clearInterval(intervals.current[signature]);
           }
-        } catch (error) {}
+        } catch (error) {
+          console.log(error);
+        }
         stop = false;
       }
     };
@@ -71,7 +75,7 @@ export const TaskManager = ({ getUserInfo }) => {
       let previousData = [...prev];
       memberGroups.forEach((group) => {
         const findGroup = txList.findIndex(
-          (tx) => tx?.type === "joined-group" && tx?.groupId === group.groupId
+          (tx) => tx?.type === 'joined-group' && tx?.groupId === group.groupId
         );
         if (findGroup !== -1 && !previousData[findGroup]?.done) {
           previousData[findGroup].done = true;
@@ -81,7 +85,7 @@ export const TaskManager = ({ getUserInfo }) => {
       memberGroups.forEach((group) => {
         const findGroup = txList.findIndex(
           (tx) =>
-            tx?.type === "created-group" && tx?.groupName === group.groupName
+            tx?.type === 'created-group' && tx?.groupName === group.groupName
         );
         if (findGroup !== -1 && !previousData[findGroup]?.done) {
           previousData[findGroup].done = true;
@@ -90,49 +94,52 @@ export const TaskManager = ({ getUserInfo }) => {
 
       prev.forEach((tx, index) => {
         if (
-          tx?.type === "leave-group" &&
-          memberGroups.findIndex((group) => tx?.groupId === group.groupId) === -1
+          tx?.type === 'leave-group' &&
+          memberGroups.findIndex((group) => tx?.groupId === group.groupId) ===
+            -1
         ) {
           previousData[index].done = true;
         }
       });
 
-     
-
       return previousData;
     });
   }, [memberGroups, getUserInfo]);
 
-  useEffect(()=> {
- 
-      txList.forEach((tx) => {
-        if (
-          ["created-common-secret", "joined-group-request", "join-request-accept"].includes(
-            tx?.type
-          ) &&
-          tx?.signature &&
-          !tx.done
-        ) {
-          if (!intervals.current[tx.signature]) {
-            getStatus({ signature: tx.signature });
-          }
+  useEffect(() => {
+    txList.forEach((tx) => {
+      if (
+        [
+          'created-common-secret',
+          'joined-group-request',
+          'join-request-accept',
+        ].includes(tx?.type) &&
+        tx?.signature &&
+        !tx.done
+      ) {
+        if (!intervals.current[tx.signature]) {
+          getStatus({ signature: tx.signature });
         }
-        if (tx?.type === "register-name" && tx?.signature && !tx.done) {
-          if (!intervals.current[tx.signature]) {
-            getStatus({ signature: tx.signature }, getUserInfo);
-          }
+      }
+      if (tx?.type === 'register-name' && tx?.signature && !tx.done) {
+        if (!intervals.current[tx.signature]) {
+          getStatus({ signature: tx.signature }, getUserInfo);
         }
-        if((tx?.type === "remove-rewardShare" || tx?.type === "add-rewardShare") && tx?.signature && !tx.done){
-          if (!intervals.current[tx.signature]) {
-            const sendEventForRewardShare = ()=> {
-              executeEvent('refresh-rewardshare-list', {})
-            }
-            getStatus({ signature: tx.signature }, sendEventForRewardShare);
-          }
+      }
+      if (
+        (tx?.type === 'remove-rewardShare' || tx?.type === 'add-rewardShare') &&
+        tx?.signature &&
+        !tx.done
+      ) {
+        if (!intervals.current[tx.signature]) {
+          const sendEventForRewardShare = () => {
+            executeEvent('refresh-rewardshare-list', {});
+          };
+          getStatus({ signature: tx.signature }, sendEventForRewardShare);
         }
-      });
-
-  }, [txList])
+      }
+    });
+  }, [txList]);
 
   if (isMobile || txList?.length === 0 || txList.every((item) => item?.done))
     return null;
@@ -143,43 +150,48 @@ export const TaskManager = ({ getUserInfo }) => {
         <IconButton
           onClick={handleClick}
           sx={{
-            // position: "fixed",
-            // bottom: 16,
-            // right: 16,
-            bgcolor: "primary.main",
-            color: "white",
-            ":hover": { bgcolor: "primary.dark" },
+            bgcolor: theme.palette.primary.main,
+            color: theme.palette.text.primary,
+            ':hover': { bgcolor: theme.palette.primary },
           }}
         >
-          {txList.some((item) => !item.done) ? <PendingIcon /> : <TaskAltIcon />}
+          {txList.some((item) => !item.done) ? (
+            <PendingIcon />
+          ) : (
+            <TaskAltIcon />
+          )}
         </IconButton>
       )}
       {open && (
         <List
           sx={{
-            position: "fixed",
+            bgcolor: theme.palette.background.paper,
             bottom: 16,
-            right: 16,
-            width: "300px",
-            maxHeight: "400px",
-            bgcolor: "background.paper",
             boxShadow: 4,
-            overflow: "auto",
+            maxHeight: '400px',
+            overflow: 'auto',
+            padding: '0px',
+            position: 'fixed',
+            right: 16,
+            width: '300px',
             zIndex: 10,
-            padding: '0px'
           }}
           component="nav"
         >
-          <ListItemButton  onClick={handleClick}>
+          <ListItemButton onClick={handleClick}>
             <ListItemIcon>
               {txList.some((item) => !item.done) ? (
-                <PendingIcon sx={{
-                  color:'white'
-                }} />
+                <PendingIcon
+                  sx={{
+                    color: theme.palette.primary,
+                  }}
+                />
               ) : (
-                <TaskAltIcon sx={{
-                  color:'white'
-                }} />
+                <TaskAltIcon
+                  sx={{
+                    color: theme.palette.primary,
+                  }}
+                />
               )}
             </ListItemIcon>
             <ListItemText primary="Ongoing Transactions" />

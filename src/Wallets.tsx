@@ -16,6 +16,7 @@ import {
   DialogTitle,
   IconButton,
   Input,
+  useTheme,
 } from '@mui/material';
 import { CustomButton } from './styles/App-styles';
 import { useDropzone } from 'react-dropzone';
@@ -266,6 +267,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             onClick={handleSetSeedValue}
             sx={{
               padding: '10px',
+              display: 'inline',
             }}
           >
             Add seed-phrase
@@ -401,6 +403,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
+  const theme = useTheme();
 
   useEffect(() => {
     if (wallet?.name) {
@@ -423,10 +426,10 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
       >
         <ListItem
           sx={{
-            bgcolor: 'background.paper', // TODO: set background color
+            bgcolor: theme.palette.background.default,
             flexGrow: 1,
             '&:hover': {
-              backgroundColor: 'secondary.main',
+              backgroundColor: theme.palette.background.paper,
               transform: 'scale(1.01)',
             },
             transition: 'all 0.1s ease-in-out',
@@ -454,7 +457,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                 <Typography
                   component="span"
                   variant="body2"
-                  sx={{ color: 'text.primary', display: 'inline' }}
+                  sx={{ color: theme.palette.text.primary, display: 'inline' }}
                 >
                   {wallet?.address0}
                 </Typography>
@@ -471,6 +474,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             }
           />
         </ListItem>
+
         <IconButton
           sx={{
             alignSelf: 'flex-start',
@@ -482,11 +486,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           edge="end"
           aria-label="edit"
         >
-          <EditIcon
-            sx={{
-              color: 'white',
-            }}
-          />
+          <EditIcon />
         </IconButton>
       </ButtonBase>
       {isEdit && (

@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppsNavBarLeft,
   AppsNavBarParent,
   AppsNavBarRight,
-} from "./Apps-styles";
-import NavBack from "../../assets/svgs/NavBack.svg";
-import NavAdd from "../../assets/svgs/NavAdd.svg";
-import NavMoreMenu from "../../assets/svgs/NavMoreMenu.svg";
+} from './Apps-styles';
+import { NavBack } from '../../assets/Icons/NavBack.tsx';
+import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
+import { NavMoreMenu } from '../../assets/Icons/NavMoreMenu.tsx';
 import {
   ButtonBase,
   ListItemIcon,
@@ -15,27 +15,33 @@ import {
   MenuItem,
   Tab,
   Tabs,
-} from "@mui/material";
+} from '@mui/material';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
-} from "../../utils/events";
-import TabComponent from "./TabComponent";
-import PushPinIcon from "@mui/icons-material/PushPin";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import { useRecoilState, useSetRecoilState } from "recoil";
+} from '../../utils/events';
+import TabComponent from './TabComponent';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   navigationControllerAtom,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from "../../atoms/global";
+} from '../../atoms/global';
 
-export function saveToLocalStorage(key, subKey, newValue, otherRootData = {}, deleteWholeKey) {
+export function saveToLocalStorage(
+  key,
+  subKey,
+  newValue,
+  otherRootData = {},
+  deleteWholeKey
+) {
   try {
-    if(deleteWholeKey){
+    if (deleteWholeKey) {
       localStorage.setItem(key, null);
-      return
+      return;
     }
     // Fetch existing data
     const existingData = localStorage.getItem(key);
@@ -64,7 +70,7 @@ export function saveToLocalStorage(key, subKey, newValue, otherRootData = {}, de
     const serializedValue = JSON.stringify(combinedData);
     localStorage.setItem(key, serializedValue);
   } catch (error) {
-    console.error("Error saving to localStorage:", error);
+    console.error('Error saving to localStorage:', error);
   }
 }
 
@@ -78,13 +84,17 @@ export const AppsNavBar = () => {
   const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
     sortablePinnedAppsAtom
   );
-  const [navigationController, setNavigationController] =  useRecoilState(navigationControllerAtom)
+  const [navigationController, setNavigationController] = useRecoilState(
+    navigationControllerAtom
+  );
 
-  const isDisableBackButton = useMemo(()=> {
-    if(selectedTab && navigationController[selectedTab?.tabId]?.hasBack) return false
-    if(selectedTab && !navigationController[selectedTab?.tabId]?.hasBack) return true
-    return false
-  }, [navigationController, selectedTab])
+  const isDisableBackButton = useMemo(() => {
+    if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
+      return false;
+    if (selectedTab && !navigationController[selectedTab?.tabId]?.hasBack)
+      return true;
+    return false;
+  }, [navigationController, selectedTab]);
 
   const setSettingsLocalLastUpdated = useSetRecoilState(
     settingsLocalLastUpdatedAtom
@@ -101,13 +111,13 @@ export const AppsNavBar = () => {
   useEffect(() => {
     // Scroll to the last tab whenever the tabs array changes (e.g., when a new tab is added)
     if (tabsRef.current) {
-      const tabElements = tabsRef.current.querySelectorAll(".MuiTab-root");
+      const tabElements = tabsRef.current.querySelectorAll('.MuiTab-root');
       if (tabElements.length > 0) {
         const lastTab = tabElements[tabElements.length - 1];
         lastTab.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "end",
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'end',
         });
       }
     }
@@ -122,10 +132,10 @@ export const AppsNavBar = () => {
   };
 
   useEffect(() => {
-    subscribeToEvent("setTabsToNav", setTabsToNav);
+    subscribeToEvent('setTabsToNav', setTabsToNav);
 
     return () => {
-      unsubscribeFromEvent("setTabsToNav", setTabsToNav);
+      unsubscribeFromEvent('setTabsToNav', setTabsToNav);
     };
   }, []);
 
@@ -137,28 +147,29 @@ export const AppsNavBar = () => {
     <AppsNavBarParent>
       <AppsNavBarLeft>
         <ButtonBase
-           onClick={() => {
-            executeEvent("navigateBack", selectedTab?.tabId);
+          onClick={() => {
+            executeEvent('navigateBack', selectedTab?.tabId);
           }}
           disabled={isDisableBackButton}
           sx={{
-            opacity: !isDisableBackButton ? 1 : 0.1,
-            cursor: !isDisableBackButton ? 'pointer': 'default'
+            opacity: !isDisableBackButton ? 1 : 0.3,
+            cursor: !isDisableBackButton ? 'pointer' : 'default',
           }}
         >
-          <img src={NavBack} />
+          <NavBack />
         </ButtonBase>
+
         <Tabs
           ref={tabsRef}
           aria-label="basic tabs example"
           variant="scrollable" // Make tabs scrollable
           scrollButtons={false}
           sx={{
-            "& .MuiTabs-indicator": {
-              backgroundColor: "white",
+            '& .MuiTabs-indicator': {
+              backgroundColor: 'white',
             },
             maxWidth: `calc(100vw - 150px)`, // Ensure the tabs container fits within the available space
-            overflow: "hidden", // Prevents overflow on small screens
+            overflow: 'hidden', // Prevents overflow on small screens
           }}
         >
           {tabs?.map((tab) => (
@@ -173,83 +184,83 @@ export const AppsNavBar = () => {
                 />
               } // Pass custom component
               sx={{
-                "&.Mui-selected": {
-                  color: "white",
+                '&.Mui-selected': {
+                  color: 'white',
                 },
-                padding: "0px",
-                margin: "0px",
-                minWidth: "0px",
-                width: "50px",
+                padding: '0px',
+                margin: '0px',
+                minWidth: '0px',
+                width: '50px',
               }}
             />
           ))}
         </Tabs>
       </AppsNavBarLeft>
+
       {selectedTab && (
-         <AppsNavBarRight
-         sx={{
-           gap: "10px",
-         }}
-       >
-         <ButtonBase
-           onClick={() => {
-             setSelectedTab(null);
-             executeEvent("newTabWindow", {});
-           }}
-         >
-           <img
-             style={{
-               height: "40px",
-               width: "40px",
-             }}
-             src={NavAdd}
-           />
-         </ButtonBase>
-         <ButtonBase
-           onClick={(e) => {
-             if (!selectedTab) return;
-             handleClick(e);
-           }}
-         >
-           <img
-             style={{
-               height: "34px",
-               width: "34px",
-             }}
-             src={NavMoreMenu}
-           />
-         </ButtonBase>
-       </AppsNavBarRight>
+        <AppsNavBarRight
+          sx={{
+            gap: '10px',
+          }}
+        >
+          <ButtonBase
+            onClick={() => {
+              setSelectedTab(null);
+              executeEvent('newTabWindow', {});
+            }}
+          >
+            <NavAdd
+              style={{
+                height: '40px',
+                width: '40px',
+              }}
+            />
+          </ButtonBase>
+
+          <ButtonBase
+            onClick={(e) => {
+              if (!selectedTab) return;
+              handleClick(e);
+            }}
+          >
+            <NavMoreMenu
+              style={{
+                height: '34px',
+                width: '34px',
+              }}
+            />
+          </ButtonBase>
+        </AppsNavBarRight>
       )}
-     
+
       <Menu
         id="navbar-more-mobile"
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
         MenuListProps={{
-          "aria-labelledby": "basic-button",
+          'aria-labelledby': 'basic-button',
         }}
         anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
+          vertical: 'bottom',
+          horizontal: 'center',
         }}
         transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
+          vertical: 'top',
+          horizontal: 'center',
         }}
         slotProps={{
           paper: {
             sx: {
-              backgroundColor: "var(--bg-primary)",
-              color: "#fff",
-              width: "148px",
-              borderRadius: "5px",
+              backgroundColor: 'var(--bg-primary)',
+              color: '#fff',
+              width: '148px',
+              borderRadius: '5px',
             },
           },
         }}
         sx={{
-          marginTop: "10px",
+          marginTop: '10px',
         }}
       >
         <MenuItem
@@ -280,8 +291,8 @@ export const AppsNavBar = () => {
               }
 
               saveToLocalStorage(
-                "ext_saved_settings",
-                "sortablePinnedApps",
+                'ext_saved_settings',
+                'sortablePinnedApps',
                 updatedApps
               );
               return updatedApps;
@@ -293,31 +304,33 @@ export const AppsNavBar = () => {
         >
           <ListItemIcon
             sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
+              minWidth: '24px !important',
+              marginRight: '5px',
             }}
           >
             <PushPinIcon
               height={20}
               sx={{
-                color: isSelectedAppPinned ? "red" : "rgba(250, 250, 250, 0.5)",
+                color: isSelectedAppPinned ? 'red' : 'rgba(250, 250, 250, 0.5)',
               }}
             />
           </ListItemIcon>
+
           <ListItemText
             sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
+              '& .MuiTypography-root': {
+                fontSize: '12px',
                 fontWeight: 600,
-                color: isSelectedAppPinned ? "red" : "rgba(250, 250, 250, 0.5)",
+                color: isSelectedAppPinned ? 'red' : 'rgba(250, 250, 250, 0.5)',
               },
             }}
-            primary={`${isSelectedAppPinned ? "Unpin app" : "Pin app"}`}
+            primary={`${isSelectedAppPinned ? 'Unpin app' : 'Pin app'}`}
           />
         </MenuItem>
+
         <MenuItem
           onClick={() => {
-            executeEvent("refreshApp", {
+            executeEvent('refreshApp', {
               tabId: selectedTab?.tabId,
             });
             handleClose();
@@ -325,23 +338,24 @@ export const AppsNavBar = () => {
         >
           <ListItemIcon
             sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
+              minWidth: '24px !important',
+              marginRight: '5px',
             }}
           >
             <RefreshIcon
               height={20}
               sx={{
-                color: "rgba(250, 250, 250, 0.5)",
+                color: 'rgba(250, 250, 250, 0.5)',
               }}
             />
           </ListItemIcon>
+
           <ListItemText
             sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
+              '& .MuiTypography-root': {
+                fontSize: '12px',
                 fontWeight: 600,
-                color: "rgba(250, 250, 250, 0.5)",
+                color: 'rgba(250, 250, 250, 0.5)',
               },
             }}
             primary="Refresh"

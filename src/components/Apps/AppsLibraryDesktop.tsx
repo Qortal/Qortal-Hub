@@ -71,6 +71,7 @@ const officialAppList = [
   'q-mintership',
   'q-wallets',
   'q-search',
+  'q-nodecontrol',
 ];
 
 const ScrollerStyled = styled('div')({
@@ -134,9 +135,9 @@ export const AppsLibraryDesktop = ({
       setDebouncedValue(searchValue);
     }, 350);
     setTimeout(() => {
-      virtuosoRef.current.scrollToIndex({
-        index: 0,
-      });
+      if (virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({ index: 0 });
+      }
     }, 500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {

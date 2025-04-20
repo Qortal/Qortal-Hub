@@ -9,31 +9,20 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  InputBase,
-  InputLabel,
   Snackbar,
   Typography,
+  useTheme,
 } from '@mui/material';
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { getFee, getNameOrAddress } from '../../background';
-import CopyToClipboard from 'react-copy-to-clipboard';
-import { AddressBox } from '../../styles/App-styles';
 import { Spacer } from '../../common/Spacer';
-import Copy from '../../assets/svgs/Copy.svg';
-import { Loader } from '../Loader';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../common/useModal';
 
@@ -56,15 +45,18 @@ export const Minting = ({
   const [isLoading, setIsLoading] = useState(false);
   const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
+  const theme = useTheme();
 
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
   const [showWaitDialog, setShowWaitDialog] = useState(false);
+
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
     return !!groups?.find((item) => item?.groupId?.toString() === '694');
   }, [groups]);
+
   const getMintingAccounts = useCallback(async () => {
     try {
       const url = `${getBaseApiReact()}/admin/mintingaccounts`;
@@ -74,7 +66,9 @@ export const Minting = ({
       }
       const data = await response.json();
       setMintingAccounts(data);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const accountIsMinting = useMemo(() => {
@@ -105,7 +99,7 @@ export const Minting = ({
         });
       }
     } catch (error) {
-      // error
+      console.log(error);
     }
   };
 
@@ -131,6 +125,7 @@ export const Minting = ({
         setAccountInfo(data);
       }
     } catch (error) {
+      console.log(error);
     } finally {
       if (!others) {
         setIsLoading(false);
@@ -199,7 +194,9 @@ export const Minting = ({
       const data = await response.json();
       setRewardShares(data);
       return data;
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const addMintingAccount = useCallback(async (val) => {
@@ -250,7 +247,6 @@ export const Minting = ({
         window
           .sendMessage(
             'ADMIN_ACTION',
-
             {
               type: 'removemintingaccount',
               value: val,
@@ -354,7 +350,6 @@ export const Minting = ({
       if (findRewardShare) {
         return true; // Exit early if found
       }
-
       await sleep(pollingInterval); // Wait before the next poll
     }
 
@@ -507,7 +502,7 @@ export const Minting = ({
 
   const _blocksNeed = () => {
     if (accountInfo?.level === 0) {
-      return 7200;
+      return 7200; // TODO manage these magic numbers in a proper location
     } else if (accountInfo?.level === 1) {
       return 72000;
     } else if (accountInfo?.level === 2) {
@@ -558,11 +553,11 @@ export const Minting = ({
       fullScreen
       sx={{
         '& .MuiDialog-paper': {
+          height: '100vh',
           margin: 0,
           maxWidth: '100%',
-          width: '100%',
-          height: '100vh',
           overflow: 'hidden', // Prevent scrollbars
+          width: '100%',
         },
       }}
     >
@@ -579,6 +574,7 @@ export const Minting = ({
       >
         <CloseIcon />
       </IconButton>
+
       <DialogContent
         sx={{
           position: 'relative',
@@ -587,37 +583,40 @@ export const Minting = ({
         {isLoading && (
           <Box
             sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
+              alignItems: 'center',
               bottom: 0,
               display: 'flex',
               justifyContent: 'center',
-              alignItems: 'center',
+              left: 0,
+              position: 'absolute',
+              right: 0,
+              top: 0,
             }}
           >
             <FidgetSpinner
-              visible={true}
-              height="80"
-              width="80"
               ariaLabel="fidget-spinner-loading"
-              wrapperStyle={{}}
+              height="80"
+              visible={true}
+              width="80"
               wrapperClass="fidget-spinner-wrapper"
+              wrapperStyle={{}}
             />
           </Box>
         )}
         <Card
           sx={{
-            backgroundColor: 'var(--bg-2)',
+            backgroundColor: theme.palette.background.default,
             padding: '10px',
           }}
         >
           <Typography>Account: {handleNames(accountInfo?.address)}</Typography>
+
           <Typography>Level: {accountInfo?.level}</Typography>
+
           <Typography>
             blocks remaining until next level: {_levelUpBlocks()}
           </Typography>
+
           <Typography>
             This node is minting: {nodeInfos?.isMintingPossible?.toString()}
           </Typography>
@@ -626,11 +625,11 @@ export const Minting = ({
         {isPartOfMintingGroup && !accountIsMinting && (
           <Box
             sx={{
-              display: 'flex',
-              gap: '5px',
-              flexDirection: 'column',
-              width: '100%',
               alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px',
+              width: '100%',
             }}
           >
             <Button
@@ -670,7 +669,7 @@ export const Minting = ({
         )}
         <Card
           sx={{
-            backgroundColor: 'var(--bg-2)',
+            backgroundColor: theme.palette.background.default,
             padding: '10px',
           }}
         >
@@ -705,14 +704,14 @@ export const Minting = ({
                 size="small"
                 sx={{
                   backgroundColor: 'var(--danger)',
-                  color: 'black',
+                  color: theme.palette.text.primary,
                   fontWeight: 'bold',
-                  opacity: 0.7,
                   maxWidth: '90%',
+                  opacity: 0.7,
                   width: '200px',
                   '&:hover': {
                     backgroundColor: 'var(--danger)',
-                    color: 'black',
+                    color: theme.palette.text.primary,
                     opacity: 1,
                   },
                 }}
@@ -723,7 +722,9 @@ export const Minting = ({
               >
                 Remove minting account
               </Button>
+
               <Divider />
+
               <Spacer height="10px" />
             </Box>
           ))}
@@ -740,7 +741,7 @@ export const Minting = ({
         {!isPartOfMintingGroup && (
           <Card
             sx={{
-              backgroundColor: 'var(--bg-2)',
+              backgroundColor: theme.palette.background.default,
               padding: '10px',
             }}
           >
@@ -764,7 +765,7 @@ export const Minting = ({
                 size="small"
                 sx={{
                   backgroundColor: 'var(--green)',
-                  color: 'black',
+                  color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   opacity: 0.7,
 
@@ -798,6 +799,7 @@ export const Minting = ({
             <DialogTitle id="alert-dialog-title">
               {isShowNext ? 'Confirmed' : 'Please Wait'}
             </DialogTitle>
+
             <DialogContent>
               {!isShowNext && (
                 <Typography>

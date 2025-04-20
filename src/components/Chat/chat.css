@@ -1,6 +1,6 @@
 .tiptap {
   margin-top: 0;
-  color: white; /* Set default font color to white */
+  color: var(--text-primary);
   width: 100%;
 }
 
@@ -26,7 +26,7 @@
   line-height: 1.1;
   margin-top: 2.5rem;
   text-wrap: pretty;
-  color: white; /* Ensure heading font color is white */
+  color: var(--text-primary);
 }
 
 .tiptap h1,
@@ -55,18 +55,18 @@
 
 /* Code and preformatted text styles */
 .tiptap code {
-  background-color: #27282c; /* Set code background color to #27282c */
+  background-color: var(--background-default);
   border-radius: 0.4rem;
-  color: white; /* Ensure inline code text color is white */
+  color: var(--text-primary);
   font-size: 0.85rem;
   padding: 0.25em 0.3em;
   text-wrap: pretty;
 }
 
 .tiptap pre {
-  background: #27282c; /* Set code block background color to #27282c */
+  background: var(--background-default);
   border-radius: 0.5rem;
-  color: white; /* Ensure code block text color is white */
+  color: var(--text-primary);
   font-family: 'JetBrainsMono', monospace;
   margin: 1.5rem 0;
   padding: 0.75rem 1rem;
@@ -86,7 +86,7 @@
   border-left: 3px solid var(--gray-3);
   margin: 1.5rem 0;
   padding-left: 1rem;
-  color: white; /* Ensure blockquote text color is white */
+  color: var(--text-primary);
   text-wrap: pretty;
 }
 
@@ -102,49 +102,49 @@
 
 .tiptap p {
   font-size: 16px;
-  color: white; /* Ensure paragraph text color is white */
+  color: var(--text-primary);
   margin: 0px;
 }
-  .tiptap p.is-editor-empty:first-child::before {
-    color: #adb5bd;
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-  }
 
-  .tiptap p:empty::before {
-    content: '';
-    display: inline-block;
-  }
+.tiptap p.is-editor-empty:first-child::before {
+  color: var(--text-primary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap p:empty::before {
+  content: '';
+  display: inline-block;
+}
 
 .tiptap a {
-  color: cadetblue
+  color: cadetblue;
 }
 
 .tiptap img {
   display: block;
-  max-width: 100%; 
+  max-width: 100%;
 }
 
 .isReply p {
   font-size: 12px !important;
 }
 
-.tiptap [data-type="mention"] {
+.tiptap [data-type='mention'] {
   box-decoration-break: clone;
-  color: lightblue;
+  color: var(--text-secondary);
   padding: 0.1rem 0.3rem;
 }
 
-
 .unread-divider {
+  border-bottom: 1px solid var(--text-primary);
+  border-radius: 2px;
+  color: var(--text-primary);
+  display: flex;
+  justify-content: center;
   width: 90%;
-        color: white;
-        border-bottom: 1px solid white;
-        display: flex;
-        justify-content: center;
-        border-radius: 2px;
 }
 
 .mention-item {
@@ -169,11 +169,10 @@
     font-size: 16px;
     width: 100%;
     border: none;
-    color: white;
-    cursor: pointer;
+    color: var(--text-primary);
     &:hover,
     &:hover.is-selected {
-      background-color: gray;
+      background-color: var(--background-default);
     }
   }
 }

@@ -7,7 +7,7 @@ import {
   Popover,
   TextField,
   Typography,
-} from "@mui/material";
+} from '@mui/material';
 import React, {
   useCallback,
   useContext,
@@ -15,20 +15,20 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
+} from 'react';
 import {
   AutoSizer,
   CellMeasurer,
   CellMeasurerCache,
   List,
-} from "react-virtualized";
-import _ from "lodash";
-import { MyContext, getBaseApiReact } from "../../App";
-import { LoadingButton } from "@mui/lab";
-import { getBaseApi, getFee } from "../../background";
+} from 'react-virtualized';
+import _ from 'lodash';
+import { MyContext, getBaseApiReact } from '../../App';
+import { LoadingButton } from '@mui/lab';
+import { getBaseApi, getFee } from '../../background';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
-import { Spacer } from "../../common/Spacer";
+import { Spacer } from '../../common/Spacer';
 const cache = new CellMeasurerCache({
   fixedWidth: true,
   defaultHeight: 50,
@@ -41,7 +41,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef();
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('');
   const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -72,9 +72,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
 
   const getGroups = async () => {
     try {
-      const response = await fetch(
-        `${getBaseApiReact()}/groups/?limit=0`
-      );
+      const response = await fetch(`${getBaseApiReact()}/groups/?limit=0`);
       const groupData = await response.json();
       const filteredGroup = groupData.filter(
         (item) => !memberGroups.find((group) => group.groupId === item.groupId)
@@ -103,23 +101,25 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const handleJoinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
-      const fee = await getFee('JOIN_GROUP')
-          await show({
-            message: "Would you like to perform an JOIN_GROUP transaction?" ,
-            publishFee: fee.fee + ' QORT'
-          })
+      const fee = await getFee('JOIN_GROUP');
+      await show({
+        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        publishFee: fee.fee + ' QORT',
+      });
       setIsLoading(true);
       await new Promise((res, rej) => {
-        window.sendMessage("joinGroup", {
-          groupId,
-        })
+        window
+          .sendMessage('joinGroup', {
+            groupId,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message:
+                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
               });
-        
+
               if (isOpen) {
                 setTxList((prev) => [
                   {
@@ -145,14 +145,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   ...prev,
                 ]);
               }
-        
+
               setOpenSnack(true);
               handlePopoverClose();
               res(response);
               return;
             } else {
               setInfoSnack({
-                type: "error",
+                type: 'error',
                 message: response?.error,
               });
               setOpenSnack(true);
@@ -161,18 +161,18 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
       setIsLoading(false);
-    } catch (error) {} finally {
+    } catch (error) {
+      console.log(error);
+    } finally {
       setIsLoading(false);
-
     }
   };
 
@@ -195,30 +195,30 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                 anchorEl={popoverAnchor}
                 onClose={handlePopoverClose}
                 anchorOrigin={{
-                  vertical: "bottom",
-                  horizontal: "center",
+                  vertical: 'bottom',
+                  horizontal: 'center',
                 }}
                 transformOrigin={{
-                  vertical: "top",
-                  horizontal: "center",
+                  vertical: 'top',
+                  horizontal: 'center',
                 }}
-                style={{ marginTop: "8px" }}
+                style={{ marginTop: '8px' }}
               >
                 <Box
                   sx={{
-                    width: "325px",
-                    height: "250px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "10px",
+                    width: '325px',
+                    height: '250px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '10px',
                   }}
                 >
                   <Typography>Join {group?.groupName}</Typography>
                   <Typography>
                     {group?.isOpen === false &&
-                      "This is a closed/private group, so you will need to wait until an admin accepts your request"}
+                      'This is a closed/private group, so you will need to wait until an admin accepts your request'}
                   </Typography>
                   <LoadingButton
                     loading={isLoading}
@@ -234,16 +234,20 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
                 {group?.isOpen === false && (
-          <LockIcon sx={{
-            color: 'var(--green)'
-          }} />
-        )}
-        {group?.isOpen === true && (
-          <NoEncryptionGmailerrorredIcon sx={{
-            color: 'var(--danger)'
-          }} />
-        )}
-        <Spacer width="15px" />
+                  <LockIcon
+                    sx={{
+                      color: 'var(--green)',
+                    }}
+                  />
+                )}
+                {group?.isOpen === true && (
+                  <NoEncryptionGmailerrorredIcon
+                    sx={{
+                      color: 'var(--danger)',
+                    }}
+                  />
+                )}
+                <Spacer width="15px" />
                 <ListItemText
                   primary={group?.groupName}
                   secondary={group?.description}
@@ -257,11 +261,13 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   };
 
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      flexGrow: 1
-    }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        flexGrow: 1,
+      }}
+    >
       <p>Groups list</p>
       <TextField
         label="Search for Groups"
@@ -272,10 +278,10 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       />
       <div
         style={{
-          position: "relative",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
+          position: 'relative',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           flexGrow: 1,
         }}
       >
