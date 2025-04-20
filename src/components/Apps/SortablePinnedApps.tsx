@@ -23,7 +23,7 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { useRecoilState, useSetRecoilState } from 'recoil';
-import { saveToLocalStorage } from './AppsNavBar';
+import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
 import LockIcon from '@mui/icons-material/Lock';
 import { useHandlePrivateApps } from './useHandlePrivateApps';
