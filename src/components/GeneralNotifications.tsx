@@ -43,7 +43,13 @@ export const GeneralNotifications = ({ address }) => {
       >
         <Tooltip
           title={
-            <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+            <span
+              style={{
+                color: theme.palette.text.primary,
+                fontSize: '14px',
+                fontWeight: 700,
+              }}
+            >
               PAYMENT NOTIFICATION
             </span>
           }
@@ -53,13 +59,13 @@ export const GeneralNotifications = ({ address }) => {
           slotProps={{
             tooltip: {
               sx: {
-                color: '#ffffff',
-                backgroundColor: '#444444',
+                color: theme.palette.text.primary,
+                backgroundColor: theme.palette.background.default,
               },
             },
             arrow: {
               sx: {
-                color: '#444444',
+                color: theme.palette.text.primary,
               },
             },
           }}
@@ -68,9 +74,7 @@ export const GeneralNotifications = ({ address }) => {
             sx={{
               color: hasNewPayment
                 ? 'var(--unread)'
-                : theme.palette.mode === 'dark'
-                  ? 'rgb(209, 209, 209)'
-                  : 'rgba(41, 41, 43, 1)',
+                : theme.palette.text.primary,
             }}
           />
         </Tooltip>
@@ -88,14 +92,14 @@ export const GeneralNotifications = ({ address }) => {
       >
         <Box
           sx={{
-            width: '300px',
-            maxWidth: '100%',
-            maxHeight: '60vh',
-            overflow: 'auto',
-            padding: '5px',
+            alignItems: hasNewPayment ? 'flex-start' : 'center',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: hasNewPayment ? 'flex-start' : 'center',
+            maxHeight: '60vh',
+            maxWidth: '100%',
+            overflow: 'auto',
+            padding: '5px',
+            width: '300px',
           }}
         >
           {!hasNewPayment && (
@@ -110,12 +114,12 @@ export const GeneralNotifications = ({ address }) => {
           {hasNewPayment && (
             <MenuItem
               sx={{
+                alignItems: 'flex-start',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '5px',
-                width: '100%',
-                alignItems: 'flex-start',
                 textWrap: 'auto',
+                width: '100%',
               }}
               onClick={() => {
                 setAnchorEl(null);
@@ -124,18 +128,18 @@ export const GeneralNotifications = ({ address }) => {
             >
               <Card
                 sx={{
-                  padding: '10px',
-                  width: '100%',
                   backgroundColor: '#1F2023',
-                  gap: '5px',
                   display: 'flex',
                   flexDirection: 'column',
+                  gap: '5px',
+                  padding: '10px',
+                  width: '100%',
                 }}
               >
                 <Box
                   sx={{
-                    display: 'flex',
                     alignItems: 'center',
+                    display: 'flex',
                     gap: '5px',
                     justifyContent: 'space-between',
                   }}
@@ -147,6 +151,7 @@ export const GeneralNotifications = ({ address }) => {
                   />{' '}
                   {formatDate(latestTx?.timestamp)}
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -157,6 +162,7 @@ export const GeneralNotifications = ({ address }) => {
                 >
                   <Typography>{latestTx?.amount}</Typography>
                 </Box>
+
                 <Typography
                   sx={{
                     fontSize: '0.8rem',
