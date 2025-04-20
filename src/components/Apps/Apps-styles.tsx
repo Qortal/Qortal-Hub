@@ -36,6 +36,24 @@ export const AppsContainer = styled(Box)(({ theme }) => ({
   width: '90%',
 }));
 
+export const AppsDesktopLibraryHeader = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  flexShrink: 0,
+  width: '100%',
+}));
+
+export const AppsDesktopLibraryBody = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  flexGrow: 1,
+  width: '100%',
+}));
+
 export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.default,
@@ -177,13 +195,11 @@ export const AppDownloadButton = styled(ButtonBase)(({ theme }) => ({
   width: '101px',
 }));
 
-export const AppDownloadButtonText = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
+export const AppDownloadButtonText = styled(Typography)({
   fontSize: '14px',
   fontWeight: 500,
   lineHeight: 1.2,
-}));
+});
 
 export const AppPublishTagsContainer = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,

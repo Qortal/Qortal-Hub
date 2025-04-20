@@ -5,6 +5,8 @@ import {
   AppCircleLabel,
   AppLibrarySubTitle,
   AppsContainer,
+  AppsDesktopLibraryBody,
+  AppsDesktopLibraryHeader,
   AppsLibraryContainer,
   AppsSearchContainer,
   AppsSearchLeft,
@@ -37,10 +39,6 @@ import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 import { executeEvent } from '../../utils/events';
-import {
-  AppsDesktopLibraryBody,
-  AppsDesktopLibraryHeader,
-} from './AppsDesktop-styles';
 import { ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 
 const officialAppList = [
@@ -204,7 +202,13 @@ export const AppsLibraryDesktop = ({
                   <InputBase
                     value={searchValue}
                     onChange={(e) => setSearchValue(e.target.value)}
-                    sx={{ ml: 1, flex: 1 }}
+                    sx={{
+                      background: theme.palette.background.paper,
+                      borderRadius: '6px',
+                      flex: 1,
+                      ml: 1,
+                      paddingLeft: '12px',
+                    }}
                     placeholder="Search for apps"
                     inputProps={{
                       'aria-label': 'Search for apps',

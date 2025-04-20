@@ -1,23 +1,21 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppLibrarySubTitle,
+  AppsDesktopLibraryBody,
+  AppsDesktopLibraryHeader,
   AppsLibraryContainer,
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { ButtonBase, InputBase, styled } from '@mui/material';
+import { ButtonBase, InputBase, styled, useTheme } from '@mui/material';
 import { MyContext } from '../../App';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
-import {
-  AppsDesktopLibraryBody,
-  AppsDesktopLibraryHeader,
-} from './AppsDesktop-styles';
 
 const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
@@ -60,6 +58,7 @@ export const AppsCategoryDesktop = ({
 }) => {
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
+  const theme = useTheme();
   const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
@@ -148,7 +147,13 @@ export const AppsCategoryDesktop = ({
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
-                sx={{ ml: 1, flex: 1 }}
+                sx={{
+                  background: theme.palette.background.paper,
+                  borderRadius: '6px',
+                  flex: 1,
+                  ml: 1,
+                  paddingLeft: '12px',
+                }}
                 placeholder="Search for apps"
                 inputProps={{
                   'aria-label': 'Search for apps',
