@@ -312,58 +312,58 @@ export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
 }));
 
 export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  width: '60px',
-  height: '60px',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  height: '60px',
+  justifyContent: 'center',
+  width: '60px',
 }));
 
 export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
-  fontSize: '10px',
-  fontWeight: 400,
-  lineHeight: 1.2,
-  fontStyle: 'italic',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  fontSize: '10px',
+  fontStyle: 'italic',
+  fontWeight: 400,
+  lineHeight: 1.2,
 }));
 
 export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
-  width: '101px',
-  height: '30px',
-  display: 'flex',
-  justifyContent: 'center',
   alignItems: 'center',
-  borderRadius: '5px',
-  fontWeight: 600,
-  fontSize: '10px',
   backgroundColor: theme.palette.background.default,
+  borderRadius: '5px',
   color: theme.palette.text.primary,
+  display: 'flex',
+  fontSize: '10px',
+  fontWeight: 600,
+  height: '30px',
+  justifyContent: 'center',
+  width: '101px',
 }));
 
 export const AppsCategoryInfo = styled(Box)(({ theme }) => ({
-  display: 'flex',
   alignItems: 'center',
-  width: '100%',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  width: '100%',
 }));
 
 export const AppsCategoryInfoSub = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  flexDirection: 'column',
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
 }));
 
 export const AppsCategoryInfoLabel = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   fontSize: '12px',
   fontWeight: 700,
   lineHeight: 1.2,
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AppsCategoryInfoValue = styled(Typography)(({ theme }) => ({
