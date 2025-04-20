@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -21,7 +22,7 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { saveToLocalStorage } from './AppsNavBar';
+import { saveToLocalStorage } from './AppsNavBarDesktop';
 
 export const AppInfoSnippet = ({
   app,

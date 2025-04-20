@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -27,7 +28,7 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { saveToLocalStorage } from './AppsNavBar';
+import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 
 export const AppInfo = ({ app, myName }) => {
