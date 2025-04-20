@@ -29,13 +29,12 @@ import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import DownloadIcon from '@mui/icons-material/Download';
 import Copy from './assets/svgs/Copy.svg';
 import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
-import { Download } from './assets/Icons/Download.tsx';
-import { Logout } from './assets/Icons/Logout.tsx';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
 import Success from './assets/svgs/Success.svg';
@@ -73,6 +72,7 @@ import { TaskManager } from './components/TaskManager/TaskManager.tsx';
 import { useModal } from './common/useModal';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import HelpIcon from '@mui/icons-material/Help';
 import {
   cleanUrl,
@@ -1538,46 +1538,43 @@ function App() {
           >
             <Spacer height="20px" />
 
-            <Tooltip
-              title={
-                <span
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                  }}
-                >
-                  LOG OUT
-                </span>
-              }
-              placement="left"
-              arrow
-              sx={{ fontSize: '24' }}
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                    backgroundColor: theme.palette.background.default,
-                  },
-                },
-                arrow: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                  },
-                },
+            <ButtonBase
+              onClick={() => {
+                logoutFunc();
+                setIsOpenDrawerProfile(false);
               }}
             >
-              <Logout
-                style={{
-                  cursor: 'pointer',
-                  width: '20px',
-                  height: 'auto',
+              <Tooltip
+                title={
+                  <span
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    LOGOUT
+                  </span>
+                }
+                placement="left"
+                arrow
+                sx={{ fontSize: '24' }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                    },
+                  },
                 }}
-                onClick={() => {
-                  logoutFunc();
-                  setIsOpenDrawerProfile(false);
-                }}
-              />
-            </Tooltip>
+              >
+                <LogoutIcon />
+              </Tooltip>
+            </ButtonBase>
 
             <Spacer height="20px" />
 
@@ -1888,41 +1885,39 @@ function App() {
             )}
 
             <Spacer height="20px" />
-            <Tooltip
-              title={
-                <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  BACKUP WALLET
-                </span>
-              }
-              placement="left"
-              arrow
-              sx={{ fontSize: '24' }}
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                    backgroundColor: theme.palette.background.default,
-                  },
-                },
-                arrow: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                  },
-                },
+
+            <ButtonBase
+              onClick={() => {
+                setExtstate('download-wallet');
+                setIsOpenDrawerProfile(false);
               }}
             >
-              <Download
-                style={{
-                  cursor: 'pointer',
-                  width: '20px',
-                  height: 'auto',
+              <Tooltip
+                title={
+                  <span style={{ fontSize: '14px', fontWeight: 700 }}>
+                    BACKUP WALLET
+                  </span>
+                }
+                placement="left"
+                arrow
+                sx={{ fontSize: '24' }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                    },
+                  },
                 }}
-                onClick={() => {
-                  setExtstate('download-wallet');
-                  setIsOpenDrawerProfile(false);
-                }}
-              />
-            </Tooltip>
+              >
+                <DownloadIcon />
+              </Tooltip>
+            </ButtonBase>
             <Spacer height="40px" />
           </Box>
         </AuthenticatedContainerInnerRight>
