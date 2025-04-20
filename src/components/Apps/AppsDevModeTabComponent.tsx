@@ -1,5 +1,5 @@
 import { TabParent } from './Apps-styles';
-import NavCloseTab from '../../assets/svgs/NavCloseTab.svg';
+import { NavCloseTab } from '../../assets/svgs/NavCloseTab.tsx';
 import { getBaseApiReact } from '../../App';
 import { Avatar, ButtonBase } from '@mui/material';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
@@ -27,14 +27,13 @@ export const AppsDevModeTabComponent = ({ isSelected, app }) => {
         }}
       >
         {isSelected && (
-          <img
+          <NavCloseTab
             style={{
               position: 'absolute',
               top: '-5px',
               right: '-5px',
               zIndex: 1,
             }}
-            src={NavCloseTab}
           />
         )}
         <Avatar
