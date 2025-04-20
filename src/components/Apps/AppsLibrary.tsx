@@ -1,11 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -13,7 +6,6 @@ import {
   AppLibrarySubTitle,
   AppsContainer,
   AppsLibraryContainer,
-  AppsParent,
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
@@ -24,16 +16,22 @@ import {
   PublishQAppCTARight,
   PublishQAppDotsBG,
 } from './Apps-styles';
-import { Avatar, Box, ButtonBase, InputBase, styled } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  InputBase,
+  styled,
+  useTheme,
+} from '@mui/material';
 import { MyContext, getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import IconSearch from '../../assets/svgs/Search.svg';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
 import qappDots from '../../assets/svgs/qappDots.svg';
+// import { Return } from './assets/svgs/Return.tsx';
 import ReturnSVG from '../../assets/svgs/Return.svg';
-
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
@@ -43,6 +41,7 @@ import {
   MailIconImg,
   ShowMessageReturnButton,
 } from '../Group/Forum/Mail-styles';
+
 const officialAppList = [
   'q-tube',
   'q-blog',
@@ -59,8 +58,6 @@ const officialAppList = [
   'q-nodecontrol',
 ];
 
-// TODO: apply dark/light style
-
 const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
   '::-webkit-scrollbar': {
@@ -76,10 +73,10 @@ const ScrollerStyled = styled('div')({
 });
 
 const StyledVirtuosoContainer = styled('div')({
-  position: 'relative',
-  width: '100%',
   display: 'flex',
   flexDirection: 'column',
+  position: 'relative',
+  width: '100%',
 
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
   '::-webkit-scrollbar': {
@@ -148,6 +145,8 @@ export const AppsLibrary = ({
     );
   };
 
+  const theme = useTheme();
+
   return (
     <AppsLibraryContainer
       sx={{
@@ -165,6 +164,7 @@ export const AppsLibrary = ({
           <AppsSearchContainer>
             <AppsSearchLeft>
               <img src={IconSearch} />
+
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
@@ -191,7 +191,9 @@ export const AppsLibrary = ({
           </AppsSearchContainer>
         </Box>
       </AppsWidthLimiter>
+
       <Spacer height="25px" />
+
       <ShowMessageReturnButton
         sx={{
           padding: '2px',
@@ -200,10 +202,12 @@ export const AppsLibrary = ({
           executeEvent('navigateBack', {});
         }}
       >
-        <MailIconImg src={ReturnSVG} />
+        <MailIconImg src={ReturnSVG} /> // TODO return icon
         <ComposeP>Return to Apps Dashboard</ComposeP>
       </ShowMessageReturnButton>
+
       <Spacer height="25px" />
+
       {searchedList?.length > 0 ? (
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
@@ -227,7 +231,9 @@ export const AppsLibrary = ({
         <>
           <AppsWidthLimiter>
             <AppLibrarySubTitle>Official Apps</AppLibrarySubTitle>
+
             <Spacer height="18px" />
+
             <AppsContainer>
               {officialApps?.map((qapp) => {
                 return (
@@ -271,6 +277,7 @@ export const AppsLibrary = ({
                           />
                         </Avatar>
                       </AppCircle>
+
                       <AppCircleLabel>
                         {qapp?.metadata?.title || qapp?.name}
                       </AppCircleLabel>
@@ -279,20 +286,27 @@ export const AppsLibrary = ({
                 );
               })}
             </AppsContainer>
+
             <Spacer height="30px" />
+
             <AppLibrarySubTitle>
               {hasPublishApp ? 'Update Apps!' : 'Create Apps!'}
             </AppLibrarySubTitle>
+
             <Spacer height="18px" />
           </AppsWidthLimiter>
+
           <PublishQAppCTAParent>
             <PublishQAppCTALeft>
               <PublishQAppDotsBG>
                 <img src={qappDots} />
               </PublishQAppDotsBG>
+
               <Spacer width="29px" />
+
               <img src={qappDevelopText} />
             </PublishQAppCTALeft>
+
             <PublishQAppCTARight
               onClick={() => {
                 setMode('publish');
@@ -301,13 +315,18 @@ export const AppsLibrary = ({
               <PublishQAppCTAButton>
                 {hasPublishApp ? 'Update' : 'Publish'}
               </PublishQAppCTAButton>
+
               <Spacer width="20px" />
             </PublishQAppCTARight>
           </PublishQAppCTAParent>
+
           <AppsWidthLimiter>
             <Spacer height="18px" />
+
             <AppLibrarySubTitle>Categories</AppLibrarySubTitle>
+
             <Spacer height="18px" />
+
             <AppsWidthLimiter
               sx={{
                 flexDirection: 'row',
@@ -338,18 +357,17 @@ export const AppsLibrary = ({
                   >
                     <Box
                       sx={{
-                        display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '110px',
-                        width: '110px',
-                        background:
-                          'linear-gradient(163.47deg, #4BBCFE 27.55%, #1386C9 86.56%)',
-                        color: '#1D1D1E',
-                        fontWeight: 700,
-                        fontSize: '16px',
-                        flexShrink: 0,
+                        background: theme.palette.background.default,
                         borderRadius: '11px',
+                        color: theme.palette.text.primary,
+                        display: 'flex',
+                        flexShrink: 0,
+                        fontSize: '16px',
+                        fontWeight: 700,
+                        height: '110px',
+                        justifyContent: 'center',
+                        width: '110px',
                       }}
                     >
                       {category?.name}
