@@ -4,9 +4,9 @@ import {
   AppsNavBarParent,
   AppsNavBarRight,
 } from './Apps-styles';
-import { NavBack } from '../../assets/svgs/NavBack.tsx';
-import { NavAdd } from '../../assets/svgs/NavAdd.tsx';
-import { NavMoreMenu } from '../../assets/svgs/NavMoreMenu.tsx';
+import { NavBack } from '../../assets/Icons/NavBack.tsx';
+import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
+import { NavMoreMenu } from '../../assets/Icons/NavMoreMenu.tsx';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   ButtonBase,

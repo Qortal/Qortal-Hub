@@ -1,5 +1,5 @@
 import { TabParent } from './Apps-styles';
-import { NavCloseTab } from '../../assets/svgs/NavCloseTab.tsx';
+import { NavCloseTab } from '../../assets/Icons/NavCloseTab.tsx';
 import { getBaseApiReact } from '../../App';
 import { Avatar, ButtonBase, useTheme } from '@mui/material';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';

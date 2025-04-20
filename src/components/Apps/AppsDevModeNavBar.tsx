@@ -4,8 +4,8 @@ import {
   AppsNavBarParent,
   AppsNavBarRight,
 } from './Apps-styles';
-import { NavBack } from '../../assets/svgs/NavBack.tsx';
-import { NavAdd } from '../../assets/svgs/NavAdd.tsx';
+import { NavBack } from '../../assets/Icons/NavBack.tsx';
+import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
 import { ButtonBase, Tab, Tabs } from '@mui/material';
 import {
   executeEvent,

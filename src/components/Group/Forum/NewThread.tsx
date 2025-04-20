@@ -33,8 +33,8 @@ import {
 import { ReusableModal } from './ReusableModal';
 import { Spacer } from '../../../common/Spacer';
 import { formatBytes } from '../../../utils/Size';
-import { CreateThreadIcon } from '../../../assets/svgs/CreateThreadIcon';
-import { SendNewMessage } from '../../../assets/svgs/SendNewMessage';
+import { CreateThreadIcon } from '../../../assets/Icons/CreateThreadIcon';
+import { SendNewMessage } from '../../../assets/Icons/SendNewMessage';
 import { TextEditor } from './TextEditor';
 import {
   MyContext,

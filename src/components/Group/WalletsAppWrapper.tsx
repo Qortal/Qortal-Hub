@@ -10,7 +10,7 @@ import {
 import { useRecoilState } from 'recoil';
 import { navigationControllerAtom } from '../../atoms/global';
 import { AppsNavBarLeft, AppsNavBarParent } from '../Apps/Apps-styles';
-import { NavBack } from '../../assets/svgs/NavBack.tsx';
+import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 export const WalletsAppWrapper = () => {

@@ -1,5 +1,5 @@
 import { useTheme } from '@mui/material';
-import { SVGProps } from '../svgs/interfaces';
+import { SVGProps } from './interfaces';
 
 export const WalletIcon: React.FC<SVGProps> = ({
   color,
