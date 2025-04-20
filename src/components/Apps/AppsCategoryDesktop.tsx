@@ -1,46 +1,24 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
   AppLibrarySubTitle,
-  AppsContainer,
   AppsLibraryContainer,
-  AppsParent,
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
   AppsWidthLimiter,
-  PublishQAppCTAButton,
-  PublishQAppCTALeft,
-  PublishQAppCTAParent,
-  PublishQAppCTARight,
-  PublishQAppDotsBG,
 } from './Apps-styles';
-import { Avatar, Box, ButtonBase, InputBase, styled } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
-import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import { ButtonBase, InputBase, styled } from '@mui/material';
+import { MyContext } from '../../App';
 import IconSearch from '../../assets/svgs/Search.svg';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
-import qappDots from '../../assets/svgs/qappDots.svg';
-
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
-import { executeEvent } from '../../utils/events';
 import {
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
 } from './AppsDesktop-styles';
+
 const officialAppList = [
   'q-tube',
   'q-blog',

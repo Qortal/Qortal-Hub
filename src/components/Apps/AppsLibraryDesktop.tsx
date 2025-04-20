@@ -23,15 +23,16 @@ import {
   InputBase,
   Typography,
   styled,
+  useTheme,
 } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
-import qappLibraryText from '../../assets/svgs/qappLibraryText.svg';
+import { QappDevelopText } from '../../assets/Icons/QappDevelopText.tsx';
+import { QappLibraryText } from '../../assets/Icons/QappLibraryText.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import qappDots from '../../assets/svgs/qappDots.svg';
+import AppsIcon from '@mui/icons-material/Apps';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
@@ -40,11 +41,8 @@ import {
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
 } from './AppsDesktop-styles';
-import {
-  ComposeP,
-  MailIconImg,
-  ShowMessageReturnButton,
-} from '../Group/Forum/Mail-styles';
+import { ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+import { Theme } from 'emoji-picker-react';
 
 const officialAppList = [
   'q-tube',
@@ -107,6 +105,7 @@ export const AppsLibraryDesktop = ({
 }) => {
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
+  const theme = useTheme();
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(
@@ -181,17 +180,18 @@ export const AppsLibraryDesktop = ({
         <AppsWidthLimiter>
           <Box
             sx={{
+              alignItems: 'center',
               display: 'flex',
-              width: '100%',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
-            <img src={qappLibraryText} />
+            <QappLibraryText />
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 gap: '20px',
-                alignItems: 'center',
               }}
             >
               <AppsSearchContainer
@@ -247,10 +247,10 @@ export const AppsLibraryDesktop = ({
 
       <AppsDesktopLibraryBody
         sx={{
+          alignItems: 'center',
           height: `calc(100vh - 36px)`,
           overflow: 'auto',
           padding: '0px',
-          alignItems: 'center',
         }}
       >
         <AppsDesktopLibraryBody
@@ -306,11 +306,13 @@ export const AppsLibraryDesktop = ({
               >
                 Official Apps
               </AppLibrarySubTitle>
+
               <Spacer height="45px" />
+
               <AppsContainer
                 sx={{
-                  gap: '50px',
-                  justifyContent: 'flex-start',
+                  gap: '15px',
+                  justifyContent: 'center',
                 }}
               >
                 {officialApps?.map((qapp) => {
@@ -387,7 +389,7 @@ export const AppsLibraryDesktop = ({
                       textAlign: 'start',
                     }}
                   >
-                    {hasPublishApp ? 'Update Apps!' : 'Create Apps!'}
+                    {hasPublishApp ? 'Update your app' : 'Publish your app'}
                   </AppLibrarySubTitle>
 
                   <Spacer height="18px" />
@@ -399,11 +401,12 @@ export const AppsLibraryDesktop = ({
                   >
                     <PublishQAppCTALeft>
                       <PublishQAppDotsBG>
-                        <img src={qappDots} />
+                        <AppsIcon fontSize="large" />
                       </PublishQAppDotsBG>
 
                       <Spacer width="29px" />
-                      <img src={qappDevelopText} />
+
+                      <QappDevelopText />
                     </PublishQAppCTALeft>
 
                     <PublishQAppCTARight
@@ -433,7 +436,9 @@ export const AppsLibraryDesktop = ({
                   >
                     Categories
                   </AppLibrarySubTitle>
+
                   <Spacer height="18px" />
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -455,18 +460,21 @@ export const AppsLibraryDesktop = ({
                       <Box
                         sx={{
                           alignItems: 'center',
-                          border: '4px solid #10242F',
+                          borderColor: theme.palette.background.paper,
                           borderRadius: '6px',
+                          borderStyle: 'solid',
+                          borderWidth: '4px',
                           boxShadow: '2px 4px 0px 0px #000000',
                           display: 'flex',
-                          height: '60px',
+                          height: '50px',
                           justifyContent: 'center',
-                          padding: '0px 24px',
+                          padding: '0px 20px',
                         }}
                       >
                         All
                       </Box>
                     </ButtonBase>
+
                     {categories?.map((category) => {
                       return (
                         <ButtonBase
@@ -480,13 +488,15 @@ export const AppsLibraryDesktop = ({
                           <Box
                             sx={{
                               alignItems: 'center',
-                              border: '4px solid #10242F',
+                              borderColor: theme.palette.background.paper,
                               borderRadius: '6px',
+                              borderStyle: 'solid',
+                              borderWidth: '4px',
                               boxShadow: '2px 4px 0px 0px #000000',
                               display: 'flex',
-                              height: '60px',
+                              height: '50px',
                               justifyContent: 'center',
-                              padding: '0px 24px',
+                              padding: '0px 20px',
                             }}
                           >
                             {category?.name}
