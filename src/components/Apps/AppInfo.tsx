@@ -1,3 +1,4 @@
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -17,9 +18,11 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Avatar, Box } from '@mui/material';
-import { getBaseApiReact } from '../../App';
+import { Avatar, Box, ButtonBase, InputBase } from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { getBaseApiReact, isMobile } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { AppRating } from './AppRating';
@@ -27,7 +30,7 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { saveToLocalStorage } from './AppsNavBar';
+import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 
 export const AppInfo = ({ app, myName }) => {
@@ -46,8 +49,9 @@ export const AppInfo = ({ app, myName }) => {
   return (
     <AppsLibraryContainer
       sx={{
-        height: '100%',
-        justifyContent: 'flex-start',
+        height: !isMobile && '100%',
+        justifyContent: !isMobile && 'flex-start',
+        alignItems: isMobile && 'center',
       }}
     >
       <Box
@@ -58,8 +62,7 @@ export const AppInfo = ({ app, myName }) => {
           width: '90%',
         }}
       >
-        <Spacer height="30px" />
-
+        {!isMobile && <Spacer height="30px" />}
         <AppsWidthLimiter>
           <AppInfoSnippetContainer>
             <AppInfoSnippetLeft
@@ -167,9 +170,15 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isSelectedAppPinned
-                  ? 'Unpin from dashboard'
-                  : 'Pin to dashboard'}
+                {!isMobile ? (
+                  <>
+                    {isSelectedAppPinned
+                      ? 'Unpin from dashboard'
+                      : 'Pin to dashboard'}
+                  </>
+                ) : (
+                  <>{isSelectedAppPinned ? 'Unpin' : 'Pin'}</>
+                )}
               </AppDownloadButtonText>
             </AppDownloadButton>
             <AppDownloadButton

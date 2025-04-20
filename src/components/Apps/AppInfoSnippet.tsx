@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -11,8 +12,9 @@ import {
   AppInfoUserName,
 } from './Apps-styles';
 import { Avatar, ButtonBase } from '@mui/material';
-import { getBaseApiReact } from '../../App';
+import { getBaseApiReact, isMobile } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { AppRating } from './AppRating';
@@ -21,7 +23,7 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { saveToLocalStorage } from './AppsNavBar';
+import { saveToLocalStorage } from './AppsNavBarDesktop';
 
 export const AppInfoSnippet = ({
   app,
@@ -122,49 +124,52 @@ export const AppInfoSnippet = ({
           gap: '10px',
         }}
       >
-        <AppDownloadButton
-          onClick={() => {
-            setSortablePinnedApps((prev) => {
-              let updatedApps;
+        {!isMobile && (
+          <AppDownloadButton
+            onClick={() => {
+              setSortablePinnedApps((prev) => {
+                let updatedApps;
 
-              if (isSelectedAppPinned) {
-                // Remove the selected app if it is pinned
-                updatedApps = prev.filter(
-                  (item) =>
-                    !(
-                      item?.name === app?.name && item?.service === app?.service
-                    )
+                if (isSelectedAppPinned) {
+                  // Remove the selected app if it is pinned
+                  updatedApps = prev.filter(
+                    (item) =>
+                      !(
+                        item?.name === app?.name &&
+                        item?.service === app?.service
+                      )
+                  );
+                } else {
+                  // Add the selected app if it is not pinned
+                  updatedApps = [
+                    ...prev,
+                    {
+                      name: app?.name,
+                      service: app?.service,
+                    },
+                  ];
+                }
+
+                saveToLocalStorage(
+                  'ext_saved_settings',
+                  'sortablePinnedApps',
+                  updatedApps
                 );
-              } else {
-                // Add the selected app if it is not pinned
-                updatedApps = [
-                  ...prev,
-                  {
-                    name: app?.name,
-                    service: app?.service,
-                  },
-                ];
-              }
-
-              saveToLocalStorage(
-                'ext_saved_settings',
-                'sortablePinnedApps',
-                updatedApps
-              );
-              return updatedApps;
-            });
-            setSettingsLocalLastUpdated(Date.now());
-          }}
-          sx={{
-            backgroundColor: '#359ff7ff',
-            opacity: isSelectedAppPinned ? 0.6 : 1,
-          }}
-        >
-          <AppDownloadButtonText>
-            {' '}
-            {isSelectedAppPinned ? 'Unpin' : 'Pin'}
-          </AppDownloadButtonText>
-        </AppDownloadButton>
+                return updatedApps;
+              });
+              setSettingsLocalLastUpdated(Date.now());
+            }}
+            sx={{
+              backgroundColor: '#359ff7ff',
+              opacity: isSelectedAppPinned ? 0.6 : 1,
+            }}
+          >
+            <AppDownloadButtonText>
+              {' '}
+              {isSelectedAppPinned ? 'Unpin' : 'Pin'}
+            </AppDownloadButtonText>
+          </AppDownloadButton>
+        )}
 
         <AppDownloadButton
           onClick={() => {
