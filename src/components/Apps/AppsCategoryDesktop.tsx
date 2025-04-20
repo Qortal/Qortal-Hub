@@ -68,7 +68,7 @@ const ScrollerStyled = styled('div')({
   scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  '-msOverflowStyle': 'none',
+  msOverflowStyle: 'none',
 });
 
 const StyledVirtuosoContainer = styled('div')({
@@ -87,7 +87,7 @@ const StyledVirtuosoContainer = styled('div')({
   scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  '-msOverflowStyle': 'none',
+  msOverflowStyle: 'none',
 });
 
 export const AppsCategoryDesktop = ({

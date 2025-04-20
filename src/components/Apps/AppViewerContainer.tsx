@@ -19,7 +19,7 @@ const AppViewerContainer = React.forwardRef(
                 padding: 0;
               }
               * {
-                -msOverflowStyle: none;  /* IE and Edge */
+                msOverflowStyle: 'none', /* IE and Edge */
                 scrollbar-width: none;  /* Firefox */
               }
               *::-webkit-scrollbar {
