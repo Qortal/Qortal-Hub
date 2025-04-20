@@ -1,10 +1,6 @@
 import * as React from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemButton from '@mui/material/ListItemButton';
-import List from '@mui/material/List';
-import Divider from '@mui/material/Divider';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import IconButton from '@mui/material/IconButton';
@@ -19,7 +15,7 @@ import { ListOfBans } from './ListOfBans';
 import { ListOfJoinRequests } from './ListOfJoinRequests';
 import { Box, ButtonBase, Card, Tab, Tabs } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { MyContext, getBaseApiReact, isMobile } from '../../App';
+import { MyContext, getBaseApiReact } from '../../App';
 import { getGroupMembers, getNames } from './Group';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getFee } from '../../background';
@@ -27,6 +23,7 @@ import { LoadingButton } from '@mui/lab';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
+
 function a11yProps(index: number) {
   return {
     id: `simple-tab-${index}`,
@@ -193,9 +190,9 @@ export const ManageMembers = ({
         <Box
           sx={{
             bgcolor: '#27282c',
+            color: 'white',
             flexGrow: 1,
             overflowY: 'auto',
-            color: 'white',
           }}
         >
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -221,9 +218,10 @@ export const ManageMembers = ({
                   '&.Mui-selected': {
                     color: 'white',
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
+
               <Tab
                 label="Invite new member"
                 {...a11yProps(1)}
@@ -231,9 +229,10 @@ export const ManageMembers = ({
                   '&.Mui-selected': {
                     color: 'white',
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem',
+                  fontSize: '1rem',
                 }}
               />
+
               <Tab
                 label="List of invites"
                 {...a11yProps(2)}
@@ -241,9 +240,10 @@ export const ManageMembers = ({
                   '&.Mui-selected': {
                     color: 'white',
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem',
+                  fontSize: '1rem',
                 }}
               />
+
               <Tab
                 label="List of bans"
                 {...a11yProps(3)}
@@ -251,9 +251,10 @@ export const ManageMembers = ({
                   '&.Mui-selected': {
                     color: 'white',
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem',
+                  fontSize: '1rem',
                 }}
               />
+
               <Tab
                 label="Join requests"
                 {...a11yProps(4)}
@@ -261,11 +262,12 @@ export const ManageMembers = ({
                   '&.Mui-selected': {
                     color: 'white',
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem',
+                  fontSize: '1rem',
                 }}
               />
             </Tabs>
           </Box>
+
           <Card
             sx={{
               padding: '10px',
@@ -274,10 +276,13 @@ export const ManageMembers = ({
           >
             <Box>
               <Typography>GroupId: {groupInfo?.groupId}</Typography>
+
               <Typography>GroupName: {groupInfo?.groupName}</Typography>
+
               <Typography>
                 Number of members: {groupInfo?.memberCount}
               </Typography>
+
               <ButtonBase
                 sx={{
                   gap: '10px',
@@ -290,7 +295,9 @@ export const ManageMembers = ({
                 <InsertLinkIcon /> <Typography>Join Group Link</Typography>
               </ButtonBase>
             </Box>
+
             <Spacer height="20px" />
+
             {selectedGroup?.groupId && !isOwner && (
               <LoadingButton
                 size="small"
@@ -317,7 +324,9 @@ export const ManageMembers = ({
               >
                 Load members with names
               </Button>
+
               <Spacer height="10px" />
+
               <ListOfMembers
                 members={membersWithNames || []}
                 groupId={selectedGroup?.groupId}
@@ -397,12 +406,14 @@ export const ManageMembers = ({
             </Box>
           )}
         </Box>
+
         <CustomizedSnackbars
           open={openSnack}
           setOpen={setOpenSnack}
           info={infoSnack}
           setInfo={setInfoSnack}
         />
+
         <LoadingSnackbar
           open={isLoadingMembers}
           info={{

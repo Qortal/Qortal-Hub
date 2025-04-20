@@ -21,7 +21,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
@@ -56,12 +55,6 @@ export const AnnouncementDiscussion = ({
   const clearEditorContent = () => {
     if (editorRef.current) {
       editorRef.current.chain().focus().clearContent().run();
-      if (isMobile) {
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run();
-          setIsFocusedParent(false);
-        }, 200);
-      }
     }
   };
 
@@ -278,7 +271,7 @@ export const AnnouncementDiscussion = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: isMobile ? '100%' : '100%',
+        height: '100%',
         width: '100%',
       }}
     >

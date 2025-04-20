@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { MyContext, isMobile } from '../../App';
+import { MyContext } from '../../App';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
 
@@ -29,10 +29,9 @@ export const AdminSpace = ({
   return (
     <div
       style={{
-        // reference to change height
         display: 'flex',
         flexDirection: 'column',
-        height: isMobile ? `calc(${rootHeight} - 127px` : 'calc(100vh - 70px)',
+        height: 'calc(100vh - 70px)',
         left: hide && '-1000px',
         opacity: hide ? 0 : 1,
         position: hide ? 'fixed' : 'relative',

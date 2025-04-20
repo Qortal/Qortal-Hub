@@ -1,18 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Input,
-  Typography,
-} from '@mui/material';
+import { Box, CircularProgress, Input } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import CloseIcon from '@mui/icons-material/Close';
-
 import ModalCloseSVG from '../../../assets/svgs/ModalClose.svg';
-
 import ComposeIconSVG from '../../../assets/svgs/ComposeIcon.svg';
-
 import {
   AttachmentContainer,
   CloseContainer,
@@ -22,7 +13,6 @@ import {
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  NewMessageAttachmentImg,
   NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
@@ -32,16 +22,9 @@ import {
 
 import { ReusableModal } from './ReusableModal';
 import { Spacer } from '../../../common/Spacer';
-import { formatBytes } from '../../../utils/Size';
 import { CreateThreadIcon } from '../../../assets/Icons/CreateThreadIcon';
 import { SendNewMessage } from '../../../assets/Icons/SendNewMessage';
-import { TextEditor } from './TextEditor';
-import {
-  MyContext,
-  isMobile,
-  pauseAllQueues,
-  resumeAllQueues,
-} from '../../../App';
+import { MyContext, pauseAllQueues, resumeAllQueues } from '../../../App';
 import { getFee } from '../../../background';
 import TipTap from '../../Chat/TipTap';
 import { MessageDisplay } from '../../Chat/MessageDisplay';
@@ -411,8 +394,8 @@ export const NewThread = ({
     >
       <ComposeContainer
         sx={{
-          padding: isMobile ? '5px' : '15px',
-          justifyContent: isMobile ? 'flex-start' : 'revert',
+          padding: '15px',
+          justifyContent: 'revert',
         }}
         onClick={() => setIsOpen(true)}
       >
@@ -423,7 +406,7 @@ export const NewThread = ({
       <ReusableModal
         open={isOpen}
         customStyles={{
-          maxHeight: isMobile ? '95svh' : '95vh',
+          maxHeight: '95vh',
           maxWidth: '950px',
           height: '700px',
           borderRadius: '12px 12px 0px 0px',
@@ -434,8 +417,8 @@ export const NewThread = ({
       >
         <InstanceListHeader
           sx={{
-            height: isMobile ? 'auto' : '50px',
-            padding: isMobile ? '5px' : '20px 42px',
+            height: '50px',
+            padding: '20px 42px',
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -457,7 +440,7 @@ export const NewThread = ({
         <InstanceListContainer
           sx={{
             backgroundColor: '#434448',
-            padding: isMobile ? '5px' : '20px 42px',
+            padding: '20px 42px',
             height: 'calc(100% - 165px)',
             flexShrink: 0,
           }}
@@ -481,7 +464,7 @@ export const NewThread = ({
                     color: 'white',
                     '& .MuiInput-input::placeholder': {
                       color: 'rgba(255,255,255, 0.70) !important',
-                      fontSize: isMobile ? '14px' : '20px',
+                      fontSize: '20px',
                       fontStyle: 'normal',
                       fontWeight: 400,
                       lineHeight: '120%', // 24px
@@ -509,7 +492,9 @@ export const NewThread = ({
               <MessageDisplay htmlContent={postReply?.textContentV2} />
             </Box>
           )}
-          {!isMobile && <Spacer height="30px" />}
+
+          <Spacer height="30px" />
+
           <Box
             sx={{
               maxHeight: '40vh',
@@ -530,12 +515,13 @@ export const NewThread = ({
             /> */}
           </Box>
         </InstanceListContainer>
+
         <InstanceFooter
           sx={{
             backgroundColor: '#434448',
-            padding: isMobile ? '5px' : '20px 42px',
+            padding: '20px 42px',
             alignItems: 'center',
-            height: isMobile ? 'auto' : '90px',
+            height: '90px',
           }}
         >
           <NewMessageSendButton onClick={sendMail}>
@@ -553,9 +539,11 @@ export const NewThread = ({
                 <CircularProgress sx={{}} size={'12px'} />
               </Box>
             )}
+
             <NewMessageSendP>
               {isMessage ? 'Post' : 'Create Thread'}
             </NewMessageSendP>
+
             {isMessage ? (
               <SendNewMessage opacity={1} height="25px" width="25px" />
             ) : (
@@ -564,6 +552,7 @@ export const NewThread = ({
           </NewMessageSendButton>
         </InstanceFooter>
       </ReusableModal>
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}
