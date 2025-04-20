@@ -41,11 +41,7 @@ import {
 import { LoadingSnackbar } from '../../Snackbar/LoadingSnackbar';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../../utils/events';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import {
-  getArbitraryEndpointReact,
-  getBaseApiReact,
-  isMobile,
-} from '../../../App';
+import { getArbitraryEndpointReact, getBaseApiReact } from '../../../App';
 import {
   ArrowDownward as ArrowDownwardIcon,
   ArrowUpward as ArrowUpwardIcon,
@@ -602,23 +598,18 @@ export const Thread = ({
         <Box
           sx={{
             display: 'flex',
-            gap: isMobile ? '45px' : '35px',
+            gap: '35px',
             alignItems: 'center',
-            padding: isMobile && '5px',
           }}
         >
           <ShowMessageReturnButton
-            sx={{
-              padding: isMobile && '5px',
-              minWidth: isMobile && '50px',
-            }}
             onClick={() => {
               setMessages([]);
               closeThread();
             }}
           >
             <MailIconImg src={ReturnSVG} />
-            {!isMobile && <ComposeP>Return to Threads</ComposeP>}
+            <ComposeP>Return to Threads</ComposeP>
           </ShowMessageReturnButton>
           {/* Conditionally render the scroll buttons */}
           {showScrollButton &&
@@ -628,7 +619,7 @@ export const Thread = ({
                   sx={{
                     color: 'white',
                     cursor: 'pointer',
-                    fontSize: isMobile ? '28px' : '36px',
+                    fontSize: '36px',
                   }}
                 />
               </ButtonBase>
@@ -638,7 +629,7 @@ export const Thread = ({
                   sx={{
                     color: 'white',
                     cursor: 'pointer',
-                    fontSize: isMobile ? '28px' : '36px',
+                    fontSize: '36px',
                   }}
                 />
               </ButtonBase>
@@ -655,38 +646,30 @@ export const Thread = ({
       >
         <div ref={threadBeginningRef} />
         <ThreadContainer>
-          <Spacer height={isMobile ? '10px' : '30px'} />
+          <Spacer height={'30px'} />
           <Box
             sx={{
-              width: '100%',
               alignItems: 'center',
               display: 'flex',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
-            <GroupNameP
-              sx={{
-                fontSize: isMobile && '18px',
-              }}
-            >
-              {currentThread?.threadData?.title}
-            </GroupNameP>
+            <GroupNameP>{currentThread?.threadData?.title}</GroupNameP>
           </Box>
           <Spacer height={'15px'} />
 
           <Box
             sx={{
-              width: '100%',
               alignItems: 'center',
               display: 'flex',
-              justifyContent: 'center',
               gap: '5px',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <Button
               sx={{
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
                 textTransformation: 'capitalize',
               }}
               onClick={() => {
@@ -705,8 +688,6 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
                 textTransformation: 'capitalize',
               }}
               onClick={() => {
@@ -725,8 +706,6 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
                 textTransformation: 'capitalize',
               }}
               onClick={() => {
@@ -745,8 +724,6 @@ export const Thread = ({
             </Button>
             <Button
               sx={{
-                padding: isMobile && '5px',
-                fontSize: isMobile && '14px',
                 textTransformation: 'capitalize',
               }}
               onClick={() => {
@@ -764,7 +741,9 @@ export const Thread = ({
               Last
             </Button>
           </Box>
-          <Spacer height={isMobile ? '10px' : '30px'} />
+
+          <Spacer height={'30px'} />
+
           {combinedListTempAndReal.map((message, index, list) => {
             let fullMessage = message;
 
@@ -780,17 +759,17 @@ export const Thread = ({
                   >
                     <Box
                       style={{
-                        width: '100%',
                         borderRadius: '8px',
+                        flexDirection: 'column',
                         overflow: 'hidden',
                         position: 'relative',
-                        flexDirection: 'column',
+                        width: '100%',
                       }}
                     >
                       <Box
                         sx={{
-                          display: 'flex',
                           alignItems: 'flex-start',
+                          display: 'flex',
                           gap: '10px',
                         }}
                       >
@@ -812,6 +791,7 @@ export const Thread = ({
                             {message?.name?.charAt(0)}
                           </Avatar>
                         </WrapperUserAction>
+
                         <ThreadInfoColumn>
                           <WrapperUserAction
                             disabled={userInfo?.name === message?.name}
@@ -822,18 +802,20 @@ export const Thread = ({
                               {message?.name}
                             </ThreadInfoColumnNameP>
                           </WrapperUserAction>
+
                           <ThreadInfoColumnTime>
                             {formatTimestampForum(message?.created)}
                           </ThreadInfoColumnTime>
                         </ThreadInfoColumn>
                       </Box>
+
                       <Box
                         sx={{
-                          width: '100%',
-                          display: 'flex',
-                          justifyContent: 'center',
                           alignItems: 'center',
+                          display: 'flex',
                           flexDirection: 'column',
+                          justifyContent: 'center',
+                          width: '100%',
                         }}
                       >
                         <Typography
@@ -876,17 +858,17 @@ export const Thread = ({
               >
                 <Box
                   style={{
-                    width: '100%',
                     borderRadius: '8px',
+                    flexDirection: 'column',
                     overflow: 'hidden',
                     position: 'relative',
-                    flexDirection: 'column',
+                    width: '100%',
                   }}
                 >
                   <Box
                     sx={{
-                      display: 'flex',
                       alignItems: 'flex-start',
+                      display: 'flex',
                       gap: '10px',
                     }}
                   >
@@ -908,6 +890,7 @@ export const Thread = ({
                         {message?.name?.charAt(0)}
                       </Avatar>
                     </WrapperUserAction>
+
                     <ThreadInfoColumn>
                       <WrapperUserAction
                         disabled={userInfo?.name === message?.name}
@@ -918,18 +901,20 @@ export const Thread = ({
                           {message?.name}
                         </ThreadInfoColumnNameP>
                       </WrapperUserAction>
+
                       <ThreadInfoColumnTime>
                         {formatTimestampForum(message?.created)}
                       </ThreadInfoColumnTime>
                     </ThreadInfoColumn>
                   </Box>
+
                   <Box
                     sx={{
-                      width: '100%',
-                      display: 'flex',
-                      justifyContent: 'center',
                       alignItems: 'center',
+                      display: 'flex',
                       flexDirection: 'column',
+                      justifyContent: 'center',
+                      width: '100%',
                     }}
                   >
                     <CustomLoader />
@@ -952,9 +937,9 @@ export const Thread = ({
               <Spacer height="20px" />
               <Box
                 sx={{
-                  width: '100%',
                   display: 'flex',
                   justifyContent: 'flex-end',
+                  width: '100%',
                 }}
               >
                 <Button
@@ -997,8 +982,6 @@ export const Thread = ({
             >
               <Button
                 sx={{
-                  padding: isMobile && '5px',
-                  fontSize: isMobile && '14px',
                   textTransformation: 'capitalize',
                 }}
                 onClick={() => {
@@ -1017,8 +1000,6 @@ export const Thread = ({
               </Button>
               <Button
                 sx={{
-                  padding: isMobile && '5px',
-                  fontSize: isMobile && '14px',
                   textTransformation: 'capitalize',
                 }}
                 onClick={() => {
@@ -1037,8 +1018,6 @@ export const Thread = ({
               </Button>
               <Button
                 sx={{
-                  padding: isMobile && '5px',
-                  fontSize: isMobile && '14px',
                   textTransformation: 'capitalize',
                 }}
                 onClick={() => {
@@ -1057,8 +1036,6 @@ export const Thread = ({
               </Button>
               <Button
                 sx={{
-                  padding: isMobile && '5px',
-                  fontSize: isMobile && '14px',
                   textTransformation: 'capitalize',
                 }}
                 onClick={() => {

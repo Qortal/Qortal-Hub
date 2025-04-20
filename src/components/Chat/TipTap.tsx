@@ -23,7 +23,6 @@ import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
 import Compressor from 'compressorjs';
 import Mention from '@tiptap/extension-mention';
 import ImageResize from 'tiptap-extension-resize-image'; // Import the ResizeImage extension
-import { isMobile } from '../../App';
 import tippy from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
 import { ReactRenderer } from '@tiptap/react';
@@ -137,7 +136,7 @@ const MenuBar = ({
             color: editor.isActive('bold')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatBoldIcon />
@@ -149,7 +148,7 @@ const MenuBar = ({
             color: editor.isActive('italic')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatItalicIcon />
@@ -161,7 +160,7 @@ const MenuBar = ({
             color: editor.isActive('strike')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <StrikethroughSIcon />
@@ -173,7 +172,7 @@ const MenuBar = ({
             color: editor.isActive('code')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <CodeIcon />
@@ -188,7 +187,7 @@ const MenuBar = ({
               editor.isActive('code')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatClearIcon />
@@ -199,7 +198,7 @@ const MenuBar = ({
             color: editor.isActive('bulletList')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatListBulletedIcon />
@@ -210,7 +209,7 @@ const MenuBar = ({
             color: editor.isActive('orderedList')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatListNumberedIcon />
@@ -221,7 +220,7 @@ const MenuBar = ({
             color: editor.isActive('codeBlock')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <DeveloperModeIcon />
@@ -232,7 +231,7 @@ const MenuBar = ({
             color: editor.isActive('blockquote')
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatQuoteIcon />
@@ -240,7 +239,7 @@ const MenuBar = ({
         <IconButton
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
           disabled={!editor.can().chain().focus().setHorizontalRule().run()}
-          sx={{ color: 'gray', padding: isMobile ? '5px' : 'revert' }}
+          sx={{ color: 'gray', padding: 'revert' }}
         >
           <HorizontalRuleIcon />
         </IconButton>
@@ -252,7 +251,7 @@ const MenuBar = ({
             color: editor.isActive('heading', { level: 1 })
               ? theme.palette.text.primary
               : theme.palette.text.secondary,
-            padding: isMobile ? '5px' : 'revert',
+            padding: 'revert',
           }}
         >
           <FormatHeadingIcon fontSize="small" />
@@ -260,7 +259,7 @@ const MenuBar = ({
         <IconButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().chain().focus().undo().run()}
-          sx={{ color: 'gray', padding: isMobile ? '5px' : 'revert' }}
+          sx={{ color: 'gray', padding: 'revert' }}
         >
           <UndoIcon />
         </IconButton>
@@ -313,7 +312,7 @@ const MenuBar = ({
               onClick={triggerImageUpload}
               sx={{
                 color: theme.palette.text.secondary,
-                padding: isMobile ? '5px' : 'revert',
+                padding: 'revert',
               }}
             >
               <ImageIcon />
@@ -397,11 +396,6 @@ export default ({
   useEffect(() => {
     usersRef.current = users; // Keep users up-to-date
   }, [users]);
-
-  const handleFocus = () => {
-    if (!isMobile) return;
-    setIsFocusedParent(true);
-  };
 
   const handleBlur = () => {
     const htmlContent = editorRef.current.getHTML();
@@ -499,7 +493,7 @@ export default ({
     >
       <EditorProvider
         slotBefore={
-          (isFocusedParent || !isMobile || overrideMobile) && (
+          (isFocusedParent || overrideMobile) && (
             <MenuBar
               setEditorRef={setEditorRefFunc}
               isChat={isChat}
@@ -511,21 +505,15 @@ export default ({
         extensions={[...extensionsFiltered, ...additionalExtensions]}
         content={content}
         onCreate={({ editor }) => {
-          editor.on('focus', handleFocus); // Listen for focus event
           editor.on('blur', handleBlur); // Listen for blur event
         }}
         onUpdate={({ editor }) => {
-          editor.on('focus', handleFocus); // Ensure focus is updated
           editor.on('blur', handleBlur); // Ensure blur is updated
         }}
         editorProps={{
           attributes: {
             class: 'tiptap-prosemirror',
-            style: isMobile
-              ? `overflow: auto; min-height: ${
-                  customEditorHeight ? '200px' : '0px'
-                }; max-height:calc(100svh - ${customEditorHeight || '140px'})`
-              : `overflow: auto; max-height: 250px`,
+            style: `overflow: auto; max-height: 250px`,
           },
           handleKeyDown(view, event) {
             if (

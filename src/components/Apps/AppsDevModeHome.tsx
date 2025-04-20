@@ -22,7 +22,7 @@ import {
   Input,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact, isMobile } from '../../App';
+import { MyContext, getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
@@ -279,7 +279,9 @@ export const AppsDevModeHome = ({
           Dev Mode Apps
         </AppLibrarySubTitle>
       </AppsContainer>
+
       <Spacer height="45px" />
+
       <AppsContainer
         sx={{
           gap: '75px',
@@ -293,7 +295,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -302,6 +304,7 @@ export const AppsDevModeHome = ({
             <AppCircleLabel>Server</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             addPreviewApp();
@@ -309,15 +312,17 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
+
             <AppCircleLabel>Zip</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             addPreviewAppWithDirectory();
@@ -325,7 +330,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -334,6 +339,7 @@ export const AppsDevModeHome = ({
             <AppCircleLabel>Directory</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             executeEvent('appsDevModeAddTab', {
@@ -347,7 +353,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -371,9 +377,11 @@ export const AppsDevModeHome = ({
                 />
               </Avatar>
             </AppCircle>
+
             <AppCircleLabel>Q-Sandbox</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             executeEvent('appsDevModeAddTab', {
@@ -387,7 +395,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -411,10 +419,12 @@ export const AppsDevModeHome = ({
                 />
               </Avatar>
             </AppCircle>
+
             <AppCircleLabel>API</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
       </AppsContainer>
+
       {isShow && (
         <Dialog
           open={isShow}
@@ -429,6 +439,7 @@ export const AppsDevModeHome = ({
           <DialogTitle id="alert-dialog-title">
             {'Add custom framework'}
           </DialogTitle>
+
           <DialogContent>
             <Box
               sx={{
@@ -460,6 +471,7 @@ export const AppsDevModeHome = ({
               />
             </Box>
           </DialogContent>
+
           <DialogActions>
             <Button variant="contained" onClick={onCancel}>
               Close

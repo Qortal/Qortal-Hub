@@ -12,7 +12,7 @@ import PendingIcon from '@mui/icons-material/Pending';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { MyContext, getBaseApiReact, isMobile } from '../../App';
+import { MyContext, getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 
 export const TaskManager = ({ getUserInfo }) => {
@@ -141,8 +141,7 @@ export const TaskManager = ({ getUserInfo }) => {
     });
   }, [txList]);
 
-  if (isMobile || txList?.length === 0 || txList.every((item) => item?.done))
-    return null;
+  if (txList?.length === 0 || txList.every((item) => item?.done)) return null;
 
   return (
     <>

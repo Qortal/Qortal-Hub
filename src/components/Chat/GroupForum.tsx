@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { GroupMail } from '../Group/Forum/GroupMail';
-import { MyContext, isMobile } from '../../App';
+import { MyContext } from '../../App';
 
 export const GroupForum = ({
   selectedGroup,

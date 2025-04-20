@@ -26,7 +26,6 @@ import {
   MyContext,
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
@@ -262,15 +261,6 @@ export const GroupAnnouncements = ({
   const clearEditorContent = () => {
     if (editorRef.current) {
       editorRef.current.chain().focus().clearContent().run();
-      if (isMobile) {
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run();
-          setIsFocusedParent(false);
-          setTimeout(() => {
-            triggerRerender();
-          }, 300);
-        }, 200);
-      }
     }
   };
 
@@ -529,12 +519,9 @@ export const GroupAnnouncements = ({
     return (
       <div
         style={{
-          // reference to change height
-          height: isMobile
-            ? `calc(${rootHeight} - 127px`
-            : 'calc(100vh - 70px)',
           display: 'flex',
           flexDirection: 'column',
+          height: 'calc(100vh - 70px)',
           left: hide && '-1000px',
           position: hide && 'fixed',
           visibility: hide && 'hidden',
@@ -576,26 +563,24 @@ export const GroupAnnouncements = ({
           width: '100%',
         }}
       >
-        {!isMobile && (
-          <Box
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            fontSize: '20px',
+            gap: '20px',
+            justifyContent: 'center',
+            padding: '25px',
+            width: '100%',
+          }}
+        >
+          <CampaignIcon
             sx={{
-              alignItems: 'center',
-              display: 'flex',
-              fontSize: '20px',
-              gap: '20px',
-              justifyContent: 'center',
-              padding: '25px',
-              width: '100%',
+              fontSize: '30px',
             }}
-          >
-            <CampaignIcon
-              sx={{
-                fontSize: '30px',
-              }}
-            />
-            Group Announcements
-          </Box>
-        )}
+          />
+          Group Announcements
+        </Box>
 
         <Spacer height={'25px'} />
       </div>

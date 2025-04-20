@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -8,7 +8,6 @@ import {
 } from './Apps-styles';
 import { Box, ButtonBase, Input, useTheme } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { isMobile } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { SortablePinnedApps } from './SortablePinnedApps';
@@ -137,12 +136,13 @@ export const AppsHomeDesktop = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? '10px' : '5px',
+              gap: '10px',
             }}
           >
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
+
             <AppCircleLabel>Library</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>

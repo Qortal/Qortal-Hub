@@ -20,7 +20,6 @@ import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import {
   getBaseApiReact,
   getBaseApiReactSocket,
-  isMobile,
   MyContext,
   pauseAllQueues,
   resumeAllQueues,
@@ -746,16 +745,6 @@ export const ChatGroup = ({
     if (editorRef.current) {
       setMessageSize(0);
       editorRef.current.chain().focus().clearContent().run();
-      if (isMobile) {
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run();
-          setIsFocusedParent(false);
-          executeEvent('sent-new-message-group', {});
-          setTimeout(() => {
-            triggerRerender();
-          }, 300);
-        }, 200);
-      }
     }
   };
 
@@ -1109,7 +1098,7 @@ export const ChatGroup = ({
               setEditorRef={setEditorRef}
               onEnter={sendMessage}
               isChat
-              disableEnter={isMobile ? true : false}
+              disableEnter={false}
               isFocusedParent={isFocusedParent}
               setIsFocusedParent={setIsFocusedParent}
               membersWithNames={members}

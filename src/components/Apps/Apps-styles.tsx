@@ -137,9 +137,9 @@ export const AppCircle = styled(Box)(({ theme }) => ({
     theme.palette.mode === 'dark'
       ? 'rgb(209, 209, 209)'
       : 'rgba(41, 41, 43, 1)',
-  borderWidth: '1px',
   borderRadius: '50%',
   borderStyle: 'solid',
+  borderWidth: '1px',
   color: theme.palette.text.primary,
   display: 'flex',
   flexDirection: 'column',

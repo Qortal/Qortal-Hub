@@ -16,19 +16,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  ListItem,
-  ListItemAvatar,
-  ListItemButton,
-  ListItemText,
   MenuItem,
   Popover,
   Select,
   TextField,
   Typography,
 } from '@mui/material';
-
-import { getNameInfo } from './Group';
-import { getBaseApi, getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
@@ -36,7 +29,6 @@ import {
   MyContext,
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
 } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
@@ -51,7 +43,6 @@ import { Label } from './AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getGroupNames } from './UserListOfInvites';
-import { WrapperUserAction } from '../WrapperUserAction';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -390,6 +381,7 @@ export const ListOfGroupPromotions = () => {
             />
           )}
         </ButtonBase>
+
         <Box
           style={{
             width: '330px',
@@ -401,7 +393,7 @@ export const ListOfGroupPromotions = () => {
         <>
           <Box
             sx={{
-              width: isMobile ? '320px' : '750px',
+              width: '750px',
               maxWidth: '90%',
               display: 'flex',
               flexDirection: 'column',
@@ -422,6 +414,7 @@ export const ListOfGroupPromotions = () => {
                   fontWeight: 600,
                 }}
               ></Typography>
+
               <Button
                 variant="contained"
                 onClick={() => setIsShowModal(true)}
@@ -432,18 +425,19 @@ export const ListOfGroupPromotions = () => {
                 Add Promotion
               </Button>
             </Box>
+
             <Spacer height="10px" />
           </Box>
           <Box
             sx={{
-              width: isMobile ? '320px' : '750px',
-              maxWidth: '90%',
-              maxHeight: '700px',
+              bgcolor: 'background.paper',
+              borderRadius: '19px',
               display: 'flex',
               flexDirection: 'column',
-              bgcolor: 'background.paper',
+              maxHeight: '700px',
+              maxWidth: '90%',
               padding: '20px 0px',
-              borderRadius: '19px',
+              width: '750px',
             }}
           >
             {loading && promotions.length === 0 && (
@@ -589,6 +583,7 @@ export const ListOfGroupPromotions = () => {
                                   >
                                     Group name: {` ${promotion?.groupName}`}
                                   </Typography>
+
                                   <Typography
                                     sx={{
                                       fontSize: '13px',
@@ -598,6 +593,7 @@ export const ListOfGroupPromotions = () => {
                                     Number of members:{' '}
                                     {` ${promotion?.memberCount}`}
                                   </Typography>
+
                                   {promotion?.description && (
                                     <Typography
                                       sx={{
@@ -608,6 +604,7 @@ export const ListOfGroupPromotions = () => {
                                       {promotion?.description}
                                     </Typography>
                                   )}
+
                                   {promotion?.isOpen === false && (
                                     <Typography
                                       sx={{
@@ -620,7 +617,9 @@ export const ListOfGroupPromotions = () => {
                                       your request
                                     </Typography>
                                   )}
+
                                   <Spacer height="5px" />
+
                                   <Box
                                     sx={{
                                       display: 'flex',
@@ -638,6 +637,7 @@ export const ListOfGroupPromotions = () => {
                                     >
                                       Close
                                     </LoadingButton>
+
                                     <LoadingButton
                                       loading={isLoadingJoinGroup}
                                       loadingPosition="start"
@@ -682,6 +682,7 @@ export const ListOfGroupPromotions = () => {
                                   >
                                     {promotion?.name?.charAt(0)}
                                   </Avatar>
+
                                   <Typography
                                     sx={{
                                       fontWight: 600,
@@ -692,6 +693,7 @@ export const ListOfGroupPromotions = () => {
                                     {promotion?.name}
                                   </Typography>
                                 </Box>
+
                                 <Typography
                                   sx={{
                                     fontWight: 600,
@@ -702,7 +704,9 @@ export const ListOfGroupPromotions = () => {
                                   {promotion?.groupName}
                                 </Typography>
                               </Box>
+
                               <Spacer height="20px" />
+
                               <Box
                                 sx={{
                                   display: 'flex',
@@ -735,7 +739,9 @@ export const ListOfGroupPromotions = () => {
                                     : 'Private group'}
                                 </Typography>
                               </Box>
+
                               <Spacer height="20px" />
+
                               <Typography
                                 sx={{
                                   fontWight: 600,
@@ -745,7 +751,9 @@ export const ListOfGroupPromotions = () => {
                               >
                                 {promotion?.data}
                               </Typography>
+
                               <Spacer height="20px" />
+
                               <Box
                                 sx={{
                                   display: 'flex',
@@ -767,6 +775,7 @@ export const ListOfGroupPromotions = () => {
                                 </Button>
                               </Box>
                             </Box>
+
                             <Spacer height="50px" />
                           </ErrorBoundary>
                         </div>
@@ -779,6 +788,7 @@ export const ListOfGroupPromotions = () => {
           </Box>
         </>
       </Collapse>
+
       <Spacer height="20px" />
 
       {isShowModal && (

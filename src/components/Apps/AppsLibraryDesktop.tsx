@@ -1,11 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -32,17 +25,14 @@ import {
   Typography,
   styled,
 } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import IconSearch from '../../assets/svgs/Search.svg';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
 import qappLibraryText from '../../assets/svgs/qappLibraryText.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
-
 import qappDots from '../../assets/svgs/qappDots.svg';
-
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
@@ -57,6 +47,7 @@ import {
   MailIconImg,
   ShowMessageReturnButton,
 } from '../Group/Forum/Mail-styles';
+
 const officialAppList = [
   'q-tube',
   'q-blog',
