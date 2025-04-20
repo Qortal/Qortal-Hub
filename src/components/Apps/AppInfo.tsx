@@ -18,11 +18,9 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Avatar, Box, ButtonBase, InputBase } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { getBaseApiReact, isMobile } from '../../App';
+import { Avatar, Box } from '@mui/material';
+import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
-
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { AppRating } from './AppRating';
@@ -49,9 +47,8 @@ export const AppInfo = ({ app, myName }) => {
   return (
     <AppsLibraryContainer
       sx={{
-        height: !isMobile && '100%',
-        justifyContent: !isMobile && 'flex-start',
-        alignItems: isMobile && 'center',
+        height: '100%',
+        justifyContent: 'flex-start',
       }}
     >
       <Box
@@ -62,7 +59,8 @@ export const AppInfo = ({ app, myName }) => {
           width: '90%',
         }}
       >
-        {!isMobile && <Spacer height="30px" />}
+        <Spacer height="30px" />
+
         <AppsWidthLimiter>
           <AppInfoSnippetContainer>
             <AppInfoSnippetLeft
@@ -170,15 +168,9 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {!isMobile ? (
-                  <>
-                    {isSelectedAppPinned
-                      ? 'Unpin from dashboard'
-                      : 'Pin to dashboard'}
-                  </>
-                ) : (
-                  <>{isSelectedAppPinned ? 'Unpin' : 'Pin'}</>
-                )}
+                {isSelectedAppPinned
+                  ? 'Unpin from dashboard'
+                  : 'Pin to dashboard'}
               </AppDownloadButtonText>
             </AppDownloadButton>
             <AppDownloadButton
