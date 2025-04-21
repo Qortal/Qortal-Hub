@@ -14,7 +14,7 @@ const isDev = process.env.NODE_ENV === 'development';
 const capitalize = {
   type: 'postProcessor',
   name: 'capitalize',
-  process: (value, key, options, translator) => {
+  process: (value) => {
     return value.charAt(0).toUpperCase() + value.slice(1);
   },
 };
