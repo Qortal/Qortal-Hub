@@ -1,7 +1,11 @@
 {
+  "add": "aggiungi",
   "cancel": "cancella",
   "choose": "scegli",
+  "close": "chiudi",
   "description": "descrizione",
+  "edit": "modifica",
+  "error": "si è verificato un errore",
   "save": "salva",
   "title": "titolo"
 }

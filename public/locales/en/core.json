@@ -1,7 +1,11 @@
 {
+  "add": "add",
   "cancel": "cancel",
   "choose": "choose",
+  "close": "close",
   "description": "description",
+  "edit": "edit",
+  "error": "an error occurred",
   "save": "save",
   "title": "title"
 }

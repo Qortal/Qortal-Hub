@@ -40,8 +40,8 @@ export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
   <Tooltip {...props} classes={{ popper: className }} />
 ))(({ theme }) => ({
   [`& .${tooltipClasses.tooltip}`]: {
-    backgroundColor: '#232428',
-    color: 'white',
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.primary,
     maxWidth: 320,
     padding: '20px',
     fontSize: theme.typography.pxToRem(12),
@@ -350,7 +350,7 @@ export const NotAuthenticated = ({
           .catch((error) => {
             console.error(
               'Failed to set API key:',
-              error.message || 'An error occurred'
+              error.message || t('core:error', { postProcess: 'capitalize' })
             );
           });
       } else {
@@ -359,7 +359,9 @@ export const NotAuthenticated = ({
         if (!fromStartUp) {
           setInfoSnack({
             type: 'error',
-            message: 'Select a valid apikey',
+            message: t('auth:apikey.select_valid', {
+              postProcess: 'capitalize',
+            }),
           });
           setOpenSnack(true);
         }
@@ -382,7 +384,10 @@ export const NotAuthenticated = ({
           .catch((error) => {
             console.error(
               'Failed to set API key:',
-              error.message || 'An error occurred'
+              error.message ||
+                t('core:error', {
+                  postProcess: 'capitalize',
+                })
             );
           });
         return;
@@ -390,7 +395,11 @@ export const NotAuthenticated = ({
       if (!fromStartUp) {
         setInfoSnack({
           type: 'error',
-          message: error?.message || 'Select a valid apikey',
+          message:
+            error?.message ||
+            t('auth:apikey.select_valid', {
+              postProcess: 'capitalize',
+            }),
         });
         setOpenSnack(true);
       }
@@ -507,7 +516,8 @@ export const NotAuthenticated = ({
                 transaction you make is linked to your ID, and this is where you
                 manage all your QORT and other tradeable cryptocurrencies on
                 Qortal.
-              </Typography>
+              </Typography>{' '}
+              // TODO translate
             </React.Fragment>
           }
         >
@@ -538,7 +548,8 @@ export const NotAuthenticated = ({
                 }}
               >
                 New users start here!
-              </Typography>
+              </Typography>{' '}
+              // TODO translate
               <Spacer height="10px" />
               <Typography
                 color="inherit"
@@ -550,7 +561,8 @@ export const NotAuthenticated = ({
                 to start using Qortal. Once you have made your account, you can
                 start doing things like obtaining some QORT, buying a name and
                 avatar, publishing videos and blogs, and much more.
-              </Typography>
+              </Typography>{' '}
+              // TODO translate
             </React.Fragment>
           }
         >
@@ -582,7 +594,7 @@ export const NotAuthenticated = ({
           visibility: !useLocalNode && 'hidden',
         }}
       >
-        {t('auth:using_node', { postProcess: 'capitalize' })}:{' '}
+        {t('auth:node.using', { postProcess: 'capitalize' })}:{' '}
         {currentNode?.url}
       </Typography>
 
@@ -635,7 +647,7 @@ export const NotAuthenticated = ({
                       },
                       '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
                         {
-                          backgroundColor: 'white', // Change track color when checked
+                          backgroundColor: theme.palette.background.default,
                         },
                     }}
                     checked={useLocalNode}
@@ -666,7 +678,11 @@ export const NotAuthenticated = ({
                     disabled={false}
                   />
                 }
-                label={`Use ${isLocal ? 'Local' : 'Custom'} Node`}
+                label={
+                  isLocal
+                    ? t('auth:node.use_local', { postProcess: 'capitalize' })
+                    : t('auth:node.use_custom', { postProcess: 'capitalize' })
+                }
               />
             </Box>
             {currentNode?.url === 'http://127.0.0.1:12391' && (
@@ -677,14 +693,19 @@ export const NotAuthenticated = ({
                   variant="contained"
                   component="label"
                 >
-                  {apiKey ? 'Change ' : 'Import '} apikey
+                  {apiKey
+                    ? t('auth:node.use_local', { postProcess: 'capitalize' })
+                    : t('auth:apikey.import', { postProcess: 'capitalize' })}
                 </Button>
                 <Typography
                   sx={{
                     fontSize: '12px',
                     visibility: importedApiKey ? 'visible' : 'hidden',
                   }}
-                >{`api key : ${importedApiKey}`}</Typography>
+                >
+                  {t('auth:apikey.key', { postProcess: 'capitalize' })}: $
+                  {importedApiKey}
+                </Typography>
               </>
             )}
             <Button
@@ -695,12 +716,12 @@ export const NotAuthenticated = ({
               variant="contained"
               component="label"
             >
-              {t('auth:choose_custom_node', { postProcess: 'capitalize' })}
+              {t('auth:node.choose', { postProcess: 'capitalize' })}
             </Button>
           </>
           <Typography
             sx={{
-              color: 'white',
+              color: theme.palette.text.primary,
               fontSize: '12px',
             }}
           >
@@ -709,6 +730,7 @@ export const NotAuthenticated = ({
           </Typography>
         </Box>
       </>
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}
@@ -722,7 +744,10 @@ export const NotAuthenticated = ({
           aria-describedby="alert-dialog-description"
           fullWidth
         >
-          <DialogTitle id="alert-dialog-title">{'Custom nodes'}</DialogTitle>
+          <DialogTitle id="alert-dialog-title">
+            {' '}
+            {t('auth:node.custom_many', { postProcess: 'capitalize' })}:
+          </DialogTitle>
           <DialogContent>
             <Box
               sx={{
@@ -750,7 +775,7 @@ export const NotAuthenticated = ({
                   >
                     <Typography
                       sx={{
-                        color: 'white',
+                        color: theme.palette.text.primary,
                         fontSize: '14px',
                       }}
                     >
@@ -807,7 +832,7 @@ export const NotAuthenticated = ({
                       >
                         <Typography
                           sx={{
-                            color: 'white',
+                            color: theme.palette.text.primary,
                             fontSize: '14px',
                           }}
                         >
@@ -850,8 +875,9 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            Choose
+                            {t('core:choose', { postProcess: 'capitalize' })}
                           </Button>
+
                           <Button
                             size="small"
                             onClick={() => {
@@ -862,20 +888,20 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            Edit
+                            {t('core:edit', { postProcess: 'capitalize' })}
                           </Button>
+
                           <Button
                             size="small"
                             onClick={() => {
                               const nodesToSave = [
                                 ...(customNodes || []),
                               ].filter((item) => item?.url !== node?.url);
-
                               saveCustomNodes(nodesToSave, true);
                             }}
                             variant="contained"
                           >
-                            Remove
+                            {t('core:remove', { postProcess: 'capitalize' })}
                           </Button>
                         </Box>
                       </Box>
@@ -920,13 +946,13 @@ export const NotAuthenticated = ({
                   }}
                   autoFocus
                 >
-                  Close
+                  {t('core:close', { postProcess: 'capitalize' })}
                 </Button>
               </>
             )}
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
-                Add
+                {t('core:add', { postProcess: 'capitalize' })}
               </Button>
             )}
 
@@ -939,7 +965,7 @@ export const NotAuthenticated = ({
                     setCustomNodeToSaveIndex(null);
                   }}
                 >
-                  Return to list
+                  {t('auth:return_to_list', { postProcess: 'capitalize' })}
                 </Button>
 
                 <Button
@@ -948,7 +974,7 @@ export const NotAuthenticated = ({
                   onClick={() => saveCustomNodes(customNodes)}
                   autoFocus
                 >
-                  Save
+                  {t('core:save', { postProcess: 'capitalize' })}
                 </Button>
               </>
             )}
@@ -962,7 +988,9 @@ export const NotAuthenticated = ({
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">{'Enter apikey'}</DialogTitle>
+          <DialogTitle id="alert-dialog-title">
+            {t('auth:enter_apikey', { postProcess: 'capitalize' })}
+          </DialogTitle>
           <DialogContent>
             <Box
               sx={{
@@ -980,7 +1008,7 @@ export const NotAuthenticated = ({
                 variant="contained"
                 component="label"
               >
-                Alternative: File select
+                {t('auth:apikey_alternative', { postProcess: 'capitalize' })}
                 <input
                   type="file"
                   accept=".txt"
@@ -998,7 +1026,7 @@ export const NotAuthenticated = ({
                 setShowSelectApiKey(false);
               }}
             >
-              Close
+              {t('core:close', { postProcess: 'capitalize' })}
             </Button>
 
             <Button
@@ -1044,7 +1072,7 @@ export const NotAuthenticated = ({
               }}
               autoFocus
             >
-              Save
+              {t('core:save', { postProcess: 'capitalize' })}
             </Button>
           </DialogActions>
         </Dialog>
