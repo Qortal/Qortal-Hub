@@ -28,7 +28,7 @@ i18n
     debug: isDev,
     fallbackLng: 'en',
     ns: ['auth', 'core'],
-    supportedLngs: ['en', 'it', 'fr', 'es'],
+    supportedLngs: ['en', 'it'],
     backend: {
       backends: [LocalStorageBackend, HttpBackend],
       backendOptions: [

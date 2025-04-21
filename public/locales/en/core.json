@@ -1,9 +1,7 @@
 {
-  "add": {
-    "task": "Add task"
-  },
-  "cancel": "Cancel",
-  "description": "Description" ,
-  "save": "Save",
-  "title": "Title"
+  "cancel": "cancel",
+  "choose": "choose",
+  "description": "description",
+  "save": "save",
+  "title": "title"
 }

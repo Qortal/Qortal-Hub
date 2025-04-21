@@ -47,6 +47,7 @@ export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
     fontSize: theme.typography.pxToRem(12),
   },
 }));
+
 function removeTrailingSlash(url) {
   return url.replace(/\/+$/, '');
 }
@@ -85,7 +86,7 @@ export const NotAuthenticated = ({
     React.useState(null);
   const { showTutorial, hasSeenGettingStarted } = useContext(GlobalContext);
   const theme = useTheme();
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'core']);
 
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
@@ -581,7 +582,8 @@ export const NotAuthenticated = ({
           visibility: !useLocalNode && 'hidden',
         }}
       >
-        {'Using node: '} {currentNode?.url}
+        {t('auth:using_node', { postProcess: 'capitalize' })}:{' '}
+        {currentNode?.url}
       </Typography>
 
       <>
@@ -693,7 +695,7 @@ export const NotAuthenticated = ({
               variant="contained"
               component="label"
             >
-              Choose custom node
+              {t('auth:choose_custom_node', { postProcess: 'capitalize' })}
             </Button>
           </>
           <Typography
@@ -702,7 +704,8 @@ export const NotAuthenticated = ({
               fontSize: '12px',
             }}
           >
-            Build version: {manifestData?.version}
+            {t('auth:build_version', { postProcess: 'capitalize' })}:
+            {manifestData?.version}
           </Typography>
         </Box>
       </>
@@ -788,7 +791,7 @@ export const NotAuthenticated = ({
                         }}
                         variant="contained"
                       >
-                        Choose
+                        {t('core:choose', { postProcess: 'capitalize' })}
                       </Button>
                     </Box>
                   </Box>

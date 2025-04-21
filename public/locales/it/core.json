@@ -1,9 +1,7 @@
 {
-  "add": {
-    "task": "Aggiungi compito"
-  },
-  "cancel": "Cancella",
-  "description": "Descrizione" ,
-  "save": "Salva",
-  "title": "Titolo"
+  "cancel": "cancella",
+  "choose": "scegli",
+  "description": "descrizione",
+  "save": "salva",
+  "title": "titolo"
 }
