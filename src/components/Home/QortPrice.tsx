@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { getBaseApiReact } from "../../App";
-import { Box, Tooltip, Typography } from "@mui/material";
-import { BarSpinner } from "../../common/Spinners/BarSpinner/BarSpinner";
-import { formatDate } from "../../utils/time";
+import { useCallback, useEffect, useState } from 'react';
+import { getBaseApiReact } from '../../App';
+import { Box, Tooltip, Typography, useTheme } from '@mui/material';
+import { BarSpinner } from '../../common/Spinners/BarSpinner/BarSpinner';
+import { formatDate } from '../../utils/time';
+import { useTranslation } from 'react-i18next';
 
 function getAverageLtcPerQort(trades) {
   let totalQort = 0;
@@ -38,6 +39,8 @@ export const QortPrice = () => {
   const [supply, setSupply] = useState(null);
   const [lastBlock, setLastBlock] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation(['core', 'tutorial']);
+  const theme = useTheme();
 
   const getPrice = useCallback(async () => {
     try {
@@ -101,64 +104,63 @@ export const QortPrice = () => {
     return () => clearInterval(interval);
   }, [getPrice]);
 
-
   return (
     <Box
       sx={{
-        display: "flex",
-        gap: "20px",
-        flexWrap: "wrap",
-        flexDirection: "column",
-        width: "322px",
+        display: 'flex',
+        gap: '20px',
+        flexWrap: 'wrap',
+        flexDirection: 'column',
+        width: '322px',
       }}
     >
       <Tooltip
         title={
-          <span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>
+          <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
             Based on the latest 20 trades
           </span>
         }
         placement="bottom"
         arrow
-        sx={{ fontSize: "24" }}
+        sx={{ fontSize: '24' }}
         slotProps={{
           tooltip: {
             sx: {
-              color: "#ffffff",
-              backgroundColor: "#444444",
+              color: theme.palette.text.primary,
+              backgroundColor: theme.palette.background.default,
             },
           },
           arrow: {
             sx: {
-              color: "#444444",
+              color: theme.palette.text.primary,
             },
           },
         }}
       >
         <Box
           sx={{
-            width: "322px",
-            display: "flex",
-            flexDirection: "row",
-            gap: "10px",
-
-            justifyContent: "space-between",
+            display: 'flex',
+            flexDirection: 'row',
+            gap: '10px',
+            justifyContent: 'space-between',
+            width: '322px',
           }}
         >
           <Typography
             sx={{
-              fontSize: "1rem",
-              fontWeight: "bold",
+              fontSize: '1rem',
+              fontWeight: 'bold',
             }}
           >
-            Price
+            {t('core:price', { postProcess: 'capitalize' })}
           </Typography>
+
           {!ltcPerQort ? (
             <BarSpinner width="16px" color="white" />
           ) : (
             <Typography
               sx={{
-                fontSize: "1rem",
+                fontSize: '1rem',
               }}
             >
               {ltcPerQort} LTC/QORT
@@ -168,28 +170,28 @@ export const QortPrice = () => {
       </Tooltip>
       <Box
         sx={{
-          width: "322px",
-          display: "flex",
-          flexDirection: "row",
-          gap: "10px",
-
-          justifyContent: "space-between",
+          display: 'flex',
+          flexDirection: 'row',
+          gap: '10px',
+          justifyContent: 'space-between',
+          width: '322px',
         }}
       >
         <Typography
           sx={{
-            fontSize: "1rem",
-            fontWeight: "bold",
+            fontSize: '1rem',
+            fontWeight: 'bold',
           }}
         >
-          Supply
+          {t('core:supply', { postProcess: 'capitalize' })}
         </Typography>
+
         {!supply ? (
           <BarSpinner width="16px" color="white" />
         ) : (
           <Typography
             sx={{
-              fontSize: "1rem",
+              fontSize: '1rem',
             }}
           >
             {supply} QORT
@@ -197,60 +199,58 @@ export const QortPrice = () => {
         )}
       </Box>
       <Tooltip
-          title={
-            <span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>
-              {lastBlock?.timestamp && formatDate(lastBlock?.timestamp)}
-            </span>
-          }
-          placement="bottom"
-          arrow
-          sx={{ fontSize: "24" }}
-          slotProps={{
-            tooltip: {
-              sx: {
-                color: "#ffffff",
-                backgroundColor: "#444444",
-              },
+        title={
+          <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+            {lastBlock?.timestamp && formatDate(lastBlock?.timestamp)}
+          </span>
+        }
+        placement="bottom"
+        arrow
+        sx={{ fontSize: '24' }}
+        slotProps={{
+          tooltip: {
+            sx: {
+              color: theme.palette.text.primary,
+              backgroundColor: theme.palette.background.default,
             },
-            arrow: {
-              sx: {
-                color: "#444444",
-              },
+          },
+          arrow: {
+            sx: {
+              color: theme.palette.text.primary,
             },
-          }}
-        >
-      <Box
-        sx={{
-          width: "322px",
-          display: "flex",
-          flexDirection: "row",
-          gap: "10px",
-
-          justifyContent: "space-between",
+          },
         }}
       >
-        
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            gap: '10px',
+            justifyContent: 'space-between',
+            width: '322px',
+          }}
+        >
           <Typography
             sx={{
-              fontSize: "1rem",
-              fontWeight: "bold",
+              fontSize: '1rem',
+              fontWeight: 'bold',
             }}
           >
-            Last height
+            {t('core:last_height', { postProcess: 'capitalize' })}
           </Typography>
+
           {!lastBlock?.height ? (
             <BarSpinner width="16px" color="white" />
           ) : (
             <Typography
               sx={{
-                fontSize: "1rem",
+                fontSize: '1rem',
               }}
             >
               {lastBlock?.height}
             </Typography>
           )}
-       
-      </Box>
+        </Box>
       </Tooltip>
     </Box>
   );

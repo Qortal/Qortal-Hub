@@ -11,7 +11,11 @@
   },
   "initial": {
     "6_qort": "Have at least 6 QORT in your wallet",
+    "explore": "explore",
+    "general_chat": "general chat",
     "getting_started": "getting started",
-    "register_name": "register a name"
+    "register_name": "register a name",
+    "see_apps": "see apps",
+    "trade_qort": "trade QORT"
   }
 }

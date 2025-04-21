@@ -6,7 +6,8 @@
   "description": "descrizione",
   "edit": "modifica",
   "error": "si è verificato un errore",
-  "loading": "loading...",
+  "loading": "caricamento...",
   "save": "salva",
+  "supply": "offerta",
   "title": "titolo"
 }
