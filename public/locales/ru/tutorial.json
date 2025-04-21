@@ -1,0 +1,21 @@
+{
+  "1_getting_started": "1. Начало работы",
+  "2_overview": "2. Обзор",
+  "3_groups": "3. Группы Qortal",
+  "4_obtain_qort": "4. Получение QORT",
+  "account_creation": "создание аккаунта",
+  "important_info": "важная информация!",
+  "apps": {
+    "dashboard": "1. Панель приложений",
+    "navigation": "2. Навигация по приложениям"
+  },
+  "initial": {
+    "6_qort": "Иметь не менее 6 QORT в кошельке",
+    "explore": "исследовать",
+    "general_chat": "общий чат",
+    "getting_started": "начало работы",
+    "register_name": "зарегистрировать имя",
+    "see_apps": "посмотреть приложения",
+    "trade_qort": "обмен QORT"
+  }
+}

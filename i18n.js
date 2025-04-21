@@ -43,7 +43,7 @@ i18n
     },
     lng: navigator.language,
     ns: ['auth', 'core', 'tutorial'],
-    supportedLngs: ['en', 'it', 'es', 'fr', 'de'],
+    supportedLngs: ['en', 'it', 'es', 'fr', 'de', 'ru'],
   });
 
 export default i18n;
