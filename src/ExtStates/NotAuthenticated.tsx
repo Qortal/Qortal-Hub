@@ -30,6 +30,7 @@ import { cleanUrl, gateways } from '../background';
 import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from '../components/Theme/ThemeSelector';
+import { useTranslation } from 'react-i18next';
 
 const manifestData = {
   version: '0.5.3',
@@ -84,6 +85,7 @@ export const NotAuthenticated = ({
     React.useState(null);
   const { showTutorial, hasSeenGettingStarted } = useContext(GlobalContext);
   const theme = useTheme();
+  const { t } = useTranslation('auth');
 
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
@@ -183,6 +185,7 @@ export const NotAuthenticated = ({
   useEffect(() => {
     importedApiKeyRef.current = importedApiKey;
   }, [importedApiKey]);
+
   useEffect(() => {
     currentNodeRef.current = currentNode;
   }, [currentNode]);
@@ -309,6 +312,7 @@ export const NotAuthenticated = ({
       } else if (currentNodeRef.current) {
         payload = currentNodeRef.current;
       }
+
       let isValid = false;
 
       const url = `${payload?.url}/admin/settings/localAuthBypassEnabled`;
@@ -402,6 +406,7 @@ export const NotAuthenticated = ({
   const addCustomNode = () => {
     setMode('add-node');
   };
+
   const saveCustomNodes = (myNodes, isFullListOfNodes) => {
     let nodes = [...(myNodes || [])];
     if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
@@ -455,7 +460,9 @@ export const NotAuthenticated = ({
       >
         <img src={Logo1Dark} className="base-image" />
       </div>
+
       <Spacer height="30px" />
+
       <TextP
         sx={{
           textAlign: 'center',
@@ -463,7 +470,7 @@ export const NotAuthenticated = ({
           fontSize: '18px',
         }}
       >
-        WELCOME TO
+        {t('auth:welcome', { postProcess: 'capitalize' })}
         <TextSpan
           sx={{
             fontSize: '18px',
@@ -504,13 +511,9 @@ export const NotAuthenticated = ({
           }
         >
           <CustomButton onClick={() => setExtstate('wallets')}>
-            {/* <input {...getInputProps()} /> */}
-            Accounts
+            {t('auth:account_many', { postProcess: 'capitalize' })}
           </CustomButton>
         </HtmlTooltip>
-        {/* <Tooltip title="Authenticate by importing your Qortal JSON file" arrow>
-          <img src={Info} />
-        </Tooltip> */}
       </Box>
 
       <Spacer height="6px" />
@@ -565,10 +568,11 @@ export const NotAuthenticated = ({
               },
             }}
           >
-            Create account
+            {t('auth:create_account', { postProcess: 'capitalize' })}
           </CustomButton>
         </HtmlTooltip>
       </Box>
+
       <Spacer height="15px" />
 
       <Typography
@@ -579,6 +583,7 @@ export const NotAuthenticated = ({
       >
         {'Using node: '} {currentNode?.url}
       </Typography>
+
       <>
         <Spacer height="15px" />
         <Box
@@ -603,7 +608,7 @@ export const NotAuthenticated = ({
                 textDecoration: 'underline',
               }}
             >
-              For advanced users
+              {t('auth:advanced_users', { postProcess: 'capitalize' })}
             </Typography>
             <Box
               sx={{
