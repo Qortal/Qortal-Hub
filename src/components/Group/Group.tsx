@@ -2235,42 +2235,40 @@ export const Group = ({
                 : '0px',
             }}
           >
-            {
-              <DesktopHeader
-                isPrivate={isPrivate}
-                selectedGroup={selectedGroup}
-                groupSection={groupSection}
-                isUnread={isUnread}
-                goToAnnouncements={goToAnnouncements}
-                isUnreadChat={isUnreadChat}
-                goToChat={goToChat}
-                goToThreads={goToThreads}
-                setOpenManageMembers={setOpenManageMembers}
-                groupChatHasUnread={groupChatHasUnread}
-                groupsAnnHasUnread={groupsAnnHasUnread}
-                directChatHasUnread={directChatHasUnread}
-                chatMode={chatMode}
-                openDrawerGroups={openDrawerGroups}
-                goToHome={goToHome}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                mobileViewMode={mobileViewMode}
-                setMobileViewMode={setMobileViewMode}
-                setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-                hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-                hasUnreadDirects={directChatHasUnread}
-                myName={userInfo?.name || null}
-                isHome={groupSection === 'home'}
-                isGroups={desktopSideView === 'groups'}
-                isDirects={desktopSideView === 'directs'}
-                setDesktopSideView={setDesktopSideView}
-                hasUnreadAnnouncements={isUnread}
-                isAnnouncement={groupSection === 'announcement'}
-                isChat={groupSection === 'chat'}
-                hasUnreadChat={isUnreadChat}
-                setGroupSection={setGroupSection}
-                isForum={groupSection === 'forum'}
-              />
-            }
+          <DesktopHeader
+            isPrivate={isPrivate}
+            selectedGroup={selectedGroup}
+            groupSection={groupSection}
+            isUnread={isUnread}
+            goToAnnouncements={goToAnnouncements}
+            isUnreadChat={isUnreadChat}
+            goToChat={goToChat}
+            goToThreads={goToThreads}
+            setOpenManageMembers={setOpenManageMembers}
+            groupChatHasUnread={groupChatHasUnread}
+            groupsAnnHasUnread={groupsAnnHasUnread}
+            directChatHasUnread={directChatHasUnread}
+            chatMode={chatMode}
+            openDrawerGroups={openDrawerGroups}
+            goToHome={goToHome}
+            setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+            mobileViewMode={mobileViewMode}
+            setMobileViewMode={setMobileViewMode}
+            setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            hasUnreadDirects={directChatHasUnread}
+            myName={userInfo?.name || null}
+            isHome={groupSection === 'home'}
+            isGroups={desktopSideView === 'groups'}
+            isDirects={desktopSideView === 'directs'}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadAnnouncements={isUnread}
+            isAnnouncement={groupSection === 'announcement'}
+            isChat={groupSection === 'chat'}
+            hasUnreadChat={isUnreadChat}
+            setGroupSection={setGroupSection}
+            isForum={groupSection === 'forum'}
+            />
 
             <Box
               sx={{
@@ -2521,64 +2519,59 @@ export const Group = ({
             </>
           )}
 
-          {
-            <AppsDesktop
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsMode}
-              setMode={setAppsMode}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'apps'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-              desktopViewMode={desktopViewMode}
-            />
-          }
-          {
-            <AppsDevMode
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsModeDev}
-              setMode={setAppsModeDev}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'dev'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-            />
-          }
-
-          {
-            <HomeDesktop
-              name={userInfo?.name}
-              refreshHomeDataFunc={refreshHomeDataFunc}
-              myAddress={myAddress}
-              isLoadingGroups={isLoadingGroups}
-              balance={balance}
-              userInfo={userInfo}
-              groups={groups}
-              setGroupSection={setGroupSection}
-              setSelectedGroup={setSelectedGroup}
-              getTimestampEnterChat={getTimestampEnterChat}
-              setOpenManageMembers={setOpenManageMembers}
-              setOpenAddGroup={setOpenAddGroup}
-              setMobileViewMode={setMobileViewMode}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-            />
-          }
+          <AppsDesktop
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsMode}
+            setMode={setAppsMode}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'apps'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+            desktopViewMode={desktopViewMode}
+          />
+        
+          <AppsDevMode
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsModeDev}
+            setMode={setAppsModeDev}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'dev'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+          />
+          
+          <HomeDesktop
+            name={userInfo?.name}
+            refreshHomeDataFunc={refreshHomeDataFunc}
+            myAddress={myAddress}
+            isLoadingGroups={isLoadingGroups}
+            balance={balance}
+            userInfo={userInfo}
+            groups={groups}
+            setGroupSection={setGroupSection}
+            setSelectedGroup={setSelectedGroup}
+            getTimestampEnterChat={getTimestampEnterChat}
+            setOpenManageMembers={setOpenManageMembers}
+            setOpenAddGroup={setOpenAddGroup}
+            setMobileViewMode={setMobileViewMode}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+          />          
         </Box>
 
         <AuthenticatedContainerInnerRight
