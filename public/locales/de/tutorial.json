@@ -1,0 +1,21 @@
+{
+  "1_getting_started": "1. Erste Schritte",
+  "2_overview": "2. Überblick",
+  "3_groups": "3. Qortal-Gruppen",
+  "4_obtain_qort": "4. QORT erhalten",
+  "account_creation": "Kontoerstellung",
+  "important_info": "wichtige Informationen!",
+  "apps": {
+    "dashboard": "1. App-Dashboard",
+    "navigation": "2. App-Navigation"
+  },
+  "initial": {
+    "6_qort": "Mindestens 6 QORT im Wallet haben",
+    "explore": "erkunden",
+    "general_chat": "allgemeiner Chat",
+    "getting_started": "erste Schritte",
+    "register_name": "einen Namen registrieren",
+    "see_apps": "Apps ansehen",
+    "trade_qort": "QORT handeln"
+  }
+}
