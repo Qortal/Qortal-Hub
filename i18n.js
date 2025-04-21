@@ -25,10 +25,6 @@ i18n
   .use(initReactI18next)
   .use(capitalize)
   .init({
-    debug: isDev,
-    fallbackLng: 'en',
-    ns: ['auth', 'core', 'tutorial'],
-    supportedLngs: ['en', 'it'],
     backend: {
       backends: [LocalStorageBackend, HttpBackend],
       backendOptions: [
@@ -40,9 +36,14 @@ i18n
         },
       ],
     },
+    debug: isDev,
+    fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
     },
+    lng: navigator.language,
+    ns: ['auth', 'core', 'tutorial'],
+    supportedLngs: ['en', 'it'],
   });
 
 export default i18n;
