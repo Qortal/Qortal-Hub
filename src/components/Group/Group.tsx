@@ -2235,7 +2235,7 @@ export const Group = ({
                 : '0px',
             }}
           >
-          
+            
           <DesktopHeader
             isPrivate={isPrivate}
             selectedGroup={selectedGroup}
@@ -2320,6 +2320,35 @@ export const Group = ({
                     retrieved by the network. Checking every 2 minutes...
                   </Typography>
                 </div>
+            />
+
+            <Box
+              sx={{
+                display: 'flex',
+                flexGrow: 1,
+                height: 'calc(100vh - 70px)',
+                position: 'relative',
+              }}
+            >
+              {triedToFetchSecretKey && (
+                <ChatGroup
+                  myAddress={myAddress}
+                  selectedGroup={selectedGroup?.groupId}
+                  getSecretKey={getSecretKey}
+                  secretKey={secretKey}
+                  isPrivate={isPrivate}
+                  setSecretKey={setSecretKey}
+                  handleNewEncryptionNotification={setNewEncryptionNotification}
+                  hide={groupSection !== 'chat' || selectedDirect || newChat}
+                  hideView={!(desktopViewMode === 'chat' && selectedGroup)}
+                  handleSecretKeyCreationInProgress={
+                    handleSecretKeyCreationInProgress
+                  }
+                  triedToFetchSecretKey={triedToFetchSecretKey}
+                  myName={userInfo?.name}
+                  balance={balance}
+                  getTimestampEnterChatParent={getTimestampEnterChat}
+                />
               )}
             {isPrivate &&
             !admins.includes(myAddress) &&
@@ -2519,7 +2548,7 @@ export const Group = ({
               </Box>
             </>
           )}
-        
+            
           <AppsDesktop
             toggleSideViewGroups={toggleSideViewGroups}
             toggleSideViewDirects={toggleSideViewDirects}
@@ -2537,7 +2566,7 @@ export const Group = ({
             isApps={desktopViewMode === 'apps'}
             desktopViewMode={desktopViewMode}
           />
-         
+            
           <AppsDevMode
             toggleSideViewGroups={toggleSideViewGroups}
             toggleSideViewDirects={toggleSideViewDirects}
@@ -2554,7 +2583,7 @@ export const Group = ({
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
             isApps={desktopViewMode === 'apps'}
-          />          
+          />
           
           <HomeDesktop
             name={userInfo?.name}

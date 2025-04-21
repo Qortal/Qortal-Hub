@@ -1,61 +1,21 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
   AppLibrarySubTitle,
-  AppsContainer,
+  AppsDesktopLibraryBody,
+  AppsDesktopLibraryHeader,
   AppsLibraryContainer,
-  AppsParent,
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
   AppsWidthLimiter,
-  PublishQAppCTAButton,
-  PublishQAppCTALeft,
-  PublishQAppCTAParent,
-  PublishQAppCTARight,
-  PublishQAppDotsBG,
 } from './Apps-styles';
-import { Avatar, Box, ButtonBase, InputBase, styled } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
-import LogoSelected from '../../assets/svgs/LogoSelected.svg';
-import IconSearch from '../../assets/svgs/Search.svg';
+import { ButtonBase, InputBase, styled, useTheme } from '@mui/material';
+import { MyContext } from '../../App';
+import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
-import qappDots from '../../assets/svgs/qappDots.svg';
-
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
-import { executeEvent } from '../../utils/events';
-import {
-  AppsDesktopLibraryBody,
-  AppsDesktopLibraryHeader,
-} from './AppsDesktop-styles';
-const officialAppList = [
-  'q-tube',
-  'q-blog',
-  'q-share',
-  'q-support',
-  'q-mail',
-  'q-fund',
-  'q-shop',
-  'q-trade',
-  'q-support',
-  'q-manager',
-  'q-wallets',
-  'q-search',
-  'q-nodecontrol',
-];
 
 const ScrollerStyled = styled('div')({
   // Hide scrollbar for WebKit browsers (Chrome, Safari)
@@ -98,6 +58,7 @@ export const AppsCategoryDesktop = ({
 }) => {
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
+  const theme = useTheme();
   const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
@@ -158,15 +119,15 @@ export const AppsCategoryDesktop = ({
     <AppsLibraryContainer
       sx={{
         display: !isShow && 'none',
-        padding: '0px',
         height: '100vh',
         overflow: 'hidden',
+        padding: '0px',
         paddingTop: '30px',
       }}
     >
       <AppsDesktopLibraryHeader
         sx={{
-          maxWidth: '1500px',
+          maxWidth: '1200px',
           width: '90%',
         }}
       >
@@ -181,11 +142,18 @@ export const AppsCategoryDesktop = ({
             }}
           >
             <AppsSearchLeft>
-              <img src={IconSearch} />
+              <SearchIcon />
+
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
-                sx={{ ml: 1, flex: 1 }}
+                sx={{
+                  background: theme.palette.background.paper,
+                  borderRadius: '6px',
+                  flex: 1,
+                  ml: 1,
+                  paddingLeft: '12px',
+                }}
                 placeholder="Search for apps"
                 inputProps={{
                   'aria-label': 'Search for apps',
@@ -194,6 +162,7 @@ export const AppsCategoryDesktop = ({
                 }}
               />
             </AppsSearchLeft>
+
             <AppsSearchRight>
               {searchValue && (
                 <ButtonBase
@@ -208,20 +177,24 @@ export const AppsCategoryDesktop = ({
           </AppsSearchContainer>
         </AppsWidthLimiter>
       </AppsDesktopLibraryHeader>
+
       <AppsDesktopLibraryBody
         sx={{
+          alignItems: 'center',
           height: `calc(100vh - 36px)`,
           overflow: 'auto',
           padding: '0px',
-          alignItems: 'center',
+          width: '70%',
         }}
       >
         <Spacer height="25px" />
+
         <AppsWidthLimiter>
           <AppLibrarySubTitle>{`Category: ${category?.name}`}</AppLibrarySubTitle>
 
           <Spacer height="25px" />
         </AppsWidthLimiter>
+
         <AppsWidthLimiter>
           <StyledVirtuosoContainer
             sx={{

@@ -11,7 +11,7 @@ import {
   AppInfoSnippetRight,
   AppInfoUserName,
 } from './Apps-styles';
-import { Avatar, ButtonBase } from '@mui/material';
+import { Avatar, ButtonBase, useTheme } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
@@ -41,6 +41,8 @@ export const AppInfoSnippet = ({
   const setSettingsLocalLastUpdated = useSetRecoilState(
     settingsLocalLastUpdatedAtom
   );
+  const theme = useTheme();
+
   return (
     <AppInfoSnippetContainer
       sx={{
@@ -96,6 +98,7 @@ export const AppInfoSnippet = ({
             </AppCircle>
           </AppCircleContainer>
         </ButtonBase>
+
         <AppInfoSnippetMiddle>
           <ButtonBase
             onClick={() => {
@@ -112,12 +115,17 @@ export const AppInfoSnippet = ({
           >
             <AppInfoAppName>{app?.metadata?.title || app?.name}</AppInfoAppName>
           </ButtonBase>
+
           <Spacer height="6px" />
+
           <AppInfoUserName>{app?.name}</AppInfoUserName>
+
           <Spacer height="3px" />
+
           <AppRating app={app} myName={myName} />
         </AppInfoSnippetMiddle>
       </AppInfoSnippetLeft>
+
       <AppInfoSnippetRight
         sx={{
           gap: '10px',
@@ -157,7 +165,7 @@ export const AppInfoSnippet = ({
             setSettingsLocalLastUpdated(Date.now());
           }}
           sx={{
-            backgroundColor: '#359ff7ff',
+            backgroundColor: theme.palette.background.paper,
             opacity: isSelectedAppPinned ? 0.6 : 1,
           }}
         >
@@ -174,7 +182,9 @@ export const AppInfoSnippet = ({
             });
           }}
           sx={{
-            backgroundColor: isInstalled ? '#0091E1' : '#247C0E',
+            backgroundColor: isInstalled
+              ? '#0091E1'
+              : theme.palette.background.paper,
           }}
         >
           <AppDownloadButtonText>

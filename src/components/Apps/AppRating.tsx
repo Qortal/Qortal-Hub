@@ -91,6 +91,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       }
     }
   }, []);
+
   useEffect(() => {
     if (hasCalledRef.current) return;
     if (!app) return;
@@ -108,6 +109,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
         publishFee: fee.fee + ' QORT',
       });
+
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];

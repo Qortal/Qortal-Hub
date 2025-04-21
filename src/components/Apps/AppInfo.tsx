@@ -8,7 +8,6 @@ import {
   AppInfoSnippetContainer,
   AppInfoSnippetLeft,
   AppInfoSnippetMiddle,
-  AppInfoSnippetRight,
   AppInfoUserName,
   AppsCategoryInfo,
   AppsCategoryInfoLabel,
@@ -18,7 +17,7 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Avatar, Box } from '@mui/material';
+import { Avatar, Box, useTheme } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
@@ -36,6 +35,7 @@ export const AppInfo = ({ app, myName }) => {
   const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
     sortablePinnedAppsAtom
   );
+  const theme = useTheme();
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
@@ -105,17 +105,21 @@ export const AppInfo = ({ app, myName }) => {
                   </Avatar>
                 </AppCircle>
               </AppCircleContainer>
+
               <AppInfoSnippetMiddle>
                 <AppInfoAppName>
                   {app?.metadata?.title || app?.name}
                 </AppInfoAppName>
+
                 <Spacer height="6px" />
+
                 <AppInfoUserName>{app?.name}</AppInfoUserName>
+
                 <Spacer height="3px" />
               </AppInfoSnippetMiddle>
             </AppInfoSnippetLeft>
-            <AppInfoSnippetRight></AppInfoSnippetRight>
           </AppInfoSnippetContainer>
+
           <Spacer height="11px" />
           <Box
             sx={{
@@ -160,11 +164,11 @@ export const AppInfo = ({ app, myName }) => {
                 setSettingsLocalLastUpdated(Date.now());
               }}
               sx={{
-                backgroundColor: '#359ff7ff',
-                width: '100%',
-                maxWidth: '320px',
+                backgroundColor: theme.palette.background.paper,
                 height: '29px',
+                maxWidth: '320px',
                 opacity: isSelectedAppPinned ? 0.6 : 1,
+                width: '100%',
               }}
             >
               <AppDownloadButtonText>
@@ -173,6 +177,7 @@ export const AppInfo = ({ app, myName }) => {
                   : 'Pin to dashboard'}
               </AppDownloadButtonText>
             </AppDownloadButton>
+
             <AppDownloadButton
               onClick={() => {
                 executeEvent('addTab', {
@@ -180,10 +185,12 @@ export const AppInfo = ({ app, myName }) => {
                 });
               }}
               sx={{
-                backgroundColor: isInstalled ? '#0091E1' : '#247C0E',
-                width: '100%',
-                maxWidth: '320px',
+                backgroundColor: isInstalled
+                  ? '#0091E1'
+                  : theme.palette.background.paper,
                 height: '29px',
+                maxWidth: '320px',
+                width: '100%',
               }}
             >
               <AppDownloadButtonText>
@@ -192,25 +199,41 @@ export const AppInfo = ({ app, myName }) => {
             </AppDownloadButton>
           </Box>
         </AppsWidthLimiter>
+
         <Spacer height="20px" />
+
         <AppsWidthLimiter>
           <AppsCategoryInfo>
             <AppRating ratingCountPosition="top" myName={myName} app={app} />
+
             <Spacer width="16px" />
-            <Spacer height="40px" width="1px" backgroundColor="white" />
+
+            <Spacer
+              backgroundColor={theme.palette.background.paper}
+              height="40px"
+              width="1px"
+            />
+
             <Spacer width="16px" />
+
             <AppsCategoryInfoSub>
               <AppsCategoryInfoLabel>Category:</AppsCategoryInfoLabel>
+
               <Spacer height="4px" />
+
               <AppsCategoryInfoValue>
                 {app?.metadata?.categoryName || 'none'}
               </AppsCategoryInfoValue>
             </AppsCategoryInfoSub>
           </AppsCategoryInfo>
+
           <Spacer height="30px" />
+
           <AppInfoAppName>About this Q-App</AppInfoAppName>
         </AppsWidthLimiter>
+
         <Spacer height="20px" />
+
         <AppsInfoDescription>
           {app?.metadata?.description || 'No description'}
         </AppsInfoDescription>
