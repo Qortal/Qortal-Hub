@@ -35,6 +35,11 @@ import {
   cancelSellName,
   buyName,
   getBaseApi,
+  getAssetBalanceInfo,
+  getNameOrAddress,
+  getAssetInfo,
+  getPublicKey,
+  transferAsset,
 } from "../background";
 import { getNameInfo, uint8ArrayToObject } from "../backgroundFunctions/encryption";
 import { showSaveFilePicker } from "../components/Apps/useQortalMessageListener";
@@ -75,6 +80,10 @@ import { fileToBase64 } from "../utils/fileReading";
 import { mimeToExtensionMap } from "../utils/memeTypes";
 import { RequestQueueWithPromise } from "../utils/queue/queue";
 import utils from "../utils/utils";
+import ShortUniqueId from "short-unique-id";
+import { isValidBase64WithDecode } from "../utils/decode";
+
+const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
 
@@ -4887,3 +4896,366 @@ export const buyNameRequest = async (data, isFromExtension) => {
     throw new Error("User declined request");
   }
 };
+
+export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
+  const requiredFields = ["payments", "assetId"];
+  requiredFields.forEach((field) => {
+      if (data[field] === undefined || data[field] === null) {
+          throw new Error(`Missing required field: ${field}`);
+      }
+  });
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const privateKey = parsedData.privateKey;
+  const userPublicKey = parsedData.publicKey
+  const {fee: paymentFee} = await getFee("TRANSFER_ASSET");
+  const {fee: arbitraryFee} = await getFee("ARBITRARY");
+
+  let name = null
+  const payments = data.payments;
+  const assetId = data.assetId
+  const pendingTransactions = []
+  const pendingAdditionalArbitraryTxs = []
+  const additionalArbitraryTxsWithoutPayment = data?.additionalArbitraryTxsWithoutPayment || []
+  let totalAmount = 0
+  let fee = 0
+  for (const payment of payments) {
+    const paymentRefId = uid.rnd();
+    const requiredFieldsPayment = ["recipient", "amount"];
+    
+    for (const field of requiredFieldsPayment) {
+      if (!payment[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+  
+    const confirmReceiver = await getNameOrAddress(payment.recipient);
+    if (confirmReceiver.error) {
+      throw new Error("Invalid receiver address or name");
+    }
+    const receiverPublicKey = await getPublicKey(confirmReceiver)
+
+    const amount = +payment.amount.toFixed(8)
+  
+    pendingTransactions.push({
+      type: "PAYMENT",
+      recipientAddress: confirmReceiver,
+      amount: amount,
+      paymentRefId,
+    });
+  
+    fee = fee + +paymentFee;
+    totalAmount = totalAmount + amount;
+  
+    if (payment.arbitraryTxs && payment.arbitraryTxs.length > 0) {
+      for (const arbitraryTx of payment.arbitraryTxs) {
+        const requiredFieldsArbitraryTx = ["service", "identifier", "base64"];
+  
+        for (const field of requiredFieldsArbitraryTx) {
+          if (!arbitraryTx[field]) {
+            throw new Error(`Missing required field: ${field}`);
+          }
+        }
+  
+        if (!name) {
+          const getName = await getNameInfo();
+          if (!getName) throw new Error("Name needed to publish");
+          name = getName;
+        }
+  
+        const isValid = isValidBase64WithDecode(arbitraryTx.base64);
+        if (!isValid) throw new Error("Invalid base64 data");
+        if(!arbitraryTx?.service?.includes('_PRIVATE')) throw new Error('Please use a PRIVATE service')
+        const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || []
+        pendingTransactions.push({
+          type: "ARBITRARY",
+          identifier: arbitraryTx.identifier,
+          service: arbitraryTx.service,
+          base64: arbitraryTx.base64,
+          description: arbitraryTx?.description || "",
+          paymentRefId,
+          publicKeys: [receiverPublicKey, ...additionalPublicKeys]
+        });
+  
+        fee = fee + +arbitraryFee;
+      }
+    }
+  }
+
+  if (additionalArbitraryTxsWithoutPayment && additionalArbitraryTxsWithoutPayment.length > 0) {
+    for (const arbitraryTx of additionalArbitraryTxsWithoutPayment) {
+      const requiredFieldsArbitraryTx = ["service", "identifier", "base64"];
+
+      for (const field of requiredFieldsArbitraryTx) {
+        if (!arbitraryTx[field]) {
+          throw new Error(`Missing required field: ${field}`);
+        }
+      }
+
+      if (!name) {
+        const getName = await getNameInfo();
+        if (!getName) throw new Error("Name needed to publish");
+        name = getName;
+      }
+
+      const isValid = isValidBase64WithDecode(arbitraryTx.base64);
+      if (!isValid) throw new Error("Invalid base64 data");
+      if(!arbitraryTx?.service?.includes('_PRIVATE')) throw new Error('Please use a PRIVATE service')
+      const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || []
+      pendingAdditionalArbitraryTxs.push({
+        type: "ARBITRARY",
+        identifier: arbitraryTx.identifier,
+        service: arbitraryTx.service,
+        base64: arbitraryTx.base64,
+        description: arbitraryTx?.description || "",
+        publicKeys: additionalPublicKeys
+      });
+
+      fee = fee + +arbitraryFee;
+    }
+  }
+
+  
+  
+  if(!name) throw new Error('A name is needed to publish')
+  const balance = await getBalanceInfo();
+
+  if(+balance < fee) throw new Error('Your QORT balance is insufficient')
+const assetBalance = await getAssetBalanceInfo(assetId)
+  const assetInfo = await getAssetInfo(assetId)
+  if(assetBalance < totalAmount) throw new Error('Your asset balance is insufficient')
+
+    const resPermission = await getUserPermission(
+      {
+        text1: "Do you give this application permission to make the following payments and publishes?",
+        text2: `Asset used in payments: ${assetInfo.name}`,
+        html: `
+      <div style="max-height: 30vh; overflow-y: auto;">
+      <style>
+        body {
+          background-color: #121212;
+          color: #e0e0e0;
+        }
+    
+        .resource-container {
+          display: flex;
+          flex-direction: column;
+          border: 1px solid #444;
+          padding: 16px;
+          margin: 8px 0;
+          border-radius: 8px;
+          background-color: #1e1e1e;
+        }
+        
+        .resource-detail {
+          margin-bottom: 8px;
+        }
+        
+        .resource-detail span {
+          font-weight: bold;
+          color: #bb86fc;
+        }
+    
+        @media (min-width: 600px) {
+          .resource-container {
+            flex-direction: row;
+            flex-wrap: wrap;
+          }
+          .resource-detail {
+            flex: 1 1 45%;
+            margin-bottom: 0;
+            padding: 4px 0;
+          }
+        }
+      </style>
+    
+      ${pendingTransactions.
+        filter((item)=> item.type === 'PAYMENT').map(
+          (payment) => `
+          <div class="resource-container">
+            <div class="resource-detail"><span>Recipient:</span> ${
+              payment.recipientAddress
+            }</div>
+            <div class="resource-detail"><span>Amount:</span> ${payment.amount}</div>
+          </div>`
+        )
+        .join("")}
+         ${[...pendingTransactions, ...pendingAdditionalArbitraryTxs].
+        filter((item)=> item.type === 'ARBITRARY').map(
+          (arbitraryTx) => `
+          <div class="resource-container">
+            <div class="resource-detail"><span>Service:</span> ${
+              arbitraryTx.service
+            }</div>
+            <div class="resource-detail"><span>Name:</span> ${name}</div>
+            <div class="resource-detail"><span>Identifier:</span> ${
+              arbitraryTx.identifier
+            }</div>
+          </div>`
+        )
+        .join("")}
+    </div>
+    
+        `,
+        highlightedText: `Total Amount: ${totalAmount}`,
+        fee: fee
+      },
+      isFromExtension
+    );
+    const { accepted, checkbox1 = false } = resPermission;
+    if (!accepted) {
+      throw new Error("User declined request");
+    }
+
+
+
+
+    // const failedTxs = []
+    const paymentsDone = {
+
+    }
+
+    const transactionsDone = []
+
+    
+    for (const transaction of pendingTransactions) {
+      const type = transaction.type;
+    
+      if (type === "PAYMENT") {
+        const makePayment = await retryTransaction(
+          transferAsset,
+          [{ amount: transaction.amount, assetId, recipient: transaction.recipientAddress }], true
+        );
+        if (makePayment) {
+          transactionsDone.push(makePayment?.signature);
+          if (transaction.paymentRefId) {
+            paymentsDone[transaction.paymentRefId] = makePayment
+          }
+        }
+      } 
+      else if (type === "ARBITRARY" && paymentsDone[transaction.paymentRefId]) {
+        const objectToEncrypt = {
+          data: transaction.base64,
+          payment: paymentsDone[transaction.paymentRefId],
+        };
+    
+        const toBase64 = await retryTransaction(objectToBase64, [objectToEncrypt], true);
+        
+        if (!toBase64) continue; // Skip if encryption fails
+    
+        const encryptDataResponse = await retryTransaction(encryptDataGroup, [
+          {
+            data64: toBase64,
+            publicKeys: transaction.publicKeys,
+            privateKey,
+            userPublicKey,
+          },
+        ], true);
+    
+        if (!encryptDataResponse) continue; // Skip if encryption fails
+    
+        const resPublish = await retryTransaction(publishData, [
+          {
+            registeredName: encodeURIComponent(name),
+            file: encryptDataResponse,
+            service: transaction.service,
+            identifier: encodeURIComponent(transaction.identifier),
+            uploadType: "file",
+            description: transaction?.description,
+            isBase64: true,
+            apiVersion: 2,
+            withFee: true,
+          },
+        ], true);
+    
+        if (resPublish?.signature) {
+          transactionsDone.push(resPublish?.signature);
+        }
+      }
+    }
+
+    for (const transaction of pendingAdditionalArbitraryTxs) {
+
+        const objectToEncrypt = {
+          data: transaction.base64,
+        };
+    
+        const toBase64 = await retryTransaction(objectToBase64, [objectToEncrypt], true);
+        
+        if (!toBase64) continue; // Skip if encryption fails
+    
+        const encryptDataResponse = await retryTransaction(encryptDataGroup, [
+          {
+            data64: toBase64,
+            publicKeys: transaction.publicKeys,
+            privateKey,
+            userPublicKey,
+          },
+        ], true);
+    
+        if (!encryptDataResponse) continue; // Skip if encryption fails
+    
+        const resPublish = await retryTransaction(publishData, [
+          {
+            registeredName: encodeURIComponent(name),
+            file: encryptDataResponse,
+            service: transaction.service,
+            identifier: encodeURIComponent(transaction.identifier),
+            uploadType: "file",
+            description: transaction?.description,
+            isBase64: true,
+            apiVersion: 2,
+            withFee: true,
+          },
+        ], true);
+    
+        if (resPublish?.signature) {
+          transactionsDone.push(resPublish?.signature);
+        }
+  
+    }
+    
+    return transactionsDone
+};
+
+
+export const transferAssetRequest = async (data, isFromExtension) => {
+  const requiredFields = ["amount", "assetId", "recipient"];
+  requiredFields.forEach((field) => {
+      if (data[field] === undefined || data[field] === null) {
+          throw new Error(`Missing required field: ${field}`);
+      }
+  });
+  const amount = data.amount
+  const assetId = data.assetId
+  const recipient = data.recipient
+
+
+  const {fee} = await getFee("TRANSFER_ASSET");
+  const balance = await getBalanceInfo();
+
+  if(+balance < +fee) throw new Error('Your QORT balance is insufficient')
+  const assetBalance = await getAssetBalanceInfo(assetId)
+  if(assetBalance < amount) throw new Error('Your asset balance is insufficient')
+  const confirmReceiver = await getNameOrAddress(recipient);
+  if (confirmReceiver.error) {
+    throw new Error("Invalid receiver address or name");
+  }
+  const assetInfo = await getAssetInfo(assetId)
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to transfer the following asset?`,
+      text2: `Asset: ${assetInfo?.name}`,
+      highlightedText: `Amount: ${amount}`,
+      fee: fee
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error("User declined request");
+  }
+  const res = await transferAsset({amount, recipient: confirmReceiver, assetId})
+  return res
+}
