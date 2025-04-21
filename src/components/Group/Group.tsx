@@ -2235,152 +2235,151 @@ export const Group = ({
                 : '0px',
             }}
           >
-            {
-              <DesktopHeader
-                isPrivate={isPrivate}
-                selectedGroup={selectedGroup}
-                groupSection={groupSection}
-                isUnread={isUnread}
-                goToAnnouncements={goToAnnouncements}
-                isUnreadChat={isUnreadChat}
-                goToChat={goToChat}
-                goToThreads={goToThreads}
-                setOpenManageMembers={setOpenManageMembers}
-                groupChatHasUnread={groupChatHasUnread}
-                groupsAnnHasUnread={groupsAnnHasUnread}
-                directChatHasUnread={directChatHasUnread}
-                chatMode={chatMode}
-                openDrawerGroups={openDrawerGroups}
-                goToHome={goToHome}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                mobileViewMode={mobileViewMode}
-                setMobileViewMode={setMobileViewMode}
-                setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-                hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-                hasUnreadDirects={directChatHasUnread}
-                myName={userInfo?.name || null}
-                isHome={groupSection === 'home'}
-                isGroups={desktopSideView === 'groups'}
-                isDirects={desktopSideView === 'directs'}
-                setDesktopSideView={setDesktopSideView}
-                hasUnreadAnnouncements={isUnread}
-                isAnnouncement={groupSection === 'announcement'}
-                isChat={groupSection === 'chat'}
-                hasUnreadChat={isUnreadChat}
-                setGroupSection={setGroupSection}
-                isForum={groupSection === 'forum'}
-              />
-            }
+          
+          <DesktopHeader
+            isPrivate={isPrivate}
+            selectedGroup={selectedGroup}
+            groupSection={groupSection}
+            isUnread={isUnread}
+            goToAnnouncements={goToAnnouncements}
+            isUnreadChat={isUnreadChat}
+            goToChat={goToChat}
+            goToThreads={goToThreads}
+            setOpenManageMembers={setOpenManageMembers}
+            groupChatHasUnread={groupChatHasUnread}
+            groupsAnnHasUnread={groupsAnnHasUnread}
+            directChatHasUnread={directChatHasUnread}
+            chatMode={chatMode}
+            openDrawerGroups={openDrawerGroups}
+            goToHome={goToHome}
+            setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+            mobileViewMode={mobileViewMode}
+            setMobileViewMode={setMobileViewMode}
+            setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            hasUnreadDirects={directChatHasUnread}
+            myName={userInfo?.name || null}
+            isHome={groupSection === 'home'}
+            isGroups={desktopSideView === 'groups'}
+            isDirects={desktopSideView === 'directs'}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadAnnouncements={isUnread}
+            isAnnouncement={groupSection === 'announcement'}
+            isChat={groupSection === 'chat'}
+            hasUnreadChat={isUnreadChat}
+            setGroupSection={setGroupSection}
+            isForum={groupSection === 'forum'}
+          />            
 
-            <Box
-              sx={{
-                display: 'flex',
-                flexGrow: 1,
-                height: 'calc(100vh - 70px)',
-                position: 'relative',
-              }}
-            >
-              {triedToFetchSecretKey && (
-                <ChatGroup
-                  myAddress={myAddress}
-                  selectedGroup={selectedGroup?.groupId}
-                  getSecretKey={getSecretKey}
-                  secretKey={secretKey}
-                  isPrivate={isPrivate}
-                  setSecretKey={setSecretKey}
-                  handleNewEncryptionNotification={setNewEncryptionNotification}
-                  hide={groupSection !== 'chat' || selectedDirect || newChat}
-                  hideView={!(desktopViewMode === 'chat' && selectedGroup)}
-                  handleSecretKeyCreationInProgress={
-                    handleSecretKeyCreationInProgress
-                  }
-                  triedToFetchSecretKey={triedToFetchSecretKey}
-                  myName={userInfo?.name}
-                  balance={balance}
-                  getTimestampEnterChatParent={getTimestampEnterChat}
-                />
+          <Box
+            sx={{
+              display: 'flex',
+              flexGrow: 1,
+              height: 'calc(100vh - 70px)',
+              position: 'relative',
+            }}
+          >
+            {triedToFetchSecretKey && (
+              <ChatGroup
+                myAddress={myAddress}
+                selectedGroup={selectedGroup?.groupId}
+                getSecretKey={getSecretKey}
+                secretKey={secretKey}
+                isPrivate={isPrivate}
+                setSecretKey={setSecretKey}
+                handleNewEncryptionNotification={setNewEncryptionNotification}
+                hide={groupSection !== 'chat' || selectedDirect || newChat}
+                hideView={!(desktopViewMode === 'chat' && selectedGroup)}
+                handleSecretKeyCreationInProgress={
+                  handleSecretKeyCreationInProgress
+                }
+                triedToFetchSecretKey={triedToFetchSecretKey}
+                myName={userInfo?.name}
+                balance={balance}
+                getTimestampEnterChatParent={getTimestampEnterChat}
+              />
+            )}
+            {isPrivate &&
+              firstSecretKeyInCreation &&
+              triedToFetchSecretKey &&
+              !secretKeyPublishDate && (
+                <div
+                  style={{
+                    alignItems: 'flex-start',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    height: '100%',
+                    padding: '20px',
+                    width: '100%',
+                  }}
+                >
+                  {' '}
+                  <Typography>
+                    The group's first common encryption key is in the process
+                    of creation. Please wait a few minutes for it to be
+                    retrieved by the network. Checking every 2 minutes...
+                  </Typography>
+                </div>
               )}
-              {isPrivate &&
-                firstSecretKeyInCreation &&
-                triedToFetchSecretKey &&
-                !secretKeyPublishDate && (
+            {isPrivate &&
+            !admins.includes(myAddress) &&
+            !secretKey &&
+            triedToFetchSecretKey ? (
+              <>
+                {secretKeyPublishDate ||
+                (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
                   <div
                     style={{
                       alignItems: 'flex-start',
                       display: 'flex',
                       flexDirection: 'column',
-                      height: '100%',
+                      height: 'calc(100vh - 70px)',
+                      overflow: 'auto',
                       padding: '20px',
                       width: '100%',
                     }}
                   >
                     {' '}
                     <Typography>
-                      The group's first common encryption key is in the process
-                      of creation. Please wait a few minutes for it to be
-                      retrieved by the network. Checking every 2 minutes...
+                      You are not part of the encrypted group of members. Wait
+                      until an admin re-encrypts the keys.
                     </Typography>
-                  </div>
-                )}
-              {isPrivate &&
-              !admins.includes(myAddress) &&
-              !secretKey &&
-              triedToFetchSecretKey ? (
-                <>
-                  {secretKeyPublishDate ||
-                  (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
-                    <div
-                      style={{
-                        alignItems: 'flex-start',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: 'calc(100vh - 70px)',
-                        overflow: 'auto',
-                        padding: '20px',
-                        width: '100%',
-                      }}
-                    >
-                      {' '}
-                      <Typography>
-                        You are not part of the encrypted group of members. Wait
-                        until an admin re-encrypts the keys.
-                      </Typography>
-                      <Spacer height="25px" />
-                      <Typography>
-                        <strong>
-                          Only unencrypted messages will be displayed.
-                        </strong>
-                      </Typography>
-                      <Spacer height="25px" />
-                      <Typography>
-                        Try notifying an admin from the list of admins below:
-                      </Typography>
-                      <Spacer height="25px" />
-                      {adminsWithNames.map((admin) => {
-                        return (
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              gap: '20px',
-                              padding: '15px',
-                              alignItems: 'center',
-                            }}
+                    <Spacer height="25px" />
+                    <Typography>
+                      <strong>
+                        Only unencrypted messages will be displayed.
+                      </strong>
+                    </Typography>
+                    <Spacer height="25px" />
+                    <Typography>
+                      Try notifying an admin from the list of admins below:
+                    </Typography>
+                    <Spacer height="25px" />
+                    {adminsWithNames.map((admin) => {
+                      return (
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            gap: '20px',
+                            padding: '15px',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Typography>{admin?.name}</Typography>
+                          <LoadingButton
+                            loading={isLoadingNotifyAdmin}
+                            loadingPosition="start"
+                            variant="contained"
+                            onClick={() => notifyAdmin(admin)}
                           >
-                            <Typography>{admin?.name}</Typography>
-                            <LoadingButton
-                              loading={isLoadingNotifyAdmin}
-                              loadingPosition="start"
-                              variant="contained"
-                              onClick={() => notifyAdmin(admin)}
-                            >
-                              Notify
-                            </LoadingButton>
-                          </Box>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </>
+                            Notify
+                          </LoadingButton>
+                        </Box>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </>
               ) : admins.includes(myAddress) &&
                 !secretKey &&
                 isPrivate &&
@@ -2520,65 +2519,60 @@ export const Group = ({
               </Box>
             </>
           )}
-
-          {
-            <AppsDesktop
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsMode}
-              setMode={setAppsMode}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'apps'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-              desktopViewMode={desktopViewMode}
-            />
-          }
-          {
-            <AppsDevMode
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsModeDev}
-              setMode={setAppsModeDev}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'dev'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-            />
-          }
-
-          {
-            <HomeDesktop
-              name={userInfo?.name}
-              refreshHomeDataFunc={refreshHomeDataFunc}
-              myAddress={myAddress}
-              isLoadingGroups={isLoadingGroups}
-              balance={balance}
-              userInfo={userInfo}
-              groups={groups}
-              setGroupSection={setGroupSection}
-              setSelectedGroup={setSelectedGroup}
-              getTimestampEnterChat={getTimestampEnterChat}
-              setOpenManageMembers={setOpenManageMembers}
-              setOpenAddGroup={setOpenAddGroup}
-              setMobileViewMode={setMobileViewMode}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-            />
-          }
+        
+          <AppsDesktop
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsMode}
+            setMode={setAppsMode}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'apps'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+            desktopViewMode={desktopViewMode}
+          />
+         
+          <AppsDevMode
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsModeDev}
+            setMode={setAppsModeDev}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'dev'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+          />          
+          
+          <HomeDesktop
+            name={userInfo?.name}
+            refreshHomeDataFunc={refreshHomeDataFunc}
+            myAddress={myAddress}
+            isLoadingGroups={isLoadingGroups}
+            balance={balance}
+            userInfo={userInfo}
+            groups={groups}
+            setGroupSection={setGroupSection}
+            setSelectedGroup={setSelectedGroup}
+            getTimestampEnterChat={getTimestampEnterChat}
+            setOpenManageMembers={setOpenManageMembers}
+            setOpenAddGroup={setOpenAddGroup}
+            setMobileViewMode={setMobileViewMode}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+          />          
         </Box>
 
         <AuthenticatedContainerInnerRight
