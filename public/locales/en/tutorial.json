@@ -3,10 +3,15 @@
   "2_overview": "2. Overview",
   "3_groups": "3. Qortal Groups",
   "4_obtain_qort": "4. Obtaining Qort",
-  "account_creation": "Account Creation",
-  "important_info": "Important Information!",
+  "account_creation": "account creation",
+  "important_info": "important information!",
   "apps": {
     "dashboard": "1. Apps Dashboard",
     "navigation": "2. Apps Navigation"
+  },
+  "initial": {
+    "6_qort": "Have at least 6 QORT in your wallet",
+    "getting_started": "getting started",
+    "register_name": "register a name"
   }
 }

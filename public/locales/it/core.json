@@ -6,6 +6,7 @@
   "description": "descrizione",
   "edit": "modifica",
   "error": "si è verificato un errore",
+  "loading": "loading...",
   "save": "salva",
   "title": "titolo"
 }
