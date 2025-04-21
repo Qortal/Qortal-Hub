@@ -936,7 +936,14 @@ export const NotAuthenticated = ({
               )}
             </Box>
           </DialogContent>
+
           <DialogActions>
+            {mode === 'list' && (
+              <Button variant="contained" onClick={addCustomNode}>
+                {t('core:add', { postProcess: 'capitalize' })}
+              </Button>
+            )}
+
             {mode === 'list' && (
               <>
                 <Button
@@ -949,11 +956,6 @@ export const NotAuthenticated = ({
                   {t('core:close', { postProcess: 'capitalize' })}
                 </Button>
               </>
-            )}
-            {mode === 'list' && (
-              <Button variant="contained" onClick={addCustomNode}>
-                {t('core:add', { postProcess: 'capitalize' })}
-              </Button>
             )}
 
             {mode === 'add-node' && (
@@ -989,7 +991,7 @@ export const NotAuthenticated = ({
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {t('auth:enter_apikey', { postProcess: 'capitalize' })}
+            {t('auth:apikey.enter', { postProcess: 'capitalize' })}
           </DialogTitle>
           <DialogContent>
             <Box
@@ -1008,7 +1010,7 @@ export const NotAuthenticated = ({
                 variant="contained"
                 component="label"
               >
-                {t('auth:apikey_alternative', { postProcess: 'capitalize' })}
+                {t('auth:apikey.alternative', { postProcess: 'capitalize' })}
                 <input
                   type="file"
                   accept=".txt"
@@ -1018,17 +1020,8 @@ export const NotAuthenticated = ({
               </Button>
             </Box>
           </DialogContent>
-          <DialogActions>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setEnteredApiKey('');
-                setShowSelectApiKey(false);
-              }}
-            >
-              {t('core:close', { postProcess: 'capitalize' })}
-            </Button>
 
+          <DialogActions>
             <Button
               variant="contained"
               disabled={!enteredApiKey}
@@ -1073,6 +1066,16 @@ export const NotAuthenticated = ({
               autoFocus
             >
               {t('core:save', { postProcess: 'capitalize' })}
+            </Button>
+
+            <Button
+              variant="contained"
+              onClick={() => {
+                setEnteredApiKey('');
+                setShowSelectApiKey(false);
+              }}
+            >
+              {t('core:close', { postProcess: 'capitalize' })}
             </Button>
           </DialogActions>
         </Dialog>
