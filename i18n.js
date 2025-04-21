@@ -27,7 +27,7 @@ i18n
   .init({
     debug: isDev,
     fallbackLng: 'en',
-    ns: ['auth', 'core'],
+    ns: ['auth', 'core', 'tutorial'],
     supportedLngs: ['en', 'it'],
     backend: {
       backends: [LocalStorageBackend, HttpBackend],
