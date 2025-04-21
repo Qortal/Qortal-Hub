@@ -6,8 +6,13 @@
   "description": "descrizione",
   "edit": "modifica",
   "error": "si è verificato un errore",
+  "last_height": "ultimo blocco",
   "loading": "caricamento...",
+  "price": "prezzo",
   "save": "salva",
   "supply": "offerta",
-  "title": "titolo"
+  "title": "titolo",
+  "wallet": "wallet",
+  "wallet_other": "wallet",
+  "welcome": "benvenuto"
 }

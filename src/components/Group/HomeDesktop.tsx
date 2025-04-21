@@ -241,6 +241,7 @@ export const HomeDesktop = ({
           </>
         )}
       </Box>
+
       <Spacer height="26px" />
 
       {/* <Box

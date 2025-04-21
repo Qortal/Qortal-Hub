@@ -124,7 +124,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             fontSize: '1rem',
           }}
         >
-          {t('core:wallet', { count: 100, postProcess: 'capitalize' })}
+          {t('core:wallet_other', { postProcess: 'capitalize' })}
         </Typography>
       </ButtonBase>
     </Box>

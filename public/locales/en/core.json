@@ -7,11 +7,12 @@
   "edit": "edit",
   "error": "an error occurred",
   "last_height": "last height",
+  "loading": "loading...",
   "price": "price",
   "save": "save",
   "supply": "supply",
   "title": "title",
   "wallet": "wallet",
-  "wallet_many": "wallets",
+  "wallet_other": "wallets",
   "welcome": "welcome"
 }

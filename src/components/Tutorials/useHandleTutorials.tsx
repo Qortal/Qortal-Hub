@@ -162,7 +162,7 @@ export const useHandleTutorials = () => {
               setOpenTutorialModal({
                 multi: [
                   {
-                    title: t('tutorial:app.dashboard', {
+                    title: t('tutorial:apps.dashboard', {
                       postProcess: 'capitalize',
                     }),
                     resource: {
@@ -173,7 +173,7 @@ export const useHandleTutorials = () => {
                     },
                   },
                   {
-                    title: t('tutorial:app.navigation', {
+                    title: t('tutorial:apps.navigation', {
                       postProcess: 'capitalize',
                     }),
                     resource: {
