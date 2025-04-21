@@ -2521,64 +2521,59 @@ export const Group = ({
             </>
           )}
 
-          {
-            <AppsDesktop
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsMode}
-              setMode={setAppsMode}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'apps'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-              desktopViewMode={desktopViewMode}
-            />
-          }
-          {
-            <AppsDevMode
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsModeDev}
-              setMode={setAppsModeDev}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'dev'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-            />
-          }
-
-          {
-            <HomeDesktop
-              name={userInfo?.name}
-              refreshHomeDataFunc={refreshHomeDataFunc}
-              myAddress={myAddress}
-              isLoadingGroups={isLoadingGroups}
-              balance={balance}
-              userInfo={userInfo}
-              groups={groups}
-              setGroupSection={setGroupSection}
-              setSelectedGroup={setSelectedGroup}
-              getTimestampEnterChat={getTimestampEnterChat}
-              setOpenManageMembers={setOpenManageMembers}
-              setOpenAddGroup={setOpenAddGroup}
-              setMobileViewMode={setMobileViewMode}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-            />
-          }
+          <AppsDesktop
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsMode}
+            setMode={setAppsMode}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'apps'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+            desktopViewMode={desktopViewMode}
+          />
+        
+          <AppsDevMode
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsModeDev}
+            setMode={setAppsModeDev}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'dev'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+          />
+          
+          <HomeDesktop
+            name={userInfo?.name}
+            refreshHomeDataFunc={refreshHomeDataFunc}
+            myAddress={myAddress}
+            isLoadingGroups={isLoadingGroups}
+            balance={balance}
+            userInfo={userInfo}
+            groups={groups}
+            setGroupSection={setGroupSection}
+            setSelectedGroup={setSelectedGroup}
+            getTimestampEnterChat={getTimestampEnterChat}
+            setOpenManageMembers={setOpenManageMembers}
+            setOpenAddGroup={setOpenAddGroup}
+            setMobileViewMode={setMobileViewMode}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+          />          
         </Box>
 
         <AuthenticatedContainerInnerRight
