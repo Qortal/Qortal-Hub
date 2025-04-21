@@ -18,4 +18,3 @@ Leveraging a redundant set of publicly accessible nodes provided by crowetic, Qo
 
 Many additional details and a fully featured wiki will be created over time. Reach out on the chat on https://qortal.dev or in any of the community locations for Qortal, if you have any issues. Thank you!
 
-
