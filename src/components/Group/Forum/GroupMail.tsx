@@ -61,11 +61,7 @@ import {
   unsubscribeFromEvent,
 } from '../../../utils/events';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import {
-  getArbitraryEndpointReact,
-  getBaseApiReact,
-  isMobile,
-} from '../../../App';
+import { getArbitraryEndpointReact, getBaseApiReact } from '../../../App';
 import { WrapperUserAction } from '../../WrapperUserAction';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
@@ -754,7 +750,6 @@ export const GroupMail = ({
                   <ThreadSingleTitle
                     sx={{
                       fontWeight: shouldAppearLighter && 300,
-                      fontSize: isMobile && '18px',
                     }}
                   >
                     {thread?.threadData?.title}

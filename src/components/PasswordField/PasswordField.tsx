@@ -4,7 +4,6 @@ import {
   TextField,
   TextFieldProps,
   styled,
-  useTheme,
 } from '@mui/material';
 import { forwardRef, useState } from 'react';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
@@ -52,7 +51,6 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
 export const PasswordField = forwardRef<HTMLInputElement, TextFieldProps>(
   ({ ...props }, ref) => {
     const [canViewPassword, setCanViewPassword] = useState(false);
-    const theme = useTheme();
 
     return (
       <CustomInput

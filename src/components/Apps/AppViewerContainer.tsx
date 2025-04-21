@@ -1,26 +1,25 @@
-import React, { useContext, } from 'react';
+import React, { useContext } from 'react';
 import { AppViewer } from './AppViewer';
 import Frame from 'react-frame-component';
-import { MyContext, isMobile } from '../../App';
+import { MyContext } from '../../App';
 
-const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
-  const { rootHeight } = useContext(MyContext);
+const AppViewerContainer = React.forwardRef(
+  ({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
+    const { rootHeight } = useContext(MyContext);
 
-
-  return (
-    <Frame
-      id={`browser-iframe-${app?.tabId}`}
-     
-      head={
-        <>
-          <style>
-            {`
+    return (
+      <Frame
+        id={`browser-iframe-${app?.tabId}`}
+        head={
+          <>
+            <style>
+              {`
               body {
                 margin: 0;
                 padding: 0;
               }
               * {
-                -msOverflowStyle: none;  /* IE and Edge */
+                msOverflowStyle: 'none', /* IE and Edge */
                 scrollbar-width: none;  /* Firefox */
               }
               *::-webkit-scrollbar {
@@ -28,24 +27,31 @@ const AppViewerContainer = React.forwardRef(({ app, isSelected, hide, isDevMode,
               }
               .frame-content {
                 overflow: hidden;
-                height: ${!isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px)`};
+                height: '100vh';
               }
             `}
-          </style>
-        </>
-      }
-      style={{
-        position: (!isSelected || hide) && 'fixed',
-        left: (!isSelected || hide) && '-200vw',
-        height: customHeight ? customHeight : !isMobile ? '100vh' : `calc(${rootHeight} - 60px - 45px)`,
-        border: 'none',
-        width: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      <AppViewer skipAuth={skipAuth} app={app}  ref={ref} hide={!isSelected || hide} isDevMode={isDevMode} />
-    </Frame>
-  );
-});
+            </style>
+          </>
+        }
+        style={{
+          border: 'none',
+          height: '100vh',
+          left: (!isSelected || hide) && '-200vw',
+          overflow: 'hidden',
+          position: (!isSelected || hide) && 'fixed',
+          width: '100%',
+        }}
+      >
+        <AppViewer
+          skipAuth={skipAuth}
+          app={app}
+          ref={ref}
+          hide={!isSelected || hide}
+          isDevMode={isDevMode}
+        />
+      </Frame>
+    );
+  }
+);
 
 export default AppViewerContainer;

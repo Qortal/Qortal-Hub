@@ -9,7 +9,7 @@ import { executeEvent } from '../../utils/events';
 import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import { getGroupNames } from './UserListOfInvites';
 import { CustomLoader } from '../../common/CustomLoader';
-import { getBaseApiReact, isMobile } from '../../App';
+import { getBaseApiReact } from '../../App';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 
@@ -97,7 +97,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             borderRadius: '19px',
             display: 'flex',
             flexDirection: 'column',
-            height: isMobile ? '165px' : '250px',
+            height: '250px',
             padding: '20px',
             width: '322px',
           }}

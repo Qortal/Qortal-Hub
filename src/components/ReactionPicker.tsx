@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import Picker, { EmojiStyle, Theme } from 'emoji-picker-react';
 import './ReactionPicker.css';
 import { ButtonBase } from '@mui/material';
-import { isMobile } from '../App';
 
 export const ReactionPicker = ({ onReaction }) => {
   const [showPicker, setShowPicker] = useState(false);
@@ -30,7 +29,7 @@ export const ReactionPicker = ({ onReaction }) => {
     } else {
       // Get the button's position
       const buttonRect = buttonRef.current.getBoundingClientRect();
-      const pickerWidth = isMobile ? 300 : 350; // Adjust based on picker width
+      const pickerWidth = 350;
 
       // Calculate position to align the right edge of the picker with the button's right edge
       setPickerPosition({
@@ -90,15 +89,15 @@ export const ReactionPicker = ({ onReaction }) => {
             }}
           >
             <Picker
-              height={isMobile ? 350 : 450}
-              width={isMobile ? 300 : 350}
-              reactionsDefaultOpen={true}
-              onReactionClick={handleReaction}
-              onEmojiClick={handlePicker}
               allowExpandReactions={true}
               autoFocusSearch={false}
-              theme={Theme.DARK}
               emojiStyle={EmojiStyle.NATIVE}
+              height="450"
+              onEmojiClick={handlePicker}
+              onReactionClick={handleReaction}
+              reactionsDefaultOpen={true}
+              theme={Theme.DARK}
+              width="350"
             />
           </div>,
           document.body

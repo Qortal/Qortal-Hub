@@ -19,7 +19,7 @@ import { SaveIcon } from '../../assets/Icons/SaveIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { Spacer } from '../../common/Spacer';
 import { LoadingButton } from '@mui/lab';
-import { saveToLocalStorage } from '../Apps/AppsNavBar';
+import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import { decryptData, encryptData } from '../../qortalRequests/get';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import {

@@ -1,19 +1,13 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   AppLibrarySubTitle,
   AppsContainer,
+  AppsDesktopLibraryBody,
+  AppsDesktopLibraryHeader,
   AppsLibraryContainer,
-  AppsParent,
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
@@ -31,32 +25,22 @@ import {
   InputBase,
   Typography,
   styled,
+  useTheme,
 } from '@mui/material';
-import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
-import IconSearch from '../../assets/svgs/Search.svg';
+import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import qappDevelopText from '../../assets/svgs/qappDevelopText.svg';
-import qappLibraryText from '../../assets/svgs/qappLibraryText.svg';
+import { QappDevelopText } from '../../assets/Icons/QappDevelopText.tsx';
+import { QappLibraryText } from '../../assets/Icons/QappLibraryText.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
-
-import qappDots from '../../assets/svgs/qappDots.svg';
-
+import AppsIcon from '@mui/icons-material/Apps';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 import { executeEvent } from '../../utils/events';
-import {
-  AppsDesktopLibraryBody,
-  AppsDesktopLibraryHeader,
-} from './AppsDesktop-styles';
-import ReturnSVG from '../../assets/svgs/Return.svg';
-import {
-  ComposeP,
-  MailIconImg,
-  ShowMessageReturnButton,
-} from '../Group/Forum/Mail-styles';
+import { ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+
 const officialAppList = [
   'q-tube',
   'q-blog',
@@ -85,7 +69,7 @@ const ScrollerStyled = styled('div')({
   scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  '-msOverflowStyle': 'none',
+  msOverflowStyle: 'none',
 });
 
 const StyledVirtuosoContainer = styled('div')({
@@ -104,7 +88,7 @@ const StyledVirtuosoContainer = styled('div')({
   scrollbarWidth: 'none',
 
   // Hide scrollbar for IE and older Edge
-  '-msOverflowStyle': 'none',
+  msOverflowStyle: 'none',
 });
 
 export const AppsLibraryDesktop = ({
@@ -118,6 +102,7 @@ export const AppsLibraryDesktop = ({
 }) => {
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
+  const theme = useTheme();
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(
@@ -192,17 +177,18 @@ export const AppsLibraryDesktop = ({
         <AppsWidthLimiter>
           <Box
             sx={{
+              alignItems: 'center',
               display: 'flex',
-              width: '100%',
               justifyContent: 'space-between',
+              width: '100%',
             }}
           >
-            <img src={qappLibraryText} />
+            <QappLibraryText />
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 gap: '20px',
-                alignItems: 'center',
               }}
             >
               <AppsSearchContainer
@@ -211,11 +197,18 @@ export const AppsLibraryDesktop = ({
                 }}
               >
                 <AppsSearchLeft>
-                  <img src={IconSearch} />
+                  <SearchIcon />
+
                   <InputBase
                     value={searchValue}
                     onChange={(e) => setSearchValue(e.target.value)}
-                    sx={{ ml: 1, flex: 1 }}
+                    sx={{
+                      background: theme.palette.background.paper,
+                      borderRadius: '6px',
+                      flex: 1,
+                      ml: 1,
+                      paddingLeft: '12px',
+                    }}
                     placeholder="Search for apps"
                     inputProps={{
                       'aria-label': 'Search for apps',
@@ -224,6 +217,7 @@ export const AppsLibraryDesktop = ({
                     }}
                   />
                 </AppsSearchLeft>
+
                 <AppsSearchRight>
                   {searchValue && (
                     <ButtonBase
@@ -236,6 +230,7 @@ export const AppsLibraryDesktop = ({
                   )}
                 </AppsSearchRight>
               </AppsSearchContainer>
+
               <ButtonBase
                 onClick={(e) => {
                   getQapps();
@@ -243,7 +238,6 @@ export const AppsLibraryDesktop = ({
               >
                 <RefreshIcon
                   sx={{
-                    color: 'rgba(250, 250, 250, 0.5)',
                     width: '40px',
                     height: 'auto',
                   }}
@@ -253,12 +247,13 @@ export const AppsLibraryDesktop = ({
           </Box>
         </AppsWidthLimiter>
       </AppsDesktopLibraryHeader>
+
       <AppsDesktopLibraryBody
         sx={{
+          alignItems: 'center',
           height: `calc(100vh - 36px)`,
           overflow: 'auto',
           padding: '0px',
-          alignItems: 'center',
         }}
       >
         <AppsDesktopLibraryBody
@@ -270,6 +265,7 @@ export const AppsLibraryDesktop = ({
           }}
         >
           <Spacer height="70px" />
+
           <ShowMessageReturnButton
             sx={{
               padding: '2px',
@@ -277,11 +273,10 @@ export const AppsLibraryDesktop = ({
             onClick={() => {
               executeEvent('navigateBack', {});
             }}
-          >
-            <MailIconImg src={ReturnSVG} />
-            <ComposeP>Return to Apps Dashboard</ComposeP>
-          </ShowMessageReturnButton>
+          ></ShowMessageReturnButton>
+
           <Spacer height="20px" />
+
           {searchedList?.length > 0 ? (
             <AppsWidthLimiter>
               <StyledVirtuosoContainer
@@ -314,24 +309,22 @@ export const AppsLibraryDesktop = ({
               >
                 Official Apps
               </AppLibrarySubTitle>
+
               <Spacer height="45px" />
+
               <AppsContainer
                 sx={{
-                  gap: '50px',
-                  justifyContent: 'flex-start',
+                  gap: '15px',
+                  justifyContent: 'center',
                 }}
               >
                 {officialApps?.map((qapp) => {
                   return (
                     <ButtonBase
                       sx={{
-                        // height: "80px",
                         width: '80px',
                       }}
                       onClick={() => {
-                        // executeEvent("addTab", {
-                        //   data: qapp
-                        // })
                         executeEvent('selectedAppInfo', {
                           data: qapp,
                         });
@@ -367,6 +360,7 @@ export const AppsLibraryDesktop = ({
                             />
                           </Avatar>
                         </AppCircle>
+
                         <AppCircleLabel>
                           {qapp?.metadata?.title || qapp?.name}
                         </AppCircleLabel>
@@ -375,7 +369,9 @@ export const AppsLibraryDesktop = ({
                   );
                 })}
               </AppsContainer>
+
               <Spacer height="80px" />
+
               <Box
                 sx={{
                   width: '100%',
@@ -396,9 +392,11 @@ export const AppsLibraryDesktop = ({
                       textAlign: 'start',
                     }}
                   >
-                    {hasPublishApp ? 'Update Apps!' : 'Create Apps!'}
+                    {hasPublishApp ? 'Update your app' : 'Publish your app'}
                   </AppLibrarySubTitle>
+
                   <Spacer height="18px" />
+
                   <PublishQAppCTAParent
                     sx={{
                       gap: '25px',
@@ -406,11 +404,14 @@ export const AppsLibraryDesktop = ({
                   >
                     <PublishQAppCTALeft>
                       <PublishQAppDotsBG>
-                        <img src={qappDots} />
+                        <AppsIcon fontSize="large" />
                       </PublishQAppDotsBG>
+
                       <Spacer width="29px" />
-                      <img src={qappDevelopText} />
+
+                      <QappDevelopText />
                     </PublishQAppCTALeft>
+
                     <PublishQAppCTARight
                       onClick={() => {
                         setMode('publish');
@@ -419,10 +420,12 @@ export const AppsLibraryDesktop = ({
                       <PublishQAppCTAButton>
                         {hasPublishApp ? 'Update' : 'Publish'}
                       </PublishQAppCTAButton>
+
                       <Spacer width="20px" />
                     </PublishQAppCTARight>
                   </PublishQAppCTAParent>
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -436,13 +439,15 @@ export const AppsLibraryDesktop = ({
                   >
                     Categories
                   </AppLibrarySubTitle>
+
                   <Spacer height="18px" />
+
                   <Box
                     sx={{
-                      width: '100%',
                       display: 'flex',
-                      gap: '20px',
                       flexWrap: 'wrap',
+                      gap: '20px',
+                      width: '100%',
                     }}
                   >
                     <ButtonBase
@@ -457,19 +462,22 @@ export const AppsLibraryDesktop = ({
                     >
                       <Box
                         sx={{
-                          display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          height: '60px',
-                          padding: '0px 24px',
-                          border: '4px solid #10242F',
+                          borderColor: theme.palette.background.paper,
                           borderRadius: '6px',
+                          borderStyle: 'solid',
+                          borderWidth: '4px',
                           boxShadow: '2px 4px 0px 0px #000000',
+                          display: 'flex',
+                          height: '50px',
+                          justifyContent: 'center',
+                          padding: '0px 20px',
                         }}
                       >
                         All
                       </Box>
                     </ButtonBase>
+
                     {categories?.map((category) => {
                       return (
                         <ButtonBase
@@ -482,14 +490,16 @@ export const AppsLibraryDesktop = ({
                         >
                           <Box
                             sx={{
-                              display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              height: '60px',
-                              padding: '0px 24px',
-                              border: '4px solid #10242F',
+                              borderColor: theme.palette.background.paper,
                               borderRadius: '6px',
+                              borderStyle: 'solid',
+                              borderWidth: '4px',
                               boxShadow: '2px 4px 0px 0px #000000',
+                              display: 'flex',
+                              height: '50px',
+                              justifyContent: 'center',
+                              padding: '0px 20px',
                             }}
                           >
                             {category?.name}

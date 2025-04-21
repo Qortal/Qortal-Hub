@@ -26,7 +26,7 @@ import { AddGroupList } from './AddGroupList';
 import { UserListOfInvites } from './UserListOfInvites';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
-import { MyContext, isMobile } from '../../App';
+import { MyContext } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 
 export const Label = styled('label')`
@@ -231,7 +231,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               value={value}
               onChange={handleChange}
               aria-label="basic tabs example"
-              variant={isMobile ? 'scrollable' : 'fullWidth'} // Scrollable on mobile, full width on desktop
+              variant={'fullWidth'}
               scrollButtons="auto"
               allowScrollButtonsMobile
               sx={{
@@ -247,7 +247,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
               <Tab
@@ -257,7 +257,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
               <Tab
@@ -267,7 +267,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
             </Tabs>

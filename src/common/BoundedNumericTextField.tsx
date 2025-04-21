@@ -1,9 +1,4 @@
-import {
-  IconButton,
-  InputAdornment,
-  TextField,
-  TextFieldProps,
-} from '@mui/material';
+import { IconButton, InputAdornment, TextFieldProps } from '@mui/material';
 import React, { useRef, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -44,6 +39,7 @@ export const BoundedNumericTextField = ({
   const stringIsEmpty = (value: string) => {
     return value === '';
   };
+
   const isAllZerosNum = /^0*\.?0*$/;
   const isFloatNum = /^-?[0-9]*\.?[0-9]*$/;
   const isIntegerNum = /^-?[0-9]+$/;
@@ -85,6 +81,7 @@ export const BoundedNumericTextField = ({
     }
     return value;
   };
+
   const filterValue = (value: string) => {
     if (stringIsEmpty(value)) return '';
     value = filterTypes(value);
@@ -120,6 +117,7 @@ export const BoundedNumericTextField = ({
 
     setTextFieldValue(value);
   };
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { onChange, ...noChangeProps } = { ...props };
   return (

@@ -29,13 +29,12 @@ import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import DownloadIcon from '@mui/icons-material/Download';
 import Copy from './assets/svgs/Copy.svg';
 import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
-import { Download } from './assets/Icons/Download.tsx';
-import { Logout } from './assets/Icons/Logout.tsx';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
 import Success from './assets/svgs/Success.svg';
@@ -73,6 +72,7 @@ import { TaskManager } from './components/TaskManager/TaskManager.tsx';
 import { useModal } from './common/useModal';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
 import HelpIcon from '@mui/icons-material/Help';
 import {
   cleanUrl,
@@ -118,9 +118,7 @@ import {
 import { useAppFullScreen } from './useAppFullscreen';
 import { NotAuthenticated } from './ExtStates/NotAuthenticated';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
-import { CoreSyncStatus } from './components/CoreSyncStatus';
 import { Wallets } from './Wallets';
-import { RandomSentenceGenerator } from './utils/seedPhrase/RandomSentenceGenerator';
 import { useFetchResources } from './common/useFetchResources';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './components/Tutorials/useHandleTutorials';
@@ -182,28 +180,6 @@ const defaultValues: MyContextInterface = {
     message: '',
   },
 };
-export let isMobile = false;
-
-const isMobileDevice = () => {
-  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-
-  if (/android/i.test(userAgent)) {
-    return true; // Android device
-  }
-
-  if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-    return true; // iOS device
-  }
-
-  return false;
-};
-
-if (isMobileDevice()) {
-  isMobile = true;
-  console.log('Running on a mobile device');
-} else {
-  console.log('Running on a desktop');
-}
 
 export const allQueues = {
   requestQueueCommentCount: requestQueueCommentCount,
@@ -313,7 +289,6 @@ export const isMainWindow = true;
 function App() {
   const [extState, setExtstate] = useState<extStates>('not-authenticated');
   const [desktopViewMode, setDesktopViewMode] = useState('home');
-
   const [backupjson, setBackupjson] = useState<any>(null);
   const [rawWallet, setRawWallet] = useState<any>(null);
   const [ltcBalanceLoading, setLtcBalanceLoading] = useState<boolean>(false);
@@ -436,16 +411,20 @@ function App() {
   const [isOpenMinting, setIsOpenMinting] = useState(false);
   const { toggleFullScreen } = useAppFullScreen(setFullScreen);
   const generatorRef = useRef(null);
+
   const exportSeedphrase = () => {
     const seedPhrase = generatorRef.current.parsedString;
     saveSeedPhraseToDisk(seedPhrase);
   };
+
   const passwordRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (extState === 'wallet-dropped' && passwordRef.current) {
       passwordRef.current.focus();
     }
   }, [extState]);
+
   useEffect(() => {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
     if (isDevModeFromStorage) {
@@ -491,31 +470,38 @@ function App() {
       );
     };
   }, [toggleFullScreen]);
+
   //resets for recoil
   const resetAtomSortablePinnedAppsAtom = useResetRecoilState(
     sortablePinnedAppsAtom
   );
+
   const resetAtomIsUsingImportExportSettingsAtom = useResetRecoilState(
     isUsingImportExportSettingsAtom
   );
   const resetAtomCanSaveSettingToQdnAtom = useResetRecoilState(
     canSaveSettingToQdnAtom
   );
+
   const resetAtomSettingsQDNLastUpdatedAtom = useResetRecoilState(
     settingsQDNLastUpdatedAtom
   );
+
   const resetAtomSettingsLocalLastUpdatedAtom = useResetRecoilState(
     settingsLocalLastUpdatedAtom
   );
+
   const resetAtomOldPinnedAppsAtom = useResetRecoilState(oldPinnedAppsAtom);
   const resetAtomQMailLastEnteredTimestampAtom = useResetRecoilState(
     qMailLastEnteredTimestampAtom
   );
+
   const resetAtomMailsAtom = useResetRecoilState(mailsAtom);
   const resetGroupPropertiesAtom = useResetRecoilState(groupsPropertiesAtom);
   const resetLastPaymentSeenTimestampAtom = useResetRecoilState(
     lastPaymentSeenTimestampAtom
   );
+
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
@@ -528,34 +514,11 @@ function App() {
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
   };
-  useEffect(() => {
-    if (!isMobile) return;
-    // Function to set the height of the app to the viewport height
-    const resetHeight = () => {
-      const height = window.visualViewport
-        ? window.visualViewport.height
-        : window.innerHeight;
-      // Set the height to the root element (usually #root)
-      document.getElementById('root').style.height = height + 'px';
-      setRootHeight(height + 'px');
-    };
 
-    // Set the initial height
-    resetHeight();
-
-    // Add event listeners for resize and visualViewport changes
-    window.addEventListener('resize', resetHeight);
-    window.visualViewport?.addEventListener('resize', resetHeight);
-
-    // Clean up the event listeners when the component unmounts
-    return () => {
-      window.removeEventListener('resize', resetHeight);
-      window.visualViewport?.removeEventListener('resize', resetHeight);
-    };
-  }, []);
   const handleSetGlobalApikey = (key) => {
     globalApiKey = key;
   };
+
   useEffect(() => {
     try {
       setIsLoading(true);
@@ -1232,14 +1195,6 @@ function App() {
     // Handler for when the window gains focus
     const handleFocus = () => {
       setIsFocused(true);
-      if (isMobile) {
-        window.sendMessage('clearAllNotifications', {}).catch((error) => {
-          console.error(
-            'Failed to clear notifications:',
-            error.message || 'An error occurred'
-          );
-        });
-      }
     };
 
     // Handler for when the window loses focus
@@ -1255,14 +1210,6 @@ function App() {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         setIsFocused(true);
-        if (isMobile) {
-          window.sendMessage('clearAllNotifications', {}).catch((error) => {
-            console.error(
-              'Failed to clear notifications:',
-              error.message || 'An error occurred'
-            );
-          });
-        }
       } else {
         setIsFocused(false);
       }
@@ -1315,7 +1262,7 @@ function App() {
     return (
       <AuthenticatedContainerInnerLeft
         sx={{
-          overflowY: isMobile && 'auto',
+          overflowY: 'auto',
           padding: '0px 20px',
           minWidth: '225px',
         }}
@@ -1568,27 +1515,9 @@ function App() {
           backgroundColor: theme.palette.background.default,
           display: 'flex',
           justifyContent: 'flex-end',
-          width: isMobile ? '100vw' : 'auto',
+          width: 'auto',
         }}
       >
-        {isMobile && (
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              padding: '10px',
-            }}
-          >
-            <CloseIcon
-              onClick={() => {
-                setIsOpenDrawerProfile(false);
-              }}
-              sx={{
-                cursor: 'pointer',
-              }}
-            />
-          </Box>
-        )}
         {desktopViewMode !== 'apps' &&
           desktopViewMode !== 'dev' &&
           desktopViewMode !== 'chat' && <>{renderProfileLeft()}</>}
@@ -1609,51 +1538,43 @@ function App() {
           >
             <Spacer height="20px" />
 
-            {!isMobile && (
-              <>
-                <Spacer height="20px" />
-                <Tooltip
-                  title={
-                    <span
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      LOG OUT
-                    </span>
-                  }
-                  placement="left"
-                  arrow
-                  sx={{ fontSize: '24' }}
-                  slotProps={{
-                    tooltip: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                        backgroundColor: theme.palette.background.default,
-                      },
-                    },
-                    arrow: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                      },
-                    },
-                  }}
-                >
-                  <Logout
+            <ButtonBase
+              onClick={() => {
+                logoutFunc();
+                setIsOpenDrawerProfile(false);
+              }}
+            >
+              <Tooltip
+                title={
+                  <span
                     style={{
-                      cursor: 'pointer',
-                      width: '20px',
-                      height: 'auto',
+                      fontSize: '14px',
+                      fontWeight: 700,
                     }}
-                    onClick={() => {
-                      logoutFunc();
-                      setIsOpenDrawerProfile(false);
-                    }}
-                  />
-                </Tooltip>
-              </>
-            )}
+                  >
+                    LOGOUT
+                  </span>
+                }
+                placement="left"
+                arrow
+                sx={{ fontSize: '24' }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                    },
+                  },
+                }}
+              >
+                <LogoutIcon />
+              </Tooltip>
+            </ButtonBase>
 
             <Spacer height="20px" />
 
@@ -1964,41 +1885,39 @@ function App() {
             )}
 
             <Spacer height="20px" />
-            <Tooltip
-              title={
-                <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  BACKUP WALLET
-                </span>
-              }
-              placement="left"
-              arrow
-              sx={{ fontSize: '24' }}
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                    backgroundColor: theme.palette.background.default,
-                  },
-                },
-                arrow: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                  },
-                },
+
+            <ButtonBase
+              onClick={() => {
+                setExtstate('download-wallet');
+                setIsOpenDrawerProfile(false);
               }}
             >
-              <Download
-                style={{
-                  cursor: 'pointer',
-                  width: '20px',
-                  height: 'auto',
+              <Tooltip
+                title={
+                  <span style={{ fontSize: '14px', fontWeight: 700 }}>
+                    BACKUP WALLET
+                  </span>
+                }
+                placement="left"
+                arrow
+                sx={{ fontSize: '24' }}
+                slotProps={{
+                  tooltip: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                      backgroundColor: theme.palette.background.default,
+                    },
+                  },
+                  arrow: {
+                    sx: {
+                      color: theme.palette.text.primary,
+                    },
+                  },
                 }}
-                onClick={() => {
-                  setExtstate('download-wallet');
-                  setIsOpenDrawerProfile(false);
-                }}
-              />
-            </Tooltip>
+              >
+                <DownloadIcon />
+              </Tooltip>
+            </ButtonBase>
             <Spacer height="40px" />
           </Box>
         </AuthenticatedContainerInnerRight>
@@ -2009,7 +1928,7 @@ function App() {
   return (
     <AppContainer
       sx={{
-        height: isMobile ? '100%' : '100vh',
+        height: '100vh',
         // backgroundImage: desktopViewMode === "apps" && 'url("appsBg.svg")',
         // backgroundSize: desktopViewMode === "apps" && "cover",
         // backgroundPosition: desktopViewMode === "apps" && "center",
@@ -2075,51 +1994,50 @@ function App() {
           >
             <Box
               sx={{
-                width: '100vw',
-                height: isMobile ? '100%' : '100vh',
                 display: 'flex',
-                flexDirection: isMobile ? 'column' : 'row',
-                overflow: isMobile && 'hidden',
+                flexDirection: 'row',
+                height: '100vh',
+                width: '100vw',
               }}
             >
               <Group
-                logoutFunc={logoutFunc}
                 balance={balance}
-                userInfo={userInfo}
-                myAddress={address}
+                desktopViewMode={desktopViewMode}
                 isFocused={isFocused}
                 isMain={isMain}
                 isOpenDrawerProfile={isOpenDrawerProfile}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                desktopViewMode={desktopViewMode}
+                logoutFunc={logoutFunc}
+                myAddress={address}
                 setDesktopViewMode={setDesktopViewMode}
+                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+                userInfo={userInfo}
               />
-              {!isMobile && renderProfile()}
+              {renderProfile()}
             </Box>
           </MyContext.Provider>
         )}
         {isOpenSendQort && isMainWindow && (
           <Box
             sx={{
-              width: '100%',
-              height: '100%',
-              position: 'fixed',
+              alignItems: 'center',
               background: theme.palette.background.default,
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              height: '100%',
+              position: 'fixed',
+              width: '100%',
               zIndex: 10000,
             }}
           >
             <Spacer height="22px" />
             <Box
               sx={{
-                display: 'flex',
-                width: '100%',
-                justifyContent: 'flex-start',
-                paddingLeft: '22px',
                 boxSizing: 'border-box',
+                display: 'flex',
+                justifyContent: 'flex-start',
                 maxWidth: '700px',
+                paddingLeft: '22px',
+                width: '100%',
               }}
             >
               <Return
@@ -2130,7 +2048,9 @@ function App() {
                 onClick={returnToMain}
               />
             </Box>
+
             <Spacer height="35px" />
+
             <QortPayment
               balance={balance}
               show={show}

@@ -37,7 +37,6 @@ import {
   clearAllQueues,
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
@@ -1096,12 +1095,8 @@ export const Group = ({
       return;
     }
     if (findDirect) {
-      if (!isMobile) {
-        setDesktopSideView('directs');
-        setDesktopViewMode('home');
-      } else {
-        setMobileViewModeKeepOpen('messaging');
-      }
+      setDesktopSideView('directs');
+      setDesktopViewMode('home');
       setSelectedDirect(null);
 
       setNewChat(false);
@@ -1136,11 +1131,7 @@ export const Group = ({
     );
 
     if (findDirect) {
-      if (!isMobile) {
-        setDesktopSideView('directs');
-      } else {
-        setMobileViewModeKeepOpen('messaging');
-      }
+      setDesktopSideView('directs');
       setSelectedDirect(null);
 
       setNewChat(false);
@@ -1162,11 +1153,7 @@ export const Group = ({
         getTimestampEnterChat();
       }, 200);
     } else {
-      if (!isMobile) {
-        setDesktopSideView('directs');
-      } else {
-        setMobileViewModeKeepOpen('messaging');
-      }
+      setDesktopSideView('directs');
       setNewChat(true);
       setTimeout(() => {
         executeEvent('setDirectToValueNewChat', {
@@ -1284,9 +1271,7 @@ export const Group = ({
     setupGroupWebsocketInterval.current = null;
     settimeoutForRefetchSecretKey.current = null;
     initiatedGetMembers.current = false;
-    if (!isMobile) {
-      setDesktopViewMode('home');
-    }
+    setDesktopViewMode('home');
   };
 
   const logoutEventFunc = () => {
@@ -1303,34 +1288,7 @@ export const Group = ({
   }, []);
 
   const openAppsMode = () => {
-    if (isMobile) {
-      setMobileViewMode('apps');
-    }
-    if (!isMobile) {
-      setDesktopViewMode('apps');
-    }
-    if (isMobile) {
-      setIsOpenSideViewDirects(false);
-      setIsOpenSideViewGroups(false);
-      setGroupSection('default');
-      setSelectedGroup(null);
-      setNewChat(false);
-      setSelectedDirect(null);
-      setSecretKey(null);
-      setGroupOwner(null);
-      lastFetchedSecretKey.current = null;
-      initiatedGetMembers.current = false;
-      setSecretKeyPublishDate(null);
-      setAdmins([]);
-      setSecretKeyDetails(null);
-      setAdminsWithNames([]);
-      setMembers([]);
-      setMemberCountFromSecretKeyData(null);
-      setTriedToFetchSecretKey(false);
-      setFirstSecretKeyInCreation(false);
-      setIsOpenSideViewDirects(false);
-      setIsOpenSideViewGroups(false);
-    }
+    setDesktopViewMode('apps');
   };
 
   useEffect(() => {
@@ -1372,9 +1330,7 @@ export const Group = ({
       setTriedToFetchSecretKey(false);
       setFirstSecretKeyInCreation(false);
       setGroupSection('chat');
-      if (!isMobile) {
-        setDesktopViewMode('chat');
-      }
+      setDesktopViewMode('chat');
 
       window
         .sendMessage('addTimestampEnterChat', {
@@ -1430,9 +1386,7 @@ export const Group = ({
       setTriedToFetchSecretKey(false);
       setFirstSecretKeyInCreation(false);
       setGroupSection('announcement');
-      if (!isMobile) {
-        setDesktopViewMode('chat');
-      }
+      setDesktopViewMode('chat');
       window
         .sendMessage('addGroupNotificationTimestamp', {
           timestamp: Date.now(),
@@ -1496,9 +1450,7 @@ export const Group = ({
       setFirstSecretKeyInCreation(false);
       setGroupSection('forum');
       setDefaultThread(data);
-      if (!isMobile) {
-        setDesktopViewMode('chat');
-      }
+      setDesktopViewMode('chat');
       setTimeout(() => {
         setSelectedGroup(findGroup);
         setMobileViewMode('group');
@@ -1521,12 +1473,6 @@ export const Group = ({
   };
 
   const goToHome = async () => {
-    if (isMobile) {
-      setMobileViewMode('home');
-    }
-    if (!isMobile) {
-      // TODO: empty block. Check it!
-    }
     setDesktopViewMode('home');
 
     await new Promise((res) => {
@@ -1614,26 +1560,38 @@ export const Group = ({
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
-          height: isMobile ? `calc(${rootHeight} - 45px)` : '100%',
-          width: isMobile ? '100%' : '380px',
+          height: '100%',
+          width: '380px',
         }}
       >
-        {!isMobile && (
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'center',
-              width: '100%',
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'center',
+            width: '100%',
+          }}
+        >
+          <ButtonBase
+            onClick={() => {
+              setDesktopSideView('groups');
             }}
           >
-            <ButtonBase
-              onClick={() => {
-                setDesktopSideView('groups');
-              }}
+            <IconWrapper
+              color={
+                groupChatHasUnread || groupsAnnHasUnread
+                  ? 'var(--unread)'
+                  : desktopSideView === 'groups'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
+              }
+              label="Groups"
+              selected={desktopSideView === 'groups'}
+              customWidth="75px"
             >
-              <IconWrapper
+              <HubsIcon
+                height={24}
                 color={
                   groupChatHasUnread || groupsAnnHasUnread
                     ? 'var(--unread)'
@@ -1641,29 +1599,28 @@ export const Group = ({
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
                 }
-                label="Groups"
-                selected={desktopSideView === 'groups'}
-                customWidth="75px"
-              >
-                <HubsIcon
-                  height={24}
-                  color={
-                    groupChatHasUnread || groupsAnnHasUnread
-                      ? 'var(--unread)'
-                      : desktopSideView === 'groups'
-                        ? theme.palette.text.primary
-                        : theme.palette.text.secondary
-                  }
-                />
-              </IconWrapper>
-            </ButtonBase>
-            <ButtonBase
-              onClick={() => {
-                setDesktopSideView('directs');
-              }}
+              />
+            </IconWrapper>
+          </ButtonBase>
+          <ButtonBase
+            onClick={() => {
+              setDesktopSideView('directs');
+            }}
+          >
+            <IconWrapper
+              customWidth="75px"
+              color={
+                directChatHasUnread
+                  ? 'var(--unread)'
+                  : desktopSideView === 'directs'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
+              }
+              label="Messaging"
+              selected={desktopSideView === 'directs'}
             >
-              <IconWrapper
-                customWidth="75px"
+              <MessagingIcon
+                height={24}
                 color={
                   directChatHasUnread
                     ? 'var(--unread)'
@@ -1671,23 +1628,10 @@ export const Group = ({
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
                 }
-                label="Messaging"
-                selected={desktopSideView === 'directs'}
-              >
-                <MessagingIcon
-                  height={24}
-                  color={
-                    directChatHasUnread
-                      ? 'var(--unread)'
-                      : desktopSideView === 'directs'
-                        ? theme.palette.text.primary
-                        : theme.palette.text.secondary
-                  }
-                />
-              </IconWrapper>
-            </ButtonBase>
-          </Box>
-        )}
+              />
+            </IconWrapper>
+          </ButtonBase>
+        </Box>
 
         <div
           style={{
@@ -1843,30 +1787,42 @@ export const Group = ({
       <div
         style={{
           display: 'flex',
-          width: isMobile ? '100%' : '380px',
+          width: '380px',
           flexDirection: 'column',
           alignItems: 'flex-start',
-          height: isMobile ? `calc(${rootHeight} - 45px)` : '100%',
-          background: !isMobile && theme.palette.background.default,
-          borderRadius: !isMobile && '0px 15px 15px 0px',
+          height: '100%',
+          background: theme.palette.background.default,
+          borderRadius: '0px 15px 15px 0px',
         }}
       >
-        {!isMobile && (
-          <Box
-            sx={{
-              width: '100%',
-              alignItems: 'center',
-              justifyContent: 'center',
-              display: 'flex',
-              gap: '10px',
+        <Box
+          sx={{
+            width: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            display: 'flex',
+            gap: '10px',
+          }}
+        >
+          <ButtonBase
+            onClick={() => {
+              setDesktopSideView('groups');
             }}
           >
-            <ButtonBase
-              onClick={() => {
-                setDesktopSideView('groups');
-              }}
+            <IconWrapper
+              color={
+                groupChatHasUnread || groupsAnnHasUnread
+                  ? 'var(--unread)'
+                  : desktopSideView === 'groups'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
+              }
+              label="Groups"
+              selected={desktopSideView === 'groups'}
+              customWidth="75px"
             >
-              <IconWrapper
+              <HubsIcon
+                height={24}
                 color={
                   groupChatHasUnread || groupsAnnHasUnread
                     ? 'var(--unread)'
@@ -1874,29 +1830,28 @@ export const Group = ({
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
                 }
-                label="Groups"
-                selected={desktopSideView === 'groups'}
-                customWidth="75px"
-              >
-                <HubsIcon
-                  height={24}
-                  color={
-                    groupChatHasUnread || groupsAnnHasUnread
-                      ? 'var(--unread)'
-                      : desktopSideView === 'groups'
-                        ? theme.palette.text.primary
-                        : theme.palette.text.secondary
-                  }
-                />
-              </IconWrapper>
-            </ButtonBase>
-            <ButtonBase
-              onClick={() => {
-                setDesktopSideView('directs');
-              }}
+              />
+            </IconWrapper>
+          </ButtonBase>
+          <ButtonBase
+            onClick={() => {
+              setDesktopSideView('directs');
+            }}
+          >
+            <IconWrapper
+              customWidth="75px"
+              color={
+                directChatHasUnread
+                  ? 'var(--unread)'
+                  : desktopSideView === 'directs'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
+              }
+              label="Messaging"
+              selected={desktopSideView === 'directs'}
             >
-              <IconWrapper
-                customWidth="75px"
+              <MessagingIcon
+                height={24}
                 color={
                   directChatHasUnread
                     ? 'var(--unread)'
@@ -1904,23 +1859,10 @@ export const Group = ({
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
                 }
-                label="Messaging"
-                selected={desktopSideView === 'directs'}
-              >
-                <MessagingIcon
-                  height={24}
-                  color={
-                    directChatHasUnread
-                      ? 'var(--unread)'
-                      : desktopSideView === 'directs'
-                        ? theme.palette.text.primary
-                        : theme.palette.text.secondary
-                  }
-                />
-              </IconWrapper>
-            </ButtonBase>
-          </Box>
-        )}
+              />
+            </IconWrapper>
+          </ButtonBase>
+        </Box>
 
         <div
           style={{
@@ -2181,38 +2123,35 @@ export const Group = ({
           alignItems: 'flex-start',
           display: 'flex',
           flexDirection: 'row',
-          height: isMobile ? '100%' : '100%',
+          height: '100%',
           width: '100%',
         }}
       >
-        {!isMobile &&
-          ((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') ||
-            isOpenSideViewGroups) && (
-            <DesktopSideBar
-              desktopViewMode={desktopViewMode}
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsMode}
-              setMode={setAppsMode}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              isApps={desktopViewMode === 'apps'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-            />
-          )}
+        {((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') ||
+          isOpenSideViewGroups) && (
+          <DesktopSideBar
+            desktopViewMode={desktopViewMode}
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsMode}
+            setMode={setAppsMode}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            isApps={desktopViewMode === 'apps'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+          />
+        )}
 
-        {!isMobile &&
-          desktopViewMode === 'chat' &&
+        {desktopViewMode === 'chat' &&
           desktopSideView !== 'directs' &&
           renderGroups()}
 
-        {!isMobile &&
-          desktopViewMode === 'chat' &&
+        {desktopViewMode === 'chat' &&
           desktopSideView === 'directs' &&
           renderDirects()}
 
@@ -2231,66 +2170,10 @@ export const Group = ({
 
           {newChat && (
             <>
-              {isMobile && (
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    height: '15px',
-                    justifyContent: 'center',
-                    marginTop: '14px',
-                    width: '100%',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      width: '320px',
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        width: '50px',
-                      }}
-                    >
-                      <ButtonBase
-                        onClick={() => {
-                          close();
-                        }}
-                      >
-                        <ReturnIcon />
-                      </ButtonBase>
-                    </Box>
-
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        width: '50px',
-                      }}
-                    >
-                      <ButtonBase
-                        onClick={() => {
-                          setSelectedDirect(null);
-                          setMobileViewModeKeepOpen('');
-                        }}
-                      >
-                        <ExitIcon />
-                      </ButtonBase>
-                    </Box>
-                  </Box>
-                </Box>
-              )}
               <Box
                 sx={{
                   background: theme.palette.background.default,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  height: isMobile && `calc(${rootHeight} - 45px)`,
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                   opacity: !(desktopViewMode === 'chat') ? 0 : 1,
                   position: 'absolute',
@@ -2352,50 +2235,47 @@ export const Group = ({
                 : '0px',
             }}
           >
-            {!isMobile && (
-              <DesktopHeader
-                isPrivate={isPrivate}
-                selectedGroup={selectedGroup}
-                groupSection={groupSection}
-                isUnread={isUnread}
-                goToAnnouncements={goToAnnouncements}
-                isUnreadChat={isUnreadChat}
-                goToChat={goToChat}
-                goToThreads={goToThreads}
-                setOpenManageMembers={setOpenManageMembers}
-                groupChatHasUnread={groupChatHasUnread}
-                groupsAnnHasUnread={groupsAnnHasUnread}
-                directChatHasUnread={directChatHasUnread}
-                chatMode={chatMode}
-                openDrawerGroups={openDrawerGroups}
-                goToHome={goToHome}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                mobileViewMode={mobileViewMode}
-                setMobileViewMode={setMobileViewMode}
-                setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-                hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-                hasUnreadDirects={directChatHasUnread}
-                myName={userInfo?.name || null}
-                isHome={groupSection === 'home'}
-                isGroups={desktopSideView === 'groups'}
-                isDirects={desktopSideView === 'directs'}
-                setDesktopSideView={setDesktopSideView}
-                hasUnreadAnnouncements={isUnread}
-                isAnnouncement={groupSection === 'announcement'}
-                isChat={groupSection === 'chat'}
-                hasUnreadChat={isUnreadChat}
-                setGroupSection={setGroupSection}
-                isForum={groupSection === 'forum'}
-              />
-            )}
+          <DesktopHeader
+            isPrivate={isPrivate}
+            selectedGroup={selectedGroup}
+            groupSection={groupSection}
+            isUnread={isUnread}
+            goToAnnouncements={goToAnnouncements}
+            isUnreadChat={isUnreadChat}
+            goToChat={goToChat}
+            goToThreads={goToThreads}
+            setOpenManageMembers={setOpenManageMembers}
+            groupChatHasUnread={groupChatHasUnread}
+            groupsAnnHasUnread={groupsAnnHasUnread}
+            directChatHasUnread={directChatHasUnread}
+            chatMode={chatMode}
+            openDrawerGroups={openDrawerGroups}
+            goToHome={goToHome}
+            setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+            mobileViewMode={mobileViewMode}
+            setMobileViewMode={setMobileViewMode}
+            setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            hasUnreadDirects={directChatHasUnread}
+            myName={userInfo?.name || null}
+            isHome={groupSection === 'home'}
+            isGroups={desktopSideView === 'groups'}
+            isDirects={desktopSideView === 'directs'}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadAnnouncements={isUnread}
+            isAnnouncement={groupSection === 'announcement'}
+            isChat={groupSection === 'chat'}
+            hasUnreadChat={isUnreadChat}
+            setGroupSection={setGroupSection}
+            isForum={groupSection === 'forum'}
+            />
 
             <Box
               sx={{
-                position: 'relative',
-                flexGrow: 1,
                 display: 'flex',
-                // reference to change height
-                height: isMobile ? 'calc(100% - 82px)' : 'calc(100vh - 70px)',
+                flexGrow: 1,
+                height: 'calc(100vh - 70px)',
+                position: 'relative',
               }}
             >
               {triedToFetchSecretKey && (
@@ -2449,15 +2329,13 @@ export const Group = ({
                   (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
                     <div
                       style={{
-                        display: 'flex',
-                        width: '100%',
-                        height: isMobile
-                          ? `calc(${rootHeight} - 113px)`
-                          : 'calc(100vh - 70px)',
-                        flexDirection: 'column',
                         alignItems: 'flex-start',
-                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: 'calc(100vh - 70px)',
                         overflow: 'auto',
+                        padding: '20px',
+                        width: '100%',
                       }}
                     >
                       {' '}
@@ -2605,7 +2483,6 @@ export const Group = ({
                 sx={{
                   background: theme.palette.background.default,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  height: isMobile && `calc(${rootHeight} - 45px)`,
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                   opacity: !(desktopViewMode === 'chat') ? 0 : 1,
                   position: 'absolute',
@@ -2642,64 +2519,59 @@ export const Group = ({
             </>
           )}
 
-          {!isMobile && (
-            <AppsDesktop
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsMode}
-              setMode={setAppsMode}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'apps'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-              desktopViewMode={desktopViewMode}
-            />
-          )}
-          {!isMobile && (
-            <AppsDevMode
-              toggleSideViewGroups={toggleSideViewGroups}
-              toggleSideViewDirects={toggleSideViewDirects}
-              goToHome={goToHome}
-              mode={appsModeDev}
-              setMode={setAppsModeDev}
-              setDesktopSideView={setDesktopSideView}
-              hasUnreadDirects={directChatHasUnread}
-              show={desktopViewMode === 'dev'}
-              myName={userInfo?.name}
-              isGroups={isOpenSideViewGroups}
-              isDirects={isOpenSideViewDirects}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-              isApps={desktopViewMode === 'apps'}
-            />
-          )}
-
-          {!isMobile && (
-            <HomeDesktop
-              name={userInfo?.name}
-              refreshHomeDataFunc={refreshHomeDataFunc}
-              myAddress={myAddress}
-              isLoadingGroups={isLoadingGroups}
-              balance={balance}
-              userInfo={userInfo}
-              groups={groups}
-              setGroupSection={setGroupSection}
-              setSelectedGroup={setSelectedGroup}
-              getTimestampEnterChat={getTimestampEnterChat}
-              setOpenManageMembers={setOpenManageMembers}
-              setOpenAddGroup={setOpenAddGroup}
-              setMobileViewMode={setMobileViewMode}
-              setDesktopViewMode={setDesktopViewMode}
-              desktopViewMode={desktopViewMode}
-            />
-          )}
+          <AppsDesktop
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsMode}
+            setMode={setAppsMode}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'apps'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+            desktopViewMode={desktopViewMode}
+          />
+        
+          <AppsDevMode
+            toggleSideViewGroups={toggleSideViewGroups}
+            toggleSideViewDirects={toggleSideViewDirects}
+            goToHome={goToHome}
+            mode={appsModeDev}
+            setMode={setAppsModeDev}
+            setDesktopSideView={setDesktopSideView}
+            hasUnreadDirects={directChatHasUnread}
+            show={desktopViewMode === 'dev'}
+            myName={userInfo?.name}
+            isGroups={isOpenSideViewGroups}
+            isDirects={isOpenSideViewDirects}
+            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+            isApps={desktopViewMode === 'apps'}
+          />
+          
+          <HomeDesktop
+            name={userInfo?.name}
+            refreshHomeDataFunc={refreshHomeDataFunc}
+            myAddress={myAddress}
+            isLoadingGroups={isLoadingGroups}
+            balance={balance}
+            userInfo={userInfo}
+            groups={groups}
+            setGroupSection={setGroupSection}
+            setSelectedGroup={setSelectedGroup}
+            getTimestampEnterChat={getTimestampEnterChat}
+            setOpenManageMembers={setOpenManageMembers}
+            setOpenAddGroup={setOpenAddGroup}
+            setMobileViewMode={setMobileViewMode}
+            setDesktopViewMode={setDesktopViewMode}
+            desktopViewMode={desktopViewMode}
+          />          
         </Box>
 
         <AuthenticatedContainerInnerRight
@@ -2708,7 +2580,6 @@ export const Group = ({
             width: '31px',
             padding: '5px',
             display:
-              isMobile ||
               desktopViewMode === 'apps' ||
               desktopViewMode === 'dev' ||
               desktopViewMode === 'chat'

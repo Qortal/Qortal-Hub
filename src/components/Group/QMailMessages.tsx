@@ -6,7 +6,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import moment from 'moment';
 import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
-import { getBaseApiReact, isMobile } from '../../App';
+import { getBaseApiReact } from '../../App';
 import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { executeEvent } from '../../utils/events';
@@ -180,7 +180,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
             borderRadius: '19px',
             display: 'flex',
             flexDirection: 'column',
-            height: isMobile ? '165px' : '250px',
+            height: '250px',
             overflow: 'auto',
             padding: '20px',
             width: '322px',

@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle,
   Input,
   MenuItem,
   Select,
@@ -24,15 +23,15 @@ import {
 import { Label } from '../Group/AddGroup';
 import { Spacer } from '../../common/Spacer';
 import {
-  Add,
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   PublishQAppChoseFile,
   PublishQAppInfo,
 } from './Apps-styles';
+import AddIcon from '@mui/icons-material/Add';
 import ImageUploader from '../../common/ImageUploader';
-import { isMobile, MyContext } from '../../App';
+import { MyContext } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background';
@@ -67,6 +66,7 @@ export const AppsPrivate = ({ myName }) => {
       (group) => groupsProperties[group?.groupId]?.isOpen === false
     );
   }, [memberGroups, groupsProperties]);
+
   const [privateAppValues, setPrivateAppValues] = useState({
     name: '',
     service: 'DOCUMENT',
@@ -230,11 +230,11 @@ export const AppsPrivate = ({ myName }) => {
       >
         <AppCircleContainer
           sx={{
-            gap: !isMobile ? '10px' : '5px',
+            gap: '10px',
           }}
         >
           <AppCircle>
-            <Add>+</Add>
+            <AddIcon />
           </AppCircle>
 
           <AppCircleLabel>Private</AppCircleLabel>
@@ -267,9 +267,8 @@ export const AppsPrivate = ({ myName }) => {
               value={valueTabPrivateApp}
               onChange={handleChange}
               aria-label="basic tabs example"
-              variant={isMobile ? 'scrollable' : 'fullWidth'} // Scrollable on mobile, full width on desktop
+              variant={'fullWidth'}
               scrollButtons="auto"
-              allowScrollButtonsMobile
               sx={{
                 '& .MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
@@ -283,7 +282,7 @@ export const AppsPrivate = ({ myName }) => {
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
               <Tab
@@ -293,7 +292,7 @@ export const AppsPrivate = ({ myName }) => {
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,
                   },
-                  fontSize: isMobile ? '0.75rem' : '1rem', // Adjust font size for mobile
+                  fontSize: '1rem',
                 }}
               />
             </Tabs>

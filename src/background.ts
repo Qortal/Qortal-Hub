@@ -1,5 +1,4 @@
 // @ts-nocheck
-
 import './qortalRequests';
 import { isArray } from 'lodash';
 import {
@@ -30,7 +29,6 @@ import { RequestQueueWithPromise } from './utils/queue/queue';
 import { validateAddress } from './utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from './transactions/TradeBotRespondMultipleRequest';
-
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/resourceTypes';
 import {
   addDataPublishesCase,
@@ -111,6 +109,7 @@ export let groupSecretkeys = {};
 export function cleanUrl(url) {
   return url?.replace(/^(https?:\/\/)?(www\.)?/, '');
 }
+
 export function getProtocol(url) {
   if (url?.startsWith('https://')) {
     return 'https';
@@ -130,7 +129,6 @@ export const groupApiLocal = 'http://127.0.0.1:12391';
 export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
-let isMobile = true;
 
 function handleNotificationClick(notificationId) {
   // Decode the notificationId if it was encoded
@@ -193,26 +191,6 @@ function handleNotificationClick(notificationId) {
   }
 }
 
-const isMobileDevice = () => {
-  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-
-  if (/android/i.test(userAgent)) {
-    return true; // Android device
-  }
-
-  if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-    return true; // iOS device
-  }
-
-  return false;
-};
-
-if (isMobileDevice()) {
-  isMobile = true;
-  console.log('Running on a mobile device');
-} else {
-  console.log('Running on a desktop');
-}
 const allQueues = {
   requestQueueAnnouncements: requestQueueAnnouncements,
 };
@@ -264,7 +242,9 @@ export const getForeignKey = async (foreignBlockchain) => {
 };
 
 export const pauseAllQueues = () => controlAllQueues('pause');
+
 export const resumeAllQueues = () => controlAllQueues('resume');
+
 export const checkDifference = (
   createdTimestamp,
   diff = timeDifferenceForNotificationChatsBackground
@@ -302,6 +282,7 @@ export const getBaseApi = async (customApi?: string) => {
     return groupApi;
   }
 };
+
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
   if (apiKey?.url) {
@@ -345,13 +326,13 @@ const proxyAccountAddress = 'QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku';
 const proxyAccountPublicKey = '5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7';
 const pendingResponses = new Map();
 let groups = null;
-
 let socket;
 let timeoutId;
 let groupSocketTimeout;
 let socketTimeout: any;
 let interval;
 let intervalThreads;
+
 // Function to check each API endpoint
 export async function findUsableApi() {
   for (const endpoint of apiEndpoints) {
@@ -435,6 +416,7 @@ async function checkWebviewFocus() {
     window.addEventListener('message', handleMessage);
   });
 }
+
 const worker = new ChatComputePowWorker();
 
 export async function performPowTask(chatBytes, difficulty) {
@@ -584,6 +566,7 @@ const handleNotificationDirect = async (directs) => {
     setChatHeadsDirect(dataDirects);
   }
 };
+
 async function getThreadActivity(): Promise<any | null> {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -852,6 +835,7 @@ export async function getNameInfoForOthers(address) {
     return '';
   }
 }
+
 export async function getAddressInfo(address) {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + '/addresses/' + address);
@@ -932,6 +916,7 @@ async function getTradeInfo(qortalAtAddress) {
   const data = await response.json();
   return data;
 }
+
 async function getTradesInfo(qortalAtAddresses) {
   // Use Promise.all to fetch data for all addresses concurrently
   const trades = await Promise.all(
@@ -951,6 +936,7 @@ export async function getBalanceInfo() {
   const data = await response.json();
   return data;
 }
+
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
   let _url = `${buyTradeNodeBaseUrl}/crosschain/ltc/walletbalance`;
@@ -1075,6 +1061,7 @@ const transaction = async (
     data: res,
   };
 };
+
 const makeTransactionRequest = async (
   receiver,
   lastRef,
@@ -1113,6 +1100,7 @@ export const getLastRef = async () => {
   const data = await response.text();
   return data;
 };
+
 export const sendQortFee = async (): Promise<number> => {
   const validApi = await getBaseApi();
   const response = await fetch(
@@ -1386,6 +1374,7 @@ export async function signChatFunc(
   }
   return response;
 }
+
 function sbrk(size, heap) {
   let brk = 512 * 1024; // stack top
   let old = brk;

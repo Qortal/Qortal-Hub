@@ -20,7 +20,6 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
   getBaseApiReact,
   getBaseApiReactSocket,
-  isMobile,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
@@ -410,16 +409,6 @@ export const ChatDirect = ({
     if (editorRef.current) {
       setMessageSize(0);
       editorRef.current.chain().focus().clearContent().run();
-      if (isMobile) {
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run();
-          setIsFocusedParent(false);
-          executeEvent('sent-new-message-group', {});
-          setTimeout(() => {
-            triggerRerender();
-          }, 300);
-        }, 200);
-      }
     }
   };
   useEffect(() => {
@@ -547,108 +536,41 @@ export const ChatDirect = ({
         background: theme.palette.background.default,
         display: 'flex',
         flexDirection: 'column',
-        height: isMobile ? '100%' : '100vh',
+        height: '100vh',
         width: '100%',
       }}
     >
-      {!isMobile && (
-        <Box
-          onClick={close}
+      <Box
+        onClick={close}
+        sx={{
+          alignItems: 'center',
+          alignSelf: 'center',
+          background: theme.palette.background.default,
+          borderRadius: '3px',
+          cursor: 'pointer',
+          display: 'flex',
+          gap: '5px',
+          margin: '10px 0px',
+          padding: '4px 6px',
+          width: 'fit-content',
+        }}
+      >
+        <ArrowBackIcon
           sx={{
-            alignItems: 'center',
-            alignSelf: 'center',
-            background: theme.palette.background.default,
-            borderRadius: '3px',
-            cursor: 'pointer',
-            display: 'flex',
-            gap: '5px',
-            margin: '10px 0px',
-            padding: '4px 6px',
-            width: 'fit-content',
+            color: theme.palette.text.primary,
+            fontSize: '20px',
+          }}
+        />
+        <Typography
+          sx={{
+            color: theme.palette.text.primary,
+            fontSize: '14px',
           }}
         >
-          <ArrowBackIcon
-            sx={{
-              color: theme.palette.text.primary,
-              fontSize: '20px',
-            }}
-          />
-          <Typography
-            sx={{
-              color: theme.palette.text.primary,
-              fontSize: '14px',
-            }}
-          >
-            Close Direct Chat
-          </Typography>
-        </Box>
-      )}
-      {isMobile && (
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            height: '15px',
-            justifyContent: 'center',
-            marginTop: '14px',
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              justifyContent: 'space-between',
-              width: '320px',
-            }}
-          >
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                width: '50px',
-              }}
-            >
-              <ButtonBase
-                onClick={() => {
-                  close();
-                }}
-              >
-                <ReturnIcon />
-              </ButtonBase>
-            </Box>
-            <Typography
-              sx={{
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              {isNewChat
-                ? ''
-                : selectedDirect?.name ||
-                  selectedDirect?.address?.slice(0, 10) + '...'}
-            </Typography>
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                width: '50px',
-              }}
-            >
-              <ButtonBase
-                onClick={() => {
-                  setSelectedDirect(null);
-                  setMobileViewModeKeepOpen('');
-                  setNewChat(false);
-                }}
-              >
-                <ExitIcon />
-              </ButtonBase>
-            </Box>
-          </Box>
-        </Box>
-      )}
+          Close Direct Chat
+        </Typography>
+      </Box>
+
       {isNewChat && (
         <>
           <Spacer height="30px" />
@@ -685,7 +607,7 @@ export const ChatDirect = ({
           flexShrink: 0,
           minHeight: '150px',
           overflow: 'hidden',
-          padding: isMobile ? '10px' : '20px',
+          padding: '20px',
           position: isFocusedParent ? 'fixed' : 'relative',
           top: isFocusedParent ? '0px' : 'unset',
           width: '100%',
@@ -753,7 +675,7 @@ export const ChatDirect = ({
             setEditorRef={setEditorRef}
             onEnter={sendMessage}
             isChat
-            disableEnter={isMobile ? true : false}
+            disableEnter={false}
             setIsFocusedParent={setIsFocusedParent}
           />
           {messageSize > 750 && (
