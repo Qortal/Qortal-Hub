@@ -10,12 +10,12 @@
     "navigation": "2. App-Navigation"
   },
   "initial": {
-    "6_qort": "Mindestens 6 QORT im Wallet haben",
+    "6_qort": "mindestens 6 QORT im Wallet haben",
     "explore": "erkunden",
     "general_chat": "allgemeiner Chat",
     "getting_started": "erste Schritte",
     "register_name": "einen Namen registrieren",
-    "see_apps": "Apps ansehen",
+    "see_apps": "apps ansehen",
     "trade_qort": "QORT handeln"
   }
 }
