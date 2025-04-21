@@ -9,7 +9,7 @@ Thank you for your interest in contributing! We follow a structured Git workflow
 
 | Branch           | Purpose                                                  |
 |------------------|----------------------------------------------------------|
-| `master`         | Stable, production-ready code. All releases are tagged here. |
+| `master`         | Stable, production-ready code. All releases are tagged from here. |
 | `develop`        | Active development branch. All new features go here first. |
 | `release/x.y.z`  | Pre-release branch for staging, QA, and final polish.     |
 
