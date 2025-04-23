@@ -82,6 +82,7 @@ export const GroupJoinRequests = ({
       );
       setGroupsWithJoinRequests(res);
     } catch (error) {
+      console.log(error);
     } finally {
       setLoading(false);
     }
@@ -138,7 +139,7 @@ export const GroupJoinRequests = ({
         <Typography
           sx={{
             fontSize: '1rem',
-          }}
+          }} // TODO translate
         >
           Join Requests{' '}
           {filteredJoinRequests?.filter((group) => group?.data?.length > 0)

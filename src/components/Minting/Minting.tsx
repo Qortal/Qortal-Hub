@@ -206,7 +206,6 @@ export const Minting = ({
         window
           .sendMessage(
             'ADMIN_ACTION',
-
             {
               type: 'addmintingaccount',
               value: val,
@@ -266,7 +265,7 @@ export const Minting = ({
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || 'An error occurred' });
+            rej({ message: error.message || 'An error occurred' }); //TODO translate
           });
       });
     } catch (error) {

@@ -91,7 +91,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
       if (!name) throw new Error('Please provide a name');
       if (!description) throw new Error('Please provide a description');
 
-      const fee = await getFee('CREATE_GROUP');
+      const fee = await getFee('CREATE_GROUP'); // TODO translate
       await show({
         message: 'Would you like to perform an CREATE_GROUP transaction?',
         publishFee: fee.fee + ' QORT',

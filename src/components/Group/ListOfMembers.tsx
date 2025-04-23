@@ -1,29 +1,29 @@
 import {
   Avatar,
   Box,
-  Button,
   ListItem,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
   Popover,
   Typography,
-} from "@mui/material";
-import React, { useRef, useState } from "react";
+} from '@mui/material';
+import { useRef, useState } from 'react';
 import {
   AutoSizer,
   CellMeasurer,
   CellMeasurerCache,
   List,
-} from "react-virtualized";
-import { LoadingButton } from "@mui/lab";
-import { getBaseApi, getFee } from "../../background";
-import { getBaseApiReact } from "../../App";
+} from 'react-virtualized';
+import { LoadingButton } from '@mui/lab';
+import { getFee } from '../../background';
+import { getBaseApiReact } from '../../App';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
   defaultHeight: 50,
 });
+
 const ListOfMembers = ({
   members,
   groupId,
@@ -40,7 +40,6 @@ const ListOfMembers = ({
   const [isLoadingMakeAdmin, setIsLoadingMakeAdmin] = useState(false);
   const [isLoadingRemoveAdmin, setIsLoadingRemoveAdmin] = useState(false);
 
-  
   const listRef = useRef();
 
   const handlePopoverOpen = (event, index) => {
@@ -55,23 +54,25 @@ const ListOfMembers = ({
 
   const handleKick = async (address) => {
     try {
-      const fee = await getFee("GROUP_KICK");
+      const fee = await getFee('GROUP_KICK');
       await show({
-        message: "Would you like to perform a GROUP_KICK transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform a GROUP_KICK transaction?',
+        publishFee: fee.fee + ' QORT',
       });
 
       setIsLoadingKick(true);
       new Promise((res, rej) => {
-        window.sendMessage("kickFromGroup", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('kickFromGroup', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully kicked member from group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message:
+                  'Successfully kicked member from group. It may take a couple of minutes for the changes to propagate',
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -79,7 +80,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -87,38 +88,40 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingKick(false);
     }
   };
   const handleBan = async (address) => {
     try {
-      const fee = await getFee("GROUP_BAN");
+      const fee = await getFee('GROUP_BAN'); // TODO translate
       await show({
-        message: "Would you like to perform a GROUP_BAN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform a GROUP_BAN transaction?',
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingBan(true);
       await new Promise((res, rej) => {
-        window.sendMessage("banFromGroup", {
-          groupId,
-          qortalAddress: address,
-          rBanTime: 0,
-        })
+        window
+          .sendMessage('banFromGroup', {
+            groupId,
+            qortalAddress: address,
+            rBanTime: 0,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully banned member from group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message:
+                  'Successfully banned member from group. It may take a couple of minutes for the changes to propagate',
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -126,7 +129,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -134,13 +137,12 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
     } finally {
@@ -150,22 +152,24 @@ const ListOfMembers = ({
 
   const makeAdmin = async (address) => {
     try {
-      const fee = await getFee("ADD_GROUP_ADMIN");
+      const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: "Would you like to perform a ADD_GROUP_ADMIN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform a ADD_GROUP_ADMIN transaction?',
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingMakeAdmin(true);
       await new Promise((res, rej) => {
-        window.sendMessage("makeAdmin", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('makeAdmin', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully made member an admin. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message:
+                  'Successfully made member an admin. It may take a couple of minutes for the changes to propagate',
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -173,7 +177,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -181,13 +185,12 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
     } finally {
@@ -197,22 +200,24 @@ const ListOfMembers = ({
 
   const removeAdmin = async (address) => {
     try {
-      const fee = await getFee("REMOVE_GROUP_ADMIN");
+      const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: "Would you like to perform a REMOVE_GROUP_ADMIN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform a REMOVE_GROUP_ADMIN transaction?',
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingRemoveAdmin(true);
       await new Promise((res, rej) => {
-        window.sendMessage("removeAdmin", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('removeAdmin', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully removed member as an admin. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message:
+                  'Successfully removed member as an admin. It may take a couple of minutes for the changes to propagate',
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -220,7 +225,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -228,13 +233,12 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
     } finally {
@@ -260,24 +264,24 @@ const ListOfMembers = ({
               anchorEl={popoverAnchor}
               onClose={handlePopoverClose}
               anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "center",
+                vertical: 'bottom',
+                horizontal: 'center',
               }}
               transformOrigin={{
-                vertical: "top",
-                horizontal: "center",
+                vertical: 'top',
+                horizontal: 'center',
               }}
-              style={{ marginTop: "8px" }}
+              style={{ marginTop: '8px' }}
             >
               <Box
                 sx={{
-                  width: "325px",
-                  height: "250px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px",
+                  width: '325px',
+                  height: '250px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px',
                 }}
               >
                 {isOwner && (
@@ -336,21 +340,28 @@ const ListOfMembers = ({
                 <ListItemAvatar>
                   <Avatar
                     alt={member?.name || member?.member}
-                    src={member?.name ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true` : ''}
+                    src={
+                      member?.name
+                        ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true`
+                        : ''
+                    }
                   />
                 </ListItemAvatar>
                 <ListItemText
-                  id={""}
+                  id={''}
                   primary={member?.name || member?.member}
                 />
                 {member?.isAdmin && (
-                <Typography sx={{
-                  color: 'white',
-                  marginLeft: 'auto'
-                }}>Admin</Typography>
-              )}
+                  <Typography
+                    sx={{
+                      color: 'white',
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    Admin
+                  </Typography>
+                )}
               </ListItemButton>
-              
             </ListItem>
           </div>
         )}
@@ -363,11 +374,11 @@ const ListOfMembers = ({
       <p>Member list</p>
       <div
         style={{
-          position: "relative",
-          height: "500px",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
+          position: 'relative',
+          height: '500px',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           flexShrink: 1,
         }}
       >

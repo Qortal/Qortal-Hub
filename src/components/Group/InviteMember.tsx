@@ -1,13 +1,6 @@
 import { LoadingButton } from '@mui/lab';
-import {
-  Box,
-  Button,
-  Input,
-  MenuItem,
-  Select,
-  SelectChangeEvent,
-} from '@mui/material';
-import React, { useState } from 'react';
+import { Box, Input, MenuItem, Select, SelectChangeEvent } from '@mui/material';
+import { useState } from 'react';
 import { Spacer } from '../../common/Spacer';
 import { Label } from './AddGroup';
 import { getFee } from '../../background';
@@ -34,6 +27,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           })
           .then((response) => {
             if (!response?.error) {
+              // TODO translate
               setInfoSnack({
                 type: 'success',
                 message: `Successfully invited ${value}. It may take a couple of minutes for the changes to propagate`,
