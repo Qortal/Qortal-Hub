@@ -118,7 +118,7 @@ export const DesktopSideBar = ({
       </ButtonBase>
 
       <Save isDesktop disableWidth myName={myName} />
-      {/* <CoreSyncStatus imageSize="30px" position="left" /> */}
+
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
@@ -139,7 +139,7 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <ThemeSelector style={{ position: 'fixed', bottom: '1%' }} />
+      <ThemeSelector />
     </Box>
   );
 };
