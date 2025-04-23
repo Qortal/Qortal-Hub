@@ -7,7 +7,7 @@
   "continue": "continue",
   "description": "description",
   "edit": "edit",
-  "error": "an error occurred",
+
   "last_height": "last height",
   "loading": "loading...",
   "logout": "logout",
@@ -15,7 +15,19 @@
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
-  "save": "save",
+  "result": {
+    "error": {
+      "generic": "an error occurred",
+      "save_qdn": "Unable to save to QDN"
+    },
+    "success": {
+      "publish_qdn": "Sucessfully published to QDN"
+    }
+  },
+  "save_options": {
+    "publish_qdn": "Would you like to publish your settings to QDN (encrypted) ?",
+    "save": "save"
+  },
   "settings": "settings",
   "supply": "supply",
   "title": "title",
