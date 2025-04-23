@@ -25,11 +25,15 @@
     }
   },
   "save_options": {
-    "publish_qdn": "Would you like to publish your settings to QDN (encrypted) ?",
+    "publish_qdn": "Would you like to publish your settings to QDN (encrypted)?",
     "save": "save"
   },
   "settings": "settings",
   "supply": "supply",
+  "theme": {
+    "dark": "dark mode",
+    "light": "light mode"
+  },
   "title": "title",
   "tutorial": "tutorial",
   "your_account": "your account",
