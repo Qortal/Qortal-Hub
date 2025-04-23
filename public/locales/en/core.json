@@ -1,13 +1,17 @@
 {
   "add": "add",
-  "backup_wallet": "backup wallet",
   "cancel": "cancel",
   "choose": "choose",
   "close": "close",
   "continue": "continue",
+  "core": {
+    "block_height": "block height",
+    "information": "core information",
+    "peers": "connected peers",
+    "version": "core version"
+  },
   "description": "description",
   "edit": "edit",
-
   "last_height": "last height",
   "loading": "loading...",
   "logout": "logout",
@@ -18,14 +22,21 @@
   "result": {
     "error": {
       "generic": "an error occurred",
-      "save_qdn": "Unable to save to QDN"
+      "incorrect_password": "incorrect password",
+      "save_qdn": "unable to save to QDN"
+    },
+    "status": {
+      "minting": "(minting)",
+      "not_minting": "(not minting)",
+      "synchronized": "synchronized",
+      "synchronizing": "synchronizing"
     },
     "success": {
-      "publish_qdn": "Sucessfully published to QDN"
+      "publish_qdn": "successfully published to QDN"
     }
   },
   "save_options": {
-    "publish_qdn": "Would you like to publish your settings to QDN (encrypted)?",
+    "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
     "save": "save"
   },
   "settings": "settings",
@@ -36,9 +47,11 @@
   },
   "title": "title",
   "tutorial": "tutorial",
-  "your_account": "your account",
   "user_lookup": "user lookup",
-  "wallet": "wallet",
-  "wallet_other": "wallets",
+  "wallet": {
+    "backup_wallet": "backup wallet",
+    "wallet": "wallet",
+    "wallet_other": "wallets"
+  },
   "welcome": "welcome"
 }

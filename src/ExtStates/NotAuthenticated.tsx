@@ -522,7 +522,7 @@ export const NotAuthenticated = ({
           }
         >
           <CustomButton onClick={() => setExtstate('wallets')}>
-            {t('auth:account_many', { postProcess: 'capitalize' })}
+            {t('auth:account.account_many', { postProcess: 'capitalize' })}
           </CustomButton>
         </HtmlTooltip>
       </Box>

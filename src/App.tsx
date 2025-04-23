@@ -1713,7 +1713,7 @@ function App() {
                         textTransform: 'uppercase',
                       }}
                     >
-                      {t('core:your_account')}
+                      {t('auth:account.your')}
                     </span>
                   }
                   placement="left"
@@ -2640,7 +2640,7 @@ function App() {
 
             <>
               <CustomLabel htmlFor="standard-adornment-password">
-                {t('auth:wallet_password', { postProcess: 'capitalize' })}
+                {t('auth:wallet.password', { postProcess: 'capitalize' })}
               </CustomLabel>
 
               <Spacer height="5px" />
@@ -2751,7 +2751,7 @@ function App() {
             {!walletToBeDownloaded && (
               <>
                 <CustomLabel htmlFor="standard-adornment-password">
-                  {t('auth:wallet_password_confirmation', {
+                  {t('auth:wallet.password_confirmation', {
                     postProcess: 'capitalize',
                   })}
                 </CustomLabel>
