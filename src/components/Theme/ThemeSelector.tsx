@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 const ThemeSelector = () => {
   const { t } = useTranslation(['core']);
+
   const { themeMode, toggleTheme } = useThemeContext();
 
   return (
