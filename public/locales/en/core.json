@@ -18,6 +18,9 @@
   "loading": "loading...",
   "logout": "logout",
   "minting_status": "minting status",
+  "page": {
+    "last": "last"
+  },
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",

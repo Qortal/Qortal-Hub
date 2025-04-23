@@ -42,7 +42,7 @@ i18n
       escapeValue: false,
     },
     lng: navigator.language,
-    ns: ['auth', 'core', 'tutorial'],
+    ns: ['auth', 'core', 'group', 'tutorial'],
     supportedLngs: ['en', 'it', 'es', 'fr', 'de', 'ru'],
   });
 
