@@ -1097,7 +1097,7 @@ export const NotAuthenticated = ({
         />
       </ButtonBase>
 
-      <ThemeSelector style={{ position: 'fixed', bottom: '1%', left: '0%' }} />
+      <ThemeSelector />
     </>
   );
 };
