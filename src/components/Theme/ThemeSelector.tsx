@@ -9,10 +9,11 @@ const ThemeSelector = () => {
   return (
     <div
       style={{
+        bottom: '1%',
         display: 'flex',
         gap: '12px',
-        position: 'fixed',
-        bottom: '1%',
+        left: '1.5vh',
+        position: 'absolute',
       }}
     >
       <Tooltip title={themeMode === 'dark' ? 'Light mode' : 'Dark mode'}>
