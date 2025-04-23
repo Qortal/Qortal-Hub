@@ -101,7 +101,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const handleJoinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
-      const fee = await getFee('JOIN_GROUP');
+      const fee = await getFee('JOIN_GROUP'); // TODO translate
       await show({
         message: 'Would you like to perform an JOIN_GROUP transaction?',
         publishFee: fee.fee + ' QORT',

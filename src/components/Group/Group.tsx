@@ -2218,7 +2218,8 @@ export const Group = ({
                 }}
               >
                 No group selected
-              </Typography>
+              </Typography>{' '}
+              // TODO translate
             </Box>
           )}
 
@@ -2235,39 +2236,39 @@ export const Group = ({
                 : '0px',
             }}
           >
-          <DesktopHeader
-            isPrivate={isPrivate}
-            selectedGroup={selectedGroup}
-            groupSection={groupSection}
-            isUnread={isUnread}
-            goToAnnouncements={goToAnnouncements}
-            isUnreadChat={isUnreadChat}
-            goToChat={goToChat}
-            goToThreads={goToThreads}
-            setOpenManageMembers={setOpenManageMembers}
-            groupChatHasUnread={groupChatHasUnread}
-            groupsAnnHasUnread={groupsAnnHasUnread}
-            directChatHasUnread={directChatHasUnread}
-            chatMode={chatMode}
-            openDrawerGroups={openDrawerGroups}
-            goToHome={goToHome}
-            setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-            mobileViewMode={mobileViewMode}
-            setMobileViewMode={setMobileViewMode}
-            setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            hasUnreadDirects={directChatHasUnread}
-            myName={userInfo?.name || null}
-            isHome={groupSection === 'home'}
-            isGroups={desktopSideView === 'groups'}
-            isDirects={desktopSideView === 'directs'}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadAnnouncements={isUnread}
-            isAnnouncement={groupSection === 'announcement'}
-            isChat={groupSection === 'chat'}
-            hasUnreadChat={isUnreadChat}
-            setGroupSection={setGroupSection}
-            isForum={groupSection === 'forum'}
+            <DesktopHeader
+              isPrivate={isPrivate}
+              selectedGroup={selectedGroup}
+              groupSection={groupSection}
+              isUnread={isUnread}
+              goToAnnouncements={goToAnnouncements}
+              isUnreadChat={isUnreadChat}
+              goToChat={goToChat}
+              goToThreads={goToThreads}
+              setOpenManageMembers={setOpenManageMembers}
+              groupChatHasUnread={groupChatHasUnread}
+              groupsAnnHasUnread={groupsAnnHasUnread}
+              directChatHasUnread={directChatHasUnread}
+              chatMode={chatMode}
+              openDrawerGroups={openDrawerGroups}
+              goToHome={goToHome}
+              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+              mobileViewMode={mobileViewMode}
+              setMobileViewMode={setMobileViewMode}
+              setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
+              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+              hasUnreadDirects={directChatHasUnread}
+              myName={userInfo?.name || null}
+              isHome={groupSection === 'home'}
+              isGroups={desktopSideView === 'groups'}
+              isDirects={desktopSideView === 'directs'}
+              setDesktopSideView={setDesktopSideView}
+              hasUnreadAnnouncements={isUnread}
+              isAnnouncement={groupSection === 'announcement'}
+              isChat={groupSection === 'chat'}
+              hasUnreadChat={isUnreadChat}
+              setGroupSection={setGroupSection}
+              isForum={groupSection === 'forum'}
             />
 
             <Box
@@ -2536,7 +2537,7 @@ export const Group = ({
             isApps={desktopViewMode === 'apps'}
             desktopViewMode={desktopViewMode}
           />
-        
+
           <AppsDevMode
             toggleSideViewGroups={toggleSideViewGroups}
             toggleSideViewDirects={toggleSideViewDirects}
@@ -2554,7 +2555,7 @@ export const Group = ({
             desktopViewMode={desktopViewMode}
             isApps={desktopViewMode === 'apps'}
           />
-          
+
           <HomeDesktop
             name={userInfo?.name}
             refreshHomeDataFunc={refreshHomeDataFunc}
@@ -2571,7 +2572,7 @@ export const Group = ({
             setMobileViewMode={setMobileViewMode}
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
-          />          
+          />
         </Box>
 
         <AuthenticatedContainerInnerRight

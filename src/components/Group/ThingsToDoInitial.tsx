@@ -4,10 +4,11 @@ import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import { QMailMessages } from './QMailMessages';
 import { executeEvent } from '../../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const ThingsToDoInitial = ({
   myAddress,
@@ -18,6 +19,8 @@ export const ThingsToDoInitial = ({
 }) => {
   const [checked1, setChecked1] = React.useState(false);
   const [checked2, setChecked2] = React.useState(false);
+  const { t } = useTranslation(['core', 'tutorial']);
+  const theme = useTheme();
 
   React.useEffect(() => {
     if (balance && +balance >= 6) {
@@ -72,7 +75,11 @@ export const ThingsToDoInitial = ({
             fontWeight: 600,
           }}
         >
-          {!isLoaded ? 'Loading...' : 'Getting Started'}
+          {!isLoaded
+            ? t('core:loading', { postProcess: 'capitalize' })
+            : t('tutorial:initial.getting_started', {
+                postProcess: 'capitalize',
+              })}
         </Typography>
 
         <Spacer height="10px" />
@@ -80,12 +87,12 @@ export const ThingsToDoInitial = ({
 
       <Box
         sx={{
-          width: '322px',
+          bgcolor: theme.palette.background.paper,
+          borderRadius: '19px',
           display: 'flex',
           flexDirection: 'column',
-          bgcolor: 'background.paper',
           padding: '20px',
-          borderRadius: '19px',
+          width: '322px',
         }}
       >
         {isLoaded && (
@@ -114,7 +121,9 @@ export const ThingsToDoInitial = ({
                       fontWeight: 400,
                     },
                   }}
-                  primary={`Have at least 6 QORT in your wallet`}
+                  primary={t('tutorial:initial.6_qort', {
+                    postProcess: 'capitalize',
+                  })}
                 />
                 <ListItemIcon
                   sx={{
@@ -183,7 +192,9 @@ export const ThingsToDoInitial = ({
                       fontWeight: 400,
                     },
                   }}
-                  primary={`Register a name`}
+                  primary={t('tutorial:initial.register_name', {
+                    postProcess: 'capitalize',
+                  })}
                 />
                 <ListItemIcon
                   sx={{

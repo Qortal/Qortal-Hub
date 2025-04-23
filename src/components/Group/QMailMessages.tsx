@@ -87,7 +87,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(error.message || 'An error occurred'); // TODO translate
           });
       });
     } catch (error) {

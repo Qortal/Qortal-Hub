@@ -8,6 +8,7 @@ import navigationImg from './img/navigation.webp';
 import overviewImg from './img/overview.webp';
 import startedImg from './img/started.webp';
 import obtainingImg from './img/obtaining-qort.jpg';
+import { useTranslation } from 'react-i18next';
 
 const checkIfGatewayIsOnline = async () => {
   try {
@@ -27,9 +28,11 @@ const checkIfGatewayIsOnline = async () => {
     return false;
   }
 };
+
 export const useHandleTutorials = () => {
   const [openTutorialModal, setOpenTutorialModal] = useState<any>(null);
   const [shownTutorials, setShowTutorials] = useState(null);
+  const { t } = useTranslation(['core', 'tutorial']);
 
   useEffect(() => {
     try {
@@ -104,7 +107,9 @@ export const useHandleTutorials = () => {
               setOpenTutorialModal({
                 multi: [
                   {
-                    title: '1. Getting Started',
+                    title: t('tutorial:1_getting_started', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',
@@ -113,7 +118,9 @@ export const useHandleTutorials = () => {
                     },
                   },
                   {
-                    title: '2. Overview',
+                    title: t('tutorial:2_overview', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',
@@ -122,7 +129,9 @@ export const useHandleTutorials = () => {
                     },
                   },
                   {
-                    title: '3. Qortal Groups',
+                    title: t('tutorial:3_groups', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',
@@ -131,7 +140,9 @@ export const useHandleTutorials = () => {
                     },
                   },
                   {
-                    title: '4. Obtaining Qort',
+                    title: t('tutorial:4_obtain_qort', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',
@@ -151,7 +162,9 @@ export const useHandleTutorials = () => {
               setOpenTutorialModal({
                 multi: [
                   {
-                    title: '1. Apps Dashboard',
+                    title: t('tutorial:apps.dashboard', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',
@@ -160,7 +173,9 @@ export const useHandleTutorials = () => {
                     },
                   },
                   {
-                    title: '2. Apps Navigation',
+                    title: t('tutorial:apps.navigation', {
+                      postProcess: 'capitalize',
+                    }),
                     resource: {
                       name: 'a-test',
                       service: 'VIDEO',

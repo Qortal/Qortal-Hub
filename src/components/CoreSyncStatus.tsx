@@ -5,11 +5,14 @@ import syncingImg from '../assets/syncStatus/syncing.png';
 import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
   const [coreInfos, setCoreInfos] = useState({});
   const [isUsingGateway, setIsUsingGateway] = useState(false);
+
+  const { t } = useTranslation(['auth', 'core']);
   const theme = useTheme();
 
   useEffect(() => {
@@ -72,25 +75,25 @@ export const CoreSyncStatus = () => {
       : '';
 
     let imagePath = syncingImg;
-    let message = `Synchronizing`;
+    let message = t('core:status.synchronizing', { postProcess: 'capitalize' });
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
-      message = `${isSynchronizing ? 'Synchronizing' : 'Synchronized'} ${'(Minting)'}`;
+      message = `${t(`core:result.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalize' })} ${t('core:result.status.minting')}`;
     } else if (isSynchronizing === true && syncPercent === 99) {
       imagePath = syncingImg;
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `Synchronizing ${isUsingGateway ? '' : '(Not Minting)'}`;
+      message = `${t('core:result.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.not_minting') : ''}`;
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncedImg;
-      message = `Synchronized ${isUsingGateway ? '' : '(Not Minting)'}`;
+      message = `${t('core:result.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.not_minting') : ''}`;
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `Synchronizing ${isUsingGateway ? '' : '(Minting)'}`;
+      message = `${t('core:result.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.minting') : ''}`;
     } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
-      message = `Synchronized ${isUsingGateway ? '' : '(Minting)'}`;
+      message = `${t('core:result.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.minting') : ''}`;
     }
 
     return (
@@ -115,24 +118,24 @@ export const CoreSyncStatus = () => {
             top: '10px',
           }}
         >
-          <h3>Core Information</h3>
+          <h3>{t('core:core.information', { postProcess: 'capitalize' })}</h3>
           <h4 className="lineHeight">
-            Core Version:{' '}
+            {t('core:core.version', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
           </h4>
           <h4 className="lineHeight">{message}</h4>
           <h4 className="lineHeight">
-            Block Height:{' '}
+            {t('core:core.block_height', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{height || ''}</span>
           </h4>
           <h4 className="lineHeight">
-            Connected Peers:{' '}
+            {t('core:core.peers', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {numberOfConnections || ''}
             </span>
           </h4>
           <h4 className="lineHeight">
-            Using public node:{' '}
+            {t('auth:node.using_public', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {isUsingGateway?.toString()}
             </span>

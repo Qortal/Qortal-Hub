@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
-import EmailIcon from '@mui/icons-material/Email';
 import { useRecoilState } from 'recoil';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
 import { isLessThanOneWeekOld } from './Group/QMailMessages';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 export const QMailStatus = () => {
+  const { t } = useTranslation(['core']);
   const theme = useTheme();
 
   const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(
@@ -63,7 +64,9 @@ export const QMailStatus = () => {
               fontWeight: 700,
             }}
           >
-            Q-MAIL
+            {t('core:q_mail', {
+              postProcess: 'capitalize',
+            })}
           </span>
         }
         placement="left"
