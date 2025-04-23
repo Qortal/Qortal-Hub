@@ -12,6 +12,8 @@
   },
   "description": "description",
   "edit": "edit",
+  "export": "export",
+  "import": "import",
   "last_height": "last height",
   "loading": "loading...",
   "logout": "logout",
@@ -36,8 +38,20 @@
     }
   },
   "save_options": {
+    "no_pinned_changes": "you currently do not have any changes to your pinned apps",
+    "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
+    "overwrite_qdn": "overwrite to QDN",
     "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
-    "save": "save"
+    "qdn": "use QDN saving",
+    "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
+    "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
+    "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
+    "revert_default": "revert to default",
+    "revert_qdn": "revert to QDN",
+    "save_qdn": "save to QDN",
+    "save": "save",
+    "settings": "you are using the export/import way of saving settings.",
+    "unsaved_changes": " You have unsaved changes to your pinned apps. Save them to QDN."
   },
   "settings": "settings",
   "supply": "supply",

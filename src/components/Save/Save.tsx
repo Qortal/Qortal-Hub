@@ -281,9 +281,10 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   fontSize: '14px',
                 }}
               >
-                You are using the export/import way of saving settings.
+                {t('core:save_options.settings', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>{' '}
-              // TODO: translate
               <Spacer height="40px" />
               <Button
                 size="small"
@@ -309,7 +310,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   },
                 }}
               >
-                Use QDN saving
+                {t('core:save_options.qdn', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </Box>
           </Box>
@@ -338,8 +341,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     fontSize: '14px',
                   }}
                 >
-                  You need a registered Qortal name to save your pinned apps to
-                  QDN.
+                  {t('core:save_options.register_name', {
+                    postProcess: 'capitalize',
+                  })}
                 </Typography>
               </Box>
             ) : (
@@ -358,8 +362,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         fontSize: '14px',
                       }}
                     >
-                      You have unsaved changes to your pinned apps. Save them to
-                      QDN.
+                      {t('core:save_options.unsaved_changes', {
+                        postProcess: 'capitalize',
+                      })}
                     </Typography>
 
                     <Spacer height="10px" />
@@ -381,7 +386,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                       onClick={saveToQdn}
                       variant="contained"
                     >
-                      Save to QDN
+                      {t('core:save_options.save_qdn', {
+                        postProcess: 'capitalize',
+                      })}
                     </LoadingButton>
                     <Spacer height="20px" />
                     {!isNaN(settingsQdnLastUpdated) &&
@@ -392,8 +399,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               fontSize: '14px',
                             }}
                           >
-                            Don't like your current local changes? Would you
-                            like to reset to your saved QDN pinned apps?
+                            {t('core:save_options.reset_qdn', {
+                              postProcess: 'capitalize',
+                            })}
                           </Typography>
                           <Spacer height="10px" />
                           <LoadingButton
@@ -413,7 +421,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               },
                             }}
                           >
-                            Revert to QDN
+                            {t('core:save_options.revert_qdn', {
+                              postProcess: 'capitalize',
+                            })}
                           </LoadingButton>
                         </>
                       )}
@@ -425,8 +435,10 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               fontSize: '14px',
                             }}
                           >
-                            Don't like your current local changes? Would you
-                            like to reset to the default pinned apps?
+                            {' '}
+                            {t('core:save_options.reset_pinned', {
+                              postProcess: 'capitalize',
+                            })}
                           </Typography>
                           <Spacer height="10px" />
                           <LoadingButton
@@ -434,7 +446,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             onClick={revertChanges}
                             variant="contained"
                           >
-                            Revert to default
+                            {t('core:save_options.revert_default', {
+                              postProcess: 'capitalize',
+                            })}
                           </LoadingButton>
                         </>
                       )}
@@ -456,8 +470,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                           fontSize: '14px',
                         }}
                       >
-                        The app was unable to download your existing QDN-saved
-                        pinned apps. Would you like to overwrite those changes?
+                        {t('core:save_options.overwrite_changes', {
+                          postProcess: 'capitalize',
+                        })}
                       </Typography>
                       <Spacer height="10px" />
                       <LoadingButton
@@ -477,7 +492,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                           },
                         }}
                       >
-                        Overwrite to QDN
+                        {t('core:save_options.overwrite_qdn', {
+                          postProcess: 'capitalize',
+                        })}
                       </LoadingButton>
                     </Box>
                   )}
@@ -495,7 +512,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         fontSize: '14px',
                       }}
                     >
-                      You currently do not have any changes to your pinned apps
+                      {t('core:save_options.no_pinned_changes', {
+                        postProcess: 'capitalize',
+                      })}
                     </Typography>
                   </Box>
                 )}
@@ -550,7 +569,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              Import
+              {t('core:import', {
+                postProcess: 'capitalize',
+              })}
             </ButtonBase>
 
             <ButtonBase
@@ -573,7 +594,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              Export
+              {t('core:export', {
+                postProcess: 'capitalize',
+              })}
             </ButtonBase>
           </Box>
         </Box>
