@@ -139,7 +139,7 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <ThemeSelector style={{ position: 'fixed', bottom: '1%' }} />
+      <ThemeSelector />
     </Box>
   );
 };
