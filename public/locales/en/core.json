@@ -1,9 +1,16 @@
 {
-  "add": "add",
-  "cancel": "cancel",
-  "choose": "choose",
-  "close": "close",
-  "continue": "continue",
+  "action": {
+    "add": "add",
+    "cancel": "cancel",
+    "change": "change",
+    "choose": "choose",
+    "close": "close",
+    "continue": "continue",
+    "edit": "edit",
+    "export": "export",
+    "import": "import",
+    "logout": "logout"
+  },
   "core": {
     "block_height": "block height",
     "information": "core information",
@@ -11,12 +18,8 @@
     "version": "core version"
   },
   "description": "description",
-  "edit": "edit",
-  "export": "export",
-  "import": "import",
   "last_height": "last height",
   "loading": "loading...",
-  "logout": "logout",
   "minting_status": "minting status",
   "page": {
     "last": "last"
