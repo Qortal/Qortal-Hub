@@ -136,6 +136,7 @@ import { QortPayment } from './components/QortPayment';
 import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
 import ThemeSelector from './components/Theme/ThemeSelector.tsx';
+import { useTranslation } from 'react-i18next';
 
 type extStates =
   | 'not-authenticated'
@@ -316,6 +317,8 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
+
+  const { t } = useTranslation(['auth', 'core']);
   const theme = useTheme();
 
   const [
@@ -1550,9 +1553,10 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    LOGOUT
+                    {t('core:logout')}
                   </span>
                 }
                 placement="left"
@@ -1589,9 +1593,10 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    SETTINGS
+                    {t('core:settings')}
                   </span>
                 }
                 placement="left"
@@ -1628,9 +1633,10 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    USER LOOKUP
+                    {t('core:user_lookup')}
                   </span>
                 }
                 placement="left"
@@ -1667,9 +1673,10 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    WALLETS
+                    {t('core:wallet_other')}
                   </span>
                 }
                 placement="left"
@@ -1703,9 +1710,10 @@ function App() {
                       style={{
                         fontSize: '14px',
                         fontWeight: 700,
+                        textTransform: 'uppercase',
                       }}
                     >
-                      YOUR ACCOUNT
+                      {t('auth:account.your')}
                     </span>
                   }
                   placement="left"
@@ -1813,9 +1821,10 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    MINTING STATUS
+                    {t('core:minting_status')}
                   </span>
                 }
                 placement="left"
@@ -1857,9 +1866,10 @@ function App() {
                       style={{
                         fontSize: '14px',
                         fontWeight: 700,
+                        textTransform: 'uppercase',
                       }}
                     >
-                      TUTORIAL
+                      {t('core:tutorial')}
                     </span>
                   }
                   placement="left"
@@ -1894,8 +1904,14 @@ function App() {
             >
               <Tooltip
                 title={
-                  <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                    BACKUP WALLET
+                  <span
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t('core:backup_wallet')}
                   </span>
                 }
                 placement="left"
@@ -2083,6 +2099,7 @@ function App() {
                 {messageQortalRequest?.text1}
               </TextP>
             </Box>
+
             {messageQortalRequest?.text2 && (
               <>
                 <Spacer height="10px" />
@@ -2124,6 +2141,7 @@ function App() {
                   >
                     {messageQortalRequest?.text3}
                   </TextP>
+
                   <Spacer height="15px" />
                 </Box>
               </>
@@ -2158,11 +2176,11 @@ function App() {
 
             <TextP
               sx={{
-                textAlign: 'center',
-                lineHeight: 1.2,
                 fontSize: '16px',
                 fontWeight: 700,
+                lineHeight: 1.2,
                 maxWidth: '90%',
+                textAlign: 'center',
               }}
             >
               {messageQortalRequest?.highlightedText}
@@ -2379,17 +2397,7 @@ function App() {
             >
               {sendqortState?.amount} QORT
             </TextP>
-            {/* <Spacer height="29px" />
 
-          <CustomLabel htmlFor="standard-adornment-password">
-            Confirm Wallet Password
-          </CustomLabel>
-          <Spacer height="5px" />
-          <PasswordField
-            id="standard-adornment-password"
-            value={paymentPassword}
-            onChange={(e) => setPaymentPassword(e.target.value)}
-          /> */}
             <Spacer height="29px" />
             <Box
               sx={{
@@ -2529,7 +2537,7 @@ function App() {
                 setExtstate('create-wallet');
               }}
             >
-              Create account
+              {t('auth:create_account', { postProcess: 'capitalize' })}
             </CustomButton>
           </>
         )}
@@ -2624,7 +2632,7 @@ function App() {
                   fontWeight: 600,
                 }}
               >
-                Authenticate
+                {t('auth:authenticate', { postProcess: 'capitalize' })}
               </TextP>
             </Box>
 
@@ -2632,7 +2640,7 @@ function App() {
 
             <>
               <CustomLabel htmlFor="standard-adornment-password">
-                Wallet Password
+                {t('auth:wallet.password', { postProcess: 'capitalize' })}
               </CustomLabel>
 
               <Spacer height="5px" />
@@ -2656,7 +2664,8 @@ function App() {
                       fontSize: '12px',
                     }}
                   >
-                    {'Using node: '} {currentNode?.url}
+                    {t('auth:node.using', { postProcess: 'capitalize' })}:{' '}
+                    {currentNode?.url}
                   </Typography>
                 </>
               ) : (
@@ -2667,7 +2676,7 @@ function App() {
                       fontSize: '12px',
                     }}
                   >
-                    {'Using public node'}
+                    {t('auth:node.using_public', { postProcess: 'capitalize' })}
                   </Typography>
                 </>
               )}
@@ -2675,7 +2684,7 @@ function App() {
               <Spacer height="20px" />
 
               <CustomButton onClick={authenticateWallet}>
-                Authenticate
+                {t('auth:authenticate', { postProcess: 'capitalize' })}
               </CustomButton>
 
               <ErrorText>{walletToBeDecryptedError}</ErrorText>
@@ -2703,7 +2712,9 @@ function App() {
                 onClick={returnToMain}
               />
             </Box>
+
             <Spacer height="10px" />
+
             <div
               className="image-container"
               style={{
@@ -2731,7 +2742,7 @@ function App() {
                   fontWeight: 600,
                 }}
               >
-                Download Account
+                {t('auth:download_account', { postProcess: 'capitalize' })}
               </TextP>
             </Box>
 
@@ -2740,9 +2751,13 @@ function App() {
             {!walletToBeDownloaded && (
               <>
                 <CustomLabel htmlFor="standard-adornment-password">
-                  Confirm Wallet Password
+                  {t('auth:wallet.password_confirmation', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomLabel>
+
                 <Spacer height="5px" />
+
                 <PasswordField
                   id="standard-adornment-password"
                   value={walletToBeDownloadedPassword}
@@ -2750,9 +2765,13 @@ function App() {
                     setWalletToBeDownloadedPassword(e.target.value)
                   }
                 />
+
                 <Spacer height="20px" />
+
                 <CustomButton onClick={confirmPasswordToDownload}>
-                  Confirm password
+                  {t('auth:password_confirmation', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButton>
                 <ErrorText>{walletToBeDownloadedError}</ErrorText>
               </>
@@ -2764,11 +2783,15 @@ function App() {
                   onClick={async () => {
                     await saveFileToDiskFunc();
                     await showInfo({
-                      message: `Keep your account file secure.`,
+                      message: t('auth:keep_secure', {
+                        postProcess: 'capitalize',
+                      }),
                     });
                   }}
                 >
-                  Download account
+                  {t('auth:download_account', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButton>
               </>
             )}
@@ -3024,7 +3047,7 @@ function App() {
                   <Spacer height="17px" />
 
                   <CustomButton onClick={createAccountFunc}>
-                    Create Account
+                    {t('auth:create_account', { postProcess: 'capitalize' })}
                   </CustomButton>
                 </Box>
                 <ErrorText>{walletToBeDownloadedError}</ErrorText>

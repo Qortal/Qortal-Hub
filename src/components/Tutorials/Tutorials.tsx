@@ -13,11 +13,13 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { VideoPlayer } from '../Embeds/VideoPlayer';
+import { useTranslation } from 'react-i18next';
 
 export const Tutorials = () => {
   const { openTutorialModal, setOpenTutorialModal } = useContext(GlobalContext);
   const [multiNumber, setMultiNumber] = useState(0);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'tutorial']);
 
   const handleClose = () => {
     setOpenTutorialModal(null);
@@ -61,9 +63,7 @@ export const Tutorials = () => {
           })}
         </Tabs>
 
-        <DialogTitle sx={{ m: 0, p: 2 }}>
-          {selectedTutorial?.title} {` Tutorial`}
-        </DialogTitle>
+        <DialogTitle sx={{ m: 0, p: 2 }}>{selectedTutorial?.title}</DialogTitle>
 
         <IconButton
           aria-label="close"
@@ -91,7 +91,7 @@ export const Tutorials = () => {
         </DialogContent>
         <DialogActions>
           <Button variant="contained" onClick={handleClose}>
-            Close
+            {t('core:close', { postProcess: 'capitalize' })}
           </Button>
         </DialogActions>
       </Dialog>
@@ -138,7 +138,7 @@ export const Tutorials = () => {
 
         <DialogActions>
           <Button variant="contained" onClick={handleClose}>
-            Close
+            {t('core:close', { postProcess: 'capitalize' })}
           </Button>
         </DialogActions>
       </Dialog>

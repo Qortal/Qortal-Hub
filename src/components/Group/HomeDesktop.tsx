@@ -1,16 +1,16 @@
-import { Box, Button, Divider, Typography } from "@mui/material";
-import React from "react";
-import { Spacer } from "../../common/Spacer";
-import { ListOfThreadPostsWatched } from "./ListOfThreadPostsWatched";
-import { ThingsToDoInitial } from "./ThingsToDoInitial";
-import { GroupJoinRequests } from "./GroupJoinRequests";
-import { GroupInvites } from "./GroupInvites";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import { ListOfGroupPromotions } from "./ListOfGroupPromotions";
-import { QortPrice } from "../Home/QortPrice";
-import ExploreIcon from "@mui/icons-material/Explore";
-import { Explore } from "../Explore/Explore";
-import { NewUsersCTA } from "../Home/NewUsersCTA";
+import { Box, Divider, Typography, useTheme } from '@mui/material';
+import React from 'react';
+import { Spacer } from '../../common/Spacer';
+import { ThingsToDoInitial } from './ThingsToDoInitial';
+import { GroupJoinRequests } from './GroupJoinRequests';
+import { GroupInvites } from './GroupInvites';
+import { ListOfGroupPromotions } from './ListOfGroupPromotions';
+import { QortPrice } from '../Home/QortPrice';
+import ExploreIcon from '@mui/icons-material/Explore';
+import { Explore } from '../Explore/Explore';
+import { NewUsersCTA } from '../Home/NewUsersCTA';
+import { useTranslation } from 'react-i18next';
+
 export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
@@ -30,93 +30,97 @@ export const HomeDesktop = ({
 }) => {
   const [checked1, setChecked1] = React.useState(false);
   const [checked2, setChecked2] = React.useState(false);
-  React.useEffect(() => {
-      if (balance && +balance >= 6) {
-        setChecked1(true);
-      }
-    }, [balance]);
-  
-  
-    React.useEffect(() => {
-      if (name) setChecked2(true);
-    }, [name]);
-  
-  
-    const isLoaded = React.useMemo(()=> {
-        if(userInfo !== null) return true
-      return false
-    }, [ userInfo])
-  
-    const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(()=> {
-      if(isLoaded && checked1 && checked2) return true
-    return false
-  }, [checked1, isLoaded, checked2])
 
- 
+  const { t } = useTranslation(['core']);
+  const theme = useTheme();
+
+  React.useEffect(() => {
+    if (balance && +balance >= 6) {
+      setChecked1(true);
+    }
+  }, [balance]);
+
+  React.useEffect(() => {
+    if (name) setChecked2(true);
+  }, [name]);
+
+  const isLoaded = React.useMemo(() => {
+    if (userInfo !== null) return true;
+    return false;
+  }, [userInfo]);
+
+  const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(() => {
+    if (isLoaded && checked1 && checked2) return true;
+    return false;
+  }, [checked1, isLoaded, checked2]);
+
   return (
     <Box
       sx={{
-        display: desktopViewMode === "home" ? "flex" : "none",
-        width: "100%",
-        flexDirection: "column",
-        height: "100%",
-        overflow: "auto",
-        alignItems: "center",
+        alignItems: 'center',
+        display: desktopViewMode === 'home' ? 'flex' : 'none',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'auto',
+        width: '100%',
       }}
     >
       <Spacer height="20px" />
+
       <Box
         sx={{
-          display: "flex",
-          width: "100%",
-          flexDirection: "column",
-          height: "100%",
-          alignItems: "flex-start",
-          maxWidth: "1036px",
+          alignItems: 'flex-start',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          maxWidth: '1036px',
+          width: '100%',
         }}
       >
         <Typography
           sx={{
-            color: "rgba(255, 255, 255, 1)",
+            color: theme.palette.text.primary,
             fontWeight: 400,
-            fontSize: userInfo?.name?.length > 15 ? "16px" : "20px",
-            padding: "10px",
+            fontSize: userInfo?.name?.length > 15 ? '16px' : '20px',
+            padding: '10px',
           }}
         >
-          Welcome
+          {t('core:welcome', { postProcess: 'capitalize' })}
           {userInfo?.name ? (
             <span
               style={{
-                fontStyle: "italic",
+                fontStyle: 'italic',
               }}
             >{`, ${userInfo?.name}`}</span>
           ) : null}
         </Typography>
+
         <Spacer height="30px" />
+
         {!isLoadingGroups && (
           <Box
             sx={{
-              display: "flex",
-              gap: "20px",
-              flexWrap: "wrap",
-              width: "100%",
-              justifyContent: "center",
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '20px',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <Box
               sx={{
-                display: "flex",
-                gap: "20px",
-                flexWrap: "wrap",
-                flexDirection: "column",
+                display: 'flex',
+                flexDirection: 'column',
+                flexWrap: 'wrap',
+                gap: '20px',
               }}
             >
               <Box
                 sx={{
-                  width: "330px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  width: '330px',
                 }}
               >
                 <ThingsToDoInitial
@@ -125,12 +129,12 @@ export const HomeDesktop = ({
                   name={userInfo?.name}
                   userInfo={userInfo}
                   hasGroups={
-                    groups?.filter((item) => item?.groupId !== "0").length !== 0
+                    groups?.filter((item) => item?.groupId !== '0').length !== 0
                   }
                 />
               </Box>
-           
-              {desktopViewMode === "home" && (
+
+              {desktopViewMode === 'home' && (
                 <>
                   {/* <Box sx={{
             width: '330px',
@@ -140,107 +144,104 @@ export const HomeDesktop = ({
           }}>
           <ListOfThreadPostsWatched />
           </Box> */}
-              {hasDoneNameAndBalanceAndIsLoaded && (
-                <>
- <Box
-                    sx={{
-                      width: "330px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <GroupJoinRequests
-                      setGroupSection={setGroupSection}
-                      setSelectedGroup={setSelectedGroup}
-                      getTimestampEnterChat={getTimestampEnterChat}
-                      setOpenManageMembers={setOpenManageMembers}
-                      myAddress={myAddress}
-                      groups={groups}
-                      setMobileViewMode={setMobileViewMode}
-                      setDesktopViewMode={setDesktopViewMode}
-                    />
-                  </Box>
-                  <Box
-                    sx={{
-                      width: "330px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <GroupInvites
-                      setOpenAddGroup={setOpenAddGroup}
-                      myAddress={myAddress}
-                      groups={groups}
-                      setMobileViewMode={setMobileViewMode}
-                    />
-                  </Box>
-                </>
-              )}
-                 
+                  {hasDoneNameAndBalanceAndIsLoaded && (
+                    <>
+                      <Box
+                        sx={{
+                          alignItems: 'center',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          width: '330px',
+                        }}
+                      >
+                        <GroupJoinRequests
+                          setGroupSection={setGroupSection}
+                          setSelectedGroup={setSelectedGroup}
+                          getTimestampEnterChat={getTimestampEnterChat}
+                          setOpenManageMembers={setOpenManageMembers}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                          setDesktopViewMode={setDesktopViewMode}
+                        />
+                      </Box>
+
+                      <Box
+                        sx={{
+                          alignItems: 'center',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          width: '330px',
+                        }}
+                      >
+                        <GroupInvites
+                          setOpenAddGroup={setOpenAddGroup}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                        />
+                      </Box>
+                    </>
+                  )}
                 </>
               )}
             </Box>
             <QortPrice />
           </Box>
         )}
-      
+
         {!isLoadingGroups && (
           <>
             <Spacer height="60px" />
-        <Divider
-          color="secondary"
-          sx={{
-            width: "100%",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              gap: "10px",
-              alignItems: "center",
-            }}
-          >
-            <ExploreIcon
+
+            <Divider
+              color="secondary"
               sx={{
-                color: "white",
-              }}
-            />{" "}
-            <Typography
-              sx={{
-                fontSize: "1rem",
+                width: '100%',
               }}
             >
-              Explore
-            </Typography>{" "}
-          </Box>
-        </Divider>
-        {!hasDoneNameAndBalanceAndIsLoaded && (
-            <Spacer height="40px" />
-          )}
-          <Box
-            sx={{
-              display: "flex",
-              gap: "20px",
-              flexWrap: "wrap",
-              width: "100%",
-              justifyContent: "center",
-            }}
-          >
-          {hasDoneNameAndBalanceAndIsLoaded && (
-                        <ListOfGroupPromotions />
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: '10px',
+                }}
+              >
+                <ExploreIcon
+                  sx={{
+                    ccolor: theme.palette.text.primary,
+                  }}
+                />{' '}
+                <Typography
+                  sx={{
+                    fontSize: '1rem',
+                  }}
+                >
+                  {t('tutorial:initial.explore', { postProcess: 'capitalize' })}
+                </Typography>{' '}
+              </Box>
+            </Divider>
 
-          )}
-           
-            <Explore setDesktopViewMode={setDesktopViewMode} />
-          </Box>
-        
-          <NewUsersCTA balance={balance} />
+            {!hasDoneNameAndBalanceAndIsLoaded && <Spacer height="40px" />}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '20px',
+                justifyContent: 'center',
+                width: '100%',
+              }}
+            >
+              {hasDoneNameAndBalanceAndIsLoaded && <ListOfGroupPromotions />}
+
+              <Explore setDesktopViewMode={setDesktopViewMode} />
+            </Box>
+
+            <NewUsersCTA balance={balance} />
           </>
-          
         )}
       </Box>
+
       <Spacer height="26px" />
 
       {/* <Box

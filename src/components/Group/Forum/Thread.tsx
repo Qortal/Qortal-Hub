@@ -467,6 +467,7 @@ export const Thread = ({
         }
         setMessages(fullArrayMsg);
       } catch (error) {
+        console.log(error);
       } finally {
       }
     },
@@ -700,7 +701,7 @@ export const Thread = ({
                 );
               }}
               disabled={!hasPreviousPage}
-              variant="contained"
+              variant="contained" // TODO translate
             >
               Previous
             </Button>

@@ -1,0 +1,71 @@
+{
+  "add": "aggiungi",
+  "cancel": "annulla",
+  "choose": "scegli",
+  "close": "chiudi",
+  "continue": "continua",
+  "core": {
+    "block_height": "altezza del blocco",
+    "information": "informazioni core",
+    "peers": "peer connessi",
+    "version": "versione core"
+  },
+  "description": "descrizione",
+  "edit": "modifica",
+  "export": "esporta",
+  "import": "importa",
+  "last_height": "ultima altezza",
+  "loading": "caricamento...",
+  "logout": "disconnetti",
+  "minting_status": "stato del conio",
+  "payment_notification": "notifica di pagamento",
+  "price": "prezzo",
+  "q_mail": "q-mail",
+  "result": {
+    "error": {
+      "generic": "si è verificato un errore",
+      "incorrect_password": "password errata",
+      "save_qdn": "impossibile salvare su QDN"
+    },
+    "status": {
+      "minting": "(conio in corso)",
+      "not_minting": "(conio non attivo)",
+      "synchronized": "sincronizzato",
+      "synchronizing": "sincronizzazione in corso"
+    },
+    "success": {
+      "publish_qdn": "pubblicato con successo su QDN"
+    }
+  },
+  "save_options": {
+    "no_pinned_changes": "attualmente non hai modifiche alle tue app appuntate",
+    "overwrite_changes": "l'app non è riuscita a scaricare le tue app appuntate salvate su QDN. Vuoi sovrascrivere queste modifiche?",
+    "overwrite_qdn": "sovrascrivi su QDN",
+    "publish_qdn": "vuoi pubblicare le tue impostazioni su QDN (crittografate)?",
+    "qdn": "usa il salvataggio QDN",
+    "register_name": "hai bisogno di un nome Qortal registrato per salvare le tue app appuntate su QDN.",
+    "reset_pinned": "non ti piacciono le modifiche locali attuali? Vuoi ripristinare le app appuntate predefinite?",
+    "reset_qdn": "non ti piacciono le modifiche locali attuali? Vuoi ripristinare le tue app appuntate salvate su QDN?",
+    "revert_default": "ripristina predefinite",
+    "revert_qdn": "ripristina da QDN",
+    "save_qdn": "salva su QDN",
+    "save": "salva",
+    "settings": "stai utilizzando il metodo esporta/importa per salvare le impostazioni.",
+    "unsaved_changes": "hai modifiche non salvate alle tue app appuntate. Salvale su QDN."
+  },
+  "settings": "impostazioni",
+  "supply": "offerta",
+  "theme": {
+    "dark": "modalità scura",
+    "light": "modalità chiara"
+  },
+  "title": "titolo",
+  "tutorial": "tutorial",
+  "user_lookup": "ricerca utente",
+  "wallet": {
+    "backup_wallet": "backup portafoglio",
+    "wallet": "portafoglio",
+    "wallet_other": "portafogli"
+  },
+  "welcome": "benvenuto"
+}

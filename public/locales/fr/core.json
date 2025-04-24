@@ -1,0 +1,71 @@
+{
+  "add": "ajouter",
+  "cancel": "annuler",
+  "choose": "choisir",
+  "close": "fermer",
+  "continue": "continuer",
+  "core": {
+    "block_height": "hauteur de bloc",
+    "information": "informations du noyau",
+    "peers": "pairs connectés",
+    "version": "version du noyau"
+  },
+  "description": "description",
+  "edit": "éditer",
+  "export": "exporter",
+  "import": "importer",
+  "last_height": "dernière hauteur",
+  "loading": "chargement...",
+  "logout": "se déconnecter",
+  "minting_status": "statut de frappe",
+  "payment_notification": "notification de paiement",
+  "price": "prix",
+  "q_mail": "q-mail",
+  "result": {
+    "error": {
+      "generic": "une erreur s'est produite",
+      "incorrect_password": "mot de passe incorrect",
+      "save_qdn": "impossible d'enregistrer dans QDN"
+    },
+    "status": {
+      "minting": "(frappe en cours)",
+      "not_minting": "(pas de frappe)",
+      "synchronized": "synchronisé",
+      "synchronizing": "synchronisation en cours"
+    },
+    "success": {
+      "publish_qdn": "publié avec succès dans QDN"
+    }
+  },
+  "save_options": {
+    "no_pinned_changes": "vous n'avez actuellement aucune modification de vos applications épinglées",
+    "overwrite_changes": "l'application n'a pas pu télécharger vos applications épinglées existantes enregistrées dans QDN. Voulez-vous écraser ces modifications ?",
+    "overwrite_qdn": "écraser dans QDN",
+    "publish_qdn": "souhaitez-vous publier vos paramètres dans QDN (chiffré) ?",
+    "qdn": "utiliser l'enregistrement QDN",
+    "register_name": "vous devez avoir un nom Qortal enregistré pour enregistrer vos applications épinglées dans QDN.",
+    "reset_pinned": "vous n'aimez pas vos modifications locales actuelles ? Voulez-vous réinitialiser les applications épinglées par défaut ?",
+    "reset_qdn": "vous n'aimez pas vos modifications locales actuelles ? Voulez-vous réinitialiser vos applications épinglées enregistrées dans QDN ?",
+    "revert_default": "revenir aux paramètres par défaut",
+    "revert_qdn": "revenir à QDN",
+    "save_qdn": "enregistrer dans QDN",
+    "save": "enregistrer",
+    "settings": "vous utilisez la méthode d'exportation/importation pour enregistrer les paramètres.",
+    "unsaved_changes": "vous avez des modifications non enregistrées de vos applications épinglées. Enregistrez-les dans QDN."
+  },
+  "settings": "paramètres",
+  "supply": "approvisionnement",
+  "theme": {
+    "dark": "mode sombre",
+    "light": "mode clair"
+  },
+  "title": "titre",
+  "tutorial": "tutoriel",
+  "user_lookup": "recherche d'utilisateur",
+  "wallet": {
+    "backup_wallet": "sauvegarder le portefeuille",
+    "wallet": "portefeuille",
+    "wallet_other": "portefeuilles"
+  },
+  "welcome": "bienvenue"
+}

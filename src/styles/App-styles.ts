@@ -130,10 +130,10 @@ export const CustomButton = styled(Box)(({ theme }) => ({
   transition: 'all 0.2s',
   width: 'fit-content',
   '&:hover': {
-    backgroundColor: theme.palette.background.default,
-    color: '#fff',
+    backgroundColor: theme.palette.background.paper,
+    color: theme.palette.text.secondary,
     'svg path': {
-      fill: '#fff',
+      fill: theme.palette.background.paper,
     },
   },
 }));

@@ -230,7 +230,7 @@ export const ListOfGroupPromotions = () => {
           .catch((error) => {
             rej(error.message || 'An error occurred');
           });
-      });
+      }); // TODO translate
       setInfoSnack({
         type: 'success',
         message:

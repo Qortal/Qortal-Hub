@@ -69,7 +69,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
         <Typography
           sx={{
             fontSize: '1rem',
-          }}
+          }} // TODO translate
         >
           Group Invites{' '}
           {groupsWithJoinRequests?.length > 0 &&

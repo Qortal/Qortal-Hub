@@ -45,7 +45,6 @@ import { formatDate, formatTimestamp } from '../../../utils/time';
 import LazyLoad from '../../../common/LazyLoad';
 import { delay } from '../../../utils/helpers';
 import { NewThread } from './NewThread';
-import { getBaseApi } from '../../../background';
 import {
   decryptPublishes,
   getTempPublish,
@@ -55,15 +54,11 @@ import CheckSVG from '../../../assets/svgs/Check.svg';
 import SortSVG from '../../../assets/svgs/Sort.svg';
 import ArrowDownSVG from '../../../assets/svgs/ArrowDown.svg';
 import { LoadingSnackbar } from '../../Snackbar/LoadingSnackbar';
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../../../utils/events';
+import { executeEvent } from '../../../utils/events';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../../App';
-import { WrapperUserAction } from '../../WrapperUserAction';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
+
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 
 export const threadIdentifier = 'DOCUMENT';
@@ -183,7 +178,7 @@ export const GroupMail = ({
           });
       });
     } catch (error) {
-    } finally {
+      console.log(error);
     }
   };
 
@@ -266,7 +261,6 @@ export const GroupMail = ({
         } else {
           sorted = fullArrayMsg.sort((a: any, b: any) => a.created - b.created);
         }
-
         setAllThreads(sorted);
       } catch (error) {
         console.log({ error });
@@ -376,6 +370,7 @@ export const GroupMail = ({
         );
         setRecentThreads(sorted);
       } catch (error) {
+        console.log(error);
       } finally {
         setIsLoading(false);
         // dispatch(setIsLoadingCustom(null));
@@ -444,7 +439,6 @@ export const GroupMail = ({
           }
         }
       }
-
       setMembers(members);
     } catch (error) {
       console.log({ error });
@@ -754,7 +748,9 @@ export const GroupMail = ({
                   >
                     {thread?.threadData?.title}
                   </ThreadSingleTitle>
+
                   <Spacer height="10px" />
+
                   {filterMode === 'Recently active' && (
                     <div
                       style={{
@@ -799,7 +795,7 @@ export const GroupMail = ({
                     sx={{
                       color: 'white',
                       fontSize: '12px',
-                    }}
+                    }} // TODO translate
                   >
                     Last page
                   </Typography>

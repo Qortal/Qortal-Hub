@@ -79,7 +79,7 @@ export const Settings = ({ address, open, setOpen }) => {
         if (response?.error) {
           console.error('Error adding user settings:', response.error);
         } else {
-          console.log('User settings added successfully');
+          console.log('User settings added successfully'); // TODO translate
         }
       })
       .catch((error) => {

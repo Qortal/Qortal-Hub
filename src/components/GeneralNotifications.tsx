@@ -14,6 +14,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { formatDate } from '../utils/time';
 import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
 import { executeEvent } from '../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const GeneralNotifications = ({ address }) => {
   const [anchorEl, setAnchorEl] = useState(null);
@@ -31,6 +32,7 @@ export const GeneralNotifications = ({ address }) => {
     setAnchorEl(event.currentTarget);
   };
 
+  const { t } = useTranslation(['core']);
   const theme = useTheme();
 
   return (
@@ -48,9 +50,10 @@ export const GeneralNotifications = ({ address }) => {
                 color: theme.palette.text.primary,
                 fontSize: '14px',
                 fontWeight: 700,
+                textTransform: 'uppercase',
               }}
             >
-              PAYMENT NOTIFICATION
+              {t('core:payment_notification')}
             </span>
           }
           placement="left"

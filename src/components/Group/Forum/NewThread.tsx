@@ -191,7 +191,7 @@ export const NewThread = ({
       }
       if (!groupInfo) {
         errorMsg = 'Cannot access group information';
-      }
+      } // TODO translate
 
       // if (!description) missingFields.push('subject')
       if (missingFields.length > 0) {
