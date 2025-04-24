@@ -2079,7 +2079,6 @@ function App() {
             />
           </Box>
         )}
-
         {isShowQortalRequest && !isMainWindow && (
           <>
             <Spacer height="120px" />
@@ -2362,7 +2361,6 @@ function App() {
             <ErrorText>{sendPaymentError}</ErrorText>
           </>
         )}
-
         {extState === 'web-app-request-payment' && !isMainWindow && (
           <>
             <Spacer height="100px" />
@@ -3176,8 +3174,9 @@ function App() {
             >
               Close
             </CustomButton>
-          </>
+          </> // TODO translate
         )}
+
         {countdown && (
           <Box
             style={{
@@ -3221,12 +3220,18 @@ function App() {
               </DialogContentText>
               {message?.paymentFee && (
                 <DialogContentText id="alert-dialog-description2">
-                  payment fee: {message.paymentFee}
+                  {t('core:fee.payment', {
+                    postProcess: 'capitalize',
+                  })}
+                  : {message.paymentFee}
                 </DialogContentText>
               )}
               {message?.publishFee && (
                 <DialogContentText id="alert-dialog-description2">
-                  publish fee: {message.publishFee}
+                  {t('core:fee.publish', {
+                    postProcess: 'capitalize',
+                  })}
+                  : {message.publishFee}
                 </DialogContentText>
               )}
             </DialogContent>
@@ -3247,7 +3252,9 @@ function App() {
                 onClick={onOk}
                 autoFocus
               >
-                accept
+                {t('core:action.accept', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
               <Button
                 sx={{
@@ -3264,7 +3271,9 @@ function App() {
                 variant="contained"
                 onClick={onCancel}
               >
-                decline
+                {t('core:action.decline', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3285,7 +3294,9 @@ function App() {
             </DialogContent>
             <DialogActions>
               <Button variant="contained" onClick={onOkInfo} autoFocus>
-                Close
+                {t('core:action.close', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3304,14 +3315,18 @@ function App() {
             </DialogContent>
             <DialogActions>
               <Button variant="contained" onClick={onCancelUnsavedChanges}>
-                Cancel
+                {t('core:action.cancel', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
               <Button
                 variant="contained"
                 onClick={onOkUnsavedChanges}
                 autoFocus
               >
-                Continue to Logout
+                {t('core:action.decline', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3582,10 +3597,12 @@ function App() {
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '14px' }}>
-                        I have read this request
+                        {t('core:result.success.request_read', {
+                          postProcess: 'capitalize',
+                        })}
                       </Typography>
                       <PriorityHighIcon color="warning" />
-                    </Box> // TODO translate
+                    </Box>
                   }
                 />
               )}
@@ -3593,8 +3610,8 @@ function App() {
               <Spacer height="29px" />
               <Box
                 sx={{
-                  display: 'flex',
                   alignItems: 'center',
+                  display: 'flex',
                   gap: '14px',
                 }}
               >
@@ -3630,7 +3647,9 @@ function App() {
                     onOkQortalRequestExtension('accepted');
                   }}
                 >
-                  accept
+                  {t('core:action.accept', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButtonAccept>
                 <CustomButtonAccept
                   color="black"
@@ -3640,7 +3659,9 @@ function App() {
                   }}
                   onClick={() => onCancelQortalRequestExtension()}
                 >
-                  decline
+                  {t('core:action.decline', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButtonAccept>
               </Box>
               <ErrorText>{sendPaymentError}</ErrorText>

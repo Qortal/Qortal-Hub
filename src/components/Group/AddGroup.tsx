@@ -28,6 +28,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
 import { MyContext } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const Label = styled('label')`
   display: block;
@@ -84,6 +85,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setMaxBlock(event.target.value as string);
   };
 
+  const { t } = useTranslation(['core']);
   const theme = useTheme();
 
   const handleCreateGroup = async () => {
@@ -91,9 +93,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
       if (!name) throw new Error('Please provide a name');
       if (!description) throw new Error('Please provide a description');
 
-      const fee = await getFee('CREATE_GROUP'); // TODO translate
+      const fee = await getFee('CREATE_GROUP');
       await show({
-        message: 'Would you like to perform an CREATE_GROUP transaction?',
+        message: t('core:question.perform_create_group', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -111,10 +115,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully created group. It may take a couple of minutes for the changes to propagate',
+                message: t('core:result.success.group_creation', {
+                  postProcess: 'capitalize',
+                }),
               });
-              setOpenSnack(true);
+              setOpenSnack(true); // TODO translate
               setTxList((prev) => [
                 {
                   ...response,
