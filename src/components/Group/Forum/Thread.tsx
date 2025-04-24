@@ -608,7 +608,7 @@ export const Thread = ({
           >
             <MailIconImg src={ReturnSVG} />
             <ComposeP>
-              {t('core:action.return_to_thread', { postProcess: 'capitalize' })}
+              {t('group:action.return_to_thread', { postProcess: 'capitalize' })}
             </ComposeP>
           </ShowMessageReturnButton>
           {/* Conditionally render the scroll buttons */}

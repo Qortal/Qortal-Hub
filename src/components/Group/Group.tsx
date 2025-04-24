@@ -55,8 +55,6 @@ import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
 import { useMessageQueue } from '../../MessageQueueContext';
 import { ContextMenu } from '../ContextMenu';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
-import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { HomeDesktop } from './HomeDesktop';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
@@ -80,6 +78,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
+import { useTranslation } from 'react-i18next';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -450,6 +449,7 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false);
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
+  const { t } = useTranslation(['core', 'group']);
 
   const [groupsProperties, setGroupsProperties] =
     useRecoilState(groupsPropertiesAtom);

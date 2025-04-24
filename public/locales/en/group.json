@@ -1,12 +1,17 @@
 {
+  "action": {
+    "return_to_thread": "return to threads"
+  },
+  "group_invites": "group invites",
   "provide_thread": "please provide a thread title",
   "result": {
     "cannot": {
       "access_name": "Cannot send a message without a access to your name",
       "group_info": "Cannot access group information"
-    }
+    },
+    "loading_threads": "loading threads... please wait."
   },
-  "": "",
+
   "": "",
   "": "",
   "": "",

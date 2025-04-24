@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { useEffect, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -12,14 +12,13 @@ import { CustomLoader } from '../../common/CustomLoader';
 import { getBaseApiReact } from '../../App';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { useTranslation } from 'react-i18next';
 
 export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
-  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState(
-    []
-  );
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = useState(true);
 
   const getJoinRequests = async () => {
     try {
@@ -38,9 +37,10 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
     }
   };
 
+  const { t } = useTranslation(['core', 'group']);
   const theme = useTheme();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (myAddress) {
       getJoinRequests();
     }
@@ -71,7 +71,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             fontSize: '1rem',
           }} // TODO translate
         >
-          Group Invites{' '}
+          {t('group:group_invites', { postProcess: 'capitalize' })}{' '}
           {groupsWithJoinRequests?.length > 0 &&
             ` (${groupsWithJoinRequests?.length})`}
         </Typography>

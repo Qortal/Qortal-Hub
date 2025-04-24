@@ -15,8 +15,7 @@
     "export": "export",
     "import": "import",
     "logout": "logout",
-    "refetch_page": "refetch page",
-    "return_to_thread": "return to threads"
+    "refetch_page": "refetch page"
   },
   "core": {
     "block_height": "block height",
