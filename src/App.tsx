@@ -1557,7 +1557,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:logout')}
+                    {t('core:action.logout')}
                   </span>
                 }
                 placement="left"
@@ -3585,7 +3585,7 @@ function App() {
                         I have read this request
                       </Typography>
                       <PriorityHighIcon color="warning" />
-                    </Box>
+                    </Box> // TODO translate
                   }
                 />
               )}

@@ -817,7 +817,7 @@ export const NotAuthenticated = ({
                         }}
                         variant="contained"
                       >
-                        {t('core:choose', { postProcess: 'capitalize' })}
+                        {t('core:action.choose', { postProcess: 'capitalize' })}
                       </Button>
                     </Box>
                   </Box>
@@ -876,7 +876,9 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            {t('core:choose', { postProcess: 'capitalize' })}
+                            {t('core:action.choose', {
+                              postProcess: 'capitalize',
+                            })}
                           </Button>
 
                           <Button
@@ -889,7 +891,9 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            {t('core:edit', { postProcess: 'capitalize' })}
+                            {t('core:action.edit', {
+                              postProcess: 'capitalize',
+                            })}
                           </Button>
 
                           <Button
@@ -941,7 +945,7 @@ export const NotAuthenticated = ({
           <DialogActions>
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
-                {t('core:add', { postProcess: 'capitalize' })}
+                {t('core:action.add', { postProcess: 'capitalize' })}
               </Button>
             )}
 
@@ -954,7 +958,7 @@ export const NotAuthenticated = ({
                   }}
                   autoFocus
                 >
-                  {t('core:close', { postProcess: 'capitalize' })}
+                  {t('core:action.close', { postProcess: 'capitalize' })}
                 </Button>
               </>
             )}
@@ -1076,7 +1080,7 @@ export const NotAuthenticated = ({
                 setShowSelectApiKey(false);
               }}
             >
-              {t('core:close', { postProcess: 'capitalize' })}
+              {t('core:action.close', { postProcess: 'capitalize' })}
             </Button>
           </DialogActions>
         </Dialog>

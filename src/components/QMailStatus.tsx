@@ -62,6 +62,7 @@ export const QMailStatus = () => {
               color: theme.palette.text.primary,
               fontSize: '14px',
               fontWeight: 700,
+              textTransform: 'uppercase',
             }}
           >
             {t('core:q_mail', {

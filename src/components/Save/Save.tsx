@@ -569,7 +569,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              {t('core:import', {
+              {t('core:action.import', {
                 postProcess: 'capitalize',
               })}
             </ButtonBase>
@@ -594,7 +594,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              {t('core:export', {
+              {t('core:action.export', {
                 postProcess: 'capitalize',
               })}
             </ButtonBase>
