@@ -18,14 +18,25 @@
     "version": "core version"
   },
   "description": "description",
+  "page": {
+    "last": "last",
+    "first": "first",
+    "previous": "previous"
+  },
+  "downloading_qdn": "downloading from QDN",
+  "edit": "edit",
+  "export": "export",
+  "import": "import",
   "last_height": "last height",
   "loading": "loading...",
+  "loading_posts": "loading posts... please wait.",
+  "logout": "logout",
   "minting_status": "minting status",
-  "page": {
-    "last": "last"
-  },
+  "next": "next",
   "payment_notification": "payment notification",
   "price": "price",
+  "refetch_page": "refetch page",
+  "return_to_thread": "return to Threads",
   "q_mail": "q-mail",
   "result": {
     "error": {

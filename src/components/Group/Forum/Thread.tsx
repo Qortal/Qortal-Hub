@@ -1,20 +1,11 @@
 import React, {
-  FC,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import {
-  Avatar,
-  Box,
-  Button,
-  ButtonBase,
-  IconButton,
-  Skeleton,
-  Typography,
-} from '@mui/material';
+import { Avatar, Box, Button, ButtonBase, Typography } from '@mui/material';
 import { ShowMessage } from './ShowMessageWithoutModal';
 import {
   ComposeP,
@@ -51,8 +42,12 @@ import { RequestQueueWithPromise } from '../../../utils/queue/queue';
 import { CustomLoader } from '../../../common/CustomLoader';
 import { WrapperUserAction } from '../../WrapperUserAction';
 import { formatTimestampForum } from '../../../utils/time';
+import { useTranslation } from 'react-i18next';
+
 const requestQueueSaveToLocal = new RequestQueueWithPromise(1);
+
 const requestQueueDownloadPost = new RequestQueueWithPromise(3);
+
 interface ThreadProps {
   currentThread: any;
   groupInfo: any;
@@ -120,6 +115,7 @@ export const Thread = ({
   const [isLoading, setIsLoading] = useState(true);
   const [postReply, setPostReply] = useState(null);
   const [hasLastPage, setHasLastPage] = useState(false);
+  const { t } = useTranslation(['core']);
 
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);
@@ -251,6 +247,7 @@ export const Thread = ({
             'Content-Type': 'application/json',
           },
         });
+
         const responseData = await response.json();
 
         let fullArrayMsg = [...responseData];
@@ -431,6 +428,7 @@ export const Thread = ({
         }
         const newArray = responseData.slice(0, findMessage).reverse();
         let fullArrayMsg = [...messages];
+
         for (const message of newArray) {
           try {
             const responseDataMessage = await getEncryptedResource({
@@ -468,7 +466,6 @@ export const Thread = ({
         setMessages(fullArrayMsg);
       } catch (error) {
         console.log(error);
-      } finally {
       }
     },
     [messages]
@@ -565,20 +562,20 @@ export const Thread = ({
   return (
     <GroupContainer
       sx={{
-        position: 'relative',
-        width: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        position: 'relative',
+        width: '100%',
       }}
       // Removed the ref from here since the scrollable area has changed
     >
       <Box
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
           alignItems: 'center',
+          display: 'flex',
           flexShrink: 0, // Corrected property name
+          justifyContent: 'space-between',
         }}
       >
         <NewThread
@@ -598,9 +595,9 @@ export const Thread = ({
         />
         <Box
           sx={{
+            alignItems: 'center',
             display: 'flex',
             gap: '35px',
-            alignItems: 'center',
           }}
         >
           <ShowMessageReturnButton
@@ -610,7 +607,9 @@ export const Thread = ({
             }}
           >
             <MailIconImg src={ReturnSVG} />
-            <ComposeP>Return to Threads</ComposeP>
+            <ComposeP>
+              {t('core:return_to_thread', { postProcess: 'capitalize' })}
+            </ComposeP>
           </ShowMessageReturnButton>
           {/* Conditionally render the scroll buttons */}
           {showScrollButton &&
@@ -658,6 +657,7 @@ export const Thread = ({
           >
             <GroupNameP>{currentThread?.threadData?.title}</GroupNameP>
           </Box>
+
           <Spacer height={'15px'} />
 
           <Box
@@ -685,8 +685,9 @@ export const Thread = ({
               disabled={!hasFirstPage}
               variant="contained"
             >
-              First
+              {t(core:page.first', { postProcess: 'capitalize' })}
             </Button>
+
             <Button
               sx={{
                 textTransformation: 'capitalize',
@@ -701,9 +702,9 @@ export const Thread = ({
                 );
               }}
               disabled={!hasPreviousPage}
-              variant="contained" // TODO translate
+              variant="contained"
             >
-              Previous
+              {t(core:page.previous', { postProcess: 'capitalize' })}
             </Button>
             <Button
               sx={{
@@ -721,7 +722,7 @@ export const Thread = ({
               disabled={!hasNextPage}
               variant="contained"
             >
-              Next
+              {t('core:next', { postProcess: 'capitalize' })}
             </Button>
             <Button
               sx={{
@@ -739,7 +740,7 @@ export const Thread = ({
               disabled={!hasLastPage}
               variant="contained"
             >
-              Last
+              {t(core:page.last', { postProcess: 'capitalize' })}
             </Button>
           </Box>
 
@@ -925,7 +926,7 @@ export const Thread = ({
                         color: 'white',
                       }}
                     >
-                      Downloading from QDN
+                      {t('core:downloading_qdn', { postProcess: 'capitalize' })}
                     </Typography>
                   </Box>
                 </Box>
@@ -959,7 +960,7 @@ export const Thread = ({
                     color: 'white',
                   }}
                 >
-                  Refetch page
+                  {t('core:refetch_page', { postProcess: 'capitalize' })}
                 </Button>
               </Box>
             </>
@@ -997,7 +998,7 @@ export const Thread = ({
                 disabled={!hasFirstPage}
                 variant="contained"
               >
-                First
+                {t(core:page.first', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{
@@ -1015,7 +1016,7 @@ export const Thread = ({
                 disabled={!hasPreviousPage}
                 variant="contained"
               >
-                Previous
+                {t(core:page.previous', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{
@@ -1033,7 +1034,7 @@ export const Thread = ({
                 disabled={!hasNextPage}
                 variant="contained"
               >
-                Next
+                {t('core:next', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{
@@ -1051,7 +1052,7 @@ export const Thread = ({
                 disabled={!hasLastPage}
                 variant="contained"
               >
-                Last
+                {t(core:page.last', { postProcess: 'capitalize' })}
               </Button>
             </Box>
             <Spacer height="30px" />
@@ -1063,7 +1064,7 @@ export const Thread = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading posts... please wait.',
+          message: t('core:loading_posts', { postProcess: 'capitalize' }),
         }}
       />
     </GroupContainer>

@@ -3,7 +3,6 @@ import { Avatar, Box, IconButton } from '@mui/material';
 import DOMPurify from 'dompurify';
 import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 import MoreSVG from '../../../assets/svgs/More.svg';
-
 import {
   MoreImg,
   MoreP,
@@ -38,16 +37,16 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
     >
       <Box
         sx={{
+          alignItems: 'flex-start',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'flex-start',
           width: '100%',
         }}
       >
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'flex-start',
+            display: 'flex',
             gap: '10px',
           }}
         >
@@ -67,6 +66,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
               {message?.name?.charAt(0)}
             </Avatar>
           </WrapperUserAction>
+
           <ThreadInfoColumn>
             <WrapperUserAction
               disabled={myName === message?.name}
@@ -75,6 +75,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
             >
               <ThreadInfoColumnNameP>{message?.name}</ThreadInfoColumnNameP>
             </WrapperUserAction>
+
             <ThreadInfoColumnTime>
               {formatTimestampForum(message?.created)}
             </ThreadInfoColumnTime>
@@ -205,6 +206,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
                 >
                   {message?.reply?.name?.charAt(0)}
                 </Avatar>
+
                 <ThreadInfoColumn>
                   <ThreadInfoColumnNameP
                     sx={{
@@ -215,6 +217,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
                   </ThreadInfoColumnNameP>
                 </ThreadInfoColumn>
               </Box>
+
               <MessageDisplay htmlContent={message?.reply?.textContentV2} />
             </Box>
             <Spacer height="20px" />

@@ -193,6 +193,7 @@ export const NewThread = ({
           postProcess: 'capitalize',
         });
       }
+
       if (!groupInfo) {
         errorMsg = t('group:result.cannot.group_info', {
           postProcess: 'capitalize',
