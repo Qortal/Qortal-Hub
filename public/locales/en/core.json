@@ -2,6 +2,8 @@
   "action": {
     "add": "add",
     "accept": "accept",
+    "backup_account": "backup account",
+    "backup_wallet": "backup wallet",
     "cancel": "cancel",
     "change": "change",
     "choose": "choose",
@@ -55,8 +57,10 @@
     },
     "success": {
       "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
+      "order_submitted": "your buy order was submitted",
       "publish_qdn": "successfully published to QDN",
-      "request_read": "I have read this request"
+      "request_read": "I have read this request",
+      "transfer": "the transfer was succesful!"
     }
   },
   "question": {
@@ -88,7 +92,6 @@
   "tutorial": "tutorial",
   "user_lookup": "user lookup",
   "wallet": {
-    "backup_wallet": "backup wallet",
     "wallet": "wallet",
     "wallet_other": "wallets"
   },

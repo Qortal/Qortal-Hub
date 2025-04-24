@@ -257,14 +257,7 @@ export const getBaseApiReact = (customApi?: string) => {
     return groupApi;
   }
 };
-// export const getArbitraryEndpointReact = () => {
 
-//   if (globalApiKey) {
-//     return `/arbitrary/resources/search`;
-//   } else {
-//     return `/arbitrary/resources/searchsimple`;
-//   }
-// };
 export const getArbitraryEndpointReact = () => {
   if (globalApiKey) {
     return `/arbitrary/resources/searchsimple`;
@@ -538,7 +531,7 @@ function App() {
           console.error(
             'Failed to get API key:',
             error?.message || 'An error occurred'
-          );
+          ); // TODO translate
         })
         .finally(() => {
           window
@@ -592,26 +585,6 @@ function App() {
   useEffect(() => {
     isFocusedRef.current = isFocused;
   }, [isFocused]);
-
-  // const checkIfUserHasLocalNode = useCallback(async () => {
-  //   try {
-  //     const url = `http://127.0.0.1:12391/admin/status`;
-  //     const response = await fetch(url, {
-  //       method: "GET",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //     });
-  //     const data = await response.json();
-  //     if (data?.isSynchronizing === false && data?.syncPercent === 100) {
-  //       setHasLocalNode(true);
-  //     }
-  //   } catch (error) {}
-  // }, []);
-
-  // useEffect(() => {
-  //   checkIfUserHasLocalNode();
-  // }, [extState]);
 
   const address = useMemo(() => {
     if (!rawWallet?.address0) return '';
@@ -1050,7 +1023,7 @@ function App() {
         await showUnsavedChanges({
           message:
             'Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.',
-        });
+        }); // TODO translate
       } else if (extState === 'authenticated') {
         await showUnsavedChanges({
           message: 'Are you sure you would like to logout?',
@@ -1354,19 +1327,24 @@ function App() {
             </Tooltip>
           )}
         </Box>
+
         <Spacer height="48px" />
 
         {authenticatedMode === 'ltc' ? (
           <>
             <img src={ltcLogo} />
+
             <Spacer height="32px" />
+
             <CopyToClipboard text={rawWallet?.ltcAddress}>
               <AddressBox>
                 {rawWallet?.ltcAddress?.slice(0, 6)}...
                 {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
               </AddressBox>
             </CopyToClipboard>
+
             <Spacer height="10px" />
+
             {ltcBalanceLoading && (
               <CircularProgress color="success" size={16} />
             )}
@@ -1388,6 +1366,7 @@ function App() {
                 >
                   {ltcBalance} LTC
                 </TextP>
+
                 <RefreshIcon
                   onClick={getLtcBalanceFunc}
                   sx={{
@@ -1407,7 +1386,9 @@ function App() {
               myName={userInfo?.name}
               balance={balance}
             />
+
             <Spacer height="32px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -1417,7 +1398,9 @@ function App() {
             >
               {userInfo?.name}
             </TextP>
+
             <Spacer height="10px" />
+
             <CopyToClipboard text={rawWallet?.address0}>
               <AddressBox>
                 {rawWallet?.address0?.slice(0, 6)}...
@@ -1912,7 +1895,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:backup_wallet')}
+                    {t('core:action.backup_wallet')}
                   </span>
                 }
                 placement="left"
@@ -3090,7 +3073,9 @@ function App() {
                     });
                   }}
                 >
-                  Backup Account
+                  {t('core:action.backup_account', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButton>
               </>
             )}
@@ -3118,7 +3103,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The transfer was succesful!
+              {t('core:result.success.transfer', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -3126,7 +3113,7 @@ function App() {
                 returnToMain();
               }}
             >
-              Continue
+              {t('core:action.continue', { postProcess: 'capitalize' })}
             </CustomButton>
           </Box>
         )}
@@ -3141,7 +3128,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The transfer was succesful!
+              {t('core:result.success.transfer', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -3149,7 +3138,7 @@ function App() {
                 window.close();
               }}
             >
-              Continue
+              {t('core:action.continue', { postProcess: 'capitalize' })}
             </CustomButton>
           </>
         )}
@@ -3164,7 +3153,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              Your buy order was submitted
+              {t('core:result.success.order_submitted', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -3172,7 +3163,7 @@ function App() {
                 window.close();
               }}
             >
-              Close
+              {t('core:action.close', { postProcess: 'capitalize' })}
             </CustomButton>
           </> // TODO translate
         )}
