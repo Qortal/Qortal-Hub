@@ -14,7 +14,7 @@ const ThemeSelector = () => {
         bottom: '1%',
         display: 'flex',
         gap: '12px',
-        left: '1.5vh',
+        left: '1.2vh',
         position: 'absolute',
       }}
     >

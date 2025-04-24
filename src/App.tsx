@@ -137,6 +137,7 @@ import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
 import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 import { useTranslation } from 'react-i18next';
+import LanguageSelector from './components/Language/LanguageSelector.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -3704,6 +3705,7 @@ function App() {
         />
       )}
 
+      <LanguageSelector />
       <ThemeSelector />
     </AppContainer>
   );

@@ -15,6 +15,7 @@ import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
 import ThemeSelector from '../Theme/ThemeSelector';
+import LanguageSelector from '../Language/LanguageSelector';
 
 export const AppsHomeDesktop = ({
   setMode,
@@ -157,6 +158,7 @@ export const AppsHomeDesktop = ({
         />
       </AppsContainer>
 
+      <LanguageSelector />
       <ThemeSelector />
     </>
   );

@@ -31,6 +31,7 @@ import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from '../components/Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
+import LanguageSelector from '../components/Language/LanguageSelector';
 
 const manifestData = {
   version: '0.5.3',
@@ -1097,6 +1098,7 @@ export const NotAuthenticated = ({
         />
       </ButtonBase>
 
+      <LanguageSelector />
       <ThemeSelector />
     </>
   );

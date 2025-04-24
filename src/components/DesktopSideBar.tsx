@@ -8,6 +8,7 @@ import { enabledDevModeAtom } from '../atoms/global';
 import { AppsIcon } from '../assets/Icons/AppsIcon';
 import ThemeSelector from './Theme/ThemeSelector';
 import { CoreSyncStatus } from './CoreSyncStatus';
+import LanguageSelector from './Language/LanguageSelector';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -139,6 +140,7 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
+      <LanguageSelector />
       <ThemeSelector />
     </Box>
   );
