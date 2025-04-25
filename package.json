@@ -120,6 +120,6 @@
     "rename-cli": "^6.2.1",
     "typescript": "^5.2.2",
     "vite": "^5.1.6",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.1"
   }
 }
