@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../../../i18n';
-import { Tooltip } from '@mui/material';
+import { Tooltip, useTheme } from '@mui/material';
 
 const LanguageSelector = () => {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation(['core']);
   const [showSelect, setShowSelect] = useState(false);
+  const theme = useTheme();
 
   const handleChange = (e) => {
     const newLang = e.target.value;
@@ -28,19 +29,21 @@ const LanguageSelector = () => {
       }}
     >
       <Tooltip
-        title="Pollo"
-        // {
-        //   themeMode === 'dark'
-        //     ? t('core:theme.light', {
-        //         postProcess: 'capitalize',
-        //       })
-        //     : t('core:theme.light', {
-        //         postProcess: 'capitalize',
-        //       })
-        // }
+        title={t('core:action.change_language', {
+          postProcess: 'capitalize',
+        })}
       >
         {showSelect ? (
           <select
+            style={{
+              fontSize: '1rem',
+              border: '2px',
+              background: theme.palette.background.default,
+              color: theme.palette.text.primary,
+              cursor: 'pointer',
+              position: 'relative',
+              bottom: '7px',
+            }}
             value={currentLang}
             onChange={handleChange}
             onBlur={() => setShowSelect(false)}
@@ -62,7 +65,7 @@ const LanguageSelector = () => {
             }}
             aria-label={`Current language: ${name}`}
           >
-            {flag}
+            {showSelect ? undefined : flag}
           </button>
         )}
       </Tooltip>

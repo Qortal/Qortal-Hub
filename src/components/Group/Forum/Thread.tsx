@@ -608,7 +608,9 @@ export const Thread = ({
           >
             <MailIconImg src={ReturnSVG} />
             <ComposeP>
-              {t('group:action.return_to_thread', { postProcess: 'capitalize' })}
+              {t('group:action.return_to_thread', {
+                postProcess: 'capitalize',
+              })}
             </ComposeP>
           </ShowMessageReturnButton>
           {/* Conditionally render the scroll buttons */}
@@ -685,7 +687,7 @@ export const Thread = ({
               disabled={!hasFirstPage}
               variant="contained"
             >
-              {t(core:page.first', { postProcess: 'capitalize' })}
+              {t('core:page.first', { postProcess: 'capitalize' })}
             </Button>
 
             <Button
@@ -704,7 +706,7 @@ export const Thread = ({
               disabled={!hasPreviousPage}
               variant="contained"
             >
-              {t(core:page.previous', { postProcess: 'capitalize' })}
+              {t('core:page.previous', { postProcess: 'capitalize' })}
             </Button>
             <Button
               sx={{
@@ -740,7 +742,7 @@ export const Thread = ({
               disabled={!hasLastPage}
               variant="contained"
             >
-              {t(core:page.last', { postProcess: 'capitalize' })}
+              {t('core:page.last', { postProcess: 'capitalize' })}
             </Button>
           </Box>
 
@@ -998,7 +1000,7 @@ export const Thread = ({
                 disabled={!hasFirstPage}
                 variant="contained"
               >
-                {t(core:page.first', { postProcess: 'capitalize' })}
+                {t('core:page.first', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{
@@ -1016,7 +1018,7 @@ export const Thread = ({
                 disabled={!hasPreviousPage}
                 variant="contained"
               >
-                {t(core:page.previous', { postProcess: 'capitalize' })}
+                {t('core:page.previous', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{
@@ -1052,7 +1054,7 @@ export const Thread = ({
                 disabled={!hasLastPage}
                 variant="contained"
               >
-                {t(core:page.last', { postProcess: 'capitalize' })}
+                {t('core:page.last', { postProcess: 'capitalize' })}
               </Button>
             </Box>
             <Spacer height="30px" />
