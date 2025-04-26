@@ -100,13 +100,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
     try {
       if (!name)
         throw new Error(
-          t('group:result.error.name_required', {
+          t('group:message.error.name_required', {
             postProcess: 'capitalize',
           })
         );
       if (!description)
         throw new Error(
-          t('group:result.error.description_required', {
+          t('group:message.error.description_required', {
             postProcess: 'capitalize',
           })
         );
@@ -134,7 +134,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message: t('group:result.success.group_creation', {
+                message: t('group:message.success.group_creation', {
                   postProcess: 'capitalize',
                 }),
               });
@@ -143,11 +143,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 {
                   ...response,
                   type: 'created-group',
-                  label: t('group:result.success.group_creation_name', {
+                  label: t('group:message.success.group_creation_name', {
                     group_name: name,
                     postProcess: 'capitalize',
                   }),
-                  labelDone: t('group:result.success.group_creation_label', {
+                  labelDone: t('group:message.success.group_creation_label', {
                     group_name: name,
                     postProcess: 'capitalize',
                   }),
@@ -164,7 +164,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
             rej({
               message:
                 error.message ||
-                t('core:result.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
           });
       });

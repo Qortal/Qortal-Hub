@@ -2961,7 +2961,7 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              {t('core:result.success.transfer', {
+              {t('core:message.success.transfer', {
                 postProcess: 'capitalize',
               })}
             </TextP>
@@ -2986,7 +2986,7 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              {t('core:result.success.transfer', {
+              {t('core:message.success.transfer', {
                 postProcess: 'capitalize',
               })}
             </TextP>
@@ -3011,7 +3011,7 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              {t('core:result.success.order_submitted', {
+              {t('core:message.success.order_submitted', {
                 postProcess: 'capitalize',
               })}
             </TextP>
@@ -3446,7 +3446,7 @@ function App() {
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '14px' }}>
-                        {t('core:result.success.request_read', {
+                        {t('core:message.success.request_read', {
                           postProcess: 'capitalize',
                         })}
                       </Typography>

@@ -2217,9 +2217,10 @@ export const Group = ({
                   color: theme.palette.text.primary,
                 }}
               >
-                No group selected
-              </Typography>{' '}
-              // TODO translate
+                {t('group:message.generic.no_selection', {
+                  postProcess: 'capitalize',
+                })}
+              </Typography>
             </Box>
           )}
 
@@ -2315,9 +2316,9 @@ export const Group = ({
                   >
                     {' '}
                     <Typography>
-                      The group's first common encryption key is in the process
-                      of creation. Please wait a few minutes for it to be
-                      retrieved by the network. Checking every 2 minutes...
+                      {t('group:message.generic.encryption_key', {
+                        postProcess: 'capitalize',
+                      })}
                     </Typography>
                   </div>
                 )}
@@ -2341,18 +2342,23 @@ export const Group = ({
                     >
                       {' '}
                       <Typography>
-                        You are not part of the encrypted group of members. Wait
-                        until an admin re-encrypts the keys.
+                        {t('group:message.generic.not_part_group', {
+                          postProcess: 'capitalize',
+                        })}
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
                         <strong>
-                          Only unencrypted messages will be displayed.
+                          {t('group:message.generic.only_encrypted', {
+                            postProcess: 'capitalize',
+                          })}
                         </strong>
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
-                        Try notifying an admin from the list of admins below:
+                        {t('group:message.generic.notify_admins', {
+                          postProcess: 'capitalize',
+                        })}
                       </Typography>
                       <Spacer height="25px" />
                       {adminsWithNames.map((admin) => {
@@ -2372,7 +2378,9 @@ export const Group = ({
                               variant="contained"
                               onClick={() => notifyAdmin(admin)}
                             >
-                              Notify
+                              {t('core:action.notify', {
+                                postProcess: 'capitalize',
+                              })}
                             </LoadingButton>
                           </Box>
                         );
@@ -2592,14 +2600,19 @@ export const Group = ({
           open={isLoadingGroup}
           info={{
             message:
-              isLoadingGroupMessage || 'Setting up group... please wait.',
+              isLoadingGroupMessage ||
+              t('group:message.generic.setting_group', {
+                postProcess: 'capitalize',
+              }),
           }}
         />
 
         <LoadingSnackbar
           open={isLoadingGroups}
           info={{
-            message: 'Setting up groups... please wait.',
+            message: t('group:message.generic.setting_group', {
+              postProcess: 'capitalize',
+            }),
           }}
         />
         <WalletsAppWrapper />

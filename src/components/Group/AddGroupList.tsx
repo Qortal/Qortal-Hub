@@ -122,7 +122,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message: t('group:result.success.join_group', {
+                message: t('group:message.success.join_group', {
                   postProcess: 'capitalize',
                 }),
               });
@@ -132,11 +132,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   {
                     ...response,
                     type: 'joined-group',
-                    label: t('group:result.success.group_join_label', {
+                    label: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
                       postProcess: 'capitalize',
                     }),
-                    labelDone: t('group:result.success.group_join_label', {
+                    labelDone: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
                       postProcess: 'capitalize',
                     }),

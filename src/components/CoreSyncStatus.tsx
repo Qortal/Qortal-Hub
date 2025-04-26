@@ -79,21 +79,21 @@ export const CoreSyncStatus = () => {
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
-      message = `${t(`core:result.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalize' })} ${t('core:result.status.minting')}`;
+      message = `${t(`core:message.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalize' })} ${t('core:message.status.minting')}`;
     } else if (isSynchronizing === true && syncPercent === 99) {
       imagePath = syncingImg;
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:result.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncedImg;
-      message = `${t('core:result.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:result.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
-      message = `${t('core:result.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:result.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     }
 
     return (

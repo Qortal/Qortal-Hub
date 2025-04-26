@@ -834,7 +834,7 @@ export const GroupMail = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('group:result.success.loading_threads', {
+          message: t('group:message.success.loading_threads', {
             postProcess: 'capitalize',
           }),
         }}

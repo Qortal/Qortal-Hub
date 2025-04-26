@@ -189,13 +189,13 @@ export const NewThread = ({
       }
 
       if (!name) {
-        errorMsg = t('group:result.error.access_name', {
+        errorMsg = t('group:message.error.access_name', {
           postProcess: 'capitalize',
         });
       }
 
       if (!groupInfo) {
-        errorMsg = t('group:result.error.group_info', {
+        errorMsg = t('group:message.error.group_info', {
           postProcess: 'capitalize',
         });
       }

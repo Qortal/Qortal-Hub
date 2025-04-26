@@ -16,7 +16,8 @@
     "export": "export",
     "import": "import",
     "join": "join",
-    "logout": "logout"
+    "logout": "logout",
+    "notify": "notify"
   },
   "core": {
     "block_height": "block height",
@@ -49,7 +50,7 @@
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
-  "result": {
+  "message": {
     "error": {
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
