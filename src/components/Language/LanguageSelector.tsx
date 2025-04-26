@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../../../i18n';
 import { Tooltip, useTheme } from '@mui/material';
@@ -7,6 +7,7 @@ const LanguageSelector = () => {
   const { i18n, t } = useTranslation(['core']);
   const [showSelect, setShowSelect] = useState(false);
   const theme = useTheme();
+  const selectorRef = useRef(null);
 
   const handleChange = (e) => {
     const newLang = e.target.value;
@@ -18,8 +19,23 @@ const LanguageSelector = () => {
   const { name, flag } =
     supportedLanguages[currentLang] || supportedLanguages['en'];
 
+  // Detect clicks outside the component
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (selectorRef.current && !selectorRef.current.contains(event.target)) {
+        setShowSelect(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   return (
     <div
+      ref={selectorRef}
       style={{
         bottom: '5%',
         display: 'flex',
@@ -46,7 +62,7 @@ const LanguageSelector = () => {
             }}
             value={currentLang}
             onChange={handleChange}
-            onBlur={() => setShowSelect(false)}
+            autoFocus
           >
             {Object.entries(supportedLanguages).map(([code, { name }]) => (
               <option key={code} value={code}>
