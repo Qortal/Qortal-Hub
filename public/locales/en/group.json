@@ -1,5 +1,6 @@
 {
   "action": {
+    "cancel_ban": "cancel ban",
     "create_group": "create group",
     "find_group": "find group",
     "join_group": "join group",
@@ -9,6 +10,7 @@
   },
   "advanced_options": "advanced options",
   "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
+  "ban_list": "ban list",
   "block_delay": {
     "minimum": "minimum Block delay for Group Transaction Approvals",
     "maximum": "maximum Block delay for Group Transaction Approvals"
@@ -25,6 +27,7 @@
   "invitation_expiry": "invitation Expiry Time",
   "join_requests": "join requests",
   "question": {
+    "cancel_ban": "would you like to perform a CANCEL_GROUP_BAN transaction?",
     "create_group": "would you like to perform an CREATE_GROUP transaction?",
     "group_invite": "would you like to perform a GROUP_INVITE transaction?",
     "join_group": "would you like to perform an JOIN_GROUP transaction?",
@@ -55,7 +58,8 @@
       "join_creation": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",
-      "loading_threads": "loading threads... please wait."
+      "loading_threads": "loading threads... please wait.",
+      "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate"
     }
   }
 }

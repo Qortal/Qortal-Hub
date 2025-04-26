@@ -18,6 +18,7 @@ import { getNameInfo } from './Group';
 import { getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -55,6 +56,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef();
   const [isLoadingUnban, setIsLoadingUnban] = useState(false);
+  const { t } = useTranslation(['core', 'group']);
 
   const getInvites = async (groupId) => {
     try {
@@ -87,7 +89,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       // TODO translate
       const fee = await getFee('CANCEL_GROUP_BAN');
       await show({
-        message: 'Would you like to perform a CANCEL_GROUP_BAN transaction?',
+        message: t('group:question.cancel_ban', { postProcess: 'capitalize' }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingUnban(true);
@@ -103,8 +105,9 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               setIsLoadingUnban(false);
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully unbanned user. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.unbanned_user', {
+                  postProcess: 'capitalize',
+                }),
               });
               handlePopoverClose();
               setOpenSnack(true);
@@ -127,6 +130,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingUnban(false);
     }
@@ -177,10 +181,13 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
                     variant="contained"
                     onClick={() => handleCancelBan(member?.offender)}
                   >
-                    Cancel Ban
+                    {t('group:action.cancel_ban', {
+                      postProcess: 'capitalize',
+                    })}
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -205,7 +212,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
   return (
     <div>
-      <p>Ban list</p>
+      <p>{t('group:ban_list', { postProcess: 'capitalize' })}</p>
       <div
         style={{
           position: 'relative',
