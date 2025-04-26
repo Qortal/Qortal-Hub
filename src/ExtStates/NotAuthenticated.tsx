@@ -703,7 +703,7 @@ export const NotAuthenticated = ({
                     visibility: importedApiKey ? 'visible' : 'hidden',
                   }}
                 >
-                  {t('auth:apikey.key', { postProcess: 'capitalize' })}: $
+                  {t('auth:apikey.key', { postProcess: 'capitalize' })}:{' '}
                   {importedApiKey}
                 </Typography>
               </>
