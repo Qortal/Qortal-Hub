@@ -493,14 +493,12 @@ export default ({
     >
       <EditorProvider
         slotBefore={
-          (isFocusedParent || overrideMobile) && (
-            <MenuBar
-              setEditorRef={setEditorRefFunc}
-              isChat={isChat}
-              isDisabledEditorEnter={isDisabledEditorEnter}
-              setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter}
-            />
-          )
+          <MenuBar
+            setEditorRef={setEditorRefFunc}
+            isChat={isChat}
+            isDisabledEditorEnter={isDisabledEditorEnter}
+            setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter}
+          />
         }
         extensions={[...extensionsFiltered, ...additionalExtensions]}
         content={content}
