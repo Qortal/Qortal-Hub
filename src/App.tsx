@@ -135,6 +135,7 @@ import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
 import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 import { useTranslation } from 'react-i18next';
+import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -897,27 +898,6 @@ function App() {
     }
   }, [authenticatedMode]);
 
-  const confirmPasswordToDownload = async () => {
-    try {
-      setWalletToBeDownloadedError('');
-      if (!walletToBeDownloadedPassword) {
-        setSendPaymentError('Please enter your password');
-        return;
-      }
-      setIsLoading(true);
-      await new Promise<void>((res) => {
-        setTimeout(() => {
-          res();
-        }, 250);
-      });
-      const res = await saveWalletFunc(walletToBeDownloadedPassword);
-    } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const saveFileToDiskFunc = async () => {
     try {
       await saveFileToDisk(
@@ -1654,7 +1634,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:wallet_other')}
+                    {t('core:wallet.wallet_other')}
                   </span>
                 }
                 placement="left"
@@ -2670,110 +2650,14 @@ function App() {
           </>
         )}
         {extState === 'download-wallet' && (
-          <>
-            <Spacer height="22px" />
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                justifyContent: 'flex-start',
-                maxWidth: '700px',
-                paddingLeft: '22px',
-                width: '100%',
-              }}
-            >
-              <Return
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                }}
-                onClick={returnToMain}
-              />
-            </Box>
-
-            <Spacer height="10px" />
-
-            <div
-              className="image-container"
-              style={{
-                width: '136px',
-                height: '154px',
-              }}
-            >
-              <img src={Logo1Dark} className="base-image" />
-            </div>
-
-            <Spacer height="35px" />
-
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-              }}
-            >
-              <TextP
-                sx={{
-                  textAlign: 'start',
-                  lineHeight: '24px',
-                  fontSize: '20px',
-                  fontWeight: 600,
-                }}
-              >
-                {t('auth:download_account', { postProcess: 'capitalize' })}
-              </TextP>
-            </Box>
-
-            <Spacer height="35px" />
-
-            {!walletToBeDownloaded && (
-              <>
-                <CustomLabel htmlFor="standard-adornment-password">
-                  {t('auth:wallet.password_confirmation', {
-                    postProcess: 'capitalize',
-                  })}
-                </CustomLabel>
-
-                <Spacer height="5px" />
-
-                <PasswordField
-                  id="standard-adornment-password"
-                  value={walletToBeDownloadedPassword}
-                  onChange={(e) =>
-                    setWalletToBeDownloadedPassword(e.target.value)
-                  }
-                />
-
-                <Spacer height="20px" />
-
-                <CustomButton onClick={confirmPasswordToDownload}>
-                  {t('auth:password_confirmation', {
-                    postProcess: 'capitalize',
-                  })}
-                </CustomButton>
-                <ErrorText>{walletToBeDownloadedError}</ErrorText>
-              </>
-            )}
-
-            {walletToBeDownloaded && (
-              <>
-                <CustomButton
-                  onClick={async () => {
-                    await saveFileToDiskFunc();
-                    await showInfo({
-                      message: t('auth:keep_secure', {
-                        postProcess: 'capitalize',
-                      }),
-                    });
-                  }}
-                >
-                  {t('auth:download_account', {
-                    postProcess: 'capitalize',
-                  })}
-                </CustomButton>
-              </>
-            )}
-          </>
+          <DownloadWallet
+            returnToMain={returnToMain}
+            setIsLoading={setIsLoading}
+            showInfo={showInfo}
+            rawWallet={rawWallet}
+            setWalletToBeDownloaded={setWalletToBeDownloaded}
+            walletToBeDownloaded={walletToBeDownloaded}
+          />
         )}
         {extState === 'create-wallet' && (
           <>
