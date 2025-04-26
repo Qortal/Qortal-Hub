@@ -248,7 +248,6 @@ export const MessageItem = React.memo(
                     sx={{
                       fontWight: 600,
                       fontFamily: 'Inter',
-                      color: 'cadetBlue',
                     }}
                   >
                     {message?.senderName || message?.sender}
@@ -304,7 +303,7 @@ export const MessageItem = React.memo(
                   <Spacer height="20px" />
                   <Box
                     sx={{
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.surface,
                       borderRadius: '5px',
                       cursor: 'pointer',
                       display: 'flex',
@@ -319,9 +318,10 @@ export const MessageItem = React.memo(
                   >
                     <Box
                       sx={{
-                        background: theme.palette.background.default,
+                        background: theme.palette.text.primary,
                         height: '100%',
                         width: '5px',
+                        flexShrink: 0,
                       }}
                     />
                     <Box
@@ -571,7 +571,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
   return (
     <Box
       sx={{
-        backgroundColor: theme.palette.background.default,
+        backgroundColor: theme.palette.background.surface,
         borderRadius: '5px',
         cursor: 'pointer',
         display: 'flex',
@@ -584,9 +584,10 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
     >
       <Box
         sx={{
-          background: theme.palette.background.default,
+          background: theme.palette.text.primary,
           height: '100%',
           width: '5px',
+          flexShrink: 0,
         }}
       />
       <Box

@@ -39,6 +39,8 @@ export const DesktopSideBar = ({
         gap: '25px',
         height: '100vh',
         width: '60px',
+        backgroundColor: theme.palette.background.surface,
+        borderRight: `1px solid ${theme.palette.border.subtle}`,
       }}
     >
       <ButtonBase
