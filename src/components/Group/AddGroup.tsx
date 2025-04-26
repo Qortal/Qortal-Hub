@@ -1,4 +1,13 @@
-import * as React from 'react';
+import {
+  forwardRef,
+  Fragment,
+  ReactElement,
+  Ref,
+  SyntheticEvent,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
@@ -38,30 +47,29 @@ export const Label = styled('label')`
   margin-bottom: 4px;
 `;
 
-const Transition = React.forwardRef(function Transition(
+const Transition = forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement;
+    children: ReactElement;
   },
-  ref: React.Ref<unknown>
+  ref: Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
 export const AddGroup = ({ address, open, setOpen }) => {
-  const { show, setTxList } = React.useContext(MyContext);
-  const [tab, setTab] = React.useState('create');
-  const [openAdvance, setOpenAdvance] = React.useState(false);
-  const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [groupType, setGroupType] = React.useState('1');
-  const [approvalThreshold, setApprovalThreshold] = React.useState('40');
-  const [minBlock, setMinBlock] = React.useState('5');
-  const [maxBlock, setMaxBlock] = React.useState('21600');
-  const [value, setValue] = React.useState(0);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const { show, setTxList } = useContext(MyContext);
+  const [openAdvance, setOpenAdvance] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [groupType, setGroupType] = useState('1');
+  const [approvalThreshold, setApprovalThreshold] = useState('40');
+  const [minBlock, setMinBlock] = useState('5');
+  const [maxBlock, setMaxBlock] = useState('21600');
+  const [value, setValue] = useState(0);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
 
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleChange = (event: SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
 
@@ -148,22 +156,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
     }
   };
 
-  function CustomTabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
-    return (
-      <div
-        role="tabpanel"
-        hidden={value !== index}
-        id={`simple-tabpanel-${index}`}
-        aria-labelledby={`simple-tab-${index}`}
-        {...other}
-      >
-        {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-      </div>
-    );
-  }
-
   function a11yProps(index: number) {
     return {
       id: `simple-tab-${index}`,
@@ -175,7 +167,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setValue(2);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     subscribeToEvent('openGroupInvitesRequest', openGroupInvitesRequestFunc);
 
     return () => {
@@ -187,7 +179,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
   }, []);
 
   return (
-    <React.Fragment>
+    <Fragment>
       <Dialog
         fullScreen
         open={open}
@@ -213,12 +205,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             >
               <CloseIcon />
             </IconButton>
-
-            {/* <Button autoFocus color="inherit" onClick={handleClose}>
-              save
-            </Button> */}
           </Toolbar>
         </AppBar>
+
         <Box
           sx={{
             bgcolor: theme.palette.background.default,
@@ -356,6 +345,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
 
                   {openAdvance ? <ExpandLess /> : <ExpandMore />}
                 </Box>
+
                 <Collapse in={openAdvance} timeout="auto" unmountOnExit>
                   <Box
                     sx={{
@@ -508,6 +498,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
           setInfo={setInfoSnack}
         />
       </Dialog>
-    </React.Fragment>
+    </Fragment>
   );
 };
