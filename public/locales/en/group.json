@@ -25,8 +25,10 @@
   },
   "result": {
     "error": {
-      "access_name": "Cannot send a message without a access to your name",
-      "group_info": "Cannot access group information"
+      "access_name": "cannot send a message without a access to your name",
+      "description_required": "please provide a description",
+      "group_info": "cannot access group information",
+      "name_required": "please provide a name"
     },
     "loading_threads": "loading threads... please wait.",
     "success": {

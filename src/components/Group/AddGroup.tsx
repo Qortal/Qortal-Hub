@@ -98,8 +98,18 @@ export const AddGroup = ({ address, open, setOpen }) => {
 
   const handleCreateGroup = async () => {
     try {
-      if (!name) throw new Error('Please provide a name');
-      if (!description) throw new Error('Please provide a description');
+      if (!name)
+        throw new Error(
+          t('group:result.error.name_required', {
+            postProcess: 'capitalize',
+          })
+        );
+      if (!description)
+        throw new Error(
+          t('group:result.error.description_required', {
+            postProcess: 'capitalize',
+          })
+        );
 
       const fee = await getFee('CREATE_GROUP');
 
@@ -128,7 +138,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   postProcess: 'capitalize',
                 }),
               });
-              setOpenSnack(true); // TODO translate
+              setOpenSnack(true);
               setTxList((prev) => [
                 {
                   ...response,
