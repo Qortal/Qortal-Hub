@@ -107,7 +107,6 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
                   directs: sortedDirects,
                 })
                 .catch((error) => {
-                  // TODO translate
                   console.error(
                     'Failed to handle active group data from socket:',
                     error.message || 'An error occurred'

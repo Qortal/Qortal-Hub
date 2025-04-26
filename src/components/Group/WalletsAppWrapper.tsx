@@ -88,7 +88,7 @@ export const WalletsAppWrapper = () => {
                 justifyContent: 'space-between',
               }}
             >
-              <Typography>Q-Wallets</Typography> // TODO translate
+              <Typography>Q-Wallets</Typography>
               <ButtonBase onClick={handleClose}>
                 <CloseIcon
                   sx={{

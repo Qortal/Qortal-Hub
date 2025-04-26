@@ -17,7 +17,7 @@ export const useBlockedAddresses = () => {
       if (userBlockedRef.current[address]) return true;
       return false;
     } catch (error) {
-      //error
+      console.log(error);
     }
   }, []);
 
@@ -42,10 +42,13 @@ export const useBlockedAddresses = () => {
               console.error('Failed qortalRequest', error);
             });
         });
+
         const blockedUsers = {};
+
         response?.forEach((item) => {
           blockedUsers[item] = true;
         });
+
         userBlockedRef.current = blockedUsers;
 
         const response2 = await new Promise((res, rej) => {
@@ -66,10 +69,13 @@ export const useBlockedAddresses = () => {
               console.error('Failed qortalRequest', error);
             });
         });
+
         const blockedUsers2 = {};
+
         response2?.forEach((item) => {
           blockedUsers2[item] = true;
         });
+
         userNamesBlockedRef.current = blockedUsers2;
       } catch (error) {
         console.error(error);

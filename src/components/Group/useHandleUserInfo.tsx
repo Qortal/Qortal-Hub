@@ -22,7 +22,7 @@ export const useHandleUserInfo = () => {
       };
       return data?.level;
     } catch (error) {
-      //error
+      console.log(error);
     }
   }, []);
 
