@@ -51,7 +51,7 @@ export const AnnouncementItem = ({
   return (
     <div
       style={{
-        backgroundColor: theme.palette.background.default,
+        backgroundColor: theme.palette.background.paper,
         borderRadius: '7px',
         display: 'flex',
         flexDirection: 'column',

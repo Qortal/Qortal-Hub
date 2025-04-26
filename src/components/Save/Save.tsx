@@ -10,7 +10,14 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { Box, Button, ButtonBase, Popover, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  Popover,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { MyContext } from '../../App';
 import { getFee } from '../../background';
@@ -77,7 +84,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [oldPinnedApps, setOldPinnedApps] = useRecoilState(oldPinnedAppsAtom);
   const [anchorEl, setAnchorEl] = useState(null);
   const { show } = useContext(MyContext);
-
+  const theme = useTheme();
   const { t } = useTranslation(['core']);
 
   const hasChanged = useMemo(() => {
@@ -229,13 +236,28 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
               postProcess: 'capitalize',
             })}
             selected={false}
+            color={
+              hasChanged && !isLoading
+                ? '#5EB049'
+                : theme.palette.text.secondary
+            }
           >
             <SaveIcon
-              color={hasChanged && !isLoading ? '#5EB049' : undefined}
+              color={
+                hasChanged && !isLoading
+                  ? '#5EB049'
+                  : theme.palette.text.secondary
+              }
             />
           </IconWrapper>
         ) : (
-          <SaveIcon color={hasChanged && !isLoading ? '#5EB049' : undefined} />
+          <SaveIcon
+            color={
+              hasChanged && !isLoading
+                ? '#5EB049'
+                : theme.palette.text.secondary
+            }
+          />
         )}
       </ButtonBase>
 

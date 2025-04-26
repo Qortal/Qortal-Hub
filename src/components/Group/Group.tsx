@@ -1679,9 +1679,6 @@ export const Group = ({
                   width: '100%',
                   flexDirection: 'column',
                   cursor: 'pointer',
-                  borderColor: theme.palette.primary,
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
                   padding: '2px',
                   borderRadius: '2px',
                   background:
@@ -1721,6 +1718,7 @@ export const Group = ({
                           theme.palette.text.primary,
                         textWrap: 'wrap',
                         overflow: 'hidden',
+                        fontSize: '16px',
                       },
                     }} // Change the color of the primary text
                     secondaryTypographyProps={{
@@ -1781,7 +1779,7 @@ export const Group = ({
       </div>
     );
   };
-
+  console.log('groupsProperties', groupsProperties);
   const renderGroups = () => {
     return (
       <div
@@ -1918,15 +1916,15 @@ export const Group = ({
                   display: 'flex',
                   background:
                     group?.groupId === selectedGroup?.groupId &&
-                    theme.palette.background.default,
-                  borderColor: theme.palette.primary,
+                    theme.palette.action.selected,
                   borderRadius: '2px',
-                  borderStyle: 'solid',
-                  borderWidth: '1px',
                   cursor: 'pointer',
                   flexDirection: 'column',
                   padding: '2px',
                   width: '100%',
+                  '&:hover': {
+                    backgroundColor: 'action.hover', // background on hover
+                  },
                 }}
               >
                 <ContextMenu
@@ -1954,6 +1952,9 @@ export const Group = ({
                             width: '40px',
                           }}
                         >
+                          {/* <Avatar src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                    app?.name
+                  }/qortal_avatar?async=true`} /> */}
                           <LockIcon
                             sx={{
                               color: 'var(--green)',
@@ -1994,6 +1995,7 @@ export const Group = ({
                           color:
                             group?.groupId === selectedGroup?.groupId &&
                             theme.palette.text.primary,
+                          fontSize: '16px',
                         },
                       }} // Change the color of the primary text
                       secondaryTypographyProps={{
