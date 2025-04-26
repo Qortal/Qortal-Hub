@@ -28,6 +28,8 @@ export const DesktopSideBar = ({
 
   const theme = useTheme();
 
+  console.log('test', desktopViewMode === 'home');
+
   return (
     <Box
       sx={{
@@ -71,8 +73,6 @@ export const DesktopSideBar = ({
       <ButtonBase
         onClick={() => {
           setDesktopViewMode('apps');
-          // setIsOpenSideViewDirects(false)
-          // setIsOpenSideViewGroups(false)
         }}
       >
         <IconWrapper
@@ -101,7 +101,9 @@ export const DesktopSideBar = ({
           color={
             hasUnreadDirects || hasUnreadGroups
               ? 'var(--unread)'
-              : theme.palette.text.primary
+              : desktopViewMode === 'chat'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
           }
           label="Chat"
           disableWidth
@@ -111,7 +113,9 @@ export const DesktopSideBar = ({
             color={
               hasUnreadDirects || hasUnreadGroups
                 ? 'var(--unread)'
-                : theme.palette.text.primary
+                : desktopViewMode === 'chat'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
             }
           />
         </IconWrapper>
@@ -134,7 +138,7 @@ export const DesktopSideBar = ({
             label="Dev"
             disableWidth
           >
-            <AppsIcon height={30} />
+            <AppsIcon height={30} color={theme.palette.text.secondary} />
           </IconWrapper>
         </ButtonBase>
       )}

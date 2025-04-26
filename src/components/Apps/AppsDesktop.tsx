@@ -363,7 +363,7 @@ export const AppsDesktop = ({
             goToHome();
           }}
         >
-          <HomeIcon height={34} />
+          <HomeIcon height={34} color={theme.palette.text.secondary} />
         </ButtonBase>
 
         <ButtonBase
@@ -372,7 +372,7 @@ export const AppsDesktop = ({
           }}
         >
           <IconWrapper label="Apps" disableWidth>
-            <AppsIcon height={30} />
+            <AppsIcon height={30} color={theme.palette.text.primary} />
           </IconWrapper>
         </ButtonBase>
 
@@ -385,7 +385,9 @@ export const AppsDesktop = ({
             color={
               hasUnreadDirects || hasUnreadGroups
                 ? 'var(--unread)'
-                : theme.palette.text.primary
+                : desktopViewMode === 'chat'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
             }
             label="Chat"
             disableWidth
@@ -395,48 +397,13 @@ export const AppsDesktop = ({
               color={
                 hasUnreadDirects || hasUnreadGroups
                   ? 'var(--unread)'
-                  : theme.palette.text.primary
+                  : desktopViewMode === 'chat'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
         </ButtonBase>
-        {/* <ButtonBase
-          onClick={() => {
-            setDesktopSideView("directs");
-            toggleSideViewDirects()
-          }}
-        >
-        
-            <MessagingIcon
-              height={30}
-              color={
-                hasUnreadDirects
-                  ? "var(--danger)"
-                  : isDirects
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-            toggleSideViewGroups()
-          }}
-        >
-            <HubsIcon
-              height={30}
-              color={
-                hasUnreadGroups
-                  ? "var(--danger)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-     
-        </ButtonBase> */}
         <Save isDesktop disableWidth myName={myName} />
         {isEnabledDevMode && (
           <ButtonBase

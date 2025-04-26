@@ -24,7 +24,7 @@ export const IconWrapper = ({
       sx={{
         alignItems: 'center',
         backgroundColor: selected
-          ? theme.palette.background.default
+          ? theme.palette.action.selected
           : 'transparent',
         borderRadius: '50%',
         color: color ? color : theme.palette.text.primary,
@@ -39,7 +39,7 @@ export const IconWrapper = ({
       {children}
       <Typography
         sx={{
-          color: theme.palette.text.primary,
+          color: color || theme.palette.text.primary,
           fontFamily: 'Inter',
           fontSize: '12px',
           fontWeight: 500,

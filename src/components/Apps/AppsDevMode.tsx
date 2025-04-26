@@ -23,7 +23,7 @@ import { AppPublish } from './AppPublish';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import { AppsNavBarDesktop } from './AppsNavBarDesktop';
-import { Box, ButtonBase } from '@mui/material';
+import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { Save } from '../Save/Save';
@@ -60,6 +60,7 @@ export const AppsDevMode = ({
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
+  const theme = useTheme();
 
   useEffect(() => {
     setTimeout(() => {
@@ -266,7 +267,9 @@ export const AppsDevMode = ({
           <HomeIcon
             height={34}
             color={
-              desktopViewMode === 'home' ? 'white' : 'rgba(250, 250, 250, 0.5)'
+              desktopViewMode === 'home'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
             }
           />
         </ButtonBase>
@@ -276,13 +279,19 @@ export const AppsDevMode = ({
           }}
         >
           <IconWrapper
-            color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
+            color={
+              isApps ? theme.palette.text.primary : theme.palette.text.secondary
+            }
             label="Apps"
             disableWidth
           >
             <AppsIcon
               height={30}
-              color={isApps ? 'white' : 'rgba(250, 250, 250, 0.5)'}
+              color={
+                isApps
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
             />
           </IconWrapper>
         </ButtonBase>
@@ -296,8 +305,8 @@ export const AppsDevMode = ({
               hasUnreadDirects || hasUnreadGroups
                 ? 'var(--unread)'
                 : desktopViewMode === 'chat'
-                  ? 'white'
-                  : 'rgba(250, 250, 250, 0.5)'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
             }
             label="Chat"
             disableWidth
@@ -308,8 +317,8 @@ export const AppsDevMode = ({
                 hasUnreadDirects || hasUnreadGroups
                   ? 'var(--unread)'
                   : desktopViewMode === 'chat'
-                    ? 'white'
-                    : 'rgba(250, 250, 250, 0.5)'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -322,14 +331,18 @@ export const AppsDevMode = ({
         >
           <IconWrapper
             color={
-              desktopViewMode === 'dev' ? 'white' : 'rgba(250, 250, 250, 0.5)'
+              desktopViewMode === 'dev'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
             }
             label="Dev"
             disableWidth
           >
             <AppsIcon
               color={
-                desktopViewMode === 'dev' ? 'white' : 'rgba(250, 250, 250, 0.5)'
+                desktopViewMode === 'dev'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
               }
               height={30}
             />

@@ -1,18 +1,6 @@
 import * as React from 'react';
-import {
-  BottomNavigation,
-  BottomNavigationAction,
-  ButtonBase,
-  Typography,
-} from '@mui/material';
-import { Home, Groups, Message, ShowChart } from '@mui/icons-material';
+import { ButtonBase, Typography, useTheme } from '@mui/material';
 import Box from '@mui/material/Box';
-import BottomLogo from '../../assets/svgs/BottomLogo5.svg';
-import { CustomSvg } from '../../common/CustomSvg';
-import { HubsIcon } from '../../assets/Icons/HubsIcon';
-import { TradingIcon } from '../../assets/Icons/TradingIcon';
-import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
-import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
 import { ChatIcon } from '../../assets/Icons/ChatIcon';
 import { ThreadsIcon } from '../../assets/Icons/ThreadsIcon';
@@ -94,6 +82,7 @@ export const DesktopHeader = ({
   isPrivate,
 }) => {
   const [value, setValue] = React.useState(0);
+  const theme = useTheme();
   return (
     <Box
       sx={{
@@ -151,10 +140,14 @@ export const DesktopHeader = ({
           }}
         >
           <IconWrapper
-            color={isAnnouncement ? 'black' : 'rgba(250, 250, 250, 0.5)'}
+            color={
+              isAnnouncement
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
             label="ANN"
             selected={isAnnouncement}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <NotificationIcon2
@@ -164,8 +157,8 @@ export const DesktopHeader = ({
                 isUnread
                   ? 'var(--unread)'
                   : isAnnouncement
-                    ? 'black'
-                    : 'rgba(250, 250, 250, 0.5)'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -177,10 +170,12 @@ export const DesktopHeader = ({
           }}
         >
           <IconWrapper
-            color={isChat ? 'black' : 'rgba(250, 250, 250, 0.5)'}
+            color={
+              isChat ? theme.palette.text.primary : theme.palette.text.secondary
+            }
             label="Chat"
             selected={isChat}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <ChatIcon
@@ -190,8 +185,8 @@ export const DesktopHeader = ({
                 isUnreadChat
                   ? 'var(--unread)'
                   : isChat
-                    ? 'black'
-                    : 'rgba(250, 250, 250, 0.5)'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -203,16 +198,24 @@ export const DesktopHeader = ({
           }}
         >
           <IconWrapper
-            color={isForum ? 'black' : 'rgba(250, 250, 250, 0.5)'}
+            color={
+              isForum
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
             label="Threads"
             selected={isForum}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <ThreadsIcon
               height={25}
               width={20}
-              color={isForum ? 'black' : 'rgba(250, 250, 250, 0.5)'}
+              color={
+                isForum
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
             />
           </IconWrapper>
         </ButtonBase>
@@ -222,7 +225,7 @@ export const DesktopHeader = ({
           }}
         >
           <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
+            color={theme.palette.text.secondary}
             label="Members"
             selected={false}
             customHeight="55px"
@@ -230,7 +233,7 @@ export const DesktopHeader = ({
             <MembersIcon
               height={25}
               width={20}
-              color={isForum ? 'white' : 'rgba(250, 250, 250, 0.5)'}
+              color={theme.palette.text.secondary}
             />
           </IconWrapper>
         </ButtonBase>
@@ -242,21 +245,21 @@ export const DesktopHeader = ({
           <IconWrapper
             color={
               groupSection === 'adminSpace'
-                ? 'black'
-                : 'rgba(250, 250, 250, 0.5)'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
             }
             label="Admins"
             selected={groupSection === 'adminSpace'}
             customHeight="55px"
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
           >
             <AdminsIcon
               height={25}
               width={20}
               color={
                 groupSection === 'adminSpace'
-                  ? 'black'
-                  : 'rgba(250, 250, 250, 0.5)'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
               }
             />
           </IconWrapper>
