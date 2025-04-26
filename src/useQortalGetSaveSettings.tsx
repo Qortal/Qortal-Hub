@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
@@ -46,6 +46,7 @@ const getPublishRecord = async (myName) => {
 
   return { hasPublishRecord: false };
 };
+
 const getPublish = async (myName) => {
   try {
     let data;
@@ -57,7 +58,6 @@ const getPublish = async (myName) => {
     if (!data) throw new Error('Unable to fetch publish');
 
     const decryptedKey: any = await decryptResource(data);
-
     const dataint8Array = base64ToUint8Array(decryptedKey.data);
     const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
     return decryptedKeyToObject;
@@ -112,6 +112,7 @@ export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
     },
     []
   );
+
   useEffect(() => {
     if (
       !myName ||
