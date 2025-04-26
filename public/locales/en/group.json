@@ -1,39 +1,38 @@
 {
   "action": {
+    "create_group": "create group",
+    "find_group": "find group",
     "return_to_thread": "return to threads"
   },
-  "group_invites": "group invites",
-  "provide_thread": "please provide a thread title",
+  "advanced_options": "advanced options",
+  "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
+  "block_delay": {
+    "minimum": "minimum Block delay for Group Transaction Approvals",
+    "maximum": "maximum Block delay for Group Transaction Approvals"
+  },
+  "group": {
+    "closed": "closed (private) - users need permission to join",
+    "description": "description of group",
+    "invites": "group invites",
+    "management": "group management",
+    "name": "name of group",
+    "open": "open (public)",
+    "type": "group type"
+  },
+  "question": {
+    "create_group": "would you like to perform an CREATE_GROUP transaction?",
+    "provide_thread": "please provide a thread title"
+  },
   "result": {
-    "cannot": {
+    "error": {
       "access_name": "Cannot send a message without a access to your name",
       "group_info": "Cannot access group information"
     },
-    "loading_threads": "loading threads... please wait."
-  },
-
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": "",
-  "": ""
+    "loading_threads": "loading threads... please wait.",
+    "success": {
+      "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
+      "group_creation_name": "created group {{group_name}}: awaiting confirmation",
+      "group_creation_label": "created group {{name}}: success!"
+    }
+  }
 }

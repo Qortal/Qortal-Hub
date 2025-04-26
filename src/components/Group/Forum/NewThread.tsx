@@ -183,19 +183,19 @@ export const NewThread = ({
       const missingFields: string[] = [];
 
       if (!isMessage && !threadTitle) {
-        errorMsg = t('group:provide_thread', {
+        errorMsg = t('group:question.provide_thread', {
           postProcess: 'capitalize',
         });
       }
 
       if (!name) {
-        errorMsg = t('group:result.cannot.access_name', {
+        errorMsg = t('group:result.error.access_name', {
           postProcess: 'capitalize',
         });
       }
 
       if (!groupInfo) {
-        errorMsg = t('group:result.cannot.group_info', {
+        errorMsg = t('group:result.error.group_info', {
           postProcess: 'capitalize',
         });
       }

@@ -24,6 +24,10 @@
     "peers": "connected peers",
     "version": "core version"
   },
+  "count": {
+    "none": "none",
+    "one": "one"
+  },
   "description": "description",
   "fee": {
     "payment": "payment fee",
@@ -56,15 +60,11 @@
       "synchronizing": "synchronizing"
     },
     "success": {
-      "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
       "order_submitted": "your buy order was submitted",
       "publish_qdn": "successfully published to QDN",
       "request_read": "I have read this request",
       "transfer": "the transfer was succesful!"
     }
-  },
-  "question": {
-    "perform_create_group": "would you like to perform an CREATE_GROUP transaction?"
   },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
@@ -87,6 +87,14 @@
   "theme": {
     "dark": "dark mode",
     "light": "light mode"
+  },
+  "time": {
+    "day_one": "{{count}} day",
+    "day_other": "{{count}} days",
+    "hour_one": "{{count}} hour",
+    "hour_other": "{{count}} hours",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes"
   },
   "title": "title",
   "tutorial": "tutorial",
