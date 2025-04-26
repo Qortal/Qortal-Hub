@@ -511,14 +511,8 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                Your wallet is like your digital ID on Qortal, and is how you
-                will login to the Qortal User Interface. It holds your public
-                address and the Qortal name you will eventually choose. Every
-                transaction you make is linked to your ID, and this is where you
-                manage all your QORT and other tradeable cryptocurrencies on
-                Qortal.
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.digital_id', { postProcess: 'capitalize' })}
+              </Typography>
             </React.Fragment>
           }
         >
@@ -548,9 +542,8 @@ export const NotAuthenticated = ({
                   fontSize: '18px',
                 }}
               >
-                New users start here!
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.new_users', { postProcess: 'capitalize' })}
+              </Typography>
               <Spacer height="10px" />
               <Typography
                 color="inherit"
@@ -558,12 +551,8 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                Creating an account means creating a new wallet and digital ID
-                to start using Qortal. Once you have made your account, you can
-                start doing things like obtaining some QORT, buying a name and
-                avatar, publishing videos and blogs, and much more.
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.new_account', { postProcess: 'capitalize' })}
+              </Typography>
             </React.Fragment>
           }
         >
