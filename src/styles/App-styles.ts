@@ -131,9 +131,8 @@ export const CustomButton = styled(Box)(({ theme }) => ({
   width: 'fit-content',
   '&:hover': {
     backgroundColor: theme.palette.background.paper,
-    color: theme.palette.text.secondary,
     'svg path': {
-      fill: theme.palette.background.paper,
+      fill: theme.palette.background.secondary,
     },
   },
 }));

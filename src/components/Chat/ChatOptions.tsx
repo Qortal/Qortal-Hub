@@ -358,14 +358,14 @@ export const ChatOptions = ({
     return (
       <Box
         sx={{
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.surface,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',
           flexDirection: 'column',
           flexGrow: 0,
           flexShrink: 0,
-          height: '100%',
+          height: '98%',
           overflow: 'auto',
           width: '300px',
         }}

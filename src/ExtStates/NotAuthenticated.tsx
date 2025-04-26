@@ -641,15 +641,6 @@ export const NotAuthenticated = ({
                 }}
                 control={
                   <Switch
-                    sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': {
-                        color: '#5EB049',
-                      },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
-                        {
-                          backgroundColor: theme.palette.background.default,
-                        },
-                    }}
                     checked={useLocalNode}
                     onChange={(event) => {
                       if (event.target.checked) {
