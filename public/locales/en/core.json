@@ -15,6 +15,7 @@
     "edit": "edit",
     "export": "export",
     "import": "import",
+    "join": "join",
     "logout": "logout",
     "refetch_page": "refetch page"
   },

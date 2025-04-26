@@ -834,7 +834,9 @@ export const GroupMail = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading threads... please wait.',
+          message: t('group:result.success.loading_threads', {
+            postProcess: 'capitalize',
+          }),
         }}
       />
     </GroupContainer>

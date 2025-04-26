@@ -2,6 +2,7 @@
   "action": {
     "create_group": "create group",
     "find_group": "find group",
+    "join_group": "join group",
     "return_to_thread": "return to threads"
   },
   "advanced_options": "advanced options",
@@ -21,6 +22,7 @@
   },
   "question": {
     "create_group": "would you like to perform an CREATE_GROUP transaction?",
+    "join_group": "would you like to perform an JOIN_GROUP transaction?",
     "provide_thread": "please provide a thread title"
   },
   "result": {
@@ -30,11 +32,14 @@
       "group_info": "cannot access group information",
       "name_required": "please provide a name"
     },
-    "loading_threads": "loading threads... please wait.",
     "success": {
       "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
-      "group_creation_label": "created group {{name}}: success!"
+      "group_creation_label": "created group {{name}}: success!",
+      "join_creation": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+      "group_join_name": "joined group {{group_name}}: awaiting confirmation",
+      "group_join_label": "joined group {{name}}: success!",
+      "loading_threads": "loading threads... please wait."
     }
   }
 }

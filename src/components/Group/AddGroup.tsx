@@ -350,6 +350,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -383,6 +384,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     </MenuItem>
                   </Select>
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
