@@ -11,13 +11,6 @@ import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useRecoilState } from 'recoil';
 
-function a11yProps(index: number) {
-  return {
-    id: `simple-tab-${index}`,
-    'aria-controls': `simple-tabpanel-${index}`,
-  };
-}
-
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
   '& .MuiSwitch-track': {
