@@ -15,6 +15,7 @@
     "edit": "edit",
     "export": "export",
     "import": "import",
+    "invite": "invite",
     "join": "join",
     "logout": "logout",
     "notify": "notify"

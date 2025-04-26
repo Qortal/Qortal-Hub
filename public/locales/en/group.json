@@ -3,6 +3,7 @@
     "create_group": "create group",
     "find_group": "find group",
     "join_group": "join group",
+    "invite_member": "invite member",
     "refetch_page": "refetch page",
     "return_to_thread": "return to threads"
   },
@@ -21,8 +22,10 @@
     "open": "open (public)",
     "type": "group type"
   },
+  "invitation_expiry": "invitation Expiry Time",
   "question": {
     "create_group": "would you like to perform an CREATE_GROUP transaction?",
+    "group_invite": "would you like to perform a GROUP_INVITE transaction?",
     "join_group": "would you like to perform an JOIN_GROUP transaction?",
     "provide_thread": "please provide a thread title"
   },
@@ -45,6 +48,7 @@
       "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
+      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
       "join_creation": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",
