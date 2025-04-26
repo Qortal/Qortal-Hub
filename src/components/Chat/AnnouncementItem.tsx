@@ -101,7 +101,6 @@ export const AnnouncementItem = ({
               sx={{
                 fontWight: 600,
                 fontFamily: 'Inter',
-                color: 'cadetBlue',
               }}
             >
               {message?.name}

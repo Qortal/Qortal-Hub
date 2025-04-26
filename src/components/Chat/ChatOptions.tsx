@@ -767,7 +767,6 @@ const ShowMessage = ({ message, goToMessage, messages }) => {
             sx={{
               fontWight: 600,
               fontFamily: 'Inter',
-              color: 'cadetBlue',
             }}
           >
             {message?.senderName}

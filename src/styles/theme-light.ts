@@ -6,20 +6,25 @@ const lightThemeOptions: ThemeOptions = {
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgba(244, 244, 251, 1)',
+      main: 'rgb(162, 162, 221)', // old light becomes main
       dark: 'rgb(113, 198, 212)',
-      light: 'rgb(162, 162, 221)',
+      light: 'rgba(244, 244, 251, 1)', // former main becomes light
     },
     secondary: {
       main: 'rgba(194, 222, 236, 1)',
     },
     background: {
       default: 'rgba(250, 250, 250, 1)',
-      paper: 'rgb(228, 228, 228)',
+      paper: 'rgb(220, 220, 220)', // darker card background
+      surface: 'rgb(240, 240, 240)', // optional middle gray for replies, side panels
     },
     text: {
       primary: 'rgba(0, 0, 0, 1)',
       secondary: 'rgba(82, 82, 82, 1)',
+    },
+    border: {
+      main: 'rgba(0, 0, 0, 0.12)',
+      subtle: 'rgba(0, 0, 0, 0.08)',
     },
   },
   components: {

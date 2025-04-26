@@ -1556,12 +1556,13 @@ export const Group = ({
       <div
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.default,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           width: '380px',
+          padding: '0px 2px',
         }}
       >
         <Box
@@ -1789,8 +1790,9 @@ export const Group = ({
           flexDirection: 'column',
           alignItems: 'flex-start',
           height: '100%',
-          background: theme.palette.background.default,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
+          padding: '0px 2px',
         }}
       >
         <Box

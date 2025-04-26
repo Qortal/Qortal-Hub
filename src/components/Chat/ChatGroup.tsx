@@ -997,6 +997,7 @@ export const ChatGroup = ({
         opacity: hide ? 0 : 1,
         position: hide ? 'absolute' : 'relative',
         width: '100%',
+        padding: '10px',
       }}
     >
       <ChatList
@@ -1021,7 +1022,7 @@ export const ChatGroup = ({
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
-            backgroundColor: theme.palette.background.default,
+            backgroundColor: theme.palette.background.surface,
             bottom: isFocusedParent ? '0px' : 'unset',
             boxSizing: 'border-box',
             display: 'flex',
@@ -1034,6 +1035,8 @@ export const ChatGroup = ({
             top: isFocusedParent ? '0px' : 'unset',
             width: '100%',
             zIndex: isFocusedParent ? 5 : 'unset',
+            border: `1px solid ${theme.palette.border.subtle}`,
+            borderRadius: '10px',
           }}
         >
           <div

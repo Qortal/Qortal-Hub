@@ -1471,6 +1471,7 @@ function App() {
           sx={{
             height: '100%',
             justifyContent: 'space-between',
+            borderLeft: `1px solid ${theme.palette.border.subtle}`,
           }}
         >
           <Box

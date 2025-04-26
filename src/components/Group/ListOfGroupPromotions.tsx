@@ -687,7 +687,6 @@ export const ListOfGroupPromotions = () => {
                                     sx={{
                                       fontWight: 600,
                                       fontFamily: 'Inter',
-                                      color: 'cadetBlue',
                                     }}
                                   >
                                     {promotion?.name}
@@ -698,7 +697,6 @@ export const ListOfGroupPromotions = () => {
                                   sx={{
                                     fontWight: 600,
                                     fontFamily: 'Inter',
-                                    color: 'cadetBlue',
                                   }}
                                 >
                                   {promotion?.groupName}
@@ -746,7 +744,6 @@ export const ListOfGroupPromotions = () => {
                                 sx={{
                                   fontWight: 600,
                                   fontFamily: 'Inter',
-                                  color: 'cadetBlue',
                                 }}
                               >
                                 {promotion?.data}

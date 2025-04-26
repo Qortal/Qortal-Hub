@@ -15,11 +15,16 @@ const darkThemeOptions: ThemeOptions = {
     },
     background: {
       default: 'rgb(49, 51, 56)',
-      paper: 'rgb(96, 96, 97)',
+      paper: 'rgb(62, 64, 68)',
+      surface: 'rgb(58, 60, 65)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
       secondary: 'rgb(179, 179, 179)',
+    },
+    border: {
+      main: 'rgba(255, 255, 255, 0.12)',
+      subtle: 'rgba(255, 255, 255, 0.08)',
     },
   },
   components: {
