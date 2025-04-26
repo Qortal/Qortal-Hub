@@ -724,7 +724,7 @@ export const Thread = ({
               disabled={!hasNextPage}
               variant="contained"
             >
-              {t('core:next', { postProcess: 'capitalize' })}
+              {t('core:page.next', { postProcess: 'capitalize' })}
             </Button>
             <Button
               sx={{
@@ -962,7 +962,9 @@ export const Thread = ({
                     color: 'white',
                   }}
                 >
-                  {t('core:action.refetch_page', { postProcess: 'capitalize' })}
+                  {t('group:action.refetch_page', {
+                    postProcess: 'capitalize',
+                  })}
                 </Button>
               </Box>
             </>
@@ -1036,7 +1038,7 @@ export const Thread = ({
                 disabled={!hasNextPage}
                 variant="contained"
               >
-                {t('core:next', { postProcess: 'capitalize' })}
+                {t('core:page.next', { postProcess: 'capitalize' })}
               </Button>
               <Button
                 sx={{

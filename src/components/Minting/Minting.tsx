@@ -265,7 +265,7 @@ export const Minting = ({
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || 'An error occurred' }); //TODO translate
+            rej({ message: error.message || 'An error occurred' });
           });
       });
     } catch (error) {
@@ -280,7 +280,7 @@ export const Minting = ({
   }, []);
 
   const createRewardShare = useCallback(async (publicKey, recipient) => {
-    const fee = await getFee('REWARD_SHARE');
+    const fee = await getFee('REWARD_SHARE'); // TODO translate
     await show({
       message: 'Would you like to perform an REWARD_SHARE transaction?',
       publishFee: fee.fee + ' QORT',

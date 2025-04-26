@@ -510,7 +510,7 @@ function App() {
           console.error(
             'Failed to get API key:',
             error?.message || 'An error occurred'
-          ); // TODO translate
+          );
         })
         .finally(() => {
           window
@@ -1887,10 +1887,6 @@ function App() {
     <AppContainer
       sx={{
         height: '100vh',
-        // backgroundImage: desktopViewMode === "apps" && 'url("appsBg.svg")',
-        // backgroundSize: desktopViewMode === "apps" && "cover",
-        // backgroundPosition: desktopViewMode === "apps" && "center",
-        // backgroundRepeat: desktopViewMode === "apps" && "no-repeat",
       }}
     >
       <PdfViewer />
@@ -3027,7 +3023,7 @@ function App() {
             >
               {t('core:action.close', { postProcess: 'capitalize' })}
             </CustomButton>
-          </> // TODO translate
+          </>
         )}
 
         {countdown && (

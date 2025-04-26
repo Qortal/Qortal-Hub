@@ -1,46 +1,52 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
+import { useTranslation } from 'react-i18next';
 
 export const NewUsersCTA = ({ balance }) => {
+  const { t } = useTranslation(['core']);
+
   if (balance === undefined || +balance > 0) return null;
+
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <Spacer height="40px" />
 
       <Box
         sx={{
-          width: '320px',
-          justifyContent: 'center',
-          flexDirection: 'column',
           alignItems: 'center',
-          padding: '15px',
-          outline: '1px solid gray',
           borderRadius: '4px',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          outline: '1px solid gray',
+          padding: '15px',
+          width: '320px',
         }}
       >
         <Typography
           sx={{
-            textAlign: 'center',
             fontSize: '1.2rem',
             fontWeight: 'bold',
+            textAlign: 'center',
           }}
         >
-          Are you a new user?
-        </Typography>{' '}
-        // TODO translate
-        <Spacer height="20px" />
-        <Typography>
-          Please message us on Telegram or Discord if you need 4 QORT to start
-          chatting without any limitations
+          {t('core:new_user', { postProcess: 'capitalize' })}
         </Typography>
+
         <Spacer height="20px" />
+
+        <Typography>
+          {t('core:message_us', { postProcess: 'capitalize' })}
+        </Typography>
+
+        <Spacer height="20px" />
+
         <Box
           sx={{
             width: '100%',
@@ -68,6 +74,7 @@ export const NewUsersCTA = ({ balance }) => {
           >
             Telegram
           </ButtonBase>
+
           <ButtonBase
             sx={{
               textDecoration: 'underline',

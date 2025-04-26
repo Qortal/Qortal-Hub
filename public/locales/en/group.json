@@ -3,6 +3,7 @@
     "create_group": "create group",
     "find_group": "find group",
     "join_group": "join group",
+    "refetch_page": "refetch page",
     "return_to_thread": "return to threads"
   },
   "advanced_options": "advanced options",
