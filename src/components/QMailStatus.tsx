@@ -77,7 +77,7 @@ export const QMailStatus = () => {
           tooltip: {
             sx: {
               color: theme.palette.text.primary,
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.paper,
             },
           },
           arrow: {
