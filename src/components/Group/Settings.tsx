@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { forwardRef, Fragment, ReactElement, Ref, useEffect } from 'react';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -44,11 +44,11 @@ const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   },
 }));
 
-const Transition = React.forwardRef(function Transition(
+const Transition = forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement;
+    children: ReactElement;
   },
-  ref: React.Ref<unknown>
+  ref: Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -111,12 +111,12 @@ export const Settings = ({ address, open, setOpen }) => {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     getUserSettings();
   }, []);
 
   return (
-    <React.Fragment>
+    <Fragment>
       <Dialog
         fullScreen
         open={open}
@@ -185,6 +185,6 @@ export const Settings = ({ address, open, setOpen }) => {
           )}
         </Box>
       </Dialog>
-    </React.Fragment>
+    </Fragment>
   );
 };
