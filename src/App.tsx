@@ -102,7 +102,6 @@ import { useRecoilState, useResetRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
-  fullScreenAtom,
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
@@ -115,7 +114,6 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from './atoms/global';
-import { useAppFullScreen } from './useAppFullscreen';
 import { NotAuthenticated } from './ExtStates/NotAuthenticated';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
 import { Wallets } from './Wallets';
@@ -401,12 +399,10 @@ function App() {
   const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
-  const [fullScreen, setFullScreen] = useRecoilState(fullScreenAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
   const setIsDisabledEditorEnter = useSetRecoilState(isDisabledEditorEnterAtom);
   const [isOpenMinting, setIsOpenMinting] = useState(false);
-  const { toggleFullScreen } = useAppFullScreen(setFullScreen);
   const generatorRef = useRef(null);
 
   const exportSeedphrase = () => {
@@ -449,24 +445,6 @@ function App() {
       showTutorial('getting-started');
     }
   }, [extState, walletToBeDownloaded, shownTutorialsInitiated]);
-
-  useEffect(() => {
-    // Attach a global event listener for double-click
-    const handleDoubleClick = () => {
-      toggleFullScreen();
-    };
-
-    // Add the event listener to the root HTML document
-    document.documentElement.addEventListener('dblclick', handleDoubleClick);
-
-    // Clean up the event listener on unmount
-    return () => {
-      document.documentElement.removeEventListener(
-        'dblclick',
-        handleDoubleClick
-      );
-    };
-  }, [toggleFullScreen]);
 
   //resets for recoil
   const resetAtomSortablePinnedAppsAtom = useResetRecoilState(
