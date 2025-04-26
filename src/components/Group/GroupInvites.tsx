@@ -69,7 +69,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
         <Typography
           sx={{
             fontSize: '1rem',
-          }} // TODO translate
+          }}
         >
           {t('group:group_invites', { postProcess: 'capitalize' })}{' '}
           {groupsWithJoinRequests?.length > 0 &&
@@ -130,7 +130,9 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                   fontWeight: 400,
                 }}
               >
-                Nothing to display
+                {t('group:message.generic.no_display', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Box>
           )}
@@ -177,7 +179,10 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                           fontWeight: 400,
                         },
                       }}
-                      primary={`${group?.groupName} has invited you`}
+                      primary={t('group:message.generic.group_invited_you', {
+                        group: group?.groupName,
+                        postProcess: 'capitalize',
+                      })}
                     />
                   </ListItemButton>
                 </ListItem>

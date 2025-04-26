@@ -14,6 +14,7 @@ import { myGroupsWhereIAmAdminAtom } from '../../atoms/global';
 import { useSetRecoilState } from 'recoil';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { useTranslation } from 'react-i18next';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2);
 
 export const GroupJoinRequests = ({
@@ -27,7 +28,7 @@ export const GroupJoinRequests = ({
   setDesktopViewMode,
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-
+  const { t } = useTranslation(['core', 'group']);
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState(
     []
   );
@@ -139,9 +140,9 @@ export const GroupJoinRequests = ({
         <Typography
           sx={{
             fontSize: '1rem',
-          }} // TODO translate
+          }}
         >
-          Join Requests{' '}
+          {t('group:join_requests', { postProcess: 'capitalize' })}{' '}
           {filteredJoinRequests?.filter((group) => group?.data?.length > 0)
             ?.length > 0 &&
             ` (${filteredJoinRequests?.filter((group) => group?.data?.length > 0)?.length})`}
@@ -163,14 +164,13 @@ export const GroupJoinRequests = ({
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <Box
           sx={{
-            width: '322px',
-            height: '250px',
-
+            bgcolor: 'background.paper',
+            borderRadius: '19px',
             display: 'flex',
             flexDirection: 'column',
-            bgcolor: 'background.paper',
+            height: '250px',
             padding: '20px',
-            borderRadius: '19px',
+            width: '322px',
           }}
         >
           {loading && filteredJoinRequests.length === 0 && (
@@ -204,18 +204,20 @@ export const GroupJoinRequests = ({
                     color: 'rgba(255, 255, 255, 0.2)',
                   }}
                 >
-                  Nothing to display
+                  {t('group:message.generic.no_display', {
+                    postProcess: 'capitalize',
+                  })}
                 </Typography>
               </Box>
             )}
           <List
             className="scrollable-container"
             sx={{
-              width: '100%',
-              maxWidth: 360,
               bgcolor: 'background.paper',
               maxHeight: '300px',
+              maxWidth: 360,
               overflow: 'auto',
+              width: '100%',
             }}
           >
             {filteredJoinRequests?.map((group) => {
