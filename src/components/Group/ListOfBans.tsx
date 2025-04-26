@@ -86,7 +86,6 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
   const handleCancelBan = async (address) => {
     try {
-      // TODO translate
       const fee = await getFee('CANCEL_GROUP_BAN');
       await show({
         message: t('group:question.cancel_ban', { postProcess: 'capitalize' }),
