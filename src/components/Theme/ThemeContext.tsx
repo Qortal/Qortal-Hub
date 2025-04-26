@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, useMemo } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+} from 'react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { darkTheme } from '../../styles/theme-dark';
 import { lightTheme } from '../../styles/theme-light';
@@ -17,8 +24,35 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   const toggleTheme = () => {
-    setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+    setThemeMode((prevMode) => {
+      const newMode = prevMode === 'light' ? 'dark' : 'light';
+
+      const themeProperties = {
+        mode: newMode,
+      };
+
+      localStorage.setItem('saved_ui_theme', JSON.stringify(themeProperties));
+
+      return newMode;
+    });
   };
+
+  const getSavedTheme = useCallback(async () => {
+    try {
+      const themeProperties = JSON.parse(
+        localStorage.getItem(`saved_ui_theme`) || '{}'
+      );
+
+      const theme = themeProperties?.mode || 'light';
+      setThemeMode(theme);
+    } catch (error) {
+      console.log('error', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    getSavedTheme();
+  }, [getSavedTheme]);
 
   return (
     <ThemeContext.Provider value={{ themeMode, toggleTheme }}>
