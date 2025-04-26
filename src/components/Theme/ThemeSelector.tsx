@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 const ThemeSelector = () => {
   const { t } = useTranslation(['core']);
+
   const { themeMode, toggleTheme } = useThemeContext();
 
   return (
@@ -14,7 +15,7 @@ const ThemeSelector = () => {
         bottom: '1%',
         display: 'flex',
         gap: '12px',
-        left: '1.5vh',
+        left: '1.2vh',
         position: 'absolute',
       }}
     >

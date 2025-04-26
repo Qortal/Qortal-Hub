@@ -1,0 +1,65 @@
+{
+  "action": {
+    "cancel_ban": "annulla ban",
+    "create_group": "crea gruppo",
+    "find_group": "trova gruppo",
+    "join_group": "unisciti al gruppo",
+    "invite_member": "invita membro",
+    "refetch_page": "ricarica pagina",
+    "return_to_thread": "torna ai thread"
+  },
+  "advanced_options": "opzioni avanzate",
+  "approval_threshold": "soglia di Approvazione del gruppo (numero/percentuale di Admin che devono approvare una transazione)",
+  "ban_list": "lista ban",
+  "block_delay": {
+    "minimum": "ritardo minimo dei blocchi per Approvazione di Transazioni di Gruppo",
+    "maximum": "ritardo massimo dei blocchi per Approvazione di Transazioni di Gruppo"
+  },
+  "group": {
+    "closed": "chiuso (privato) - gli utenti necessitano di permesso per unirsi",
+    "description": "descrizione del gruppo",
+    "invites": "inviti del gruppo",
+    "management": "gestione del gruppo",
+    "name": "nome del gruppo",
+    "open": "aperto (pubblico)",
+    "type": "tipo di gruppo"
+  },
+  "invitation_expiry": "tempo di scadenza dell'invito",
+  "join_requests": "richieste di adesione",
+  "question": {
+    "cancel_ban": "vuoi eseguire una transazione CANCEL_GROUP_BAN?",
+    "create_group": "vuoi eseguire una transazione CREATE_GROUP?",
+    "group_invite": "vuoi eseguire una transazione GROUP_INVITE?",
+    "join_group": "vuoi eseguire una transazione JOIN_GROUP?",
+    "provide_thread": "per favore fornisci un titolo per il thread"
+  },
+  "message": {
+    "generic": {
+      "encryption_key": "la prima chiave di cifratura comune del gruppo è in fase di creazione. Attendere alcuni minuti affinché venga recuperata dalla rete. Controllo ogni 2 minuti...",
+      "group_invited_you": "{{group}} ti ha invitato",
+      "no_display": "niente da visualizzare",
+      "no_selection": "nessun gruppo selezionato",
+      "not_part_group": "non fai parte del gruppo cifrato dei membri. Attendi che un amministratore ri-codifichi le chiavi.",
+      "only_encrypted": "verranno visualizzati solo i messaggi non cifrati.",
+      "setting_group": "configurazione del gruppo... attendere prego."
+    },
+    "error": {
+      "access_name": "impossibile inviare un messaggio senza accesso al tuo nome",
+      "description_required": "per favore fornisci una descrizione",
+      "group_info": "impossibile accedere alle informazioni del gruppo",
+      "name_required": "per favore fornisci un nome",
+      "notify_admins": "prova a notificare un admin dalla lista di amministratori qui sotto:"
+    },
+    "success": {
+      "group_creation": "gruppo creato con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
+      "group_creation_name": "gruppo {{group_name}} creato: in attesa di conferma",
+      "group_creation_label": "gruppo {{name}} creato: successo!",
+      "group_invite": "invito inviato con successo a {{value}}. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
+      "join_creation": "richiesta di adesione al gruppo inviata con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
+      "group_join_name": "entrato nel gruppo {{group_name}}: in attesa di conferma",
+      "group_join_label": "entrato nel gruppo {{name}}: successo!",
+      "loading_threads": "caricamento thread... attendere prego.",
+      "unbanned_user": "utente sbannato con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino"
+    }
+  }
+}

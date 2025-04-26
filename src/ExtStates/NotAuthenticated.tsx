@@ -31,6 +31,7 @@ import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from '../components/Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
+import LanguageSelector from '../components/Language/LanguageSelector';
 
 const manifestData = {
   version: '0.5.3',
@@ -510,14 +511,8 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                Your wallet is like your digital ID on Qortal, and is how you
-                will login to the Qortal User Interface. It holds your public
-                address and the Qortal name you will eventually choose. Every
-                transaction you make is linked to your ID, and this is where you
-                manage all your QORT and other tradeable cryptocurrencies on
-                Qortal.
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.digital_id', { postProcess: 'capitalize' })}
+              </Typography>
             </React.Fragment>
           }
         >
@@ -547,9 +542,8 @@ export const NotAuthenticated = ({
                   fontSize: '18px',
                 }}
               >
-                New users start here!
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.new_users', { postProcess: 'capitalize' })}
+              </Typography>
               <Spacer height="10px" />
               <Typography
                 color="inherit"
@@ -557,12 +551,8 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                Creating an account means creating a new wallet and digital ID
-                to start using Qortal. Once you have made your account, you can
-                start doing things like obtaining some QORT, buying a name and
-                avatar, publishing videos and blogs, and much more.
-              </Typography>{' '}
-              // TODO translate
+                {t('auth:tips.new_account', { postProcess: 'capitalize' })}
+              </Typography>
             </React.Fragment>
           }
         >
@@ -816,7 +806,7 @@ export const NotAuthenticated = ({
                         }}
                         variant="contained"
                       >
-                        {t('core:choose', { postProcess: 'capitalize' })}
+                        {t('core:action.choose', { postProcess: 'capitalize' })}
                       </Button>
                     </Box>
                   </Box>
@@ -875,7 +865,9 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            {t('core:choose', { postProcess: 'capitalize' })}
+                            {t('core:action.choose', {
+                              postProcess: 'capitalize',
+                            })}
                           </Button>
 
                           <Button
@@ -888,7 +880,9 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            {t('core:edit', { postProcess: 'capitalize' })}
+                            {t('core:action.edit', {
+                              postProcess: 'capitalize',
+                            })}
                           </Button>
 
                           <Button
@@ -940,7 +934,7 @@ export const NotAuthenticated = ({
           <DialogActions>
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
-                {t('core:add', { postProcess: 'capitalize' })}
+                {t('core:action.add', { postProcess: 'capitalize' })}
               </Button>
             )}
 
@@ -953,7 +947,7 @@ export const NotAuthenticated = ({
                   }}
                   autoFocus
                 >
-                  {t('core:close', { postProcess: 'capitalize' })}
+                  {t('core:action.close', { postProcess: 'capitalize' })}
                 </Button>
               </>
             )}
@@ -1075,7 +1069,7 @@ export const NotAuthenticated = ({
                 setShowSelectApiKey(false);
               }}
             >
-              {t('core:close', { postProcess: 'capitalize' })}
+              {t('core:action.close', { postProcess: 'capitalize' })}
             </Button>
           </DialogActions>
         </Dialog>
@@ -1097,6 +1091,7 @@ export const NotAuthenticated = ({
         />
       </ButtonBase>
 
+      <LanguageSelector />
       <ThemeSelector />
     </>
   );

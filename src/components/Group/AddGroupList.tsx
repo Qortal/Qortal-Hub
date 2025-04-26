@@ -1,6 +1,5 @@
 import {
   Box,
-  Button,
   ListItem,
   ListItemButton,
   ListItemText,
@@ -8,7 +7,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, {
+import {
   useCallback,
   useContext,
   useEffect,
@@ -25,10 +24,12 @@ import {
 import _ from 'lodash';
 import { MyContext, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
-import { getBaseApi, getFee } from '../../background';
+import { getFee } from '../../background';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { Spacer } from '../../common/Spacer';
+import { useTranslation } from 'react-i18next';
+
 const cache = new CellMeasurerCache({
   fixedWidth: true,
   defaultHeight: 50,
@@ -36,7 +37,7 @@ const cache = new CellMeasurerCache({
 
 export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const { memberGroups, show, setTxList } = useContext(MyContext);
-
+  const { t } = useTranslation(['core', 'group']);
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
@@ -101,12 +102,17 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const handleJoinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
-      const fee = await getFee('JOIN_GROUP'); // TODO translate
+
+      const fee = await getFee('JOIN_GROUP');
+
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.join_group', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoading(true);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('joinGroup', {
@@ -116,8 +122,9 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.join_group', {
+                  postProcess: 'capitalize',
+                }),
               });
 
               if (isOpen) {
@@ -125,8 +132,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   {
                     ...response,
                     type: 'joined-group',
-                    label: `Joined Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Joined Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
+                    labelDone: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
                     done: false,
                     groupId,
                   },
@@ -215,7 +228,10 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     padding: '10px',
                   }}
                 >
-                  <Typography>Join {group?.groupName}</Typography>
+                  <Typography>
+                    {t('core:action.join', { postProcess: 'capitalize' })}{' '}
+                    {group?.groupName}
+                  </Typography>
                   <Typography>
                     {group?.isOpen === false &&
                       'This is a closed/private group, so you will need to wait until an admin accepts your request'}
@@ -226,7 +242,9 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     variant="contained"
                     onClick={() => handleJoinGroup(group, group?.isOpen)}
                   >
-                    Join group
+                    {t('group:action.join_group', {
+                      postProcess: 'capitalize',
+                    })}
                   </LoadingButton>
                 </Box>
               </Popover>

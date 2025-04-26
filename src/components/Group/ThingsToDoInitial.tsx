@@ -141,21 +141,6 @@ export const ThingsToDoInitial = ({
                       outline: '1px solid rgba(9, 182, 232, 1)',
                     }}
                   />
-                  {/* <Checkbox
-                   edge="start"
-                   checked={checked1}
-                   tabIndex={-1}
-                   disableRipple
-                   disabled={true}
-                   sx={{
-                     "&.Mui-checked": {
-                       color: "white", // Customize the color when checked
-                     },
-                     "& .MuiSvgIcon-root": {
-                       color: "white",
-                     },
-                   }}
-                 /> */}
                 </ListItemIcon>
               </ListItemButton>
             </ListItem>
@@ -163,15 +148,6 @@ export const ThingsToDoInitial = ({
               sx={{
                 marginBottom: '20px',
               }}
-              //  secondaryAction={
-              //     <IconButton edge="end" aria-label="comments">
-              //       <InfoIcon
-              //         sx={{
-              //           color: "white",
-              //         }}
-              //       />
-              //     </IconButton>
-              //   }
               disablePadding
             >
               <ListItemButton
@@ -215,34 +191,6 @@ export const ThingsToDoInitial = ({
                 </ListItemIcon>
               </ListItemButton>
             </ListItem>
-            {/* <ListItem
-             disablePadding
-           >
-             <ListItemButton sx={{
-                 padding: "0px",
-               }} disableRipple role={undefined} dense>
-               
-               <ListItemText sx={{
-                   "& .MuiTypography-root": {
-                     fontSize: "13px",
-                     fontWeight: 400,
-                   },
-                 }} primary={`Join a group`} />
-               <ListItemIcon sx={{
-                   justifyContent: "flex-end",
-                 }}>
-               <Box
-                   sx={{
-                     height: "18px",
-                     width: "18px",
-                     borderRadius: "50%",
-                     backgroundColor: checked3 ? "rgba(9, 182, 232, 1)" : "transparent",
-                     outline: "1px solid rgba(9, 182, 232, 1)",
-                   }}
-                 />
-               </ListItemIcon>
-             </ListItemButton>
-           </ListItem> */}
           </List>
         )}
       </Box>

@@ -4,16 +4,21 @@ import { useState } from 'react';
 import { Spacer } from '../../common/Spacer';
 import { Label } from './AddGroup';
 import { getFee } from '../../background';
+import { useTranslation } from 'react-i18next';
 
 export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [value, setValue] = useState('');
   const [expiryTime, setExpiryTime] = useState<string>('259200');
   const [isLoadingInvite, setIsLoadingInvite] = useState(false);
+  const { t } = useTranslation(['core', 'group']);
+
   const inviteMember = async () => {
     try {
       const fee = await getFee('GROUP_INVITE');
       await show({
-        message: 'Would you like to perform a GROUP_INVITE transaction?',
+        message: t('group:question.group_invite', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingInvite(true);
@@ -27,10 +32,12 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           })
           .then((response) => {
             if (!response?.error) {
-              // TODO translate
               setInfoSnack({
                 type: 'success',
-                message: `Successfully invited ${value}. It may take a couple of minutes for the changes to propagate`,
+                message: t('group:message.success.group_invite', {
+                  value: value,
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               res(response);
@@ -72,7 +79,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         flexDirection: 'column',
       }}
     >
-      Invite member
+      {t('group:action.invite_member', { postProcess: 'capitalize' })}
       <Spacer height="20px" />
       <Input
         value={value}
@@ -80,24 +87,26 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         onChange={(e) => setValue(e.target.value)}
       />
       <Spacer height="20px" />
-      <Label>Invitation Expiry Time</Label>
+      <Label>
+        {t('group:invitation_expiry', { postProcess: 'capitalize' })}
+      </Label>
       <Select
         labelId="demo-simple-select-label"
         id="demo-simple-select"
         value={expiryTime}
-        label="Invitation Expiry Time"
+        label={t('group:invitation_expiry', { postProcess: 'capitalize' })}
         onChange={handleChange}
       >
-        <MenuItem value={10800}>3 hours</MenuItem>
-        <MenuItem value={21600}>6 hours</MenuItem>
-        <MenuItem value={43200}>12 hours</MenuItem>
-        <MenuItem value={86400}>1 day</MenuItem>
-        <MenuItem value={259200}>3 days</MenuItem>
-        <MenuItem value={432000}>5 days</MenuItem>
-        <MenuItem value={604800}>7 days</MenuItem>
-        <MenuItem value={864000}>10 days</MenuItem>
-        <MenuItem value={1296000}>15 days</MenuItem>
-        <MenuItem value={2592000}>30 days</MenuItem>
+        <MenuItem value={10800}>{t('core.time.hour', { count: 3 })}</MenuItem>
+        <MenuItem value={21600}>{t('core.time.hour', { count: 6 })}</MenuItem>
+        <MenuItem value={43200}>{t('core.time.hour', { count: 12 })}</MenuItem>
+        <MenuItem value={86400}>{t('core.time.day', { count: 1 })}</MenuItem>
+        <MenuItem value={259200}>{t('core.time.day', { count: 3 })}</MenuItem>
+        <MenuItem value={432000}>{t('core.time.day', { count: 5 })}</MenuItem>
+        <MenuItem value={604800}>{t('core.time.day', { count: 7 })}</MenuItem>
+        <MenuItem value={864000}>{t('core.time.day', { count: 10 })}</MenuItem>
+        <MenuItem value={1296000}>{t('core.time.day', { count: 15 })}</MenuItem>
+        <MenuItem value={2592000}>{t('core.time.day', { count: 30 })}</MenuItem>
       </Select>
       <Spacer height="20px" />
       <LoadingButton
@@ -106,7 +115,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         loading={isLoadingInvite}
         onClick={inviteMember}
       >
-        Invite
+        {t('core:action.invite', { postProcess: 'capitalize' })}
       </LoadingButton>
     </Box>
   );

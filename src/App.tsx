@@ -135,6 +135,7 @@ import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
 import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 import { useTranslation } from 'react-i18next';
+import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 
 type extStates =
@@ -255,14 +256,7 @@ export const getBaseApiReact = (customApi?: string) => {
     return groupApi;
   }
 };
-// export const getArbitraryEndpointReact = () => {
 
-//   if (globalApiKey) {
-//     return `/arbitrary/resources/search`;
-//   } else {
-//     return `/arbitrary/resources/searchsimple`;
-//   }
-// };
 export const getArbitraryEndpointReact = () => {
   if (globalApiKey) {
     return `/arbitrary/resources/searchsimple`;
@@ -570,26 +564,6 @@ function App() {
   useEffect(() => {
     isFocusedRef.current = isFocused;
   }, [isFocused]);
-
-  // const checkIfUserHasLocalNode = useCallback(async () => {
-  //   try {
-  //     const url = `http://127.0.0.1:12391/admin/status`;
-  //     const response = await fetch(url, {
-  //       method: "GET",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //     });
-  //     const data = await response.json();
-  //     if (data?.isSynchronizing === false && data?.syncPercent === 100) {
-  //       setHasLocalNode(true);
-  //     }
-  //   } catch (error) {}
-  // }, []);
-
-  // useEffect(() => {
-  //   checkIfUserHasLocalNode();
-  // }, [extState]);
 
   const address = useMemo(() => {
     if (!rawWallet?.address0) return '';
@@ -1007,7 +981,7 @@ function App() {
         await showUnsavedChanges({
           message:
             'Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.',
-        });
+        }); // TODO translate
       } else if (extState === 'authenticated') {
         await showUnsavedChanges({
           message: 'Are you sure you would like to logout?',
@@ -1311,19 +1285,24 @@ function App() {
             </Tooltip>
           )}
         </Box>
+
         <Spacer height="48px" />
 
         {authenticatedMode === 'ltc' ? (
           <>
             <img src={ltcLogo} />
+
             <Spacer height="32px" />
+
             <CopyToClipboard text={rawWallet?.ltcAddress}>
               <AddressBox>
                 {rawWallet?.ltcAddress?.slice(0, 6)}...
                 {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
               </AddressBox>
             </CopyToClipboard>
+
             <Spacer height="10px" />
+
             {ltcBalanceLoading && (
               <CircularProgress color="success" size={16} />
             )}
@@ -1345,6 +1324,7 @@ function App() {
                 >
                   {ltcBalance} LTC
                 </TextP>
+
                 <RefreshIcon
                   onClick={getLtcBalanceFunc}
                   sx={{
@@ -1364,7 +1344,9 @@ function App() {
               myName={userInfo?.name}
               balance={balance}
             />
+
             <Spacer height="32px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -1374,7 +1356,9 @@ function App() {
             >
               {userInfo?.name}
             </TextP>
+
             <Spacer height="10px" />
+
             <CopyToClipboard text={rawWallet?.address0}>
               <AddressBox>
                 {rawWallet?.address0?.slice(0, 6)}...
@@ -1514,7 +1498,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:logout')}
+                    {t('core:action.logout')}
                   </span>
                 }
                 placement="left"
@@ -1869,7 +1853,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:backup_wallet')}
+                    {t('core:action.backup_wallet')}
                   </span>
                 }
                 placement="left"
@@ -1903,10 +1887,6 @@ function App() {
     <AppContainer
       sx={{
         height: '100vh',
-        // backgroundImage: desktopViewMode === "apps" && 'url("appsBg.svg")',
-        // backgroundSize: desktopViewMode === "apps" && "cover",
-        // backgroundPosition: desktopViewMode === "apps" && "center",
-        // backgroundRepeat: desktopViewMode === "apps" && "no-repeat",
       }}
     >
       <PdfViewer />
@@ -2036,7 +2016,6 @@ function App() {
             />
           </Box>
         )}
-
         {isShowQortalRequest && !isMainWindow && (
           <>
             <Spacer height="120px" />
@@ -2319,7 +2298,6 @@ function App() {
             <ErrorText>{sendPaymentError}</ErrorText>
           </>
         )}
-
         {extState === 'web-app-request-payment' && !isMainWindow && (
           <>
             <Spacer height="100px" />
@@ -2953,7 +2931,9 @@ function App() {
                     });
                   }}
                 >
-                  Backup Account
+                  {t('core:action.backup_account', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButton>
               </>
             )}
@@ -2981,7 +2961,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The transfer was succesful!
+              {t('core:message.success.transfer', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -2989,7 +2971,7 @@ function App() {
                 returnToMain();
               }}
             >
-              Continue
+              {t('core:action.continue', { postProcess: 'capitalize' })}
             </CustomButton>
           </Box>
         )}
@@ -3004,7 +2986,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The transfer was succesful!
+              {t('core:message.success.transfer', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -3012,7 +2996,7 @@ function App() {
                 window.close();
               }}
             >
-              Continue
+              {t('core:action.continue', { postProcess: 'capitalize' })}
             </CustomButton>
           </>
         )}
@@ -3027,7 +3011,9 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              Your buy order was submitted
+              {t('core:message.success.order_submitted', {
+                postProcess: 'capitalize',
+              })}
             </TextP>
             <Spacer height="100px" />
             <CustomButton
@@ -3035,10 +3021,11 @@ function App() {
                 window.close();
               }}
             >
-              Close
+              {t('core:action.close', { postProcess: 'capitalize' })}
             </CustomButton>
           </>
         )}
+
         {countdown && (
           <Box
             style={{
@@ -3082,12 +3069,18 @@ function App() {
               </DialogContentText>
               {message?.paymentFee && (
                 <DialogContentText id="alert-dialog-description2">
-                  payment fee: {message.paymentFee}
+                  {t('core:fee.payment', {
+                    postProcess: 'capitalize',
+                  })}
+                  : {message.paymentFee}
                 </DialogContentText>
               )}
               {message?.publishFee && (
                 <DialogContentText id="alert-dialog-description2">
-                  publish fee: {message.publishFee}
+                  {t('core:fee.publish', {
+                    postProcess: 'capitalize',
+                  })}
+                  : {message.publishFee}
                 </DialogContentText>
               )}
             </DialogContent>
@@ -3108,7 +3101,9 @@ function App() {
                 onClick={onOk}
                 autoFocus
               >
-                accept
+                {t('core:action.accept', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
               <Button
                 sx={{
@@ -3125,7 +3120,9 @@ function App() {
                 variant="contained"
                 onClick={onCancel}
               >
-                decline
+                {t('core:action.decline', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3146,7 +3143,9 @@ function App() {
             </DialogContent>
             <DialogActions>
               <Button variant="contained" onClick={onOkInfo} autoFocus>
-                Close
+                {t('core:action.close', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3165,14 +3164,18 @@ function App() {
             </DialogContent>
             <DialogActions>
               <Button variant="contained" onClick={onCancelUnsavedChanges}>
-                Cancel
+                {t('core:action.cancel', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
               <Button
                 variant="contained"
                 onClick={onOkUnsavedChanges}
                 autoFocus
               >
-                Continue to Logout
+                {t('core:action.decline', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -3443,7 +3446,9 @@ function App() {
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '14px' }}>
-                        I have read this request
+                        {t('core:message.success.request_read', {
+                          postProcess: 'capitalize',
+                        })}
                       </Typography>
                       <PriorityHighIcon color="warning" />
                     </Box>
@@ -3454,8 +3459,8 @@ function App() {
               <Spacer height="29px" />
               <Box
                 sx={{
-                  display: 'flex',
                   alignItems: 'center',
+                  display: 'flex',
                   gap: '14px',
                 }}
               >
@@ -3491,7 +3496,9 @@ function App() {
                     onOkQortalRequestExtension('accepted');
                   }}
                 >
-                  accept
+                  {t('core:action.accept', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButtonAccept>
                 <CustomButtonAccept
                   color="black"
@@ -3501,7 +3508,9 @@ function App() {
                   }}
                   onClick={() => onCancelQortalRequestExtension()}
                 >
-                  decline
+                  {t('core:action.decline', {
+                    postProcess: 'capitalize',
+                  })}
                 </CustomButtonAccept>
               </Box>
               <ErrorText>{sendPaymentError}</ErrorText>
@@ -3566,6 +3575,7 @@ function App() {
         />
       )}
 
+      <LanguageSelector />
       <ThemeSelector />
     </AppContainer>
   );

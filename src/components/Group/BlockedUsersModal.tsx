@@ -129,7 +129,7 @@ export const BlockedUsersModal = () => {
         executeEvent('updateChatMessagesWithBlocks', true);
       }
     } catch (error) {
-      setOpenSnackGlobal(true); // TODO translate
+      setOpenSnackGlobal(true);
       setInfoSnackCustom({
         type: 'error',
         message: error?.message || 'Unable to block user',

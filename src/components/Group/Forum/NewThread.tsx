@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Input } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
-import CloseIcon from '@mui/icons-material/Close';
 import ModalCloseSVG from '../../../assets/svgs/ModalClose.svg';
 import ComposeIconSVG from '../../../assets/svgs/ComposeIcon.svg';
 import {
-  AttachmentContainer,
   CloseContainer,
   ComposeContainer,
   ComposeIcon,
@@ -30,6 +28,7 @@ import TipTap from '../../Chat/TipTap';
 import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
 import { saveTempPublish } from '../../Chat/GroupAnnouncements';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -129,6 +128,7 @@ export const encryptSingleFunc = async (data: string, secretKeyObject: any) => {
     console.log(error);
   }
 };
+
 export const NewThread = ({
   groupInfo,
   members,
@@ -143,8 +143,8 @@ export const NewThread = ({
   setPostReply,
   isPrivate,
 }: NewMessageProps) => {
+  const { t } = useTranslation(['core', 'group']);
   const { show } = React.useContext(MyContext);
-
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -183,21 +183,28 @@ export const NewThread = ({
       const missingFields: string[] = [];
 
       if (!isMessage && !threadTitle) {
-        errorMsg = 'Please provide a thread title';
+        errorMsg = t('group:question.provide_thread', {
+          postProcess: 'capitalize',
+        });
       }
 
       if (!name) {
-        errorMsg = 'Cannot send a message without a access to your name';
+        errorMsg = t('group:message.error.access_name', {
+          postProcess: 'capitalize',
+        });
       }
+
       if (!groupInfo) {
-        errorMsg = 'Cannot access group information';
-      } // TODO translate
+        errorMsg = t('group:message.error.group_info', {
+          postProcess: 'capitalize',
+        });
+      }
 
       // if (!description) missingFields.push('subject')
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
         const errMsg = `Missing: ${missingFieldsString}`;
-        errorMsg = errMsg;
+        errorMsg = errMsg; // TODO translate
       }
 
       if (errorMsg) {

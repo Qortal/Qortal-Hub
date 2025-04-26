@@ -19,6 +19,15 @@ const capitalize = {
   },
 };
 
+export const supportedLanguages = {
+  de: { name: 'Deutsch', flag: '🇩🇪' },
+  en: { name: 'English', flag: '🇺🇸' },
+  es: { name: 'Español', flag: '🇪🇸' },
+  fr: { name: 'Français', flag: '🇫🇷' },
+  it: { name: 'Italiano', flag: '🇮🇹' },
+  ru: { name: 'Русский', flag: '🇷🇺' },
+};
+
 i18n
   .use(HttpApi)
   .use(LanguageDetector)
@@ -42,8 +51,8 @@ i18n
       escapeValue: false,
     },
     lng: navigator.language,
-    ns: ['auth', 'core', 'tutorial'],
-    supportedLngs: ['en', 'it', 'es', 'fr', 'de', 'ru'],
+    ns: ['auth', 'core', 'group', 'tutorial'],
+    supportedLngs: Object.keys(supportedLanguages),
   });
 
 export default i18n;

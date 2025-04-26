@@ -1,27 +1,57 @@
 {
-  "add": "add",
-  "cancel": "cancel",
-  "choose": "choose",
-  "close": "close",
-  "continue": "continue",
+  "action": {
+    "add": "add",
+    "accept": "accept",
+    "backup_account": "backup account",
+    "backup_wallet": "backup wallet",
+    "cancel": "cancel",
+    "change": "change",
+    "change_language": "change language",
+    "choose": "choose",
+    "close": "close",
+    "continue": "continue",
+    "continue_logout": "continue to logout",
+    "decline": "decline",
+    "edit": "edit",
+    "export": "export",
+    "import": "import",
+    "invite": "invite",
+    "join": "join",
+    "logout": "logout",
+    "notify": "notify"
+  },
   "core": {
     "block_height": "block height",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
   },
+  "count": {
+    "none": "none",
+    "one": "one"
+  },
   "description": "description",
-  "edit": "edit",
-  "export": "export",
-  "import": "import",
+  "fee": {
+    "payment": "payment fee",
+    "publish": "publish fee"
+  },
+  "page": {
+    "last": "last",
+    "first": "first",
+    "next": "next",
+    "previous": "previous"
+  },
+  "downloading_qdn": "downloading from QDN",
   "last_height": "last height",
   "loading": "loading...",
-  "logout": "logout",
+  "loading_posts": "loading posts... please wait.",
+  "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "minting_status": "minting status",
+  "new_user": "are you a new user?",
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
-  "result": {
+  "message": {
     "error": {
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
@@ -34,7 +64,10 @@
       "synchronizing": "synchronizing"
     },
     "success": {
-      "publish_qdn": "successfully published to QDN"
+      "order_submitted": "your buy order was submitted",
+      "publish_qdn": "successfully published to QDN",
+      "request_read": "I have read this request",
+      "transfer": "the transfer was succesful!"
     }
   },
   "save_options": {
@@ -59,11 +92,18 @@
     "dark": "dark mode",
     "light": "light mode"
   },
+  "time": {
+    "day_one": "{{count}} day",
+    "day_other": "{{count}} days",
+    "hour_one": "{{count}} hour",
+    "hour_other": "{{count}} hours",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes"
+  },
   "title": "title",
   "tutorial": "tutorial",
   "user_lookup": "user lookup",
   "wallet": {
-    "backup_wallet": "backup wallet",
     "wallet": "wallet",
     "wallet_other": "wallets"
   },

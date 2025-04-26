@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { forwardRef, Fragment, ReactElement, Ref, useEffect } from 'react';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -10,13 +10,6 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useRecoilState } from 'recoil';
-
-function a11yProps(index: number) {
-  return {
-    id: `simple-tab-${index}`,
-    'aria-controls': `simple-tabpanel-${index}`,
-  };
-}
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -51,11 +44,11 @@ const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   },
 }));
 
-const Transition = React.forwardRef(function Transition(
+const Transition = forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement;
+    children: ReactElement;
   },
-  ref: React.Ref<unknown>
+  ref: Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -118,12 +111,12 @@ export const Settings = ({ address, open, setOpen }) => {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     getUserSettings();
   }, []);
 
   return (
-    <React.Fragment>
+    <Fragment>
       <Dialog
         fullScreen
         open={open}
@@ -192,6 +185,6 @@ export const Settings = ({ address, open, setOpen }) => {
           )}
         </Box>
       </Dialog>
-    </React.Fragment>
+    </Fragment>
   );
 };

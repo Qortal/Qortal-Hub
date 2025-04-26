@@ -1,4 +1,13 @@
-import * as React from 'react';
+import {
+  forwardRef,
+  Fragment,
+  ReactElement,
+  Ref,
+  SyntheticEvent,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
@@ -28,6 +37,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
 import { MyContext } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const Label = styled('label')`
   display: block;
@@ -37,30 +47,29 @@ export const Label = styled('label')`
   margin-bottom: 4px;
 `;
 
-const Transition = React.forwardRef(function Transition(
+const Transition = forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement;
+    children: ReactElement;
   },
-  ref: React.Ref<unknown>
+  ref: Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
 export const AddGroup = ({ address, open, setOpen }) => {
-  const { show, setTxList } = React.useContext(MyContext);
-  const [tab, setTab] = React.useState('create');
-  const [openAdvance, setOpenAdvance] = React.useState(false);
-  const [name, setName] = React.useState('');
-  const [description, setDescription] = React.useState('');
-  const [groupType, setGroupType] = React.useState('1');
-  const [approvalThreshold, setApprovalThreshold] = React.useState('40');
-  const [minBlock, setMinBlock] = React.useState('5');
-  const [maxBlock, setMaxBlock] = React.useState('21600');
-  const [value, setValue] = React.useState(0);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const { show, setTxList } = useContext(MyContext);
+  const [openAdvance, setOpenAdvance] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [groupType, setGroupType] = useState('1');
+  const [approvalThreshold, setApprovalThreshold] = useState('40');
+  const [minBlock, setMinBlock] = useState('5');
+  const [maxBlock, setMaxBlock] = useState('21600');
+  const [value, setValue] = useState(0);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
 
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleChange = (event: SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
 
@@ -84,16 +93,30 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setMaxBlock(event.target.value as string);
   };
 
+  const { t } = useTranslation(['core', 'group']);
   const theme = useTheme();
 
   const handleCreateGroup = async () => {
     try {
-      if (!name) throw new Error('Please provide a name');
-      if (!description) throw new Error('Please provide a description');
+      if (!name)
+        throw new Error(
+          t('group:message.error.name_required', {
+            postProcess: 'capitalize',
+          })
+        );
+      if (!description)
+        throw new Error(
+          t('group:message.error.description_required', {
+            postProcess: 'capitalize',
+          })
+        );
 
-      const fee = await getFee('CREATE_GROUP'); // TODO translate
+      const fee = await getFee('CREATE_GROUP');
+
       await show({
-        message: 'Would you like to perform an CREATE_GROUP transaction?',
+        message: t('group:question.create_group', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -111,16 +134,23 @@ export const AddGroup = ({ address, open, setOpen }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully created group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_creation', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               setTxList((prev) => [
                 {
                   ...response,
                   type: 'created-group',
-                  label: `Created group ${name}: awaiting confirmation`,
-                  labelDone: `Created group ${name}: success!`,
+                  label: t('group:message.success.group_creation_name', {
+                    group_name: name,
+                    postProcess: 'capitalize',
+                  }),
+                  labelDone: t('group:message.success.group_creation_label', {
+                    group_name: name,
+                    postProcess: 'capitalize',
+                  }),
                   done: false,
                 },
                 ...prev,
@@ -131,7 +161,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || 'An error occurred' });
+            rej({
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
+            });
           });
       });
     } catch (error) {
@@ -142,22 +176,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
       setOpenSnack(true);
     }
   };
-
-  function CustomTabPanel(props: TabPanelProps) {
-    const { children, value, index, ...other } = props;
-
-    return (
-      <div
-        role="tabpanel"
-        hidden={value !== index}
-        id={`simple-tabpanel-${index}`}
-        aria-labelledby={`simple-tab-${index}`}
-        {...other}
-      >
-        {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-      </div>
-    );
-  }
 
   function a11yProps(index: number) {
     return {
@@ -170,7 +188,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setValue(2);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     subscribeToEvent('openGroupInvitesRequest', openGroupInvitesRequestFunc);
 
     return () => {
@@ -182,7 +200,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
   }, []);
 
   return (
-    <React.Fragment>
+    <Fragment>
       <Dialog
         fullScreen
         open={open}
@@ -197,7 +215,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
         >
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-              Group Management
+              {t('group:group.management', { postProcess: 'capitalize' })}
             </Typography>
 
             <IconButton
@@ -208,12 +226,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             >
               <CloseIcon />
             </IconButton>
-
-            {/* <Button autoFocus color="inherit" onClick={handleClose}>
-              save
-            </Button> */}
           </Toolbar>
         </AppBar>
+
         <Box
           sx={{
             bgcolor: theme.palette.background.default,
@@ -241,7 +256,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
               }}
             >
               <Tab
-                label="Create Group"
+                label={t('group:action.create_group', {
+                  postProcess: 'capitalize',
+                })}
                 {...a11yProps(0)}
                 sx={{
                   '&.Mui-selected': {
@@ -251,7 +268,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 }}
               />
               <Tab
-                label="Find Group"
+                label={t('group:action.find_group', {
+                  postProcess: 'capitalize',
+                })}
                 {...a11yProps(1)}
                 sx={{
                   '&.Mui-selected': {
@@ -261,7 +280,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 }}
               />
               <Tab
-                label="Group Invites"
+                label={t('group:group.invites', {
+                  postProcess: 'capitalize',
+                })}
                 {...a11yProps(2)}
                 sx={{
                   '&.Mui-selected': {
@@ -295,9 +316,15 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     gap: '5px',
                   }}
                 >
-                  <Label>Name of group</Label>
+                  <Label>
+                    {t('group:group.name', {
+                      postProcess: 'capitalize',
+                    })}
+                  </Label>
                   <Input
-                    placeholder="Name of group"
+                    placeholder={t('group:group.name', {
+                      postProcess: 'capitalize',
+                    })}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
@@ -309,14 +336,21 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     gap: '5px',
                   }}
                 >
-                  <Label>Description of group</Label>
+                  <Label>
+                    {t('group:group.description', {
+                      postProcess: 'capitalize',
+                    })}
+                  </Label>
 
                   <Input
-                    placeholder="Description of group"
+                    placeholder={t('group:group.description', {
+                      postProcess: 'capitalize',
+                    })}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -324,7 +358,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     gap: '5px',
                   }}
                 >
-                  <Label>Group type</Label>
+                  <Label>
+                    {' '}
+                    {t('group:group.type', {
+                      postProcess: 'capitalize',
+                    })}
+                  </Label>
+
                   <Select
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
@@ -332,12 +372,19 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     label="Group Type"
                     onChange={handleChangeGroupType}
                   >
-                    <MenuItem value={1}>Open (public)</MenuItem>
+                    <MenuItem value={1}>
+                      {t('group:group.open', {
+                        postProcess: 'capitalize',
+                      })}
+                    </MenuItem>
                     <MenuItem value={0}>
-                      Closed (private) - users need permission to join
+                      {t('group:group.closed', {
+                        postProcess: 'capitalize',
+                      })}
                     </MenuItem>
                   </Select>
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -347,10 +394,15 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   }}
                   onClick={() => setOpenAdvance((prev) => !prev)}
                 >
-                  <Typography>Advanced options</Typography>
+                  <Typography>
+                    {t('group:advanced_options', {
+                      postProcess: 'capitalize',
+                    })}
+                  </Typography>
 
                   {openAdvance ? <ExpandLess /> : <ExpandMore />}
                 </Box>
+
                 <Collapse in={openAdvance} timeout="auto" unmountOnExit>
                   <Box
                     sx={{
@@ -360,8 +412,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      Group Approval Threshold (number / percentage of Admins
-                      that must approve a transaction)
+                      {t('group:approval_threshold', {
+                        postProcess: 'capitalize',
+                      })}
                     </Label>
                     <Select
                       labelId="demo-simple-select-label"
@@ -370,14 +423,21 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       label="Group Approval Threshold"
                       onChange={handleChangeApprovalThreshold}
                     >
-                      <MenuItem value={0}>NONE</MenuItem>
-                      <MenuItem value={1}>ONE </MenuItem>
-
-                      <MenuItem value={20}>20% </MenuItem>
-                      <MenuItem value={40}>40% </MenuItem>
-                      <MenuItem value={60}>60% </MenuItem>
-                      <MenuItem value={80}>80% </MenuItem>
-                      <MenuItem value={100}>100% </MenuItem>
+                      <MenuItem value={0}>
+                        {t('core.count.none', {
+                          postProcess: 'capitalize',
+                        })}
+                      </MenuItem>
+                      <MenuItem value={1}>
+                        {t('core.count.one', {
+                          postProcess: 'capitalize',
+                        })}
+                      </MenuItem>
+                      <MenuItem value={20}>20%</MenuItem>
+                      <MenuItem value={40}>40%</MenuItem>
+                      <MenuItem value={60}>60%</MenuItem>
+                      <MenuItem value={80}>80%</MenuItem>
+                      <MenuItem value={100}>100%</MenuItem>
                     </Select>
                   </Box>
                   <Box
@@ -388,7 +448,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      Minimum Block delay for Group Transaction Approvals
+                      {t('group.block_delay.minimum', {
+                        postProcess: 'capitalize',
+                      })}
                     </Label>
                     <Select
                       labelId="demo-simple-select-label"
@@ -397,18 +459,42 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       label="Minimum Block delay"
                       onChange={handleChangeMinBlock}
                     >
-                      <MenuItem value={5}>5 minutes</MenuItem>
-                      <MenuItem value={10}>10 minutes</MenuItem>
-                      <MenuItem value={30}>30 minutes</MenuItem>
-                      <MenuItem value={60}>1 hour</MenuItem>
-                      <MenuItem value={180}>3 hours</MenuItem>
-                      <MenuItem value={300}>5 hours</MenuItem>
-                      <MenuItem value={420}>7 hours</MenuItem>
-                      <MenuItem value={720}>12 hours</MenuItem>
-                      <MenuItem value={1440}>1 day</MenuItem>
-                      <MenuItem value={4320}>3 days</MenuItem>
-                      <MenuItem value={7200}>5 days</MenuItem>
-                      <MenuItem value={10080}>7 days</MenuItem>
+                      <MenuItem value={5}>
+                        {t('core.time.minute', { count: 5 })}
+                      </MenuItem>
+                      <MenuItem value={10}>
+                        {t('core.time.minute', { count: 10 })}
+                      </MenuItem>
+                      <MenuItem value={30}>
+                        {t('core.time.minute', { count: 30 })}
+                      </MenuItem>
+                      <MenuItem value={60}>
+                        {t('core.time.hour', { count: 1 })}
+                      </MenuItem>
+                      <MenuItem value={180}>
+                        {t('core.time.hour', { count: 3 })}
+                      </MenuItem>
+                      <MenuItem value={300}>
+                        {t('core.time.hour', { count: 5 })}
+                      </MenuItem>
+                      <MenuItem value={420}>
+                        {t('core.time.hour', { count: 7 })}
+                      </MenuItem>
+                      <MenuItem value={720}>
+                        {t('core.time.hour', { count: 12 })}
+                      </MenuItem>
+                      <MenuItem value={1440}>
+                        {t('core.time.day', { count: 1 })}
+                      </MenuItem>
+                      <MenuItem value={4320}>
+                        {t('core.time.day', { count: 3 })}
+                      </MenuItem>
+                      <MenuItem value={7200}>
+                        {t('core.time.day', { count: 5 })}
+                      </MenuItem>
+                      <MenuItem value={10080}>
+                        {t('core.time.day', { count: 7 })}
+                      </MenuItem>
                     </Select>
                   </Box>
                   <Box
@@ -419,7 +505,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      Maximum Block delay for Group Transaction Approvals
+                      {t('group.block_delay.maximum', {
+                        postProcess: 'capitalize',
+                      })}
                     </Label>
                     <Select
                       labelId="demo-simple-select-label"
@@ -428,17 +516,39 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       label="Maximum Block delay"
                       onChange={handleChangeMaxBlock}
                     >
-                      <MenuItem value={60}>1 hour</MenuItem>
-                      <MenuItem value={180}>3 hours</MenuItem>
-                      <MenuItem value={300}>5 hours</MenuItem>
-                      <MenuItem value={420}>7 hours</MenuItem>
-                      <MenuItem value={720}>12 hours</MenuItem>
-                      <MenuItem value={1440}>1 day</MenuItem>
-                      <MenuItem value={4320}>3 days</MenuItem>
-                      <MenuItem value={7200}>5 days</MenuItem>
-                      <MenuItem value={10080}>7 days</MenuItem>
-                      <MenuItem value={14400}>10 days</MenuItem>
-                      <MenuItem value={21600}>15 days</MenuItem>
+                      <MenuItem value={60}>
+                        {t('core.time.hour', { count: 1 })}
+                      </MenuItem>
+                      <MenuItem value={180}>
+                        3{t('core.time.hour', { count: 3 })}
+                      </MenuItem>
+                      <MenuItem value={300}>
+                        {t('core.time.hour', { count: 5 })}
+                      </MenuItem>
+                      <MenuItem value={420}>
+                        {t('core.time.hour', { count: 7 })}
+                      </MenuItem>
+                      <MenuItem value={720}>
+                        {t('core.time.hour', { count: 12 })}
+                      </MenuItem>
+                      <MenuItem value={1440}>
+                        {t('core.time.day', { count: 1 })}
+                      </MenuItem>
+                      <MenuItem value={4320}>
+                        {t('core.time.day', { count: 3 })}
+                      </MenuItem>
+                      <MenuItem value={7200}>
+                        {t('core.time.day', { count: 5 })}
+                      </MenuItem>
+                      <MenuItem value={10080}>
+                        {t('core.time.day', { count: 7 })}
+                      </MenuItem>
+                      <MenuItem value={14400}>
+                        {t('core.time.day', { count: 10 })}
+                      </MenuItem>
+                      <MenuItem value={21600}>
+                        {t('core.time.day', { count: 15 })}
+                      </MenuItem>
                     </Select>
                   </Box>
                 </Collapse>
@@ -454,7 +564,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     color="primary"
                     onClick={handleCreateGroup}
                   >
-                    Create Group
+                    {t('group.action.create', {
+                      postProcess: 'capitalize',
+                    })}
                   </Button>
                 </Box>
               </Box>
@@ -503,6 +615,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
           setInfo={setInfoSnack}
         />
       </Dialog>
-    </React.Fragment>
+    </Fragment>
   );
 };

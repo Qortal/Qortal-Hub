@@ -1,0 +1,65 @@
+{
+  "action": {
+    "cancel_ban": "cancel ban",
+    "create_group": "create group",
+    "find_group": "find group",
+    "join_group": "join group",
+    "invite_member": "invite member",
+    "refetch_page": "refetch page",
+    "return_to_thread": "return to threads"
+  },
+  "advanced_options": "advanced options",
+  "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
+  "ban_list": "ban list",
+  "block_delay": {
+    "minimum": "minimum Block delay for Group Transaction Approvals",
+    "maximum": "maximum Block delay for Group Transaction Approvals"
+  },
+  "group": {
+    "closed": "closed (private) - users need permission to join",
+    "description": "description of group",
+    "invites": "group invites",
+    "management": "group management",
+    "name": "name of group",
+    "open": "open (public)",
+    "type": "group type"
+  },
+  "invitation_expiry": "invitation Expiry Time",
+  "join_requests": "join requests",
+  "question": {
+    "cancel_ban": "would you like to perform a CANCEL_GROUP_BAN transaction?",
+    "create_group": "would you like to perform an CREATE_GROUP transaction?",
+    "group_invite": "would you like to perform a GROUP_INVITE transaction?",
+    "join_group": "would you like to perform an JOIN_GROUP transaction?",
+    "provide_thread": "please provide a thread title"
+  },
+  "message": {
+    "generic": {
+      "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
+      "group_invited_you": "{{group}} has invited you",
+      "no_display": "nothing to display",
+      "no_selection": "no group selected",
+      "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
+      "only_encrypted": "only unencrypted messages will be displayed.",
+      "setting_group": "setting up group... please wait."
+    },
+    "error": {
+      "access_name": "cannot send a message without a access to your name",
+      "description_required": "please provide a description",
+      "group_info": "cannot access group information",
+      "name_required": "please provide a name",
+      "notify_admins": "try notifying an admin from the list of admins below:"
+    },
+    "success": {
+      "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
+      "group_creation_name": "created group {{group_name}}: awaiting confirmation",
+      "group_creation_label": "created group {{name}}: success!",
+      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
+      "join_creation": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+      "group_join_name": "joined group {{group_name}}: awaiting confirmation",
+      "group_join_label": "joined group {{name}}: success!",
+      "loading_threads": "loading threads... please wait.",
+      "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate"
+    }
+  }
+}

@@ -1,5 +1,4 @@
 import React, {
-  FC,
   useCallback,
   useEffect,
   useMemo,
@@ -17,7 +16,6 @@ import {
   ComposeIcon,
   ComposeP,
   GroupContainer,
-  GroupNameP,
   InstanceFooter,
   InstanceListContainer,
   InstanceListContainerRow,
@@ -58,10 +56,12 @@ import { executeEvent } from '../../../utils/events';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../../App';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
+import { useTranslation } from 'react-i18next';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 
 export const threadIdentifier = 'DOCUMENT';
+
 export const GroupMail = ({
   selectedGroup,
   userInfo,
@@ -82,6 +82,7 @@ export const GroupMail = ({
   const anchorElInstanceFilter = useRef<any>(null);
   const [tempPublishedList, setTempPublishedList] = useState([]);
   const dataPublishes = useRef({});
+  const { t } = useTranslation(['core']);
 
   const [isLoading, setIsLoading] = useState(false);
   const groupIdRef = useRef<any>(null);
@@ -120,7 +121,9 @@ export const GroupMail = ({
         });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const getEncryptedResource = async (
@@ -627,9 +630,9 @@ export const GroupMail = ({
         <ThreadContainer>
           <Box
             sx={{
+              alignItems: 'center',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center',
             }}
           >
             <NewThread
@@ -667,8 +670,8 @@ export const GroupMail = ({
           <Spacer height="30px" />
           <Box
             sx={{
-              display: 'flex',
               alignItems: 'center',
+              display: 'flex',
               justifyContent: 'space-between',
             }}
           >
@@ -682,6 +685,7 @@ export const GroupMail = ({
               }}
             />
           </Box>
+
           <Spacer height="30px" />
 
           {combinedListTempAndReal.map((thread) => {
@@ -754,8 +758,8 @@ export const GroupMail = ({
                   {filterMode === 'Recently active' && (
                     <div
                       style={{
-                        display: 'flex',
                         alignItems: 'center',
+                        display: 'flex',
                       }}
                     >
                       <ThreadSingleLastMessageP>
@@ -776,16 +780,16 @@ export const GroupMail = ({
                     }, 300);
                   }}
                   sx={{
-                    position: 'absolute',
-                    bottom: '2px',
-                    right: '2px',
-                    borderRadius: '5px',
+                    alignItems: 'center',
                     backgroundColor: '#27282c',
+                    borderRadius: '5px',
+                    bottom: '2px',
+                    cursor: 'pointer',
                     display: 'flex',
                     gap: '10px',
-                    alignItems: 'center',
                     padding: '5px',
-                    cursor: 'pointer',
+                    position: 'absolute',
+                    right: '2px',
                     '&:hover': {
                       background: 'rgba(255, 255, 255, 0.60)',
                     },
@@ -795,9 +799,11 @@ export const GroupMail = ({
                     sx={{
                       color: 'white',
                       fontSize: '12px',
-                    }} // TODO translate
+                    }}
                   >
-                    Last page
+                    {t('core:page.last', {
+                      postProcess: 'capitalize',
+                    })}
                   </Typography>
                   <ArrowForwardIosIcon
                     sx={{
@@ -828,7 +834,9 @@ export const GroupMail = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading threads... please wait.',
+          message: t('group:message.success.loading_threads', {
+            postProcess: 'capitalize',
+          }),
         }}
       />
     </GroupContainer>

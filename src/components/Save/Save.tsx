@@ -176,7 +176,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             .catch((error) => {
               rej(
                 error.message ||
-                  t('core:result.error.generic', { postProcess: 'capitalize' })
+                  t('core:message.error.generic', { postProcess: 'capitalize' })
               );
             });
         });
@@ -185,7 +185,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
           setSettingsQdnLastUpdated(Date.now());
           setInfoSnack({
             type: 'success',
-            message: t('core:result.success.publish_qdn', {
+            message: t('core:message.success.publish_qdn', {
               postProcess: 'capitalize',
             }),
           });
@@ -198,7 +198,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         type: 'error',
         message:
           error?.message ||
-          t('core:result.error.save_qdn', {
+          t('core:message.error.save_qdn', {
             postProcess: 'capitalize',
           }),
       });
@@ -591,7 +591,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              {t('core:import', {
+              {t('core:action.import', {
                 postProcess: 'capitalize',
               })}
             </ButtonBase>
@@ -616,7 +616,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }
               }}
             >
-              {t('core:export', {
+              {t('core:action.export', {
                 postProcess: 'capitalize',
               })}
             </ButtonBase>
