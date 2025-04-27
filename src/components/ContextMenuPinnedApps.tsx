@@ -5,6 +5,7 @@ import {
   MenuItem,
   Typography,
   styled,
+  useTheme,
 } from '@mui/material';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import { saveToLocalStorage } from './Apps/AppsNavBarDesktop';
@@ -13,7 +14,6 @@ import { sortablePinnedAppsAtom } from '../atoms/global';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
-    backgroundColor: '#f9f9f9',
     borderRadius: '12px',
     padding: theme.spacing(1),
     boxShadow: '0 5px 15px rgba(0, 0, 0, 0.2)',
@@ -23,7 +23,7 @@ const CustomStyledMenu = styled(Menu)(({ theme }) => ({
     color: '#444',
     transition: '0.3s background-color',
     '&:hover': {
-      backgroundColor: '#f0f0f0',
+      backgroundColor: theme.palette.action.hover,
     },
   },
 }));
@@ -37,6 +37,7 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
   const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
     sortablePinnedAppsAtom
   );
+  const theme = useTheme();
 
   const handleContextMenu = (event) => {
     if (isMine) return;
@@ -170,9 +171,14 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
           }}
         >
           <ListItemIcon sx={{ minWidth: '32px' }}>
-            <PushPinIcon fontSize="small" />
+            <PushPinIcon
+              sx={{
+                color: theme.palette.text.primary,
+              }}
+              fontSize="small"
+            />
           </ListItemIcon>
-          <Typography variant="inherit" sx={{ fontSize: '14px' }}>
+          <Typography sx={{ fontSize: '14px' }} color="text.primary">
             Unpin app
           </Typography>
         </MenuItem>

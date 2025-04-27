@@ -39,7 +39,8 @@ import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 import { executeEvent } from '../../utils/events';
-import { ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
 
 const officialAppList = [
   'q-tube',
@@ -273,7 +274,10 @@ export const AppsLibraryDesktop = ({
             onClick={() => {
               executeEvent('navigateBack', {});
             }}
-          ></ShowMessageReturnButton>
+          >
+            <ReturnIcon />
+            <ComposeP>Return to Apps Dashboard</ComposeP>
+          </ShowMessageReturnButton>
 
           <Spacer height="20px" />
 

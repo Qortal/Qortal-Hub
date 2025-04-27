@@ -183,7 +183,7 @@ export const AppInfoSnippet = ({
           }}
           sx={{
             backgroundColor: isInstalled
-              ? '#0091E1'
+              ? theme.palette.primary.main
               : theme.palette.background.paper,
           }}
         >

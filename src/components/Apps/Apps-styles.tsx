@@ -75,7 +75,7 @@ export const AppsWidthLimiter = styled(Box)(({ theme }) => ({
 
 export const AppsSearchContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   borderRadius: '8px',
   color: theme.palette.text.primary,
   display: 'flex',
@@ -87,7 +87,7 @@ export const AppsSearchContainer = styled(Box)(({ theme }) => ({
 
 export const AppsSearchLeft = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
   flexGrow: 1,
@@ -99,7 +99,7 @@ export const AppsSearchLeft = styled(Box)(({ theme }) => ({
 
 export const AppsSearchRight = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
   flexShrink: 1,

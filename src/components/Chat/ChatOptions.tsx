@@ -24,7 +24,7 @@ import {
   AppsSearchLeft,
   AppsSearchRight,
 } from '../Apps/Apps-styles';
-import IconSearch from '../../assets/svgs/Search.svg';
+
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { CellMeasurerCache } from 'react-virtualized';
 import { getBaseApiReact } from '../../App';
@@ -398,7 +398,11 @@ export const ChatOptions = ({
         >
           <AppsSearchContainer>
             <AppsSearchLeft>
-              <img src={IconSearch} />
+              <SearchIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}

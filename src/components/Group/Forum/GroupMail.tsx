@@ -681,8 +681,8 @@ export const GroupMail = ({
             <RefreshIcon
               onClick={refetchThreadsLists}
               sx={{
-                color: 'white',
                 cursor: 'pointer',
+                color: theme.palette.text.primary,
               }}
             />
           </Box>

@@ -29,7 +29,6 @@ import {
 } from './Mail-styles';
 import { Spacer } from '../../../common/Spacer';
 import { threadIdentifier } from './GroupMail';
-import ReturnSVG from '../../../assets/svgs/Return.svg';
 import { NewThread } from './NewThread';
 import {
   decryptPublishes,
