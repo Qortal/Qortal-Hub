@@ -26,6 +26,10 @@ const lightThemeOptions: ThemeOptions = {
       main: 'rgba(0, 0, 0, 0.12)',
       subtle: 'rgba(0, 0, 0, 0.08)',
     },
+    border: {
+      main: 'rgba(0, 0, 0, 0.12)',
+      subtle: 'rgba(0, 0, 0, 0.08)',
+    },
   },
   components: {
     MuiCard: {
