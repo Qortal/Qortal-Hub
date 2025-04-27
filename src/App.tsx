@@ -36,7 +36,6 @@ import qortLogo from './assets/qort.png';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
-import Success from './assets/svgs/Success.svg';
 import './utils/seedPhrase/RandomSentenceGenerator';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -137,6 +136,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
+import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -2931,7 +2931,7 @@ function App() {
             {walletToBeDownloaded && (
               <>
                 <Spacer height="48px" />
-                <img src={Success} />
+                <SuccessIcon />
                 <Spacer height="45px" />
                 <TextP
                   sx={{
@@ -2987,7 +2987,7 @@ function App() {
             }}
           >
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{
@@ -3012,7 +3012,7 @@ function App() {
         {extState === 'transfer-success-request' && (
           <>
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{
@@ -3037,7 +3037,7 @@ function App() {
         {extState === 'buy-order-submitted' && (
           <>
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{

@@ -5,7 +5,14 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Avatar, Box, Button, ButtonBase, Typography } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { ShowMessage } from './ShowMessageWithoutModal';
 import {
   ComposeP,
@@ -43,6 +50,7 @@ import { CustomLoader } from '../../../common/CustomLoader';
 import { WrapperUserAction } from '../../WrapperUserAction';
 import { formatTimestampForum } from '../../../utils/time';
 import { useTranslation } from 'react-i18next';
+import { ReturnIcon } from '../../../assets/Icons/ReturnIcon';
 
 const requestQueueSaveToLocal = new RequestQueueWithPromise(1);
 
@@ -116,7 +124,7 @@ export const Thread = ({
   const [postReply, setPostReply] = useState(null);
   const [hasLastPage, setHasLastPage] = useState(false);
   const { t } = useTranslation(['core']);
-
+  const theme = useTheme();
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);
   const threadBeginningRef = useRef(null);
@@ -606,7 +614,7 @@ export const Thread = ({
               closeThread();
             }}
           >
-            <MailIconImg src={ReturnSVG} />
+            <ReturnIcon />
             <ComposeP>
               {t('group:action.return_to_thread', {
                 postProcess: 'capitalize',
@@ -619,7 +627,7 @@ export const Thread = ({
               <ButtonBase onClick={scrollToPosition}>
                 <ArrowUpwardIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                     cursor: 'pointer',
                     fontSize: '36px',
                   }}
@@ -629,7 +637,7 @@ export const Thread = ({
               <ButtonBase onClick={scrollToPosition}>
                 <ArrowDownwardIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                     cursor: 'pointer',
                     fontSize: '36px',
                   }}
@@ -825,7 +833,6 @@ export const Thread = ({
                         <Typography
                           sx={{
                             fontSize: '18px',
-                            color: 'white',
                           }}
                         >
                           {fullMessage?.error}
@@ -925,7 +932,6 @@ export const Thread = ({
                     <Typography
                       sx={{
                         fontSize: '18px',
-                        color: 'white',
                       }}
                     >
                       {t('core:downloading_qdn', { postProcess: 'capitalize' })}
@@ -957,9 +963,6 @@ export const Thread = ({
                       true,
                       groupInfo?.groupId
                     );
-                  }}
-                  sx={{
-                    color: 'white',
                   }}
                 >
                   {t('group:action.refetch_page', {

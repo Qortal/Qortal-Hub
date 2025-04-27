@@ -7,7 +7,7 @@ import IconButton from '@mui/material/IconButton';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { executeEvent } from '../../utils/events';
-import { Box, ButtonBase, Collapse, Typography } from '@mui/material';
+import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import { CustomLoader } from '../../common/CustomLoader';
 import { MyContext, getBaseApiReact } from '../../App';
 import { myGroupsWhereIAmAdminAtom } from '../../atoms/global';
@@ -35,7 +35,7 @@ export const GroupJoinRequests = ({
   const [loading, setLoading] = React.useState(true);
   const { txList, setTxList } = React.useContext(MyContext);
   const setMyGroupsWhereIAmAdmin = useSetRecoilState(myGroupsWhereIAmAdminAtom);
-
+  const theme = useTheme();
   const getJoinRequests = async () => {
     try {
       setLoading(true);
@@ -244,7 +244,7 @@ export const GroupJoinRequests = ({
                     <IconButton edge="end" aria-label="comments">
                       <GroupAddIcon
                         sx={{
-                          color: 'white',
+                          color: theme.palette.text.primary,
                           fontSize: '18px',
                         }}
                       />

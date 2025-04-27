@@ -242,27 +242,6 @@ export const HomeDesktop = ({
         )}
       </Box>
 
-      <Spacer height="26px" />
-
-      {/* <Box
-                sx={{
-                  display: "flex",
-                  width: "100%",
-                  justifyContent: "flex-start",
-                }}
-              >
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={refreshHomeDataFunc}
-                  sx={{
-                    color: "white",
-                  }}
-                >
-                  Refresh home data
-                </Button>
-              </Box> */}
-
       <Spacer height="180px" />
     </Box>
   );

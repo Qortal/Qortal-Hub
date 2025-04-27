@@ -384,7 +384,7 @@ export const MessageItem = React.memo(
                         <ButtonBase
                           key={reaction}
                           sx={{
-                            background: theme.palette.background.paper,
+                            background: theme.palette.background.surface,
                             borderRadius: '7px',
                             height: '30px',
                             minWidth: '45px',

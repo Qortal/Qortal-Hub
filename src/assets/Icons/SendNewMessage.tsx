@@ -1,17 +1,23 @@
 import React from 'react';
 import { styled } from '@mui/system';
 import { SVGProps } from './interfaces';
+import { useTheme } from '@mui/material';
 
-// Create a styled container with hover effects
-const SvgContainer = styled('svg')({
+// Make SvgContainer accept a prop
+const SvgContainer = styled('svg')<{ color?: string }>(({ color }) => ({
   '& path': {
-    fill: 'rgba(41, 41, 43, 1)', // Default to red if no color prop
+    fill: color,
   },
-});
+}));
 
-export const SendNewMessage: React.FC<SVGProps> = ({ color, opacity }) => {
+export const SendNewMessage: React.FC<SVGProps> = ({ color, ...props }) => {
+  const theme = useTheme();
+
+  const setColor = color || theme.palette.text.primary;
   return (
     <SvgContainer
+      {...props}
+      color={setColor}
       width="20"
       height="20"
       viewBox="0 0 20 20"

@@ -21,6 +21,7 @@ import {
   Select,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import LockIcon from '@mui/icons-material/Lock';
@@ -90,7 +91,7 @@ export const ListOfGroupPromotions = () => {
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
   const { show, setTxList } = useContext(MyContext);
-
+  const theme = useTheme();
   const listRef = useRef();
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
@@ -673,7 +674,7 @@ export const ListOfGroupPromotions = () => {
                                   <Avatar
                                     sx={{
                                       backgroundColor: '#27282c',
-                                      color: 'white',
+                                      color: theme.palette.text.primary,
                                     }}
                                     alt={promotion?.name}
                                     src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -765,7 +766,7 @@ export const ListOfGroupPromotions = () => {
                                   }
                                   sx={{
                                     fontSize: '12px',
-                                    color: 'white',
+                                    color: theme.palette.text.primary,
                                   }}
                                 >
                                   Join Group: {` ${promotion?.groupName}`}
@@ -845,10 +846,10 @@ export const ListOfGroupPromotions = () => {
               multiline={true}
               sx={{
                 '& .MuiFormLabel-root': {
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 },
                 '& .MuiFormLabel-root.Mui-focused': {
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 },
               }}
             />

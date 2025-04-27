@@ -1,4 +1,12 @@
-import { forwardRef, Fragment, ReactElement, Ref, useEffect } from 'react';
+import {
+  ChangeEvent,
+  forwardRef,
+  Fragment,
+  ReactElement,
+  Ref,
+  useEffect,
+  useState,
+} from 'react';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -54,12 +62,12 @@ const Transition = forwardRef(function Transition(
 });
 
 export const Settings = ({ address, open, setOpen }) => {
-  const [checked, setChecked] = React.useState(false);
+  const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
   const theme = useTheme();
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
     window
       .sendMessage('addUserSettings', {

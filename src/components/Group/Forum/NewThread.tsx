@@ -1,12 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, CircularProgress, Input } from '@mui/material';
+import { Box, CircularProgress, Input, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
-import ModalCloseSVG from '../../../assets/svgs/ModalClose.svg';
-import ComposeIconSVG from '../../../assets/svgs/ComposeIcon.svg';
 import {
   CloseContainer,
   ComposeContainer,
-  ComposeIcon,
   ComposeP,
   InstanceFooter,
   InstanceListContainer,
@@ -29,6 +26,8 @@ import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
 import { saveTempPublish } from '../../Chat/GroupAnnouncements';
 import { useTranslation } from 'react-i18next';
+import { ComposeIcon } from '../../../assets/Icons/ComposeIcon';
+import CloseIcon from '@mui/icons-material/Close';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -152,6 +151,7 @@ export const NewThread = ({
   const [openSnack, setOpenSnack] = React.useState(false);
   const [infoSnack, setInfoSnack] = React.useState(null);
   const editorRef = useRef(null);
+  const theme = useTheme();
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
@@ -406,7 +406,7 @@ export const NewThread = ({
         }}
         onClick={() => setIsOpen(true)}
       >
-        <ComposeIcon src={ComposeIconSVG} />
+        <ComposeIcon />
         <ComposeP>{currentThread ? 'New Post' : 'New Thread'}</ComposeP>
       </ComposeContainer>
 
@@ -417,7 +417,7 @@ export const NewThread = ({
           maxWidth: '950px',
           height: '700px',
           borderRadius: '12px 12px 0px 0px',
-          background: '#434448',
+          background: theme.palette.background.paper,
           padding: '0px',
           gap: '0px',
         }}
@@ -429,7 +429,7 @@ export const NewThread = ({
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: '#434448',
+            backgroundColor: theme.palette.background.paper,
           }}
         >
           <NewMessageHeaderP>
@@ -441,12 +441,16 @@ export const NewThread = ({
             }}
             onClick={closeModal}
           >
-            <NewMessageCloseImg src={ModalCloseSVG} />
+            <CloseIcon
+              sx={{
+                color: theme.palette.text.primary,
+              }}
+            />
           </CloseContainer>
         </InstanceListHeader>
         <InstanceListContainer
           sx={{
-            backgroundColor: '#434448',
+            backgroundColor: theme.palette.background.paper,
             padding: '20px 42px',
             height: 'calc(100% - 165px)',
             flexShrink: 0,
@@ -468,9 +472,7 @@ export const NewThread = ({
                   autoCorrect="off"
                   sx={{
                     width: '100%',
-                    color: 'white',
                     '& .MuiInput-input::placeholder': {
-                      color: 'rgba(255,255,255, 0.70) !important',
                       fontSize: '20px',
                       fontStyle: 'normal',
                       fontWeight: 400,
@@ -525,7 +527,7 @@ export const NewThread = ({
 
         <InstanceFooter
           sx={{
-            backgroundColor: '#434448',
+            backgroundColor: theme.palette.background.paper,
             padding: '20px 42px',
             alignItems: 'center',
             height: '90px',
@@ -543,7 +545,12 @@ export const NewThread = ({
                   alignItems: 'center',
                 }}
               >
-                <CircularProgress sx={{}} size={'12px'} />
+                <CircularProgress
+                  sx={{
+                    color: theme.palette.text.primary,
+                  }}
+                  size={'12px'}
+                />
               </Box>
             )}
 
@@ -552,9 +559,14 @@ export const NewThread = ({
             </NewMessageSendP>
 
             {isMessage ? (
-              <SendNewMessage opacity={1} height="25px" width="25px" />
+              <SendNewMessage />
             ) : (
-              <CreateThreadIcon opacity={1} height="25px" width="25px" />
+              <CreateThreadIcon
+                color={theme.palette.text.primary}
+                opacity={1}
+                height="25px"
+                width="25px"
+              />
             )}
           </NewMessageSendButton>
         </InstanceFooter>
