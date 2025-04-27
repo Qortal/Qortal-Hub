@@ -77,7 +77,7 @@ export const GeneralNotifications = ({ address }) => {
             sx={{
               color: hasNewPayment
                 ? 'var(--unread)'
-                : theme.palette.text.primary,
+                : theme.palette.text.secondary,
             }}
           />
         </Tooltip>

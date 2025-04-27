@@ -261,6 +261,12 @@ export const AppsPrivate = ({ myName }) => {
           }}
           maxWidth="md"
           fullWidth={true}
+          PaperProps={{
+            style: {
+              backgroundColor: theme.palette.background.paper,
+              boxShadow: 'none',
+            },
+          }}
         >
           <Box>
             <Tabs

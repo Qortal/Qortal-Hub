@@ -184,6 +184,14 @@ export const DownloadWallet = ({
                 edge="start"
                 tabIndex={-1}
                 disableRipple
+                sx={{
+                  '&.Mui-checked': {
+                    color: theme.palette.text.secondary,
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: theme.palette.text.secondary,
+                  },
+                }}
               />
             }
             label={

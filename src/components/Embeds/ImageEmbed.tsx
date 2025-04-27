@@ -8,6 +8,7 @@ import {
   Divider,
   Dialog,
   IconButton,
+  useTheme,
 } from '@mui/material';
 
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -28,6 +29,7 @@ export const ImageCard = ({
   errorMsg,
   encryptionType,
 }) => {
+  const theme = useTheme();
   const [isOpen, setIsOpen] = useState(true);
   const [height, setHeight] = useState('400px');
   useEffect(() => {
@@ -45,7 +47,7 @@ export const ImageCard = ({
   return (
     <Card
       sx={{
-        backgroundColor: '#1F2023',
+        backgroundColor: theme.palette.background.default,
         height: height,
         transition: 'height 0.6s ease-in-out',
       }}
@@ -67,7 +69,7 @@ export const ImageCard = ({
         >
           <ImageIcon
             sx={{
-              color: 'white',
+              color: theme.palette.text.primary,
             }}
           />
           <Typography>IMAGE embed</Typography>
@@ -84,7 +86,7 @@ export const ImageCard = ({
               onClick={refresh}
               sx={{
                 fontSize: '24px',
-                color: 'white',
+                color: theme.palette.text.primary,
               }}
             />
           </ButtonBase>
@@ -94,7 +96,7 @@ export const ImageCard = ({
                 onClick={openExternal}
                 sx={{
                   fontSize: '24px',
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
             </ButtonBase>
@@ -109,7 +111,6 @@ export const ImageCard = ({
         <Typography
           sx={{
             fontSize: '12px',
-            color: 'white',
           }}
         >
           Created by {decodeIfEncoded(owner)}
@@ -182,7 +183,7 @@ export function ImageViewer({ src, alt = '' }) {
 
   const handleOpenFullscreen = () => setIsFullscreen(true);
   const handleCloseFullscreen = () => setIsFullscreen(false);
-
+  const theme = useTheme();
   return (
     <>
       {/* Image in container */}
@@ -231,7 +232,7 @@ export function ImageViewer({ src, alt = '' }) {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: '#000', // Optional: dark background for fullscreen mode
+            backgroundColor: theme.palette.background.paper, // Optional: dark background for fullscreen mode
           }}
         >
           {/* Close Button */}
@@ -242,7 +243,7 @@ export function ImageViewer({ src, alt = '' }) {
               top: 8,
               right: 8,
               zIndex: 10,
-              color: 'white',
+              color: theme.palette.text.primary,
             }}
           >
             <CloseIcon />

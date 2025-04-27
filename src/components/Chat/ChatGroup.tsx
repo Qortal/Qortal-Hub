@@ -1217,7 +1217,7 @@ export const ChatGroup = ({
               >
                 <CloseIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
               </ButtonBase>

@@ -13,7 +13,7 @@ import { InviteMember } from './InviteMember';
 import { ListOfInvites } from './ListOfInvites';
 import { ListOfBans } from './ListOfBans';
 import { ListOfJoinRequests } from './ListOfJoinRequests';
-import { Box, ButtonBase, Card, Tab, Tabs } from '@mui/material';
+import { Box, ButtonBase, Card, Tab, Tabs, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { MyContext, getBaseApiReact } from '../../App';
 import { getGroupMembers, getNames } from './Group';
@@ -60,6 +60,7 @@ export const ManageMembers = ({
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
+  const theme = useTheme();
   const { show, setTxList } = React.useContext(MyContext);
 
   const handleClose = () => {
@@ -172,9 +173,14 @@ export const ManageMembers = ({
         onClose={handleClose}
         TransitionComponent={Transition}
       >
-        <AppBar sx={{ position: 'relative', bgcolor: '#232428' }}>
+        <AppBar
+          sx={{
+            position: 'relative',
+            bgcolor: theme.palette.background.default,
+          }}
+        >
           <Toolbar>
-            <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
+            <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
               Manage Members
             </Typography>
             <IconButton
@@ -189,8 +195,8 @@ export const ManageMembers = ({
         </AppBar>
         <Box
           sx={{
-            bgcolor: '#27282c',
-            color: 'white',
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             flexGrow: 1,
             overflowY: 'auto',
           }}
@@ -205,7 +211,7 @@ export const ManageMembers = ({
               allowScrollButtonsMobile // Show scroll buttons on mobile as well
               sx={{
                 '& .MuiTabs-indicator': {
-                  backgroundColor: 'white',
+                  backgroundColor: theme.palette.background.default,
                 },
                 maxWidth: '100%', // Ensure the tabs container fits within the available space
                 overflow: 'hidden', // Prevents overflow on small screens
@@ -216,7 +222,7 @@ export const ManageMembers = ({
                 {...a11yProps(0)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: '1rem',
                 }}
@@ -227,7 +233,7 @@ export const ManageMembers = ({
                 {...a11yProps(1)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: '1rem',
                 }}
@@ -238,7 +244,7 @@ export const ManageMembers = ({
                 {...a11yProps(2)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: '1rem',
                 }}
@@ -249,7 +255,7 @@ export const ManageMembers = ({
                 {...a11yProps(3)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: '1rem',
                 }}
@@ -260,7 +266,7 @@ export const ManageMembers = ({
                 {...a11yProps(4)}
                 sx={{
                   '&.Mui-selected': {
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   },
                   fontSize: '1rem',
                 }}

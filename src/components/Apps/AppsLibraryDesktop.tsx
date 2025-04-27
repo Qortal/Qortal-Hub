@@ -467,11 +467,13 @@ export const AppsLibraryDesktop = ({
                           borderRadius: '6px',
                           borderStyle: 'solid',
                           borderWidth: '4px',
-                          boxShadow: '2px 4px 0px 0px #000000',
                           display: 'flex',
                           height: '50px',
                           justifyContent: 'center',
                           padding: '0px 20px',
+                          '&:hover': {
+                            backgroundColor: 'action.hover', // background on hover
+                          },
                         }}
                       >
                         All
@@ -495,11 +497,13 @@ export const AppsLibraryDesktop = ({
                               borderRadius: '6px',
                               borderStyle: 'solid',
                               borderWidth: '4px',
-                              boxShadow: '2px 4px 0px 0px #000000',
                               display: 'flex',
                               height: '50px',
                               justifyContent: 'center',
                               padding: '0px 20px',
+                              '&:hover': {
+                                backgroundColor: 'action.hover', // background on hover
+                              },
                             }}
                           >
                             {category?.name}

@@ -15,6 +15,7 @@ import {
   Dialog,
   IconButton,
   CircularProgress,
+  useTheme,
 } from '@mui/material';
 import { base64ToBlobUrl } from '../../utils/fileReading';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
@@ -44,6 +45,7 @@ export const AttachmentCard = ({
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const { downloadResource } = useContext(MyContext);
+  const theme = useTheme();
 
   const saveToDisk = async () => {
     const { name, service, identifier } = resourceData;
@@ -110,7 +112,7 @@ export const AttachmentCard = ({
   return (
     <Card
       sx={{
-        backgroundColor: '#1F2023',
+        backgroundColor: theme.palette.background.default,
         height: '250px',
         // height: isOpen ? "auto" : "150px",
       }}
@@ -132,7 +134,7 @@ export const AttachmentCard = ({
         >
           <AttachmentIcon
             sx={{
-              color: 'white',
+              color: theme.palette.text.primary,
             }}
           />
           <Typography>ATTACHMENT embed</Typography>
@@ -149,7 +151,7 @@ export const AttachmentCard = ({
               onClick={refresh}
               sx={{
                 fontSize: '24px',
-                color: 'white',
+                color: theme.palette.text.primary,
               }}
             />
           </ButtonBase>
@@ -159,7 +161,7 @@ export const AttachmentCard = ({
                 onClick={openExternal}
                 sx={{
                   fontSize: '24px',
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
             </ButtonBase>
@@ -174,7 +176,6 @@ export const AttachmentCard = ({
         <Typography
           sx={{
             fontSize: '12px',
-            color: 'white',
           }}
         >
           Created by {decodeIfEncoded(owner)}
@@ -281,10 +282,10 @@ export const AttachmentCard = ({
                 resourceDetails?.status?.status !== 'FAILED_TO_DOWNLOAD' && (
                   <>
                     <CircularProgress
-                      sx={{
-                        color: 'white',
-                      }}
                       size={20}
+                      sx={{
+                        color: theme.palette.text.primary,
+                      }}
                     />
                     <FileAttachmentFont>
                       Downloading:{' '}

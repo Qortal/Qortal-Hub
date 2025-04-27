@@ -81,7 +81,7 @@ export const AppsDevModeNavBar = () => {
       sx={{
         position: 'relative',
         flexDirection: 'column',
-        width: '60px',
+        width: '59px',
         height: 'unset',
         maxHeight: '70vh',
         borderRadius: '0px 30px 30px 0px',
@@ -116,7 +116,7 @@ export const AppsDevModeNavBar = () => {
             '& .MuiTabs-indicator': {
               backgroundColor: 'white',
             },
-            maxHeight: `320px`, // Ensure the tabs container fits within the available space
+            maxHeight: `275px`, // Ensure the tabs container fits within the available space
             overflow: 'hidden', // Prevents overflow on small screens
           }}
         >

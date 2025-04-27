@@ -87,7 +87,11 @@ export const QMailStatus = () => {
           },
         }}
       >
-        <Mail />
+        <Mail
+          sx={{
+            color: theme.palette.text.secondary,
+          }}
+        />
       </Tooltip>
     </ButtonBase>
   );

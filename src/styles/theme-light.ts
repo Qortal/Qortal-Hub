@@ -19,8 +19,8 @@ const lightThemeOptions: ThemeOptions = {
       surface: 'rgb(240, 240, 240)', // optional middle gray for replies, side panels
     },
     text: {
-      primary: 'rgba(0, 0, 0, 1)',
-      secondary: 'rgba(82, 82, 82, 1)',
+      primary: 'rgba(0, 0, 0, 0.87)', // 87% black (slightly softened)
+      secondary: 'rgba(0, 0, 0, 0.6)', // 60% black
     },
     border: {
       main: 'rgba(0, 0, 0, 0.12)',
@@ -79,6 +79,20 @@ const lightThemeOptions: ThemeOptions = {
         style: {
           color: 'rgba(0, 0, 0, 1)',
           opacity: 0.5,
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
         },
       },
     },

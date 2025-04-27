@@ -14,8 +14,8 @@ export const QappDevelopText: React.FC<SVGProps> = ({
   return (
     <svg
       {...children}
-      width="83"
-      height="40"
+      width="124"
+      height="60"
       viewBox="0 0 83 40"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

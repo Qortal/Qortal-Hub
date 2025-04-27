@@ -141,7 +141,7 @@ export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
 
 export const AppCircle = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.surface,
   borderColor:
     theme.palette.mode === 'dark'
       ? 'rgb(209, 209, 209)'
@@ -283,7 +283,7 @@ export const TabParent = styled(Box)(({ theme }) => ({
 
 export const PublishQAppCTAParent = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
   justifyContent: 'space-between',
@@ -292,7 +292,7 @@ export const PublishQAppCTAParent = styled(Box)(({ theme }) => ({
 
 export const PublishQAppCTALeft = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
   justifyContent: 'flex-start',
@@ -300,7 +300,7 @@ export const PublishQAppCTALeft = styled(Box)(({ theme }) => ({
 
 export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
   justifyContent: 'flex-end',
@@ -308,8 +308,8 @@ export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
 
 export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.paper,
-  borderColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.default,
+  borderColor: theme.palette.text.primary,
   borderRadius: '25px',
   borderStyle: 'solid',
   borderWidth: '1px',
@@ -322,10 +322,10 @@ export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
 
 export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   color: theme.palette.text.primary,
   display: 'flex',
-  height: '60px',
+  height: '80px',
   justifyContent: 'center',
   width: '60px',
 }));
@@ -333,7 +333,7 @@ export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
 export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
-  fontSize: '10px',
+  fontSize: '16px',
   fontStyle: 'italic',
   fontWeight: 400,
   lineHeight: 1.2,
@@ -341,15 +341,18 @@ export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
 
 export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   borderRadius: '5px',
   color: theme.palette.text.primary,
   display: 'flex',
-  fontSize: '10px',
+  fontSize: '16px',
   fontWeight: 600,
-  height: '30px',
+  height: '40px',
   justifyContent: 'center',
-  width: '101px',
+  width: '120px',
+  '&:hover': {
+    backgroundColor: 'action.hover', // background on hover
+  },
 }));
 
 export const AppsCategoryInfo = styled(Box)(({ theme }) => ({

@@ -576,7 +576,7 @@ export const ChatOptions = ({
       <Box
         sx={{
           alignItems: 'center',
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.paper,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',
@@ -711,7 +711,7 @@ export const ChatOptions = ({
                     (!lastMentionTimestamp ||
                       lastMentionTimestamp < mentionList[0]?.timestamp)
                       ? 'var(--unread)'
-                      : 'white',
+                      : theme.palette.text.primary,
                 }}
               />
             </Tooltip>

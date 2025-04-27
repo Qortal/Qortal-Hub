@@ -30,7 +30,6 @@ import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
-import Copy from './assets/svgs/Copy.svg';
 import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
@@ -137,6 +136,7 @@ import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
+import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -1297,7 +1297,8 @@ function App() {
             <CopyToClipboard text={rawWallet?.ltcAddress}>
               <AddressBox>
                 {rawWallet?.ltcAddress?.slice(0, 6)}...
-                {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
+                {rawWallet?.ltcAddress?.slice(-4)}{' '}
+                <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
             </CopyToClipboard>
 
@@ -1362,7 +1363,8 @@ function App() {
             <CopyToClipboard text={rawWallet?.address0}>
               <AddressBox>
                 {rawWallet?.address0?.slice(0, 6)}...
-                {rawWallet?.address0?.slice(-4)} <img src={Copy} />
+                {rawWallet?.address0?.slice(-4)}{' '}
+                <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
             </CopyToClipboard>
             <Spacer height="10px" />
@@ -1519,7 +1521,11 @@ function App() {
                   },
                 }}
               >
-                <LogoutIcon />
+                <LogoutIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1559,7 +1565,11 @@ function App() {
                   },
                 }}
               >
-                <SettingsIcon />
+                <SettingsIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1599,7 +1609,11 @@ function App() {
                   },
                 }}
               >
-                <PersonSearchIcon />
+                <PersonSearchIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1639,7 +1653,11 @@ function App() {
                   },
                 }}
               >
-                <AccountBalanceWalletIcon />
+                <AccountBalanceWalletIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1681,7 +1699,10 @@ function App() {
                       setIsOpenDrawerProfile(true);
                     }}
                   >
-                    <WalletIcon width="25" />
+                    <WalletIcon
+                      color={theme.palette.text.secondary}
+                      width="25"
+                    />
                   </ButtonBase>
                 </Tooltip>
               </>
@@ -1787,7 +1808,11 @@ function App() {
                   },
                 }}
               >
-                <EngineeringIcon />
+                <EngineeringIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1832,7 +1857,11 @@ function App() {
                     },
                   }}
                 >
-                  <HelpIcon />
+                  <HelpIcon
+                    sx={{
+                      color: theme.palette.text.secondary,
+                    }}
+                  />
                 </Tooltip>
               </ButtonBase>
             )}
@@ -1874,7 +1903,11 @@ function App() {
                   },
                 }}
               >
-                <DownloadIcon />
+                <DownloadIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
             <Spacer height="40px" />
@@ -2165,10 +2198,10 @@ function App() {
                   defaultChecked={messageQortalRequest?.checkbox1?.value}
                   sx={{
                     '&.Mui-checked': {
-                      color: 'white', // Customize the color when checked
+                      color: theme.palette.text.secondary, // Customize the color when checked
                     },
                     '& .MuiSvgIcon-root': {
-                      color: 'white',
+                      color: theme.palette.text.secondary,
                     },
                   }}
                 />
@@ -3407,10 +3440,10 @@ function App() {
                     }
                     sx={{
                       '&.Mui-checked': {
-                        color: 'white', // Customize the color when checked
+                        color: theme.palette.text.secondary, // Customize the color when checked
                       },
                       '& .MuiSvgIcon-root': {
-                        color: 'white',
+                        color: theme.palette.text.secondary,
                       },
                     }}
                   />
@@ -3436,10 +3469,10 @@ function App() {
                       disableRipple
                       sx={{
                         '&.Mui-checked': {
-                          color: 'white',
+                          color: theme.palette.text.secondary,
                         },
                         '& .MuiSvgIcon-root': {
-                          color: 'white',
+                          color: theme.palette.text.secondary,
                         },
                       }}
                     />

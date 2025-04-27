@@ -81,6 +81,20 @@ const darkThemeOptions: ThemeOptions = {
         },
       },
     },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
   },
 };
 

@@ -27,7 +27,7 @@ const AppViewerContainer = React.forwardRef(
               }
               .frame-content {
                 overflow: hidden;
-                height: '100vh';
+                height: 100vh;
               }
             `}
             </style>
@@ -35,7 +35,7 @@ const AppViewerContainer = React.forwardRef(
         }
         style={{
           border: 'none',
-          height: '100vh',
+          height: customHeight || '100vh',
           left: (!isSelected || hide) && '-200vw',
           overflow: 'hidden',
           position: (!isSelected || hide) && 'fixed',

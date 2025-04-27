@@ -12,6 +12,7 @@ import {
   Box,
   ButtonBase,
   Divider,
+  useTheme,
 } from '@mui/material';
 import { getNameInfo } from '../Group/Group';
 import PollIcon from '@mui/icons-material/Poll';
@@ -37,6 +38,7 @@ export const PollCard = ({
   const [isOpen, setIsOpen] = useState(false);
   const { show, userInfo } = useContext(MyContext);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
+  const theme = useTheme();
   const handleVote = async () => {
     const fee = await getFee('VOTE_ON_POLL');
 
@@ -103,7 +105,7 @@ export const PollCard = ({
   return (
     <Card
       sx={{
-        backgroundColor: '#1F2023',
+        backgroundColor: theme.palette.background.default,
         height: isOpen ? 'auto' : '150px',
       }}
     >
@@ -124,7 +126,7 @@ export const PollCard = ({
         >
           <PollIcon
             sx={{
-              color: 'white',
+              color: theme.palette.text.primary,
             }}
           />
           <Typography>POLL embed</Typography>
@@ -141,7 +143,7 @@ export const PollCard = ({
               onClick={refresh}
               sx={{
                 fontSize: '24px',
-                color: 'white',
+                color: theme.palette.text.primary,
               }}
             />
           </ButtonBase>
@@ -151,7 +153,7 @@ export const PollCard = ({
                 onClick={openExternal}
                 sx={{
                   fontSize: '24px',
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
             </ButtonBase>
@@ -186,9 +188,6 @@ export const PollCard = ({
             <Button
               size="small"
               variant="contained"
-              sx={{
-                backgroundColor: 'var(--green)',
-              }}
               onClick={() => {
                 setIsOpen(true);
               }}
@@ -260,16 +259,7 @@ export const PollCard = ({
               <FormControlLabel
                 key={index}
                 value={index}
-                control={
-                  <Radio
-                    sx={{
-                      color: 'white', // Unchecked color
-                      '&.Mui-checked': {
-                        color: 'var(--green)', // Checked color
-                      },
-                    }}
-                  />
-                }
+                control={<Radio />}
                 label={option?.optionName}
                 sx={{
                   '& .MuiFormControlLabel-label': {
