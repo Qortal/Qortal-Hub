@@ -717,14 +717,14 @@ export const ListOfGroupPromotions = () => {
                                 {promotion?.isOpen === false && (
                                   <LockIcon
                                     sx={{
-                                      color: 'var(--green)',
+                                      color: theme.palette.other.positive,
                                     }}
                                   />
                                 )}
                                 {promotion?.isOpen === true && (
                                   <NoEncryptionGmailerrorredIcon
                                     sx={{
-                                      color: 'var(--danger)',
+                                      color: theme.palette.other.danger,
                                     }}
                                   />
                                 )}

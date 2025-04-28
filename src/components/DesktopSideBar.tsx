@@ -103,7 +103,7 @@ export const DesktopSideBar = ({
         <IconWrapper
           color={
             hasUnreadDirects || hasUnreadGroups
-              ? 'var(--unread)'
+              ? theme.palette.other.unread
               : desktopViewMode === 'chat'
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
@@ -115,7 +115,7 @@ export const DesktopSideBar = ({
             height={30}
             color={
               hasUnreadDirects || hasUnreadGroups
-                ? 'var(--unread)'
+                ? theme.palette.other.unread
                 : desktopViewMode === 'chat'
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary

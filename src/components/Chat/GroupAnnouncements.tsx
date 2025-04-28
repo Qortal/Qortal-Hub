@@ -674,7 +674,7 @@ export const GroupAnnouncements = ({
                 }}
                 style={{
                   alignSelf: 'center',
-                  background: 'var(--danger)',
+                  background: theme.palette.other.danger,
                   cursor: isSending ? 'default' : 'pointer',
                   flexShrink: 0,
                   fontSize: '14px',

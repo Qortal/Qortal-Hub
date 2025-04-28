@@ -1,16 +1,6 @@
 import { Typography, Box } from '@mui/material';
 import { styled } from '@mui/system';
 
-export const InstanceContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  width: '100%',
-  backgroundColor: 'var(--color-instance)',
-  height: '59px',
-  flexShrink: 0,
-  justifyContent: 'space-between',
-}));
-
 export const MailContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -161,24 +151,20 @@ export const InstanceP = styled(Typography)(({ theme }) => ({
   fontWeight: 500,
 }));
 
-export const InstanceListParent = styled(Box)`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 246px;
-  max-height: 325px;
-  width: 425px;
-  padding: 10px 0px 7px 0px;
-  background-color: var(--color-instance-popover-bg);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-`;
-
-export const InstanceListHeader = styled(Box)`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  background-color: var(--color-instance-popover-bg);
-`;
+export const InstanceListParent = styled(Typography)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  width: '425px', // only one width now
+  minHeight: '246px',
+  maxHeight: '325px',
+  padding: '10px 0px 7px 0px',
+  border: '1px solid rgba(0, 0, 0, 0.1)',
+}));
+export const InstanceListHeader = styled(Typography)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  width: '100%',
+}));
 
 export const InstanceFooter = styled(Box)`
   display: flex;
@@ -242,7 +228,7 @@ export const InstanceListContainerRow = styled(Box)(({ theme }) => ({
   cursor: 'pointer',
   transition: '0.2s background',
   '&:hover': {
-    background: 'rgba(67, 68, 72, 1)',
+    background: theme.palette.action.hover,
   },
   flexShrink: 0,
 }));

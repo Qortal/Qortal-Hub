@@ -220,7 +220,7 @@ export const PollCard = ({
             <Typography
               sx={{
                 fontSize: '14px',
-                color: 'var(--danger)',
+                color: theme.palette.other.danger,
               }}
             >
               {errorMsg}

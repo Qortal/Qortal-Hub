@@ -230,7 +230,7 @@ export const JoinGroup = ({ memberGroups }) => {
           >
             <CustomButtonAccept
               color="black"
-              bgColor="var(--green)"
+              bgColor={theme.palette.other.positive}
               sx={{
                 minWidth: '102px',
                 height: '45px',
@@ -244,7 +244,7 @@ export const JoinGroup = ({ memberGroups }) => {
 
           <CustomButtonAccept
             color="black"
-            bgColor="var(--danger)"
+            bgColor={theme.palette.other.danger}
             sx={{
               minWidth: '102px',
               height: '45px',

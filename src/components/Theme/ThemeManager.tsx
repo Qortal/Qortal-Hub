@@ -291,6 +291,24 @@ export default function ThemeManager() {
               'border.subtle',
               themeDraft[currentTab]?.border?.subtle
             )}
+            {renderColorPicker(
+              currentTab,
+              'Positive',
+              'other.positive',
+              themeDraft[currentTab]?.other?.positive
+            )}
+            {renderColorPicker(
+              currentTab,
+              'Danger',
+              'other.danger',
+              themeDraft[currentTab]?.other?.danger
+            )}
+            {renderColorPicker(
+              currentTab,
+              'Unread',
+              'other.unread',
+              themeDraft[currentTab]?.other?.unread
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

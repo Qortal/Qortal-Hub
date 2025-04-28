@@ -43,7 +43,7 @@ export const QMailStatus = () => {
       {hasNewMail && (
         <div
           style={{
-            backgroundColor: 'var(--unread)',
+            backgroundColor: theme.palette.other.unread,
             borderRadius: '50%',
             height: '15px',
             outline: '1px solid white',

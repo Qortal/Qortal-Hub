@@ -122,7 +122,7 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadGroups
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : isGroups
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -141,7 +141,7 @@ export const DesktopFooter = ({
               height={30}
               color={
                 hasUnreadDirects
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : isDirects
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary

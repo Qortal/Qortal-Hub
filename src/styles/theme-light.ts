@@ -26,6 +26,11 @@ export const lightThemeOptions: ThemeOptions = {
       main: 'rgba(0, 0, 0, 0.12)',
       subtle: 'rgba(0, 0, 0, 0.08)',
     },
+    other: {
+      positive: 'rgb(94, 176, 73)',
+      danger: 'rgb(177, 70, 70)',
+      unread: 'rgb(66, 151, 226)',
+    },
   },
   components: {
     MuiCard: {

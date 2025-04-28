@@ -361,7 +361,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
               height={20}
               sx={{
                 color: isSelectedAppPinned
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : theme.palette.text.primary,
               }}
             />
@@ -372,7 +372,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 fontSize: '12px',
                 fontWeight: 600,
                 color: isSelectedAppPinned
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : theme.palette.text.primary,
               },
             }}

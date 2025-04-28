@@ -153,7 +153,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
         </Typography>
         <MarkEmailUnreadIcon
           sx={{
-            color: anyUnread ? 'var(--unread)' : theme.palette.text.primary,
+            color: anyUnread
+              ? theme.palette.other.unread
+              : theme.palette.text.primary,
           }}
         />
         {isExpanded ? (
@@ -165,7 +167,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
         ) : (
           <ExpandMoreIcon
             sx={{
-              color: anyUnread ? 'var(--unread)' : theme.palette.text.primary,
+              color: anyUnread
+                ? theme.palette.other.unread
+                : theme.palette.text.primary,
               marginLeft: 'auto',
             }}
           />
@@ -262,7 +266,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
                       isLessThanOneWeekOld(mail?.created) ? (
                         <MailIcon
                           sx={{
-                            color: 'var(--unread)',
+                            color: theme.palette.other.unread,
                           }}
                         />
                       ) : !lastEnteredTimestamp ? (
@@ -275,7 +279,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
                         isLessThanOneWeekOld(mail?.created) ? (
                         <MailIcon
                           sx={{
-                            color: 'var(--unread)',
+                            color: theme.palette.other.unread,
                           }}
                         />
                       ) : (

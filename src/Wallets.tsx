@@ -539,12 +539,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             </Button>
             <Button
               sx={{
-                backgroundColor: 'var(--danger)',
+                backgroundColor: theme.palette.other.danger,
                 '&:hover': {
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                 },
                 '&:focus': {
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                 },
               }}
               size="small"

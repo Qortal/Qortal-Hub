@@ -76,7 +76,7 @@ export const GeneralNotifications = ({ address }) => {
           <NotificationsIcon
             sx={{
               color: hasNewPayment
-                ? 'var(--unread)'
+                ? theme.palette.other.unread
                 : theme.palette.text.secondary,
             }}
           />

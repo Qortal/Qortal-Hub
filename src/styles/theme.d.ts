@@ -9,11 +9,21 @@ declare module '@mui/material/styles' {
       main: string;
       subtle: string;
     };
+    other: {
+      positive: string;
+      danger: string;
+      unread: string;
+    };
   }
   interface PaletteOptions {
     border?: {
       main?: string;
       subtle?: string;
+    };
+    other?: {
+      positive?: string;
+      danger?: string;
+      unread?: string;
     };
   }
 }

@@ -6,6 +6,7 @@ import {
   Popover,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
 import {
   useCallback,
@@ -45,7 +46,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [inputValue, setInputValue] = useState('');
   const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);
-
+  const theme = useTheme();
   const handleFilter = useCallback(
     (query) => {
       if (query) {
@@ -254,14 +255,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                 {group?.isOpen === false && (
                   <LockIcon
                     sx={{
-                      color: 'var(--green)',
+                      color: theme.palette.other.positive,
                     }}
                   />
                 )}
                 {group?.isOpen === true && (
                   <NoEncryptionGmailerrorredIcon
                     sx={{
-                      color: 'var(--danger)',
+                      color: theme.palette.other.danger,
                     }}
                   />
                 )}

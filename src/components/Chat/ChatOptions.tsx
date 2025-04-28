@@ -714,7 +714,7 @@ export const ChatOptions = ({
                     mentionList?.length > 0 &&
                     (!lastMentionTimestamp ||
                       lastMentionTimestamp < mentionList[0]?.timestamp)
-                      ? 'var(--unread)'
+                      ? theme.palette.other.unread
                       : theme.palette.text.primary,
                 }}
               />

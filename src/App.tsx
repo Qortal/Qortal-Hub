@@ -3121,12 +3121,12 @@ function App() {
             <DialogActions>
               <Button
                 sx={{
-                  backgroundColor: 'var(--green)',
+                  backgroundColor: theme.palette.other.positive,
                   color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--green)',
+                    backgroundColor: theme.palette.other.positive,
                     color: 'black',
                     opacity: 1,
                   },
@@ -3141,12 +3141,12 @@ function App() {
               </Button>
               <Button
                 sx={{
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                   color: 'black',
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--danger)',
+                    backgroundColor: theme.palette.other.danger,
                     color: 'black',
                     opacity: 1,
                   },
@@ -3500,7 +3500,7 @@ function App() {
               >
                 <CustomButtonAccept
                   color="black"
-                  bgColor="var(--green)"
+                  bgColor={theme.palette.other.positive}
                   sx={{
                     minWidth: '102px',
                     opacity:
@@ -3536,7 +3536,7 @@ function App() {
                 </CustomButtonAccept>
                 <CustomButtonAccept
                   color="black"
-                  bgColor="var(--danger)"
+                  bgColor={theme.palette.other.danger}
                   sx={{
                     minWidth: '102px',
                   }}
@@ -3593,7 +3593,7 @@ function App() {
         >
           <HelpIcon
             sx={{
-              color: 'var(--unread)',
+              color: theme.palette.other.unread,
             }}
           />
         </ButtonBase>

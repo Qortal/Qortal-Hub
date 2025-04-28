@@ -60,7 +60,7 @@ import { SortIcon } from '../../../assets/Icons/SortIcon';
 import { CustomButton } from '../../../styles/App-styles';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
-
+import CheckIcon from '@mui/icons-material/Check';
 export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
@@ -606,13 +606,19 @@ export const GroupMail = ({
                   }}
                   sx={{
                     backgroundColor:
-                      filterMode === filter ? 'rgba(74, 158, 244, 1)' : 'unset',
+                      filterMode === filter
+                        ? theme.palette.action.selected
+                        : 'unset',
                   }}
                   key={filter}
                 >
                   <InstanceListContainerRowCheck>
                     {filter === filterMode && (
-                      <InstanceListContainerRowCheckIcon src={CheckSVG} />
+                      <CheckIcon
+                        sx={{
+                          color: theme.palette.text.primary,
+                        }}
+                      />
                     )}
                   </InstanceListContainerRowCheck>
                   <InstanceListContainerRowMain>

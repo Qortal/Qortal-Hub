@@ -390,7 +390,7 @@ export const ChatList = ({
           <button
             onClick={() => scrollToBottom()}
             style={{
-              backgroundColor: 'var(--unread)',
+              backgroundColor: theme.palette.other.unread,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,

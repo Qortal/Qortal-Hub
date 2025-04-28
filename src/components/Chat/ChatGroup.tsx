@@ -1118,7 +1118,8 @@ export const ChatGroup = ({
                 <Typography
                   sx={{
                     fontSize: '12px',
-                    color: messageSize > 4000 ? 'var(--danger)' : 'unset',
+                    color:
+                      messageSize > 4000 ? theme.palette.other.danger : 'unset',
                   }}
                 >{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
               </Box>
