@@ -149,7 +149,7 @@ export const GeneralNotifications = ({ address }) => {
                 >
                   <AccountBalanceWalletIcon
                     sx={{
-                      color: 'white',
+                      color: theme.palette.text.primary,
                     }}
                   />{' '}
                   {formatDate(latestTx?.timestamp)}

@@ -226,7 +226,7 @@ export const RegisterName = ({
               >
                 <ErrorIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
                 <Typography>
@@ -248,7 +248,7 @@ export const RegisterName = ({
             >
               <CheckIcon
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
               <Typography>{registerNameValue} is available</Typography>
@@ -264,7 +264,7 @@ export const RegisterName = ({
             >
               <ErrorIcon
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />
               <Typography>{registerNameValue} is unavailable</Typography>
@@ -298,7 +298,7 @@ export const RegisterName = ({
               <ListItemIcon>
                 <RadioButtonCheckedIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
               </ListItemIcon>
@@ -308,7 +308,7 @@ export const RegisterName = ({
               <ListItemIcon>
                 <RadioButtonCheckedIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
               </ListItemIcon>

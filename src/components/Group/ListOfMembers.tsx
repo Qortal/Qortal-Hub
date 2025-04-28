@@ -7,6 +7,7 @@ import {
   ListItemText,
   Popover,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useRef, useState } from 'react';
 import {
@@ -39,7 +40,7 @@ const ListOfMembers = ({
   const [isLoadingBan, setIsLoadingBan] = useState(false);
   const [isLoadingMakeAdmin, setIsLoadingMakeAdmin] = useState(false);
   const [isLoadingRemoveAdmin, setIsLoadingRemoveAdmin] = useState(false);
-
+  const theme = useTheme();
   const listRef = useRef();
 
   const handlePopoverOpen = (event, index) => {
@@ -354,7 +355,7 @@ const ListOfMembers = ({
                 {member?.isAdmin && (
                   <Typography
                     sx={{
-                      color: 'white',
+                      color: theme.palette.text.primary,
                       marginLeft: 'auto',
                     }}
                   >

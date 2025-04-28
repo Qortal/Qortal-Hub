@@ -20,7 +20,7 @@ import { WrapperUserAction } from '../../WrapperUserAction';
 
 export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
   const [expandAttachments, setExpandAttachments] = useState<boolean>(false);
-  console.log('message', message);
+
   let cleanHTML = '';
   if (message?.htmlContent) {
     cleanHTML = DOMPurify.sanitize(message.htmlContent);

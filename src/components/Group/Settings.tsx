@@ -131,9 +131,7 @@ export const Settings = ({ address, open, setOpen }) => {
         onClose={handleClose}
         TransitionComponent={Transition}
       >
-        <AppBar
-          sx={{ position: 'relative', bgcolor: theme.palette.background }}
-        >
+        <AppBar sx={{ position: 'relative' }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
               General Settings
@@ -152,7 +150,6 @@ export const Settings = ({ address, open, setOpen }) => {
 
         <Box
           sx={{
-            bgcolor: theme.palette.background,
             flexGrow: 1,
             overflowY: 'auto',
             color: theme.palette.text.primary,
@@ -173,9 +170,6 @@ export const Settings = ({ address, open, setOpen }) => {
           />
           {window?.electronAPI && (
             <FormControlLabel
-              sx={{
-                color: 'white',
-              }}
               control={
                 <LocalNodeSwitch
                   checked={isEnabledDevMode}

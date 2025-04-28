@@ -1,4 +1,9 @@
-import { IconButton, InputAdornment, TextFieldProps } from '@mui/material';
+import {
+  IconButton,
+  InputAdornment,
+  TextFieldProps,
+  useTheme,
+} from '@mui/material';
 import React, { useRef, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -39,7 +44,7 @@ export const BoundedNumericTextField = ({
   const stringIsEmpty = (value: string) => {
     return value === '';
   };
-
+  const theme = useTheme();
   const isAllZerosNum = /^0*\.?0*$/;
   const isFloatNum = /^-?[0-9]*\.?[0-9]*$/;
   const isIntegerNum = /^-?[0-9]+$/;
@@ -133,7 +138,7 @@ export const BoundedNumericTextField = ({
             >
               <AddIcon
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />{' '}
             </IconButton>
@@ -143,7 +148,7 @@ export const BoundedNumericTextField = ({
             >
               <RemoveIcon
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />{' '}
             </IconButton>

@@ -1780,7 +1780,7 @@ export const Group = ({
       </div>
     );
   };
-  console.log('groupsProperties', groupsProperties);
+
   const renderGroups = () => {
     return (
       <div
