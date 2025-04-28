@@ -15,6 +15,8 @@ export const AdminSpace = ({
   defaultThread,
   setDefaultThread,
   setIsForceShowCreationKeyPopup,
+  balance,
+  isOwner,
 }) => {
   const { rootHeight } = useContext(MyContext);
   const [isMoved, setIsMoved] = useState(false);
@@ -37,6 +39,7 @@ export const AdminSpace = ({
         position: hide ? 'fixed' : 'relative',
         visibility: hide && 'hidden',
         width: '100%',
+        overflow: 'auto',
       }}
     >
       {!isAdmin && (
@@ -56,6 +59,9 @@ export const AdminSpace = ({
           setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup}
           adminsWithNames={adminsWithNames}
           selectedGroup={selectedGroup}
+          balance={balance}
+          userInfo={userInfo}
+          isOwner={isOwner}
         />
       )}
     </div>

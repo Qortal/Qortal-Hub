@@ -68,6 +68,7 @@ import { AdminSpace } from '../Chat/AdminSpace';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   addressInfoControllerAtom,
+  groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   isOpenBlockedModalAtom,
   selectedGroupIdAtom,
@@ -449,10 +450,14 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false);
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
+  const groupsOwnerNamesRef = useRef({});
   const { t } = useTranslation(['core', 'group']);
 
   const [groupsProperties, setGroupsProperties] =
     useRecoilState(groupsPropertiesAtom);
+  const [groupsOwnerNames, setGroupsOwnerNames] =
+    useRecoilState(groupsOwnerNamesAtom);
+
   const setUserInfoForLevels = useSetRecoilState(addressInfoControllerAtom);
 
   const isPrivate = useMemo(() => {
@@ -826,6 +831,24 @@ export const Group = ({
     }
   };
 
+  const getOwnerNameForGroup = async (owner: string, groupId: string) => {
+    try {
+      if (!owner) return;
+      if (groupsOwnerNamesRef.current[groupId]) return;
+      const name = await requestQueueMemberNames.enqueue(() => {
+        return getNameInfo(owner);
+      });
+      if (name) {
+        groupsOwnerNamesRef.current[groupId] = name;
+        setGroupsOwnerNames((prev) => {
+          return { ...prev, [groupId]: name };
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const getGroupsProperties = useCallback(async (address) => {
     try {
       const url = `${getBaseApiReact()}/groups/member/${address}`;
@@ -837,6 +860,9 @@ export const Group = ({
         return result;
       }, {});
       setGroupsProperties(transformToObject);
+      Object.keys(transformToObject).forEach((key) => {
+        getOwnerNameForGroup(transformToObject[key]?.owner || '', key);
+      });
     } catch (error) {
       console.log(error);
     }
@@ -1023,6 +1049,8 @@ export const Group = ({
     newEncryptionNotification,
     triedToFetchSecretKey,
   ]);
+
+  console.log('groupOwner?.owner', groupOwner);
 
   const notifyAdmin = async (admin) => {
     try {
@@ -1298,6 +1326,8 @@ export const Group = ({
       unsubscribeFromEvent('open-apps-mode', openAppsMode);
     };
   }, []);
+
+  console.log('selectedGroup', selectedGroup);
 
   const openGroupChatFromNotification = (e) => {
     if (isLoadingOpenSectionFromNotification.current) return;
@@ -1942,45 +1972,20 @@ export const Group = ({
                     }}
                   >
                     <ListItemAvatar>
-                      {groupsProperties[group?.groupId]?.isOpen === false ? (
-                        <Box
-                          sx={{
-                            alignItems: 'center',
-                            background: theme.palette.background.default,
-                            borderRadius: '50%',
-                            display: 'flex',
-                            height: '40px',
-                            justifyContent: 'center',
-                            width: '40px',
-                          }}
+                      {groupsOwnerNames[group?.groupId] ? (
+                        <Avatar
+                          alt={group?.groupName?.charAt(0)}
+                          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                            groupsOwnerNames[group?.groupId]
+                          }/qortal_group_avatar_${group?.groupId}?async=true`}
                         >
-                          {/* <Avatar src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                    app?.name
-                  }/qortal_avatar?async=true`} /> */}
-                          <LockIcon
-                            sx={{
-                              color: theme.palette.other.positive,
-                            }}
-                          />
-                        </Box>
+                          {group?.groupName?.charAt(0).toUpperCase()}
+                        </Avatar>
                       ) : (
-                        <Box
-                          sx={{
-                            alignItems: 'center',
-                            background: theme.palette.background.default,
-                            borderRadius: '50%',
-                            display: 'flex',
-                            height: '40px',
-                            justifyContent: 'center',
-                            width: '40px',
-                          }}
-                        >
-                          <NoEncryptionGmailerrorredIcon
-                            sx={{
-                              color: theme.palette.other.danger,
-                            }}
-                          />
-                        </Box>
+                        <Avatar alt={group?.groupName?.charAt(0)}>
+                          {' '}
+                          {group?.groupName?.charAt(0).toUpperCase() || 'G'}
+                        </Avatar>
                       )}
                     </ListItemAvatar>
                     <ListItemText
@@ -2020,24 +2025,44 @@ export const Group = ({
                           sx={{
                             color: theme.palette.other.unread,
                             marginRight: '5px',
+                            marginBottom: 'auto',
                           }}
                         />
                       )}
-                    {group?.data &&
-                      groupChatTimestamps[group?.groupId] &&
-                      group?.sender !== myAddress &&
-                      group?.timestamp &&
-                      ((!timestampEnterData[group?.groupId] &&
-                        Date.now() - group?.timestamp <
-                          timeDifferenceForNotificationChats) ||
-                        timestampEnterData[group?.groupId] <
-                          group?.timestamp) && (
-                        <MarkChatUnreadIcon
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        justifyContent: 'flex-start',
+                        height: '100%',
+                        marginBottom: 'auto',
+                      }}
+                    >
+                      {group?.data &&
+                        groupChatTimestamps[group?.groupId] &&
+                        group?.sender !== myAddress &&
+                        group?.timestamp &&
+                        ((!timestampEnterData[group?.groupId] &&
+                          Date.now() - group?.timestamp <
+                            timeDifferenceForNotificationChats) ||
+                          timestampEnterData[group?.groupId] <
+                            group?.timestamp) && (
+                          <MarkChatUnreadIcon
+                            sx={{
+                              color: theme.palette.other.unread,
+                            }}
+                          />
+                        )}
+                      {groupsProperties[group?.groupId]?.isOpen === false && (
+                        <LockIcon
                           sx={{
-                            color: theme.palette.other.unread,
+                            color: theme.palette.other.positive,
+                            marginBottom: 'auto',
                           }}
                         />
                       )}
+                    </Box>
                   </Box>
                 </ContextMenu>
               </ListItem>
@@ -2431,10 +2456,12 @@ export const Group = ({
                       }
                       adminsWithNames={adminsWithNames}
                       selectedGroup={selectedGroup?.groupId}
+                      isOwner={groupOwner?.owner === myAddress}
                       myAddress={myAddress}
                       userInfo={userInfo}
                       hide={groupSection !== 'adminSpace'}
                       isAdmin={admins.includes(myAddress)}
+                      balance={balance}
                     />
                   )}
                 </>

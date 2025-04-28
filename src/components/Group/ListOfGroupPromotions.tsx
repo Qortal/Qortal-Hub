@@ -49,7 +49,7 @@ import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background';
-export const requestQueuePromos = new RequestQueueWithPromise(20);
+export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
   // Encode the string as UTF-8

@@ -100,6 +100,7 @@ import { useRecoilState, useResetRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
+  groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
@@ -477,6 +478,7 @@ function App() {
   const resetLastPaymentSeenTimestampAtom = useResetRecoilState(
     lastPaymentSeenTimestampAtom
   );
+  const resetGroupsOwnerNamesAtom = useResetRecoilState(groupsOwnerNamesAtom);
 
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
@@ -489,6 +491,7 @@ function App() {
     resetAtomMailsAtom();
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
+    resetGroupsOwnerNamesAtom();
   };
 
   const handleSetGlobalApikey = (key) => {

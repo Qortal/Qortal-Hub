@@ -15,6 +15,7 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
+import { GroupAvatar } from '../GroupAvatar';
 
 export const getPublishesFromAdminsAdminSpace = async (
   admins: string[],
@@ -53,6 +54,9 @@ export const AdminSpaceInner = ({
   selectedGroup,
   adminsWithNames,
   setIsForceShowCreationKeyPopup,
+  balance,
+  userInfo,
+  isOwner,
 }) => {
   const [adminGroupSecretKey, setAdminGroupSecretKey] = useState(null);
   const [isFetchingAdminGroupSecretKey, setIsFetchingAdminGroupSecretKey] =
@@ -282,6 +286,32 @@ export const AdminSpaceInner = ({
           content encrypted with it.
         </Typography>
       </Box>
+      <Spacer height="25px" />
+      {isOwner && (
+        <Box
+          sx={{
+            border: '1px solid gray',
+            borderRadius: '6px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            maxWidth: '90%',
+            padding: '10px',
+            width: '300px',
+            alignItems: 'center',
+          }}
+        >
+          <Typography>Group Avatar</Typography>
+
+          <GroupAvatar
+            setOpenSnack={setOpenSnackGlobal}
+            setInfoSnack={setInfoSnackCustom}
+            myName={userInfo?.name}
+            balance={balance}
+            groupId={selectedGroup}
+          />
+        </Box>
+      )}
     </Box>
   );
 };

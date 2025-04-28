@@ -192,6 +192,10 @@ export const groupsPropertiesAtom = atom({
   key: 'groupsPropertiesAtom',
   default: {},
 });
+export const groupsOwnerNamesAtom = atom({
+  key: 'groupsOwnerNamesAtom',
+  default: {},
+});
 
 export const isOpenBlockedModalAtom = atom({
   key: 'isOpenBlockedModalAtom',
