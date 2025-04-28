@@ -1,14 +1,14 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const darkThemeOptions: ThemeOptions = {
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgb(46, 61, 96)',
-      dark: 'rgb(5, 20, 53)',
-      light: 'rgb(45, 92, 201)',
+      main: 'rgb(100, 155, 240)',
+      dark: 'rgb(45, 92, 201)',
+      light: 'rgb(130, 185, 255)',
     },
     secondary: {
       main: 'rgb(69, 173, 255)',

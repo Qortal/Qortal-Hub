@@ -110,7 +110,6 @@ export const BuyQortInformation = ({ balance }) => {
           </Typography>
           <List
             sx={{
-              bgcolor: theme.palette.background.default,
               maxWidth: 360,
               width: '100%',
             }}
@@ -118,21 +117,13 @@ export const BuyQortInformation = ({ balance }) => {
           >
             <ListItem disablePadding>
               <ListItemIcon>
-                <RadioButtonCheckedIcon
-                  sx={{
-                    color: theme.palette.primary.dark,
-                  }}
-                />
+                <RadioButtonCheckedIcon />
               </ListItemIcon>
               <ListItemText primary="Create transactions on the Qortal Blockchain" />
             </ListItem>
             <ListItem disablePadding>
               <ListItemIcon>
-                <RadioButtonCheckedIcon
-                  sx={{
-                    color: theme.palette.primary.dark,
-                  }}
-                />
+                <RadioButtonCheckedIcon />
               </ListItemIcon>
               <ListItemText primary="Having at least 4 QORT in your balance allows you to send chat messages at near instant speed." />
             </ListItem>

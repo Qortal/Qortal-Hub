@@ -1,7 +1,7 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const lightThemeOptions: ThemeOptions = {
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
@@ -21,10 +21,6 @@ const lightThemeOptions: ThemeOptions = {
     text: {
       primary: 'rgba(0, 0, 0, 0.87)', // 87% black (slightly softened)
       secondary: 'rgba(0, 0, 0, 0.6)', // 60% black
-    },
-    border: {
-      main: 'rgba(0, 0, 0, 0.12)',
-      subtle: 'rgba(0, 0, 0, 0.08)',
     },
     border: {
       main: 'rgba(0, 0, 0, 0.12)',

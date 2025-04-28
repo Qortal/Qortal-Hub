@@ -18,6 +18,7 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useRecoilState } from 'recoil';
+import ThemeManager from '../Theme/ThemeManager';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -185,6 +186,7 @@ export const Settings = ({ address, open, setOpen }) => {
               label="Enable dev mode"
             />
           )}
+          <ThemeManager />
         </Box>
       </Dialog>
     </Fragment>
