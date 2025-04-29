@@ -131,7 +131,7 @@ export const GroupAvatar = ({
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
-              fontSize: '12px',
+              fontSize: '16px',
               opacity: 0.5,
             }}
           >
@@ -169,7 +169,7 @@ export const GroupAvatar = ({
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
-              fontSize: '12px',
+              fontSize: '16px',
               opacity: 0.5,
             }}
           >
@@ -197,7 +197,7 @@ export const GroupAvatar = ({
       <ButtonBase onClick={handleChildClick}>
         <Typography
           sx={{
-            fontSize: '12px',
+            fontSize: '16px',
             opacity: 0.5,
           }}
         >
