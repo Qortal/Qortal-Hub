@@ -1556,12 +1556,13 @@ export const Group = ({
       <div
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.default,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
           width: '380px',
+          padding: '0px 2px',
         }}
       >
         <Box
@@ -1581,7 +1582,7 @@ export const Group = ({
             <IconWrapper
               color={
                 groupChatHasUnread || groupsAnnHasUnread
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopSideView === 'groups'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -1594,7 +1595,7 @@ export const Group = ({
                 height={24}
                 color={
                   groupChatHasUnread || groupsAnnHasUnread
-                    ? 'var(--unread)'
+                    ? theme.palette.other.unread
                     : desktopSideView === 'groups'
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
@@ -1611,7 +1612,7 @@ export const Group = ({
               customWidth="75px"
               color={
                 directChatHasUnread
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopSideView === 'directs'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -1623,7 +1624,7 @@ export const Group = ({
                 height={24}
                 color={
                   directChatHasUnread
-                    ? 'var(--unread)'
+                    ? theme.palette.other.unread
                     : desktopSideView === 'directs'
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
@@ -1744,7 +1745,7 @@ export const Group = ({
                         direct?.timestamp) && (
                       <MarkChatUnreadIcon
                         sx={{
-                          color: 'var(--unread)',
+                          color: theme.palette.other.unread,
                         }}
                       />
                     )}
@@ -1779,7 +1780,7 @@ export const Group = ({
       </div>
     );
   };
-  console.log('groupsProperties', groupsProperties);
+
   const renderGroups = () => {
     return (
       <div
@@ -1789,8 +1790,9 @@ export const Group = ({
           flexDirection: 'column',
           alignItems: 'flex-start',
           height: '100%',
-          background: theme.palette.background.default,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
+          padding: '0px 2px',
         }}
       >
         <Box
@@ -1810,7 +1812,7 @@ export const Group = ({
             <IconWrapper
               color={
                 groupChatHasUnread || groupsAnnHasUnread
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopSideView === 'groups'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -1823,7 +1825,7 @@ export const Group = ({
                 height={24}
                 color={
                   groupChatHasUnread || groupsAnnHasUnread
-                    ? 'var(--unread)'
+                    ? theme.palette.other.unread
                     : desktopSideView === 'groups'
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
@@ -1840,7 +1842,7 @@ export const Group = ({
               customWidth="75px"
               color={
                 directChatHasUnread
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopSideView === 'directs'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -1852,7 +1854,7 @@ export const Group = ({
                 height={24}
                 color={
                   directChatHasUnread
-                    ? 'var(--unread)'
+                    ? theme.palette.other.unread
                     : desktopSideView === 'directs'
                       ? theme.palette.text.primary
                       : theme.palette.text.secondary
@@ -1957,7 +1959,7 @@ export const Group = ({
                   }/qortal_avatar?async=true`} /> */}
                           <LockIcon
                             sx={{
-                              color: 'var(--green)',
+                              color: theme.palette.other.positive,
                             }}
                           />
                         </Box>
@@ -1975,7 +1977,7 @@ export const Group = ({
                         >
                           <NoEncryptionGmailerrorredIcon
                             sx={{
-                              color: 'var(--danger)',
+                              color: theme.palette.other.danger,
                             }}
                           />
                         </Box>
@@ -2016,7 +2018,7 @@ export const Group = ({
                       !groupAnnouncements[group?.groupId]?.seentimestamp && (
                         <CampaignIcon
                           sx={{
-                            color: 'var(--unread)',
+                            color: theme.palette.other.unread,
                             marginRight: '5px',
                           }}
                         />
@@ -2032,7 +2034,7 @@ export const Group = ({
                           group?.timestamp) && (
                         <MarkChatUnreadIcon
                           sx={{
-                            color: 'var(--unread)',
+                            color: theme.palette.other.unread,
                           }}
                         />
                       )}

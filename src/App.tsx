@@ -30,14 +30,12 @@ import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
-import Copy from './assets/svgs/Copy.svg';
 import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
-import Success from './assets/svgs/Success.svg';
 import './utils/seedPhrase/RandomSentenceGenerator';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
@@ -137,6 +135,8 @@ import ThemeSelector from './components/Theme/ThemeSelector.tsx';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
+import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
+import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 
 type extStates =
   | 'not-authenticated'
@@ -1297,7 +1297,8 @@ function App() {
             <CopyToClipboard text={rawWallet?.ltcAddress}>
               <AddressBox>
                 {rawWallet?.ltcAddress?.slice(0, 6)}...
-                {rawWallet?.ltcAddress?.slice(-4)} <img src={Copy} />
+                {rawWallet?.ltcAddress?.slice(-4)}{' '}
+                <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
             </CopyToClipboard>
 
@@ -1362,7 +1363,8 @@ function App() {
             <CopyToClipboard text={rawWallet?.address0}>
               <AddressBox>
                 {rawWallet?.address0?.slice(0, 6)}...
-                {rawWallet?.address0?.slice(-4)} <img src={Copy} />
+                {rawWallet?.address0?.slice(-4)}{' '}
+                <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
             </CopyToClipboard>
             <Spacer height="10px" />
@@ -1471,6 +1473,7 @@ function App() {
           sx={{
             height: '100%',
             justifyContent: 'space-between',
+            borderLeft: `1px solid ${theme.palette.border.subtle}`,
           }}
         >
           <Box
@@ -1508,7 +1511,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1518,7 +1521,11 @@ function App() {
                   },
                 }}
               >
-                <LogoutIcon />
+                <LogoutIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1548,7 +1555,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1558,7 +1565,11 @@ function App() {
                   },
                 }}
               >
-                <SettingsIcon />
+                <SettingsIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1588,7 +1599,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1598,7 +1609,11 @@ function App() {
                   },
                 }}
               >
-                <PersonSearchIcon />
+                <PersonSearchIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1628,7 +1643,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1638,7 +1653,11 @@ function App() {
                   },
                 }}
               >
-                <AccountBalanceWalletIcon />
+                <AccountBalanceWalletIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1665,7 +1684,7 @@ function App() {
                     tooltip: {
                       sx: {
                         color: theme.palette.text.primary,
-                        backgroundColor: theme.palette.background.default,
+                        backgroundColor: theme.palette.background.paper,
                       },
                     },
                     arrow: {
@@ -1680,7 +1699,10 @@ function App() {
                       setIsOpenDrawerProfile(true);
                     }}
                   >
-                    <WalletIcon width="25" />
+                    <WalletIcon
+                      color={theme.palette.text.secondary}
+                      width="25"
+                    />
                   </ButtonBase>
                 </Tooltip>
               </>
@@ -1776,7 +1798,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1786,7 +1808,11 @@ function App() {
                   },
                 }}
               >
-                <EngineeringIcon />
+                <EngineeringIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
 
@@ -1821,7 +1847,7 @@ function App() {
                     tooltip: {
                       sx: {
                         color: theme.palette.text.primary,
-                        backgroundColor: theme.palette.background.default,
+                        backgroundColor: theme.palette.background.paper,
                       },
                     },
                     arrow: {
@@ -1831,7 +1857,11 @@ function App() {
                     },
                   }}
                 >
-                  <HelpIcon />
+                  <HelpIcon
+                    sx={{
+                      color: theme.palette.text.secondary,
+                    }}
+                  />
                 </Tooltip>
               </ButtonBase>
             )}
@@ -1863,7 +1893,7 @@ function App() {
                   tooltip: {
                     sx: {
                       color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.default,
+                      backgroundColor: theme.palette.background.paper,
                     },
                   },
                   arrow: {
@@ -1873,7 +1903,11 @@ function App() {
                   },
                 }}
               >
-                <DownloadIcon />
+                <DownloadIcon
+                  sx={{
+                    color: theme.palette.text.secondary,
+                  }}
+                />
               </Tooltip>
             </ButtonBase>
             <Spacer height="40px" />
@@ -2164,10 +2198,10 @@ function App() {
                   defaultChecked={messageQortalRequest?.checkbox1?.value}
                   sx={{
                     '&.Mui-checked': {
-                      color: 'white', // Customize the color when checked
+                      color: theme.palette.text.secondary, // Customize the color when checked
                     },
                     '& .MuiSvgIcon-root': {
-                      color: 'white',
+                      color: theme.palette.text.secondary,
                     },
                   }}
                 />
@@ -2897,7 +2931,7 @@ function App() {
             {walletToBeDownloaded && (
               <>
                 <Spacer height="48px" />
-                <img src={Success} />
+                <SuccessIcon />
                 <Spacer height="45px" />
                 <TextP
                   sx={{
@@ -2953,7 +2987,7 @@ function App() {
             }}
           >
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{
@@ -2978,7 +3012,7 @@ function App() {
         {extState === 'transfer-success-request' && (
           <>
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{
@@ -3003,7 +3037,7 @@ function App() {
         {extState === 'buy-order-submitted' && (
           <>
             <Spacer height="48px" />
-            <img src={Success} />
+            <SuccessIcon />
             <Spacer height="45px" />
             <TextP
               sx={{
@@ -3087,12 +3121,12 @@ function App() {
             <DialogActions>
               <Button
                 sx={{
-                  backgroundColor: 'var(--green)',
+                  backgroundColor: theme.palette.other.positive,
                   color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--green)',
+                    backgroundColor: theme.palette.other.positive,
                     color: 'black',
                     opacity: 1,
                   },
@@ -3107,12 +3141,12 @@ function App() {
               </Button>
               <Button
                 sx={{
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                   color: 'black',
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--danger)',
+                    backgroundColor: theme.palette.other.danger,
                     color: 'black',
                     opacity: 1,
                   },
@@ -3406,10 +3440,10 @@ function App() {
                     }
                     sx={{
                       '&.Mui-checked': {
-                        color: 'white', // Customize the color when checked
+                        color: theme.palette.text.secondary, // Customize the color when checked
                       },
                       '& .MuiSvgIcon-root': {
-                        color: 'white',
+                        color: theme.palette.text.secondary,
                       },
                     }}
                   />
@@ -3435,10 +3469,10 @@ function App() {
                       disableRipple
                       sx={{
                         '&.Mui-checked': {
-                          color: 'white',
+                          color: theme.palette.text.secondary,
                         },
                         '& .MuiSvgIcon-root': {
-                          color: 'white',
+                          color: theme.palette.text.secondary,
                         },
                       }}
                     />
@@ -3466,7 +3500,7 @@ function App() {
               >
                 <CustomButtonAccept
                   color="black"
-                  bgColor="var(--green)"
+                  bgColor={theme.palette.other.positive}
                   sx={{
                     minWidth: '102px',
                     opacity:
@@ -3502,7 +3536,7 @@ function App() {
                 </CustomButtonAccept>
                 <CustomButtonAccept
                   color="black"
-                  bgColor="var(--danger)"
+                  bgColor={theme.palette.other.danger}
                   sx={{
                     minWidth: '102px',
                   }}
@@ -3559,7 +3593,7 @@ function App() {
         >
           <HelpIcon
             sx={{
-              color: 'var(--unread)',
+              color: theme.palette.other.unread,
             }}
           />
         </ButtonBase>

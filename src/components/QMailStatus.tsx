@@ -43,7 +43,7 @@ export const QMailStatus = () => {
       {hasNewMail && (
         <div
           style={{
-            backgroundColor: 'var(--unread)',
+            backgroundColor: theme.palette.other.unread,
             borderRadius: '50%',
             height: '15px',
             outline: '1px solid white',
@@ -77,7 +77,7 @@ export const QMailStatus = () => {
           tooltip: {
             sx: {
               color: theme.palette.text.primary,
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.paper,
             },
           },
           arrow: {
@@ -87,7 +87,11 @@ export const QMailStatus = () => {
           },
         }}
       >
-        <Mail />
+        <Mail
+          sx={{
+            color: theme.palette.text.secondary,
+          }}
+        />
       </Tooltip>
     </ButtonBase>
   );

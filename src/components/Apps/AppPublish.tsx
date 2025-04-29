@@ -20,7 +20,13 @@ import {
   PublishQAppChoseFile,
   PublishQAppInfo,
 } from './Apps-styles';
-import { InputBase, InputLabel, MenuItem, Select } from '@mui/material';
+import {
+  InputBase,
+  InputLabel,
+  MenuItem,
+  Select,
+  useTheme,
+} from '@mui/material';
 import { styled } from '@mui/system';
 import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
 import { Add } from '@mui/icons-material';
@@ -59,11 +65,11 @@ const CustomSelect = styled(Select)({
 });
 
 const CustomMenuItem = styled(MenuItem)({
-  backgroundColor: '#1f1f1f', // Background for dropdown items
-  color: '#ccc',
-  '&:hover': {
-    backgroundColor: '#333', // Darker background on hover
-  },
+  // backgroundColor: '#1f1f1f', // Background for dropdown items
+  // color: '#ccc',
+  // '&:hover': {
+  //   backgroundColor: '#333', // Darker background on hover
+  // },
 });
 
 export const AppPublish = ({ names, categories }) => {
@@ -74,7 +80,7 @@ export const AppPublish = ({ names, categories }) => {
   const [appType, setAppType] = useState('APP');
   const [file, setFile] = useState(null);
   const { show } = useContext(MyContext);
-
+  const theme = useTheme();
   const [tag1, setTag1] = useState('');
   const [tag2, setTag2] = useState('');
   const [tag3, setTag3] = useState('');
@@ -263,9 +269,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="18px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           Name/App
         </InputLabel>
 
@@ -278,11 +282,11 @@ export const AppPublish = ({ names, categories }) => {
           <CustomMenuItem value="">
             <em
               style={{
-                color: 'var(--50-white, #FFFFFF80)',
+                color: theme.palette.text.secondary,
               }}
             >
               Select Name/App
-            </em>{' '}
+            </em>
             {/* This is the placeholder item */}
           </CustomMenuItem>
           {names.map((name) => {
@@ -292,9 +296,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="15px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           App service type
         </InputLabel>
 
@@ -307,12 +309,11 @@ export const AppPublish = ({ names, categories }) => {
           <CustomMenuItem value="">
             <em
               style={{
-                color: 'var(--50-white, #FFFFFF80)',
+                color: theme.palette.text.secondary,
               }}
             >
               Select App Type
-            </em>{' '}
-            {/* This is the placeholder item */}
+            </em>
           </CustomMenuItem>
           <CustomMenuItem value={'APP'}>App</CustomMenuItem>
           <CustomMenuItem value={'WEBSITE'}>Website</CustomMenuItem>
@@ -320,9 +321,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="15px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           Title
         </InputLabel>
 
@@ -330,7 +329,7 @@ export const AppPublish = ({ names, categories }) => {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           sx={{
-            border: '0.5px solid var(--50-white, #FFFFFF80)',
+            border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
             borderRadius: '5px',
             height: '36px',
@@ -347,9 +346,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="15px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           Description
         </InputLabel>
 
@@ -357,7 +354,7 @@ export const AppPublish = ({ names, categories }) => {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           sx={{
-            border: '0.5px solid var(--50-white, #FFFFFF80)',
+            border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
             borderRadius: '5px',
             height: '36px',
@@ -374,9 +371,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="15px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           Category
         </InputLabel>
 
@@ -389,12 +384,11 @@ export const AppPublish = ({ names, categories }) => {
           <CustomMenuItem value="">
             <em
               style={{
-                color: 'var(--50-white, #FFFFFF80)',
+                color: theme.palette.text.secondary,
               }}
             >
               Select Category
-            </em>{' '}
-            {/* This is the placeholder item */}
+            </em>
           </CustomMenuItem>
           {categories?.map((category) => {
             return (
@@ -407,9 +401,7 @@ export const AppPublish = ({ names, categories }) => {
 
         <Spacer height="15px" />
 
-        <InputLabel
-          sx={{ color: '#888', fontSize: '14px', marginBottom: '2px' }}
-        >
+        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           Tags
         </InputLabel>
 
@@ -418,7 +410,7 @@ export const AppPublish = ({ names, categories }) => {
             value={tag1}
             onChange={(e) => setTag1(e.target.value)}
             sx={{
-              border: '0.5px solid var(--50-white, #FFFFFF80)',
+              border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
               borderRadius: '5px',
               height: '36px',
@@ -435,7 +427,7 @@ export const AppPublish = ({ names, categories }) => {
             value={tag2}
             onChange={(e) => setTag2(e.target.value)}
             sx={{
-              border: '0.5px solid var(--50-white, #FFFFFF80)',
+              border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
               borderRadius: '5px',
               height: '36px',
@@ -452,7 +444,7 @@ export const AppPublish = ({ names, categories }) => {
             value={tag3}
             onChange={(e) => setTag3(e.target.value)}
             sx={{
-              border: '0.5px solid var(--50-white, #FFFFFF80)',
+              border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
               borderRadius: '5px',
               height: '36px',
@@ -469,7 +461,7 @@ export const AppPublish = ({ names, categories }) => {
             value={tag4}
             onChange={(e) => setTag4(e.target.value)}
             sx={{
-              border: '0.5px solid var(--50-white, #FFFFFF80)',
+              border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
               borderRadius: '5px',
               height: '36px',
@@ -486,7 +478,7 @@ export const AppPublish = ({ names, categories }) => {
             value={tag5}
             onChange={(e) => setTag5(e.target.value)}
             sx={{
-              border: '0.5px solid var(--50-white, #FFFFFF80)',
+              border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
               borderRadius: '5px',
               height: '36px',

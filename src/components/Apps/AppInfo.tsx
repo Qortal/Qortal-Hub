@@ -186,7 +186,7 @@ export const AppInfo = ({ app, myName }) => {
               }}
               sx={{
                 backgroundColor: isInstalled
-                  ? '#0091E1'
+                  ? theme.palette.primary.main
                   : theme.palette.background.paper,
                 height: '29px',
                 maxWidth: '320px',

@@ -71,7 +71,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             fontSize: '1rem',
           }}
         >
-          {t('group:group_invites', { postProcess: 'capitalize' })}{' '}
+          {t('group:group.invites', { postProcess: 'capitalize' })}{' '}
           {groupsWithJoinRequests?.length > 0 &&
             ` (${groupsWithJoinRequests?.length})`}
         </Typography>

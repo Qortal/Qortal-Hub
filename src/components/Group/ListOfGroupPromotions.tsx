@@ -21,6 +21,7 @@ import {
   Select,
   TextField,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
 import LockIcon from '@mui/icons-material/Lock';
@@ -47,6 +48,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { getFee } from '../../background';
 export const requestQueuePromos = new RequestQueueWithPromise(20);
 
 export function utf8ToBase64(inputString: string): string {
@@ -90,7 +92,7 @@ export const ListOfGroupPromotions = () => {
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
   const { show, setTxList } = useContext(MyContext);
-
+  const theme = useTheme();
   const listRef = useRef();
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
@@ -673,7 +675,7 @@ export const ListOfGroupPromotions = () => {
                                   <Avatar
                                     sx={{
                                       backgroundColor: '#27282c',
-                                      color: 'white',
+                                      color: theme.palette.text.primary,
                                     }}
                                     alt={promotion?.name}
                                     src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -687,7 +689,6 @@ export const ListOfGroupPromotions = () => {
                                     sx={{
                                       fontWight: 600,
                                       fontFamily: 'Inter',
-                                      color: 'cadetBlue',
                                     }}
                                   >
                                     {promotion?.name}
@@ -698,7 +699,6 @@ export const ListOfGroupPromotions = () => {
                                   sx={{
                                     fontWight: 600,
                                     fontFamily: 'Inter',
-                                    color: 'cadetBlue',
                                   }}
                                 >
                                   {promotion?.groupName}
@@ -717,14 +717,14 @@ export const ListOfGroupPromotions = () => {
                                 {promotion?.isOpen === false && (
                                   <LockIcon
                                     sx={{
-                                      color: 'var(--green)',
+                                      color: theme.palette.other.positive,
                                     }}
                                   />
                                 )}
                                 {promotion?.isOpen === true && (
                                   <NoEncryptionGmailerrorredIcon
                                     sx={{
-                                      color: 'var(--danger)',
+                                      color: theme.palette.other.danger,
                                     }}
                                   />
                                 )}
@@ -746,7 +746,6 @@ export const ListOfGroupPromotions = () => {
                                 sx={{
                                   fontWight: 600,
                                   fontFamily: 'Inter',
-                                  color: 'cadetBlue',
                                 }}
                               >
                                 {promotion?.data}
@@ -768,7 +767,7 @@ export const ListOfGroupPromotions = () => {
                                   }
                                   sx={{
                                     fontSize: '12px',
-                                    color: 'white',
+                                    color: theme.palette.text.primary,
                                   }}
                                 >
                                   Join Group: {` ${promotion?.groupName}`}
@@ -848,10 +847,10 @@ export const ListOfGroupPromotions = () => {
               multiline={true}
               sx={{
                 '& .MuiFormLabel-root': {
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 },
                 '& .MuiFormLabel-root.Mui-focused': {
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 },
               }}
             />

@@ -1,15 +1,5 @@
-import { Typography, Box, TextField } from '@mui/material';
+import { Typography, Box } from '@mui/material';
 import { styled } from '@mui/system';
-
-export const InstanceContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  width: '100%',
-  backgroundColor: 'var(--color-instance)',
-  height: '59px',
-  flexShrink: 0,
-  justifyContent: 'space-between',
-}));
 
 export const MailContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -88,7 +78,7 @@ export const ComposeContainer = styled(Box)(({ theme }) => ({
   transition: '0.2s background-color',
   justifyContent: 'center',
   '&:hover': {
-    backgroundColor: 'rgba(67, 68, 72, 1)',
+    backgroundColor: theme.palette.action.hover,
   },
 }));
 
@@ -141,19 +131,6 @@ export const SelectInstanceContainer = styled(Box)(({ theme }) => ({
   gap: '17px',
 }));
 
-export const SelectInstanceContainerInner = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  gap: '3px',
-  cursor: 'pointer',
-  padding: '8px',
-  transition: 'all 0.2s',
-  '&:hover': {
-    borderRadius: '8px',
-    background: '#434448',
-  },
-}));
-
 export const SelectInstanceContainerFilterInner = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
@@ -174,99 +151,20 @@ export const InstanceP = styled(Typography)(({ theme }) => ({
   fontWeight: 500,
 }));
 
-export const MailMessageRowContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  justifyContent: 'space-between',
-  borderRadius: '56px 5px 10px 56px',
-  paddingRight: '15px',
-  transition: 'background 0.2s',
-  gap: '10px',
-  '&:hover': {
-    background: '#434448',
-  },
-}));
-
-export const MailMessageRowProfile = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  justifyContent: 'flex-start',
-  gap: '10px',
-  width: '50%',
-  overflow: 'hidden',
-}));
-
-export const MailMessageRowInfo = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  cursor: 'pointer',
-  justifyContent: 'flex-start',
-  gap: '7px',
-  width: '50%',
-}));
-
-export const MailMessageRowInfoStatusNotDecrypted = styled(Typography)(
-  ({ theme }) => ({
-    fontSize: '16px',
-    fontWeight: 900,
-    textTransform: 'uppercase',
-    paddingTop: '2px',
-  })
-);
-
-export const MailMessageRowInfoStatusRead = styled(Typography)(({ theme }) => ({
-  fontSize: '16px',
-  fontWeight: 300,
-}));
-
-export const MessageExtraInfo = styled(Box)(({ theme }) => ({
+export const InstanceListParent = styled(Typography)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px',
-  overflow: 'hidden',
+  width: '425px', // only one width now
+  minHeight: '246px',
+  maxHeight: '325px',
+  padding: '10px 0px 7px 0px',
+  border: '1px solid rgba(0, 0, 0, 0.1)',
 }));
-
-export const MessageExtraName = styled(Typography)(({ theme }) => ({
-  fontSize: '16px',
-  fontWeight: 900,
-  whiteSpace: 'nowrap',
-  textOverflow: 'ellipsis',
-  overflow: 'hidden',
-}));
-
-export const MessageExtraDate = styled(Typography)(({ theme }) => ({
-  fontSize: '15px',
-  fontWeight: 500,
-}));
-
-export const MessagesContainer = styled(Box)(({ theme }) => ({
-  width: '460px',
-  maxWidth: '90%',
+export const InstanceListHeader = styled(Typography)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  gap: '12px',
+  width: '100%',
 }));
-
-export const InstanceListParent = styled(Box)`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-height: 246px;
-  max-height: 325px;
-  width: 425px;
-  padding: 10px 0px 7px 0px;
-  background-color: var(--color-instance-popover-bg);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-`;
-
-export const InstanceListHeader = styled(Box)`
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  background-color: var(--color-instance-popover-bg);
-`;
 
 export const InstanceFooter = styled(Box)`
   display: flex;
@@ -330,7 +228,7 @@ export const InstanceListContainerRow = styled(Box)(({ theme }) => ({
   cursor: 'pointer',
   transition: '0.2s background',
   '&:hover': {
-    background: 'rgba(67, 68, 72, 1)',
+    background: theme.palette.action.hover,
   },
   flexShrink: 0,
 }));
@@ -378,44 +276,6 @@ export const InstanceListContainerRowGroupIcon = styled('img')({
   userSelect: 'none',
   objectFit: 'contain',
 });
-export const TypeInAliasTextfield = styled(TextField)({
-  width: '340px', // Adjust the width as needed
-  borderRadius: '5px',
-  backgroundColor: 'rgba(30, 30, 32, 1)',
-  border: 'none',
-  outline: 'none',
-  input: {
-    fontSize: 16,
-    color: 'white',
-    '&::placeholder': {
-      fontSize: 16,
-      color: 'rgba(255, 255, 255, 0.2)',
-    },
-    border: 'none',
-    outline: 'none',
-    padding: '10px',
-  },
-  '& .MuiOutlinedInput-root': {
-    '& fieldset': {
-      border: 'none',
-    },
-    '&:hover fieldset': {
-      border: 'none',
-    },
-    '&.Mui-focused fieldset': {
-      border: 'none',
-    },
-  },
-  '& .MuiInput-underline:before': {
-    borderBottom: 'none',
-  },
-  '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
-    borderBottom: 'none',
-  },
-  '& .MuiInput-underline:after': {
-    borderBottom: 'none',
-  },
-});
 
 export const NewMessageCloseImg = styled('img')({
   width: 'auto',
@@ -427,6 +287,7 @@ export const NewMessageCloseImg = styled('img')({
 export const NewMessageHeaderP = styled(Typography)(({ theme }) => ({
   fontSize: '18px',
   fontWeight: 600,
+  color: theme.palette.text.primary,
 }));
 
 export const NewMessageInputRow = styled(Box)(({ theme }) => ({
@@ -480,29 +341,24 @@ export const NewMessageAttachmentImg = styled('img')({
   border: '1px dashed #646464',
 });
 
-export const NewMessageSendButton = styled(Box)`
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.9);
-  display: inline-flex;
-  padding: 8px 16px 8px 12px;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-  width: fit-content;
-  transition: all 0.2s;
-  color: black;
-  min-width: 120px;
-  gap: 8px;
-  position: relative;
-  cursor: pointer;
-  &:hover {
-    background-color: rgba(41, 41, 43, 1);
-    color: white;
-    svg path {
-      fill: white; // Fill color changes to white on hover
-    }
-  }
-`;
+export const NewMessageSendButton = styled(Box)(({ theme }) => ({
+  borderRadius: '4px',
+  border: `1px solid ${theme.palette.border.main}`, // you can replace with theme.palette.divider or whatever you want later
+  display: 'inline-flex',
+  padding: '8px 16px 8px 12px',
+  justifyContent: 'center',
+  alignItems: 'center',
+  width: 'fit-content',
+  transition: 'all 0.2s',
+  color: theme.palette.text.primary, // replace later with theme.palette.text.primary if needed
+  minWidth: '120px',
+  position: 'relative',
+  gap: '8px',
+  cursor: 'pointer',
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover, // replace with theme value if needed
+  },
+}));
 
 export const NewMessageSendP = styled(Typography)`
   font-family: Roboto;
@@ -524,14 +380,7 @@ export const ShowMessageNameP = styled(Typography)`
   text-overflow: ellipsis;
   overflow: hidden;
 `;
-export const ShowMessageTimeP = styled(Typography)`
-  color: rgba(255, 255, 255, 0.5);
-  font-family: Roboto;
-  font-size: 15px;
-  font-style: normal;
-  font-weight: 500;
-  line-height: normal;
-`;
+
 export const ShowMessageSubjectP = styled(Typography)`
   font-family: Roboto;
   font-size: 16px;
@@ -541,61 +390,44 @@ export const ShowMessageSubjectP = styled(Typography)`
   text-align: left;
 `;
 
-export const ShowMessageButton = styled(Box)`
-display: inline-flex;
-padding: 8px 16px 8px 16px;
-align-items: center;
-justify-content: center;
-gap: 8px;
-width: fit-content;
-transition: all 0.2s;
-color: white;
-background-color: rgba(41, 41, 43, 1)
-min-width: 120px;
-gap: 8px;
-border-radius: 4px;
-border: 0.5px solid rgba(255, 255, 255, 0.70);
-font-family: Roboto;
+export const ShowMessageButton = styled(Box)(({ theme }) => ({
+  display: 'inline-flex',
+  padding: '8px 16px',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 'fit-content',
+  transition: 'all 0.2s',
+  color: theme.palette.text.primary, // you'll replace with theme value
+  minWidth: '120px',
+  gap: '8px',
+  borderRadius: '4px',
+  border: theme.palette.border.main, // you'll replace
+  fontFamily: 'Roboto',
+  cursor: 'pointer',
+  '&:hover': {
+    background: theme.palette.action.hover, // you'll replace
+    borderRadius: '4px',
+  },
+}));
 
-min-width: 120px;
-cursor: pointer;
-&:hover {
-  border-radius: 4px;
-border: 0.5px solid rgba(255, 255, 255, 0.70);
-background:  #434448;
-}
-`;
-export const ShowMessageReturnButton = styled(Box)`
-display: inline-flex;
-padding: 8px 16px 8px 16px;
-align-items: center;
-justify-content: center;
-gap: 8px;
-width: fit-content;
-transition: all 0.2s;
-color: white;
-background-color: rgba(41, 41, 43, 1)
-min-width: 120px;
-gap: 8px;
-border-radius: 4px;
-font-family: Roboto;
-
-min-width: 120px;
-cursor: pointer;
-&:hover {
-  border-radius: 4px;
-background:  #434448;
-}
-`;
-
-export const ShowMessageButtonP = styled(Typography)`
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 500;
-  line-height: 120%; /* 19.2px */
-  letter-spacing: -0.16px;
-  color: white;
-`;
+export const ShowMessageReturnButton = styled(Box)(({ theme }) => ({
+  display: 'inline-flex',
+  padding: '8px 16px',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 'fit-content',
+  transition: 'all 0.2s',
+  color: theme.palette.text.primary, // you'll replace with theme value
+  minWidth: '120px',
+  gap: '8px',
+  borderRadius: '4px',
+  fontFamily: 'Roboto',
+  cursor: 'pointer',
+  '&:hover': {
+    background: theme.palette.action.hover, // you'll replace
+    borderRadius: '4px',
+  },
+}));
 
 export const ShowMessageButtonImg = styled('img')({
   width: 'auto',
@@ -630,18 +462,16 @@ export const MoreImg = styled('img')({
   },
 });
 
-export const MoreP = styled(Typography)`
-  color: rgba(255, 255, 255, 0.5);
-
-  /* Attachments */
-  font-family: Roboto;
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 120%; /* 19.2px */
-  letter-spacing: -0.16px;
-  white-space: nowrap;
-`;
+export const MoreP = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.primary, // Now dynamic
+  fontFamily: 'Roboto',
+  fontSize: '16px',
+  fontStyle: 'normal',
+  fontWeight: 400,
+  lineHeight: '120%', // 19.2px
+  letterSpacing: '-0.16px',
+  whiteSpace: 'nowrap',
+}));
 
 export const ThreadContainerFullWidth = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -658,7 +488,6 @@ export const ThreadContainer = styled(Box)(({ theme }) => ({
 }));
 
 export const GroupNameP = styled(Typography)`
-  color: #fff;
   font-size: 25px;
   font-style: normal;
   font-weight: 700;
@@ -667,7 +496,6 @@ export const GroupNameP = styled(Typography)`
 `;
 
 export const AllThreadP = styled(Typography)`
-  color: #fff;
   font-size: 20px;
   font-style: normal;
   font-weight: 400;
@@ -675,32 +503,32 @@ export const AllThreadP = styled(Typography)`
   letter-spacing: 0.15px;
 `;
 
-export const SingleThreadParent = styled(Box)`
-  border-radius: 35px 4px 4px 35px;
-  position: relative;
-  background: #434448;
-  display: flex;
-  padding: 13px;
-  cursor: pointer;
-  margin-bottom: 5px;
-  height: 76px;
-  align-items: center;
-  transition: 0.2s all;
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
-`;
+export const SingleThreadParent = styled(Box)(({ theme }) => ({
+  borderRadius: '35px 4px 4px 35px',
+  position: 'relative',
+  display: 'flex',
+  padding: '13px',
+  cursor: 'pointer',
+  marginBottom: '5px',
+  height: '76px',
+  alignItems: 'center',
+  transition: '0.2s all',
+  backgroundColor: theme.palette.background.paper, // or remove if you want no background by default
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+  },
+}));
 
-export const SingleTheadMessageParent = styled(Box)`
-  border-radius: 35px 4px 4px 35px;
-  background: #434448;
-  display: flex;
-  padding: 13px;
-  cursor: pointer;
-  margin-bottom: 5px;
-  height: 76px;
-  align-items: center;
-`;
+export const SingleTheadMessageParent = styled(Box)(({ theme }) => ({
+  borderRadius: '35px 4px 4px 35px',
+  background: theme.palette.background.paper,
+  display: 'flex',
+  padding: '13px',
+  cursor: 'pointer',
+  marginBottom: '5px',
+  height: '76px',
+  alignItems: 'center',
+}));
 
 export const ThreadInfoColumn = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -713,7 +541,6 @@ export const ThreadInfoColumn = styled(Box)(({ theme }) => ({
 }));
 
 export const ThreadInfoColumnNameP = styled(Typography)`
-  color: #fff;
   font-family: Roboto;
   font-size: 16px;
   font-style: normal;
@@ -724,26 +551,25 @@ export const ThreadInfoColumnNameP = styled(Typography)`
   overflow: hidden;
 `;
 
-export const ThreadInfoColumnbyP = styled('span')`
-  color: rgba(255, 255, 255, 0.8);
-  font-family: Roboto;
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 500;
-  line-height: normal;
-`;
+export const ThreadInfoColumnbyP = styled('span')(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  fontFamily: 'Roboto',
+  fontSize: '16px',
+  fontStyle: 'normal',
+  fontWeight: 500,
+  lineHeight: 'normal',
+}));
 
-export const ThreadInfoColumnTime = styled(Typography)`
-  color: rgba(255, 255, 255, 0.8);
-  font-family: Roboto;
-  font-size: 15px;
-  font-style: normal;
-  font-weight: 500;
-  line-height: normal;
-`;
+export const ThreadInfoColumnTime = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  fontFamily: 'Roboto',
+  fontSize: '15px',
+  fontStyle: 'normal',
+  fontWeight: 500,
+  lineHeight: 'normal',
+}));
 
 export const ThreadSingleTitle = styled(Typography)`
-  color: #fff;
   font-family: Roboto;
   font-size: 23px;
   font-style: normal;
@@ -755,7 +581,6 @@ export const ThreadSingleTitle = styled(Typography)`
 `;
 
 export const ThreadSingleLastMessageP = styled(Typography)`
-  color: #fff;
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;
@@ -764,7 +589,6 @@ export const ThreadSingleLastMessageP = styled(Typography)`
 `;
 
 export const ThreadSingleLastMessageSpanP = styled('span')`
-  color: #fff;
   font-family: Roboto;
   font-size: 12px;
   font-style: normal;
@@ -792,6 +616,6 @@ export const CloseContainer = styled(Box)(({ theme }) => ({
   height: '50px',
   borderRadius: '0px 12px 0px 0px',
   '&:hover': {
-    backgroundColor: 'rgba(162, 31, 31, 1)',
+    backgroundColor: theme.palette.action.hover,
   },
 }));

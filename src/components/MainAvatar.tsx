@@ -8,6 +8,7 @@ import {
   ButtonBase,
   Popover,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { Spacer } from '../common/Spacer';
 import ImageUploader from '../common/ImageUploader';
@@ -222,6 +223,7 @@ const PopoverComp = ({
   isLoading,
   myName,
 }) => {
+  const theme = useTheme();
   return (
     <Popover
       id={id}
@@ -260,7 +262,7 @@ const PopoverComp = ({
           >
             <ErrorIcon
               sx={{
-                color: 'white',
+                color: theme.palette.text.primary,
               }}
             />
             <Typography>

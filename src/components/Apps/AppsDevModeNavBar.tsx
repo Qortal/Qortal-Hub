@@ -6,7 +6,7 @@ import {
 } from './Apps-styles';
 import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
-import { ButtonBase, Tab, Tabs } from '@mui/material';
+import { ButtonBase, Tab, Tabs, useTheme } from '@mui/material';
 import {
   executeEvent,
   subscribeToEvent,
@@ -23,7 +23,7 @@ export const AppsDevModeNavBar = () => {
   const [navigationController, setNavigationController] = useRecoilState(
     navigationControllerAtom
   );
-
+  const theme = useTheme();
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -81,7 +81,7 @@ export const AppsDevModeNavBar = () => {
       sx={{
         position: 'relative',
         flexDirection: 'column',
-        width: '60px',
+        width: '59px',
         height: 'unset',
         maxHeight: '70vh',
         borderRadius: '0px 30px 30px 0px',
@@ -114,9 +114,9 @@ export const AppsDevModeNavBar = () => {
           scrollButtons={true}
           sx={{
             '& .MuiTabs-indicator': {
-              backgroundColor: 'white',
+              backgroundColor: theme.palette.text.primary,
             },
-            maxHeight: `320px`, // Ensure the tabs container fits within the available space
+            maxHeight: `275px`, // Ensure the tabs container fits within the available space
             overflow: 'hidden', // Prevents overflow on small screens
           }}
         >
@@ -133,7 +133,7 @@ export const AppsDevModeNavBar = () => {
               } // Pass custom component
               sx={{
                 '&.Mui-selected': {
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 },
                 padding: '0px',
                 margin: '0px',

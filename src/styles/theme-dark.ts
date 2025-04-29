@@ -1,25 +1,35 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const darkThemeOptions: ThemeOptions = {
+export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgb(46, 61, 96)',
-      dark: 'rgb(5, 20, 53)',
-      light: 'rgb(45, 92, 201)',
+      main: 'rgb(100, 155, 240)',
+      dark: 'rgb(45, 92, 201)',
+      light: 'rgb(130, 185, 255)',
     },
     secondary: {
       main: 'rgb(69, 173, 255)',
     },
     background: {
       default: 'rgb(49, 51, 56)',
-      paper: 'rgb(96, 96, 97)',
+      paper: 'rgb(62, 64, 68)',
+      surface: 'rgb(58, 60, 65)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
       secondary: 'rgb(179, 179, 179)',
+    },
+    border: {
+      main: 'rgba(255, 255, 255, 0.12)',
+      subtle: 'rgba(255, 255, 255, 0.08)',
+    },
+    other: {
+      positive: 'rgb(94, 176, 73)',
+      danger: 'rgb(177, 70, 70)',
+      unread: 'rgb(66, 151, 226)',
     },
   },
   components: {
@@ -73,6 +83,20 @@ const darkThemeOptions: ThemeOptions = {
         style: {
           color: 'rgb(255, 255, 255)',
           opacity: 0.5,
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
         },
       },
     },

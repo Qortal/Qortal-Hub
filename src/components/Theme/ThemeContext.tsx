@@ -6,57 +6,129 @@ import {
   useEffect,
   useCallback,
 } from 'react';
-import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
-import { darkTheme } from '../../styles/theme-dark';
-import { lightTheme } from '../../styles/theme-light';
+import {
+  ThemeProvider as MuiThemeProvider,
+  createTheme,
+} from '@mui/material/styles';
+import { lightThemeOptions } from '../../styles/theme-light';
+import { darkThemeOptions } from '../../styles/theme-dark';
+
+const defaultTheme = {
+  id: 'default',
+  name: 'Default Theme',
+  light: lightThemeOptions.palette,
+  dark: darkThemeOptions.palette,
+};
 
 const ThemeContext = createContext({
   themeMode: 'light',
   toggleTheme: () => {},
+  userThemes: [defaultTheme],
+  addUserTheme: (themes) => {},
+  setUserTheme: (theme) => {},
+  currentThemeId: 'default',
 });
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+export const ThemeProvider = ({ children }) => {
   const [themeMode, setThemeMode] = useState('light');
+  const [userThemes, setUserThemes] = useState([defaultTheme]);
+  const [currentThemeId, setCurrentThemeId] = useState('default');
 
-  const theme = useMemo(
-    () => (themeMode === 'light' ? lightTheme : darkTheme),
-    [themeMode]
-  );
+  const currentTheme =
+    userThemes.find((theme) => theme.id === currentThemeId) || defaultTheme;
+
+  const muiTheme = useMemo(() => {
+    if (themeMode === 'light') {
+      return createTheme({
+        ...lightThemeOptions,
+        palette: {
+          ...currentTheme.light,
+        },
+      });
+    } else {
+      return createTheme({
+        ...lightThemeOptions,
+        palette: {
+          ...currentTheme.dark,
+        },
+      });
+    }
+  }, [themeMode, currentTheme]);
+
+  const saveSettings = (
+    themes = userThemes,
+    mode = themeMode,
+    themeId = currentThemeId
+  ) => {
+    localStorage.setItem(
+      'saved_ui_theme',
+      JSON.stringify({
+        mode,
+        userThemes: themes,
+        currentThemeId: themeId,
+      })
+    );
+  };
 
   const toggleTheme = () => {
-    setThemeMode((prevMode) => {
-      const newMode = prevMode === 'light' ? 'dark' : 'light';
-
-      const themeProperties = {
-        mode: newMode,
-      };
-
-      localStorage.setItem('saved_ui_theme', JSON.stringify(themeProperties));
-
+    setThemeMode((prev) => {
+      const newMode = prev === 'light' ? 'dark' : 'light';
+      saveSettings(userThemes, newMode, currentThemeId);
       return newMode;
     });
   };
 
-  const getSavedTheme = useCallback(async () => {
-    try {
-      const themeProperties = JSON.parse(
-        localStorage.getItem(`saved_ui_theme`) || '{}'
-      );
+  const addUserTheme = (themes) => {
+    setUserThemes(themes);
+    saveSettings(themes);
+  };
 
-      const theme = themeProperties?.mode || 'light';
-      setThemeMode(theme);
-    } catch (error) {
-      console.log('error', error);
+  const setUserTheme = (theme) => {
+    if (theme.id === 'default') {
+      setCurrentThemeId('default');
+      saveSettings(userThemes, themeMode, 'default');
+    } else {
+      setCurrentThemeId(theme.id);
+      saveSettings(userThemes, themeMode, theme.id);
+    }
+  };
+
+  const loadSettings = useCallback(() => {
+    const saved = localStorage.getItem('saved_ui_theme');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.mode === 'light' || parsed.mode === 'dark')
+          setThemeMode(parsed.mode);
+        if (Array.isArray(parsed.userThemes)) {
+          const filteredThemes = parsed.userThemes.filter(
+            (theme) => theme.id !== 'default'
+          );
+          setUserThemes([defaultTheme, ...filteredThemes]);
+        }
+        if (parsed.currentThemeId) setCurrentThemeId(parsed.currentThemeId);
+      } catch (error) {
+        console.error('Failed to parse saved_ui_theme:', error);
+      }
     }
   }, []);
 
   useEffect(() => {
-    getSavedTheme();
-  }, [getSavedTheme]);
+    loadSettings();
+  }, [loadSettings]);
 
   return (
-    <ThemeContext.Provider value={{ themeMode, toggleTheme }}>
-      <MuiThemeProvider theme={theme}>{children}</MuiThemeProvider>
+    <ThemeContext.Provider
+      value={{
+        themeMode,
+        toggleTheme,
+        userThemes,
+        addUserTheme,
+        setUserTheme,
+        currentThemeId,
+      }}
+    >
+      <MuiThemeProvider theme={muiTheme}>{children}</MuiThemeProvider>
     </ThemeContext.Provider>
   );
 };

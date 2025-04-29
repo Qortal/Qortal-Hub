@@ -321,12 +321,12 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 }}
                 variant="contained"
                 sx={{
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                   color: 'black',
                   fontWeight: 'bold',
                   opacity: 0.7,
                   '&:hover': {
-                    backgroundColor: 'var(--danger)',
+                    backgroundColor: theme.palette.other.danger,
                     color: 'black',
                     opacity: 1,
                   },
@@ -393,12 +393,12 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
 
                     <LoadingButton
                       sx={{
-                        backgroundColor: 'var(--green)',
+                        backgroundColor: theme.palette.other.positive,
                         color: 'black',
                         opacity: 0.7,
                         fontWeight: 'bold',
                         '&:hover': {
-                          backgroundColor: 'var(--green)',
+                          backgroundColor: theme.palette.other.positive,
                           color: 'black',
                           opacity: 1,
                         },
@@ -432,12 +432,12 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             onClick={revertChanges}
                             variant="contained"
                             sx={{
-                              backgroundColor: 'var(--danger)',
+                              backgroundColor: theme.palette.other.danger,
                               color: 'black',
                               fontWeight: 'bold',
                               opacity: 0.7,
                               '&:hover': {
-                                backgroundColor: 'var(--danger)',
+                                backgroundColor: theme.palette.other.danger,
                                 color: 'black',
                                 opacity: 1,
                               },
@@ -503,12 +503,12 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         onClick={saveToQdn}
                         variant="contained"
                         sx={{
-                          backgroundColor: 'var(--danger)',
+                          backgroundColor: theme.palette.other.danger,
                           color: 'black',
                           fontWeight: 'bold',
                           opacity: 0.7,
                           '&:hover': {
-                            backgroundColor: 'var(--danger)',
+                            backgroundColor: theme.palette.other.danger,
                             color: 'black',
                             opacity: 1,
                           },

@@ -562,11 +562,12 @@ export const NotAuthenticated = ({
             }}
             sx={{
               backgroundColor:
-                hasSeenGettingStarted === false && 'var(--green)',
+                hasSeenGettingStarted === false && theme.palette.other.positive,
               color: hasSeenGettingStarted === false && 'black',
               '&:hover': {
                 backgroundColor:
-                  hasSeenGettingStarted === false && 'var(--green)',
+                  hasSeenGettingStarted === false &&
+                  theme.palette.other.positive,
                 color: hasSeenGettingStarted === false && 'black',
               },
             }}
@@ -631,15 +632,6 @@ export const NotAuthenticated = ({
                 }}
                 control={
                   <Switch
-                    sx={{
-                      '& .MuiSwitch-switchBase.Mui-checked': {
-                        color: '#5EB049',
-                      },
-                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
-                        {
-                          backgroundColor: theme.palette.background.default,
-                        },
-                    }}
                     checked={useLocalNode}
                     onChange={(event) => {
                       if (event.target.checked) {
@@ -1086,7 +1078,7 @@ export const NotAuthenticated = ({
       >
         <HelpIcon
           sx={{
-            color: 'var(--unread)',
+            color: theme.palette.other.unread,
           }}
         />
       </ButtonBase>

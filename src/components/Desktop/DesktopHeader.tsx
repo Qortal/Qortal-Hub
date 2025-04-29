@@ -104,14 +104,14 @@ export const DesktopHeader = ({
         {isPrivate && (
           <LockIcon
             sx={{
-              color: 'var(--green)',
+              color: theme.palette.other.positive,
             }}
           />
         )}
         {isPrivate === false && (
           <NoEncryptionGmailerrorredIcon
             sx={{
-              color: 'var(--danger)',
+              color: theme.palette.other.danger,
             }}
           />
         )}
@@ -155,7 +155,7 @@ export const DesktopHeader = ({
               width={20}
               color={
                 isUnread
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : isAnnouncement
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
@@ -183,7 +183,7 @@ export const DesktopHeader = ({
               width={20}
               color={
                 isUnreadChat
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : isChat
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary

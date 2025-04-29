@@ -24,7 +24,7 @@ import {
   AppsSearchLeft,
   AppsSearchRight,
 } from '../Apps/Apps-styles';
-import IconSearch from '../../assets/svgs/Search.svg';
+
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { CellMeasurerCache } from 'react-virtualized';
 import { getBaseApiReact } from '../../App';
@@ -358,14 +358,14 @@ export const ChatOptions = ({
     return (
       <Box
         sx={{
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.surface,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',
           flexDirection: 'column',
           flexGrow: 0,
           flexShrink: 0,
-          height: '100%',
+          height: '98%',
           overflow: 'auto',
           width: '300px',
         }}
@@ -398,7 +398,11 @@ export const ChatOptions = ({
         >
           <AppsSearchContainer>
             <AppsSearchLeft>
-              <img src={IconSearch} />
+              <SearchIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
@@ -576,7 +580,7 @@ export const ChatOptions = ({
       <Box
         sx={{
           alignItems: 'center',
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.paper,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',
@@ -710,8 +714,8 @@ export const ChatOptions = ({
                     mentionList?.length > 0 &&
                     (!lastMentionTimestamp ||
                       lastMentionTimestamp < mentionList[0]?.timestamp)
-                      ? 'var(--unread)'
-                      : 'white',
+                      ? theme.palette.other.unread
+                      : theme.palette.text.primary,
                 }}
               />
             </Tooltip>
@@ -767,7 +771,6 @@ const ShowMessage = ({ message, goToMessage, messages }) => {
             sx={{
               fontWight: 600,
               fontFamily: 'Inter',
-              color: 'cadetBlue',
             }}
           >
             {message?.senderName}

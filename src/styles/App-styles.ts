@@ -54,7 +54,6 @@ export const AuthenticatedContainerInnerTop = styled(Box)(({ theme }) => ({
 }));
 
 export const TextP = styled(Typography)(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   fontFamily: 'Inter',
   fontSize: '13px',
@@ -62,7 +61,6 @@ export const TextP = styled(Typography)(({ theme }) => ({
 }));
 
 export const TextItalic = styled('span')(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   fontFamily: 'Inter',
   fontSize: '13px',
@@ -71,7 +69,6 @@ export const TextItalic = styled('span')(({ theme }) => ({
 }));
 
 export const TextSpan = styled('span')(({ theme }) => ({
-  backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
   fontFamily: 'Inter',
   fontSize: '13px',
@@ -131,9 +128,8 @@ export const CustomButton = styled(Box)(({ theme }) => ({
   width: 'fit-content',
   '&:hover': {
     backgroundColor: theme.palette.background.paper,
-    color: theme.palette.text.secondary,
     'svg path': {
-      fill: theme.palette.background.paper,
+      fill: theme.palette.background.secondary,
     },
   },
 }));

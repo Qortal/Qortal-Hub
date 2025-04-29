@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Avatar, Box, Popover, Typography } from '@mui/material';
+import { Avatar, Box, Popover, Typography, useTheme } from '@mui/material';
 // import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
 import { Thread } from './Thread';
 import {
@@ -49,7 +49,6 @@ import {
   handleUnencryptedPublishes,
 } from '../../Chat/GroupAnnouncements';
 import CheckSVG from '../../../assets/svgs/Check.svg';
-import SortSVG from '../../../assets/svgs/Sort.svg';
 import ArrowDownSVG from '../../../assets/svgs/ArrowDown.svg';
 import { LoadingSnackbar } from '../../Snackbar/LoadingSnackbar';
 import { executeEvent } from '../../../utils/events';
@@ -57,9 +56,11 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../../App';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group';
 import { useTranslation } from 'react-i18next';
+import { SortIcon } from '../../../assets/Icons/SortIcon';
+import { CustomButton } from '../../../styles/App-styles';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
-
+import CheckIcon from '@mui/icons-material/Check';
 export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
@@ -83,7 +84,7 @@ export const GroupMail = ({
   const [tempPublishedList, setTempPublishedList] = useState([]);
   const dataPublishes = useRef({});
   const { t } = useTranslation(['core']);
-
+  const theme = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const groupIdRef = useRef<any>(null);
   const groupId = useMemo(() => {
@@ -605,13 +606,19 @@ export const GroupMail = ({
                   }}
                   sx={{
                     backgroundColor:
-                      filterMode === filter ? 'rgba(74, 158, 244, 1)' : 'unset',
+                      filterMode === filter
+                        ? theme.palette.action.selected
+                        : 'unset',
                   }}
                   key={filter}
                 >
                   <InstanceListContainerRowCheck>
                     {filter === filterMode && (
-                      <InstanceListContainerRowCheckIcon src={CheckSVG} />
+                      <CheckIcon
+                        sx={{
+                          color: theme.palette.text.primary,
+                        }}
+                      />
                     )}
                   </InstanceListContainerRowCheck>
                   <InstanceListContainerRowMain>
@@ -657,7 +664,7 @@ export const GroupMail = ({
                   }}
                   ref={anchorElInstanceFilter}
                 >
-                  <ComposeIcon src={SortSVG} />
+                  <SortIcon />
 
                   <SelectInstanceContainerFilterInner>
                     <ComposeP>Sort by</ComposeP>
@@ -680,8 +687,8 @@ export const GroupMail = ({
             <RefreshIcon
               onClick={refetchThreadsLists}
               sx={{
-                color: 'white',
                 cursor: 'pointer',
+                color: theme.palette.text.primary,
               }}
             />
           </Box>
@@ -771,7 +778,7 @@ export const GroupMail = ({
                     </div>
                   )}
                 </div>
-                <Box
+                <CustomButton
                   onClick={() => {
                     setTimeout(() => {
                       executeEvent('threadFetchMode', {
@@ -781,7 +788,6 @@ export const GroupMail = ({
                   }}
                   sx={{
                     alignItems: 'center',
-                    backgroundColor: '#27282c',
                     borderRadius: '5px',
                     bottom: '2px',
                     cursor: 'pointer',
@@ -790,14 +796,11 @@ export const GroupMail = ({
                     padding: '5px',
                     position: 'absolute',
                     right: '2px',
-                    '&:hover': {
-                      background: 'rgba(255, 255, 255, 0.60)',
-                    },
+                    minWidth: 'unset',
                   }}
                 >
                   <Typography
                     sx={{
-                      color: 'white',
                       fontSize: '12px',
                     }}
                   >
@@ -807,11 +810,11 @@ export const GroupMail = ({
                   </Typography>
                   <ArrowForwardIosIcon
                     sx={{
-                      color: 'white',
+                      color: theme.palette.text.primary,
                       fontSize: '12px',
                     }}
                   />
-                </Box>
+                </CustomButton>
               </SingleThreadParent>
             );
           })}

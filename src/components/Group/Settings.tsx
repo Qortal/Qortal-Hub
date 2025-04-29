@@ -1,4 +1,12 @@
-import { forwardRef, Fragment, ReactElement, Ref, useEffect } from 'react';
+import {
+  ChangeEvent,
+  forwardRef,
+  Fragment,
+  ReactElement,
+  Ref,
+  useEffect,
+  useState,
+} from 'react';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -10,6 +18,7 @@ import { TransitionProps } from '@mui/material/transitions';
 import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useRecoilState } from 'recoil';
+import ThemeManager from '../Theme/ThemeManager';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -54,12 +63,12 @@ const Transition = forwardRef(function Transition(
 });
 
 export const Settings = ({ address, open, setOpen }) => {
-  const [checked, setChecked] = React.useState(false);
+  const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] =
     useRecoilState(enabledDevModeAtom);
   const theme = useTheme();
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
     window
       .sendMessage('addUserSettings', {
@@ -123,9 +132,7 @@ export const Settings = ({ address, open, setOpen }) => {
         onClose={handleClose}
         TransitionComponent={Transition}
       >
-        <AppBar
-          sx={{ position: 'relative', bgcolor: theme.palette.background }}
-        >
+        <AppBar sx={{ position: 'relative' }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
               General Settings
@@ -144,7 +151,6 @@ export const Settings = ({ address, open, setOpen }) => {
 
         <Box
           sx={{
-            bgcolor: theme.palette.background,
             flexGrow: 1,
             overflowY: 'auto',
             color: theme.palette.text.primary,
@@ -165,9 +171,6 @@ export const Settings = ({ address, open, setOpen }) => {
           />
           {window?.electronAPI && (
             <FormControlLabel
-              sx={{
-                color: 'white',
-              }}
               control={
                 <LocalNodeSwitch
                   checked={isEnabledDevMode}
@@ -183,6 +186,7 @@ export const Settings = ({ address, open, setOpen }) => {
               label="Enable dev mode"
             />
           )}
+          <ThemeManager />
         </Box>
       </Dialog>
     </Fragment>

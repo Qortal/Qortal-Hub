@@ -24,6 +24,7 @@ import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { CoreSyncStatus } from '../CoreSyncStatus';
+import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -342,6 +343,8 @@ export const AppsDesktop = ({
           gap: '25px',
           height: '100vh',
           width: '60px',
+          backgroundColor: theme.palette.background.surface,
+          borderRight: `1px solid ${theme.palette.border.subtle}`,
         }}
       >
         <ButtonBase
@@ -384,7 +387,7 @@ export const AppsDesktop = ({
           <IconWrapper
             color={
               hasUnreadDirects || hasUnreadGroups
-                ? 'var(--unread)'
+                ? theme.palette.other.unread
                 : desktopViewMode === 'chat'
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
@@ -392,11 +395,11 @@ export const AppsDesktop = ({
             label="Chat"
             disableWidth
           >
-            <MessagingIcon
+            <MessagingIconFilled
               height={30}
               color={
                 hasUnreadDirects || hasUnreadGroups
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopViewMode === 'chat'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary

@@ -1,6 +1,5 @@
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../assets/Icons/HomeIcon';
-import { MessagingIcon } from '../assets/Icons/MessagingIcon';
 import { Save } from './Save/Save';
 import { IconWrapper } from './Desktop/DesktopFooter';
 import { useRecoilState } from 'recoil';
@@ -9,6 +8,7 @@ import { AppsIcon } from '../assets/Icons/AppsIcon';
 import ThemeSelector from './Theme/ThemeSelector';
 import { CoreSyncStatus } from './CoreSyncStatus';
 import LanguageSelector from './Language/LanguageSelector';
+import { MessagingIconFilled } from '../assets/Icons/MessagingIconFilled';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -40,6 +40,8 @@ export const DesktopSideBar = ({
         gap: '25px',
         height: '100vh',
         width: '60px',
+        backgroundColor: theme.palette.background.surface,
+        borderRight: `1px solid ${theme.palette.border.subtle}`,
       }}
     >
       <ButtonBase
@@ -101,7 +103,7 @@ export const DesktopSideBar = ({
         <IconWrapper
           color={
             hasUnreadDirects || hasUnreadGroups
-              ? 'var(--unread)'
+              ? theme.palette.other.unread
               : desktopViewMode === 'chat'
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
@@ -109,11 +111,11 @@ export const DesktopSideBar = ({
           label="Chat"
           disableWidth
         >
-          <MessagingIcon
+          <MessagingIconFilled
             height={30}
             color={
               hasUnreadDirects || hasUnreadGroups
-                ? 'var(--unread)'
+                ? theme.palette.other.unread
                 : desktopViewMode === 'chat'
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary

@@ -1,4 +1,4 @@
-import { Box, ButtonBase, Divider, Typography } from '@mui/material';
+import { Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import AppViewerContainer from '../Apps/AppViewerContainer';
@@ -25,7 +25,7 @@ export const WalletsAppWrapper = () => {
     service: 'APP',
     path: 'qortal?authOnMount=true',
   });
-
+  const theme = useTheme();
   const isDisableBackButton = useMemo(() => {
     if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
       return false;
@@ -62,7 +62,7 @@ export const WalletsAppWrapper = () => {
             position: 'fixed',
             height: '100vh',
             width: '100vw',
-            backgroundColor: '#27282c', // TODO: set color theme
+            backgroundColor: theme.palette.background.paper, // TODO: set color theme
             zIndex: 100,
             bottom: 0,
             right: 0,
@@ -92,7 +92,7 @@ export const WalletsAppWrapper = () => {
               <ButtonBase onClick={handleClose}>
                 <CloseIcon
                   sx={{
-                    color: 'white',
+                    color: theme.palette.text.primary,
                   }}
                 />
               </ButtonBase>

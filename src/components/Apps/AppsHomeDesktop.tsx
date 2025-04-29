@@ -69,10 +69,7 @@ export const AppsHomeDesktop = ({
             display: 'flex',
             gap: '20px',
             alignItems: 'center',
-            backgroundColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(41, 41, 43, 1)'
-                : 'rgb(209, 209, 209)',
+            backgroundColor: theme.palette.background.paper,
             padding: '7px',
             borderRadius: '20px',
             width: '100%',
@@ -91,9 +88,9 @@ export const AppsHomeDesktop = ({
             placeholder="qortal://"
             sx={{
               width: '100%',
-              color: theme.palette.mode === 'dark' ? 'white' : 'black',
+              color: theme.palette.text.primary,
               '& .MuiInput-input::placeholder': {
-                color: 'rgba(84, 84, 84, 0.70) !important',
+                color: theme.palette.text.secondary,
                 fontSize: '20px',
                 fontStyle: 'normal',
                 fontWeight: 400,
@@ -115,7 +112,9 @@ export const AppsHomeDesktop = ({
           <ButtonBase onClick={() => openQortalUrl()}>
             <ArrowOutwardIcon
               sx={{
-                color: qortalUrl ? 'white' : 'rgba(84, 84, 84, 0.70)',
+                color: qortalUrl
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary,
               }}
             />
           </ButtonBase>

@@ -116,7 +116,7 @@ export const QortPrice = () => {
     >
       <Tooltip
         title={
-          <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+          <span style={{ fontSize: '14px', fontWeight: 700 }}>
             Based on the latest 20 trades
           </span>
         }
@@ -127,7 +127,7 @@ export const QortPrice = () => {
           tooltip: {
             sx: {
               color: theme.palette.text.primary,
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.paper,
             },
           },
           arrow: {
@@ -156,7 +156,7 @@ export const QortPrice = () => {
           </Typography>
 
           {!ltcPerQort ? (
-            <BarSpinner width="16px" color="white" />
+            <BarSpinner width="16px" color={theme.palette.text.primary} />
           ) : (
             <Typography
               sx={{
@@ -187,7 +187,7 @@ export const QortPrice = () => {
         </Typography>
 
         {!supply ? (
-          <BarSpinner width="16px" color="white" />
+          <BarSpinner width="16px" color={theme.palette.text.primary} />
         ) : (
           <Typography
             sx={{
@@ -200,7 +200,7 @@ export const QortPrice = () => {
       </Box>
       <Tooltip
         title={
-          <span style={{ color: 'white', fontSize: '14px', fontWeight: 700 }}>
+          <span style={{ fontSize: '14px', fontWeight: 700 }}>
             {lastBlock?.timestamp && formatDate(lastBlock?.timestamp)}
           </span>
         }
@@ -211,7 +211,7 @@ export const QortPrice = () => {
           tooltip: {
             sx: {
               color: theme.palette.text.primary,
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.paper,
             },
           },
           arrow: {
@@ -240,7 +240,7 @@ export const QortPrice = () => {
           </Typography>
 
           {!lastBlock?.height ? (
-            <BarSpinner width="16px" color="white" />
+            <BarSpinner width="16px" color={theme.palette.text.primary} />
           ) : (
             <Typography
               sx={{

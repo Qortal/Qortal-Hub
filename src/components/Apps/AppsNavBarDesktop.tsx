@@ -160,7 +160,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         maxHeight: '70vh',
         padding: '10px',
         position: 'relative',
-        width: '60px',
+        width: '59px',
       }}
     >
       <AppsNavBarLeft
@@ -190,7 +190,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
             '& .MuiTabs-indicator': {
               backgroundColor: theme.palette.background.default,
             },
-            maxHeight: `320px`, // Ensure the tabs container fits within the available space
+            maxHeight: `275px`, // Ensure the tabs container fits within the available space
             overflow: 'hidden', // Prevents overflow on small screens
           }}
         >
@@ -361,7 +361,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
               height={20}
               sx={{
                 color: isSelectedAppPinned
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : theme.palette.text.primary,
               }}
             />
@@ -372,7 +372,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 fontSize: '12px',
                 fontWeight: 600,
                 color: isSelectedAppPinned
-                  ? 'var(--danger)'
+                  ? theme.palette.other.danger
                   : theme.palette.text.primary,
               },
             }}

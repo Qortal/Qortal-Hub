@@ -638,14 +638,14 @@ export const Minting = ({
               }}
               disabled={mintingAccounts?.length > 1}
               sx={{
-                backgroundColor: 'var(--green)',
+                backgroundColor: theme.palette.other.positive,
                 color: 'black',
                 fontWeight: 'bold',
                 opacity: 0.7,
                 maxWidth: '90%',
                 width: '200px',
                 '&:hover': {
-                  backgroundColor: 'var(--green)',
+                  backgroundColor: theme.palette.other.positive,
                   color: 'black',
                   opacity: 1,
                 },
@@ -702,14 +702,14 @@ export const Minting = ({
               <Button
                 size="small"
                 sx={{
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                   color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   maxWidth: '90%',
                   opacity: 0.7,
                   width: '200px',
                   '&:hover': {
-                    backgroundColor: 'var(--danger)',
+                    backgroundColor: theme.palette.other.danger,
                     color: theme.palette.text.primary,
                     opacity: 1,
                   },
@@ -763,13 +763,13 @@ export const Minting = ({
               <Button
                 size="small"
                 sx={{
-                  backgroundColor: 'var(--green)',
+                  backgroundColor: theme.palette.other.positive,
                   color: theme.palette.text.primary,
                   fontWeight: 'bold',
                   opacity: 0.7,
 
                   '&:hover': {
-                    backgroundColor: 'var(--green)',
+                    backgroundColor: theme.palette.other.positive,
                     color: 'black',
                     opacity: 1,
                   },

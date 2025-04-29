@@ -48,7 +48,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
-
+  const theme = useTheme();
   const { isShow, onCancel, onOk, show } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -216,7 +216,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             maxHeight: '60vh',
             overflowY: 'auto',
             overflowX: 'hidden',
-            backgroundColor: 'rgb(30 30 32 / 70%)',
+            backgroundColor: theme.palette.background.paper,
           }}
         >
           {wallets?.map((wallet, idx) => {
@@ -429,7 +429,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             bgcolor: theme.palette.background.default,
             flexGrow: 1,
             '&:hover': {
-              backgroundColor: theme.palette.background.paper,
+              backgroundColor: theme.palette.action.hover,
               transform: 'scale(1.01)',
             },
             transition: 'all 0.1s ease-in-out',
@@ -539,12 +539,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             </Button>
             <Button
               sx={{
-                backgroundColor: 'var(--danger)',
+                backgroundColor: theme.palette.other.danger,
                 '&:hover': {
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                 },
                 '&:focus': {
-                  backgroundColor: 'var(--danger)',
+                  backgroundColor: theme.palette.other.danger,
                 },
               }}
               size="small"

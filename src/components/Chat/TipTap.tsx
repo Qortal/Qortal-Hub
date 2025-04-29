@@ -365,6 +365,7 @@ export default ({
   membersWithNames,
   enableMentions,
 }) => {
+  const theme = useTheme();
   const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(
     isDisabledEditorEnterAtom
   );
@@ -483,12 +484,16 @@ export default ({
   }, []);
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
         justifyContent: 'space-between',
+        '--text-primary': theme.palette.text.primary,
+        '--text-secondary': theme.palette.text.secondary,
+        '--background-default': theme.palette.background.default,
+        '--background-secondary': theme.palette.background.paper,
       }}
     >
       <EditorProvider
@@ -537,6 +542,6 @@ export default ({
           },
         }}
       />
-    </div>
+    </Box>
   );
 };

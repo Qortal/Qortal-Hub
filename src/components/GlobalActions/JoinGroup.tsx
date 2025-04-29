@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { CustomButton, CustomButtonAccept } from '../../styles/App-styles';
 import { getBaseApiReact, MyContext } from '../../App';
@@ -23,6 +24,7 @@ export const JoinGroup = ({ memberGroups }) => {
   const [groupInfo, setGroupInfo] = useState(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const handleJoinGroup = async (e) => {
     setGroupInfo(null);
@@ -151,7 +153,7 @@ export const JoinGroup = ({ memberGroups }) => {
               <CircularProgress
                 size={25}
                 sx={{
-                  color: 'white',
+                  color: theme.palette.text.primary,
                 }}
               />{' '}
             </Box>
@@ -228,7 +230,7 @@ export const JoinGroup = ({ memberGroups }) => {
           >
             <CustomButtonAccept
               color="black"
-              bgColor="var(--green)"
+              bgColor={theme.palette.other.positive}
               sx={{
                 minWidth: '102px',
                 height: '45px',
@@ -242,7 +244,7 @@ export const JoinGroup = ({ memberGroups }) => {
 
           <CustomButtonAccept
             color="black"
-            bgColor="var(--danger)"
+            bgColor={theme.palette.other.danger}
             sx={{
               minWidth: '102px',
               height: '45px',

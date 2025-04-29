@@ -1,4 +1,10 @@
-import { Box, Checkbox, FormControlLabel, Typography } from '@mui/material';
+import {
+  Box,
+  Checkbox,
+  FormControlLabel,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import { Return } from '../../assets/Icons/Return';
 import { CustomButton, CustomLabel, TextP } from '../../styles/App-styles';
@@ -24,7 +30,7 @@ export const DownloadWallet = ({
     useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
   const [keepCurrentPassword, setKeepCurrentPassword] = useState<boolean>(true);
-
+  const theme = useTheme();
   const [walletToBeDownloadedError, setWalletToBeDownloadedError] =
     useState<string>('');
 
@@ -184,6 +190,14 @@ export const DownloadWallet = ({
                 edge="start"
                 tabIndex={-1}
                 disableRipple
+                sx={{
+                  '&.Mui-checked': {
+                    color: theme.palette.text.secondary,
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: theme.palette.text.secondary,
+                  },
+                }}
               />
             }
             label={

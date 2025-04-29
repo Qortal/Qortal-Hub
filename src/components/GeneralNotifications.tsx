@@ -63,7 +63,7 @@ export const GeneralNotifications = ({ address }) => {
             tooltip: {
               sx: {
                 color: theme.palette.text.primary,
-                backgroundColor: theme.palette.background.default,
+                backgroundColor: theme.palette.background.paper,
               },
             },
             arrow: {
@@ -76,8 +76,8 @@ export const GeneralNotifications = ({ address }) => {
           <NotificationsIcon
             sx={{
               color: hasNewPayment
-                ? 'var(--unread)'
-                : theme.palette.text.primary,
+                ? theme.palette.other.unread
+                : theme.palette.text.secondary,
             }}
           />
         </Tooltip>
@@ -149,7 +149,7 @@ export const GeneralNotifications = ({ address }) => {
                 >
                   <AccountBalanceWalletIcon
                     sx={{
-                      color: 'white',
+                      color: theme.palette.text.primary,
                     }}
                   />{' '}
                   {formatDate(latestTx?.timestamp)}

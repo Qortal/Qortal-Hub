@@ -1,15 +1,6 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
-import { MyContext, getBaseApiReact } from '../../App';
-import { AppInfo } from './AppInfo';
 
 import {
   executeEvent,
@@ -19,19 +10,15 @@ import {
 import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
-import { AppPublish } from './AppPublish';
-import { AppsLibraryDesktop } from './AppsLibraryDesktop';
-import { AppsCategoryDesktop } from './AppsCategoryDesktop';
-import { AppsNavBarDesktop } from './AppsNavBarDesktop';
+
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { Save } from '../Save/Save';
-import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { AppsDevModeNavBar } from './AppsDevModeNavBar';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { CoreSyncStatus } from '../CoreSyncStatus';
+import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -303,7 +290,7 @@ export const AppsDevMode = ({
           <IconWrapper
             color={
               hasUnreadDirects || hasUnreadGroups
-                ? 'var(--unread)'
+                ? theme.palette.other.unread
                 : desktopViewMode === 'chat'
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
@@ -311,11 +298,11 @@ export const AppsDevMode = ({
             label="Chat"
             disableWidth
           >
-            <MessagingIcon
+            <MessagingIconFilled
               height={30}
               color={
                 hasUnreadDirects || hasUnreadGroups
-                  ? 'var(--unread)'
+                  ? theme.palette.other.unread
                   : desktopViewMode === 'chat'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary

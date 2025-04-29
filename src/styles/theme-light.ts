@@ -1,25 +1,35 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions } from './theme-common';
 
-const lightThemeOptions: ThemeOptions = {
+export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgba(244, 244, 251, 1)',
+      main: 'rgb(162, 162, 221)', // old light becomes main
       dark: 'rgb(113, 198, 212)',
-      light: 'rgb(162, 162, 221)',
+      light: 'rgba(244, 244, 251, 1)', // former main becomes light
     },
     secondary: {
       main: 'rgba(194, 222, 236, 1)',
     },
     background: {
       default: 'rgba(250, 250, 250, 1)',
-      paper: 'rgb(228, 228, 228)',
+      paper: 'rgb(220, 220, 220)', // darker card background
+      surface: 'rgb(240, 240, 240)', // optional middle gray for replies, side panels
     },
     text: {
-      primary: 'rgba(0, 0, 0, 1)',
-      secondary: 'rgba(82, 82, 82, 1)',
+      primary: 'rgba(0, 0, 0, 0.87)', // 87% black (slightly softened)
+      secondary: 'rgba(0, 0, 0, 0.6)', // 60% black
+    },
+    border: {
+      main: 'rgba(0, 0, 0, 0.12)',
+      subtle: 'rgba(0, 0, 0, 0.08)',
+    },
+    other: {
+      positive: 'rgb(94, 176, 73)',
+      danger: 'rgb(177, 70, 70)',
+      unread: 'rgb(66, 151, 226)',
     },
   },
   components: {
@@ -74,6 +84,20 @@ const lightThemeOptions: ThemeOptions = {
         style: {
           color: 'rgba(0, 0, 0, 1)',
           opacity: 0.5,
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
         },
       },
     },

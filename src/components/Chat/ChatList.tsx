@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { MessageItem } from './MessageItem';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import { Box, Typography, useTheme } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
 
@@ -390,7 +390,7 @@ export const ChatList = ({
           <button
             onClick={() => scrollToBottom()}
             style={{
-              backgroundColor: 'var(--unread)',
+              backgroundColor: theme.palette.other.unread,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
@@ -407,10 +407,11 @@ export const ChatList = ({
           </button>
         )}
         {showScrollDownButton && !showScrollButton && (
-          <button
+          <Button
             onClick={() => scrollToBottom()}
+            variant="contained"
             style={{
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.background.surface,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
@@ -422,10 +423,11 @@ export const ChatList = ({
               position: 'absolute',
               right: 20,
               zIndex: 10,
+              textTransform: 'none',
             }}
           >
             Scroll to bottom
-          </button>
+          </Button>
         )}
       </div>
       {enableMentions && (hasSecretKey || isPrivate === false) && (

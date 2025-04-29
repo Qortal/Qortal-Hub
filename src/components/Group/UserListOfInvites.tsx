@@ -5,6 +5,7 @@ import {
   ListItemText,
   Popover,
   Typography,
+  useTheme,
 } from '@mui/material';
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -54,7 +55,7 @@ export const UserListOfInvites = ({
   const { txList, setTxList, show } = useContext(MyContext);
   const [invites, setInvites] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
+  const theme = useTheme();
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef();
@@ -205,14 +206,14 @@ export const UserListOfInvites = ({
                 {invite?.isOpen === false && (
                   <LockIcon
                     sx={{
-                      color: 'var(--green)',
+                      color: theme.palette.other.positive,
                     }}
                   />
                 )}
                 {invite?.isOpen === true && (
                   <NoEncryptionGmailerrorredIcon
                     sx={{
-                      color: 'var(--danger)',
+                      color: theme.palette.other.danger,
                     }}
                   />
                 )}
