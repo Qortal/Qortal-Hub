@@ -68,10 +68,14 @@ import { AdminSpace } from '../Chat/AdminSpace';
 import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   addressInfoControllerAtom,
+  groupAnnouncementsAtom,
+  groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   isOpenBlockedModalAtom,
+  mutedGroupsAtom,
   selectedGroupIdAtom,
+  timestampEnterDataAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
@@ -80,6 +84,7 @@ import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmail
 import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
+import { GroupList } from './GroupList';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -117,7 +122,7 @@ interface GroupProps {
   balance: number;
 }
 
-const timeDifferenceForNotificationChats = 900000;
+export const timeDifferenceForNotificationChats = 900000;
 
 export const requestQueueMemberNames = new RequestQueueWithPromise(5);
 export const requestQueueAdminMemberNames = new RequestQueueWithPromise(5);
@@ -410,7 +415,9 @@ export const Group = ({
   const { setMemberGroups, rootHeight, isRunningPublicNode } =
     useContext(MyContext);
   const lastGroupNotification = useRef<null | number>(null);
-  const [timestampEnterData, setTimestampEnterData] = useState({});
+  const [timestampEnterData, setTimestampEnterData] = useRecoilState(
+    timestampEnterDataAtom
+  );
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
   const [openSnack, setOpenSnack] = React.useState(false);
@@ -421,7 +428,10 @@ export const Group = ({
   const [firstSecretKeyInCreation, setFirstSecretKeyInCreation] =
     React.useState(false);
   const [groupSection, setGroupSection] = React.useState('home');
-  const [groupAnnouncements, setGroupAnnouncements] = React.useState({});
+  const [groupAnnouncements, setGroupAnnouncements] = useRecoilState(
+    groupAnnouncementsAtom
+  );
+
   const [defaultThread, setDefaultThread] = React.useState(null);
   const [isOpenDrawer, setIsOpenDrawer] = React.useState(false);
   const setIsOpenBlockedUserModal = useSetRecoilState(isOpenBlockedModalAtom);
@@ -429,7 +439,7 @@ export const Group = ({
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = React.useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = React.useState('');
   const [drawerMode, setDrawerMode] = React.useState('groups');
-  const [mutedGroups, setMutedGroups] = useState([]);
+  const setMutedGroups = useSetRecoilState(mutedGroupsAtom);
   const [mobileViewMode, setMobileViewMode] = useState('home');
   const [mobileViewModeKeepOpen, setMobileViewModeKeepOpen] = useState('');
   const isFocusedRef = useRef(true);
@@ -443,7 +453,9 @@ export const Group = ({
   const settimeoutForRefetchSecretKey = useRef(null);
   const { clearStatesMessageQueueProvider } = useMessageQueue();
   const initiatedGetMembers = useRef(false);
-  const [groupChatTimestamps, setGroupChatTimestamps] = React.useState({});
+  const [groupChatTimestamps, setGroupChatTimestamps] = useRecoilState(
+    groupChatTimestampsAtom
+  );
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
   const [isOpenSideViewDirects, setIsOpenSideViewDirects] = useState(false);
@@ -500,7 +512,7 @@ export const Group = ({
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
 
-  const getUserSettings = async () => {
+  const getUserSettings = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
         window
@@ -522,13 +534,13 @@ export const Group = ({
     } catch (error) {
       console.log('error', error);
     }
-  };
+  }, [setMutedGroups]);
 
   useEffect(() => {
     getUserSettings();
-  }, []);
+  }, [getUserSettings]);
 
-  const getTimestampEnterChat = async () => {
+  const getTimestampEnterChat = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
         window
@@ -548,7 +560,7 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
+  }, []);
 
   const refreshHomeDataFunc = () => {
     setGroupSection('default');
@@ -650,115 +662,139 @@ export const Group = ({
     return hasUnread;
   }, [groupAnnouncements, groups]);
 
-  const getSecretKey = async (
-    loadingGroupParam?: boolean,
-    secretKeyToPublish?: boolean
-  ) => {
-    try {
-      setIsLoadingGroupMessage('Locating encryption keys');
-      pauseAllQueues();
-      let dataFromStorage;
-      let publishFromStorage;
-      let adminsFromStorage;
-      if (
-        secretKeyToPublish &&
-        secretKey &&
-        lastFetchedSecretKey.current &&
-        Date.now() - lastFetchedSecretKey.current < 600000
-      )
-        return secretKey;
-      if (loadingGroupParam) {
-        setIsLoadingGroup(true);
-      }
-      if (selectedGroup?.groupId !== selectedGroupRef.current.groupId) {
-        if (settimeoutForRefetchSecretKey.current) {
-          clearTimeout(settimeoutForRefetchSecretKey.current);
-        }
-        return;
-      }
-      const prevGroupId = selectedGroupRef.current.groupId;
-      // const validApi = await findUsableApi();
-      const { names, addresses, both } =
-        adminsFromStorage || (await getGroupAdmins(selectedGroup?.groupId));
-      setAdmins(addresses);
-      setAdminsWithNames(both);
-      if (!names.length) {
-        throw new Error('Network error');
-      }
-      const publish =
-        publishFromStorage ||
-        (await getPublishesFromAdmins(names, selectedGroup?.groupId));
+  const getSecretKey = useCallback(
+    async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
+      try {
+        setIsLoadingGroupMessage('Locating encryption keys');
+        pauseAllQueues();
 
-      if (prevGroupId !== selectedGroupRef.current.groupId) {
-        if (settimeoutForRefetchSecretKey.current) {
-          clearTimeout(settimeoutForRefetchSecretKey.current);
+        let dataFromStorage;
+        let publishFromStorage;
+        let adminsFromStorage;
+
+        if (
+          secretKeyToPublish &&
+          secretKey &&
+          lastFetchedSecretKey.current &&
+          Date.now() - lastFetchedSecretKey.current < 600000
+        ) {
+          return secretKey;
         }
-        return;
-      }
-      if (publish === false) {
-        setTriedToFetchSecretKey(true);
-        settimeoutForRefetchSecretKey.current = setTimeout(() => {
-          getSecretKey();
-        }, 120000);
-        return false;
-      }
-      setSecretKeyPublishDate(publish?.updated || publish?.created);
-      let data;
-      if (dataFromStorage) {
-        data = dataFromStorage;
-      } else {
-        // const shouldRebuild = !secretKeyPublishDate || (publish?.update && publish?.updated > secretKeyPublishDate)
-        setIsLoadingGroupMessage('Downloading encryption keys');
-        const res = await fetch(
-          `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
-            publish.identifier
-          }?encoding=base64&rebuild=true`
-        );
-        data = await res.text();
-      }
-      const decryptedKey: any = await decryptResource(data);
-      const dataint8Array = base64ToUint8Array(decryptedKey.data);
-      const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
-      if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
-      setSecretKeyDetails(publish);
-      setSecretKey(decryptedKeyToObject);
-      lastFetchedSecretKey.current = Date.now();
-      setMemberCountFromSecretKeyData(decryptedKey.count);
-      window
-        .sendMessage('setGroupData', {
-          groupId: selectedGroup?.groupId,
-          secretKeyData: data,
-          secretKeyResource: publish,
-          admins: { names, addresses, both },
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to set group data:',
-            error.message || 'An error occurred'
+
+        if (loadingGroupParam) {
+          setIsLoadingGroup(true);
+        }
+
+        if (selectedGroup?.groupId !== selectedGroupRef.current.groupId) {
+          if (settimeoutForRefetchSecretKey.current) {
+            clearTimeout(settimeoutForRefetchSecretKey.current);
+          }
+          return;
+        }
+
+        const prevGroupId = selectedGroupRef.current.groupId;
+
+        const { names, addresses, both } =
+          adminsFromStorage || (await getGroupAdmins(selectedGroup?.groupId));
+        setAdmins(addresses);
+        setAdminsWithNames(both);
+
+        if (!names.length) throw new Error('Network error');
+
+        const publish =
+          publishFromStorage ||
+          (await getPublishesFromAdmins(names, selectedGroup?.groupId));
+
+        if (prevGroupId !== selectedGroupRef.current.groupId) {
+          if (settimeoutForRefetchSecretKey.current) {
+            clearTimeout(settimeoutForRefetchSecretKey.current);
+          }
+          return;
+        }
+
+        if (publish === false) {
+          setTriedToFetchSecretKey(true);
+          settimeoutForRefetchSecretKey.current = setTimeout(() => {
+            getSecretKey();
+          }, 120000);
+          return false;
+        }
+
+        setSecretKeyPublishDate(publish?.updated || publish?.created);
+
+        let data;
+        if (dataFromStorage) {
+          data = dataFromStorage;
+        } else {
+          setIsLoadingGroupMessage('Downloading encryption keys');
+          const res = await fetch(
+            `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64&rebuild=true`
           );
-        });
+          data = await res.text();
+        }
 
-      if (decryptedKeyToObject) {
-        setTriedToFetchSecretKey(true);
-        setFirstSecretKeyInCreation(false);
-        return decryptedKeyToObject;
-      } else {
-        setTriedToFetchSecretKey(true);
+        const decryptedKey: any = await decryptResource(data);
+        const dataint8Array = base64ToUint8Array(decryptedKey.data);
+        const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+
+        if (!validateSecretKey(decryptedKeyToObject)) {
+          throw new Error('SecretKey is not valid');
+        }
+
+        setSecretKeyDetails(publish);
+        setSecretKey(decryptedKeyToObject);
+        lastFetchedSecretKey.current = Date.now();
+        setMemberCountFromSecretKeyData(decryptedKey.count);
+
+        window
+          .sendMessage('setGroupData', {
+            groupId: selectedGroup?.groupId,
+            secretKeyData: data,
+            secretKeyResource: publish,
+            admins: { names, addresses, both },
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to set group data:',
+              error.message || 'An error occurred'
+            );
+          });
+
+        if (decryptedKeyToObject) {
+          setTriedToFetchSecretKey(true);
+          setFirstSecretKeyInCreation(false);
+          return decryptedKeyToObject;
+        } else {
+          setTriedToFetchSecretKey(true);
+        }
+      } catch (error) {
+        if (error === 'Unable to decrypt data') {
+          setTriedToFetchSecretKey(true);
+          settimeoutForRefetchSecretKey.current = setTimeout(() => {
+            getSecretKey();
+          }, 120000);
+        }
+      } finally {
+        setIsLoadingGroup(false);
+        setIsLoadingGroupMessage('');
+        resumeAllQueues();
       }
-    } catch (error) {
-      if (error === 'Unable to decrypt data') {
-        setTriedToFetchSecretKey(true);
-        settimeoutForRefetchSecretKey.current = setTimeout(() => {
-          getSecretKey();
-        }, 120000);
-      }
-    } finally {
-      setIsLoadingGroup(false);
-      setIsLoadingGroupMessage('');
-      resumeAllQueues();
-    }
-  };
+    },
+    [
+      secretKey,
+      selectedGroup?.groupId,
+      setIsLoadingGroup,
+      setIsLoadingGroupMessage,
+      setSecretKey,
+      setSecretKeyDetails,
+      setTriedToFetchSecretKey,
+      setFirstSecretKeyInCreation,
+      setMemberCountFromSecretKeyData,
+      setAdmins,
+      setAdminsWithNames,
+      setSecretKeyPublishDate,
+    ]
+  );
 
   const getAdminsForPublic = async (selectedGroup) => {
     try {
@@ -1050,8 +1086,6 @@ export const Group = ({
     triedToFetchSecretKey,
   ]);
 
-  console.log('groupOwner?.owner', groupOwner);
-
   const notifyAdmin = async (admin) => {
     try {
       setIsLoadingNotifyAdmin(true);
@@ -1327,8 +1361,6 @@ export const Group = ({
     };
   }, []);
 
-  console.log('selectedGroup', selectedGroup);
-
   const openGroupChatFromNotification = (e) => {
     if (isLoadingOpenSectionFromNotification.current) return;
 
@@ -1498,9 +1530,9 @@ export const Group = ({
     };
   }, [groups, selectedGroup]);
 
-  const handleSecretKeyCreationInProgress = () => {
+  const handleSecretKeyCreationInProgress = useCallback(() => {
     setFirstSecretKeyInCreation(true);
-  };
+  }, []);
 
   const goToHome = async () => {
     setDesktopViewMode('home');
@@ -1811,327 +1843,34 @@ export const Group = ({
     );
   };
 
-  const renderGroups = () => {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          width: '380px',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-          height: '100%',
-          background: theme.palette.background.surface,
-          borderRadius: '0px 15px 15px 0px',
-          padding: '0px 2px',
-        }}
-      >
-        <Box
-          sx={{
-            width: '100%',
-            alignItems: 'center',
-            justifyContent: 'center',
-            display: 'flex',
-            gap: '10px',
-          }}
-        >
-          <ButtonBase
-            onClick={() => {
-              setDesktopSideView('groups');
-            }}
-          >
-            <IconWrapper
-              color={
-                groupChatHasUnread || groupsAnnHasUnread
-                  ? theme.palette.other.unread
-                  : desktopSideView === 'groups'
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary
-              }
-              label="Groups"
-              selected={desktopSideView === 'groups'}
-              customWidth="75px"
-            >
-              <HubsIcon
-                height={24}
-                color={
-                  groupChatHasUnread || groupsAnnHasUnread
-                    ? theme.palette.other.unread
-                    : desktopSideView === 'groups'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary
-                }
-              />
-            </IconWrapper>
-          </ButtonBase>
-          <ButtonBase
-            onClick={() => {
-              setDesktopSideView('directs');
-            }}
-          >
-            <IconWrapper
-              customWidth="75px"
-              color={
-                directChatHasUnread
-                  ? theme.palette.other.unread
-                  : desktopSideView === 'directs'
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary
-              }
-              label="Messaging"
-              selected={desktopSideView === 'directs'}
-            >
-              <MessagingIcon
-                height={24}
-                color={
-                  directChatHasUnread
-                    ? theme.palette.other.unread
-                    : desktopSideView === 'directs'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary
-                }
-              />
-            </IconWrapper>
-          </ButtonBase>
-        </Box>
-
-        <div
-          style={{
-            alignItems: 'flex-start',
-            display: 'flex',
-            flexDirection: 'column',
-            flexGrow: 1,
-            left: chatMode === 'directs' && '-1000px',
-            overflowY: 'auto',
-            position: chatMode === 'directs' && 'fixed',
-            visibility: chatMode === 'directs' && 'hidden',
-            width: '100%',
-          }}
-        >
-          {groups.map((group: any) => (
-            <List
-              sx={{
-                width: '100%',
-              }}
-              className="group-list"
-              dense={true}
-            >
-              <ListItem
-                onClick={() => {
-                  setMobileViewMode('group');
-                  setDesktopSideView('groups');
-                  initiatedGetMembers.current = false;
-                  clearAllQueues();
-                  setSelectedDirect(null);
-                  setTriedToFetchSecretKey(false);
-                  setNewChat(false);
-                  setSelectedGroup(null);
-                  setUserInfoForLevels({});
-                  setSecretKey(null);
-                  lastFetchedSecretKey.current = null;
-                  setSecretKeyPublishDate(null);
-                  setAdmins([]);
-                  setSecretKeyDetails(null);
-                  setAdminsWithNames([]);
-                  setGroupOwner(null);
-                  setMembers([]);
-                  setMemberCountFromSecretKeyData(null);
-                  setHideCommonKeyPopup(false);
-                  setFirstSecretKeyInCreation(false);
-                  setGroupSection('chat');
-                  setIsOpenDrawer(false);
-                  setIsForceShowCreationKeyPopup(false);
-                  setTimeout(() => {
-                    setSelectedGroup(group);
-                  }, 200);
-                }}
-                sx={{
-                  display: 'flex',
-                  background:
-                    group?.groupId === selectedGroup?.groupId &&
-                    theme.palette.action.selected,
-                  borderRadius: '2px',
-                  cursor: 'pointer',
-                  flexDirection: 'column',
-                  padding: '2px',
-                  width: '100%',
-                  '&:hover': {
-                    backgroundColor: 'action.hover', // background on hover
-                  },
-                }}
-              >
-                <ContextMenu
-                  mutedGroups={mutedGroups}
-                  getUserSettings={getUserSettings}
-                  groupId={group.groupId}
-                >
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      width: '100%',
-                    }}
-                  >
-                    <ListItemAvatar>
-                      {groupsOwnerNames[group?.groupId] ? (
-                        <Avatar
-                          alt={group?.groupName?.charAt(0)}
-                          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                            groupsOwnerNames[group?.groupId]
-                          }/qortal_group_avatar_${group?.groupId}?async=true`}
-                        >
-                          {group?.groupName?.charAt(0).toUpperCase()}
-                        </Avatar>
-                      ) : (
-                        <Avatar alt={group?.groupName?.charAt(0)}>
-                          {' '}
-                          {group?.groupName?.charAt(0).toUpperCase() || 'G'}
-                        </Avatar>
-                      )}
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        group.groupId === '0' ? 'General' : group.groupName
-                      }
-                      secondary={
-                        !group?.timestamp
-                          ? 'no messages'
-                          : `last message: ${formatEmailDate(group?.timestamp)}`
-                      }
-                      primaryTypographyProps={{
-                        style: {
-                          color:
-                            group?.groupId === selectedGroup?.groupId &&
-                            theme.palette.text.primary,
-                          fontSize: '16px',
-                        },
-                      }} // Change the color of the primary text
-                      secondaryTypographyProps={{
-                        style: {
-                          color:
-                            group?.groupId === selectedGroup?.groupId &&
-                            theme.palette.text.primary,
-                          fontSize: '12px',
-                        },
-                      }}
-                      sx={{
-                        width: '150px',
-                        fontFamily: 'Inter',
-                        fontSize: '16px',
-                      }}
-                    />
-                    {groupAnnouncements[group?.groupId] &&
-                      !groupAnnouncements[group?.groupId]?.seentimestamp && (
-                        <CampaignIcon
-                          sx={{
-                            color: theme.palette.other.unread,
-                            marginRight: '5px',
-                            marginBottom: 'auto',
-                          }}
-                        />
-                      )}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '5px',
-                        justifyContent: 'flex-start',
-                        height: '100%',
-                        marginBottom: 'auto',
-                      }}
-                    >
-                      {group?.data &&
-                        groupChatTimestamps[group?.groupId] &&
-                        group?.sender !== myAddress &&
-                        group?.timestamp &&
-                        ((!timestampEnterData[group?.groupId] &&
-                          Date.now() - group?.timestamp <
-                            timeDifferenceForNotificationChats) ||
-                          timestampEnterData[group?.groupId] <
-                            group?.timestamp) && (
-                          <MarkChatUnreadIcon
-                            sx={{
-                              color: theme.palette.other.unread,
-                            }}
-                          />
-                        )}
-                      {groupsProperties[group?.groupId]?.isOpen === false && (
-                        <LockIcon
-                          sx={{
-                            color: theme.palette.other.positive,
-                            marginBottom: 'auto',
-                          }}
-                        />
-                      )}
-                    </Box>
-                  </Box>
-                </ContextMenu>
-              </ListItem>
-            </List>
-          ))}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: '10px',
-            justifyContent: 'center',
-            padding: '10px',
-            width: '100%',
-          }}
-        >
-          {chatMode === 'groups' && (
-            <>
-              <CustomButton
-                onClick={() => {
-                  setOpenAddGroup(true);
-                }}
-              >
-                <AddCircleOutlineIcon
-                  sx={{
-                    color: theme.palette.text.primary,
-                  }}
-                />
-                Group
-              </CustomButton>
-
-              {!isRunningPublicNode && (
-                <CustomButton
-                  onClick={() => {
-                    setIsOpenBlockedUserModal(true);
-                  }}
-                  sx={{
-                    minWidth: 'unset',
-                    padding: '10px',
-                  }}
-                >
-                  <PersonOffIcon
-                    sx={{
-                      color: theme.palette.text.primary,
-                    }}
-                  />
-                </CustomButton>
-              )}
-            </>
-          )}
-          {chatMode === 'directs' && (
-            <CustomButton
-              onClick={() => {
-                setNewChat(true);
-                setSelectedDirect(null);
-                setIsOpenDrawer(false);
-              }}
-            >
-              <CreateIcon
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
-              />
-              New Chat
-            </CustomButton>
-          )}
-        </div>
-      </div>
-    );
-  };
+  const selectGroupFunc = useCallback((group) => {
+    setMobileViewMode('group');
+    setDesktopSideView('groups');
+    initiatedGetMembers.current = false;
+    clearAllQueues();
+    setSelectedDirect(null);
+    setTriedToFetchSecretKey(false);
+    setNewChat(false);
+    setSelectedGroup(null);
+    setUserInfoForLevels({});
+    setSecretKey(null);
+    lastFetchedSecretKey.current = null;
+    setSecretKeyPublishDate(null);
+    setAdmins([]);
+    setSecretKeyDetails(null);
+    setAdminsWithNames([]);
+    setGroupOwner(null);
+    setMembers([]);
+    setMemberCountFromSecretKeyData(null);
+    setHideCommonKeyPopup(false);
+    setFirstSecretKeyInCreation(false);
+    setGroupSection('chat');
+    setIsOpenDrawer(false);
+    setIsForceShowCreationKeyPopup(false);
+    setTimeout(() => {
+      setSelectedGroup(group);
+    }, 200);
+  }, []);
 
   return (
     <>
@@ -2176,9 +1915,24 @@ export const Group = ({
           />
         )}
 
-        {desktopViewMode === 'chat' &&
-          desktopSideView !== 'directs' &&
-          renderGroups()}
+        {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
+          <GroupList
+            selectGroupFunc={selectGroupFunc}
+            setDesktopSideView={setDesktopSideView}
+            groupChatHasUnread={groupChatHasUnread}
+            groupsAnnHasUnread={groupsAnnHasUnread}
+            desktopSideView={desktopSideView}
+            directChatHasUnread={directChatHasUnread}
+            chatMode={chatMode}
+            groups={groups}
+            selectedGroup={selectedGroup}
+            getUserSettings={getUserSettings}
+            setOpenAddGroup={setOpenAddGroup}
+            isRunningPublicNode={isRunningPublicNode}
+            setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
+            myAddress={myAddress}
+          />
+        )}
 
         {desktopViewMode === 'chat' &&
           desktopSideView === 'directs' &&
@@ -2318,7 +2072,7 @@ export const Group = ({
                   isPrivate={isPrivate}
                   setSecretKey={setSecretKey}
                   handleNewEncryptionNotification={setNewEncryptionNotification}
-                  hide={groupSection !== 'chat' || selectedDirect || newChat}
+                  hide={groupSection !== 'chat' || !!selectedDirect || newChat}
                   hideView={!(desktopViewMode === 'chat' && selectedGroup)}
                   handleSecretKeyCreationInProgress={
                     handleSecretKeyCreationInProgress

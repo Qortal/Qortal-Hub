@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -41,295 +41,297 @@ function textMatcher(doc, from) {
   return { start, query };
 }
 
-const MenuBar = ({
-  setEditorRef,
-  isChat,
-  isDisabledEditorEnter,
-  setIsDisabledEditorEnter,
-}) => {
-  const { editor } = useCurrentEditor();
-  const fileInputRef = useRef(null);
-  const theme = useTheme();
+const MenuBar = React.memo(
+  ({
+    setEditorRef,
+    isChat,
+    isDisabledEditorEnter,
+    setIsDisabledEditorEnter,
+  }) => {
+    const { editor } = useCurrentEditor();
+    const fileInputRef = useRef(null);
+    const theme = useTheme();
 
-  if (!editor) {
-    return null;
-  }
+    useEffect(() => {
+      if (editor && setEditorRef) {
+        setEditorRef(editor);
+      }
+    }, [editor, setEditorRef]);
 
-  useEffect(() => {
-    if (editor && setEditorRef) {
-      setEditorRef(editor);
+    if (!editor) {
+      return null;
     }
-  }, [editor, setEditorRef]);
 
-  const handleImageUpload = async (file) => {
-    let compressedFile;
-    await new Promise<void>((resolve) => {
-      new Compressor(file, {
-        quality: 0.6,
-        maxWidth: 1200,
-        mimeType: 'image/webp',
-        success(result) {
-          compressedFile = new File([result], 'image.webp', {
-            type: 'image/webp',
-          });
-          resolve();
-        },
-        error(err) {
-          console.error('Image compression error:', err);
-        },
+    const handleImageUpload = async (file) => {
+      let compressedFile;
+      await new Promise<void>((resolve) => {
+        new Compressor(file, {
+          quality: 0.6,
+          maxWidth: 1200,
+          mimeType: 'image/webp',
+          success(result) {
+            compressedFile = new File([result], 'image.webp', {
+              type: 'image/webp',
+            });
+            resolve();
+          },
+          error(err) {
+            console.error('Image compression error:', err);
+          },
+        });
       });
-    });
 
-    if (compressedFile) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result;
-        editor
-          .chain()
-          .focus()
-          .setImage({ src: url, style: 'width: auto' })
-          .run();
-        fileInputRef.current.value = '';
-      };
-      reader.readAsDataURL(compressedFile);
-    }
-  };
+      if (compressedFile) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const url = reader.result;
+          editor
+            .chain()
+            .focus()
+            .setImage({ src: url, style: 'width: auto' })
+            .run();
+          fileInputRef.current.value = '';
+        };
+        reader.readAsDataURL(compressedFile);
+      }
+    };
 
-  const triggerImageUpload = () => {
-    fileInputRef.current.click(); // Trigger the file input click
-  };
+    const triggerImageUpload = () => {
+      fileInputRef.current.click(); // Trigger the file input click
+    };
 
-  const handlePaste = (event) => {
-    const items = event.clipboardData.items;
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const file = item.getAsFile();
-        if (file) {
-          event.preventDefault(); // Prevent the default paste behavior
-          handleImageUpload(file); // Call the image upload function
+    const handlePaste = (event) => {
+      const items = event.clipboardData.items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault(); // Prevent the default paste behavior
+            handleImageUpload(file); // Call the image upload function
+          }
         }
       }
-    }
-  };
+    };
 
-  useEffect(() => {
-    if (editor) {
-      editor.view.dom.addEventListener('paste', handlePaste);
-      return () => {
-        editor.view.dom.removeEventListener('paste', handlePaste);
-      };
-    }
-  }, [editor]);
+    useEffect(() => {
+      if (editor) {
+        editor.view.dom.addEventListener('paste', handlePaste);
+        return () => {
+          editor.view.dom.removeEventListener('paste', handlePaste);
+        };
+      }
+    }, [editor]);
 
-  return (
-    <div className="control-group">
-      <div
-        className="button-group"
-        style={{
-          display: 'flex',
-        }}
-      >
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          disabled={!editor.can().chain().focus().toggleBold().run()}
-          sx={{
-            color: editor.isActive('bold')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
+    return (
+      <div className="control-group">
+        <div
+          className="button-group"
+          style={{
+            display: 'flex',
           }}
         >
-          <FormatBoldIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          disabled={!editor.can().chain().focus().toggleItalic().run()}
-          sx={{
-            color: editor.isActive('italic')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatItalicIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          disabled={!editor.can().chain().focus().toggleStrike().run()}
-          sx={{
-            color: editor.isActive('strike')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <StrikethroughSIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          disabled={!editor.can().chain().focus().toggleCode().run()}
-          sx={{
-            color: editor.isActive('code')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <CodeIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().unsetAllMarks().run()}
-          sx={{
-            color:
-              editor.isActive('bold') ||
-              editor.isActive('italic') ||
-              editor.isActive('strike') ||
-              editor.isActive('code')
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            disabled={!editor.can().chain().focus().toggleBold().run()}
+            sx={{
+              color: editor.isActive('bold')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatClearIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          sx={{
-            color: editor.isActive('bulletList')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatListBulletedIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          sx={{
-            color: editor.isActive('orderedList')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatListNumberedIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          sx={{
-            color: editor.isActive('codeBlock')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <DeveloperModeIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          sx={{
-            color: editor.isActive('blockquote')
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatQuoteIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          disabled={!editor.can().chain().focus().setHorizontalRule().run()}
-          sx={{ color: 'gray', padding: 'revert' }}
-        >
-          <HorizontalRuleIcon />
-        </IconButton>
-        <IconButton
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 1 }).run()
-          }
-          sx={{
-            color: editor.isActive('heading', { level: 1 })
-              ? theme.palette.text.primary
-              : theme.palette.text.secondary,
-            padding: 'revert',
-          }}
-        >
-          <FormatHeadingIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().chain().focus().undo().run()}
-          sx={{ color: 'gray', padding: 'revert' }}
-        >
-          <UndoIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().chain().focus().redo().run()}
-          sx={{ color: 'gray' }}
-        >
-          <RedoIcon />
-        </IconButton>
-        {isChat && (
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              marginLeft: '5px',
-              cursor: 'pointer',
-            }}
-            onClick={() => {
-              setIsDisabledEditorEnter(!isDisabledEditorEnter);
+              padding: 'revert',
             }}
           >
-            <Checkbox
-              edge="start"
-              tabIndex={-1}
-              disableRipple
-              checked={isDisabledEditorEnter}
+            <FormatBoldIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            disabled={!editor.can().chain().focus().toggleItalic().run()}
+            sx={{
+              color: editor.isActive('italic')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatItalicIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            disabled={!editor.can().chain().focus().toggleStrike().run()}
+            sx={{
+              color: editor.isActive('strike')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <StrikethroughSIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleCode().run()}
+            disabled={!editor.can().chain().focus().toggleCode().run()}
+            sx={{
+              color: editor.isActive('code')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <CodeIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().unsetAllMarks().run()}
+            sx={{
+              color:
+                editor.isActive('bold') ||
+                editor.isActive('italic') ||
+                editor.isActive('strike') ||
+                editor.isActive('code')
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatClearIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            sx={{
+              color: editor.isActive('bulletList')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatListBulletedIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            sx={{
+              color: editor.isActive('orderedList')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatListNumberedIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            sx={{
+              color: editor.isActive('codeBlock')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <DeveloperModeIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            sx={{
+              color: editor.isActive('blockquote')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatQuoteIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            disabled={!editor.can().chain().focus().setHorizontalRule().run()}
+            sx={{ color: 'gray', padding: 'revert' }}
+          >
+            <HorizontalRuleIcon />
+          </IconButton>
+          <IconButton
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            sx={{
+              color: editor.isActive('heading', { level: 1 })
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatHeadingIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().chain().focus().undo().run()}
+            sx={{ color: 'gray', padding: 'revert' }}
+          >
+            <UndoIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().chain().focus().redo().run()}
+            sx={{ color: 'gray' }}
+          >
+            <RedoIcon />
+          </IconButton>
+          {isChat && (
+            <Box
               sx={{
-                '&.Mui-checked': {
-                  color: theme.palette.text.secondary,
-                },
-                '& .MuiSvgIcon-root': {
-                  color: theme.palette.text.secondary,
-                },
+                display: 'flex',
+                alignItems: 'center',
+                marginLeft: '5px',
+                cursor: 'pointer',
               }}
-            />
-            <Typography
-              sx={{
-                fontSize: '14px',
-                color: theme.palette.text.primary,
+              onClick={() => {
+                setIsDisabledEditorEnter(!isDisabledEditorEnter);
               }}
             >
-              disable enter
-            </Typography>
-          </Box>
-        )}
-        {!isChat && (
-          <>
-            <IconButton
-              onClick={triggerImageUpload}
-              sx={{
-                color: theme.palette.text.secondary,
-                padding: 'revert',
-              }}
-            >
-              <ImageIcon />
-            </IconButton>
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={(event) => handleImageUpload(event.target.files[0])}
-              accept="image/*"
-            />
-          </>
-        )}
+              <Checkbox
+                edge="start"
+                tabIndex={-1}
+                disableRipple
+                checked={isDisabledEditorEnter}
+                sx={{
+                  '&.Mui-checked': {
+                    color: theme.palette.text.secondary,
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: theme.palette.text.secondary,
+                  },
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: '14px',
+                  color: theme.palette.text.primary,
+                }}
+              >
+                disable enter
+              </Typography>
+            </Box>
+          )}
+          {!isChat && (
+            <>
+              <IconButton
+                onClick={triggerImageUpload}
+                sx={{
+                  color: theme.palette.text.secondary,
+                  padding: 'revert',
+                }}
+              >
+                <ImageIcon />
+              </IconButton>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={(event) => handleImageUpload(event.target.files[0])}
+                accept="image/*"
+              />
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  }
+);
 
 const extensions = [
   Color.configure({ types: [TextStyle.name, ListItem.name] }),
@@ -373,10 +375,10 @@ export default ({
     ? extensions.filter((item) => item?.name !== 'image')
     : extensions;
   const editorRef = useRef(null);
-  const setEditorRefFunc = (editorInstance) => {
+  const setEditorRefFunc = useCallback((editorInstance) => {
     editorRef.current = editorInstance;
     setEditorRef(editorInstance);
-  };
+  }, []);
 
   // const users = [
   //   { id: 1, label: 'Alice' },

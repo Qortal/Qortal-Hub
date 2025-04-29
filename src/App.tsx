@@ -100,6 +100,8 @@ import { useRecoilState, useResetRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
+  groupAnnouncementsAtom,
+  groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
@@ -107,11 +109,13 @@ import {
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
   mailsAtom,
+  mutedGroupsAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
+  timestampEnterDataAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './ExtStates/NotAuthenticated';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
@@ -479,6 +483,15 @@ function App() {
     lastPaymentSeenTimestampAtom
   );
   const resetGroupsOwnerNamesAtom = useResetRecoilState(groupsOwnerNamesAtom);
+  const resetGroupAnnouncementsAtom = useResetRecoilState(
+    groupAnnouncementsAtom
+  );
+  const resetMutedGroupsAtom = useResetRecoilState(mutedGroupsAtom);
+
+  const resetGroupChatTimestampsAtom = useResetRecoilState(
+    groupChatTimestampsAtom
+  );
+  const resetTimestampEnterAtom = useResetRecoilState(timestampEnterDataAtom);
 
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
@@ -492,6 +505,10 @@ function App() {
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
     resetGroupsOwnerNamesAtom();
+    resetGroupAnnouncementsAtom();
+    resetMutedGroupsAtom();
+    resetGroupChatTimestampsAtom();
+    resetTimestampEnterAtom();
   };
 
   const handleSetGlobalApikey = (key) => {

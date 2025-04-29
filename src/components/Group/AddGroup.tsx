@@ -199,6 +199,8 @@ export const AddGroup = ({ address, open, setOpen }) => {
     };
   }, []);
 
+  if (!open) return null;
+
   return (
     <Fragment>
       <Dialog

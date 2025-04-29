@@ -201,3 +201,73 @@ export const isOpenBlockedModalAtom = atom({
   key: 'isOpenBlockedModalAtom',
   default: false,
 });
+
+export const groupsOwnerNamesSelector = selectorFamily({
+  key: 'groupsOwnerNamesSelector',
+  get:
+    (key) =>
+    ({ get }) => {
+      const data = get(groupsOwnerNamesAtom);
+      return data[key] || null; // Return the value for the key or null if not found
+    },
+});
+
+export const groupAnnouncementsAtom = atom({
+  key: 'groupAnnouncementsAtom',
+  default: {},
+});
+
+export const groupAnnouncementSelector = selectorFamily({
+  key: 'groupAnnouncementSelector',
+  get:
+    (key) =>
+    ({ get }) => {
+      const data = get(groupAnnouncementsAtom);
+      return data[key] || null; // Return the value for the key or null if not found
+    },
+});
+
+export const groupPropertySelector = selectorFamily({
+  key: 'groupPropertySelector',
+  get:
+    (key) =>
+    ({ get }) => {
+      const data = get(groupsPropertiesAtom);
+      return data[key] || null; // Return the value for the key or null if not found
+    },
+});
+
+export const mutedGroupsAtom = atom({
+  key: 'mutedGroupsAtom',
+  default: [],
+});
+
+export const groupChatTimestampsAtom = atom({
+  key: 'groupChatTimestampsAtom',
+  default: {},
+});
+
+export const groupChatTimestampSelector = selectorFamily({
+  key: 'groupChatTimestampSelector',
+  get:
+    (key) =>
+    ({ get }) => {
+      const data = get(groupChatTimestampsAtom);
+      return data[key] || null; // Return the value for the key or null if not found
+    },
+});
+
+export const timestampEnterDataAtom = atom({
+  key: 'timestampEnterDataAtom',
+  default: {},
+});
+
+export const timestampEnterDataSelector = selectorFamily({
+  key: 'timestampEnterDataSelector',
+  get:
+    (key) =>
+    ({ get }) => {
+      const data = get(timestampEnterDataAtom);
+      return data[key] || null; // Return the value for the key or null if not found
+    },
+});

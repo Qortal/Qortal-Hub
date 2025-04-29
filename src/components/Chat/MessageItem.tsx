@@ -75,6 +75,21 @@ const getBadgeImg = (level) => {
   }
 };
 
+const UserBadge = React.memo(({ userInfo }) => {
+  return (
+    <Tooltip disableFocusListener title={`level ${userInfo ?? 0}`}>
+      <img
+        style={{
+          visibility: userInfo !== undefined ? 'visible' : 'hidden',
+          width: '30px',
+          height: 'auto',
+        }}
+        src={getBadgeImg(userInfo)}
+      />
+    </Tooltip>
+  );
+});
+
 export const MessageItem = React.memo(
   ({
     message,
@@ -210,16 +225,7 @@ export const MessageItem = React.memo(
                     {message?.senderName?.charAt(0)}
                   </Avatar>
                 </WrapperUserAction>
-                <Tooltip disableFocusListener title={`level ${userInfo ?? 0}`}>
-                  <img
-                    style={{
-                      visibility: userInfo !== undefined ? 'visible' : 'hidden',
-                      width: '30px',
-                      height: 'auto',
-                    }}
-                    src={getBadgeImg(userInfo)}
-                  />
-                </Tooltip>
+                <UserBadge userInfo={userInfo} />
               </Box>
             )}
 
