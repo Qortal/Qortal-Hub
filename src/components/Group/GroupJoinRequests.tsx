@@ -11,10 +11,10 @@ import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import { CustomLoader } from '../../common/CustomLoader';
 import { MyContext, getBaseApiReact } from '../../App';
 import { myGroupsWhereIAmAdminAtom } from '../../atoms/global';
-import { useSetRecoilState } from 'recoil';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
+import { useSetAtom } from 'jotai';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2);
 
 export const GroupJoinRequests = ({
@@ -34,7 +34,8 @@ export const GroupJoinRequests = ({
   );
   const [loading, setLoading] = React.useState(true);
   const { txList, setTxList } = React.useContext(MyContext);
-  const setMyGroupsWhereIAmAdmin = useSetRecoilState(myGroupsWhereIAmAdminAtom);
+  const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
+
   const theme = useTheme();
   const getJoinRequests = async () => {
     try {

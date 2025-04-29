@@ -8,7 +8,6 @@ import React, {
 } from 'react';
 
 import { ChatList } from './ChatList';
-import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';

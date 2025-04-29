@@ -27,9 +27,9 @@ import tippy from 'tippy.js';
 import 'tippy.js/dist/tippy.css';
 import { ReactRenderer } from '@tiptap/react';
 import MentionList from './MentionList.jsx';
-import { useRecoilState } from 'recoil';
 import { isDisabledEditorEnterAtom } from '../../atoms/global.js';
 import { Box, Checkbox, Typography, useTheme } from '@mui/material';
+import { useAtom } from 'jotai';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -368,9 +368,10 @@ export default ({
   enableMentions,
 }) => {
   const theme = useTheme();
-  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(
+  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useAtom(
     isDisabledEditorEnterAtom
   );
+
   const extensionsFiltered = isChat
     ? extensions.filter((item) => item?.name !== 'image')
     : extensions;

@@ -28,21 +28,21 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
-import { useRecoilState, useSetRecoilState } from 'recoil';
+
+import { useAtom, useSetAtom } from 'jotai';
 
 export const AppInfo = ({ app, myName }) => {
   const isInstalled = app?.status?.status === 'READY';
-  const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
+  const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
     sortablePinnedAppsAtom
   );
+
   const theme = useTheme();
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
   );
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   return (
     <AppsLibraryContainer

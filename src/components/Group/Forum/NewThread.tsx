@@ -516,12 +516,7 @@ export const NewThread = ({
               overrideMobile
               customEditorHeight="240px"
             />
-            {/* <TextEditor
-              inlineContent={value}
-              setInlineContent={(val: any) => {
-                setValue(val);
-              }}
-            /> */}
+
           </Box>
         </InstanceListContainer>
 

@@ -15,7 +15,6 @@ import {
 } from '@mui/material';
 import { useDropzone } from 'react-dropzone';
 import { useHandlePrivateApps } from './useHandlePrivateApps';
-import { useRecoilState } from 'recoil';
 import {
   groupsPropertiesAtom,
   myGroupsWhereIAmAdminAtom,
@@ -35,6 +34,7 @@ import { MyContext } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background';
+import { useAtom } from 'jotai';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
@@ -44,11 +44,10 @@ export const AppsPrivate = ({ myName }) => {
   const [logo, setLogo] = useState(null);
   const [qortalUrl, setQortalUrl] = useState('');
   const [selectedGroup, setSelectedGroup] = useState(0);
-  const [groupsProperties] = useRecoilState(groupsPropertiesAtom);
+
   const [valueTabPrivateApp, setValueTabPrivateApp] = useState(0);
-  const [myGroupsWhereIAmAdminFromGlobal] = useRecoilState(
-    myGroupsWhereIAmAdminAtom
-  );
+  const [groupsProperties] = useAtom(groupsPropertiesAtom);
+  const [myGroupsWhereIAmAdminFromGlobal] = useAtom(myGroupsWhereIAmAdminAtom);
 
   const myGroupsWhereIAmAdmin = useMemo(() => {
     return myGroupsWhereIAmAdminFromGlobal?.filter(

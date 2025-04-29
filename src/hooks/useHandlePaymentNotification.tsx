@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBaseApiReact } from '../App';
 import { getData, storeData } from '../utils/chromeStorage';
 import { checkDifference, getNameInfoForOthers } from '../background';
-import { useRecoilState } from 'recoil';
 import { lastPaymentSeenTimestampAtom } from '../atoms/global';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
+import { useAtom } from 'jotai';
 
 export const useHandlePaymentNotification = (address) => {
   const [latestTx, setLatestTx] = useState(null);
@@ -12,8 +12,9 @@ export const useHandlePaymentNotification = (address) => {
   const nameAddressOfSender = useRef({});
   const isFetchingName = useRef({});
 
-  const [lastEnteredTimestampPayment, setLastEnteredTimestampPayment] =
-    useRecoilState(lastPaymentSeenTimestampAtom);
+  const [lastEnteredTimestampPayment, setLastEnteredTimestampPayment] = useAtom(
+    lastPaymentSeenTimestampAtom
+  );
 
   useEffect(() => {
     if (lastEnteredTimestampPayment && address) {

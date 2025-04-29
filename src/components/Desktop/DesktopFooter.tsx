@@ -6,8 +6,9 @@ import AppIcon from '../../assets/svgs/AppIcon.svg';
 
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-import { useRecoilState } from 'recoil';
+
 import { enabledDevModeAtom } from '../../atoms/global';
+import { useAtom } from 'jotai';
 
 export const IconWrapper = ({
   children,
@@ -65,8 +66,7 @@ export const DesktopFooter = ({
   setIsOpenSideViewDirects,
   setIsOpenSideViewGroups,
 }) => {
-  const [isEnabledDevMode, setIsEnabledDevMode] =
-    useRecoilState(enabledDevModeAtom);
+  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
 
   const theme = useTheme();
 

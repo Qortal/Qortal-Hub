@@ -7,18 +7,19 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { useRecoilState } from 'recoil';
 import { navigationControllerAtom } from '../../atoms/global';
 import { AppsNavBarLeft, AppsNavBarParent } from '../Apps/Apps-styles';
 import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useAtom } from 'jotai';
 
 export const WalletsAppWrapper = () => {
   const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [navigationController, setNavigationController] = useRecoilState(
+  const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
+
   const [selectedTab, setSelectedTab] = useState({
     tabId: '5558589',
     name: 'Q-Wallets',

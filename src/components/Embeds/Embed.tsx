@@ -7,7 +7,6 @@ import { extractComponents } from '../Chat/MessageDisplay';
 import { executeEvent } from '../../utils/events';
 
 import { base64ToBlobUrl } from '../../utils/fileReading';
-import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
 import {
   blobControllerAtom,
   blobKeySelector,
@@ -19,6 +18,7 @@ import { PollCard } from './PollEmbed';
 import { ImageCard } from './ImageEmbed';
 import { AttachmentCard } from './AttachmentEmbed';
 import { decodeIfEncoded } from '../../utils/decode';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 const getPoll = async (name) => {
   const pollName = name;
@@ -63,8 +63,9 @@ export const Embed = ({ embedLink }) => {
   const [external, setExternal] = useState(null);
   const [imageUrl, setImageUrl] = useState('');
   const [parsedData, setParsedData] = useState(null);
-  const setBlobs = useSetRecoilState(blobControllerAtom);
-  const [selectedGroupId] = useRecoilState(selectedGroupIdAtom);
+  const setBlobs = useSetAtom(blobControllerAtom);
+  const [selectedGroupId] = useAtom(selectedGroupIdAtom);
+
   const resourceData = useMemo(() => {
     const parsedDataOnTheFly = parseQortalLink(embedLink);
     if (
@@ -98,7 +99,8 @@ export const Embed = ({ embedLink }) => {
       return undefined;
     }
   }, [resourceData]);
-  const blobUrl = useRecoilValue(blobKeySelector(keyIdentifier));
+
+  const blobUrl = useAtomValue(blobKeySelector(keyIdentifier));
 
   const handlePoll = async (parsedData) => {
     try {
@@ -312,7 +314,7 @@ export const Embed = ({ embedLink }) => {
     hasFetched.current = true;
   }, [embedLink]);
 
-  const resourceDetails = useRecoilValue(resourceKeySelector(keyIdentifier));
+  const resourceDetails = useAtomValue(resourceKeySelector(keyIdentifier));
 
   const { parsedType, encryptionType } = useMemo(() => {
     let parsedType;

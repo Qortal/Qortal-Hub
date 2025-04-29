@@ -1,5 +1,4 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import isEqual from 'lodash/isEqual'; // TODO Import deep comparison utility
 import {
   canSaveSettingToQdnAtom,
@@ -34,6 +33,7 @@ import {
   uint8ArrayToObject,
 } from '../../backgroundFunctions/encryption';
 import { useTranslation } from 'react-i18next';
+import { useAtom, useSetAtom } from 'jotai';
 
 export const handleImportClick = async () => {
   const fileInput = document.createElement('input');
@@ -66,22 +66,21 @@ export const handleImportClick = async () => {
 };
 
 export const Save = ({ isDesktop, disableWidth, myName }) => {
-  const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
-  const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useRecoilState(
+  const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
+  const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useAtom(
     settingsQDNLastUpdatedAtom
   );
-  const [settingsLocalLastUpdated] = useRecoilState(
-    settingsLocalLastUpdatedAtom
+  const [settingsLocalLastUpdated] = useAtom(settingsLocalLastUpdatedAtom);
+  const setHasSettingsChangedAtom = useSetAtom(hasSettingsChangedAtom);
+  const [isUsingImportExportSettings, setIsUsingImportExportSettings] = useAtom(
+    isUsingImportExportSettingsAtom
   );
-  const setHasSettingsChangedAtom = useSetRecoilState(hasSettingsChangedAtom);
-  const [isUsingImportExportSettings, setIsUsingImportExportSettings] =
-    useRecoilState(isUsingImportExportSettingsAtom);
 
-  const [canSave] = useRecoilState(canSaveSettingToQdnAtom);
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
-  const [oldPinnedApps, setOldPinnedApps] = useRecoilState(oldPinnedAppsAtom);
+  const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
+
   const [anchorEl, setAnchorEl] = useState(null);
   const { show } = useContext(MyContext);
   const theme = useTheme();

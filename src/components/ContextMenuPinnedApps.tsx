@@ -9,8 +9,8 @@ import {
 } from '@mui/material';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import { saveToLocalStorage } from './Apps/AppsNavBarDesktop';
-import { useRecoilState } from 'recoil';
 import { sortablePinnedAppsAtom } from '../atoms/global';
+import { useSetAtom } from 'jotai';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -34,9 +34,9 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
   const maxHoldTimeout = useRef(null);
   const preventClick = useRef(false);
   const startTouchPosition = useRef({ x: 0, y: 0 }); // Track initial touch position
-  const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
-    sortablePinnedAppsAtom
-  );
+
+  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
+
   const theme = useTheme();
 
   const handleContextMenu = (event) => {

@@ -10,8 +10,8 @@ import {
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import { executeEvent } from '../utils/events';
-import { useRecoilState } from 'recoil';
 import { mutedGroupsAtom } from '../atoms/global';
+import { useAtom } from 'jotai';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -35,7 +35,8 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
   const longPressTimeout = useRef(null);
   const preventClick = useRef(false); // Flag to prevent click after long-press or right-click
   const theme = useTheme();
-  const [mutedGroups] = useRecoilState(mutedGroupsAtom);
+  const [mutedGroups] = useAtom(mutedGroupsAtom);
+
   const isMuted = useMemo(() => {
     return mutedGroups.includes(groupId);
   }, [mutedGroups, groupId]);

@@ -17,12 +17,12 @@ import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { AppRating } from './AppRating';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
+import { useAtom, useSetAtom } from 'jotai';
 
 export const AppInfoSnippet = ({
   app,
@@ -31,16 +31,15 @@ export const AppInfoSnippet = ({
   parentStyles = {},
 }) => {
   const isInstalled = app?.status?.status === 'READY';
-  const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
+  const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
     sortablePinnedAppsAtom
   );
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
   );
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
+
   const theme = useTheme();
 
   return (

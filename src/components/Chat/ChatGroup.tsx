@@ -12,7 +12,6 @@ import {
   objectToBase64,
 } from '../../qdn/encryption/group-encryption';
 import { ChatList } from './ChatList';
-import '@chatscope/chat-ui-kit-styles/dist/default/styles.min.css';
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -1237,8 +1236,6 @@ export const ChatGroup = ({
           </Box>
         </Box>
       )}
-
-      {/* <ChatContainerComp messages={formatMessages} /> */}
 
       <LoadingSnackbar
         open={isLoading}
