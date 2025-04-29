@@ -26,7 +26,9 @@ import { darkThemeOptions } from '../../styles/theme-dark';
 import { lightThemeOptions } from '../../styles/theme-light';
 import ShortUniqueId from 'short-unique-id';
 import { rgbStringToHsva, rgbaStringToHsva } from '@uiw/color-convert';
-
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
+import { handleImportClick } from '../../utils/fileReading';
 const uid = new ShortUniqueId({ length: 8 });
 
 function detectColorFormat(color) {
@@ -35,6 +37,36 @@ function detectColorFormat(color) {
   if (color.startsWith('rgb')) return 'rgb';
   return null;
 }
+
+const validateTheme = (theme) => {
+  if (typeof theme !== 'object' || !theme) return false;
+  if (typeof theme.name !== 'string') return false;
+  if (!theme.light || typeof theme.light !== 'object') return false;
+  if (!theme.dark || typeof theme.dark !== 'object') return false;
+
+  // Optional: deeper checks on structure
+  const requiredKeys = [
+    'primary',
+    'secondary',
+    'background',
+    'text',
+    'border',
+    'other',
+  ];
+
+  for (const mode of ['light', 'dark']) {
+    const modeTheme = theme[mode];
+    if (modeTheme.mode !== mode) return false;
+
+    for (const key of requiredKeys) {
+      if (!modeTheme[key] || typeof modeTheme[key] !== 'object') {
+        return false;
+      }
+    }
+  }
+
+  return true;
+};
 
 export default function ThemeManager() {
   const { userThemes, addUserTheme, setUserTheme, currentThemeId } =
@@ -152,6 +184,38 @@ export default function ThemeManager() {
     );
   };
 
+  const exportTheme = async (theme) => {
+    try {
+      const copyTheme = structuredClone(theme);
+      delete copyTheme.id;
+      const fileName = `ui_theme_${theme.name}.json`;
+
+      const blob = new Blob([JSON.stringify(copyTheme, null, 2)], {
+        type: 'application/json',
+      });
+
+      await saveFileToDiskGeneric(blob, fileName);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const importTheme = async (theme) => {
+    try {
+      const fileContent = await handleImportClick('.json');
+      const importedTheme = JSON.parse(fileContent);
+      if (!validateTheme(importedTheme)) {
+        throw new Error('Invalid theme format');
+      }
+      const newTheme = { ...importedTheme, id: uid.rnd() };
+      const updatedThemes = [...userThemes, newTheme];
+      addUserTheme(updatedThemes);
+      setUserTheme(newTheme);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <Box p={2}>
       <Typography variant="h5" gutterBottom>
@@ -165,7 +229,16 @@ export default function ThemeManager() {
       >
         Add Theme
       </Button>
-
+      <Button
+        sx={{
+          marginLeft: '20px',
+        }}
+        variant="contained"
+        startIcon={<AddIcon />}
+        onClick={importTheme}
+      >
+        Import theme
+      </Button>
       <List>
         {userThemes?.map((theme, index) => (
           <ListItemButton
@@ -178,6 +251,9 @@ export default function ThemeManager() {
             <ListItemSecondaryAction>
               {theme.id !== 'default' && (
                 <>
+                  <IconButton onClick={() => exportTheme(theme)}>
+                    <FileDownloadIcon />
+                  </IconButton>
                   <IconButton onClick={() => handleEditTheme(theme.id)}>
                     <EditIcon />
                   </IconButton>
