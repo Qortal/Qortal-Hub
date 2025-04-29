@@ -2063,6 +2063,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={returnToMain}
               />
@@ -2560,6 +2561,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2593,6 +2595,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2722,6 +2725,7 @@ function App() {
                     style={{
                       cursor: 'pointer',
                       height: '24px',
+                      width: 'auto',
                     }}
                     onClick={() => {
                       if (creationStep === 2) {
