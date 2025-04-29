@@ -20,11 +20,11 @@ import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from '../Desktop/DesktopFooter';
-import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
+import { useAtom } from 'jotai';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -47,8 +47,8 @@ export const AppsDesktop = ({
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
-  const [isEnabledDevMode, setIsEnabledDevMode] =
-    useRecoilState(enabledDevModeAtom);
+  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+
   const { showTutorial } = useContext(GlobalContext);
   const theme = useTheme();
 

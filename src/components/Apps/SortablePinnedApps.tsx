@@ -22,11 +22,11 @@ import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
 import LockIcon from '@mui/icons-material/Lock';
 import { useHandlePrivateApps } from './useHandlePrivateApps';
+import { useAtom, useSetAtom } from 'jotai';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {
   const { openApp } = useHandlePrivateApps();
@@ -137,10 +137,8 @@ export const SortablePinnedApps = ({
   myApp,
   availableQapps = [],
 }) => {
-  const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
+  const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   const transformPinnedApps = useMemo(() => {
     // Clone the existing pinned apps list

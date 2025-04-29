@@ -1,5 +1,4 @@
 import { useCallback, useEffect } from 'react';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
   isUsingImportExportSettingsAtom,
@@ -14,6 +13,7 @@ import {
   base64ToUint8Array,
   uint8ArrayToObject,
 } from './backgroundFunctions/encryption';
+import { useAtom, useSetAtom } from 'jotai';
 
 function fetchFromLocalStorage(key) {
   try {
@@ -67,19 +67,15 @@ const getPublish = async (myName) => {
 };
 
 export const useQortalGetSaveSettings = (myName, isAuthenticated) => {
-  const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
-  const setCanSave = useSetRecoilState(canSaveSettingToQdnAtom);
-  const setSettingsQDNLastUpdated = useSetRecoilState(
-    settingsQDNLastUpdatedAtom
-  );
-  const [settingsLocalLastUpdated] = useRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
-  const [isUsingImportExportSettings] = useRecoilState(
+  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
+  const setCanSave = useSetAtom(canSaveSettingToQdnAtom);
+  const setSettingsQDNLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
+
+  const [settingsLocalLastUpdated] = useAtom(settingsLocalLastUpdatedAtom);
+  const [isUsingImportExportSettings] = useAtom(
     isUsingImportExportSettingsAtom
   );
-
-  const [oldPinnedApps, setOldPinnedApps] = useRecoilState(oldPinnedAppsAtom);
+  const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
 
   const getSavedSettings = useCallback(
     async (myName, settingsLocalLastUpdated) => {

@@ -65,7 +65,7 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './QMailMessages';
 import { AdminSpace } from '../Chat/AdminSpace';
-import { useRecoilState, useSetRecoilState } from 'recoil';
+
 import {
   addressInfoControllerAtom,
   groupAnnouncementsAtom,
@@ -85,6 +85,7 @@ import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
+import { useAtom, useSetAtom } from 'jotai';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -415,9 +416,10 @@ export const Group = ({
   const { setMemberGroups, rootHeight, isRunningPublicNode } =
     useContext(MyContext);
   const lastGroupNotification = useRef<null | number>(null);
-  const [timestampEnterData, setTimestampEnterData] = useRecoilState(
+  const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
   );
+
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
   const [openSnack, setOpenSnack] = React.useState(false);
@@ -428,18 +430,19 @@ export const Group = ({
   const [firstSecretKeyInCreation, setFirstSecretKeyInCreation] =
     React.useState(false);
   const [groupSection, setGroupSection] = React.useState('home');
-  const [groupAnnouncements, setGroupAnnouncements] = useRecoilState(
+  const [groupAnnouncements, setGroupAnnouncements] = useAtom(
     groupAnnouncementsAtom
   );
 
   const [defaultThread, setDefaultThread] = React.useState(null);
   const [isOpenDrawer, setIsOpenDrawer] = React.useState(false);
-  const setIsOpenBlockedUserModal = useSetRecoilState(isOpenBlockedModalAtom);
+  const setIsOpenBlockedUserModal = useSetAtom(isOpenBlockedModalAtom);
 
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = React.useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = React.useState('');
   const [drawerMode, setDrawerMode] = React.useState('groups');
-  const setMutedGroups = useSetRecoilState(mutedGroupsAtom);
+  const setMutedGroups = useSetAtom(mutedGroupsAtom);
+
   const [mobileViewMode, setMobileViewMode] = useState('home');
   const [mobileViewModeKeepOpen, setMobileViewModeKeepOpen] = useState('');
   const isFocusedRef = useRef(true);
@@ -453,9 +456,10 @@ export const Group = ({
   const settimeoutForRefetchSecretKey = useRef(null);
   const { clearStatesMessageQueueProvider } = useMessageQueue();
   const initiatedGetMembers = useRef(false);
-  const [groupChatTimestamps, setGroupChatTimestamps] = useRecoilState(
+  const [groupChatTimestamps, setGroupChatTimestamps] = useAtom(
     groupChatTimestampsAtom
   );
+
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
   const [isOpenSideViewDirects, setIsOpenSideViewDirects] = useState(false);
@@ -465,12 +469,10 @@ export const Group = ({
   const groupsOwnerNamesRef = useRef({});
   const { t } = useTranslation(['core', 'group']);
 
-  const [groupsProperties, setGroupsProperties] =
-    useRecoilState(groupsPropertiesAtom);
-  const [groupsOwnerNames, setGroupsOwnerNames] =
-    useRecoilState(groupsOwnerNamesAtom);
+  const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
+  const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
 
-  const setUserInfoForLevels = useSetRecoilState(addressInfoControllerAtom);
+  const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
 
   const isPrivate = useMemo(() => {
     if (selectedGroup?.groupId === '0') return false;
@@ -481,7 +483,8 @@ export const Group = ({
     return null;
   }, [selectedGroup]);
 
-  const setSelectedGroupId = useSetRecoilState(selectedGroupIdAtom);
+  const setSelectedGroupId = useSetAtom(selectedGroupIdAtom);
+
   const toggleSideViewDirects = () => {
     if (isOpenSideViewGroups) {
       setIsOpenSideViewGroups(false);

@@ -13,16 +13,17 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useRecoilState } from 'recoil';
 import { navigationControllerAtom } from '../../atoms/global';
 import { AppsDevModeTabComponent } from './AppsDevModeTabComponent';
+import { useAtom } from 'jotai';
 
 export const AppsDevModeNavBar = () => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
-  const [navigationController, setNavigationController] = useRecoilState(
+  const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
+
   const theme = useTheme();
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);

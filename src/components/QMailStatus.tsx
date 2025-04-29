@@ -1,20 +1,20 @@
 import { useMemo } from 'react';
-import { useRecoilState } from 'recoil';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
 import { isLessThanOneWeekOld } from './Group/QMailMessages';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useAtom } from 'jotai';
 
 export const QMailStatus = () => {
   const { t } = useTranslation(['core']);
   const theme = useTheme();
 
-  const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(
+  const [lastEnteredTimestamp, setLastEnteredTimestamp] = useAtom(
     qMailLastEnteredTimestampAtom
   );
-  const [mails, setMails] = useRecoilState(mailsAtom);
+  const [mails, setMails] = useAtom(mailsAtom);
 
   const hasNewMail = useMemo(() => {
     if (mails?.length === 0) return false;

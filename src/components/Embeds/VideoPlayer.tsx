@@ -19,7 +19,8 @@ import { Menu, MenuItem } from '@mui/material';
 import { MoreVert as MoreIcon } from '@mui/icons-material';
 import { GlobalContext, getBaseApiReact } from '../../App';
 import { resourceKeySelector } from '../../atoms/global';
-import { useRecoilValue } from 'recoil';
+
+import { useAtomValue } from 'jotai';
 const VideoContainer = styled(Box)`
   position: relative;
   display: flex;
@@ -80,7 +81,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return undefined;
     }
   }, [service, name, identifier]);
-  const download = useRecoilValue(resourceKeySelector(keyIdentifier));
+
+  const download = useAtomValue(resourceKeySelector(keyIdentifier));
+
   const { downloadResource } = useContext(GlobalContext);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);

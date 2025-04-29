@@ -21,15 +21,16 @@ import {
 import { validateAddress } from '../../utils/validateAddress';
 import { getNameInfo, requestQueueMemberNames } from './Group';
 import { useModal } from '../../common/useModal';
-import { useRecoilState } from 'recoil';
 import { isOpenBlockedModalAtom } from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
+import { useAtom } from 'jotai';
 
 export const BlockedUsersModal = () => {
   const theme = useTheme();
-  const [isOpenBlockedModal, setIsOpenBlockedModal] = useRecoilState(
+  const [isOpenBlockedModal, setIsOpenBlockedModal] = useAtom(
     isOpenBlockedModalAtom
   );
+
   const [hasChanged, setHasChanged] = useState(false);
   const [value, setValue] = useState('');
   const [addressesWithNames, setAddressesWithNames] = useState({});

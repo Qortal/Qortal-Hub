@@ -27,8 +27,7 @@ import { Spacer } from '../../common/Spacer';
 import { FileAttachmentContainer, FileAttachmentFont } from './Embed-styles';
 import DownloadIcon from '@mui/icons-material/Download';
 import SaveIcon from '@mui/icons-material/Save';
-import { useSetRecoilState } from 'recoil';
-import { blobControllerAtom } from '../../atoms/global';
+
 import { decodeIfEncoded } from '../../utils/decode';
 
 export const AttachmentCard = ({

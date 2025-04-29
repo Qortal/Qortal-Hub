@@ -33,7 +33,6 @@ import DownloadIcon from '@mui/icons-material/Download';
 import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
-import { CopyToClipboard } from 'react-copy-to-clipboard';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
 import './utils/seedPhrase/RandomSentenceGenerator';
@@ -96,7 +95,6 @@ import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './useRetrieveDataLocalStorage';
 import { useQortalGetSaveSettings } from './useQortalGetSaveSettings';
-import { useRecoilState, useResetRecoilState, useSetRecoilState } from 'recoil';
 import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
@@ -142,6 +140,8 @@ import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
+import { useAtom, useSetAtom } from 'jotai';
+import { useResetAtom } from 'jotai/utils';
 
 type extStates =
   | 'not-authenticated'
@@ -330,9 +330,10 @@ function App() {
   const [txList, setTxList] = useState([]);
   const [memberGroups, setMemberGroups] = useState([]);
   const [isFocused, setIsFocused] = useState(true);
-  const [hasSettingsChanged, setHasSettingsChanged] = useRecoilState(
+  const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
   );
+
   const balanceSetIntervalRef = useRef(null);
   const { downloadResource } = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
@@ -405,9 +406,10 @@ function App() {
   const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
-  const [isEnabledDevMode, setIsEnabledDevMode] =
-    useRecoilState(enabledDevModeAtom);
-  const setIsDisabledEditorEnter = useSetRecoilState(isDisabledEditorEnterAtom);
+  const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+
+  const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
+
   const [isOpenMinting, setIsOpenMinting] = useState(false);
   const generatorRef = useRef(null);
 
@@ -453,45 +455,33 @@ function App() {
   }, [extState, walletToBeDownloaded, shownTutorialsInitiated]);
 
   //resets for recoil
-  const resetAtomSortablePinnedAppsAtom = useResetRecoilState(
-    sortablePinnedAppsAtom
-  );
-
-  const resetAtomIsUsingImportExportSettingsAtom = useResetRecoilState(
+  const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
+  const resetAtomIsUsingImportExportSettingsAtom = useResetAtom(
     isUsingImportExportSettingsAtom
   );
-  const resetAtomCanSaveSettingToQdnAtom = useResetRecoilState(
+  const resetAtomCanSaveSettingToQdnAtom = useResetAtom(
     canSaveSettingToQdnAtom
   );
-
-  const resetAtomSettingsQDNLastUpdatedAtom = useResetRecoilState(
+  const resetAtomSettingsQDNLastUpdatedAtom = useResetAtom(
     settingsQDNLastUpdatedAtom
   );
-
-  const resetAtomSettingsLocalLastUpdatedAtom = useResetRecoilState(
+  const resetAtomSettingsLocalLastUpdatedAtom = useResetAtom(
     settingsLocalLastUpdatedAtom
   );
-
-  const resetAtomOldPinnedAppsAtom = useResetRecoilState(oldPinnedAppsAtom);
-  const resetAtomQMailLastEnteredTimestampAtom = useResetRecoilState(
+  const resetAtomOldPinnedAppsAtom = useResetAtom(oldPinnedAppsAtom);
+  const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
     qMailLastEnteredTimestampAtom
   );
-
-  const resetAtomMailsAtom = useResetRecoilState(mailsAtom);
-  const resetGroupPropertiesAtom = useResetRecoilState(groupsPropertiesAtom);
-  const resetLastPaymentSeenTimestampAtom = useResetRecoilState(
+  const resetAtomMailsAtom = useResetAtom(mailsAtom);
+  const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
+  const resetLastPaymentSeenTimestampAtom = useResetAtom(
     lastPaymentSeenTimestampAtom
   );
-  const resetGroupsOwnerNamesAtom = useResetRecoilState(groupsOwnerNamesAtom);
-  const resetGroupAnnouncementsAtom = useResetRecoilState(
-    groupAnnouncementsAtom
-  );
-  const resetMutedGroupsAtom = useResetRecoilState(mutedGroupsAtom);
-
-  const resetGroupChatTimestampsAtom = useResetRecoilState(
-    groupChatTimestampsAtom
-  );
-  const resetTimestampEnterAtom = useResetRecoilState(timestampEnterDataAtom);
+  const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
+  const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
+  const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
+  const resetGroupChatTimestampsAtom = useResetAtom(groupChatTimestampsAtom);
+  const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
 
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
@@ -1314,13 +1304,23 @@ function App() {
 
             <Spacer height="32px" />
 
-            <CopyToClipboard text={rawWallet?.ltcAddress}>
+            <ButtonBase
+              onClick={() => {
+                if (rawWallet?.ltcAddress) {
+                  navigator.clipboard
+                    .writeText(rawWallet.ltcAddress)
+                    .catch((err) => {
+                      console.error('Failed to copy LTC address:', err);
+                    });
+                }
+              }}
+            >
               <AddressBox>
                 {rawWallet?.ltcAddress?.slice(0, 6)}...
                 {rawWallet?.ltcAddress?.slice(-4)}{' '}
                 <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
-            </CopyToClipboard>
+            </ButtonBase>
 
             <Spacer height="10px" />
 
@@ -1380,13 +1380,24 @@ function App() {
 
             <Spacer height="10px" />
 
-            <CopyToClipboard text={rawWallet?.address0}>
+            <ButtonBase
+              onClick={() => {
+                if (rawWallet?.address0) {
+                  navigator.clipboard
+                    .writeText(rawWallet.address0)
+                    .catch((err) => {
+                      console.error('Failed to copy address:', err);
+                    });
+                }
+              }}
+            >
               <AddressBox>
                 {rawWallet?.address0?.slice(0, 6)}...
                 {rawWallet?.address0?.slice(-4)}{' '}
                 <CopyIcon color={theme.palette.text.primary} />
               </AddressBox>
-            </CopyToClipboard>
+            </ButtonBase>
+
             <Spacer height="10px" />
             {qortBalanceLoading && (
               <CircularProgress color="success" size={16} />

@@ -17,8 +17,9 @@ import Slide from '@mui/material/Slide';
 import { TransitionProps } from '@mui/material/transitions';
 import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
-import { useRecoilState } from 'recoil';
+
 import ThemeManager from '../Theme/ThemeManager';
+import { useAtom } from 'jotai';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -64,8 +65,8 @@ const Transition = forwardRef(function Transition(
 
 export const Settings = ({ address, open, setOpen }) => {
   const [checked, setChecked] = useState(false);
-  const [isEnabledDevMode, setIsEnabledDevMode] =
-    useRecoilState(enabledDevModeAtom);
+  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+
   const theme = useTheme();
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {

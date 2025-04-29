@@ -1,273 +1,80 @@
-import { atom, selectorFamily } from 'recoil';
+import { atom } from 'jotai';
+import { atomWithReset, atomFamily } from 'jotai/utils';
 
-export const sortablePinnedAppsAtom = atom({
-  key: 'sortablePinnedAppsFromAtom',
-  default: [
-    {
-      name: 'Q-Tube',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Mail',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Share',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Fund',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Shop',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Trade',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Support',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Manager',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Blog',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Mintership',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Wallets',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Search',
-      service: 'APP',
-    },
-    {
-      name: 'Q-Nodecontrol',
-      service: 'APP',
-    },
-  ],
-});
+// Atoms (resettable)
+export const sortablePinnedAppsAtom = atomWithReset([
+  { name: 'Q-Tube', service: 'APP' },
+  { name: 'Q-Mail', service: 'APP' },
+  { name: 'Q-Share', service: 'APP' },
+  { name: 'Q-Fund', service: 'APP' },
+  { name: 'Q-Shop', service: 'APP' },
+  { name: 'Q-Trade', service: 'APP' },
+  { name: 'Q-Support', service: 'APP' },
+  { name: 'Q-Manager', service: 'APP' },
+  { name: 'Q-Blog', service: 'APP' },
+  { name: 'Q-Mintership', service: 'APP' },
+  { name: 'Q-Wallets', service: 'APP' },
+  { name: 'Q-Search', service: 'APP' },
+  { name: 'Q-Nodecontrol', service: 'APP' },
+]);
 
-export const canSaveSettingToQdnAtom = atom({
-  key: 'canSaveSettingToQdnAtom',
-  default: false,
-});
+export const canSaveSettingToQdnAtom = atomWithReset(false);
+export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
+export const settingsLocalLastUpdatedAtom = atomWithReset(0);
+export const oldPinnedAppsAtom = atomWithReset([]);
+export const isUsingImportExportSettingsAtom = atomWithReset(null);
+export const fullScreenAtom = atomWithReset(false);
+export const hasSettingsChangedAtom = atomWithReset(false);
+export const navigationControllerAtom = atomWithReset({});
+export const enabledDevModeAtom = atomWithReset(false);
+export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
+export const promotionTimeIntervalAtom = atomWithReset(0);
+export const promotionsAtom = atomWithReset([]);
+export const resourceDownloadControllerAtom = atomWithReset({});
+export const blobControllerAtom = atomWithReset({});
+export const selectedGroupIdAtom = atomWithReset(null);
+export const addressInfoControllerAtom = atomWithReset({});
+export const isDisabledEditorEnterAtom = atomWithReset(false);
+export const qMailLastEnteredTimestampAtom = atomWithReset(null);
+export const lastPaymentSeenTimestampAtom = atomWithReset(null);
+export const mailsAtom = atomWithReset([]);
+export const groupsPropertiesAtom = atomWithReset({});
+export const groupsOwnerNamesAtom = atomWithReset({});
+export const isOpenBlockedModalAtom = atomWithReset(false);
+export const groupAnnouncementsAtom = atomWithReset({});
+export const mutedGroupsAtom = atomWithReset([]);
+export const groupChatTimestampsAtom = atomWithReset({});
+export const timestampEnterDataAtom = atomWithReset({});
 
-export const settingsQDNLastUpdatedAtom = atom({
-  key: 'settingsQDNLastUpdatedAtom',
-  default: -100,
-});
+// Atom Families (replacing selectorFamily)
+export const resourceKeySelector = atomFamily((key) =>
+  atom((get) => get(resourceDownloadControllerAtom)[key] || null)
+);
 
-export const settingsLocalLastUpdatedAtom = atom({
-  key: 'settingsLocalLastUpdatedAtom',
-  default: 0,
-});
+export const blobKeySelector = atomFamily((key) =>
+  atom((get) => get(blobControllerAtom)[key] || null)
+);
 
-export const oldPinnedAppsAtom = atom({
-  key: 'oldPinnedAppsAtom',
-  default: [],
-});
+export const addressInfoKeySelector = atomFamily((key) =>
+  atom((get) => get(addressInfoControllerAtom)[key] || null)
+);
 
-export const isUsingImportExportSettingsAtom = atom({
-  key: 'isUsingImportExportSettingsAtom',
-  default: null,
-});
+export const groupsOwnerNamesSelector = atomFamily((key) =>
+  atom((get) => get(groupsOwnerNamesAtom)[key] || null)
+);
 
-export const fullScreenAtom = atom({
-  key: 'fullScreenAtom',
-  default: false,
-});
+export const groupAnnouncementSelector = atomFamily((key) =>
+  atom((get) => get(groupAnnouncementsAtom)[key] || null)
+);
 
-export const hasSettingsChangedAtom = atom({
-  key: 'hasSettingsChangedAtom',
-  default: false,
-});
+export const groupPropertySelector = atomFamily((key) =>
+  atom((get) => get(groupsPropertiesAtom)[key] || null)
+);
 
-export const navigationControllerAtom = atom({
-  key: 'navigationControllerAtom',
-  default: {},
-});
+export const groupChatTimestampSelector = atomFamily((key) =>
+  atom((get) => get(groupChatTimestampsAtom)[key] || null)
+);
 
-export const enabledDevModeAtom = atom({
-  key: 'enabledDevModeAtom',
-  default: false,
-});
-
-export const myGroupsWhereIAmAdminAtom = atom({
-  key: 'myGroupsWhereIAmAdminAtom',
-  default: [],
-});
-
-export const promotionTimeIntervalAtom = atom({
-  key: 'promotionTimeIntervalAtom',
-  default: 0,
-});
-
-export const promotionsAtom = atom({
-  key: 'promotionsAtom',
-  default: [],
-});
-
-export const resourceDownloadControllerAtom = atom({
-  key: 'resourceDownloadControllerAtom',
-  default: {},
-});
-
-export const resourceKeySelector = selectorFamily({
-  key: 'resourceKeySelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const resources = get(resourceDownloadControllerAtom);
-      return resources[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const blobControllerAtom = atom({
-  key: 'blobControllerAtom',
-  default: {},
-});
-
-export const blobKeySelector = selectorFamily({
-  key: 'blobKeySelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const blobs = get(blobControllerAtom);
-      return blobs[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const selectedGroupIdAtom = atom({
-  key: 'selectedGroupIdAtom',
-  default: null,
-});
-
-export const addressInfoControllerAtom = atom({
-  key: 'addressInfoControllerAtom',
-  default: {},
-});
-
-export const addressInfoKeySelector = selectorFamily({
-  key: 'addressInfoKeySelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const userInfo = get(addressInfoControllerAtom);
-      return userInfo[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const isDisabledEditorEnterAtom = atom({
-  key: 'isDisabledEditorEnterAtom',
-  default: false,
-});
-
-export const qMailLastEnteredTimestampAtom = atom({
-  key: 'qMailLastEnteredTimestampAtom',
-  default: null,
-});
-
-export const lastPaymentSeenTimestampAtom = atom<null | number>({
-  key: 'lastPaymentSeenTimestampAtom',
-  default: null,
-});
-
-export const mailsAtom = atom({
-  key: 'mailsAtom',
-  default: [],
-});
-
-export const groupsPropertiesAtom = atom({
-  key: 'groupsPropertiesAtom',
-  default: {},
-});
-export const groupsOwnerNamesAtom = atom({
-  key: 'groupsOwnerNamesAtom',
-  default: {},
-});
-
-export const isOpenBlockedModalAtom = atom({
-  key: 'isOpenBlockedModalAtom',
-  default: false,
-});
-
-export const groupsOwnerNamesSelector = selectorFamily({
-  key: 'groupsOwnerNamesSelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const data = get(groupsOwnerNamesAtom);
-      return data[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const groupAnnouncementsAtom = atom({
-  key: 'groupAnnouncementsAtom',
-  default: {},
-});
-
-export const groupAnnouncementSelector = selectorFamily({
-  key: 'groupAnnouncementSelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const data = get(groupAnnouncementsAtom);
-      return data[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const groupPropertySelector = selectorFamily({
-  key: 'groupPropertySelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const data = get(groupsPropertiesAtom);
-      return data[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const mutedGroupsAtom = atom({
-  key: 'mutedGroupsAtom',
-  default: [],
-});
-
-export const groupChatTimestampsAtom = atom({
-  key: 'groupChatTimestampsAtom',
-  default: {},
-});
-
-export const groupChatTimestampSelector = selectorFamily({
-  key: 'groupChatTimestampSelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const data = get(groupChatTimestampsAtom);
-      return data[key] || null; // Return the value for the key or null if not found
-    },
-});
-
-export const timestampEnterDataAtom = atom({
-  key: 'timestampEnterDataAtom',
-  default: {},
-});
-
-export const timestampEnterDataSelector = selectorFamily({
-  key: 'timestampEnterDataSelector',
-  get:
-    (key) =>
-    ({ get }) => {
-      const data = get(timestampEnterDataAtom);
-      return data[key] || null; // Return the value for the key or null if not found
-    },
-});
+export const timestampEnterDataSelector = atomFamily((key) =>
+  atom((get) => get(timestampEnterDataAtom)[key] || null)
+);

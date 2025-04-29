@@ -28,8 +28,9 @@ import {
   groupsOwnerNamesSelector,
   timestampEnterDataSelector,
 } from '../../atoms/global';
-import { useRecoilValue } from 'recoil';
+
 import { timeDifferenceForNotificationChats } from './Group';
+import { useAtomValue } from 'jotai';
 
 export const GroupList = ({
   selectGroupFunc,
@@ -211,17 +212,18 @@ export const GroupList = ({
 const GroupItem = React.memo(
   ({ selectGroupFunc, group, selectedGroup, getUserSettings, myAddress }) => {
     const theme = useTheme();
-    const ownerName = useRecoilValue(groupsOwnerNamesSelector(group?.groupId));
-    const announcement = useRecoilValue(
+    const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));
+    const announcement = useAtomValue(
       groupAnnouncementSelector(group?.groupId)
     );
-    const groupProperty = useRecoilValue(groupPropertySelector(group?.groupId));
-    const groupChatTimestamp = useRecoilValue(
+    const groupProperty = useAtomValue(groupPropertySelector(group?.groupId));
+    const groupChatTimestamp = useAtomValue(
       groupChatTimestampSelector(group?.groupId)
     );
-    const timestampEnterData = useRecoilValue(
+    const timestampEnterData = useAtomValue(
       timestampEnterDataSelector(group?.groupId)
     );
+
     const selectGroupHandler = useCallback(() => {
       selectGroupFunc(group);
     }, [group, selectGroupFunc]);

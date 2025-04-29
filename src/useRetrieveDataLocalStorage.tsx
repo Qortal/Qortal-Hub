@@ -1,5 +1,4 @@
 import { useCallback, useEffect } from 'react';
-import { useSetRecoilState } from 'recoil';
 import {
   isUsingImportExportSettingsAtom,
   oldPinnedAppsAtom,
@@ -7,6 +6,7 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from './atoms/global';
+import { useSetAtom } from 'jotai';
 
 function fetchFromLocalStorage(key) {
   try {
@@ -22,21 +22,13 @@ function fetchFromLocalStorage(key) {
 }
 
 export const useRetrieveDataLocalStorage = (address) => {
-  const setSortablePinnedApps = useSetRecoilState(sortablePinnedAppsAtom);
-
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
-
-  const setIsUsingImportExportSettings = useSetRecoilState(
+  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  const setIsUsingImportExportSettings = useSetAtom(
     isUsingImportExportSettingsAtom
   );
-
-  const setSettingsQDNLastUpdated = useSetRecoilState(
-    settingsQDNLastUpdatedAtom
-  );
-
-  const setOldPinnedApps = useSetRecoilState(oldPinnedAppsAtom);
+  const setSettingsQDNLastUpdated = useSetAtom(settingsQDNLastUpdatedAtom);
+  const setOldPinnedApps = useSetAtom(oldPinnedAppsAtom);
 
   const getSortablePinnedApps = useCallback(() => {
     const pinnedAppsLocal = fetchFromLocalStorage('ext_saved_settings');

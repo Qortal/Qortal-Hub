@@ -74,15 +74,18 @@ export const AppViewer = React.forwardRef(
     }, [app, path, isDevMode]);
 
     useEffect(() => {
-      if (!iframeRef?.current) return;
-      const targetOrigin = iframeRef.current
-        ? new URL(iframeRef.current.src).origin
-        : '*';
-      // Send the navigation command after setting up the listener and timeout
-      iframeRef.current.contentWindow.postMessage(
-        { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
-        targetOrigin
-      );
+      const iframe = iframeRef?.current;
+      if (!iframe) return;
+
+      try {
+        const targetOrigin = new URL(iframe.src).origin;
+        iframe.contentWindow?.postMessage(
+          { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
+          targetOrigin
+        );
+      } catch (err) {
+        console.error('Failed to send theme change to iframe:', err);
+      }
     }, [themeMode]);
 
     const removeTrailingSlash = (str) => str.replace(/\/$/, '');

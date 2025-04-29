@@ -26,12 +26,12 @@ import {
 import TabComponent from './TabComponent';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useRecoilState, useSetRecoilState } from 'recoil';
 import {
   navigationControllerAtom,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
 
 export function saveToLocalStorage(key, subKey, newValue) {
   try {
@@ -67,22 +67,21 @@ export function saveToLocalStorage(key, subKey, newValue) {
 export const AppsNavBarDesktop = ({ disableBack }) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
-  const [navigationController, setNavigationController] = useRecoilState(
+  const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
+  const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
+    sortablePinnedAppsAtom
+  );
+
   const theme = useTheme();
 
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
-  const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
-    sortablePinnedAppsAtom
-  );
 
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);

@@ -11,11 +11,12 @@ import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { executeEvent } from '../../utils/events';
 import { CustomLoader } from '../../common/CustomLoader';
-import { useRecoilState } from 'recoil';
+
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
+import { useAtom } from 'jotai';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
@@ -46,10 +47,11 @@ export function formatEmailDate(timestamp: number) {
 
 export const QMailMessages = ({ userName, userAddress }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [mails, setMails] = useRecoilState(mailsAtom);
-  const [lastEnteredTimestamp, setLastEnteredTimestamp] = useRecoilState(
+  const [mails, setMails] = useAtom(mailsAtom);
+  const [lastEnteredTimestamp, setLastEnteredTimestamp] = useAtom(
     qMailLastEnteredTimestampAtom
   );
+
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
 

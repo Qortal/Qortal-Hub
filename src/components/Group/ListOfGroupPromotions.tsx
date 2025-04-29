@@ -34,7 +34,7 @@ import {
 import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
-import { useRecoilState } from 'recoil';
+
 import {
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
@@ -49,6 +49,7 @@ import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background';
+import { useAtom } from 'jotai';
 export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
@@ -77,13 +78,14 @@ export const ListOfGroupPromotions = () => {
   const [loading, setLoading] = useState(false);
   const [isShowModal, setIsShowModal] = useState(false);
   const [text, setText] = useState('');
-  const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useRecoilState(
+  const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useAtom(
     myGroupsWhereIAmAdminAtom
   );
-  const [promotions, setPromotions] = useRecoilState(promotionsAtom);
-  const [promotionTimeInterval, setPromotionTimeInterval] = useRecoilState(
+  const [promotions, setPromotions] = useAtom(promotionsAtom);
+  const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
+
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   const [openSnack, setOpenSnack] = useState(false);
