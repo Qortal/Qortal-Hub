@@ -34,7 +34,7 @@ import LanguageSelector from '../components/Language/LanguageSelector';
 import { MyContext } from '../App';
 
 const manifestData = {
-  version: '0.5.3',
+  version: '0.5.4',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (

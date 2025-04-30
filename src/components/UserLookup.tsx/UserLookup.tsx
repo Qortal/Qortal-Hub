@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DrawerUserLookup } from '../Drawer/DrawerUserLookup';
 import {
   Avatar,
@@ -17,6 +17,7 @@ import {
   Table,
   CircularProgress,
   useTheme,
+  Autocomplete,
 } from '@mui/material';
 import { getAddressInfo, getNameOrAddress } from '../../background';
 import { getBaseApiReact } from '../../App';
@@ -31,6 +32,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
+import { useNameSearch } from '../../hooks/useNameSearch';
 
 function formatAddress(str) {
   if (str.length <= 12) return str;
@@ -44,6 +46,9 @@ function formatAddress(str) {
 export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const theme = useTheme();
   const [nameOrAddress, setNameOrAddress] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const { results, isLoading } = useNameSearch(inputValue);
+  const options = useMemo(() => results?.map((item) => item.name), [results]);
   const [errorMessage, setErrorMessage] = useState('');
   const [addressInfo, setAddressInfo] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -120,6 +125,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const onClose = () => {
     setIsOpenDrawerLookup(false);
     setNameOrAddress('');
+    setInputValue('');
     setErrorMessage('');
     setPayments([]);
     setIsLoadingUser(false);
@@ -146,31 +152,39 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             gap: '5px',
           }}
         >
-          <TextField
-            autoFocus
+          <Autocomplete
             value={nameOrAddress}
-            onChange={(e) => setNameOrAddress(e.target.value)}
-            size="small"
-            placeholder="Address or Name"
-            autoComplete="off"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && nameOrAddress) {
-                lookupFunc();
+            onChange={(event: any, newValue: string | null) => {
+              if (!newValue) {
+                setNameOrAddress('');
+                return;
               }
+              setNameOrAddress(newValue);
+              lookupFunc(newValue);
             }}
+            inputValue={inputValue}
+            onInputChange={(event, newInputValue) => {
+              setInputValue(newInputValue);
+            }}
+            id="controllable-states-demo"
+            loading={isLoading}
+            options={options}
+            sx={{ width: 300 }}
+            renderInput={(params) => (
+              <TextField
+                autoFocus
+                autoComplete="off"
+                {...params}
+                label="Address or Name"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && nameOrAddress) {
+                    lookupFunc(inputValue);
+                  }
+                }}
+              />
+            )}
           />
-          <ButtonBase
-            onClick={() => {
-              lookupFunc();
-            }}
-          >
-            <SearchIcon
-              sx={{
-                color: theme.palette.text.primary,
-                marginRight: '20px',
-              }}
-            />
-          </ButtonBase>
+
           <ButtonBase
             sx={{
               marginLeft: 'auto',
