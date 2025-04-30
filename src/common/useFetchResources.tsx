@@ -163,5 +163,5 @@ export const useFetchResources = () => {
     [setResources]
   );
 
-  return { downloadResource };
+  return downloadResource;
 };

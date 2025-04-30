@@ -1,6 +1,5 @@
-import { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { GroupMail } from '../Group/Forum/GroupMail';
-import { MyContext } from '../../App';
 
 export const GroupForum = ({
   selectedGroup,
@@ -14,7 +13,6 @@ export const GroupForum = ({
   setDefaultThread,
   isPrivate,
 }) => {
-  const { rootHeight } = useContext(MyContext);
   const [isMoved, setIsMoved] = useState(false);
 
   useEffect(() => {

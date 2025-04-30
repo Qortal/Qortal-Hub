@@ -1,6 +1,6 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from './useQortalMessageListener';
@@ -8,7 +8,6 @@ import { useThemeContext } from '../Theme/ThemeContext';
 
 export const AppViewer = React.forwardRef(
   ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
-    const { rootHeight } = useContext(MyContext);
     // const iframeRef = useRef(null);
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =

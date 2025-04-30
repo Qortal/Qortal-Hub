@@ -23,6 +23,8 @@ import { LoadingButton } from '@mui/lab';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
+import { useSetAtom } from 'jotai';
+import { txListAtom } from '../../atoms/global';
 
 function a11yProps(index: number) {
   return {
@@ -61,7 +63,8 @@ export const ManageMembers = ({
     setValue(newValue);
   };
   const theme = useTheme();
-  const { show, setTxList } = React.useContext(MyContext);
+  const { show } = React.useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
 
   const handleClose = () => {
     setOpen(false);

@@ -7,16 +7,21 @@ import {
   IconButton,
   useTheme,
 } from '@mui/material';
-import React, { useContext, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import PendingIcon from '@mui/icons-material/Pending';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
+import { useAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
 export const TaskManager = ({ getUserInfo }) => {
-  const { txList, setTxList, memberGroups } = useContext(MyContext);
+  const [memberGroups] = useAtom(memberGroupsAtom);
+
+  const [txList, setTxList] = useAtom(txListAtom);
+
   const [open, setOpen] = React.useState(false);
   const intervals = useRef({});
   const theme = useTheme();

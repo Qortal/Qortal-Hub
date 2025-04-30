@@ -26,7 +26,5 @@ export const useHandleUserInfo = () => {
     }
   }, []);
 
-  return {
-    getIndividualUserInfo,
-  };
+  return getIndividualUserInfo;
 };

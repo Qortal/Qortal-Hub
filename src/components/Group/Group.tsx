@@ -11,7 +11,6 @@ import {
 } from '@mui/material';
 import React, {
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -33,7 +32,6 @@ import { Spacer } from '../../common/Spacer';
 import { ManageMembers } from './ManageMembers';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import {
-  MyContext,
   clearAllQueues,
   getArbitraryEndpointReact,
   getBaseApiReact,
@@ -73,6 +71,7 @@ import {
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   isOpenBlockedModalAtom,
+  memberGroupsAtom,
   mutedGroupsAtom,
   selectedGroupIdAtom,
   timestampEnterDataAtom,
@@ -413,8 +412,9 @@ export const Group = ({
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
-  const { setMemberGroups, rootHeight, isRunningPublicNode } =
-    useContext(MyContext);
+
+  const setMemberGroups = useSetAtom(memberGroupsAtom);
+
   const lastGroupNotification = useRef<null | number>(null);
   const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
@@ -1309,7 +1309,6 @@ export const Group = ({
     setOpenAddGroup(false);
     setIsInitialGroups(false);
     setOpenManageMembers(false);
-    setMemberGroups([]); // Assuming you're clearing the context here as well
     setTimestampEnterData({});
     setChatMode('groups');
     setNewChat(false);
@@ -1931,7 +1930,6 @@ export const Group = ({
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}
-            isRunningPublicNode={isRunningPublicNode}
             setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
             myAddress={myAddress}
           />

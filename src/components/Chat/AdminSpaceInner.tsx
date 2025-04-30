@@ -70,7 +70,7 @@ export const AdminSpaceInner = ({
   const [groupSecretKeyPublishDetails, setGroupSecretKeyPublishDetails] =
     useState(null);
   const [isLoadingPublishKey, setIsLoadingPublishKey] = useState(false);
-  const { show, setTxList, setInfoSnackCustom, setOpenSnackGlobal } =
+  const { show, setInfoSnackCustom, setOpenSnackGlobal } =
     useContext(MyContext);
 
   const getAdminGroupSecretKey = useCallback(async () => {

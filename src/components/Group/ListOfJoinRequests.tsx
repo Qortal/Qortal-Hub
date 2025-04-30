@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -17,7 +17,9 @@ import {
 import { getNameInfo } from './Group';
 import { getBaseApi, getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
+import { txListAtom } from '../../atoms/global';
+import { useAtom } from 'jotai';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -56,7 +58,7 @@ export const ListOfJoinRequests = ({
   show,
 }) => {
   const [invites, setInvites] = useState([]);
-  const { txList, setTxList } = useContext(MyContext);
+  const [txList, setTxList] = useAtom(txListAtom);
 
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open

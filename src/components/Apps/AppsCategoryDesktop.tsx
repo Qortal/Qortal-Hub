@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppsDesktopLibraryBody,
@@ -10,7 +10,6 @@ import {
   AppsWidthLimiter,
 } from './Apps-styles';
 import { ButtonBase, InputBase, styled, useTheme } from '@mui/material';
-import { MyContext } from '../../App';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
@@ -59,7 +58,6 @@ export const AppsCategoryDesktop = ({
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef();
   const theme = useTheme();
-  const { rootHeight } = useContext(MyContext);
 
   const categoryList = useMemo(() => {
     if (category?.id === 'all') return availableQapps;

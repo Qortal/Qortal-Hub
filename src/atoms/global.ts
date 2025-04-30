@@ -46,6 +46,10 @@ export const mutedGroupsAtom = atomWithReset([]);
 export const groupChatTimestampsAtom = atomWithReset({});
 export const timestampEnterDataAtom = atomWithReset({});
 
+export const txListAtom = atomWithReset([]);
+export const memberGroupsAtom = atomWithReset([]);
+export const isRunningPublicNodeAtom = atomWithReset(false);
+
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

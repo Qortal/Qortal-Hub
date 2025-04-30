@@ -5,8 +5,6 @@ import { MyContext } from '../../App';
 
 const AppViewerContainer = React.forwardRef(
   ({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
-    const { rootHeight } = useContext(MyContext);
-
     return (
       <Frame
         id={`browser-iframe-${app?.tabId}`}

@@ -18,7 +18,6 @@ export const AdminSpace = ({
   balance,
   isOwner,
 }) => {
-  const { rootHeight } = useContext(MyContext);
   const [isMoved, setIsMoved] = useState(false);
   useEffect(() => {
     if (hide) {

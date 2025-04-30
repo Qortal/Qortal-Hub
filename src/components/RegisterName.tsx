@@ -34,6 +34,8 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
 import CheckIcon from '@mui/icons-material/Check';
 import ErrorIcon from '@mui/icons-material/Error';
+import { useSetAtom } from 'jotai';
+import { txListAtom } from '../atoms/global';
 
 enum Availability {
   NULL = 'null',
@@ -46,9 +48,10 @@ export const RegisterName = ({
   setInfoSnack,
   userInfo,
   show,
-  setTxList,
   balance,
 }) => {
+  const setTxList = useSetAtom(txListAtom);
+
   const [isOpen, setIsOpen] = useState(false);
   const [registerNameValue, setRegisterNameValue] = useState('');
   const [isLoadingRegisterName, setIsLoadingRegisterName] = useState(false);

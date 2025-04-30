@@ -25,15 +25,13 @@ import { getFee, getNameOrAddress } from '../../background';
 import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../common/useModal';
+import { useAtom, useSetAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
-export const Minting = ({
-  setIsOpenMinting,
-  myAddress,
-  groups,
-  show,
-  setTxList,
-  txList,
-}) => {
+export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
+  const setTxList = useSetAtom(txListAtom);
+  const [groups] = useAtom(memberGroupsAtom);
+
   const [mintingAccounts, setMintingAccounts] = useState([]);
   const [accountInfo, setAccountInfo] = useState(null);
   const [rewardSharePublicKey, setRewardSharePublicKey] = useState('');

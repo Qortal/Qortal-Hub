@@ -9,12 +9,12 @@ import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { executeEvent } from '../../utils/events';
 import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
 import { CustomLoader } from '../../common/CustomLoader';
-import { MyContext, getBaseApiReact } from '../../App';
-import { myGroupsWhereIAmAdminAtom } from '../../atoms/global';
+import { getBaseApiReact } from '../../App';
+import { myGroupsWhereIAmAdminAtom, txListAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2);
 
 export const GroupJoinRequests = ({
@@ -33,7 +33,8 @@ export const GroupJoinRequests = ({
     []
   );
   const [loading, setLoading] = React.useState(true);
-  const { txList, setTxList } = React.useContext(MyContext);
+  const [txList] = useAtom(txListAtom);
+
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
 
   const theme = useTheme();
