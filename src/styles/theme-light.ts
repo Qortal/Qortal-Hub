@@ -6,9 +6,9 @@ export const lightThemeOptions: ThemeOptions = {
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgb(162, 162, 221)', // old light becomes main
+      main: 'rgb(162, 162, 221)',
       dark: 'rgb(113, 198, 212)',
-      light: 'rgba(244, 244, 251, 1)', // former main becomes light
+      light: 'rgb(180, 200, 235)',
     },
     secondary: {
       main: 'rgba(194, 222, 236, 1)',
@@ -49,36 +49,57 @@ export const lightThemeOptions: ThemeOptions = {
       },
     },
     MuiCssBaseline: {
-      styleOverrides: {
+      styleOverrides: (theme) => ({
         ':root': {
-          '--color-instance': 'rgba(30, 30, 32, 1)',
-          '--color-instance-popover-bg': 'rgba(34, 34, 34, 1)',
           '--Mail-Background': 'rgba(49, 51, 56, 1)',
-          '--new-message-text': 'rgba(0, 0, 0, 1)',
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgba(39, 40, 44, 1)',
-          '--bg-3': 'rgba(0, 0, 0, 0.1)',
-          '--unread': 'rgba(66, 151, 226, 1)',
-          '--danger': 'rgba(177, 70, 70, 1)',
-          '--apps-circle': 'rgba(31, 32, 35, 1)',
-          '--green': 'rgba(94, 176, 73, 1)',
+          '--primary-main': theme.palette.primary.main,
         },
+
         '*, *::before, *::after': {
           boxSizing: 'border-box',
         },
+
         html: {
           padding: 0,
           margin: 0,
         },
+
         body: {
           padding: 0,
           margin: 0,
           wordBreak: 'break-word',
           backgroundColor: 'var(--bg-primary)',
-          color: 'var(--new-message-text)',
         },
-      },
+
+        '::-webkit-scrollbar-track': {
+          backgroundColor: 'transparent',
+        },
+
+        '::-webkit-scrollbar-track:hover': {
+          backgroundColor: 'transparent',
+        },
+
+        '::-webkit-scrollbar': {
+          width: '16px',
+          height: '10px',
+        },
+
+        '::-webkit-scrollbar-thumb': {
+          backgroundColor: theme.palette.primary.main,
+          borderRadius: '8px',
+          backgroundClip: 'content-box',
+          border: '4px solid transparent',
+          transition: '0.3s background-color',
+        },
+
+        '::-webkit-scrollbar-thumb:hover': {
+          backgroundColor: theme.palette.primary.light,
+        },
+      }),
     },
+
     MuiIcon: {
       defaultProps: {
         style: {

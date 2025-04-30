@@ -32,6 +32,7 @@ export const darkThemeOptions: ThemeOptions = {
       unread: 'rgb(66, 151, 226)',
     },
   },
+
   components: {
     MuiCard: {
       styleOverrides: {
@@ -48,19 +49,12 @@ export const darkThemeOptions: ThemeOptions = {
       },
     },
     MuiCssBaseline: {
-      styleOverrides: {
+      styleOverrides: (theme) => ({
         ':root': {
-          '--color-instance': 'rgb(30, 30, 32)',
-          '--color-instance-popover-bg': 'rgb(34, 34, 34)',
           '--Mail-Background': 'rgb(43, 43, 43)',
-          '--new-message-text': 'rgb(0, 0, 0)',
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgb(39, 40, 44)',
-          '--bg-3': 'rgba(0, 0, 0, 0.1)',
-          '--unread': 'rgb(66, 151, 226)',
-          '--danger': 'rgb(177, 70, 70)',
-          '--apps-circle': 'rgb(31, 32, 35)',
-          '--green': 'rgb(94, 176, 73)',
+          '--primary-main': theme.palette.primary.main,
         },
         '*, *::before, *::after': {
           boxSizing: 'border-box',
@@ -74,9 +68,32 @@ export const darkThemeOptions: ThemeOptions = {
           margin: 0,
           wordBreak: 'break-word',
           backgroundColor: 'var(--bg-primary)',
-          color: 'var(--new-message-text)',
         },
-      },
+        '::-webkit-scrollbar-track': {
+          backgroundColor: 'transparent',
+        },
+
+        '::-webkit-scrollbar-track:hover': {
+          backgroundColor: 'transparent',
+        },
+
+        '::-webkit-scrollbar': {
+          width: '16px',
+          height: '10px',
+        },
+
+        '::-webkit-scrollbar-thumb': {
+          backgroundColor: theme.palette.primary.main,
+          borderRadius: '8px',
+          backgroundClip: 'content-box',
+          border: '4px solid transparent',
+          transition: '0.3s background-color',
+        },
+
+        '::-webkit-scrollbar-thumb:hover': {
+          backgroundColor: theme.palette.primary.light,
+        },
+      }),
     },
     MuiIcon: {
       defaultProps: {

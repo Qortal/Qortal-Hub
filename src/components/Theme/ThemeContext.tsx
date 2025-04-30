@@ -21,7 +21,7 @@ const defaultTheme = {
 };
 
 const ThemeContext = createContext({
-  themeMode: 'light',
+  themeMode: 'dark',
   toggleTheme: () => {},
   userThemes: [defaultTheme],
   addUserTheme: (themes) => {},
@@ -30,7 +30,7 @@ const ThemeContext = createContext({
 });
 
 export const ThemeProvider = ({ children }) => {
-  const [themeMode, setThemeMode] = useState('light');
+  const [themeMode, setThemeMode] = useState('dark');
   const [userThemes, setUserThemes] = useState([defaultTheme]);
   const [currentThemeId, setCurrentThemeId] = useState('default');
 
