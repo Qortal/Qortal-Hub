@@ -3219,7 +3219,7 @@ function App() {
                 onClick={onOkUnsavedChanges}
                 autoFocus
               >
-                {t('core:action.decline', {
+                {t('core:action.continue_logout', {
                   postProcess: 'capitalize',
                 })}
               </Button>

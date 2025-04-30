@@ -42,7 +42,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
 
 const uid = new ShortUniqueId({ length: 5 });
-
+const uidImages = new ShortUniqueId({ length: 12 });
 export const ChatGroup = ({
   selectedGroup,
   secretKey,
@@ -74,6 +74,7 @@ export const ChatGroup = ({
   const [isOpenQManager, setIsOpenQManager] = useState(null);
 
   const [messageSize, setMessageSize] = useState(0);
+  const [chatImagesToSave, setChatImagesToSave] = useState([]);
   const hasInitializedWebsocket = useRef(false);
   const socketRef = useRef(null); // WebSocket reference
   const timeoutIdRef = useRef(null); // Timeout ID reference
@@ -778,11 +779,45 @@ export const ChatGroup = ({
           : {
               isEdited: chatReference ? true : false,
             };
+        const imagesToPublish = [];
+        if (!chatReference && chatImagesToSave?.length > 0) {
+          chatImagesToSave.forEach((base64Img) => {
+            const identifier = `qchat_1_group_${selectedGroup}_${uidImages.rnd()}`;
+            imagesToPublish.push({
+              service: 'IMAGE',
+              identifier,
+              name: myName,
+              base64: base64Img,
+            });
+          });
+
+          const res = await window.sendMessage(
+            'PUBLISH_MULTIPLE_QDN_RESOURCES',
+
+            {
+              resources: imagesToPublish,
+            },
+            240000,
+            true
+          );
+          console.log('res', res);
+          if (res !== true) throw new Error('Unable to publish images');
+        }
+
         const otherData = {
           repliedTo,
           ...(onEditMessage?.decryptedData || {}),
           type: chatReference ? 'edit' : '',
           specialId: uid.rnd(),
+          images:
+            onEditMessage?.images ||
+            imagesToPublish.map((item) => {
+              return {
+                name: item.name,
+                identifier: item.identifier,
+                service: item.service,
+              };
+            }),
           ...publicData,
         };
         const objectMessage = {
@@ -824,6 +859,7 @@ export const ChatGroup = ({
         clearEditorContent();
         setReplyMessage(null);
         setOnEditMessage(null);
+        setChatImagesToSave([]);
       }
       // send chat message
     } catch (error) {
@@ -986,6 +1022,10 @@ export const ChatGroup = ({
 
   const theme = useTheme();
 
+  const insertImage = useCallback((img) => {
+    setChatImagesToSave((prev) => [...prev, img]);
+  }, []);
+
   return (
     <div
       style={{
@@ -1049,6 +1089,29 @@ export const ChatGroup = ({
               width: 'calc(100% - 100px)',
             }}
           >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'flex',
+                width: '100%',
+                gap: '10px',
+                flexWrap: 'wrap',
+              }}
+            >
+              {chatImagesToSave?.map((imgBase64) => {
+                return (
+                  <img
+                    style={{
+                      height: '50px',
+                      width: '50px',
+                      objectFit: 'contain',
+                      borderRadius: '3px',
+                    }}
+                    src={`data:image/webp;base64,${imgBase64}`}
+                  />
+                );
+              })}
+            </Box>
             {replyMessage && (
               <Box
                 sx={{
@@ -1104,6 +1167,7 @@ export const ChatGroup = ({
               isFocusedParent={isFocusedParent}
               setIsFocusedParent={setIsFocusedParent}
               membersWithNames={members}
+              insertImage={insertImage}
             />
             {messageSize > 750 && (
               <Box
