@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
-import { GlobalContext, getBaseApiReact } from '../../App';
+import { MyContext, getBaseApiReact } from '../../App';
 import { AppInfo } from './AppInfo';
 import {
   executeEvent,
@@ -49,7 +49,7 @@ export const AppsDesktop = ({
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
 
-  const { showTutorial } = useContext(GlobalContext);
+  const { showTutorial } = useContext(MyContext);
   const theme = useTheme();
 
   const myApp = useMemo(() => {

@@ -17,6 +17,7 @@ import { useDropzone } from 'react-dropzone';
 import { useHandlePrivateApps } from './useHandlePrivateApps';
 import {
   groupsPropertiesAtom,
+  memberGroupsAtom,
   myGroupsWhereIAmAdminAtom,
 } from '../../atoms/global';
 import { Label } from '../Group/AddGroup';
@@ -56,8 +57,10 @@ export const AppsPrivate = ({ myName }) => {
   }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties]);
 
   const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
-  const { show, setInfoSnackCustom, setOpenSnackGlobal, memberGroups } =
+  const { show, setInfoSnackCustom, setOpenSnackGlobal } =
     useContext(MyContext);
+  const [memberGroups] = useAtom(memberGroupsAtom);
+
   const theme = useTheme();
 
   const myGroupsPrivate = useMemo(() => {

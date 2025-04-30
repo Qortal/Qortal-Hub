@@ -27,11 +27,11 @@ import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
 import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from '../components/Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background';
-import { GlobalContext } from '../App';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from '../components/Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../components/Language/LanguageSelector';
+import { MyContext } from '../App';
 
 const manifestData = {
   version: '0.5.3',
@@ -85,7 +85,7 @@ export const NotAuthenticated = ({
   const [enteredApiKey, setEnteredApiKey] = useState('');
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
     React.useState(null);
-  const { showTutorial, hasSeenGettingStarted } = useContext(GlobalContext);
+  const { showTutorial, hasSeenGettingStarted } = useContext(MyContext);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core']);
 

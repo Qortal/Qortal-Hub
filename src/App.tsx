@@ -104,9 +104,11 @@ import {
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
+  isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
   mailsAtom,
+  memberGroupsAtom,
   mutedGroupsAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
@@ -114,6 +116,7 @@ import {
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
   timestampEnterDataAtom,
+  txListAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './ExtStates/NotAuthenticated';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
@@ -161,10 +164,6 @@ type extStates =
   | 'group';
 
 interface MyContextInterface {
-  txList: any[];
-  memberGroups: any[];
-  setTxList: (val) => void;
-  setMemberGroups: (val) => void;
   isShow: boolean;
   onCancel: () => void;
   onOk: () => void;
@@ -173,10 +172,6 @@ interface MyContextInterface {
 }
 
 const defaultValues: MyContextInterface = {
-  txList: [],
-  memberGroups: [],
-  setTxList: () => {},
-  setMemberGroups: () => {},
   isShow: false,
   onCancel: () => {},
   onOk: () => {},
@@ -244,9 +239,6 @@ const defaultValuesGlobal = {
 };
 
 export const MyContext = createContext<MyContextInterface>(defaultValues);
-
-export const GlobalContext =
-  createContext<MyContextInterface>(defaultValuesGlobal);
 
 export let globalApiKey: string | null = null;
 
@@ -327,15 +319,13 @@ function App() {
     useState<string>('');
   const [walletToBeDecryptedError, setWalletToBeDecryptedError] =
     useState<string>('');
-  const [txList, setTxList] = useState([]);
-  const [memberGroups, setMemberGroups] = useState([]);
   const [isFocused, setIsFocused] = useState(true);
   const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
   );
 
   const balanceSetIntervalRef = useRef(null);
-  const { downloadResource } = useFetchResources();
+  const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
   const {
@@ -375,8 +365,7 @@ function App() {
     isShow: isShowQortalRequestExtension,
     message: messageQortalRequestExtension,
   } = useModal();
-
-  const [isRunningPublicNode, setIsRunningPublicNode] = useState(false);
+  const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
   const [infoSnack, setInfoSnack] = useState(null);
   const [openSnack, setOpenSnack] = useState(false);
@@ -386,7 +375,6 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
-  const [rootHeight, setRootHeight] = useState('100%');
   const {
     isUserBlocked,
     addToBlockList,
@@ -402,7 +390,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
   const [creationStep, setCreationStep] = useState(1);
-  const { getIndividualUserInfo } = useHandleUserInfo();
+  const getIndividualUserInfo = useHandleUserInfo();
   const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
@@ -482,6 +470,8 @@ function App() {
   const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
   const resetGroupChatTimestampsAtom = useResetAtom(groupChatTimestampsAtom);
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
+  const resettxListAtomAtom = useResetAtom(txListAtom);
+  const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
 
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
@@ -499,7 +489,58 @@ function App() {
     resetMutedGroupsAtom();
     resetGroupChatTimestampsAtom();
     resetTimestampEnterAtom();
+    resettxListAtomAtom();
+    resetmemberGroupsAtomAtom();
   };
+
+  const contextValue = useMemo(
+    () => ({
+      isShow,
+      onCancel,
+      onOk,
+      show,
+      userInfo,
+      message,
+      showInfo,
+      openSnackGlobal: openSnack,
+      setOpenSnackGlobal: setOpenSnack,
+      infoSnackCustom: infoSnack,
+      setInfoSnackCustom: setInfoSnack,
+      downloadResource,
+      getIndividualUserInfo,
+      isUserBlocked,
+      addToBlockList,
+      removeBlockFromList,
+      getAllBlockedUsers,
+      showTutorial,
+      openTutorialModal,
+      setOpenTutorialModal,
+      hasSeenGettingStarted,
+    }),
+    [
+      isShow,
+      onCancel,
+      onOk,
+      show,
+      userInfo,
+      message,
+      showInfo,
+      openSnack,
+      setOpenSnack,
+      infoSnack,
+      setInfoSnack,
+      downloadResource,
+      getIndividualUserInfo,
+      isUserBlocked,
+      addToBlockList,
+      removeBlockFromList,
+      getAllBlockedUsers,
+      showTutorial,
+      openTutorialModal,
+      setOpenTutorialModal,
+      hasSeenGettingStarted,
+    ]
+  );
 
   const handleSetGlobalApikey = (key) => {
     globalApiKey = key;
@@ -985,7 +1026,7 @@ function App() {
     }
   };
 
-  const logoutFunc = async () => {
+  const logoutFunc = useCallback(async () => {
     try {
       if (hasSettingsChanged) {
         await showUnsavedChanges({
@@ -1014,7 +1055,7 @@ function App() {
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [hasSettingsChanged, extState]);
 
   const returnToMain = () => {
     setPaymentTo('');
@@ -1059,8 +1100,6 @@ function App() {
     setWalletToBeDownloadedError('');
     setSendqortState(null);
     setHasLocalNode(false);
-    setTxList([]);
-    setMemberGroups([]);
     resetAllRecoil();
     if (balanceSetIntervalRef?.current) {
       clearInterval(balanceSetIntervalRef?.current);
@@ -1758,36 +1797,10 @@ function App() {
             }}
           >
             {extState === 'authenticated' && isMainWindow && (
-              <MyContext.Provider
-                value={{
-                  txList,
-                  setTxList,
-                  memberGroups,
-                  setMemberGroups,
-                  isShow,
-                  onCancel,
-                  onOk,
-                  show,
-                  userInfo,
-                  message,
-                  rootHeight,
-                  showInfo,
-                  openSnackGlobal: openSnack,
-                  setOpenSnackGlobal: setOpenSnack,
-                  infoSnackCustom: infoSnack,
-                  setInfoSnackCustom: setInfoSnack,
-                  downloadResource,
-                  getIndividualUserInfo,
-                  isUserBlocked,
-                  addToBlockList,
-                  removeBlockFromList,
-                  getAllBlockedUsers,
-                  isRunningPublicNode,
-                }}
-              >
+              <>
                 <TaskManager getUserInfo={getUserInfo} />
-                <GlobalActions memberGroups={memberGroups} />
-              </MyContext.Provider>
+                <GlobalActions />
+              </>
             )}
 
             <Spacer height="20px" />
@@ -1955,15 +1968,7 @@ function App() {
       }}
     >
       <PdfViewer />
-      <GlobalContext.Provider
-        value={{
-          showTutorial,
-          openTutorialModal,
-          setOpenTutorialModal,
-          downloadResource,
-          hasSeenGettingStarted,
-        }}
-      >
+      <MyContext.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
@@ -1984,56 +1989,28 @@ function App() {
         <button onClick={logoutFunc}>logout</button>
       )} */}
         {extState === 'authenticated' && isMainWindow && (
-          <MyContext.Provider
-            value={{
-              txList,
-              setTxList,
-              memberGroups,
-              setMemberGroups,
-              isShow,
-              onCancel,
-              onOk,
-              show,
-              userInfo,
-              message,
-              rootHeight,
-              showInfo,
-              openSnackGlobal: openSnack,
-              setOpenSnackGlobal: setOpenSnack,
-              infoSnackCustom: infoSnack,
-              setInfoSnackCustom: setInfoSnack,
-              downloadResource,
-              getIndividualUserInfo,
-              isUserBlocked,
-              addToBlockList,
-              removeBlockFromList,
-              getAllBlockedUsers,
-              isRunningPublicNode,
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              height: '100vh',
+              width: '100vw',
             }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'row',
-                height: '100vh',
-                width: '100vw',
-              }}
-            >
-              <Group
-                balance={balance}
-                desktopViewMode={desktopViewMode}
-                isFocused={isFocused}
-                isMain={isMain}
-                isOpenDrawerProfile={isOpenDrawerProfile}
-                logoutFunc={logoutFunc}
-                myAddress={address}
-                setDesktopViewMode={setDesktopViewMode}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                userInfo={userInfo}
-              />
-              {renderProfile()}
-            </Box>
-          </MyContext.Provider>
+            <Group
+              balance={balance}
+              desktopViewMode={desktopViewMode}
+              isFocused={isFocused}
+              isMain={isMain}
+              isOpenDrawerProfile={isOpenDrawerProfile}
+              logoutFunc={logoutFunc}
+              myAddress={address}
+              setDesktopViewMode={setDesktopViewMode}
+              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+              userInfo={userInfo}
+            />
+            {renderProfile()}
+          </Box>
         )}
         {isOpenSendQort && isMainWindow && (
           <Box
@@ -2063,6 +2040,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={returnToMain}
               />
@@ -2560,6 +2538,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2593,6 +2572,7 @@ function App() {
                 style={{
                   cursor: 'pointer',
                   height: '24px',
+                  width: 'auto',
                 }}
                 onClick={() => {
                   setRawWallet(null);
@@ -2722,6 +2702,7 @@ function App() {
                     style={{
                       cursor: 'pointer',
                       height: '24px',
+                      width: 'auto',
                     }}
                     onClick={() => {
                       if (creationStep === 2) {
@@ -3604,13 +3585,12 @@ function App() {
         <RegisterName
           balance={balance}
           show={show}
-          setTxList={setTxList}
           userInfo={userInfo}
           setOpenSnack={setOpenSnack}
           setInfoSnack={setInfoSnack}
         />
         <BuyQortInformation balance={balance} />
-      </GlobalContext.Provider>
+      </MyContext.Provider>
       {extState === 'create-wallet' && walletToBeDownloaded && (
         <ButtonBase
           onClick={() => {
@@ -3632,11 +3612,8 @@ function App() {
       {isOpenMinting && (
         <Minting
           setIsOpenMinting={setIsOpenMinting}
-          groups={memberGroups}
           myAddress={address}
           show={show}
-          setTxList={setTxList}
-          txList={txList}
         />
       )}
 

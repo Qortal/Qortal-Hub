@@ -20,6 +20,8 @@ import { getFee } from '../../background';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { Spacer } from '../../common/Spacer';
+import { useSetAtom } from 'jotai';
+import { txListAtom } from '../../atoms/global';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -52,7 +54,9 @@ export const UserListOfInvites = ({
   setInfoSnack,
   setOpenSnack,
 }) => {
-  const { txList, setTxList, show } = useContext(MyContext);
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
+
   const [invites, setInvites] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();

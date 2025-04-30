@@ -26,11 +26,12 @@ import {
   groupChatTimestampSelector,
   groupPropertySelector,
   groupsOwnerNamesSelector,
+  isRunningPublicNodeAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
 
 import { timeDifferenceForNotificationChats } from './Group';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 
 export const GroupList = ({
   selectGroupFunc,
@@ -44,11 +45,12 @@ export const GroupList = ({
   selectedGroup,
   getUserSettings,
   setOpenAddGroup,
-  isRunningPublicNode,
   setIsOpenBlockedUserModal,
   myAddress,
 }) => {
   const theme = useTheme();
+  const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+
   return (
     <div
       style={{

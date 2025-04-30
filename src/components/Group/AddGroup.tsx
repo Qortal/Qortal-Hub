@@ -38,6 +38,8 @@ import { getFee } from '../../background';
 import { MyContext } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
+import { useSetAtom } from 'jotai';
+import { txListAtom } from '../../atoms/global';
 
 export const Label = styled('label')`
   display: block;
@@ -57,7 +59,9 @@ const Transition = forwardRef(function Transition(
 });
 
 export const AddGroup = ({ address, open, setOpen }) => {
-  const { show, setTxList } = useContext(MyContext);
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
+
   const [openAdvance, setOpenAdvance] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

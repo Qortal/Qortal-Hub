@@ -16,9 +16,13 @@ import { getBaseApiReact, MyContext } from '../../App';
 import { getFee } from '../../background';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
+import { useAtom, useSetAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
-export const JoinGroup = ({ memberGroups }) => {
-  const { show, setTxList } = useContext(MyContext);
+export const JoinGroup = () => {
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
+  const [memberGroups] = useAtom(memberGroupsAtom);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [groupInfo, setGroupInfo] = useState(null);

@@ -121,6 +121,7 @@ export const DownloadWallet = ({
           style={{
             cursor: 'pointer',
             height: '24px',
+            width: 'auto',
           }}
           onClick={returnToMain}
         />

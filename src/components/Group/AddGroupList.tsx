@@ -30,6 +30,8 @@ import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
+import { useAtom, useSetAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -37,7 +39,11 @@ const cache = new CellMeasurerCache({
 });
 
 export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
-  const { memberGroups, show, setTxList } = useContext(MyContext);
+  const { show } = useContext(MyContext);
+  const [memberGroups] = useAtom(memberGroupsAtom);
+
+  const setTxList = useSetAtom(txListAtom);
+
   const { t } = useTranslation(['core', 'group']);
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to

@@ -1,10 +1,10 @@
-import React from 'react'
-import { JoinGroup } from './JoinGroup'
+import React from 'react';
+import { JoinGroup } from './JoinGroup';
 
-export const GlobalActions = ({memberGroups}) => {
+export const GlobalActions = () => {
   return (
     <>
-    <JoinGroup memberGroups={memberGroups} />
+      <JoinGroup />
     </>
-  )
-}
+  );
+};

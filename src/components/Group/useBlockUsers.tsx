@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 export const useBlockedAddresses = () => {
   const userBlockedRef = useRef({});
@@ -191,10 +191,13 @@ export const useBlockedAddresses = () => {
     }
   }, []);
 
-  return {
-    isUserBlocked,
-    addToBlockList,
-    removeBlockFromList,
-    getAllBlockedUsers,
-  };
+  return useMemo(
+    () => ({
+      isUserBlocked,
+      addToBlockList,
+      removeBlockFromList,
+      getAllBlockedUsers,
+    }),
+    [isUserBlocked, addToBlockList, removeBlockFromList, getAllBlockedUsers]
+  );
 };

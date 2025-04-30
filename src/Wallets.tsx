@@ -31,7 +31,7 @@ import { crypto } from './constants/decryptWallet';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './components';
 import { HtmlTooltip } from './ExtStates/NotAuthenticated';
-import { GlobalContext } from './App';
+import { MyContext } from './App';
 
 const parsefilenameQortal = (filename) => {
   return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
@@ -43,7 +43,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(GlobalContext);
+  const { hasSeenGettingStarted } = useContext(MyContext);
 
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);

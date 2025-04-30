@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
 import creationImg from './img/creation.webp';
 import dashboardImg from './img/dashboard.webp';
@@ -196,14 +196,17 @@ export const useHandleTutorials = () => {
     },
     [shownTutorials]
   );
-  return {
-    showTutorial,
-    hasSeenGettingStarted:
-      shownTutorials === null
-        ? null
-        : !!(shownTutorials || {})['getting-started'],
-    openTutorialModal,
-    setOpenTutorialModal,
-    shownTutorialsInitiated: !!shownTutorials,
-  };
+  return useMemo(
+    () => ({
+      showTutorial,
+      hasSeenGettingStarted:
+        shownTutorials === null
+          ? null
+          : !!(shownTutorials || {})['getting-started'],
+      openTutorialModal,
+      setOpenTutorialModal,
+      shownTutorialsInitiated: !!shownTutorials,
+    }),
+    [showTutorial, openTutorialModal, setOpenTutorialModal, shownTutorials]
+  );
 };

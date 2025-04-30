@@ -1742,7 +1742,7 @@ export async function decryptSingleFunc({
       const responseData = uint8ArrayToObject(decryptToUnit8Array);
       holdMessages.push({ ...message, decryptedData: responseData });
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   }
   return holdMessages;
@@ -1766,7 +1766,7 @@ export async function decryptSingleForPublishes({
       const responseData = uint8ArrayToObject(decryptToUnit8Array);
       holdMessages.push({ ...message, decryptedData: responseData });
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   }
   return holdMessages;
@@ -1795,7 +1795,7 @@ export async function decryptDirectFunc({ messages, involvingAddress }) {
       const parsedMessage = JSON.parse(decodedMessage);
       holdMessages.push({ ...message, ...parsedMessage });
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   }
   return holdMessages;

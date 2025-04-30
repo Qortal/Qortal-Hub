@@ -16,6 +16,8 @@ import {
 } from '../Group/Group';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { useSetAtom } from 'jotai';
+import { txListAtom } from '../../atoms/global';
 
 export const CreateCommonSecret = ({
   groupId,
@@ -29,7 +31,8 @@ export const CreateCommonSecret = ({
   setIsForceShowCreationKeyPopup,
   isForceShowCreationKeyPopup,
 }) => {
-  const { show, setTxList } = useContext(MyContext);
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
 
   const [openSnack, setOpenSnack] = React.useState(false);
   const [infoSnack, setInfoSnack] = React.useState(null);

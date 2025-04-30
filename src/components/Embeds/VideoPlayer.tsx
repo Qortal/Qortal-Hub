@@ -17,7 +17,7 @@ import { Refresh } from '@mui/icons-material';
 
 import { Menu, MenuItem } from '@mui/material';
 import { MoreVert as MoreIcon } from '@mui/icons-material';
-import { GlobalContext, getBaseApiReact } from '../../App';
+import { MyContext, getBaseApiReact } from '../../App';
 import { resourceKeySelector } from '../../atoms/global';
 
 import { useAtomValue } from 'jotai';
@@ -84,7 +84,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const download = useAtomValue(resourceKeySelector(keyIdentifier));
 
-  const { downloadResource } = useContext(GlobalContext);
+  const { downloadResource } = useContext(MyContext);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);

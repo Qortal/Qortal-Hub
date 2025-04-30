@@ -8,10 +8,13 @@ import {
 } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { MyContext } from '../App';
+import { useAtom } from 'jotai';
+import { isRunningPublicNodeAtom } from '../atoms/global';
 
 export const WrapperUserAction = ({ children, address, name, disabled }) => {
   const theme = useTheme();
-  const { isRunningPublicNode } = useContext(MyContext);
+  const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+
   const [anchorEl, setAnchorEl] = useState(null);
 
   // Handle child element click to open Popover

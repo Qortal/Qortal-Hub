@@ -39,6 +39,7 @@ import {
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
+  txListAtom,
 } from '../../atoms/global';
 import { Label } from './AddGroup';
 import ShortUniqueId from 'short-unique-id';
@@ -49,7 +50,7 @@ import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
@@ -93,7 +94,9 @@ export const ListOfGroupPromotions = () => {
   const [fee, setFee] = useState(null);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
-  const { show, setTxList } = useContext(MyContext);
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
+
   const theme = useTheme();
   const listRef = useRef();
   const rowVirtualizer = useVirtualizer({
