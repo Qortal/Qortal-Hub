@@ -4923,3 +4923,68 @@ export const buyNameRequest = async (data, isFromExtension) => {
     throw new Error('User declined request');
   }
 };
+
+export const signForeignFees = async (data, isFromExtension) => {
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to sign the required fees for all your trade offers?`,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+    const wallet = await getSaveWallet();
+    const address = wallet.address0;
+    const resKeyPair = await getKeyPair();
+    const parsedData = resKeyPair;
+    const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+    const uint8PublicKey = Base58.decode(parsedData.publicKey);
+    const keyPair = {
+      privateKey: uint8PrivateKey,
+      publicKey: uint8PublicKey,
+    };
+
+    const unsignedFeesUrl = await createEndpoint(
+      `/crosschain/unsignedfees/${address}`
+    );
+
+    const unsignedFeesResponse = await fetch(unsignedFeesUrl);
+
+    const unsignedFees = await unsignedFeesResponse.json();
+
+    const signedFees = [];
+
+    unsignedFees.forEach((unsignedFee) => {
+      const unsignedDataDecoded = Base58.decode(unsignedFee.data);
+
+      const signature = nacl.sign.detached(
+        unsignedDataDecoded,
+        keyPair.privateKey
+      );
+
+      const signedFee = {
+        timestamp: unsignedFee.timestamp,
+        data: `${Base58.encode(signature)}`,
+        atAddress: unsignedFee.atAddress,
+        fee: unsignedFee.fee,
+      };
+
+      signedFees.push(signedFee);
+    });
+
+    const signedFeesUrl = await createEndpoint(`/crosschain/signedfees`);
+
+    await fetch(signedFeesUrl, {
+      method: 'POST',
+      headers: {
+        Accept: '*/*',
+        'Content-Type': 'application/json',
+      },
+      body: `${JSON.stringify(signedFees)}`,
+    });
+
+    return true;
+  } else {
+    throw new Error('User declined request');
+  }
+};
