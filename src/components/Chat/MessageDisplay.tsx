@@ -1,28 +1,29 @@
-import React, { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import DOMPurify from 'dompurify';
-import './styles.css';
+import './chat.css';
 import { executeEvent } from '../../utils/events';
 import { Embed } from '../Embeds/Embed';
+import { Box, useTheme } from '@mui/material';
 
 export const extractComponents = (url) => {
-  if (!url || !url.startsWith("qortal://")) {
+  if (!url || !url.startsWith('qortal://')) {
     return null;
   }
 
   // Skip links starting with "qortal://use-"
-  if (url.startsWith("qortal://use-")) {
+  if (url.startsWith('qortal://use-')) {
     return null;
   }
 
-  url = url.replace(/^(qortal\:\/\/)/, "");
-  if (url.includes("/")) {
-    let parts = url.split("/");
+  url = url.replace(/^(qortal\:\/\/)/, '');
+  if (url.includes('/')) {
+    let parts = url.split('/');
     const service = parts[0].toUpperCase();
     parts.shift();
     const name = parts[0];
     parts.shift();
     let identifier;
-    const path = parts.join("/");
+    const path = parts.join('/');
     return { service, name, identifier, path };
   }
 
@@ -64,8 +65,7 @@ function processText(input) {
 }
 
 const linkify = (text) => {
-  if (!text) return ""; // Return an empty string if text is null or undefined
-
+  if (!text) return ''; // Return an empty string if text is null or undefined
   let textFormatted = text;
   const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
   textFormatted = text.replace(urlPattern, (url) => {
@@ -75,22 +75,68 @@ const linkify = (text) => {
   return processText(textFormatted);
 };
 
-
 export const MessageDisplay = ({ htmlContent, isReply }) => {
+  const theme = useTheme();
 
-
-  const sanitizedContent = useMemo(()=> {
+  const sanitizedContent = useMemo(() => {
     return DOMPurify.sanitize(linkify(htmlContent), {
       ALLOWED_TAGS: [
-        'a', 'b', 'i', 'em', 'strong', 'p', 'br', 'div', 'span', 'img', 
-        'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 's', 'hr'
+        'a',
+        'b',
+        'i',
+        'em',
+        'strong',
+        'p',
+        'br',
+        'div',
+        'span',
+        'img',
+        'ul',
+        'ol',
+        'li',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'blockquote',
+        'code',
+        'pre',
+        'table',
+        'thead',
+        'tbody',
+        'tr',
+        'th',
+        'td',
+        's',
+        'hr',
       ],
       ALLOWED_ATTR: [
-        'href', 'target', 'rel', 'class', 'src', 'alt', 'title', 
-        'width', 'height', 'style', 'align', 'valign', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'data-url'
+        'href',
+        'target',
+        'rel',
+        'class',
+        'src',
+        'alt',
+        'title',
+        'width',
+        'height',
+        'style',
+        'align',
+        'valign',
+        'colspan',
+        'rowspan',
+        'border',
+        'cellpadding',
+        'cellspacing',
+        'data-url',
       ],
-    }).replace(/<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g, '');
-  }, [htmlContent])
+    }).replace(
+      /<span[^>]*data-url="qortal:\/\/use-embed\/[^"]*"[^>]*>.*?<\/span>/g,
+      ''
+    );
+  }, [htmlContent]);
 
   const handleClick = async (e) => {
     e.preventDefault();
@@ -98,7 +144,7 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     const target = e.target;
     if (target.tagName === 'A') {
       const href = target.getAttribute('href');
-      if(window?.electronAPI){
+      if (window?.electronAPI) {
         window.electronAPI.openExternal(href);
       } else {
         window.open(href, '_system');
@@ -106,32 +152,32 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
     } else if (target.getAttribute('data-url')) {
       const url = target.getAttribute('data-url');
 
-      let copyUrl = url
+      let copyUrl = url;
 
-     try {
-      copyUrl = copyUrl.replace(/^(qortal:\/\/)/, '')
-      if (copyUrl.startsWith('use-')) {
-        // Handle the new 'use' format
-        const parts = copyUrl.split('/')
-        const type = parts[0].split('-')[1] // e.g., 'group' from 'use-group'
-        parts.shift()
-        const action = parts.length > 0 ? parts[0].split('-')[1] : null // e.g., 'invite' from 'action-invite'
-        parts.shift()
-        const idPrefix = parts.length > 0 ? parts[0].split('-')[0] : null // e.g., 'groupid' from 'groupid-321'
-        const id = parts.length > 0 ? parts[0].split('-')[1] : null // e.g., '321' from 'groupid-321'
-        if(action === 'join'){
-          executeEvent("globalActionJoinGroup", { groupId: id});
-          return
+      try {
+        copyUrl = copyUrl.replace(/^(qortal:\/\/)/, '');
+        if (copyUrl.startsWith('use-')) {
+          // Handle the new 'use' format
+          const parts = copyUrl.split('/');
+          const type = parts[0].split('-')[1]; // e.g., 'group' from 'use-group'
+          parts.shift();
+          const action = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., 'invite' from 'action-invite'
+          parts.shift();
+          const idPrefix = parts.length > 0 ? parts[0].split('-')[0] : null; // e.g., 'groupid' from 'groupid-321'
+          const id = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., '321' from 'groupid-321'
+          if (action === 'join') {
+            executeEvent('globalActionJoinGroup', { groupId: id });
+            return;
+          }
         }
+      } catch (error) {
+        //error
       }
-     } catch (error) {
-      //error
-     }
       const res = extractComponents(url);
       if (res) {
         const { service, name, identifier, path } = res;
-        executeEvent("addTab", { data: { service, name, identifier, path } });
-        executeEvent("open-apps-mode", { });
+        executeEvent('addTab', { data: { service, name, identifier, path } });
+        executeEvent('open-apps-mode', {});
       }
     }
   };
@@ -141,19 +187,24 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
   let embedData = null;
 
   if (embedLink) {
-    embedData = embedLink[0]
+    embedData = embedLink[0];
   }
 
   return (
-    <>
-    {embedLink && (
-      <Embed embedLink={embedData} />
-    )}
-    <div
-      className={`tiptap ${isReply ? 'isReply' : ''}`}
-      dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-      onClick={handleClick}
-    />
-    </>
+    <Box
+      sx={{
+        '--text-primary': theme.palette.text.primary,
+        '--text-secondary': theme.palette.text.secondary,
+        '--background-default': theme.palette.background.default,
+        '--background-secondary': theme.palette.background.paper,
+      }}
+    >
+      {embedLink && <Embed embedLink={embedData} />}
+      <div
+        className={`tiptap ${isReply ? 'isReply' : ''}`}
+        dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+        onClick={handleClick}
+      />
+    </Box>
   );
 };

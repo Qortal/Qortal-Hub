@@ -1,22 +1,21 @@
-import React from "react";
-import { TabParent } from "./Apps-styles";
-import NavCloseTab from "../../assets/svgs/NavCloseTab.svg";
-import { getBaseApiReact } from "../../App";
-import { Avatar, ButtonBase } from "@mui/material";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import { executeEvent } from "../../utils/events";
+import { TabParent } from './Apps-styles';
+import { NavCloseTab } from '../../assets/Icons/NavCloseTab.tsx';
+import { getBaseApiReact } from '../../App';
+import { Avatar, ButtonBase } from '@mui/material';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import { executeEvent } from '../../utils/events';
 
 export const AppsDevModeTabComponent = ({ isSelected, app }) => {
   return (
     <ButtonBase
       onClick={() => {
         if (isSelected) {
-          executeEvent("removeTabDevMode", {
+          executeEvent('removeTabDevMode', {
             data: app,
           });
           return;
         }
-        executeEvent("setSelectedTabDevMode", {
+        executeEvent('setSelectedTabDevMode', {
           data: app,
           isDevMode: true,
         });
@@ -24,39 +23,40 @@ export const AppsDevModeTabComponent = ({ isSelected, app }) => {
     >
       <TabParent
         sx={{
-          border: isSelected && "1px solid #FFFFFF",
+          border: isSelected && '1px solid #FFFFFF',
         }}
       >
         {isSelected && (
-          <img
+          <NavCloseTab
             style={{
-              position: "absolute",
-              top: "-5px",
-              right: "-5px",
+              position: 'absolute',
+              top: '-5px',
+              right: '-5px',
               zIndex: 1,
             }}
-            src={NavCloseTab}
           />
         )}
         <Avatar
           sx={{
-            height: "28px",
-            width: "28px",
+            height: '28px',
+            width: '28px',
           }}
           alt=""
           src={``}
         >
           <img
             style={{
-              width: "28px",
-              height: "auto",
+              width: '28px',
+              height: 'auto',
             }}
-            src={ app?.customIcon ? app?.customIcon :
-              app?.service
-                ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                    app?.name
-                  }/qortal_avatar?async=true`
-                : LogoSelected
+            src={
+              app?.customIcon
+                ? app?.customIcon
+                : app?.service
+                  ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                      app?.name
+                    }/qortal_avatar?async=true`
+                  : LogoSelected
             }
             alt="center-icon"
           />

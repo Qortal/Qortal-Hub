@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppsNavBarLeft,
   AppsNavBarParent,
   AppsNavBarRight,
-} from "./Apps-styles";
-import NavBack from "../../assets/svgs/NavBack.svg";
-import NavAdd from "../../assets/svgs/NavAdd.svg";
-import NavMoreMenu from "../../assets/svgs/NavMoreMenu.svg";
+} from './Apps-styles';
+import { NavBack } from '../../assets/Icons/NavBack.tsx';
+import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
+import { NavMoreMenu } from '../../assets/Icons/NavMoreMenu.tsx';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   ButtonBase,
@@ -16,21 +16,22 @@ import {
   MenuItem,
   Tab,
   Tabs,
-} from "@mui/material";
+  useTheme,
+} from '@mui/material';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
-} from "../../utils/events";
-import TabComponent from "./TabComponent";
-import PushPinIcon from "@mui/icons-material/PushPin";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import { useRecoilState, useSetRecoilState } from "recoil";
+} from '../../utils/events';
+import TabComponent from './TabComponent';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   navigationControllerAtom,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from "../../atoms/global";
+} from '../../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
 
 export function saveToLocalStorage(key, subKey, newValue) {
   try {
@@ -59,27 +60,28 @@ export function saveToLocalStorage(key, subKey, newValue) {
     const serializedValue = JSON.stringify(combinedData);
     localStorage.setItem(key, serializedValue);
   } catch (error) {
-    console.error("Error saving to localStorage:", error);
+    console.error('Error saving to localStorage:', error);
   }
 }
 
-export const AppsNavBarDesktop = ({disableBack}) => {
+export const AppsNavBarDesktop = ({ disableBack }) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
-  const [navigationController, setNavigationController] =  useRecoilState(navigationControllerAtom)
+  const [navigationController, setNavigationController] = useAtom(
+    navigationControllerAtom
+  );
+  const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
+    sortablePinnedAppsAtom
+  );
+
+  const theme = useTheme();
 
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
-  const [sortablePinnedApps, setSortablePinnedApps] = useRecoilState(
-    sortablePinnedAppsAtom
-  );
 
-
-  const setSettingsLocalLastUpdated = useSetRecoilState(
-    settingsLocalLastUpdatedAtom
-  );
+  const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -92,29 +94,26 @@ export const AppsNavBarDesktop = ({disableBack}) => {
   useEffect(() => {
     // Scroll to the last tab whenever the tabs array changes (e.g., when a new tab is added)
     if (tabsRef.current) {
-      const tabElements = tabsRef.current.querySelectorAll(".MuiTab-root");
+      const tabElements = tabsRef.current.querySelectorAll('.MuiTab-root');
       if (tabElements.length > 0) {
         const lastTab = tabElements[tabElements.length - 1];
         lastTab.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest",
-          inline: "end",
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'end',
         });
       }
     }
   }, [tabs.length]); // Dependency on the number of tabs
 
-
-
-  const isDisableBackButton = useMemo(()=> {
-    if(disableBack) return true
-    if(selectedTab && navigationController[selectedTab?.tabId]?.hasBack) return false
-    if(selectedTab && !navigationController[selectedTab?.tabId]?.hasBack) return true
-    return false
-  }, [navigationController, selectedTab, disableBack])
-
-
-
+  const isDisableBackButton = useMemo(() => {
+    if (disableBack) return true;
+    if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
+      return false;
+    if (selectedTab && !navigationController[selectedTab?.tabId]?.hasBack)
+      return true;
+    return false;
+  }, [navigationController, selectedTab, disableBack]);
 
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
@@ -124,57 +123,61 @@ export const AppsNavBarDesktop = ({disableBack}) => {
   };
 
   useEffect(() => {
-    subscribeToEvent("setTabsToNav", setTabsToNav);
+    subscribeToEvent('setTabsToNav', setTabsToNav);
 
     return () => {
-      unsubscribeFromEvent("setTabsToNav", setTabsToNav);
+      unsubscribeFromEvent('setTabsToNav', setTabsToNav);
     };
   }, []);
 
- 
-
-  const isSelectedAppPinned = useMemo(()=> {
-    if(selectedTab?.isPrivate){
+  const isSelectedAppPinned = useMemo(() => {
+    if (selectedTab?.isPrivate) {
       return !!sortablePinnedApps?.find(
         (item) =>
-          item?.privateAppProperties?.name === selectedTab?.privateAppProperties?.name && item?.privateAppProperties?.service === selectedTab?.privateAppProperties?.service && item?.privateAppProperties?.identifier === selectedTab?.privateAppProperties?.identifier
+          item?.privateAppProperties?.name ===
+            selectedTab?.privateAppProperties?.name &&
+          item?.privateAppProperties?.service ===
+            selectedTab?.privateAppProperties?.service &&
+          item?.privateAppProperties?.identifier ===
+            selectedTab?.privateAppProperties?.identifier
       );
     } else {
       return !!sortablePinnedApps?.find(
         (item) =>
-          item?.name === selectedTab?.name && item?.service === selectedTab?.service
+          item?.name === selectedTab?.name &&
+          item?.service === selectedTab?.service
       );
     }
-  }, [selectedTab,sortablePinnedApps])
+  }, [selectedTab, sortablePinnedApps]);
 
   return (
     <AppsNavBarParent
       sx={{
-        position: "relative",
-        flexDirection: "column",
-        width: "60px",
-        height: "unset",
-        maxHeight: "70vh",
-        borderRadius: "0px 30px 30px 0px",
-        padding: "10px",
+        borderRadius: '0px 30px 30px 0px',
+        flexDirection: 'column',
+        height: 'unset',
+        maxHeight: '70vh',
+        padding: '10px',
+        position: 'relative',
+        width: '59px',
       }}
     >
       <AppsNavBarLeft
         sx={{
-          flexDirection: "column",
+          flexDirection: 'column',
         }}
       >
         <ButtonBase
           onClick={() => {
-            executeEvent("navigateBack", selectedTab?.tabId);
+            executeEvent('navigateBack', selectedTab?.tabId);
           }}
           disabled={isDisableBackButton}
           sx={{
             opacity: !isDisableBackButton ? 1 : 0.1,
-            cursor: !isDisableBackButton ? 'pointer': 'default'
+            cursor: !isDisableBackButton ? 'pointer' : 'default',
           }}
         >
-          <img src={NavBack} />
+          <NavBack />
         </ButtonBase>
         <Tabs
           orientation="vertical"
@@ -183,11 +186,11 @@ export const AppsNavBarDesktop = ({disableBack}) => {
           variant="scrollable" // Make tabs scrollable
           scrollButtons={true}
           sx={{
-            "& .MuiTabs-indicator": {
-              backgroundColor: "white",
+            '& .MuiTabs-indicator': {
+              backgroundColor: theme.palette.background.default,
             },
-            maxHeight: `320px`, // Ensure the tabs container fits within the available space
-            overflow: "hidden", // Prevents overflow on small screens
+            maxHeight: `275px`, // Ensure the tabs container fits within the available space
+            overflow: 'hidden', // Prevents overflow on small screens
           }}
         >
           {tabs?.map((tab) => (
@@ -202,84 +205,83 @@ export const AppsNavBarDesktop = ({disableBack}) => {
                 />
               } // Pass custom component
               sx={{
-                "&.Mui-selected": {
-                  color: "white",
+                '&.Mui-selected': {
+                  color: theme.palette.text.primary,
                 },
-                padding: "0px",
-                margin: "0px",
-                minWidth: "0px",
-                width: "50px",
+                padding: '0px',
+                margin: '0px',
+                minWidth: '0px',
+                width: '50px',
               }}
             />
           ))}
         </Tabs>
       </AppsNavBarLeft>
+
       {selectedTab && (
         <AppsNavBarRight
-        sx={{
-          gap: "10px",
-          flexDirection: "column",
-        }}
-      >
-        <ButtonBase
-          onClick={() => {
-            setSelectedTab(null);
-            executeEvent("newTabWindow", {});
+          sx={{
+            gap: '10px',
+            flexDirection: 'column',
           }}
         >
-          <img
-            style={{
-              height: "40px",
-              width: "40px",
+          <ButtonBase
+            onClick={() => {
+              setSelectedTab(null);
+              executeEvent('newTabWindow', {});
             }}
-            src={NavAdd}
-          />
-        </ButtonBase>
-        <ButtonBase
-          onClick={(e) => {
-            if (!selectedTab) return;
-            handleClick(e);
-          }}
-        >
-          <img
-            style={{
-              height: "34px",
-              width: "34px",
+          >
+            <NavAdd
+              style={{
+                height: '40px',
+                width: '40px',
+              }}
+            />
+          </ButtonBase>
+          <ButtonBase
+            onClick={(e) => {
+              if (!selectedTab) return;
+              handleClick(e);
             }}
-            src={NavMoreMenu}
-          />
-        </ButtonBase>
-      </AppsNavBarRight>
+          >
+            <NavMoreMenu
+              style={{
+                height: '34px',
+                width: '34px',
+              }}
+            />
+          </ButtonBase>
+        </AppsNavBarRight>
       )}
-      
+
       <Menu
         id="navbar-more-mobile"
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
         MenuListProps={{
-          "aria-labelledby": "basic-button",
+          'aria-labelledby': 'basic-button',
         }}
         anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
+          vertical: 'bottom',
+          horizontal: 'center',
         }}
         transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
+          vertical: 'top',
+          horizontal: 'center',
         }}
         slotProps={{
           paper: {
             sx: {
-              backgroundColor: "var(--bg-primary)",
-              color: "#fff",
-              width: "148px",
-              borderRadius: "5px",
+              backgroundColor: theme.palette.background.default,
+              color: theme.palette.text.primary,
+              width: '148px',
+              borderRadius: '5px',
             },
           },
         }}
         sx={{
-          marginTop: "10px",
+          marginTop: '10px',
         }}
       >
         <MenuItem
@@ -291,13 +293,16 @@ export const AppsNavBarDesktop = ({disableBack}) => {
 
               if (isSelectedAppPinned) {
                 // Remove the selected app if it is pinned
-                if(selectedTab?.isPrivate){
+                if (selectedTab?.isPrivate) {
                   updatedApps = prev.filter(
                     (item) =>
                       !(
-                        item?.privateAppProperties?.name === selectedTab?.privateAppProperties?.name &&
-                        item?.privateAppProperties?.service === selectedTab?.privateAppProperties?.service &&
-                        item?.privateAppProperties?.identifier === selectedTab?.privateAppProperties?.identifier
+                        item?.privateAppProperties?.name ===
+                          selectedTab?.privateAppProperties?.name &&
+                        item?.privateAppProperties?.service ===
+                          selectedTab?.privateAppProperties?.service &&
+                        item?.privateAppProperties?.identifier ===
+                          selectedTab?.privateAppProperties?.identifier
                       )
                   );
                 } else {
@@ -309,21 +314,19 @@ export const AppsNavBarDesktop = ({disableBack}) => {
                       )
                   );
                 }
-                
               } else {
                 // Add the selected app if it is not pinned
-                if(selectedTab?.isPrivate){
+                if (selectedTab?.isPrivate) {
                   updatedApps = [
-                  ...prev,
-                  {
-                    isPreview: true,
-                    isPrivate: true,
-                    privateAppProperties: {
-                      ...(selectedTab?.privateAppProperties || {})
-                    }
-                    
-                  },
-                ];
+                    ...prev,
+                    {
+                      isPreview: true,
+                      isPrivate: true,
+                      privateAppProperties: {
+                        ...(selectedTab?.privateAppProperties || {}),
+                      },
+                    },
+                  ];
                 } else {
                   updatedApps = [
                     ...prev,
@@ -333,12 +336,11 @@ export const AppsNavBarDesktop = ({disableBack}) => {
                     },
                   ];
                 }
-                
               }
 
               saveToLocalStorage(
-                "ext_saved_settings",
-                "sortablePinnedApps",
+                'ext_saved_settings',
+                'sortablePinnedApps',
                 updatedApps
               );
               return updatedApps;
@@ -350,70 +352,74 @@ export const AppsNavBarDesktop = ({disableBack}) => {
         >
           <ListItemIcon
             sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
+              minWidth: '24px !important',
+              marginRight: '5px',
             }}
           >
             <PushPinIcon
               height={20}
               sx={{
-                color: isSelectedAppPinned ? "var(--danger)" : "rgba(250, 250, 250, 0.5)",
+                color: isSelectedAppPinned
+                  ? theme.palette.other.danger
+                  : theme.palette.text.primary,
               }}
             />
           </ListItemIcon>
           <ListItemText
             sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
+              '& .MuiTypography-root': {
+                fontSize: '12px',
                 fontWeight: 600,
-                color: isSelectedAppPinned ? "var(--danger)" : "rgba(250, 250, 250, 0.5)",
+                color: isSelectedAppPinned
+                  ? theme.palette.other.danger
+                  : theme.palette.text.primary,
               },
             }}
-            primary={`${isSelectedAppPinned ? "Unpin app" : "Pin app"}`}
+            primary={`${isSelectedAppPinned ? 'Unpin app' : 'Pin app'}`}
           />
         </MenuItem>
         <MenuItem
           onClick={() => {
             if (selectedTab?.refreshFunc) {
               selectedTab.refreshFunc(selectedTab?.tabId);
-            
             } else {
-              executeEvent("refreshApp", {
+              executeEvent('refreshApp', {
                 tabId: selectedTab?.tabId,
               });
             }
-            
+
             handleClose();
           }}
         >
           <ListItemIcon
             sx={{
-              minWidth: "24px !important",
-              marginRight: "5px",
+              minWidth: '24px !important',
+              marginRight: '5px',
             }}
           >
             <RefreshIcon
               height={20}
               sx={{
-                color: "rgba(250, 250, 250, 0.5)",
+                color: theme.palette.text.primary,
               }}
             />
           </ListItemIcon>
           <ListItemText
             sx={{
-              "& .MuiTypography-root": {
-                fontSize: "12px",
+              '& .MuiTypography-root': {
+                fontSize: '12px',
                 fontWeight: 600,
-                color: "rgba(250, 250, 250, 0.5)",
+                color: theme.palette.text.primary,
               },
             }}
             primary="Refresh"
           />
         </MenuItem>
+
         {!selectedTab?.isPrivate && (
-            <MenuItem
+          <MenuItem
             onClick={() => {
-              executeEvent("copyLink", {
+              executeEvent('copyLink', {
                 tabId: selectedTab?.tabId,
               });
               handleClose();
@@ -421,23 +427,24 @@ export const AppsNavBarDesktop = ({disableBack}) => {
           >
             <ListItemIcon
               sx={{
-                minWidth: "24px !important",
-                marginRight: "5px",
+                minWidth: '24px !important',
+                marginRight: '5px',
               }}
             >
               <ContentCopyIcon
                 height={20}
                 sx={{
-                  color: "rgba(250, 250, 250, 0.5)",
+                  color: theme.palette.text.primary,
                 }}
               />
             </ListItemIcon>
+
             <ListItemText
               sx={{
-                "& .MuiTypography-root": {
-                  fontSize: "12px",
+                '& .MuiTypography-root': {
+                  fontSize: '12px',
                   fontWeight: 600,
-                  color: "rgba(250, 250, 250, 0.5)",
+                  color: theme.palette.text.primary,
                 },
               }}
               primary="Copy link"

@@ -1,0 +1,71 @@
+{
+  "add": "hinzufügen",
+  "cancel": "abbrechen",
+  "choose": "auswählen",
+  "close": "schließen",
+  "continue": "fortfahren",
+  "core": {
+    "block_height": "Blockhöhe",
+    "information": "Kerninformationen",
+    "peers": "verbundene Peers",
+    "version": "Kernversion"
+  },
+  "description": "Beschreibung",
+  "edit": "bearbeiten",
+  "export": "exportieren",
+  "import": "importieren",
+  "last_height": "letzte Höhe",
+  "loading": "Lade...",
+  "logout": "abmelden",
+  "minting_status": "Präge-Status",
+  "payment_notification": "Zahlungsbenachrichtigung",
+  "price": "Preis",
+  "q_mail": "Q-Mail",
+  "result": {
+    "error": {
+      "generic": "Ein Fehler ist aufgetreten",
+      "incorrect_password": "Falsches Passwort",
+      "save_qdn": "Speichern in QDN nicht möglich"
+    },
+    "status": {
+      "minting": "(Prägung)",
+      "not_minting": "(keine Prägung)",
+      "synchronized": "synchronisiert",
+      "synchronizing": "synchronisiere"
+    },
+    "success": {
+      "publish_qdn": "Erfolgreich in QDN veröffentlicht"
+    }
+  },
+  "save_options": {
+    "no_pinned_changes": "Derzeit keine Änderungen an Ihren angehefteten Apps",
+    "overwrite_changes": "Die App konnte Ihre vorhandenen in QDN gespeicherten angehefteten Apps nicht herunterladen. Möchten Sie diese Änderungen überschreiben?",
+    "overwrite_qdn": "In QDN überschreiben",
+    "publish_qdn": "Möchten Sie Ihre Einstellungen in QDN (verschlüsselt) veröffentlichen?",
+    "qdn": "QDN-Speicherung verwenden",
+    "register_name": "Sie benötigen einen registrierten Qortal-Namen, um Ihre angehefteten Apps in QDN zu speichern.",
+    "reset_pinned": "Gefällt Ihnen Ihre aktuellen lokalen Änderungen nicht? Möchten Sie zu den Standard-Anheftungen zurückkehren?",
+    "reset_qdn": "Gefällt Ihnen Ihre aktuellen lokalen Änderungen nicht? Möchten Sie zu Ihren in QDN gespeicherten Anheftungen zurückkehren?",
+    "revert_default": "Auf Standard zurücksetzen",
+    "revert_qdn": "Auf QDN zurücksetzen",
+    "save_qdn": "In QDN speichern",
+    "save": "speichern",
+    "settings": "Sie verwenden die Export/Import-Methode zum Speichern von Einstellungen.",
+    "unsaved_changes": "Sie haben nicht gespeicherte Änderungen an Ihren angehefteten Apps. Speichern Sie sie in QDN."
+  },
+  "settings": "Einstellungen",
+  "supply": "Angebot",
+  "theme": {
+    "dark": "Dunkelmodus",
+    "light": "Hellmodus"
+  },
+  "title": "Titel",
+  "tutorial": "Tutorial",
+  "user_lookup": "Benutzersuche",
+  "wallet": {
+    "backup_wallet": "Wallet sichern",
+    "wallet": "Wallet",
+    "wallet_other": "Wallets"
+  },
+  "welcome": "Willkommen"
+}

@@ -1,0 +1,111 @@
+{
+  "action": {
+    "add": "add",
+    "accept": "accept",
+    "backup_account": "backup account",
+    "backup_wallet": "backup wallet",
+    "cancel": "cancel",
+    "change": "change",
+    "change_language": "change language",
+    "choose": "choose",
+    "close": "close",
+    "continue": "continue",
+    "continue_logout": "continue to logout",
+    "decline": "decline",
+    "edit": "edit",
+    "export": "export",
+    "import": "import",
+    "invite": "invite",
+    "join": "join",
+    "logout": "logout",
+    "notify": "notify"
+  },
+  "core": {
+    "block_height": "block height",
+    "information": "core information",
+    "peers": "connected peers",
+    "version": "core version"
+  },
+  "count": {
+    "none": "none",
+    "one": "one"
+  },
+  "description": "description",
+  "fee": {
+    "payment": "payment fee",
+    "publish": "publish fee"
+  },
+  "page": {
+    "last": "last",
+    "first": "first",
+    "next": "next",
+    "previous": "previous"
+  },
+  "downloading_qdn": "downloading from QDN",
+  "last_height": "last height",
+  "loading": "loading...",
+  "loading_posts": "loading posts... please wait.",
+  "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
+  "minting_status": "minting status",
+  "new_user": "are you a new user?",
+  "payment_notification": "payment notification",
+  "price": "price",
+  "q_mail": "q-mail",
+  "message": {
+    "error": {
+      "generic": "an error occurred",
+      "incorrect_password": "incorrect password",
+      "save_qdn": "unable to save to QDN"
+    },
+    "status": {
+      "minting": "(minting)",
+      "not_minting": "(not minting)",
+      "synchronized": "synchronized",
+      "synchronizing": "synchronizing"
+    },
+    "success": {
+      "order_submitted": "your buy order was submitted",
+      "publish_qdn": "successfully published to QDN",
+      "request_read": "I have read this request",
+      "transfer": "the transfer was succesful!"
+    }
+  },
+  "save_options": {
+    "no_pinned_changes": "you currently do not have any changes to your pinned apps",
+    "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
+    "overwrite_qdn": "overwrite to QDN",
+    "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
+    "qdn": "use QDN saving",
+    "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
+    "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
+    "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
+    "revert_default": "revert to default",
+    "revert_qdn": "revert to QDN",
+    "save_qdn": "save to QDN",
+    "save": "save",
+    "settings": "you are using the export/import way of saving settings.",
+    "unsaved_changes": " you have unsaved changes to your pinned apps. Save them to QDN."
+  },
+  "settings": "settings",
+  "supply": "supply",
+  "theme": {
+    "dark": "dark mode",
+    "light": "light mode"
+  },
+  "time": {
+    "day_one": "{{count}} day",
+    "day_other": "{{count}} days",
+    "hour_one": "{{count}} hour",
+    "hour_other": "{{count}} hours",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes"
+  },
+  "title": "title",
+  "tutorial": "tutorial",
+  "user_lookup": "user lookup",
+  "wallet": {
+    "wallet": "wallet",
+    "wallet_other": "wallets"
+  },
+  "welcome": "welcome"
+}

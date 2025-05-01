@@ -1,37 +1,35 @@
 // @ts-nocheck
-
-import "./qortalRequests";
-import { isArray } from "lodash";
+import './qortalRequests';
+import { isArray } from 'lodash';
 import {
   decryptGroupEncryption,
   encryptAndPublishSymmetricKeyGroupChat,
   publishGroupEncryptedResource,
   publishOnQDN,
   uint8ArrayToObject,
-} from "./backgroundFunctions/encryption";
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from "./constants/codes";
-import Base58 from "./deps/Base58";
-import axios from 'axios'
+} from './backgroundFunctions/encryption';
+import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/codes';
+import Base58 from './deps/Base58';
+import axios from 'axios';
 import {
   base64ToUint8Array,
   decryptSingle,
   encryptDataGroup,
   encryptSingle,
   objectToBase64,
-} from "./qdn/encryption/group-encryption";
+} from './qdn/encryption/group-encryption';
 import ChatComputePowWorker from './chatComputePow.worker.js?worker';
-import { reusableGet } from "./qdn/publish/pubish";
-import { signChat } from "./transactions/signChat";
-import { createTransaction } from "./transactions/transactions";
-import { decryptChatMessage } from "./utils/decryptChatMessage";
-import { decryptStoredWallet } from "./utils/decryptWallet";
-import PhraseWallet from "./utils/generateWallet/phrase-wallet";
-import { RequestQueueWithPromise } from "./utils/queue/queue";
-import { validateAddress } from "./utils/validateAddress";
-import { Sha256 } from "asmcrypto.js";
-import { TradeBotRespondMultipleRequest } from "./transactions/TradeBotRespondMultipleRequest";
-
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from "./constants/resourceTypes";
+import { reusableGet } from './qdn/publish/pubish';
+import { signChat } from './transactions/signChat';
+import { createTransaction } from './transactions/transactions';
+import { decryptChatMessage } from './utils/decryptChatMessage';
+import { decryptStoredWallet } from './utils/decryptWallet';
+import PhraseWallet from './utils/generateWallet/phrase-wallet';
+import { RequestQueueWithPromise } from './utils/queue/queue';
+import { validateAddress } from './utils/validateAddress';
+import { Sha256 } from 'asmcrypto.js';
+import { TradeBotRespondMultipleRequest } from './transactions/TradeBotRespondMultipleRequest';
+import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/resourceTypes';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -101,47 +99,48 @@ import {
   validApiCase,
   versionCase,
   voteOnPollCase,
-} from "./background-cases";
-import { getData, removeKeysAndLogout, storeData } from "./utils/chromeStorage";
-import TradeBotRespondRequest from "./transactions/TradeBotRespondRequest";
+} from './background-cases';
+import { getData, removeKeysAndLogout, storeData } from './utils/chromeStorage';
+import TradeBotRespondRequest from './transactions/TradeBotRespondRequest';
 // import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
 
-export let groupSecretkeys = {}
+export let groupSecretkeys = {};
 
 export function cleanUrl(url) {
-  return url?.replace(/^(https?:\/\/)?(www\.)?/, "");
+  return url?.replace(/^(https?:\/\/)?(www\.)?/, '');
 }
+
 export function getProtocol(url) {
-  if (url?.startsWith("https://")) {
-    return "https";
-  } else if (url?.startsWith("http://")) {
-    return "http";
+  if (url?.startsWith('https://')) {
+    return 'https';
+  } else if (url?.startsWith('http://')) {
+    return 'http';
   } else {
-    return "unknown"; // If neither protocol is present
+    return 'unknown'; // If neither protocol is present
   }
 }
 
-export const gateways = ['ext-node.qortal.link']
-
+export const gateways = ['ext-node.qortal.link'];
 
 let lastGroupNotification;
-export const groupApi = "https://ext-node.qortal.link";
-export const groupApiSocket = "wss://ext-node.qortal.link";
-export const groupApiLocal = "http://127.0.0.1:12391";
-export const groupApiSocketLocal = "ws://127.0.0.1:12391";
+export const groupApi = 'https://ext-node.qortal.link';
+export const groupApiSocket = 'wss://ext-node.qortal.link';
+export const groupApiLocal = 'http://127.0.0.1:12391';
+export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
-let isMobile = true;
 
 function handleNotificationClick(notificationId) {
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
   // Determine the type of notification by parsing decodedNotificationId
-  const isDirect = decodedNotificationId.includes("_type=direct_");
-  const isGroup = decodedNotificationId.includes("_type=group_");
-  const isGroupAnnouncement = decodedNotificationId.includes("_type=group-announcement_");
-  const isNewThreadPost = decodedNotificationId.includes("_type=thread-post_");
+  const isDirect = decodedNotificationId.includes('_type=direct_');
+  const isGroup = decodedNotificationId.includes('_type=group_');
+  const isGroupAnnouncement = decodedNotificationId.includes(
+    '_type=group-announcement_'
+  );
+  const isNewThreadPost = decodedNotificationId.includes('_type=thread-post_');
 
   // Helper function to extract parameter values safely
   function getParameterValue(id, key) {
@@ -151,65 +150,47 @@ function handleNotificationClick(notificationId) {
   const targetOrigin = window.location.origin;
   // Handle specific notification types and post the message accordingly
   if (isDirect) {
-    const fromValue = getParameterValue(decodedNotificationId, "_from");
+    const fromValue = getParameterValue(decodedNotificationId, '_from');
     window.postMessage(
-      { action: "NOTIFICATION_OPEN_DIRECT", payload: { from: fromValue } },
+      { action: 'NOTIFICATION_OPEN_DIRECT', payload: { from: fromValue } },
       targetOrigin
     );
   } else if (isGroup) {
-    const fromValue = getParameterValue(decodedNotificationId, "_from");
+    const fromValue = getParameterValue(decodedNotificationId, '_from');
     window.postMessage(
-      { action: "NOTIFICATION_OPEN_GROUP", payload: { from: fromValue } },
+      { action: 'NOTIFICATION_OPEN_GROUP', payload: { from: fromValue } },
       targetOrigin
     );
   } else if (isGroupAnnouncement) {
-    const fromValue = getParameterValue(decodedNotificationId, "_from");
+    const fromValue = getParameterValue(decodedNotificationId, '_from');
     window.postMessage(
       {
-        action: "NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP",
+        action: 'NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP',
         payload: { from: fromValue },
       },
       targetOrigin
     );
   } else if (isNewThreadPost) {
-    const dataValue = getParameterValue(decodedNotificationId, "_data");
+    const dataValue = getParameterValue(decodedNotificationId, '_data');
     try {
       const targetOrigin = window.location.origin;
       const dataParsed = JSON.parse(dataValue);
       window.postMessage(
         {
-          action: "NOTIFICATION_OPEN_THREAD_NEW_POST",
+          action: 'NOTIFICATION_OPEN_THREAD_NEW_POST',
           payload: { data: dataParsed },
         },
         targetOrigin
       );
     } catch (error) {
-      console.error("Error parsing JSON data for thread post notification:", error);
+      console.error(
+        'Error parsing JSON data for thread post notification:',
+        error
+      );
     }
   }
 }
 
-
-const isMobileDevice = () => {
-  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-
-  if (/android/i.test(userAgent)) {
-    return true; // Android device
-  }
-
-  if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-    return true; // iOS device
-  }
-
-  return false;
-};
-
-if (isMobileDevice()) {
-  isMobile = true;
-  console.log("Running on a mobile device");
-} else {
-  console.log("Running on a desktop");
-}
 const allQueues = {
   requestQueueAnnouncements: requestQueueAnnouncements,
 };
@@ -218,7 +199,7 @@ const controlAllQueues = (action) => {
   Object.keys(allQueues).forEach((key) => {
     const val = allQueues[key];
     try {
-      if (typeof val[action] === "function") {
+      if (typeof val[action] === 'function') {
         val[action]();
       }
     } catch (error) {
@@ -238,42 +219,45 @@ export const clearAllQueues = () => {
   });
 };
 
-export const getForeignKey = async (foreignBlockchain)=> {
+export const getForeignKey = async (foreignBlockchain) => {
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
 
   switch (foreignBlockchain) {
-    case "LITECOIN":
-      return parsedData.ltcPrivateKey
-      case "DOGECOIN":
-        return parsedData.dogePrivateKey
-      case "BITCOIN":
-        return parsedData.btcPrivateKey
-      case "DIGIBYTE":
-        return parsedData.dgbPrivateKey
-      case "RAVENCOIN":
-        return parsedData.rvnPrivateKey
-      case "PIRATECHAIN":
-        return parsedData.arrrSeed58
-      default:
-        return null
+    case 'LITECOIN':
+      return parsedData.ltcPrivateKey;
+    case 'DOGECOIN':
+      return parsedData.dogePrivateKey;
+    case 'BITCOIN':
+      return parsedData.btcPrivateKey;
+    case 'DIGIBYTE':
+      return parsedData.dgbPrivateKey;
+    case 'RAVENCOIN':
+      return parsedData.rvnPrivateKey;
+    case 'PIRATECHAIN':
+      return parsedData.arrrSeed58;
+    default:
+      return null;
   }
-}
+};
 
-export const pauseAllQueues = () => controlAllQueues("pause");
-export const resumeAllQueues = () => controlAllQueues("resume");
-export const checkDifference = (createdTimestamp, diff = timeDifferenceForNotificationChatsBackground) => {
-  return (
-    Date.now() - createdTimestamp < diff
-  );
+export const pauseAllQueues = () => controlAllQueues('pause');
+
+export const resumeAllQueues = () => controlAllQueues('resume');
+
+export const checkDifference = (
+  createdTimestamp,
+  diff = timeDifferenceForNotificationChatsBackground
+) => {
+  return Date.now() - createdTimestamp < diff;
 };
 
 export const getApiKeyFromStorage = async (): Promise<string | null> => {
-  return getData<string>("apiKey").catch(() => null);
+  return getData<string>('apiKey').catch(() => null);
 };
 
 export const getCustomNodesFromStorage = async (): Promise<any | null> => {
-  return getData<any>("customNodes").catch(() => null);
+  return getData<any>('customNodes').catch(() => null);
 };
 
 const getArbitraryEndpoint = async () => {
@@ -291,13 +275,14 @@ export const getBaseApi = async (customApi?: string) => {
   }
 
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  
+
   if (apiKey?.url) {
     return apiKey?.url;
   } else {
     return groupApi;
   }
 };
+
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
   if (apiKey?.url) {
@@ -316,7 +301,7 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 
   if (apiKey?.url) {
     // Check if the endpoint already contains a query string
-    const separator = endpoint.includes("?") ? "&" : "?";
+    const separator = endpoint.includes('?') ? '&' : '?';
     return `${apiKey?.url}${endpoint}${separator}apiKey=${apiKey?.apikey}`;
   } else {
     return `${groupApi}${endpoint}`;
@@ -326,34 +311,34 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 export const walletVersion = 2;
 // List of your API endpoints
 const apiEndpoints = [
-  "https://api.qortal.org",
-  "https://api2.qortal.org",
-  "https://appnode.qortal.org",
-  "https://apinode.qortalnodes.live",
-  "https://apinode1.qortalnodes.live",
-  "https://apinode2.qortalnodes.live",
-  "https://apinode3.qortalnodes.live",
-  "https://apinode4.qortalnodes.live",
+  'https://api.qortal.org',
+  'https://api2.qortal.org',
+  'https://appnode.qortal.org',
+  'https://apinode.qortalnodes.live',
+  'https://apinode1.qortalnodes.live',
+  'https://apinode2.qortalnodes.live',
+  'https://apinode3.qortalnodes.live',
+  'https://apinode4.qortalnodes.live',
 ];
 
-const buyTradeNodeBaseUrl = "https://appnode.qortal.org";
-const proxyAccountAddress = "QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku";
-const proxyAccountPublicKey = "5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7";
+const buyTradeNodeBaseUrl = 'https://appnode.qortal.org';
+const proxyAccountAddress = 'QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku';
+const proxyAccountPublicKey = '5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7';
 const pendingResponses = new Map();
 let groups = null;
-
 let socket;
 let timeoutId;
 let groupSocketTimeout;
 let socketTimeout: any;
 let interval;
 let intervalThreads;
+
 // Function to check each API endpoint
 export async function findUsableApi() {
   for (const endpoint of apiEndpoints) {
     try {
       const response = await fetch(`${endpoint}/admin/status`);
-      if (!response.ok) throw new Error("Failed to fetch");
+      if (!response.ok) throw new Error('Failed to fetch');
 
       const data = await response.json();
       if (data.isSynchronizing === false && data.syncPercent === 100) {
@@ -367,7 +352,7 @@ export async function findUsableApi() {
     }
   }
 
-  throw new Error("No usable API found");
+  throw new Error('No usable API found');
 }
 
 export function isExtMsg(data) {
@@ -417,21 +402,22 @@ async function checkWebviewFocus() {
     }, 1000);
     const targetOrigin = window.location.origin;
     // Send a message to check focus
-    window.postMessage({ action: "CHECK_FOCUS" }, targetOrigin);
+    window.postMessage({ action: 'CHECK_FOCUS' }, targetOrigin);
 
     // Listen for the response
     const handleMessage = (event) => {
-      if (event.data?.action === "CHECK_FOCUS_RESPONSE") {
+      if (event.data?.action === 'CHECK_FOCUS_RESPONSE') {
         clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage); // Clean up listener
+        window.removeEventListener('message', handleMessage); // Clean up listener
         resolve(event.data.isFocused); // Resolve with the response
       }
     };
 
-    window.addEventListener("message", handleMessage);
+    window.addEventListener('message', handleMessage);
   });
 }
-const worker = new ChatComputePowWorker()
+
+const worker = new ChatComputePowWorker();
 
 export async function performPowTask(chatBytes, difficulty) {
   return new Promise((resolve, reject) => {
@@ -465,7 +451,7 @@ const handleNotificationDirect = async (directs) => {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   let isDisableNotifications =
-    (await getUserSettings({ key: "disable-push-notifications" })) || false;
+    (await getUserSettings({ key: 'disable-push-notifications' })) || false;
   const dataDirects = directs.filter((direct) => direct?.sender !== address);
   try {
     if (isDisableNotifications) return;
@@ -473,7 +459,7 @@ const handleNotificationDirect = async (directs) => {
     isFocused = await checkWebviewFocus();
 
     if (isFocused) {
-      throw new Error("isFocused");
+      throw new Error('isFocused');
     }
     const newActiveChats = dataDirects;
     const oldActiveChats = await getChatHeadsDirect();
@@ -510,17 +496,18 @@ const handleNotificationDirect = async (directs) => {
     ) {
       // Create the notification and assign the onclick handler
       const title = `New Direct message! ${
-        newestLatestTimestamp?.name ? `from ${newestLatestTimestamp.name}` : ""
+        newestLatestTimestamp?.name ? `from ${newestLatestTimestamp.name}` : ''
       }`;
-      const body = "You have received a new direct message";
-      const notificationId =
-      encodeURIComponent("chat_notification_" +
-        Date.now() +
-        "_type=direct" +
-        `_from=${newestLatestTimestamp.address}`);
+      const body = 'You have received a new direct message';
+      const notificationId = encodeURIComponent(
+        'chat_notification_' +
+          Date.now() +
+          '_type=direct' +
+          `_from=${newestLatestTimestamp.address}`
+      );
       const notification = new window.Notification(title, {
         body,
-        icon: window.location.origin + "/qortal192.png",
+        icon: window.location.origin + '/qortal192.png',
         data: { id: notificationId },
       });
 
@@ -537,7 +524,7 @@ const handleNotificationDirect = async (directs) => {
   } catch (error) {
     if (!isFocused) {
       window
-        .sendMessage("notification", {})
+        .sendMessage('notification', {})
         .then((response) => {
           if (!response?.error) {
             // Handle success if needed
@@ -545,24 +532,22 @@ const handleNotificationDirect = async (directs) => {
         })
         .catch((error) => {
           console.error(
-            "Failed to send notification:",
-            error.message || "An error occurred"
+            'Failed to send notification:',
+            error.message || 'An error occurred'
           );
         });
 
       // Create a unique notification ID with type and sender information
-      const notificationId =
-      encodeURIComponent("chat_notification_" +
-        Date.now() +
-        "_type=direct" +
-        `_from=""`);
+      const notificationId = encodeURIComponent(
+        'chat_notification_' + Date.now() + '_type=direct' + `_from=""`
+      );
 
-      const title = "New Direct message!";
-      const body = "You have received a new direct message";
+      const title = 'New Direct message!';
+      const body = 'You have received a new direct message';
 
       const notification = new window.Notification(title, {
         body,
-        icon: window.location.origin + "/qortal192.png",
+        icon: window.location.origin + '/qortal192.png',
         data: { id: notificationId },
       });
 
@@ -581,6 +566,7 @@ const handleNotificationDirect = async (directs) => {
     setChatHeadsDirect(dataDirects);
   }
 };
+
 async function getThreadActivity(): Promise<any | null> {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -674,16 +660,14 @@ const handleNotification = async (groups) => {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   let isDisableNotifications =
-    (await getUserSettings({ key: "disable-push-notifications" })) || false;
+    (await getUserSettings({ key: 'disable-push-notifications' })) || false;
 
-  let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
+  let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
   if (!isArray(mutedGroups)) mutedGroups = [];
-  mutedGroups.push('0')
+  mutedGroups.push('0');
   let isFocused;
   const data = groups.filter(
-    (group) =>
-      group?.sender !== address &&
-      !mutedGroups.includes(group.groupId)
+    (group) => group?.sender !== address && !mutedGroups.includes(group.groupId)
   );
   const dataWithUpdates = groups.filter(
     (group) => group?.sender !== address && !mutedGroups.includes(group.groupId)
@@ -695,7 +679,7 @@ const handleNotification = async (groups) => {
     isFocused = await checkWebviewFocus();
 
     if (isFocused) {
-      throw new Error("isFocused");
+      throw new Error('isFocused');
     }
     const newActiveChats = data;
     const oldActiveChats = await getChatHeads();
@@ -733,24 +717,22 @@ const handleNotification = async (groups) => {
         !lastGroupNotification ||
         Date.now() - lastGroupNotification >= 120000
       ) {
-        if (
-          !newestLatestTimestamp?.data
-        )
-          return;
+        if (!newestLatestTimestamp?.data) return;
 
         // Create a unique notification ID with type and group information
-        const notificationId =
-        encodeURIComponent("chat_notification_" +
-          Date.now() +
-          "_type=group" +
-          `_from=${newestLatestTimestamp.groupId}`);
+        const notificationId = encodeURIComponent(
+          'chat_notification_' +
+            Date.now() +
+            '_type=group' +
+            `_from=${newestLatestTimestamp.groupId}`
+        );
 
-        const title = "New Group Message!";
+        const title = 'New Group Message!';
         const body = `You have received a new message from ${newestLatestTimestamp?.groupName}`;
 
         const notification = new window.Notification(title, {
           body,
-          icon: window.location.origin + "/qortal192.png",
+          icon: window.location.origin + '/qortal192.png',
           data: { id: notificationId },
         });
 
@@ -771,7 +753,7 @@ const handleNotification = async (groups) => {
   } catch (error) {
     if (!isFocused) {
       window
-        .sendMessage("notification", {})
+        .sendMessage('notification', {})
         .then((response) => {
           if (!response?.error) {
             // Handle success if needed
@@ -779,21 +761,23 @@ const handleNotification = async (groups) => {
         })
         .catch((error) => {
           console.error(
-            "Failed to send notification:",
-            error.message || "An error occurred"
+            'Failed to send notification:',
+            error.message || 'An error occurred'
           );
         });
 
       // Generate a unique notification ID
-      const notificationId = encodeURIComponent("chat_notification_" + Date.now());
+      const notificationId = encodeURIComponent(
+        'chat_notification_' + Date.now()
+      );
 
-      const title = "New Group Message!";
-      const body = "You have received a new message from one of your groups";
+      const title = 'New Group Message!';
+      const body = 'You have received a new message from one of your groups';
 
       // Create and show the notification immediately
       const notification = new window.Notification(title, {
         body,
-        icon: window.location.origin + "/qortal192.png",
+        icon: window.location.origin + '/qortal192.png',
         data: { id: notificationId },
       });
 
@@ -823,7 +807,7 @@ const forceCloseWebSocket = () => {
     clearTimeout(socketTimeout);
     timeoutId = null;
     groupSocketTimeout = null;
-    socket.close(1000, "forced");
+    socket.close(1000, 'forced');
     socket = null;
   }
 };
@@ -832,32 +816,33 @@ export async function getNameInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + "/names/address/" + address);
+  const response = await fetch(validApi + '/names/address/' + address);
   const nameData = await response.json();
   if (nameData?.length > 0) {
     return nameData[0].name;
   } else {
-    return "";
+    return '';
   }
 }
 
 export async function getNameInfoForOthers(address) {
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + "/names/address/" + address);
+  const response = await fetch(validApi + '/names/address/' + address);
   const nameData = await response.json();
   if (nameData?.length > 0) {
     return nameData[0].name;
   } else {
-    return "";
+    return '';
   }
 }
+
 export async function getAddressInfo(address) {
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + "/addresses/" + address);
+  const response = await fetch(validApi + '/addresses/' + address);
   const data = await response.json();
 
   if (!response?.ok && data?.error !== 124)
-    throw new Error("Cannot fetch address info");
+    throw new Error('Cannot fetch address info');
   if (data?.error === 124) {
     return {
       address,
@@ -867,39 +852,37 @@ export async function getAddressInfo(address) {
 }
 
 export async function getKeyPair() {
-  const res = await getData<any>("keyPair").catch(() => null);
+  const res = await getData<any>('keyPair').catch(() => null);
   if (res) {
     return res;
   } else {
-    throw new Error("Wallet not authenticated");
+    throw new Error('Wallet not authenticated');
   }
 }
 
 export async function getSaveWallet() {
-  const res = await getData<any>("walletInfo").catch(() => null);
+  const res = await getData<any>('walletInfo').catch(() => null);
   if (res) {
     return res;
   } else {
-    throw new Error("No wallet saved");
+    throw new Error('No wallet saved');
   }
 }
 
 export async function getWallets() {
-  const res = await getData<any>("wallets").catch(() => null);
+  const res = await getData<any>('wallets').catch(() => null);
   if (res) {
     return res;
   } else {
-    return null
+    return null;
   }
 }
 
 export async function storeWallets(wallets) {
-  storeData("wallets", wallets)
-        .catch((error) => {
-         console.error(error)
-        });
+  storeData('wallets', wallets).catch((error) => {
+    console.error(error);
+  });
 }
-
 
 export async function clearAllNotifications() {
   // const notifications = await chrome.notifications.getAll();
@@ -927,12 +910,13 @@ async function connection(hostname: string) {
 
 async function getTradeInfo(qortalAtAddress) {
   const response = await fetch(
-    buyTradeNodeBaseUrl + "/crosschain/trade/" + qortalAtAddress
+    buyTradeNodeBaseUrl + '/crosschain/trade/' + qortalAtAddress
   );
-  if (!response?.ok) throw new Error("Cannot crosschain trade information");
+  if (!response?.ok) throw new Error('Cannot crosschain trade information');
   const data = await response.json();
   return data;
 }
+
 async function getTradesInfo(qortalAtAddresses) {
   // Use Promise.all to fetch data for all addresses concurrently
   const trades = await Promise.all(
@@ -946,9 +930,9 @@ export async function getBalanceInfo() {
   const address = wallet.address0;
   const validApi = await getBaseApi();
 
-  const response = await fetch(validApi + "/addresses/balance/" + address);
+  const response = await fetch(validApi + '/addresses/balance/' + address);
 
-  if (!response?.ok) throw new Error("0 QORT in your balance");
+  if (!response?.ok) throw new Error('0 QORT in your balance');
   const data = await response.json();
   return data;
 }
@@ -957,22 +941,24 @@ export async function getAssetBalanceInfo(assetId: number) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + `/assets/balances?address=${address}&assetid=${assetId}&ordering=ASSET_BALANCE_ACCOUNT&limit=1`);
+  const response = await fetch(
+    validApi +
+      `/assets/balances?address=${address}&assetid=${assetId}&ordering=ASSET_BALANCE_ACCOUNT&limit=1`
+  );
 
-  if (!response?.ok) throw new Error("Cannot fetch asset balance");
+  if (!response?.ok) throw new Error('Cannot fetch asset balance');
   const data = await response.json();
-  return +data?.[0]?.balance
+  return +data?.[0]?.balance;
 }
 
 export async function getAssetInfo(assetId: number) {
   const validApi = await getBaseApi();
   const response = await fetch(validApi + `/assets/info?assetId=${assetId}`);
 
-  if (!response?.ok) throw new Error("Cannot fetch asset info");
+  if (!response?.ok) throw new Error('Cannot fetch asset info');
   const data = await response.json();
-  return data
+  return data;
 }
-
 
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
@@ -981,9 +967,9 @@ export async function getLTCBalance() {
   const parsedKeyPair = keyPair;
   let _body = parsedKeyPair.ltcPublicKey;
   const response = await fetch(_url, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
     body: _body,
   });
@@ -991,10 +977,13 @@ export async function getLTCBalance() {
     const data = await response.text();
     const dataLTCBalance = (Number(data) / 1e8).toFixed(8);
     return +dataLTCBalance;
-  } else throw new Error("Onable to get LTC balance");
+  } else throw new Error('Onable to get LTC balance');
 }
 
-export async function parseErrorResponse(response, defaultMessage = "Request failed") {
+export async function parseErrorResponse(
+  response,
+  defaultMessage = 'Request failed'
+) {
   let message = defaultMessage;
 
   try {
@@ -1020,15 +1009,14 @@ export async function parseErrorResponse(response, defaultMessage = "Request fai
   return message;
 }
 
-
 const processTransactionVersion2Chat = async (body: any, customApi) => {
   // const validApi = await findUsableApi();
   const url = await createEndpoint(
-    "/transactions/process?apiVersion=2",
+    '/transactions/process?apiVersion=2',
     customApi
   );
   return fetch(url, {
-    method: "POST",
+    method: 'POST',
     headers: {},
     body: Base58.encode(body),
   }).then(async (response) => {
@@ -1046,9 +1034,9 @@ export const processTransactionVersion2 = async (body: any) => {
 
   try {
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json", // Ensure the body is correctly parsed
+        'Content-Type': 'application/json', // Ensure the body is correctly parsed
       },
       body, // Convert body to JSON string
     });
@@ -1070,7 +1058,7 @@ export const processTransactionVersion2 = async (body: any) => {
       }
     }
   } catch (error) {
-    console.error("Error processing transaction:", error);
+    console.error('Error processing transaction:', error);
     throw error; // Re-throw the error after logging it
   }
 };
@@ -1096,6 +1084,7 @@ const transaction = async (
     data: res,
   };
 };
+
 const makeTransactionRequest = async (
   receiver,
   lastRef,
@@ -1128,20 +1117,21 @@ export const getLastRef = async () => {
   const address = wallet.address0;
   const validApi = await getBaseApi();
   const response = await fetch(
-    validApi + "/addresses/lastreference/" + address
+    validApi + '/addresses/lastreference/' + address
   );
-  if (!response?.ok) throw new Error("0 QORT in your balance");
+  if (!response?.ok) throw new Error('0 QORT in your balance');
   const data = await response.text();
   return data;
 };
+
 export const sendQortFee = async (): Promise<number> => {
   const validApi = await getBaseApi();
   const response = await fetch(
-    validApi + "/transactions/unitfee?txType=PAYMENT"
+    validApi + '/transactions/unitfee?txType=PAYMENT'
   );
 
   if (!response.ok) {
-    throw new Error("Error when fetching join fee");
+    throw new Error('Error when fetching join fee');
   }
 
   const data = await response.json();
@@ -1157,16 +1147,16 @@ export async function getNameOrAddress(receiver) {
     }
     const validApi = await getBaseApi();
 
-    const response = await fetch(validApi + "/names/" + receiver);
+    const response = await fetch(validApi + '/names/' + receiver);
     const data = await response.json();
     if (data?.owner) return data.owner;
     if (data?.error) {
-      throw new Error("Name does not exist");
+      throw new Error('Name does not exist');
     }
-    if (!response?.ok) throw new Error("Cannot fetch name");
-    return { error: "cannot validate address or name" };
+    if (!response?.ok) throw new Error('Cannot fetch name');
+    return { error: 'cannot validate address or name' };
   } catch (error) {
-    throw new Error(error?.message || "cannot validate address or name");
+    throw new Error(error?.message || 'cannot validate address or name');
   }
 }
 
@@ -1174,17 +1164,17 @@ export async function getPublicKey(receiver) {
   try {
     const validApi = await getBaseApi();
 
-    const response = await fetch(validApi + "/addresses/publickey/" + receiver);
+    const response = await fetch(validApi + '/addresses/publickey/' + receiver);
     if (!response?.ok) throw new Error("Cannot fetch recipient's public key");
 
     const data = await response.text();
-    if (!data?.error && data !== "false") return data;
+    if (!data?.error && data !== 'false') return data;
     if (data?.error) {
       throw new Error("Cannot fetch recipient's public key");
     }
     throw new Error("Cannot fetch recipient's public key");
   } catch (error) {
-    throw new Error(error?.message || "cannot validate address or name");
+    throw new Error(error?.message || 'cannot validate address or name');
   }
 }
 
@@ -1204,7 +1194,7 @@ export async function getDataPublishes(groupId, type) {
         resolve(typeData); // Resolve with the data inside the specific type
       })
       .catch((error) => {
-        console.error("Error retrieving data:", error);
+        console.error('Error retrieving data:', error);
         resolve(null); // Return null in case of an error
       });
   });
@@ -1262,16 +1252,16 @@ export async function addDataPublishes(newData, groupId, type) {
           storeData(`${address}-publishData`, storedData)
             .then(() => res(true)) // Successfully added
             .catch((error) => {
-              console.error("Error saving data:", error);
+              console.error('Error saving data:', error);
               res(false); // Save failed
             });
         } else {
-          console.error("Failed to add data, still exceeds storage limit.");
+          console.error('Failed to add data, still exceeds storage limit.');
           res(false); // Failure due to storage limit
         }
       })
       .catch((error) => {
-        console.error("Error retrieving data:", error);
+        console.error('Error retrieving data:', error);
         res(false); // Failure due to retrieval error
       });
   });
@@ -1315,12 +1305,12 @@ export async function addUserSettings({ keyValue }) {
         storeData(`${address}-userSettings`, storedData)
           .then(() => res(true)) // Data successfully added
           .catch((error) => {
-            console.error("Error saving data:", error);
+            console.error('Error saving data:', error);
             res(false); // Save failed
           });
       })
       .catch((error) => {
-        console.error("Error retrieving data:", error);
+        console.error('Error retrieving data:', error);
         res(false); // Failure due to retrieval error
       });
   });
@@ -1360,10 +1350,10 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
       rvnPrivateKey: wallet2._addresses[0].rvnWallet.derivedMasterPrivateKey,
     };
     await new Promise((resolve, reject) => {
-      storeData("keyPair", toSave)
+      storeData('keyPair', toSave)
         .then(() => resolve(true))
         .catch((error) => {
-          reject(new Error(error.message || "Error saving data"));
+          reject(new Error(error.message || 'Error saving data'));
         });
     });
     const newWallet = {
@@ -1372,10 +1362,10 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
       ltcAddress: ltcAddress,
     };
     await new Promise((resolve, reject) => {
-      storeData("walletInfo", newWallet)
+      storeData('walletInfo', newWallet)
         .then(() => resolve(true))
         .catch((error) => {
-          reject(new Error(error.message || "Error saving data"));
+          reject(new Error(error.message || 'Error saving data'));
         });
     });
 
@@ -1407,11 +1397,12 @@ export async function signChatFunc(
   }
   return response;
 }
+
 function sbrk(size, heap) {
   let brk = 512 * 1024; // stack top
   let old = brk;
   brk += size;
-  if (brk > heap.length) throw new Error("heap exhausted");
+  if (brk > heap.length) throw new Error('heap exhausted');
   return old;
 }
 
@@ -1475,14 +1466,14 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
     const targetOrigin = window.location.origin;
     window.postMessage(
       {
-        action: "SET_GROUPS",
+        action: 'SET_GROUPS',
         payload: groups,
       },
       targetOrigin
     );
     window.postMessage(
       {
-        action: "SET_DIRECTS",
+        action: 'SET_DIRECTS',
         payload: directs,
       },
       targetOrigin
@@ -1495,18 +1486,28 @@ export async function handleActiveGroupDataFromSocket({ groups, directs }) {
       directs: directs || [], // Your directs data here
     };
     // Save the active data to localStorage
-    storeData("active-groups-directs", activeData).catch((error) => {
-      console.error("Error saving data:", error);
+    storeData('active-groups-directs', activeData).catch((error) => {
+      console.error('Error saving data:', error);
     });
 
     try {
       handleNotification(groups);
       handleNotificationDirect(directs);
-    } catch (error) {}
-  } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
+  } catch (error) {
+    console.log(error);
+  }
 }
 
-async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, atAddresses, isSingle }) {
+async function sendChatForBuyOrder({
+  qortAddress,
+  recipientPublicKey,
+  message,
+  atAddresses,
+  isSingle,
+}) {
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
 
@@ -1532,7 +1533,7 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   const finalJson = {
     callRequest: jsonData,
     extra: {
-      type: isSingle ? "single" : "multiple"
+      type: isSingle ? 'single' : 'multiple',
     },
   };
   const messageStringified = JSON.stringify(finalJson);
@@ -1550,50 +1551,63 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   });
   //TODO
   // if (!hasEnoughBalance) {
-  if(!hasEnoughBalance){
+  if (!hasEnoughBalance) {
     const _encryptedMessage = tx._encryptedMessage;
     const encryptedMessageToBase58 = Base58.encode(_encryptedMessage);
-    const signature = "id-" + Date.now() + "-" + Math.floor(Math.random() * 1000)
-    const checkGatewayStatusRes = await fetch(`${buyTradeNodeBaseUrl}/admin/status`)
-    const checkGatewayStatusData = await checkGatewayStatusRes.json()
-    if(+checkGatewayStatusData?.syncPercent !== 100 || checkGatewayStatusData?.isSynchronizing !== false){
-      throw new Error("Cannot make trade. Gateway node is synchronizing")
+    const signature =
+      'id-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+    const checkGatewayStatusRes = await fetch(
+      `${buyTradeNodeBaseUrl}/admin/status`
+    );
+    const checkGatewayStatusData = await checkGatewayStatusRes.json();
+    if (
+      +checkGatewayStatusData?.syncPercent !== 100 ||
+      checkGatewayStatusData?.isSynchronizing !== false
+    ) {
+      throw new Error('Cannot make trade. Gateway node is synchronizing');
     }
-    const healthCheckRes = await fetch('https://www.qort.trade/api/transaction/healthcheck')
-    const healthcheckData = await healthCheckRes.json()
-    if(healthcheckData?.dbConnection !== 'healthy'){
-      throw new Error('Could not connect to db. Try again later.')
+    const healthCheckRes = await fetch(
+      'https://www.qort.trade/api/transaction/healthcheck'
+    );
+    const healthcheckData = await healthCheckRes.json();
+    if (healthcheckData?.dbConnection !== 'healthy') {
+      throw new Error('Could not connect to db. Try again later.');
     }
     const res = await axios.post(
       `https://www.qort.trade/api/transaction/updatetxgateway`,
       {
-        qortalAtAddresses: atAddresses, qortAddress: address, node: buyTradeNodeBaseUrl, status: "message-sent", encryptedMessageToBase58, signature ,
-        reference, senderPublicKey: parsedData.publicKey,
+        qortalAtAddresses: atAddresses,
+        qortAddress: address,
+        node: buyTradeNodeBaseUrl,
+        status: 'message-sent',
+        encryptedMessageToBase58,
+        signature,
+        reference,
+        senderPublicKey: parsedData.publicKey,
         sender: address,
       },
       {
         headers: {
-          "Content-Type": "application/json"
+          'Content-Type': 'application/json',
         },
       }
     );
 
     return {
       encryptedMessageToBase58,
-      status: "message-sent",
-      signature
-    }
+      status: 'message-sent',
+      signature,
+    };
   }
-
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
-  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+  const { nonce, chatBytesArray } = await performPowTask(chatBytes, difficulty);
 
   let _response = await signChatFunc(
     chatBytesArray,
     nonce,
-    "https://appnode.qortal.org",
+    'https://appnode.qortal.org',
     keyPair
   );
   if (_response?.error) {
@@ -1601,9 +1615,6 @@ async function sendChatForBuyOrder({ qortAddress, recipientPublicKey, message, a
   }
   return _response;
 }
-
-
-
 
 export async function sendChatGroup({
   groupId,
@@ -1626,7 +1637,6 @@ export async function sendChatGroup({
   // const balance = await getBalanceInfo();
   // const hasEnoughBalance = +balance < 4 ? false : true;
 
-
   const txBody = {
     timestamp: Date.now(),
     groupID: Number(groupId),
@@ -1640,7 +1650,7 @@ export async function sendChatGroup({
   };
 
   if (chatReference) {
-    txBody["chatReference"] = chatReference;
+    txBody['chatReference'] = chatReference;
   }
 
   const tx = await createTransaction(181, keyPair, txBody);
@@ -1651,9 +1661,8 @@ export async function sendChatGroup({
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
-  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+  const { nonce, chatBytesArray } = await performPowTask(chatBytes, difficulty);
 
- 
   let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
   if (_response?.error) {
     throw new Error(_response?.message);
@@ -1682,7 +1691,7 @@ export async function sendChatDirect({
     recipientAddress = await getNameOrAddress(directTo);
   }
 
-  if (!recipientPublicKey) throw new Error("Cannot retrieve publickey");
+  if (!recipientPublicKey) throw new Error('Cannot retrieve publickey');
 
   let _reference = new Uint8Array(64);
   self.crypto.getRandomValues(_reference);
@@ -1698,7 +1707,6 @@ export async function sendChatDirect({
   };
   // const balance = await getBalanceInfo();
   // const hasEnoughBalance = +balance < 4 ? false : true;
-
 
   const finalJson = {
     message: messageText,
@@ -1719,7 +1727,7 @@ export async function sendChatDirect({
     isText: 1,
   };
   if (chatReference) {
-    txBody["chatReference"] = chatReference;
+    txBody['chatReference'] = chatReference;
   }
   const tx = await createTransaction(18, keyPair, txBody);
 
@@ -1729,7 +1737,7 @@ export async function sendChatDirect({
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
-  const { nonce, chatBytesArray  } = await performPowTask(chatBytes, difficulty);
+  const { nonce, chatBytesArray } = await performPowTask(chatBytes, difficulty);
 
   let _response = await signChatFunc(chatBytesArray, nonce, null, keyPair);
   if (_response?.error) {
@@ -1756,7 +1764,9 @@ export async function decryptSingleFunc({
       const decryptToUnit8Array = base64ToUint8Array(res);
       const responseData = uint8ArrayToObject(decryptToUnit8Array);
       holdMessages.push({ ...message, decryptedData: responseData });
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
   }
   return holdMessages;
 }
@@ -1778,11 +1788,12 @@ export async function decryptSingleForPublishes({
       const decryptToUnit8Array = base64ToUint8Array(res);
       const responseData = uint8ArrayToObject(decryptToUnit8Array);
       holdMessages.push({ ...message, decryptedData: responseData });
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
   }
   return holdMessages;
 }
-
 
 export async function decryptDirectFunc({ messages, involvingAddress }) {
   const senderPublicKey = await getPublicKey(involvingAddress);
@@ -1806,72 +1817,68 @@ export async function decryptDirectFunc({ messages, involvingAddress }) {
       );
       const parsedMessage = JSON.parse(decodedMessage);
       holdMessages.push({ ...message, ...parsedMessage });
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
   }
   return holdMessages;
 }
 
-export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlockchain }) {
+export async function createBuyOrderTx({
+  crosschainAtInfo,
+  isGateway,
+  foreignBlockchain,
+}) {
   try {
-
     if (!isGateway) {
       const wallet = await getSaveWallet();
 
       const address = wallet.address0;
-      let message
-      if(foreignBlockchain === 'PIRATECHAIN'){
-         message = {
+      let message;
+      if (foreignBlockchain === 'PIRATECHAIN') {
+        message = {
           atAddress: crosschainAtInfo[0].qortalAtAddress,
           foreignKey: await getForeignKey(foreignBlockchain),
           receivingAddress: address,
         };
       } else {
-         message = {
-          addresses: crosschainAtInfo.map((order)=> order.qortalAtAddress),
+        message = {
+          addresses: crosschainAtInfo.map((order) => order.qortalAtAddress),
           foreignKey: await getForeignKey(foreignBlockchain),
           receivingAddress: address,
         };
       }
-     
+
       let responseVar;
-      let txn
-      let url
-      if(foreignBlockchain === 'PIRATECHAIN'){
-         txn = new TradeBotRespondRequest().createTransaction(
-          message
-        );
-       
-     
-          url =  await createEndpoint('/crosschain/tradebot/respond')
+      let txn;
+      let url;
+      if (foreignBlockchain === 'PIRATECHAIN') {
+        txn = new TradeBotRespondRequest().createTransaction(message);
+
+        url = await createEndpoint('/crosschain/tradebot/respond');
       } else {
-         txn = new TradeBotRespondMultipleRequest().createTransaction(
-          message
-        );
-       
-     
-          url =  await createEndpoint('/crosschain/tradebot/respondmultiple')
+        txn = new TradeBotRespondMultipleRequest().createTransaction(message);
+
+        url = await createEndpoint('/crosschain/tradebot/respondmultiple');
       }
-    
-      const responseFetch = await fetch(
-        url,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(txn),
-        }
-      );
+
+      const responseFetch = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(txn),
+      });
 
       const res = await responseFetch.json();
-      if(res?.error && res?.message){
-        throw new Error(res?.message)
+      if (res?.error && res?.message) {
+        throw new Error(res?.message);
       }
-      if(!responseFetch?.ok) throw new Error('Failed to submit buy order')
+      if (!responseFetch?.ok) throw new Error('Failed to submit buy order');
 
       if (res === false) {
         responseVar = {
-          response: "Unable to execute buy order",
+          response: 'Unable to execute buy order',
           success: false,
         };
       } else {
@@ -1883,32 +1890,40 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
         responseMessage = {
           callResponse: response,
           extra: {
-            message: "Transaction processed successfully!",
-            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            message: 'Transaction processed successfully!',
+            atAddresses:
+              foreignBlockchain === 'PIRATECHAIN'
+                ? [crosschainAtInfo[0].qortalAtAddress]
+                : crosschainAtInfo.map((order) => order.qortalAtAddress),
             senderAddress: address,
-            node: url
+            node: url,
           },
         };
       } else {
         responseMessage = {
-          callResponse: "ERROR",
+          callResponse: 'ERROR',
           extra: {
             message: response,
-            atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
+            atAddresses:
+              foreignBlockchain === 'PIRATECHAIN'
+                ? [crosschainAtInfo[0].qortalAtAddress]
+                : crosschainAtInfo.map((order) => order.qortalAtAddress),
             senderAddress: address,
-            node: url
+            node: url,
           },
         };
       }
 
-      return responseMessage
+      return responseMessage;
     }
     const wallet = await getSaveWallet();
     const address = wallet.address0;
 
- 
     const message = {
-      addresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
+      addresses:
+        foreignBlockchain === 'PIRATECHAIN'
+          ? [crosschainAtInfo[0].qortalAtAddress]
+          : crosschainAtInfo.map((order) => order.qortalAtAddress),
       foreignKey: await getForeignKey(foreignBlockchain),
       receivingAddress: address,
     };
@@ -1916,33 +1931,37 @@ export async function createBuyOrderTx({ crosschainAtInfo, isGateway, foreignBlo
       qortAddress: proxyAccountAddress,
       recipientPublicKey: proxyAccountPublicKey,
       message,
-      atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
-      isSingle: foreignBlockchain === 'PIRATECHAIN'
+      atAddresses:
+        foreignBlockchain === 'PIRATECHAIN'
+          ? [crosschainAtInfo[0].qortalAtAddress]
+          : crosschainAtInfo.map((order) => order.qortalAtAddress),
+      isSingle: foreignBlockchain === 'PIRATECHAIN',
     });
 
-    
     if (res?.signature) {
-    
-        const message = await listenForChatMessageForBuyOrder({
-          nodeBaseUrl: buyTradeNodeBaseUrl,
-          senderAddress: proxyAccountAddress,
-          senderPublicKey: proxyAccountPublicKey,
-          signature: res?.signature,
-        });
+      const message = await listenForChatMessageForBuyOrder({
+        nodeBaseUrl: buyTradeNodeBaseUrl,
+        senderAddress: proxyAccountAddress,
+        senderPublicKey: proxyAccountPublicKey,
+        signature: res?.signature,
+      });
 
       const responseMessage = {
-          callResponse: message.callResponse,
-            extra: {
-              message: message?.extra?.message,
-              senderAddress: address,
-              node: buyTradeNodeBaseUrl,
-              atAddresses: foreignBlockchain === 'PIRATECHAIN' ? [crosschainAtInfo[0].qortalAtAddress]  : crosschainAtInfo.map((order)=> order.qortalAtAddress),
-            }
-          }
-    
-      return responseMessage
+        callResponse: message.callResponse,
+        extra: {
+          message: message?.extra?.message,
+          senderAddress: address,
+          node: buyTradeNodeBaseUrl,
+          atAddresses:
+            foreignBlockchain === 'PIRATECHAIN'
+              ? [crosschainAtInfo[0].qortalAtAddress]
+              : crosschainAtInfo.map((order) => order.qortalAtAddress),
+        },
+      };
+
+      return responseMessage;
     } else {
-      throw new Error("Unable to send buy order message");
+      throw new Error('Unable to send buy order message');
     }
   } catch (error) {
     throw new Error(error.message);
@@ -1957,8 +1976,8 @@ export async function sendChatNotification(
 ) {
   try {
     const data = await objectToBase64({
-      type: "notification",
-      subType: "new-group-encryption",
+      type: 'notification',
+      subType: 'new-group-encryption',
       data: {
         timestamp: res.timestamp,
         name: res.name,
@@ -1981,16 +2000,18 @@ export async function sendChatNotification(
         })
           .then(() => {})
           .catch((error) => {
-            console.error("1", error.message);
+            console.error('1', error.message);
           })
           .finally(() => {
             resumeAllQueues();
           });
       })
       .catch((error) => {
-        console.error("2", error.message);
+        console.error('2', error.message);
       });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 export const getFee = async (txType) => {
@@ -2018,7 +2039,7 @@ export async function leaveGroup({ groupId }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("LEAVE_GROUP");
+  const feeres = await getFee('LEAVE_GROUP');
 
   const tx = await createTransaction(32, keyPair, {
     fee: feeres.fee,
@@ -2031,7 +2052,7 @@ export async function leaveGroup({ groupId }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
@@ -2047,7 +2068,7 @@ export async function joinGroup({ groupId }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("JOIN_GROUP");
+  const feeres = await getFee('JOIN_GROUP');
 
   const tx = await createTransaction(31, keyPair, {
     fee: feeres.fee,
@@ -2060,7 +2081,7 @@ export async function joinGroup({ groupId }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
@@ -2074,7 +2095,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("CANCEL_GROUP_INVITE");
+  const feeres = await getFee('CANCEL_GROUP_INVITE');
 
   const tx = await createTransaction(30, keyPair, {
     fee: feeres.fee,
@@ -2087,7 +2108,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
@@ -2101,7 +2122,7 @@ export async function cancelBan({ groupId, qortalAddress }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("CANCEL_GROUP_BAN");
+  const feeres = await getFee('CANCEL_GROUP_BAN');
 
   const tx = await createTransaction(27, keyPair, {
     fee: feeres.fee,
@@ -2114,10 +2135,10 @@ export async function cancelBan({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
-export async function registerName({ name, description = "" }) {
+export async function registerName({ name, description = '' }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2127,12 +2148,12 @@ export async function registerName({ name, description = "" }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("REGISTER_NAME");
+  const feeres = await getFee('REGISTER_NAME');
 
   const tx = await createTransaction(3, keyPair, {
     fee: feeres.fee,
     name,
-    value: description || "",
+    value: description || '',
     lastReference: lastReference,
   });
 
@@ -2140,7 +2161,7 @@ export async function registerName({ name, description = "" }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 export async function updateName({ newName, oldName, description }) {
@@ -2153,13 +2174,13 @@ export async function updateName({ newName, oldName, description }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("UPDATE_NAME");
+  const feeres = await getFee('UPDATE_NAME');
 
   const tx = await createTransaction(4, keyPair, {
     fee: feeres.fee,
     name: oldName,
     newName,
-    newData: description || "",
+    newData: description || '',
     lastReference: lastReference,
   });
 
@@ -2167,7 +2188,7 @@ export async function updateName({ newName, oldName, description }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 export async function makeAdmin({ groupId, qortalAddress }) {
@@ -2180,7 +2201,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("ADD_GROUP_ADMIN");
+  const feeres = await getFee('ADD_GROUP_ADMIN');
 
   const tx = await createTransaction(24, keyPair, {
     fee: feeres.fee,
@@ -2193,7 +2214,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
@@ -2207,7 +2228,7 @@ export async function removeAdmin({ groupId, qortalAddress }) {
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("REMOVE_GROUP_ADMIN");
+  const feeres = await getFee('REMOVE_GROUP_ADMIN');
 
   const tx = await createTransaction(25, keyPair, {
     fee: feeres.fee,
@@ -2220,14 +2241,14 @@ export async function removeAdmin({ groupId, qortalAddress }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
 export async function banFromGroup({
   groupId,
   qortalAddress,
-  rBanReason = "",
+  rBanReason = '',
   rBanTime,
 }) {
   const lastReference = await getLastRef();
@@ -2239,7 +2260,7 @@ export async function banFromGroup({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("GROUP_BAN");
+  const feeres = await getFee('GROUP_BAN');
 
   const tx = await createTransaction(26, keyPair, {
     fee: feeres.fee,
@@ -2254,14 +2275,14 @@ export async function banFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
 export async function kickFromGroup({
   groupId,
   qortalAddress,
-  rBanReason = "",
+  rBanReason = '',
 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
@@ -2272,7 +2293,7 @@ export async function kickFromGroup({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("GROUP_KICK");
+  const feeres = await getFee('GROUP_KICK');
 
   const tx = await createTransaction(28, keyPair, {
     fee: feeres.fee,
@@ -2286,15 +2307,11 @@ export async function kickFromGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
-export async function transferAsset({
-  amount,
-  recipient,
-  assetId,
-}) {
+export async function transferAsset({ amount, recipient, assetId }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2304,7 +2321,7 @@ export async function transferAsset({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  const feeres = await getFee("TRANSFER_ASSET");
+  const feeres = await getFee('TRANSFER_ASSET');
 
   const tx = await createTransaction(12, keyPair, {
     fee: feeres.fee,
@@ -2314,12 +2331,11 @@ export async function transferAsset({
     lastReference: lastReference,
   });
 
-
   const signedBytes = Base58.encode(tx.signedBytes);
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
@@ -2333,9 +2349,9 @@ export async function createGroup({
 }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("CREATE_GROUP");
+  const feeres = await getFee('CREATE_GROUP');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2361,18 +2377,15 @@ export async function createGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
-export async function sellName({
-  name,
-  sellPrice
-}) {
+export async function sellName({ name, sellPrice }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("SELL_NAME");
+  const feeres = await getFee('SELL_NAME');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2393,18 +2406,16 @@ export async function sellName({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
-export async function cancelSellName({
-  name
-}) {
+export async function cancelSellName({ name }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("SELL_NAME");
+  const feeres = await getFee('SELL_NAME');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2424,20 +2435,16 @@ export async function cancelSellName({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 
-export async function buyName({
-  name,
-  sellerAddress,
-  sellPrice
-}) {
+export async function buyName({ name, sellerAddress, sellPrice }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("BUY_NAME");
+  const feeres = await getFee('BUY_NAME');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2450,8 +2457,8 @@ export async function buyName({
   const tx = await createTransaction(7, keyPair, {
     fee: feeres.fee,
     name,
-		sellPrice,
-		recipient: sellerAddress,
+    sellPrice,
+    recipient: sellerAddress,
     lastReference: lastReference,
   });
 
@@ -2459,7 +2466,7 @@ export async function buyName({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 export async function updateGroup({
@@ -2469,13 +2476,13 @@ export async function updateGroup({
   newDescription,
   newApprovalThreshold,
   newMinimumBlockDelay,
-  newMaximumBlockDelay
+  newMaximumBlockDelay,
 }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("UPDATE_GROUP");
+  const feeres = await getFee('UPDATE_GROUP');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2488,8 +2495,8 @@ export async function updateGroup({
   const tx = await createTransaction(23, keyPair, {
     fee: feeres.fee,
     _groupId: groupId,
-     newOwner,
-     newIsOpen,
+    newOwner,
+    newIsOpen,
     newDescription,
     newApprovalThreshold,
     newMinimumBlockDelay,
@@ -2501,14 +2508,14 @@ export async function updateGroup({
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error(res?.message || "Transaction was not able to be processed");
+    throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
 export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
   const address = await getNameOrAddress(qortalAddress);
-  if (!address) throw new Error("Cannot find user");
+  if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
-  const feeres = await getFee("GROUP_INVITE");
+  const feeres = await getFee('GROUP_INVITE');
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
   const uint8PrivateKey = Base58.decode(parsedData.privateKey);
@@ -2530,7 +2537,7 @@ export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
 
   const res = await processTransactionVersion2(signedBytes);
   if (!res?.signature)
-    throw new Error("Transaction was not able to be processed");
+    throw new Error('Transaction was not able to be processed');
   return res;
 }
 
@@ -2541,12 +2548,12 @@ export async function sendCoin(
   try {
     const confirmReceiver = await getNameOrAddress(receiver);
     if (confirmReceiver.error)
-      throw new Error("Invalid receiver address or name");
+      throw new Error('Invalid receiver address or name');
     const wallet = await getSaveWallet();
-    let keyPair = "";
+    let keyPair = '';
     if (skipConfirmPassword) {
       const resKeyPair = await getKeyPair();
-  
+
       const parsedData = resKeyPair;
       const uint8PrivateKey = Base58.decode(parsedData.privateKey);
       const uint8PublicKey = Base58.decode(parsedData.publicKey);
@@ -2556,7 +2563,10 @@ export async function sendCoin(
       };
     } else {
       const response = await decryptStoredWallet(password, wallet);
-      const wallet2 = new PhraseWallet(response, wallet?.version || walletVersion);
+      const wallet2 = new PhraseWallet(
+        response,
+        wallet?.version || walletVersion
+      );
 
       keyPair = wallet2._addresses[0].keyPair;
     }
@@ -2589,7 +2599,7 @@ function fetchMessages(apiCall) {
   return new Promise((resolve, reject) => {
     const attemptFetch = async () => {
       if (Date.now() - startTime > maxDuration) {
-        return reject(new Error("Maximum polling time exceeded"));
+        return reject(new Error('Maximum polling time exceeded'));
       }
 
       try {
@@ -2624,7 +2634,7 @@ async function fetchMessagesForBuyOrders(apiCall, signature, senderPublicKey) {
   return new Promise((resolve, reject) => {
     const attemptFetch = async () => {
       if (Date.now() - startTime > maxDuration) {
-        return reject(new Error("Maximum polling time exceeded"));
+        return reject(new Error('Maximum polling time exceeded'));
       }
 
       try {
@@ -2680,7 +2690,7 @@ async function listenForChatMessage({
   timestamp,
 }) {
   try {
-    let validApi = "";
+    let validApi = '';
     const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
       (item) => item === nodeBaseUrl
     );
@@ -2725,7 +2735,7 @@ async function listenForChatMessageForBuyOrder({
   signature,
 }) {
   try {
-    let validApi = "";
+    let validApi = '';
     const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
       (item) => item === nodeBaseUrl
     );
@@ -2745,7 +2755,7 @@ async function listenForChatMessageForBuyOrder({
       senderPublicKey
     );
 
-    return parsedMessageObj
+    return parsedMessageObj;
 
     // chrome.tabs.query({}, function (tabs) {
     //   tabs.forEach((tab) => {
@@ -2803,7 +2813,7 @@ export async function setChatHeads(data) {
     storeData(`chatheads-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -2866,7 +2876,7 @@ export async function saveTempPublish({ data, key }) {
     storeData(`tempPublish-${address}`, newTemp)
       .then(() => resolve(newTemp[key]))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -2878,7 +2888,7 @@ async function setChatHeadsDirect(data) {
     storeData(`chatheads-direct-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -2936,7 +2946,7 @@ export async function addTimestampGroupAnnouncement({
     storeData(`group-announcement-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -2949,32 +2959,31 @@ export async function getTimestampLatestPayment() {
   if (res) {
     const parsedData = res;
     return parsedData;
-  } else return 0
+  } else return 0;
 }
 
 export async function addTimestampLatestPayment(timestamp) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  
+
   return await new Promise((resolve, reject) => {
     storeData(`latest-payment-${address}`, timestamp)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
 
-
 export async function addEnteredQmailTimestamp() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  
+
   return await new Promise((resolve, reject) => {
     storeData(`qmail-entered-timestamp-${address}`, Date.now())
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -2988,7 +2997,7 @@ export async function getEnteredQmailTimestamp() {
     const parsedData = res;
     return parsedData;
   } else {
-    return null
+    return null;
   }
 }
 
@@ -3036,7 +3045,7 @@ export async function setGroupData({
     storeData(`group-data-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -3050,7 +3059,7 @@ export async function addTimestampEnterChat({ groupId, timestamp }) {
     storeData(`enter-chat-timestamp-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
@@ -3064,11 +3073,10 @@ export async function addTimestampMention({ groupId, timestamp }) {
     storeData(`enter-mention-timestamp-${address}`, data)
       .then(() => resolve(true))
       .catch((error) => {
-        reject(new Error(error.message || "Error saving data"));
+        reject(new Error(error.message || 'Error saving data'));
       });
   });
 }
-
 
 export async function notifyAdminRegenerateSecretKey({
   groupName,
@@ -3096,7 +3104,7 @@ async function getChatHeads() {
     const parsedData = res;
     return parsedData;
   } else {
-    throw new Error("No Chatheads saved");
+    throw new Error('No Chatheads saved');
   }
 }
 
@@ -3109,22 +3117,22 @@ async function getChatHeadsDirect() {
     const parsedData = res;
     return parsedData;
   } else {
-    throw new Error("No Chatheads saved");
+    throw new Error('No Chatheads saved');
   }
 }
 
 function setupMessageListener() {
-  window.addEventListener("message", async (event) => {
+  window.addEventListener('message', async (event) => {
     if (event.origin !== window.location.origin) {
       return;
     }
     const request = event.data;
 
     // Check if the message is intended for this listener
-    if (request?.type !== "backgroundMessage") return; // Only process messages of type 'backgroundMessage'
+    if (request?.type !== 'backgroundMessage') return; // Only process messages of type 'backgroundMessage'
 
     switch (request.action) {
-      case "version":
+      case 'version':
         versionCase(request, event);
         break;
 
@@ -3132,208 +3140,208 @@ function setupMessageListener() {
       //   storeWalletInfoCase(request, event);
       //   break;
 
-      case "getWalletInfo":
+      case 'getWalletInfo':
         getWalletInfoCase(request, event);
         break;
 
-      case "validApi":
+      case 'validApi':
         validApiCase(request, event);
         break;
 
-      case "name":
+      case 'name':
         nameCase(request, event);
         break;
-      case "userInfo":
+      case 'userInfo':
         userInfoCase(request, event);
         break;
-      case "decryptWallet":
+      case 'decryptWallet':
         decryptWalletCase(request, event);
         break;
-      case "balance":
+      case 'balance':
         balanceCase(request, event);
         break;
-      case "ltcBalance":
+      case 'ltcBalance':
         ltcBalanceCase(request, event);
         break;
-      case "sendCoin":
+      case 'sendCoin':
         sendCoinCase(request, event);
         break;
-      case "inviteToGroup":
+      case 'inviteToGroup':
         inviteToGroupCase(request, event);
         break;
-      case "saveTempPublish":
+      case 'saveTempPublish':
         saveTempPublishCase(request, event);
         break;
-      case "getTempPublish":
+      case 'getTempPublish':
         getTempPublishCase(request, event);
         break;
-      case "createGroup":
+      case 'createGroup':
         createGroupCase(request, event);
         break;
-      case "cancelInvitationToGroup":
+      case 'cancelInvitationToGroup':
         cancelInvitationToGroupCase(request, event);
         break;
-      case "leaveGroup":
+      case 'leaveGroup':
         leaveGroupCase(request, event);
         break;
-      case "joinGroup":
+      case 'joinGroup':
         joinGroupCase(request, event);
         break;
-      case "kickFromGroup":
+      case 'kickFromGroup':
         kickFromGroupCase(request, event);
         break;
-      case "banFromGroup":
+      case 'banFromGroup':
         banFromGroupCase(request, event);
         break;
 
-      case "addDataPublishes":
+      case 'addDataPublishes':
         addDataPublishesCase(request, event);
         break;
 
-      case "getDataPublishes":
+      case 'getDataPublishes':
         getDataPublishesCase(request, event);
         break;
-      case "addUserSettings":
+      case 'addUserSettings':
         addUserSettingsCase(request, event);
         break;
-      case "cancelBan":
+      case 'cancelBan':
         cancelBanCase(request, event);
         break;
-      case "registerName":
+      case 'registerName':
         registerNameCase(request, event);
         break;
-      case "createPoll":
+      case 'createPoll':
         createPollCase(request, event);
         break;
-      case "voteOnPoll":
+      case 'voteOnPoll':
         voteOnPollCase(request, event);
-          break;
-      case "makeAdmin":
+        break;
+      case 'makeAdmin':
         makeAdminCase(request, event);
         break;
-      case "removeAdmin":
+      case 'removeAdmin':
         removeAdminCase(request, event);
         break;
-      case "notification":
+      case 'notification':
         notificationCase(request, event);
         break;
 
-      case "addTimestampEnterChat":
+      case 'addTimestampEnterChat':
         addTimestampEnterChatCase(request, event);
         break;
-      case "setApiKey":
+      case 'setApiKey':
         setApiKeyCase(request, event);
         break;
-      case "setCustomNodes":
+      case 'setCustomNodes':
         setCustomNodesCase(request, event);
-      case "getApiKey":
+      case 'getApiKey':
         getApiKeyCase(request, event);
         break;
-      case "getCustomNodesFromStorage":
+      case 'getCustomNodesFromStorage':
         getCustomNodesFromStorageCase(request, event);
         break;
-      case "notifyAdminRegenerateSecretKey":
+      case 'notifyAdminRegenerateSecretKey':
         notifyAdminRegenerateSecretKeyCase(request, event);
         break;
-      case "addGroupNotificationTimestamp":
+      case 'addGroupNotificationTimestamp':
         addGroupNotificationTimestampCase(request, event);
         break;
-      case "clearAllNotifications":
+      case 'clearAllNotifications':
         clearAllNotificationsCase(request, event);
         break;
-      case "setGroupData":
+      case 'setGroupData':
         setGroupDataCase(request, event);
         break;
-      case "getGroupDataSingle":
+      case 'getGroupDataSingle':
         getGroupDataSingleCase(request, event);
         break;
-      case "getTimestampEnterChat":
+      case 'getTimestampEnterChat':
         getTimestampEnterChatCase(request, event);
         break;
-        case "listActions":
-          listActionsCase(request, event);
-          break;
-        case "addTimestampMention":
-          addTimestampMentionCase(request, event);
-          break;
-          case "getTimestampMention":
-            getTimestampMentionCase(request, event);
-            break;
-      case "getGroupNotificationTimestamp":
+      case 'listActions':
+        listActionsCase(request, event);
+        break;
+      case 'addTimestampMention':
+        addTimestampMentionCase(request, event);
+        break;
+      case 'getTimestampMention':
+        getTimestampMentionCase(request, event);
+        break;
+      case 'getGroupNotificationTimestamp':
         getGroupNotificationTimestampCase(request, event);
         break;
-      case "encryptAndPublishSymmetricKeyGroupChat":
+      case 'encryptAndPublishSymmetricKeyGroupChat':
         encryptAndPublishSymmetricKeyGroupChatCase(request, event);
         break;
-      case "encryptAndPublishSymmetricKeyGroupChatForAdmins":
+      case 'encryptAndPublishSymmetricKeyGroupChatForAdmins':
         encryptAndPublishSymmetricKeyGroupChatForAdminsCase(request, event);
         break;
-      case "publishGroupEncryptedResource":
+      case 'publishGroupEncryptedResource':
         publishGroupEncryptedResourceCase(request, event);
         break;
-      case "publishOnQDN":
+      case 'publishOnQDN':
         publishOnQDNCase(request, event);
         break;
-      case "getUserSettings":
+      case 'getUserSettings':
         getUserSettingsCase(request, event);
         break;
-      case "handleActiveGroupDataFromSocket":
+      case 'handleActiveGroupDataFromSocket':
         handleActiveGroupDataFromSocketCase(request, event);
         break;
-      case "getThreadActivity":
+      case 'getThreadActivity':
         getThreadActivityCase(request, event);
         break;
-      case "updateThreadActivity":
+      case 'updateThreadActivity':
         updateThreadActivityCase(request, event);
-      case "decryptGroupEncryption":
+      case 'decryptGroupEncryption':
         decryptGroupEncryptionCase(request, event);
         break;
-      case "encryptSingle":
+      case 'encryptSingle':
         encryptSingleCase(request, event);
         break;
-      case "decryptSingle":
+      case 'decryptSingle':
         decryptSingleCase(request, event);
         break;
-      case "pauseAllQueues":
+      case 'pauseAllQueues':
         pauseAllQueuesCase(request, event);
         break;
-      case "resumeAllQueues":
+      case 'resumeAllQueues':
         resumeAllQueuesCase(request, event);
         break;
-      case "checkLocal":
+      case 'checkLocal':
         checkLocalCase(request, event);
         break;
-      case "decryptSingleForPublishes":
+      case 'decryptSingleForPublishes':
         decryptSingleForPublishesCase(request, event);
         break;
-      case "decryptDirect":
+      case 'decryptDirect':
         decryptDirectCase(request, event);
         break;
-      case "sendChatGroup":
+      case 'sendChatGroup':
         sendChatGroupCase(request, event);
         break;
-      case "sendChatDirect":
+      case 'sendChatDirect':
         sendChatDirectCase(request, event);
         break;
-      case "setupGroupWebsocket":
+      case 'setupGroupWebsocket':
         setupGroupWebsocketCase(request, event);
         break;
-      case "createRewardShare":
+      case 'createRewardShare':
         createRewardShareCase(request, event);
         break;
-        case "getRewardSharePrivateKey":
-          getRewardSharePrivateKeyCase(request, event);
-          break;
-      case "removeRewardShare" :
+      case 'getRewardSharePrivateKey':
+        getRewardSharePrivateKeyCase(request, event);
+        break;
+      case 'removeRewardShare':
         removeRewardShareCase(request, event);
         break;
-      case "addEnteredQmailTimestamp":
+      case 'addEnteredQmailTimestamp':
         addEnteredQmailTimestampCase(request, event);
         break;
-      case "getEnteredQmailTimestamp":
+      case 'getEnteredQmailTimestamp':
         getEnteredQmailTimestampCase(request, event);
         break;
-      case "logout":
+      case 'logout':
         {
           try {
             const logoutFunc = async () => {
@@ -3343,16 +3351,16 @@ function setupMessageListener() {
                 // for announcement notification
                 clearInterval(interval);
               }
-              groupSecretkeys = {}
+              groupSecretkeys = {};
               const wallet = await getSaveWallet();
               const address = wallet.address0;
               const key1 = `tempPublish-${address}`;
               const key2 = `group-data-${address}`;
               const key3 = `${address}-publishData`;
               const keysToRemove = [
-                "keyPair",
-                "walletInfo",
-                "active-groups-directs",
+                'keyPair',
+                'walletInfo',
+                'active-groups-directs',
                 key1,
                 key2,
                 key3,
@@ -3361,7 +3369,9 @@ function setupMessageListener() {
               removeKeysAndLogout(keysToRemove, event, request);
             };
             logoutFunc();
-          } catch (error) {}
+          } catch (error) {
+            console.log(error);
+          }
         }
 
         break;
@@ -3377,23 +3387,25 @@ const checkGroupList = async () => {
   try {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
-    const url = await createEndpoint(`/chat/active/${address}?encoding=BASE64&haschatreference=false`);
+    const url = await createEndpoint(
+      `/chat/active/${address}?encoding=BASE64&haschatreference=false`
+    );
     const response = await fetch(url, {
-      method: "GET",
+      method: 'GET',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
     });
     const data = await response.json();
-    const copyGroups = [...(data?.groups || [])]
-              const findIndex = copyGroups?.findIndex(item => item?.groupId === 0)
-              if(findIndex !== -1){
-                copyGroups[findIndex] = {
-                  ...(copyGroups[findIndex] || {}),
-                  groupId: "0"
-                }
-              }
-              const filteredGroups = copyGroups
+    const copyGroups = [...(data?.groups || [])];
+    const findIndex = copyGroups?.findIndex((item) => item?.groupId === 0);
+    if (findIndex !== -1) {
+      copyGroups[findIndex] = {
+        ...(copyGroups[findIndex] || {}),
+        groupId: '0',
+      };
+    }
+    const filteredGroups = copyGroups;
 
     const sortedGroups = filteredGroups.sort(
       (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
@@ -3401,8 +3413,8 @@ const checkGroupList = async () => {
     const sortedDirects = (data?.direct || [])
       .filter(
         (item) =>
-          item?.name !== "extension-proxy" &&
-          item?.address !== "QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH"
+          item?.name !== 'extension-proxy' &&
+          item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH'
       )
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
@@ -3418,17 +3430,17 @@ const checkGroupList = async () => {
 
 export const checkNewMessages = async () => {
   try {
-    let mutedGroups = (await getUserSettings({ key: "mutedGroups" })) || [];
+    let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
     if (!isArray(mutedGroups)) mutedGroups = [];
-    mutedGroups.push('0')
-    let myName = "";
+    mutedGroups.push('0');
+    let myName = '';
     const userData = await getUserInfo();
     if (userData?.name) {
       myName = userData.name;
     }
 
     let newAnnouncements = [];
-    const activeData = (await getStoredData("active-groups-directs")) || {
+    const activeData = (await getStoredData('active-groups-directs')) || {
       groups: [],
       directs: [],
     };
@@ -3446,9 +3458,9 @@ export const checkNewMessages = async () => {
           );
           const response = await requestQueueAnnouncements.enqueue(() => {
             return fetch(url, {
-              method: "GET",
+              method: 'GET',
               headers: {
-                "Content-Type": "application/json",
+                'Content-Type': 'application/json',
               },
             });
           });
@@ -3480,7 +3492,7 @@ export const checkNewMessages = async () => {
       })
     );
     let isDisableNotifications =
-      (await getUserSettings({ key: "disable-push-notifications" })) || false;
+      (await getUserSettings({ key: 'disable-push-notifications' })) || false;
 
     if (
       newAnnouncements.length > 0 &&
@@ -3488,19 +3500,20 @@ export const checkNewMessages = async () => {
       !isDisableNotifications
     ) {
       // Create a unique notification ID with type and group announcement details
-      const notificationId =
-      encodeURIComponent("chat_notification_" +
-        Date.now() +
-        "_type=group-announcement" +
-        `_from=${newAnnouncements[0]?.groupId}`);
+      const notificationId = encodeURIComponent(
+        'chat_notification_' +
+          Date.now() +
+          '_type=group-announcement' +
+          `_from=${newAnnouncements[0]?.groupId}`
+      );
 
-      const title = "New group announcement!";
+      const title = 'New group announcement!';
       const body = `You have received a new announcement from ${newAnnouncements[0]?.groupName}`;
 
       // Create and show the notification
       const notification = new window.Notification(title, {
         body,
-        icon: window.location.origin + "/qortal192.png",
+        icon: window.location.origin + '/qortal192.png',
         data: { id: notificationId },
       });
 
@@ -3520,7 +3533,7 @@ export const checkNewMessages = async () => {
 
     window.postMessage(
       {
-        action: "SET_GROUP_ANNOUNCEMENTS",
+        action: 'SET_GROUP_ANNOUNCEMENTS',
         payload: savedtimestampAfter,
       },
       targetOrigin
@@ -3533,62 +3546,55 @@ export const checkNewMessages = async () => {
 export const checkPaymentsForNotifications = async (address) => {
   try {
     const isDisableNotifications =
-    (await getUserSettings({ key: "disable-push-notifications" })) || false;
-    if(isDisableNotifications) return
-      let latestPayment = null
-          const savedtimestamp = await getTimestampLatestPayment();
+      (await getUserSettings({ key: 'disable-push-notifications' })) || false;
+    if (isDisableNotifications) return;
+    let latestPayment = null;
+    const savedtimestamp = await getTimestampLatestPayment();
 
-          const url = await createEndpoint(
-            `/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
-          );
-         
-         const response =   await fetch(url, {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            });
-        
-          const responseData = await response.json();
+    const url = await createEndpoint(
+      `/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
+    );
 
-          const latestTx = responseData.filter(
-            (tx) => tx?.creatorAddress !== address && tx?.recipient === address
-          )[0];
-          if (!latestTx) {
-            return; // continue to the next group
-          }
-          if (
-            checkDifference(latestTx.timestamp) &&
-            (!savedtimestamp ||
-              latestTx.timestamp >
-                savedtimestamp)
-          ) {
-            if(latestTx.timestamp){
-              latestPayment = latestTx
-              await addTimestampLatestPayment(latestTx.timestamp);
-            }
-           
-            // save new timestamp
-          }
-       
- 
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
+    const responseData = await response.json();
+
+    const latestTx = responseData.filter(
+      (tx) => tx?.creatorAddress !== address && tx?.recipient === address
+    )[0];
+    if (!latestTx) {
+      return; // continue to the next group
+    }
     if (
-      latestPayment
+      checkDifference(latestTx.timestamp) &&
+      (!savedtimestamp || latestTx.timestamp > savedtimestamp)
     ) {
-      // Create a unique notification ID with type and group announcement details
-      const notificationId =
-      encodeURIComponent("payment_notification_" +
-        Date.now() +
-        "_type=payment-announcement");
+      if (latestTx.timestamp) {
+        latestPayment = latestTx;
+        await addTimestampLatestPayment(latestTx.timestamp);
+      }
 
-      const title = "New payment!";
+      // save new timestamp
+    }
+
+    if (latestPayment) {
+      // Create a unique notification ID with type and group announcement details
+      const notificationId = encodeURIComponent(
+        'payment_notification_' + Date.now() + '_type=payment-announcement'
+      );
+
+      const title = 'New payment!';
       const body = `You have received a new payment of ${latestPayment?.amount} QORT`;
 
       // Create and show the notification
       const notification = new window.Notification(title, {
         body,
-        icon: window.location.origin + "/qortal192.png",
+        icon: window.location.origin + '/qortal192.png',
         data: { id: notificationId },
       });
 
@@ -3607,27 +3613,28 @@ export const checkPaymentsForNotifications = async (address) => {
 
       window.postMessage(
         {
-          action: "SET_PAYMENT_ANNOUNCEMENT",
+          action: 'SET_PAYMENT_ANNOUNCEMENT',
           payload: latestPayment,
         },
         targetOrigin
       );
     }
-   
   } catch (error) {
-    console.error(error)
-  } 
+    console.error(error);
+  }
 };
 
 const checkActiveChatsForNotifications = async () => {
   try {
     checkGroupList();
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
 
 export const checkThreads = async (bringBack) => {
   try {
-    let myName = "";
+    let myName = '';
     const userData = await getUserInfo();
     if (userData?.name) {
       myName = userData.name;
@@ -3654,9 +3661,9 @@ export const checkThreads = async (bringBack) => {
           `${endpoint}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=1&includemetadata=false&offset=${0}&reverse=true&prefix=true`
         );
         const response = await fetch(url, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseData = await response.json();
@@ -3732,29 +3739,28 @@ export const checkThreads = async (bringBack) => {
     chrome.storage.local.set({ [`threadactivity-${address}`]: dataString });
 
     if (newAnnouncements.length > 0) {
-      const notificationId =
-      encodeURIComponent("chat_notification_" +
-        Date.now() +
-        "_type=thread-post" +
-        `_data=${JSON.stringify(newAnnouncements[0])}`);
+      const notificationId = encodeURIComponent(
+        'chat_notification_' +
+          Date.now() +
+          '_type=thread-post' +
+          `_data=${JSON.stringify(newAnnouncements[0])}`
+      );
       let isDisableNotifications =
-        (await getUserSettings({ key: "disable-push-notifications" })) || false;
+        (await getUserSettings({ key: 'disable-push-notifications' })) || false;
       if (!isDisableNotifications) {
-     
-
         // Check user settings to see if notifications are disabled
         const isDisableNotifications =
-          (await getUserSettings({ key: "disable-push-notifications" })) ||
+          (await getUserSettings({ key: 'disable-push-notifications' })) ||
           false;
 
         if (!isDisableNotifications) {
-          const title = "New thread post!";
+          const title = 'New thread post!';
           const body = `New post in ${newAnnouncements[0]?.thread?.threadData?.title}`;
 
           // Create and show the notification
           const notification = new window.Notification(title, {
             body,
-            icon: window.location.origin + "/qortal192.png",
+            icon: window.location.origin + '/qortal192.png',
             data: { id: notificationId },
           });
 
@@ -3776,7 +3782,7 @@ export const checkThreads = async (bringBack) => {
 
     window.postMessage(
       {
-        action: "SET_GROUP_ANNOUNCEMENTS",
+        action: 'SET_GROUP_ANNOUNCEMENTS',
         payload: savedtimestampAfter,
       },
       targetOrigin
@@ -3811,42 +3817,47 @@ export const checkThreads = async (bringBack) => {
 //   BackgroundFetch.finish(taskId);
 // });
 
-let notificationCheckInterval
-let paymentsCheckInterval
+let notificationCheckInterval;
+let paymentsCheckInterval;
 
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
   if (!notificationCheckInterval) {
-    notificationCheckInterval = setInterval(async () => {
-      try {
-        // This would replace the Chrome alarm callback
-        const wallet = await getSaveWallet();
-        const address = wallet?.address0;
-        if (!address) return;
+    notificationCheckInterval = setInterval(
+      async () => {
+        try {
+          // This would replace the Chrome alarm callback
+          const wallet = await getSaveWallet();
+          const address = wallet?.address0;
+          if (!address) return;
 
-        checkActiveChatsForNotifications();
-        checkNewMessages();
-        checkThreads();
-      } catch (error) {
-        console.error('Error checking notifications:', error);
-      }
-    }, 10 * 60 * 1000); // 10 minutes
+          checkActiveChatsForNotifications();
+          checkNewMessages();
+          checkThreads();
+        } catch (error) {
+          console.error('Error checking notifications:', error);
+        }
+      },
+      10 * 60 * 1000
+    ); // 10 minutes
   }
 
   if (!paymentsCheckInterval) {
-    paymentsCheckInterval = setInterval(async () => {
-      try {
-        // This would replace the Chrome alarm callback
-        const wallet = await getSaveWallet();
-        const address = wallet?.address0;
-        if (!address) return;
+    paymentsCheckInterval = setInterval(
+      async () => {
+        try {
+          // This would replace the Chrome alarm callback
+          const wallet = await getSaveWallet();
+          const address = wallet?.address0;
+          if (!address) return;
 
-        checkPaymentsForNotifications(address);
-        
-      } catch (error) {
-        console.error('Error checking payments:', error);
-      }
-    }, 3 * 60 * 1000); // 3 minutes
+          checkPaymentsForNotifications(address);
+        } catch (error) {
+          console.error('Error checking payments:', error);
+        }
+      },
+      3 * 60 * 1000
+    ); // 3 minutes
   }
 };
 

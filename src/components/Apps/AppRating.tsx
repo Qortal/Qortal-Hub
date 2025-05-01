@@ -1,20 +1,14 @@
-import { Box, Rating, Typography } from "@mui/material";
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { getFee } from "../../background";
-import { MyContext, getBaseApiReact } from "../../App";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { StarFilledIcon } from "../../assets/svgs/StarFilled";
-import { StarEmptyIcon } from "../../assets/svgs/StarEmpty";
-import { AppInfoUserName } from "./Apps-styles";
-import { Spacer } from "../../common/Spacer";
+import { Box, Rating } from '@mui/material';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { getFee } from '../../background';
+import { MyContext, getBaseApiReact } from '../../App';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { StarFilledIcon } from '../../assets/Icons/StarFilled';
+import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
+import { AppInfoUserName } from './Apps-styles';
+import { Spacer } from '../../common/Spacer';
 
-export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
+export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [value, setValue] = useState(0);
   const { show } = useContext(MyContext);
   const [hasPublishedRating, setHasPublishedRating] = useState<null | boolean>(
@@ -33,14 +27,14 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
       const url = `${getBaseApiReact()}/polls/${pollName}`;
 
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
 
       const responseData = await response.json();
-      if (responseData?.message?.includes("POLL_NO_EXISTS")) {
+      if (responseData?.message?.includes('POLL_NO_EXISTS')) {
         setHasPublishedRating(false);
       } else if (responseData?.pollName) {
         setPollInfo(responseData);
@@ -48,9 +42,9 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
         const urlVotes = `${getBaseApiReact()}/polls/votes/${pollName}`;
 
         const responseVotes = await fetch(urlVotes, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
 
@@ -59,15 +53,15 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
         const voteCount = responseDataVotes.voteCounts;
         // Include initial value vote in the calculation
         const ratingVotes = voteCount.filter(
-          (vote) => !vote.optionName.startsWith("initialValue-")
+          (vote) => !vote.optionName.startsWith('initialValue-')
         );
         const initialValueVote = voteCount.find((vote) =>
-          vote.optionName.startsWith("initialValue-")
+          vote.optionName.startsWith('initialValue-')
         );
         if (initialValueVote) {
           // Convert "initialValue-X" to just "X" and add it to the ratingVotes array
           const initialRating = parseInt(
-            initialValueVote.optionName.split("-")[1],
+            initialValueVote.optionName.split('-')[1],
             10
           );
           ratingVotes.push({
@@ -92,11 +86,12 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
         setValue(averageRating);
       }
     } catch (error) {
-      if (error?.message?.includes("POLL_NO_EXISTS")) {
+      if (error?.message?.includes('POLL_NO_EXISTS')) {
         setHasPublishedRating(false);
       }
     }
   }, []);
+
   useEffect(() => {
     if (hasCalledRef.current) return;
     if (!app) return;
@@ -105,45 +100,48 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
 
   const rateFunc = async (event, chosenValue, currentValue) => {
     try {
-      const newValue = chosenValue || currentValue
-      if (!myName) throw new Error("You need a name to rate.");
+      const newValue = chosenValue || currentValue;
+      if (!myName) throw new Error('You need a name to rate.');
       if (!app?.name) return;
-      const fee = await getFee("CREATE_POLL");
+      const fee = await getFee('CREATE_POLL');
 
       await show({
         message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
-        publishFee: fee.fee + " QORT",
+        publishFee: fee.fee + ' QORT',
       });
+
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
         await new Promise((res, rej) => {
-          window.sendMessage("createPoll", {
-          
-              pollName: pollName,
-              pollDescription: `Rating for ${app.service} ${app.name}`,
-              pollOptions: pollOptions,
-              pollOwnerAddress: myName,
-         
-          }, 60000)
-          .then((response) => {
-            if (response.error) {
-              rej(response?.message);
-              return;
-            } else {
-              res(response);
-              setInfoSnack({
-                type: "success",
-                message:
-                  "Successfully rated. Please wait a couple minutes for the network to propogate the changes.",
-              });
-              setOpenSnack(true);
-            }
-          })
-          .catch((error) => {
-            console.error("Failed qortalRequest", error);
-          });
-          
+          window
+            .sendMessage(
+              'createPoll',
+              {
+                pollName: pollName,
+                pollDescription: `Rating for ${app.service} ${app.name}`,
+                pollOptions: pollOptions,
+                pollOwnerAddress: myName,
+              },
+              60000
+            )
+            .then((response) => {
+              if (response.error) {
+                rej(response?.message);
+                return;
+              } else {
+                res(response);
+                setInfoSnack({
+                  type: 'success',
+                  message:
+                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                });
+                setOpenSnack(true);
+              }
+            })
+            .catch((error) => {
+              console.error('Failed qortalRequest', error);
+            });
         });
       } else {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
@@ -152,39 +150,41 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
           (option) => +option.optionName === +newValue
         );
         if (isNaN(optionIndex) || optionIndex === -1)
-          throw new Error("Cannot find rating option");
+          throw new Error('Cannot find rating option');
         await new Promise((res, rej) => {
-          window.sendMessage("voteOnPoll", {
-     
-              pollName: pollName,
-              optionIndex,
-          
-          }, 60000)
-          .then((response) => {
-            if (response.error) {
-              rej(response?.message);
-              return;
-            } else {
-              res(response);
-              setInfoSnack({
-                type: "success",
-                message:
-                  "Successfully rated. Please wait a couple minutes for the network to propogate the changes.",
-              });
-              setOpenSnack(true);
-            }
-          })
-          .catch((error) => {
-            console.error("Failed qortalRequest", error);
-          });
-         
+          window
+            .sendMessage(
+              'voteOnPoll',
+              {
+                pollName: pollName,
+                optionIndex,
+              },
+              60000
+            )
+            .then((response) => {
+              if (response.error) {
+                rej(response?.message);
+                return;
+              } else {
+                res(response);
+                setInfoSnack({
+                  type: 'success',
+                  message:
+                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                });
+                setOpenSnack(true);
+              }
+            })
+            .catch((error) => {
+              console.error('Failed qortalRequest', error);
+            });
         });
       }
     } catch (error) {
-      console.log('error', error)
+      console.log('error', error);
       setInfoSnack({
-        type: "error",
-        message: error?.message || "Unable to rate",
+        type: 'error',
+        message: error?.message || 'Unable to rate',
       });
       setOpenSnack(true);
     }
@@ -194,17 +194,17 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
     <div>
       <Box
         sx={{
-          display: "flex",
-          alignItems: "center",
-          flexDirection: ratingCountPosition === "top" ? "column" : "row",
+          display: 'flex',
+          alignItems: 'center',
+          flexDirection: ratingCountPosition === 'top' ? 'column' : 'row',
         }}
       >
-        {ratingCountPosition === "top" && (
+        {ratingCountPosition === 'top' && (
           <>
             <AppInfoUserName>
               {(votesInfo?.totalVotes ?? 0) +
-                (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}{" "}
-              {" RATINGS"}
+                (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}{' '}
+              {' RATINGS'}
             </AppInfoUserName>
             <Spacer height="6px" />
             <AppInfoUserName>{value?.toFixed(1)}</AppInfoUserName>
@@ -214,17 +214,17 @@ export const AppRating = ({ app, myName, ratingCountPosition = "right" }) => {
 
         <Rating
           value={value}
-          onChange={(event, rating)=> rateFunc(event, rating, value)}
+          onChange={(event, rating) => rateFunc(event, rating, value)}
           precision={1}
           size="small"
           icon={<StarFilledIcon />}
           emptyIcon={<StarEmptyIcon />}
           sx={{
-            display: "flex",
-            gap: "2px",
+            display: 'flex',
+            gap: '2px',
           }}
         />
-        {ratingCountPosition === "right" && (
+        {ratingCountPosition === 'right' && (
           <AppInfoUserName>
             {(votesInfo?.totalVotes ?? 0) +
               (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}

@@ -9,72 +9,64 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  InputBase,
-  InputLabel,
   Snackbar,
   Typography,
-} from "@mui/material";
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import CloseIcon from "@mui/icons-material/Close";
-import { MyContext, getBaseApiReact } from "../../App";
+  useTheme,
+} from '@mui/material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import CloseIcon from '@mui/icons-material/Close';
+import { getBaseApiReact } from '../../App';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
-} from "../../utils/events";
-import { getFee, getNameOrAddress } from "../../background";
-import CopyToClipboard from "react-copy-to-clipboard";
-import { AddressBox } from "../../App-styles";
-import { Spacer } from "../../common/Spacer";
-import Copy from "../../assets/svgs/Copy.svg";
-import { Loader } from "../Loader";
-import { FidgetSpinner } from "react-loader-spinner";
-import { useModal } from "../../common/useModal";
+} from '../../utils/events';
+import { getFee, getNameOrAddress } from '../../background';
+import { Spacer } from '../../common/Spacer';
+import { FidgetSpinner } from 'react-loader-spinner';
+import { useModal } from '../../common/useModal';
+import { useAtom, useSetAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
-export const Minting = ({
-  setIsOpenMinting,
-  myAddress,
-  groups,
-  show,
-  setTxList,
-  txList,
-}) => {
+export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
+  const setTxList = useSetAtom(txListAtom);
+  const [groups] = useAtom(memberGroupsAtom);
+
   const [mintingAccounts, setMintingAccounts] = useState([]);
   const [accountInfo, setAccountInfo] = useState(null);
-  const [rewardSharePublicKey, setRewardSharePublicKey] = useState("");
-  const [mintingKey, setMintingKey] = useState("");
-  const [rewardsharekey, setRewardsharekey] = useState("");
+  const [rewardSharePublicKey, setRewardSharePublicKey] = useState('');
+  const [mintingKey, setMintingKey] = useState('');
+  const [rewardsharekey, setRewardsharekey] = useState('');
   const [rewardShares, setRewardShares] = useState([]);
   const [nodeInfos, setNodeInfos] = useState({});
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const {  show: showKey, message } = useModal();
-  const { isShow: isShowNext,  onOk, show: showNext } = useModal();
+  const { show: showKey, message } = useModal();
+  const { isShow: isShowNext, onOk, show: showNext } = useModal();
+  const theme = useTheme();
 
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
-  const [showWaitDialog, setShowWaitDialog] = useState(false)
+  const [showWaitDialog, setShowWaitDialog] = useState(false);
+
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
-    return !!groups?.find((item) => item?.groupId?.toString() === "694");
+    return !!groups?.find((item) => item?.groupId?.toString() === '694');
   }, [groups]);
+
   const getMintingAccounts = useCallback(async () => {
     try {
       const url = `${getBaseApiReact()}/admin/mintingaccounts`;
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error("network error");
+        throw new Error('network error');
       }
       const data = await response.json();
       setMintingAccounts(data);
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const accountIsMinting = useMemo(() => {
@@ -105,7 +97,7 @@ export const Minting = ({
         });
       }
     } catch (error) {
-      // error
+      console.log(error);
     }
   };
 
@@ -117,7 +109,7 @@ export const Minting = ({
       const url = `${getBaseApiReact()}/addresses/${address}`;
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error("network error");
+        throw new Error('network error');
       }
       const data = await response.json();
       if (others) {
@@ -131,6 +123,7 @@ export const Minting = ({
         setAccountInfo(data);
       }
     } catch (error) {
+      console.log(error);
     } finally {
       if (!others) {
         setIsLoading(false);
@@ -144,10 +137,10 @@ export const Minting = ({
   };
 
   useEffect(() => {
-    subscribeToEvent("refresh-rewardshare-list", refreshRewardShare);
+    subscribeToEvent('refresh-rewardshare-list', refreshRewardShare);
 
     return () => {
-      unsubscribeFromEvent("refresh-rewardshare-list", refreshRewardShare);
+      unsubscribeFromEvent('refresh-rewardshare-list', refreshRewardShare);
     };
   }, [myAddress]);
 
@@ -177,15 +170,15 @@ export const Minting = ({
     try {
       const url = `${getBaseApiReact()}/admin/status`;
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       const data = await response.json();
       setNodeInfos(data);
     } catch (error) {
-      console.error("Request failed", error);
+      console.error('Request failed', error);
     }
   };
 
@@ -194,12 +187,14 @@ export const Minting = ({
       const url = `${getBaseApiReact()}/addresses/rewardshares?involving=${address}`;
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error("network error");
+        throw new Error('network error');
       }
       const data = await response.json();
       setRewardShares(data);
-      return data
-    } catch (error) {}
+      return data;
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
 
   const addMintingAccount = useCallback(async (val) => {
@@ -208,10 +203,9 @@ export const Minting = ({
       return await new Promise((res, rej) => {
         window
           .sendMessage(
-            "ADMIN_ACTION",
-
+            'ADMIN_ACTION',
             {
-              type: "addmintingaccount",
+              type: 'addmintingaccount',
               value: val,
             },
             180000,
@@ -220,7 +214,7 @@ export const Minting = ({
           .then((response) => {
             if (!response?.error) {
               res(response);
-              setMintingKey("");
+              setMintingKey('');
               setTimeout(() => {
                 getMintingAccounts();
               }, 300);
@@ -229,13 +223,13 @@ export const Minting = ({
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || "An error occurred" });
+            rej({ message: error.message || 'An error occurred' });
           });
       });
     } catch (error) {
       setInfo({
-        type: "error",
-        message: error?.message || "Unable to add minting account",
+        type: 'error',
+        message: error?.message || 'Unable to add minting account',
       });
       setOpenSnack(true);
     } finally {
@@ -249,10 +243,9 @@ export const Minting = ({
       return await new Promise((res, rej) => {
         window
           .sendMessage(
-            "ADMIN_ACTION",
-
+            'ADMIN_ACTION',
             {
-              type: "removemintingaccount",
+              type: 'removemintingaccount',
               value: val,
             },
             180000,
@@ -270,13 +263,13 @@ export const Minting = ({
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || "An error occurred" });
+            rej({ message: error.message || 'An error occurred' });
           });
       });
     } catch (error) {
       setInfo({
-        type: "error",
-        message: error?.message || "Unable to remove minting account",
+        type: 'error',
+        message: error?.message || 'Unable to remove minting account',
       });
       setOpenSnack(true);
     } finally {
@@ -285,14 +278,14 @@ export const Minting = ({
   }, []);
 
   const createRewardShare = useCallback(async (publicKey, recipient) => {
-    const fee = await getFee("REWARD_SHARE");
+    const fee = await getFee('REWARD_SHARE'); // TODO translate
     await show({
-      message: "Would you like to perform an REWARD_SHARE transaction?",
-      publishFee: fee.fee + " QORT",
+      message: 'Would you like to perform an REWARD_SHARE transaction?',
+      publishFee: fee.fee + ' QORT',
     });
     return await new Promise((res, rej) => {
       window
-        .sendMessage("createRewardShare", {
+        .sendMessage('createRewardShare', {
           recipientPublicKey: publicKey,
         })
         .then((response) => {
@@ -301,7 +294,7 @@ export const Minting = ({
               {
                 recipient,
                 ...response,
-                type: "add-rewardShare",
+                type: 'add-rewardShare',
                 label: `Add rewardshare: awaiting confirmation`,
                 labelDone: `Add rewardshare: success!`,
                 done: false,
@@ -314,7 +307,7 @@ export const Minting = ({
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || "An error occurred" });
+          rej({ message: error.message || 'An error occurred' });
         });
     });
   }, []);
@@ -322,7 +315,7 @@ export const Minting = ({
   const getRewardSharePrivateKey = useCallback(async (publicKey) => {
     return await new Promise((res, rej) => {
       window
-        .sendMessage("getRewardSharePrivateKey", {
+        .sendMessage('getRewardSharePrivateKey', {
           recipientPublicKey: publicKey,
         })
         .then((response) => {
@@ -333,7 +326,7 @@ export const Minting = ({
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || "An error occurred" });
+          rej({ message: error.message || 'An error occurred' });
         });
     });
   }, []);
@@ -341,26 +334,23 @@ export const Minting = ({
   const waitUntilRewardShareIsConfirmed = async (timeoutMs = 600000) => {
     const pollingInterval = 30000;
     const startTime = Date.now();
-  
+
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
-  
+
     while (Date.now() - startTime < timeoutMs) {
- 
-        const rewardShares = await getRewardShares(myAddress);
-        const findRewardShare = rewardShares?.find(
-          (item) =>
-            item?.recipient === myAddress && item?.mintingAccount === myAddress
-        );
-  
-        if (findRewardShare) {
-          return true; // Exit early if found
-        }
-  
-  
+      const rewardShares = await getRewardShares(myAddress);
+      const findRewardShare = rewardShares?.find(
+        (item) =>
+          item?.recipient === myAddress && item?.mintingAccount === myAddress
+      );
+
+      if (findRewardShare) {
+        return true; // Exit early if found
+      }
       await sleep(pollingInterval); // Wait before the next poll
     }
-  
-    throw new Error("Timeout waiting for reward share confirmation");
+
+    throw new Error('Timeout waiting for reward share confirmation');
   };
 
   const startMinting = async () => {
@@ -377,23 +367,22 @@ export const Minting = ({
         addMintingAccount(privateRewardShare);
       } else {
         await createRewardShare(accountInfo?.publicKey, myAddress);
-        setShowWaitDialog(true)
-        await waitUntilRewardShareIsConfirmed()
+        setShowWaitDialog(true);
+        await waitUntilRewardShareIsConfirmed();
         await showNext({
-          message: ''
-        })
+          message: '',
+        });
         const privateRewardShare = await getRewardSharePrivateKey(
           accountInfo?.publicKey
         );
-        setShowWaitDialog(false)
+        setShowWaitDialog(false);
         addMintingAccount(privateRewardShare);
-       
       }
     } catch (error) {
-      setShowWaitDialog(false)
+      setShowWaitDialog(false);
       setInfo({
-        type: "error",
-        message: error?.message || "Unable to start minting",
+        type: 'error',
+        message: error?.message || 'Unable to start minting',
       });
       setOpenSnack(true);
     } finally {
@@ -412,13 +401,13 @@ export const Minting = ({
     const url = `${getBaseApiReact()}/groups/member/${address}`;
     const response = await fetch(url);
     const data = await response.json();
-    return !!data?.find((grp) => grp?.groupId?.toString() === "694");
+    return !!data?.find((grp) => grp?.groupId?.toString() === '694');
   };
 
   const removeRewardShare = useCallback(async (rewardShare) => {
     return await new Promise((res, rej) => {
       window
-        .sendMessage("removeRewardShare", {
+        .sendMessage('removeRewardShare', {
           rewardShareKeyPairPublicKey: rewardShare.rewardSharePublicKey,
           recipient: rewardShare.recipient,
           percentageShare: -1,
@@ -430,7 +419,7 @@ export const Minting = ({
               {
                 ...rewardShare,
                 ...response,
-                type: "remove-rewardShare",
+                type: 'remove-rewardShare',
                 label: `Remove rewardshare: awaiting confirmation`,
                 labelDone: `Remove rewardshare: success!`,
                 done: false,
@@ -442,7 +431,7 @@ export const Minting = ({
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || "An error occurred" });
+          rej({ message: error.message || 'An error occurred' });
         });
     });
   }, []);
@@ -454,8 +443,8 @@ export const Minting = ({
       const privateRewardShare = await removeRewardShare(rewardShare);
     } catch (error) {
       setInfo({
-        type: "error",
-        message: error?.message || "Unable to remove reward share",
+        type: 'error',
+        message: error?.message || 'Unable to remove reward share',
       });
       setOpenSnack(true);
     } finally {
@@ -468,9 +457,9 @@ export const Minting = ({
       setIsLoading(true);
       const confirmReceiver = await getNameOrAddress(receiver);
       if (confirmReceiver.error)
-        throw new Error("Invalid receiver address or name");
+        throw new Error('Invalid receiver address or name');
       const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
-      if (!isInMinterGroup) throw new Error("Account not in Minter Group");
+      if (!isInMinterGroup) throw new Error('Account not in Minter Group');
       const publicKey = await getPublicKeyFromAddress(confirmReceiver);
       const findRewardShare = rewardShares?.find(
         (item) =>
@@ -487,8 +476,8 @@ export const Minting = ({
       }
     } catch (error) {
       setInfo({
-        type: "error",
-        message: error?.message || "Unable to create reward share",
+        type: 'error',
+        message: error?.message || 'Unable to create reward share',
       });
       setOpenSnack(true);
     } finally {
@@ -510,7 +499,7 @@ export const Minting = ({
 
   const _blocksNeed = () => {
     if (accountInfo?.level === 0) {
-      return 7200;
+      return 7200; // TODO manage these magic numbers in a proper location
     } else if (accountInfo?.level === 1) {
       return 72000;
     } else if (accountInfo?.level === 2) {
@@ -550,10 +539,8 @@ export const Minting = ({
       (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
 
     let countBlocksString = countBlocks.toString();
-    return "" + countBlocksString;
+    return '' + countBlocksString;
   };
-
-
 
   return (
     <Dialog
@@ -562,19 +549,19 @@ export const Minting = ({
       fullWidth
       fullScreen
       sx={{
-        "& .MuiDialog-paper": {
+        '& .MuiDialog-paper': {
+          height: '100vh',
           margin: 0,
-          maxWidth: "100%",
-          width: "100%",
-          height: "100vh",
-          overflow: "hidden", // Prevent scrollbars
+          maxWidth: '100%',
+          overflow: 'hidden', // Prevent scrollbars
+          width: '100%',
         },
       }}
     >
-      <DialogTitle id="alert-dialog-title">{"Manage your minting"}</DialogTitle>
+      <DialogTitle id="alert-dialog-title">{'Manage your minting'}</DialogTitle>
       <IconButton
         sx={{
-          position: "absolute",
+          position: 'absolute',
           right: 8,
           top: 8,
         }}
@@ -584,45 +571,49 @@ export const Minting = ({
       >
         <CloseIcon />
       </IconButton>
+
       <DialogContent
         sx={{
-          position: "relative",
+          position: 'relative',
         }}
       >
         {isLoading && (
           <Box
             sx={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
+              alignItems: 'center',
               bottom: 0,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
+              display: 'flex',
+              justifyContent: 'center',
+              left: 0,
+              position: 'absolute',
+              right: 0,
+              top: 0,
             }}
           >
             <FidgetSpinner
-              visible={true}
-              height="80"
-              width="80"
               ariaLabel="fidget-spinner-loading"
-              wrapperStyle={{}}
+              height="80"
+              visible={true}
+              width="80"
               wrapperClass="fidget-spinner-wrapper"
+              wrapperStyle={{}}
             />
           </Box>
         )}
         <Card
           sx={{
-            backgroundColor: "var(--bg-2)",
-            padding: "10px",
+            backgroundColor: theme.palette.background.default,
+            padding: '10px',
           }}
         >
           <Typography>Account: {handleNames(accountInfo?.address)}</Typography>
+
           <Typography>Level: {accountInfo?.level}</Typography>
+
           <Typography>
             blocks remaining until next level: {_levelUpBlocks()}
           </Typography>
+
           <Typography>
             This node is minting: {nodeInfos?.isMintingPossible?.toString()}
           </Typography>
@@ -631,11 +622,11 @@ export const Minting = ({
         {isPartOfMintingGroup && !accountIsMinting && (
           <Box
             sx={{
-              display: "flex",
-              gap: "5px",
-              flexDirection: "column",
-              width: "100%",
-              alignItems: "center",
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px',
+              width: '100%',
             }}
           >
             <Button
@@ -645,15 +636,15 @@ export const Minting = ({
               }}
               disabled={mintingAccounts?.length > 1}
               sx={{
-                backgroundColor: "var(--green)",
-                color: "black",
-                fontWeight: "bold",
+                backgroundColor: theme.palette.other.positive,
+                color: 'black',
+                fontWeight: 'bold',
                 opacity: 0.7,
-                maxWidth: "90%",
-                width: "200px",
-                "&:hover": {
-                  backgroundColor: "var(--green)",
-                  color: "black",
+                maxWidth: '90%',
+                width: '200px',
+                '&:hover': {
+                  backgroundColor: theme.palette.other.positive,
+                  color: 'black',
                   opacity: 1,
                 },
               }}
@@ -675,16 +666,16 @@ export const Minting = ({
         )}
         <Card
           sx={{
-            backgroundColor: "var(--bg-2)",
-            padding: "10px",
+            backgroundColor: theme.palette.background.default,
+            padding: '10px',
           }}
         >
           {accountIsMinting && (
             <Box
               sx={{
-                display: "flex",
-                gap: "5px",
-                flexDirection: "column",
+                display: 'flex',
+                gap: '5px',
+                flexDirection: 'column',
               }}
             >
               <Typography>
@@ -698,9 +689,9 @@ export const Minting = ({
             <Box
               key={acct?.mintingAccount}
               sx={{
-                display: "flex",
-                gap: "10px",
-                flexDirection: "column",
+                display: 'flex',
+                gap: '10px',
+                flexDirection: 'column',
               }}
             >
               <Typography>
@@ -709,15 +700,15 @@ export const Minting = ({
               <Button
                 size="small"
                 sx={{
-                  backgroundColor: "var(--danger)",
-                  color: "black",
-                  fontWeight: "bold",
+                  backgroundColor: theme.palette.other.danger,
+                  color: theme.palette.text.primary,
+                  fontWeight: 'bold',
+                  maxWidth: '90%',
                   opacity: 0.7,
-                  maxWidth: "90%",
-                  width: "200px",
-                  "&:hover": {
-                    backgroundColor: "var(--danger)",
-                    color: "black",
+                  width: '200px',
+                  '&:hover': {
+                    backgroundColor: theme.palette.other.danger,
+                    color: theme.palette.text.primary,
                     opacity: 1,
                   },
                 }}
@@ -728,7 +719,9 @@ export const Minting = ({
               >
                 Remove minting account
               </Button>
+
               <Divider />
+
               <Spacer height="10px" />
             </Box>
           ))}
@@ -745,17 +738,17 @@ export const Minting = ({
         {!isPartOfMintingGroup && (
           <Card
             sx={{
-              backgroundColor: "var(--bg-2)",
-              padding: "10px",
+              backgroundColor: theme.palette.background.default,
+              padding: '10px',
             }}
           >
             <Box
               sx={{
-                display: "flex",
-                gap: "5px",
-                flexDirection: "column",
-                width: "100%",
-                alignItems: "center",
+                display: 'flex',
+                gap: '5px',
+                flexDirection: 'column',
+                width: '100%',
+                alignItems: 'center',
               }}
             >
               <Typography>
@@ -768,22 +761,22 @@ export const Minting = ({
               <Button
                 size="small"
                 sx={{
-                  backgroundColor: "var(--green)",
-                  color: "black",
-                  fontWeight: "bold",
+                  backgroundColor: theme.palette.other.positive,
+                  color: theme.palette.text.primary,
+                  fontWeight: 'bold',
                   opacity: 0.7,
 
-                  "&:hover": {
-                    backgroundColor: "var(--green)",
-                    color: "black",
+                  '&:hover': {
+                    backgroundColor: theme.palette.other.positive,
+                    color: 'black',
                     opacity: 1,
                   },
                 }}
                 onClick={() => {
-                  executeEvent("addTab", {
-                    data: { service: "APP", name: "q-mintership" },
+                  executeEvent('addTab', {
+                    data: { service: 'APP', name: 'q-mintership' },
                   });
-                  executeEvent("open-apps-mode", {});
+                  executeEvent('open-apps-mode', {});
                   setIsOpenMinting(false);
                 }}
                 variant="contained"
@@ -801,29 +794,33 @@ export const Minting = ({
             aria-describedby="alert-dialog-description"
           >
             <DialogTitle id="alert-dialog-title">
-              {isShowNext ? "Confirmed" : "Please Wait"}
+              {isShowNext ? 'Confirmed' : 'Please Wait'}
             </DialogTitle>
+
             <DialogContent>
               {!isShowNext && (
                 <Typography>
-                Confirming creation of rewardshare on chain. Please be patient, this could take up to 90 seconds.
-              </Typography>
+                  Confirming creation of rewardshare on chain. Please be
+                  patient, this could take up to 90 seconds.
+                </Typography>
               )}
               {isShowNext && (
                 <Typography>
-                Rewardshare confirmed. Please click Next.
-              </Typography>
+                  Rewardshare confirmed. Please click Next.
+                </Typography>
               )}
-              
             </DialogContent>
-         
-              <DialogActions>
-              <Button disabled={!isShowNext} variant="contained" onClick={onOk} autoFocus>
+
+            <DialogActions>
+              <Button
+                disabled={!isShowNext}
+                variant="contained"
+                onClick={onOk}
+                autoFocus
+              >
                 Next
               </Button>
             </DialogActions>
-           
-            
           </Dialog>
         )}
       </DialogContent>
@@ -837,7 +834,7 @@ export const Minting = ({
         </Button>
       </DialogActions>
       <Snackbar
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         open={openSnack}
         autoHideDuration={6000}
         onClose={handleClose}
@@ -846,7 +843,7 @@ export const Minting = ({
           onClose={handleClose}
           severity={info?.type}
           variant="filled"
-          sx={{ width: "100%" }}
+          sx={{ width: '100%' }}
         >
           {info?.message}
         </Alert>

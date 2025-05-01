@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from "react";
+import React, { useContext, useMemo, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -6,8 +6,8 @@ import {
   AppLibrarySubTitle,
   AppsContainer,
   AppsParent,
-} from "./Apps-styles";
-import { Buffer } from "buffer";
+} from './Apps-styles';
+import { Buffer } from 'buffer';
 
 import {
   Avatar,
@@ -20,17 +20,17 @@ import {
   DialogContentText,
   DialogTitle,
   Input,
-} from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { MyContext, getBaseApiReact, isMobile } from "../../App";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import { executeEvent } from "../../utils/events";
-import { Spacer } from "../../common/Spacer";
-import { useModal } from "../../common/useModal";
-import { createEndpoint, isUsingLocal } from "../../background";
-import { Label } from "../Group/AddGroup";
-import ShortUniqueId from "short-unique-id";
-import swaggerSVG from '../../assets/svgs/swagger.svg'
+} from '@mui/material';
+import { Add } from '@mui/icons-material';
+import { MyContext, getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import { executeEvent } from '../../utils/events';
+import { Spacer } from '../../common/Spacer';
+import { useModal } from '../../common/useModal';
+import { createEndpoint, isUsingLocal } from '../../background';
+import { Label } from '../Group/AddGroup';
+import ShortUniqueId from 'short-unique-id';
+import swaggerSVG from '../../assets/svgs/swagger.svg';
 const uid = new ShortUniqueId({ length: 8 });
 
 export const AppsDevModeHome = ({
@@ -40,8 +40,8 @@ export const AppsDevModeHome = ({
   availableQapps,
   myName,
 }) => {
-  const [domain, setDomain] = useState("127.0.0.1");
-  const [port, setPort] = useState("");
+  const [domain, setDomain] = useState('127.0.0.1');
+  const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
 
   const { isShow, onCancel, onOk, show, message } = useModal();
@@ -58,7 +58,7 @@ export const AppsDevModeHome = ({
       const content = await window.electron.readFile(filePath);
       return { buffer: content, filePath };
     } else {
-      console.log("No file selected.");
+      console.log('No file selected.');
     }
   };
   const handleSelectDirectry = async (existingDirectoryPath) => {
@@ -67,7 +67,7 @@ export const AppsDevModeHome = ({
     if (buffer) {
       return { buffer, directoryPath };
     } else {
-      console.log("No file selected.");
+      console.log('No file selected.');
     }
   };
 
@@ -78,34 +78,36 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
+          type: 'error',
           message:
-            "Please use your local node for dev mode! Logout and use Local node.",
+            'Please use your local node for dev mode! Logout and use Local node.',
         });
         return;
       }
       const { portVal, domainVal } = await show({
-        message: "",
-        publishFee: "",
+        message: '',
+        publishFee: '',
       });
-      const framework = domainVal + ":" + portVal;
+      const framework = domainVal + ':' + portVal;
       const response = await fetch(
         `${getBaseApiReact()}/developer/proxy/start`,
         {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "text/plain",
+            'Content-Type': 'text/plain',
           },
           body: framework,
         }
       );
       const responseData = await response.text();
-      executeEvent("appsDevModeAddTab", {
+      executeEvent('appsDevModeAddTab', {
         data: {
-          url: "http://127.0.0.1:" + responseData,
+          url: 'http://127.0.0.1:' + responseData,
         },
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const addPreviewApp = async (isRefresh, existingFilePath, tabId) => {
@@ -115,9 +117,9 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
+          type: 'error',
           message:
-            "Please use your local node for dev mode! Logout and use Local node.",
+            'Please use your local node for dev mode! Logout and use Local node.',
         });
         return;
       }
@@ -125,8 +127,8 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
-          message: "You need a name to use preview",
+          type: 'error',
+          message: 'You need a name to use preview',
         });
         return;
       }
@@ -137,29 +139,29 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
-          message: "Please select a file",
+          type: 'error',
+          message: 'Please select a file',
         });
         return;
       }
-      const postBody = Buffer.from(buffer).toString("base64");
+      const postBody = Buffer.from(buffer).toString('base64');
 
       const endpoint = await createEndpoint(
         `/arbitrary/APP/${myName}/zip?preview=true`
       );
       const response = await fetch(endpoint, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "text/plain",
+          'Content-Type': 'text/plain',
         },
         body: postBody,
       });
-      if (!response?.ok) throw new Error("Invalid zip");
+      if (!response?.ok) throw new Error('Invalid zip');
       const previewPath = await response.text();
       if (tabId) {
-        executeEvent("appsDevModeUpdateTab", {
+        executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: "http://127.0.0.1:12391" + previewPath,
+            url: 'http://127.0.0.1:12391' + previewPath,
             isPreview: true,
             filePath,
             refreshFunc: (tabId) => {
@@ -170,9 +172,9 @@ export const AppsDevModeHome = ({
         });
         return;
       }
-      executeEvent("appsDevModeAddTab", {
+      executeEvent('appsDevModeAddTab', {
         data: {
-          url: "http://127.0.0.1:12391" + previewPath,
+          url: 'http://127.0.0.1:12391' + previewPath,
           isPreview: true,
           filePath,
           refreshFunc: (tabId) => {
@@ -192,9 +194,9 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
+          type: 'error',
           message:
-            "Please use your local node for dev mode! Logout and use Local node.",
+            'Please use your local node for dev mode! Logout and use Local node.',
         });
         return;
       }
@@ -202,8 +204,8 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
-          message: "You need a name to use preview",
+          type: 'error',
+          message: 'You need a name to use preview',
         });
         return;
       }
@@ -214,29 +216,29 @@ export const AppsDevModeHome = ({
         setOpenSnackGlobal(true);
 
         setInfoSnackCustom({
-          type: "error",
-          message: "Please select a file",
+          type: 'error',
+          message: 'Please select a file',
         });
         return;
       }
-      const postBody = Buffer.from(buffer).toString("base64");
+      const postBody = Buffer.from(buffer).toString('base64');
 
       const endpoint = await createEndpoint(
         `/arbitrary/APP/${myName}/zip?preview=true`
       );
       const response = await fetch(endpoint, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "text/plain",
+          'Content-Type': 'text/plain',
         },
         body: postBody,
       });
-      if (!response?.ok) throw new Error("Invalid zip");
+      if (!response?.ok) throw new Error('Invalid zip');
       const previewPath = await response.text();
       if (tabId) {
-        executeEvent("appsDevModeUpdateTab", {
+        executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: "http://127.0.0.1:12391" + previewPath,
+            url: 'http://127.0.0.1:12391' + previewPath,
             isPreview: true,
             directoryPath,
             refreshFunc: (tabId) => {
@@ -247,9 +249,9 @@ export const AppsDevModeHome = ({
         });
         return;
       }
-      executeEvent("appsDevModeAddTab", {
+      executeEvent('appsDevModeAddTab', {
         data: {
-          url: "http://127.0.0.1:12391" + previewPath,
+          url: 'http://127.0.0.1:12391' + previewPath,
           isPreview: true,
           directoryPath,
           refreshFunc: (tabId) => {
@@ -266,22 +268,24 @@ export const AppsDevModeHome = ({
     <>
       <AppsContainer
         sx={{
-          justifyContent: "flex-start",
+          justifyContent: 'flex-start',
         }}
       >
         <AppLibrarySubTitle
           sx={{
-            fontSize: "30px",
+            fontSize: '30px',
           }}
         >
           Dev Mode Apps
         </AppLibrarySubTitle>
       </AppsContainer>
+
       <Spacer height="45px" />
+
       <AppsContainer
         sx={{
-          gap: "75px",
-          justifyContent: "flex-start",
+          gap: '75px',
+          justifyContent: 'flex-start',
         }}
       >
         <ButtonBase
@@ -291,7 +295,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -300,6 +304,7 @@ export const AppsDevModeHome = ({
             <AppCircleLabel>Server</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             addPreviewApp();
@@ -307,15 +312,17 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
+
             <AppCircleLabel>Zip</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             addPreviewAppWithDirectory();
@@ -323,7 +330,7 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
@@ -332,12 +339,13 @@ export const AppsDevModeHome = ({
             <AppCircleLabel>Directory</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
-            executeEvent("appsDevModeAddTab", {
+            executeEvent('appsDevModeAddTab', {
               data: {
-                service: "APP",
-                name: "Q-Sandbox",
+                service: 'APP',
+                name: 'Q-Sandbox',
                 tabId: uid.rnd(),
               },
             });
@@ -345,16 +353,16 @@ export const AppsDevModeHome = ({
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
               <Avatar
                 sx={{
-                  height: "42px",
-                  width: "42px",
-                  "& img": {
-                    objectFit: "fill",
+                  height: '42px',
+                  width: '42px',
+                  '& img': {
+                    objectFit: 'fill',
                   },
                 }}
                 alt="Q-Sandbox"
@@ -362,39 +370,41 @@ export const AppsDevModeHome = ({
               >
                 <img
                   style={{
-                    width: "31px",
-                    height: "auto",
+                    width: '31px',
+                    height: 'auto',
                   }}
                   alt="center-icon"
                 />
               </Avatar>
             </AppCircle>
+
             <AppCircleLabel>Q-Sandbox</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
-            executeEvent("appsDevModeAddTab", {
+            executeEvent('appsDevModeAddTab', {
               data: {
-                url: "http://127.0.0.1:12391",
+                url: 'http://127.0.0.1:12391',
                 isPreview: false,
-                customIcon: swaggerSVG
+                customIcon: swaggerSVG,
               },
             });
           }}
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
               <Avatar
                 sx={{
-                  height: "42px",
-                  width: "42px",
-                  "& img": {
-                    objectFit: "fill",
+                  height: '42px',
+                  width: '42px',
+                  '& img': {
+                    objectFit: 'fill',
                   },
                 }}
                 alt="API"
@@ -402,37 +412,40 @@ export const AppsDevModeHome = ({
               >
                 <img
                   style={{
-                    width: "31px",
-                    height: "auto",
+                    width: '31px',
+                    height: 'auto',
                   }}
                   alt="center-icon"
                 />
               </Avatar>
             </AppCircle>
+
             <AppCircleLabel>API</AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
       </AppsContainer>
+
       {isShow && (
         <Dialog
           open={isShow}
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && domain && port) {
+            if (e.key === 'Enter' && domain && port) {
               onOk({ portVal: port, domainVal: domain });
             }
           }}
         >
           <DialogTitle id="alert-dialog-title">
-            {"Add custom framework"}
+            {'Add custom framework'}
           </DialogTitle>
+
           <DialogContent>
             <Box
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
               }}
             >
               <Label>Domain</Label>
@@ -444,10 +457,10 @@ export const AppsDevModeHome = ({
             </Box>
             <Box
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-                marginTop: "15px",
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                marginTop: '15px',
               }}
             >
               <Label>Port</Label>
@@ -458,6 +471,7 @@ export const AppsDevModeHome = ({
               />
             </Box>
           </DialogContent>
+
           <DialogActions>
             <Button variant="contained" onClick={onCancel}>
               Close

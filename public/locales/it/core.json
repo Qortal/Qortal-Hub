@@ -1,0 +1,111 @@
+{
+  "action": {
+    "add": "aggiungi",
+    "accept": "accetta",
+    "backup_account": "backup account",
+    "backup_wallet": "backup wallet",
+    "cancel": "annulla",
+    "change": "cambia",
+    "change_language": "cambia lingua",
+    "choose": "scegli",
+    "close": "chiudi",
+    "continue": "continua",
+    "continue_logout": "continua con il logout",
+    "decline": "rifiuta",
+    "edit": "modifica",
+    "export": "esporta",
+    "import": "importa",
+    "invite": "invita",
+    "join": "unisciti",
+    "logout": "esci",
+    "notify": "notifica"
+  },
+  "core": {
+    "block_height": "altezza blocco",
+    "information": "informazioni core",
+    "peers": "peer connessi",
+    "version": "versione core"
+  },
+  "count": {
+    "none": "nessuno",
+    "one": "uno"
+  },
+  "description": "descrizione",
+  "fee": {
+    "payment": "commissione di pagamento",
+    "publish": "commissione di pubblicazione"
+  },
+  "page": {
+    "last": "ultimo",
+    "first": "primo",
+    "next": "successivo",
+    "previous": "precedente"
+  },
+  "downloading_qdn": "scaricamento da QDN",
+  "last_height": "ultima altezza",
+  "loading": "caricamento...",
+  "loading_posts": "caricamento post... attendere prego.",
+  "message_us": "per favore scrivici su Telegram o Discord se hai bisogno di 4 QORT per iniziare a chattare senza limitazioni",
+  "minting_status": "stato minting",
+  "new_user": "sei un nuovo utente?",
+  "payment_notification": "notifica di pagamento",
+  "price": "prezzo",
+  "q_mail": "q-mail",
+  "message": {
+    "error": {
+      "generic": "si è verificato un errore",
+      "incorrect_password": "password errata",
+      "save_qdn": "impossibile salvare su QDN"
+    },
+    "status": {
+      "minting": "(minting)",
+      "not_minting": "(non minting)",
+      "synchronized": "sincronizzato",
+      "synchronizing": "sincronizzazione in corso"
+    },
+    "success": {
+      "order_submitted": "il tuo ordine di acquisto è stato inviato",
+      "publish_qdn": "pubblicato su QDN con successo",
+      "request_read": "ho letto questa richiesta",
+      "transfer": "il trasferimento è stato effettuato con successo!"
+    }
+  },
+  "save_options": {
+    "no_pinned_changes": "attualmente non hai modifiche alle tue app appuntate",
+    "overwrite_changes": "l'app non è riuscita a scaricare le tue app appuntate salvate su QDN. Vuoi sovrascrivere le modifiche?",
+    "overwrite_qdn": "sovrascrivi su QDN",
+    "publish_qdn": "vuoi pubblicare le tue impostazioni su QDN (crittografato)?",
+    "qdn": "usa il salvataggio su QDN",
+    "register_name": "devi avere un nome Qortal registrato per salvare le tue app appuntate su QDN.",
+    "reset_pinned": "non ti piacciono le modifiche locali attuali? Vuoi ripristinare le app appuntate predefinite?",
+    "reset_qdn": "non ti piacciono le modifiche locali attuali? Vuoi ripristinare le app appuntate salvate su QDN?",
+    "revert_default": "ripristina predefinito",
+    "revert_qdn": "ripristina da QDN",
+    "save_qdn": "salva su QDN",
+    "save": "salva",
+    "settings": "stai usando il metodo di esportazione/importazione per salvare le impostazioni.",
+    "unsaved_changes": "hai modifiche non salvate alle tue app appuntate. Salvale su QDN."
+  },
+  "settings": "impostazioni",
+  "supply": "disponibilità",
+  "theme": {
+    "dark": "modalità scura",
+    "light": "modalità chiara"
+  },
+  "time": {
+    "day_one": "{{count}} giorno",
+    "day_other": "{{count}} giorni",
+    "hour_one": "{{count}} ora",
+    "hour_other": "{{count}} ore",
+    "minute_one": "{{count}} minuto",
+    "minute_other": "{{count}} minuti"
+  },
+  "title": "titolo",
+  "tutorial": "tutorial",
+  "user_lookup": "ricerca utente",
+  "wallet": {
+    "wallet": "wallet",
+    "wallet_other": "wallet"
+  },
+  "welcome": "benvenuto"
+}

@@ -1,42 +1,35 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorProvider, useCurrentEditor, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { Color } from "@tiptap/extension-color";
-import ListItem from "@tiptap/extension-list-item";
-import TextStyle from "@tiptap/extension-text-style";
-import Placeholder from "@tiptap/extension-placeholder";
-import Image from "@tiptap/extension-image";
-import IconButton from "@mui/material/IconButton";
-import FormatBoldIcon from "@mui/icons-material/FormatBold";
-import FormatItalicIcon from "@mui/icons-material/FormatItalic";
-import StrikethroughSIcon from "@mui/icons-material/StrikethroughS";
-import FormatClearIcon from "@mui/icons-material/FormatClear";
-import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import CodeIcon from "@mui/icons-material/Code";
-import ImageIcon from "@mui/icons-material/Image"; // Import Image icon
-import FormatQuoteIcon from "@mui/icons-material/FormatQuote";
-import HorizontalRuleIcon from "@mui/icons-material/HorizontalRule";
-import UndoIcon from "@mui/icons-material/Undo";
-import RedoIcon from "@mui/icons-material/Redo";
-import FormatHeadingIcon from "@mui/icons-material/FormatSize";
-import DeveloperModeIcon from "@mui/icons-material/DeveloperMode";
-import Compressor from "compressorjs";
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { EditorProvider, useCurrentEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { Color } from '@tiptap/extension-color';
+import ListItem from '@tiptap/extension-list-item';
+import TextStyle from '@tiptap/extension-text-style';
+import Placeholder from '@tiptap/extension-placeholder';
+import IconButton from '@mui/material/IconButton';
+import FormatBoldIcon from '@mui/icons-material/FormatBold';
+import FormatItalicIcon from '@mui/icons-material/FormatItalic';
+import StrikethroughSIcon from '@mui/icons-material/StrikethroughS';
+import FormatClearIcon from '@mui/icons-material/FormatClear';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
+import CodeIcon from '@mui/icons-material/Code';
+import ImageIcon from '@mui/icons-material/Image'; // Import Image icon
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
+import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
+import FormatHeadingIcon from '@mui/icons-material/FormatSize';
+import DeveloperModeIcon from '@mui/icons-material/DeveloperMode';
+import Compressor from 'compressorjs';
 import Mention from '@tiptap/extension-mention';
-import ImageResize from "tiptap-extension-resize-image"; // Import the ResizeImage extension
-import { isMobile } from "../../App";
-import tippy from "tippy.js";
-import "tippy.js/dist/tippy.css";
-import Popover from '@mui/material/Popover';
-import List from '@mui/material/List';
-import ListItemMui from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import { ReactRenderer } from '@tiptap/react'
-import MentionList from './MentionList.jsx'
-import { useRecoilState } from "recoil";
-import { isDisabledEditorEnterAtom } from "../../atoms/global.js";
-import { Box, Checkbox, Typography } from "@mui/material";
+import ImageResize from 'tiptap-extension-resize-image'; // Import the ResizeImage extension
+import tippy from 'tippy.js';
+import 'tippy.js/dist/tippy.css';
+import { ReactRenderer } from '@tiptap/react';
+import MentionList from './MentionList.jsx';
+import { isDisabledEditorEnterAtom } from '../../atoms/global.js';
+import { Box, Checkbox, Typography, useTheme } from '@mui/material';
+import { useAtom } from 'jotai';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -47,266 +40,298 @@ function textMatcher(doc, from) {
   const query = match[0];
   return { start, query };
 }
-const MenuBar = ({ setEditorRef, isChat, isDisabledEditorEnter, setIsDisabledEditorEnter }) => {
-  const { editor } = useCurrentEditor();
-  const fileInputRef = useRef(null);
 
-  if (!editor) {
-    return null;
-  }
+const MenuBar = React.memo(
+  ({
+    setEditorRef,
+    isChat,
+    isDisabledEditorEnter,
+    setIsDisabledEditorEnter,
+  }) => {
+    const { editor } = useCurrentEditor();
+    const fileInputRef = useRef(null);
+    const theme = useTheme();
 
-  useEffect(() => {
-    if (editor && setEditorRef) {
-      setEditorRef(editor);
+    useEffect(() => {
+      if (editor && setEditorRef) {
+        setEditorRef(editor);
+      }
+    }, [editor, setEditorRef]);
+
+    if (!editor) {
+      return null;
     }
-  }, [editor, setEditorRef]);
 
-  const handleImageUpload = async (file) => {
-    let compressedFile;
-    await new Promise<void>((resolve) => {
-      new Compressor(file, {
-        quality: 0.6,
-        maxWidth: 1200,
-        mimeType: "image/webp",
-        success(result) {
-          compressedFile = new File([result], "image.webp", {
-            type: "image/webp",
-          });
-          resolve();
-        },
-        error(err) {
-          console.error("Image compression error:", err);
-        },
+    const handleImageUpload = async (file) => {
+      let compressedFile;
+      await new Promise<void>((resolve) => {
+        new Compressor(file, {
+          quality: 0.6,
+          maxWidth: 1200,
+          mimeType: 'image/webp',
+          success(result) {
+            compressedFile = new File([result], 'image.webp', {
+              type: 'image/webp',
+            });
+            resolve();
+          },
+          error(err) {
+            console.error('Image compression error:', err);
+          },
+        });
       });
-    });
 
-    if (compressedFile) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const url = reader.result;
-        editor
-          .chain()
-          .focus()
-          .setImage({ src: url, style: "width: auto" })
-          .run();
-        fileInputRef.current.value = "";
-      };
-      reader.readAsDataURL(compressedFile);
-    }
-  };
+      if (compressedFile) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const url = reader.result;
+          editor
+            .chain()
+            .focus()
+            .setImage({ src: url, style: 'width: auto' })
+            .run();
+          fileInputRef.current.value = '';
+        };
+        reader.readAsDataURL(compressedFile);
+      }
+    };
 
-  const triggerImageUpload = () => {
-    fileInputRef.current.click(); // Trigger the file input click
-  };
+    const triggerImageUpload = () => {
+      fileInputRef.current.click(); // Trigger the file input click
+    };
 
-  const handlePaste = (event) => {
-    const items = event.clipboardData.items;
-    for (const item of items) {
-      if (item.type.startsWith("image/")) {
-        const file = item.getAsFile();
-        if (file) {
-          event.preventDefault(); // Prevent the default paste behavior
-          handleImageUpload(file); // Call the image upload function
+    const handlePaste = (event) => {
+      const items = event.clipboardData.items;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault(); // Prevent the default paste behavior
+            handleImageUpload(file); // Call the image upload function
+          }
         }
       }
-    }
-  };
+    };
 
-  useEffect(() => {
-    if (editor) {
-      editor.view.dom.addEventListener("paste", handlePaste);
-      return () => {
-        editor.view.dom.removeEventListener("paste", handlePaste);
-      };
-    }
-  }, [editor]);
+    useEffect(() => {
+      if (editor) {
+        editor.view.dom.addEventListener('paste', handlePaste);
+        return () => {
+          editor.view.dom.removeEventListener('paste', handlePaste);
+        };
+      }
+    }, [editor]);
 
-  return (
-    <div className="control-group">
-      <div className="button-group" style={{
-        display: 'flex'
-      }}>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          disabled={!editor.can().chain().focus().toggleBold().run()}
-          sx={{
-            color: editor.isActive("bold") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
+    return (
+      <div className="control-group">
+        <div
+          className="button-group"
+          style={{
+            display: 'flex',
           }}
         >
-          <FormatBoldIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          disabled={!editor.can().chain().focus().toggleItalic().run()}
-          sx={{
-            color: editor.isActive("italic") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatItalicIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          disabled={!editor.can().chain().focus().toggleStrike().run()}
-          sx={{
-            color: editor.isActive("strike") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <StrikethroughSIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          disabled={!editor.can().chain().focus().toggleCode().run()}
-          sx={{
-            color: editor.isActive("code") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <CodeIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().unsetAllMarks().run()}
-          sx={{
-            color:
-              editor.isActive("bold") ||
-              editor.isActive("italic") ||
-              editor.isActive("strike") ||
-              editor.isActive("code")
-                ? "white"
-                : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatClearIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          sx={{
-            color: editor.isActive("bulletList") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatListBulletedIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          sx={{
-            color: editor.isActive("orderedList") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatListNumberedIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          sx={{
-            color: editor.isActive("codeBlock") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <DeveloperModeIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          sx={{
-            color: editor.isActive("blockquote") ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatQuoteIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          disabled={!editor.can().chain().focus().setHorizontalRule().run()}
-          sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
-        >
-          <HorizontalRuleIcon />
-        </IconButton>
-        <IconButton
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 1 }).run()
-          }
-          sx={{
-            color: editor.isActive("heading", { level: 1 }) ? "white" : "gray",
-            padding: isMobile ? "5px" : "revert",
-          }}
-        >
-          <FormatHeadingIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().chain().focus().undo().run()}
-          sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
-        >
-          <UndoIcon />
-        </IconButton>
-        <IconButton
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().chain().focus().redo().run()}
-          sx={{ color: "gray" }}
-        >
-          <RedoIcon />
-        </IconButton>
-        {isChat && (
-          <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            marginLeft: '5px',
-            cursor: 'pointer'
-          }}
-          onClick={()=> {
-            setIsDisabledEditorEnter(!isDisabledEditorEnter)
-          }}
-        >
-          <Checkbox
-          edge="start"
-          tabIndex={-1}
-          disableRipple
-          
-          checked={isDisabledEditorEnter}
-          sx={{
-            "&.Mui-checked": {
-              color: "gray", // Customize the color when checked
-            },
-            "& .MuiSvgIcon-root": {
-              color: "gray",
-            },
-          }}
-        />
-         <Typography
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            disabled={!editor.can().chain().focus().toggleBold().run()}
+            sx={{
+              color: editor.isActive('bold')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatBoldIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            disabled={!editor.can().chain().focus().toggleItalic().run()}
+            sx={{
+              color: editor.isActive('italic')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatItalicIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            disabled={!editor.can().chain().focus().toggleStrike().run()}
+            sx={{
+              color: editor.isActive('strike')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <StrikethroughSIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleCode().run()}
+            disabled={!editor.can().chain().focus().toggleCode().run()}
+            sx={{
+              color: editor.isActive('code')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <CodeIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().unsetAllMarks().run()}
+            sx={{
+              color:
+                editor.isActive('bold') ||
+                editor.isActive('italic') ||
+                editor.isActive('strike') ||
+                editor.isActive('code')
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatClearIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            sx={{
+              color: editor.isActive('bulletList')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatListBulletedIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            sx={{
+              color: editor.isActive('orderedList')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatListNumberedIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+            sx={{
+              color: editor.isActive('codeBlock')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <DeveloperModeIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            sx={{
+              color: editor.isActive('blockquote')
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatQuoteIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            disabled={!editor.can().chain().focus().setHorizontalRule().run()}
+            sx={{ color: 'gray', padding: 'revert' }}
+          >
+            <HorizontalRuleIcon />
+          </IconButton>
+          <IconButton
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            sx={{
+              color: editor.isActive('heading', { level: 1 })
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary,
+              padding: 'revert',
+            }}
+          >
+            <FormatHeadingIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().chain().focus().undo().run()}
+            sx={{ color: 'gray', padding: 'revert' }}
+          >
+            <UndoIcon />
+          </IconButton>
+          <IconButton
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().chain().focus().redo().run()}
+            sx={{ color: 'gray' }}
+          >
+            <RedoIcon />
+          </IconButton>
+          {isChat && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                marginLeft: '5px',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setIsDisabledEditorEnter(!isDisabledEditorEnter);
+              }}
+            >
+              <Checkbox
+                edge="start"
+                tabIndex={-1}
+                disableRipple
+                checked={isDisabledEditorEnter}
                 sx={{
-                  fontSize: "14px",
-                  color: 'gray'
+                  '&.Mui-checked': {
+                    color: theme.palette.text.secondary,
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: theme.palette.text.secondary,
+                  },
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: '14px',
+                  color: theme.palette.text.primary,
                 }}
               >
                 disable enter
               </Typography>
-        </Box>
-        )}
-        {!isChat && (
-          <>
-            <IconButton
-              onClick={triggerImageUpload}
-              sx={{ color: "gray", padding: isMobile ? "5px" : "revert" }}
-            >
-              <ImageIcon />
-            </IconButton>
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: "none" }}
-              onChange={(event) => handleImageUpload(event.target.files[0])}
-              accept="image/*"
-            />
-          </>
-        )}
+            </Box>
+          )}
+          {!isChat && (
+            <>
+              <IconButton
+                onClick={triggerImageUpload}
+                sx={{
+                  color: theme.palette.text.secondary,
+                  padding: 'revert',
+                }}
+              >
+                <ImageIcon />
+              </IconButton>
+              <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={(event) => handleImageUpload(event.target.files[0])}
+                accept="image/*"
+              />
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  }
+);
 
 const extensions = [
   Color.configure({ types: [TextStyle.name, ListItem.name] }),
@@ -322,7 +347,7 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: "Start typing here...",
+    placeholder: 'Start typing here...',
   }),
   ImageResize,
 ];
@@ -340,18 +365,21 @@ export default ({
   overrideMobile,
   customEditorHeight,
   membersWithNames,
-  enableMentions
+  enableMentions,
 }) => {
-  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useRecoilState(isDisabledEditorEnterAtom)
+  const theme = useTheme();
+  const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useAtom(
+    isDisabledEditorEnterAtom
+  );
 
   const extensionsFiltered = isChat
-    ? extensions.filter((item) => item?.name !== "image")
+    ? extensions.filter((item) => item?.name !== 'image')
     : extensions;
   const editorRef = useRef(null);
-  const setEditorRefFunc = (editorInstance) => {
+  const setEditorRefFunc = useCallback((editorInstance) => {
     editorRef.current = editorInstance;
     setEditorRef(editorInstance);
-  };
+  }, []);
 
   // const users = [
   //   { id: 1, label: 'Alice' },
@@ -359,40 +387,29 @@ export default ({
   //   { id: 3, label: 'Charlie' },
   // ];
 
-
-
-  const users = useMemo(()=> {
-    return (membersWithNames || [])?.map((item)=> {
+  const users = useMemo(() => {
+    return (membersWithNames || [])?.map((item) => {
       return {
         id: item,
-        label: item
-      }
-    })
-  }, [membersWithNames])
-
-
-
-
+        label: item,
+      };
+    });
+  }, [membersWithNames]);
 
   const usersRef = useRef([]);
   useEffect(() => {
     usersRef.current = users; // Keep users up-to-date
   }, [users]);
 
-  const handleFocus = () => {
-    if (!isMobile) return;
-    setIsFocusedParent(true);
-  };
-
   const handleBlur = () => {
     const htmlContent = editorRef.current.getHTML();
-    if (!htmlContent?.trim() || htmlContent?.trim() === "<p></p>") {
+    if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
       // Set focus state based on content
     }
   };
 
-  const additionalExtensions = useMemo(()=> {
-    if(!enableMentions) return []
+  const additionalExtensions = useMemo(() => {
+    if (!enableMentions) return [];
     return [
       Mention.configure({
         HTMLAttributes: {
@@ -409,122 +426,125 @@ export default ({
             let popup; // Reference to the Tippy.js instance
             let component;
 
-           return {
-            onStart: props => {
-              component = new ReactRenderer(MentionList, {
-                props,
-                editor: props.editor,
-              })
-      
-              if (!props.clientRect) {
-                return
-              }
-      
-              popup = tippy('body', {
-                getReferenceClientRect: props.clientRect,
-                appendTo: () => document.body,
-                content: component.element,
-                showOnCreate: true,
-                interactive: true,
-                trigger: 'manual',
-                placement: 'bottom-start',
-              })
-            },
-      
-            onUpdate(props) {
-              component.updateProps(props)
-      
-              if (!props.clientRect) {
-                return
-              }
-      
-              popup[0].setProps({
-                getReferenceClientRect: props.clientRect,
-              })
-            },
-      
-            onKeyDown(props) {
-              if (props.event.key === 'Escape') {
-                popup[0].hide()
-      
-                return true
-              }
-      
-              return component.ref?.onKeyDown(props)
-            },
-      
-            onExit() {
-              popup[0].destroy()
-              component.destroy()
-            },
-           }
+            return {
+              onStart: (props) => {
+                component = new ReactRenderer(MentionList, {
+                  props,
+                  editor: props.editor,
+                });
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup = tippy('body', {
+                  getReferenceClientRect: props.clientRect,
+                  appendTo: () => document.body,
+                  content: component.element,
+                  showOnCreate: true,
+                  interactive: true,
+                  trigger: 'manual',
+                  placement: 'bottom-start',
+                });
+              },
+
+              onUpdate(props) {
+                component.updateProps(props);
+
+                if (!props.clientRect) {
+                  return;
+                }
+
+                popup[0].setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              },
+
+              onKeyDown(props) {
+                if (props.event.key === 'Escape') {
+                  popup[0].hide();
+
+                  return true;
+                }
+
+                return component.ref?.onKeyDown(props);
+              },
+
+              onExit() {
+                popup[0].destroy();
+                component.destroy();
+              },
+            };
           },
         },
-      })
-    ]
-  }, [enableMentions])
+      }),
+    ];
+  }, [enableMentions]);
 
-  const handleSetIsDisabledEditorEnter = useCallback((val)=> {
-    setIsDisabledEditorEnter(val)
+  const handleSetIsDisabledEditorEnter = useCallback((val) => {
+    setIsDisabledEditorEnter(val);
     localStorage.setItem('settings-disable-editor-enter', JSON.stringify(val));
-
-  }, [])
-
+  }, []);
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      height: '100%'
-    }}>
-    <EditorProvider
-      slotBefore={
-        (isFocusedParent || !isMobile || overrideMobile) && (
-          <MenuBar setEditorRef={setEditorRefFunc} isChat={isChat} isDisabledEditorEnter={isDisabledEditorEnter} setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter} />
-        )
-      }
-      extensions={[...extensionsFiltered,   ...additionalExtensions
-    ]}
-      content={content}
-      onCreate={({ editor }) => {
-        editor.on("focus", handleFocus); // Listen for focus event
-        editor.on("blur", handleBlur); // Listen for blur event
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        justifyContent: 'space-between',
+        '--text-primary': theme.palette.text.primary,
+        '--text-secondary': theme.palette.text.secondary,
+        '--background-default': theme.palette.background.default,
+        '--background-secondary': theme.palette.background.paper,
       }}
-      onUpdate={({ editor }) => {
-      editor.on('focus', handleFocus);   // Ensure focus is updated
-      editor.on('blur', handleBlur);     // Ensure blur is updated
-    }}
-      editorProps={{
-        attributes: {
-          class: "tiptap-prosemirror",
-          style:
-            isMobile ?
-            `overflow: auto; min-height: ${
-              customEditorHeight ? "200px" : "0px"
-            }; max-height:calc(100svh - ${customEditorHeight || "140px"})`: `overflow: auto; max-height: 250px`,
-        },
-        handleKeyDown(view, event) {
-          if (!disableEnter && !isDisabledEditorEnter && event.key === "Enter") {
-            if (event.shiftKey) {
-              view.dispatch(
-                view.state.tr.replaceSelectionWith(
-                  view.state.schema.nodes.hardBreak.create()
-                )
-              );
-              return true;
-            } else {
-              if (typeof onEnter === "function") {
-                onEnter();
+    >
+      <EditorProvider
+        slotBefore={
+          <MenuBar
+            setEditorRef={setEditorRefFunc}
+            isChat={isChat}
+            isDisabledEditorEnter={isDisabledEditorEnter}
+            setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter}
+          />
+        }
+        extensions={[...extensionsFiltered, ...additionalExtensions]}
+        content={content}
+        onCreate={({ editor }) => {
+          editor.on('blur', handleBlur); // Listen for blur event
+        }}
+        onUpdate={({ editor }) => {
+          editor.on('blur', handleBlur); // Ensure blur is updated
+        }}
+        editorProps={{
+          attributes: {
+            class: 'tiptap-prosemirror',
+            style: `overflow: auto; max-height: 250px`,
+          },
+          handleKeyDown(view, event) {
+            if (
+              !disableEnter &&
+              !isDisabledEditorEnter &&
+              event.key === 'Enter'
+            ) {
+              if (event.shiftKey) {
+                view.dispatch(
+                  view.state.tr.replaceSelectionWith(
+                    view.state.schema.nodes.hardBreak.create()
+                  )
+                );
+                return true;
+              } else {
+                if (typeof onEnter === 'function') {
+                  onEnter();
+                }
+                return true;
               }
-              return true;
             }
-          }
-          return false;
-        },
-      }}
-    />
-    </div>
-
+            return false;
+          },
+        }}
+      />
+    </Box>
   );
 };

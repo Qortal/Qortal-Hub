@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
-import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import {
   Box,
   Button,
@@ -9,20 +9,26 @@ import {
   DialogActions,
   DialogContent,
   Typography,
-} from "@mui/material";
-import { CustomButton, CustomButtonAccept } from "../../App-styles";
-import { getBaseApiReact, MyContext } from "../../App";
-import { getFee } from "../../background";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { FidgetSpinner } from "react-loader-spinner";
+  useTheme,
+} from '@mui/material';
+import { CustomButton, CustomButtonAccept } from '../../styles/App-styles';
+import { getBaseApiReact, MyContext } from '../../App';
+import { getFee } from '../../background';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { FidgetSpinner } from 'react-loader-spinner';
+import { useAtom, useSetAtom } from 'jotai';
+import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 
-export const JoinGroup = ({ memberGroups }) => {
-  const { show, setTxList } = useContext(MyContext);
+export const JoinGroup = () => {
+  const { show } = useContext(MyContext);
+  const setTxList = useSetAtom(txListAtom);
+  const [memberGroups] = useAtom(memberGroupsAtom);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [groupInfo, setGroupInfo] = useState(null);
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const handleJoinGroup = async (e) => {
     setGroupInfo(null);
@@ -42,43 +48,45 @@ export const JoinGroup = ({ memberGroups }) => {
   };
 
   useEffect(() => {
-    subscribeToEvent("globalActionJoinGroup", handleJoinGroup);
+    subscribeToEvent('globalActionJoinGroup', handleJoinGroup);
 
     return () => {
-      unsubscribeFromEvent("globalActionJoinGroup", handleJoinGroup);
+      unsubscribeFromEvent('globalActionJoinGroup', handleJoinGroup);
     };
   }, []);
 
-  const isInGroup = useMemo(()=> {
-    return !!memberGroups.find((item)=> +item?.groupId === +groupInfo?.groupId)
-  }, [memberGroups, groupInfo])
+  const isInGroup = useMemo(() => {
+    return !!memberGroups.find(
+      (item) => +item?.groupId === +groupInfo?.groupId
+    );
+  }, [memberGroups, groupInfo]);
   const joinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
-      const fee = await getFee("JOIN_GROUP");
+      const fee = await getFee('JOIN_GROUP');
       await show({
-        message: "Would you like to perform an JOIN_GROUP transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingJoinGroup(true);
       await new Promise((res, rej) => {
         window
-          .sendMessage("joinGroup", {
+          .sendMessage('joinGroup', {
             groupId,
           })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
+                type: 'success',
                 message:
-                  "Successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
               });
 
               if (isOpen) {
                 setTxList((prev) => [
                   {
                     ...response,
-                    type: "joined-group",
+                    type: 'joined-group',
                     label: `Joined Group ${group?.groupName}: awaiting confirmation`,
                     labelDone: `Joined Group ${group?.groupName}: success!`,
                     done: false,
@@ -90,7 +98,7 @@ export const JoinGroup = ({ memberGroups }) => {
                 setTxList((prev) => [
                   {
                     ...response,
-                    type: "joined-group-request",
+                    type: 'joined-group-request',
                     label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
                     labelDone: `Requested to join Group ${group?.groupName}: success!`,
                     done: false,
@@ -105,7 +113,7 @@ export const JoinGroup = ({ memberGroups }) => {
               return;
             } else {
               setInfoSnack({
-                type: "error",
+                type: 'error',
                 message: response?.error,
               });
               setOpenSnack(true);
@@ -114,8 +122,8 @@ export const JoinGroup = ({ memberGroups }) => {
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message: error.message || 'An error occurred',
             });
             setOpenSnack(true);
             rej(error);
@@ -138,37 +146,37 @@ export const JoinGroup = ({ memberGroups }) => {
           {!groupInfo && (
             <Box
               sx={{
-                width: "325px",
-                height: "150px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                width: '325px',
+                height: '150px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              {" "}
+              {' '}
               <CircularProgress
                 size={25}
                 sx={{
-                  color: "white",
+                  color: theme.palette.text.primary,
                 }}
-              />{" "}
+              />{' '}
             </Box>
           )}
           <Box
             sx={{
-              width: "325px",
-              height: "auto",
-              maxHeight: "400px",
-              display: !groupInfo ? "none" : "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "10px",
-              padding: "10px",
+              width: '325px',
+              height: 'auto',
+              maxHeight: '400px',
+              display: !groupInfo ? 'none' : 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px',
             }}
           >
             <Typography
               sx={{
-                fontSize: "15px",
+                fontSize: '15px',
                 fontWeight: 600,
               }}
             >
@@ -176,7 +184,7 @@ export const JoinGroup = ({ memberGroups }) => {
             </Typography>
             <Typography
               sx={{
-                fontSize: "15px",
+                fontSize: '15px',
                 fontWeight: 600,
               }}
             >
@@ -185,7 +193,7 @@ export const JoinGroup = ({ memberGroups }) => {
             {groupInfo?.description && (
               <Typography
                 sx={{
-                  fontSize: "15px",
+                  fontSize: '15px',
                   fontWeight: 600,
                 }}
               >
@@ -193,19 +201,19 @@ export const JoinGroup = ({ memberGroups }) => {
               </Typography>
             )}
             {isInGroup && (
-                 <Typography
-                 sx={{
-                   fontSize: "14px",
-                   fontWeight: 600,
-                 }}
-               >
-                 *You are already in this group!
-               </Typography>
+              <Typography
+                sx={{
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                *You are already in this group!
+              </Typography>
             )}
             {!isInGroup && groupInfo?.isOpen === false && (
               <Typography
                 sx={{
-                  fontSize: "14px",
+                  fontSize: '14px',
                   fontWeight: 600,
                 }}
               >
@@ -216,32 +224,34 @@ export const JoinGroup = ({ memberGroups }) => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <ButtonBase onClick={() => {
+          <ButtonBase
+            onClick={() => {
               joinGroup(groupInfo, groupInfo?.isOpen);
 
               setIsOpen(false);
-            }} disabled={isInGroup}>
-          <CustomButtonAccept
-            color="black"
-            bgColor="var(--green)"
-            sx={{
-              minWidth: "102px",
-              height: "45px",
-              fontSize: '16px',
-              opacity: isInGroup ? 0.1 : 1
             }}
-            
+            disabled={isInGroup}
           >
-            Join
-          </CustomButtonAccept>
+            <CustomButtonAccept
+              color="black"
+              bgColor={theme.palette.other.positive}
+              sx={{
+                minWidth: '102px',
+                height: '45px',
+                fontSize: '16px',
+                opacity: isInGroup ? 0.1 : 1,
+              }}
+            >
+              Join
+            </CustomButtonAccept>
           </ButtonBase>
-         
+
           <CustomButtonAccept
             color="black"
-            bgColor="var(--danger)"
+            bgColor={theme.palette.other.danger}
             sx={{
-              minWidth: "102px",
-              height: "45px",
+              minWidth: '102px',
+              height: '45px',
             }}
             onClick={() => setIsOpen(false)}
           >
@@ -259,14 +269,14 @@ export const JoinGroup = ({ memberGroups }) => {
       {isLoadingJoinGroup && (
         <Box
           sx={{
-            position: "absolute",
+            position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
           <FidgetSpinner

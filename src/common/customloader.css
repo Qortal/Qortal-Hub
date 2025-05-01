@@ -1,7 +1,6 @@
-
 .lds-ellipsis {
-    color: white
-  }
+  color: var(--text-primary);
+}
 .lds-ellipsis,
 .lds-ellipsis div {
   box-sizing: border-box;
@@ -61,4 +60,3 @@
     transform: translate(24px, 0);
   }
 }
-

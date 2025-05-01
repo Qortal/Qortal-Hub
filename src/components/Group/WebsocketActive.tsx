@@ -1,12 +1,16 @@
-import React, { useEffect, useRef } from 'react';
-import { getBaseApiReactSocket, pauseAllQueues, resumeAllQueues } from '../../App';
+import { useEffect, useRef } from 'react';
+import {
+  getBaseApiReactSocket,
+  pauseAllQueues,
+  resumeAllQueues,
+} from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 
 export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   const socketRef = useRef(null); // WebSocket reference
   const timeoutIdRef = useRef(null); // Timeout ID reference
   const groupSocketTimeoutRef = useRef(null); // Group Socket Timeout reference
-  const initiateRef = useRef(null)
+  const initiateRef = useRef(null);
   const forceCloseWebSocket = () => {
     if (socketRef.current) {
       clearTimeout(timeoutIdRef.current);
@@ -17,20 +21,19 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   };
 
   const logoutEventFunc = () => {
-    forceCloseWebSocket()
+    forceCloseWebSocket();
   };
 
   useEffect(() => {
-    subscribeToEvent("logout-event", logoutEventFunc);
+    subscribeToEvent('logout-event', logoutEventFunc);
 
     return () => {
-      unsubscribeFromEvent("logout-event", logoutEventFunc);
+      unsubscribeFromEvent('logout-event', logoutEventFunc);
     };
   }, []);
 
   useEffect(() => {
     if (!myAddress) return; // Only proceed if myAddress is set
-
 
     const pingHeads = () => {
       try {
@@ -53,10 +56,9 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
       const currentAddress = myAddress;
 
       try {
-        if(!initiateRef.current) {
-          setIsLoadingGroups(true)
-          pauseAllQueues()
-          
+        if (!initiateRef.current) {
+          setIsLoadingGroups(true);
+          pauseAllQueues();
         }
         const socketLink = `${getBaseApiReactSocket()}/websockets/chat/active/${currentAddress}?encoding=BASE64&haschatreference=false`;
         socketRef.current = new WebSocket(socketLink);
@@ -71,34 +73,45 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
               clearTimeout(timeoutIdRef.current);
               groupSocketTimeoutRef.current = setTimeout(pingHeads, 45000); // Ping every 45 seconds
             } else {
-              if(!initiateRef.current) {
-                setIsLoadingGroups(false)
-                initiateRef.current = true
-                resumeAllQueues()
-      
+              if (!initiateRef.current) {
+                setIsLoadingGroups(false);
+                initiateRef.current = true;
+                resumeAllQueues();
               }
               const data = JSON.parse(e.data);
-              const copyGroups = [...(data?.groups || [])]
-              const findIndex = copyGroups?.findIndex(item => item?.groupId === 0)
-              if(findIndex !== -1){
+              const copyGroups = [...(data?.groups || [])];
+              const findIndex = copyGroups?.findIndex(
+                (item) => item?.groupId === 0
+              );
+              if (findIndex !== -1) {
                 copyGroups[findIndex] = {
                   ...(copyGroups[findIndex] || {}),
-                  groupId: "0"
-                }
+                  groupId: '0',
+                };
               }
-              const filteredGroups = copyGroups
-              const sortedGroups = filteredGroups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-              const sortedDirects = (data?.direct || []).filter(item =>
-                item?.name !== 'extension-proxy' && item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH'
-              ).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+              const filteredGroups = copyGroups;
+              const sortedGroups = filteredGroups.sort(
+                (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+              );
+              const sortedDirects = (data?.direct || [])
+                .filter(
+                  (item) =>
+                    item?.name !== 'extension-proxy' &&
+                    item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH'
+                )
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-              window.sendMessage("handleActiveGroupDataFromSocket", {
-                groups: sortedGroups,
-                directs: sortedDirects,
-              }).catch((error) => {
-                  console.error("Failed to handle active group data from socket:", error.message || "An error occurred");
+              window
+                .sendMessage('handleActiveGroupDataFromSocket', {
+                  groups: sortedGroups,
+                  directs: sortedDirects,
+                })
+                .catch((error) => {
+                  console.error(
+                    'Failed to handle active group data from socket:',
+                    error.message || 'An error occurred'
+                  );
                 });
-              
             }
           } catch (error) {
             console.error('Error parsing onmessage data:', error);
@@ -127,9 +140,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
       }
     };
 
-   
-      initWebsocketMessageGroup(); // Initialize WebSocket on component mount
-   
+    initWebsocketMessageGroup(); // Initialize WebSocket on component mount
 
     return () => {
       forceCloseWebSocket(); // Clean up WebSocket on component unmount

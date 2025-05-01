@@ -4,54 +4,49 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from "react";
-import { CreateCommonSecret } from "./CreateCommonSecret";
-import { reusableGet } from "../../qdn/publish/pubish";
-import { uint8ArrayToObject } from "../../backgroundFunctions/encryption";
+} from 'react';
+import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import {
   base64ToUint8Array,
   objectToBase64,
-} from "../../qdn/encryption/group-encryption";
-import { ChatContainerComp } from "./ChatContainer";
-import { ChatList } from "./ChatList";
-import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
-import Tiptap from "./TipTap";
-import { AuthenticatedContainerInnerTop, CustomButton } from "../../App-styles";
-import CircularProgress from "@mui/material/CircularProgress";
-import { getBaseApi, getFee } from "../../background";
-import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
-import { Box, Typography } from "@mui/material";
-import { Spacer } from "../../common/Spacer";
-import ShortUniqueId from "short-unique-id";
-import { AnnouncementList } from "./AnnouncementList";
-const uid = new ShortUniqueId({ length: 8 });
-import CampaignIcon from "@mui/icons-material/Campaign";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import { AnnouncementDiscussion } from "./AnnouncementDiscussion";
+} from '../../qdn/encryption/group-encryption';
+import Tiptap from './TipTap';
+import { CustomButton } from '../../styles/App-styles';
+import CircularProgress from '@mui/material/CircularProgress';
+import { getFee } from '../../background';
+import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
+import { Box, Typography, useTheme } from '@mui/material';
+import { Spacer } from '../../common/Spacer';
+import ShortUniqueId from 'short-unique-id';
+import { AnnouncementList } from './AnnouncementList';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import { AnnouncementDiscussion } from './AnnouncementDiscussion';
 import {
   MyContext,
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
   pauseAllQueues,
   resumeAllQueues,
-} from "../../App";
-import { RequestQueueWithPromise } from "../../utils/queue/queue";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { addDataPublishesFunc, getDataPublishesFunc } from "../Group/Group";
-import { getRootHeight } from "../../utils/mobile/mobileUtils";
+} from '../../App';
+import { RequestQueueWithPromise } from '../../utils/queue/queue';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
+
+const uid = new ShortUniqueId({ length: 8 });
 
 export const requestQueueCommentCount = new RequestQueueWithPromise(3);
+
 export const requestQueuePublishedAccouncements = new RequestQueueWithPromise(
   3
 );
 
 export const saveTempPublish = async ({ data, key }: any) => {
   return new Promise((res, rej) => {
-    window.sendMessage("saveTempPublish", {
-      data,
-      key,
-    })
+    window
+      .sendMessage('saveTempPublish', {
+        data,
+        key,
+      })
       .then((response) => {
         if (!response?.error) {
           res(response);
@@ -60,37 +55,37 @@ export const saveTempPublish = async ({ data, key }: any) => {
         rej(response.error);
       })
       .catch((error) => {
-        rej(error.message || "An error occurred");
+        rej(error.message || 'An error occurred');
       });
-    
   });
 };
 
 export const getTempPublish = async () => {
   return new Promise((res, rej) => {
-    window.sendMessage("getTempPublish", {})
-  .then((response) => {
-    if (!response?.error) {
-      res(response);
-      return;
-    }
-    rej(response.error);
-  })
-  .catch((error) => {
-    rej(error.message || "An error occurred");
-  });
-
+    window
+      .sendMessage('getTempPublish', {})
+      .then((response) => {
+        if (!response?.error) {
+          res(response);
+          return;
+        }
+        rej(response.error);
+      })
+      .catch((error) => {
+        rej(error.message || 'An error occurred');
+      });
   });
 };
 
 export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
   try {
     return await new Promise((res, rej) => {
-      window.sendMessage("decryptSingleForPublishes", {
-        data: encryptedMessages,
-        secretKeyObject: secretKey,
-        skipDecodeBase64: true,
-      })
+      window
+        .sendMessage('decryptSingleForPublishes', {
+          data: encryptedMessages,
+          secretKeyObject: secretKey,
+          skipDecodeBase64: true,
+        })
         .then((response) => {
           if (!response?.error) {
             res(response);
@@ -99,27 +94,29 @@ export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
           rej(response.error);
         })
         .catch((error) => {
-          rej(error.message || "An error occurred");
+          rej(error.message || 'An error occurred');
         });
-      
     });
-  } catch (error) {}
+  } catch (error) {
+    console.log(error);
+  }
 };
-export const handleUnencryptedPublishes =  (publishes) => {
-  let publishesData = []
-  publishes.forEach((pub)=> {
+export const handleUnencryptedPublishes = (publishes) => {
+  let publishesData = [];
+  publishes.forEach((pub) => {
     try {
       const decryptToUnit8Array = base64ToUint8Array(pub);
       const decodedData = uint8ArrayToObject(decryptToUnit8Array);
-      if(decodedData){
-        publishesData.push({decryptedData: decodedData})
+      if (decodedData) {
+        publishesData.push({ decryptedData: decodedData });
       }
     } catch (error) {
-      
+      console.log(error);
     }
-  })
-  return publishesData
+  });
+  return publishesData;
 };
+
 export const GroupAnnouncements = ({
   selectedGroup,
   secretKey,
@@ -130,7 +127,7 @@ export const GroupAnnouncements = ({
   isAdmin,
   hide,
   myName,
-  isPrivate
+  isPrivate,
 }) => {
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
@@ -141,7 +138,7 @@ export const GroupAnnouncements = ({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const { show, rootHeight } = React.useContext(MyContext);
+  const { show } = React.useContext(MyContext);
   const [openSnack, setOpenSnack] = React.useState(false);
   const [infoSnack, setInfoSnack] = React.useState(null);
   const hasInitialized = useRef(false);
@@ -159,12 +156,15 @@ export const GroupAnnouncements = ({
   useEffect(() => {
     if (!selectedGroup) return;
     (async () => {
-      const res = await getDataPublishesFunc(selectedGroup, "anc");
+      const res = await getDataPublishesFunc(selectedGroup, 'anc');
       dataPublishes.current = res || {};
     })();
   }, [selectedGroup]);
 
-  const getAnnouncementData = async ({ identifier, name, resource }, isPrivate) => {
+  const getAnnouncementData = async (
+    { identifier, name, resource },
+    isPrivate
+  ) => {
     try {
       let data = dataPublishes.current[`${name}-${identifier}`];
       if (
@@ -179,14 +179,17 @@ export const GroupAnnouncements = ({
         });
         if (!res?.ok) return;
         data = await res.text();
-        await addDataPublishesFunc({ ...resource, data }, selectedGroup, "anc");
+        await addDataPublishesFunc({ ...resource, data }, selectedGroup, 'anc');
       } else {
         data = data.data;
       }
 
-      const response = isPrivate === false ? handleUnencryptedPublishes([data]) :  await decryptPublishes([{ data }], secretKey);
+      const response =
+        isPrivate === false
+          ? handleUnencryptedPublishes([data])
+          : await decryptPublishes([{ data }], secretKey);
       const messageData = response[0];
-      if(!messageData) return
+      if (!messageData) return;
       setAnnouncementData((prev) => {
         return {
           ...prev,
@@ -194,12 +197,17 @@ export const GroupAnnouncements = ({
         };
       });
     } catch (error) {
-      console.error("error", error);
+      console.error('error', error);
     }
   };
 
   useEffect(() => {
-    if ((!secretKey && isPrivate) || hasInitializedWebsocket.current || isPrivate === null) return;
+    if (
+      (!secretKey && isPrivate) ||
+      hasInitializedWebsocket.current ||
+      isPrivate === null
+    )
+      return;
     setIsLoading(true);
     // initWebsocketMessageGroup()
     hasInitializedWebsocket.current = true;
@@ -208,10 +216,11 @@ export const GroupAnnouncements = ({
   const encryptChatMessage = async (data: string, secretKeyObject: any) => {
     try {
       return new Promise((res, rej) => {
-        window.sendMessage("encryptSingle", {
-          data,
-          secretKeyObject,
-        })
+        window
+          .sendMessage('encryptSingle', {
+            data,
+            secretKeyObject,
+          })
           .then((response) => {
             if (!response?.error) {
               res(response);
@@ -220,19 +229,21 @@ export const GroupAnnouncements = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || "An error occurred");
+            rej(error.message || 'An error occurred');
           });
-        
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnc = async ({ encryptedData, identifier }: any) => {
     return new Promise((res, rej) => {
-      window.sendMessage("publishGroupEncryptedResource", {
-        encryptedData,
-        identifier,
-      })
+      window
+        .sendMessage('publishGroupEncryptedResource', {
+          encryptedData,
+          identifier,
+        })
         .then((response) => {
           if (!response?.error) {
             res(response);
@@ -241,23 +252,14 @@ export const GroupAnnouncements = ({
           rej(response.error);
         })
         .catch((error) => {
-          rej(error.message || "An error occurred");
+          rej(error.message || 'An error occurred');
         });
-      
     });
   };
+
   const clearEditorContent = () => {
     if (editorRef.current) {
       editorRef.current.chain().focus().clearContent().run();
-      if (isMobile) {
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run();
-          setIsFocusedParent(false);
-          setTimeout(() => {
-            triggerRerender();
-           }, 300);
-        }, 200);
-      }
     }
   };
 
@@ -266,39 +268,46 @@ export const GroupAnnouncements = ({
       const getTempAnnouncements = await getTempPublish();
       if (getTempAnnouncements?.announcement) {
         let tempData = [];
-        Object.keys(getTempAnnouncements?.announcement || {}).filter((annKey)=> annKey?.startsWith(`grp-${selectedGroup}-anc`)).map((key) => {
-          const value = getTempAnnouncements?.announcement[key];
-          tempData.push(value.data);
-        });
+        Object.keys(getTempAnnouncements?.announcement || {})
+          .filter((annKey) => annKey?.startsWith(`grp-${selectedGroup}-anc`))
+          .map((key) => {
+            const value = getTempAnnouncements?.announcement[key];
+            tempData.push(value.data);
+          });
         setTempPublishedList(tempData);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnnouncement = async () => {
     try {
       pauseAllQueues();
-      const fee = await getFee("ARBITRARY");
+      const fee = await getFee('ARBITRARY');
+
       await show({
-        message: "Would you like to perform a ARBITRARY transaction?",
-        publishFee: fee.fee + " QORT",
+        message: 'Would you like to perform a ARBITRARY transaction?',
+        publishFee: fee.fee + ' QORT',
       });
+
       if (isSending) return;
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
-        if (!htmlContent?.trim() || htmlContent?.trim() === "<p></p>") return;
+        if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') return;
         setIsSending(true);
         const message = {
           version: 1,
           extra: {},
           message: htmlContent,
         };
-        const secretKeyObject = isPrivate === false ? null : await getSecretKey(false, true);
-        const message64: any =  await objectToBase64(message);
-        const encryptSingle =  isPrivate === false ? message64 : await encryptChatMessage(
-          message64,
-          secretKeyObject
-        );
+        const secretKeyObject =
+          isPrivate === false ? null : await getSecretKey(false, true);
+        const message64: any = await objectToBase64(message);
+        const encryptSingle =
+          isPrivate === false
+            ? message64
+            : await encryptChatMessage(message64, secretKeyObject);
         const randomUid = uid.rnd();
         const identifier = `grp-${selectedGroup}-anc-${randomUid}`;
         const res = await publishAnc({
@@ -309,13 +318,13 @@ export const GroupAnnouncements = ({
         const dataToSaveToStorage = {
           name: myName,
           identifier,
-          service: "DOCUMENT",
+          service: 'DOCUMENT',
           tempData: message,
           created: Date.now(),
         };
         await saveTempPublish({
           data: dataToSaveToStorage,
-          key: "announcement",
+          key: 'announcement',
         });
         setTempData(selectedGroup);
         clearEditorContent();
@@ -324,7 +333,7 @@ export const GroupAnnouncements = ({
     } catch (error) {
       if (!error) return;
       setInfoSnack({
-        type: "error",
+        type: 'error',
         message: error,
       });
       setOpenSnack(true);
@@ -343,9 +352,9 @@ export const GroupAnnouncements = ({
         const identifier = `grp-${selectedGroup}-anc-`;
         const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
         const response = await fetch(url, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseData = await response.json();
@@ -354,23 +363,30 @@ export const GroupAnnouncements = ({
         setAnnouncements(responseData);
         setIsLoading(false);
         for (const data of responseData) {
-          getAnnouncementData({
-            name: data.name,
-            identifier: data.identifier,
-            resource: data,
-          }, isPrivate);
+          getAnnouncementData(
+            {
+              name: data.name,
+              identifier: data.identifier,
+              resource: data,
+            },
+            isPrivate
+          );
         }
       } catch (error) {
-      } finally {
-        // dispatch(setIsLoadingGlobal(false))
+        console.log(error);
       }
     },
     [secretKey]
   );
 
   React.useEffect(() => {
-    if(!secretKey && isPrivate) return
-    if (selectedGroup && !hasInitialized.current && !hide && isPrivate !== null) {
+    if (!secretKey && isPrivate) return;
+    if (
+      selectedGroup &&
+      !hasInitialized.current &&
+      !hide &&
+      isPrivate !== null
+    ) {
       getAnnouncements(selectedGroup, isPrivate);
       hasInitialized.current = true;
     }
@@ -384,9 +400,9 @@ export const GroupAnnouncements = ({
       const identifier = `grp-${selectedGroup}-anc-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       const responseData = await response.json();
@@ -394,21 +410,28 @@ export const GroupAnnouncements = ({
       setAnnouncements((prev) => [...prev, ...responseData]);
       setIsLoading(false);
       for (const data of responseData) {
-        getAnnouncementData({ name: data.name, identifier: data.identifier }, isPrivate);
+        getAnnouncementData(
+          { name: data.name, identifier: data.identifier },
+          isPrivate
+        );
       }
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const interval = useRef<any>(null);
+
+  const theme = useTheme();
 
   const checkNewMessages = React.useCallback(async () => {
     try {
       const identifier = `grp-${selectedGroup}-anc-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${0}&reverse=true&prefix=true`;
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       const responseData = await response.json();
@@ -416,11 +439,16 @@ export const GroupAnnouncements = ({
       if (!latestMessage) {
         for (const data of responseData) {
           try {
-            getAnnouncementData({
-              name: data.name,
-              identifier: data.identifier,
-            }, isPrivate);
-          } catch (error) {}
+            getAnnouncementData(
+              {
+                name: data.name,
+                identifier: data.identifier,
+              },
+              isPrivate
+            );
+          } catch (error) {
+            console.log(error);
+          }
         }
         setAnnouncements(responseData);
         return;
@@ -434,12 +462,17 @@ export const GroupAnnouncements = ({
 
       for (const data of newArray) {
         try {
-          getAnnouncementData({ name: data.name, identifier: data.identifier }, isPrivate);
-        } catch (error) {}
+          getAnnouncementData(
+            { name: data.name, identifier: data.identifier },
+            isPrivate
+          );
+        } catch (error) {
+          console.log(error);
+        }
       }
       setAnnouncements((prev) => [...newArray, ...prev]);
     } catch (error) {
-    } finally {
+      console.log(error);
     }
   }, [announcements, secretKey, selectedGroup]);
 
@@ -485,14 +518,13 @@ export const GroupAnnouncements = ({
     return (
       <div
         style={{
-          // reference to change height
-          height: isMobile ? `calc(${rootHeight} - 127px` : "calc(100vh - 70px)",
-          display: "flex",
-          flexDirection: "column",
-          width: "100%",
-          visibility: hide && "hidden",
-          position: hide && "fixed",
-          left: hide && "-1000px",
+          display: 'flex',
+          flexDirection: 'column',
+          height: 'calc(100vh - 70px)',
+          left: hide && '-1000px',
+          position: hide && 'fixed',
+          visibility: hide && 'hidden',
+          width: '100%',
         }}
       >
         <AnnouncementDiscussion
@@ -509,63 +541,60 @@ export const GroupAnnouncements = ({
     );
   }
 
-
   return (
     <div
       style={{
-         // reference to change height
-        height: isMobile ? `calc(${rootHeight} - 127px` : "calc(100vh - 70px)",
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-        visibility: hide && "hidden",
-        position: hide && "fixed",
-        left: hide && "-1000px",
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100vh - 70px)',
+        left: hide && '-1000px',
+        position: hide && 'fixed',
+        visibility: hide && 'hidden',
+        width: '100%',
       }}
     >
       <div
         style={{
-          position: "relative",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           flexShrink: 0,
+          position: 'relative',
+          width: '100%',
         }}
       >
-        {!isMobile && (
-          <Box
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            fontSize: '20px',
+            gap: '20px',
+            justifyContent: 'center',
+            padding: '25px',
+            width: '100%',
+          }}
+        >
+          <CampaignIcon
             sx={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
-              padding: isMobile ? "8px" : "25px",
-              fontSize: isMobile ? "16px" : "20px",
-              gap: "20px",
-              alignItems: "center",
+              fontSize: '30px',
             }}
-          >
-            <CampaignIcon
-              sx={{
-                fontSize: isMobile ? "16px" : "30px",
-              }}
-            />
-            Group Announcements
-          </Box>
-        )}
+          />
+          Group Announcements
+        </Box>
 
-        <Spacer height={isMobile ? "0px" : "25px"} />
+        <Spacer height={'25px'} />
       </div>
+
       {!isLoading && combinedListTempAndReal?.length === 0 && (
         <Box
           sx={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "center",
+            display: 'flex',
+            justifyContent: 'center',
+            width: '100%',
           }}
         >
           <Typography
             sx={{
-              fontSize: "16px",
+              fontSize: '16px',
             }}
           >
             No announcements
@@ -587,31 +616,28 @@ export const GroupAnnouncements = ({
       {isAdmin && (
         <div
           style={{
-            // position: 'fixed',
-            // bottom: '0px',
-            backgroundColor: "#232428",
-            minHeight: isMobile ? "0px" : "150px",
-            maxHeight: isMobile ? "auto" : "400px",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            width: "100%",
-            boxSizing: "border-box",
-            padding: isMobile ? "10px" : "20px",
-            position: isFocusedParent ? "fixed" : "relative",
-            bottom: isFocusedParent ? "0px" : "unset",
-            top: isFocusedParent ? "0px" : "unset",
-            zIndex: isFocusedParent ? 5 : "unset",
+            backgroundColor: theme.palette.background.default,
+            bottom: isFocusedParent ? '0px' : 'unset',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column',
             flexShrink: 0,
+            maxHeight: '400px',
+            minHeight: '150px',
+            overflow: 'hidden',
+            padding: '20px',
+            position: isFocusedParent ? 'fixed' : 'relative',
+            top: isFocusedParent ? '0px' : 'unset',
+            width: '100%',
+            zIndex: isFocusedParent ? 5 : 'unset',
           }}
         >
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              flexGrow: isMobile && 1,
-              overflow: "auto",
-              // height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              flexGrow: 1,
+              overflow: 'auto',
             }}
           >
             <Tiptap
@@ -623,14 +649,15 @@ export const GroupAnnouncements = ({
               setIsFocusedParent={setIsFocusedParent}
             />
           </div>
+
           <Box
             sx={{
-              display: "flex",
-              width: "100&",
-              gap: "10px",
-              justifyContent: "center",
+              display: 'flex',
               flexShrink: 0,
-              position: "relative",
+              gap: '10px',
+              justifyContent: 'center',
+              position: 'relative',
+              width: '100&',
             }}
           >
             {isFocusedParent && (
@@ -639,49 +666,52 @@ export const GroupAnnouncements = ({
                   if (isSending) return;
                   setIsFocusedParent(false);
                   clearEditorContent();
-                 setTimeout(() => {
-                  triggerRerender();
-                 }, 300);
+                  setTimeout(() => {
+                    triggerRerender();
+                  }, 300);
                   // Unfocus the editor
                 }}
                 style={{
-                  marginTop: "auto",
-                  alignSelf: "center",
-                  cursor: isSending ? "default" : "pointer",
-                  background: "var(--danger)",
+                  alignSelf: 'center',
+                  background: theme.palette.other.danger,
+                  cursor: isSending ? 'default' : 'pointer',
                   flexShrink: 0,
-                  padding: isMobile && "5px",
-                  fontSize: isMobile && "14px",
+                  fontSize: '14px',
+                  marginTop: 'auto',
+                  padding: '5px',
                 }}
               >
                 {` Close`}
               </CustomButton>
             )}
+
             <CustomButton
               onClick={() => {
                 if (isSending) return;
                 publishAnnouncement();
               }}
               style={{
-                marginTop: "auto",
-                alignSelf: "center",
-                cursor: isSending ? "default" : "pointer",
-                background: isSending && "rgba(0, 0, 0, 0.8)",
+                alignSelf: 'center',
+                background: isSending
+                  ? theme.palette.background.default
+                  : theme.palette.background.paper,
+                cursor: isSending ? 'default' : 'pointer',
                 flexShrink: 0,
-                padding: isMobile && "5px",
-                fontSize: isMobile && "14px",
+                fontSize: '14px',
+                marginTop: 'auto',
+                padding: '5px',
               }}
             >
               {isSending && (
                 <CircularProgress
                   size={18}
                   sx={{
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    marginTop: "-12px",
-                    marginLeft: "-12px",
-                    color: "white",
+                    color: theme.palette.text.primary,
+                    left: '50%',
+                    marginLeft: '-12px',
+                    marginTop: '-12px',
+                    position: 'absolute',
+                    top: '50%',
                   }}
                 />
               )}
@@ -701,7 +731,7 @@ export const GroupAnnouncements = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: "Loading announcements... please wait.",
+          message: 'Loading announcements... please wait.',
         }}
       />
     </div>

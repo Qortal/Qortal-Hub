@@ -1,18 +1,31 @@
-import React, { useMemo, useRef, useState } from "react";
-import TipTap from "./TipTap";
-import { AuthenticatedContainerInnerTop, CustomButton } from "../../App-styles";
-import { Box, CircularProgress } from "@mui/material";
-import { objectToBase64 } from "../../qdn/encryption/group-encryption";
-import ShortUniqueId from "short-unique-id";
-import { LoadingSnackbar } from "../Snackbar/LoadingSnackbar";
-import { getBaseApi, getFee } from "../../background";
-import { decryptPublishes, getTempPublish, handleUnencryptedPublishes, saveTempPublish } from "./GroupAnnouncements";
-import { AnnouncementList } from "./AnnouncementList";
-import { Spacer } from "../../common/Spacer";
+import React, { useMemo, useRef, useState } from 'react';
+import TipTap from './TipTap';
+import {
+  AuthenticatedContainerInnerTop,
+  CustomButton,
+} from '../../styles/App-styles';
+import { Box, CircularProgress, useTheme } from '@mui/material';
+import { objectToBase64 } from '../../qdn/encryption/group-encryption';
+import ShortUniqueId from 'short-unique-id';
+import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
+import { getBaseApi, getFee } from '../../background';
+import {
+  decryptPublishes,
+  getTempPublish,
+  handleUnencryptedPublishes,
+  saveTempPublish,
+} from './GroupAnnouncements';
+import { AnnouncementList } from './AnnouncementList';
+import { Spacer } from '../../common/Spacer';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { getArbitraryEndpointReact, getBaseApiReact, isMobile, pauseAllQueues, resumeAllQueues } from "../../App";
+import {
+  getArbitraryEndpointReact,
+  getBaseApiReact,
+  pauseAllQueues,
+  resumeAllQueues,
+} from '../../App';
 
-const tempKey = 'accouncement-comment'
+const tempKey = 'accouncement-comment';
 
 const uid = new ShortUniqueId({ length: 8 });
 export const AnnouncementDiscussion = ({
@@ -23,43 +36,40 @@ export const AnnouncementDiscussion = ({
   setSelectedAnnouncement,
   show,
   myName,
-  isPrivate
+  isPrivate,
 }) => {
+  const theme = useTheme();
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const [comments, setComments] = useState([])
-  const [tempPublishedList, setTempPublishedList] = useState([])
-  const firstMountRef = useRef(false)
-  const [data, setData] = useState({})
+  const [comments, setComments] = useState([]);
+  const [tempPublishedList, setTempPublishedList] = useState([]);
+  const firstMountRef = useRef(false);
+  const [data, setData] = useState({});
   const editorRef = useRef(null);
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
- 
+
   const clearEditorContent = () => {
     if (editorRef.current) {
       editorRef.current.chain().focus().clearContent().run();
-      if(isMobile){
-        setTimeout(() => {
-          editorRef.current?.chain().blur().run(); 
-          setIsFocusedParent(false)
-        }, 200);
-      }
     }
   };
 
   const getData = async ({ identifier, name }, isPrivate) => {
     try {
-     
       const res = await fetch(
         `${getBaseApiReact()}/arbitrary/DOCUMENT/${name}/${identifier}?encoding=base64`
       );
-      if(!res?.ok) return
+      if (!res?.ok) return;
       const data = await res.text();
-      const response = isPrivate === false ? handleUnencryptedPublishes([data]) :  await decryptPublishes([{ data }], secretKey);
-    
+      const response =
+        isPrivate === false
+          ? handleUnencryptedPublishes([data])
+          : await decryptPublishes([{ data }], secretKey);
+
       const messageData = response[0];
       setData((prev) => {
         return {
@@ -67,19 +77,21 @@ export const AnnouncementDiscussion = ({
           [`${identifier}-${name}`]: messageData,
         };
       });
-    
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const publishAnc = async ({ encryptedData, identifier }: any) => {
     try {
       if (!selectedAnnouncement) return;
-    
+
       return new Promise((res, rej) => {
-        window.sendMessage("publishGroupEncryptedResource", {
-          encryptedData,
-          identifier,
-        })
+        window
+          .sendMessage('publishGroupEncryptedResource', {
+            encryptedData,
+            identifier,
+          })
           .then((response) => {
             if (!response?.error) {
               res(response);
@@ -88,63 +100,64 @@ export const AnnouncementDiscussion = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || "An error occurred");
+            rej(error.message || 'An error occurred');
           });
-        
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
-  const setTempData = async ()=> {
+  const setTempData = async () => {
     try {
-      const getTempAnnouncements = await getTempPublish()
-  if(getTempAnnouncements[tempKey]){
-    let tempData = []
-    Object.keys(getTempAnnouncements[tempKey] || {}).map((key)=> {
-      const value = getTempAnnouncements[tempKey][key]
-      if(value.data?.announcementId === selectedAnnouncement.identifier){
-        tempData.push(value.data)
+      const getTempAnnouncements = await getTempPublish();
+      if (getTempAnnouncements[tempKey]) {
+        let tempData = [];
+        Object.keys(getTempAnnouncements[tempKey] || {}).map((key) => {
+          const value = getTempAnnouncements[tempKey][key];
+          if (value.data?.announcementId === selectedAnnouncement.identifier) {
+            tempData.push(value.data);
+          }
+        });
+        setTempPublishedList(tempData);
       }
-    })
-    setTempPublishedList(tempData)
-  }
     } catch (error) {
-      
+      console.log(error);
     }
-   
-  }
+  };
 
   const publishComment = async () => {
     try {
-      pauseAllQueues()
-      const fee = await getFee('ARBITRARY')
+      pauseAllQueues();
+      const fee = await getFee('ARBITRARY');
       await show({
-        message: "Would you like to perform a ARBITRARY transaction?" ,
-        publishFee: fee.fee + ' QORT'
-      })
+        message: 'Would you like to perform a ARBITRARY transaction?',
+        publishFee: fee.fee + ' QORT',
+      });
       if (isSending) return;
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
-      
-        if (!htmlContent?.trim() || htmlContent?.trim() === "<p></p>") return;
+
+        if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') return;
         setIsSending(true);
         const message = {
           version: 1,
           extra: {},
           message: htmlContent,
         };
-        const secretKeyObject = isPrivate === false ? null : await getSecretKey(false, true);
-        const message64: any =  await objectToBase64(message);
-     
-        const encryptSingle = isPrivate === false ? message64 : await encryptChatMessage(
-          message64,
-          secretKeyObject
-        );
+        const secretKeyObject =
+          isPrivate === false ? null : await getSecretKey(false, true);
+        const message64: any = await objectToBase64(message);
+
+        const encryptSingle =
+          isPrivate === false
+            ? message64
+            : await encryptChatMessage(message64, secretKeyObject);
         const randomUid = uid.rnd();
         const identifier = `cm-${selectedAnnouncement.identifier}-${randomUid}`;
         const res = await publishAnc({
           encryptedData: encryptSingle,
-          identifier
+          identifier,
         });
 
         const dataToSaveToStorage = {
@@ -153,18 +166,18 @@ export const AnnouncementDiscussion = ({
           service: 'DOCUMENT',
           tempData: message,
           created: Date.now(),
-          announcementId: selectedAnnouncement.identifier
-        }
-        await saveTempPublish({data: dataToSaveToStorage, key: tempKey})
-        setTempData()
-      
+          announcementId: selectedAnnouncement.identifier,
+        };
+        await saveTempPublish({ data: dataToSaveToStorage, key: tempKey });
+        setTempData();
+
         clearEditorContent();
       }
       // send chat message
     } catch (error) {
       console.error(error);
     } finally {
-      resumeAllQueues()
+      resumeAllQueues();
       setIsSending(false);
     }
   };
@@ -172,7 +185,6 @@ export const AnnouncementDiscussion = ({
   const getComments = React.useCallback(
     async (selectedAnnouncement, isPrivate) => {
       try {
-        
         setIsLoading(true);
 
         const offset = 0;
@@ -181,19 +193,20 @@ export const AnnouncementDiscussion = ({
         const identifier = `cm-${selectedAnnouncement.identifier}`;
         const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
         const response = await fetch(url, {
-          method: "GET",
+          method: 'GET',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
         });
         const responseData = await response.json();
-        setTempData()
+        setTempData();
         setComments(responseData);
         setIsLoading(false);
         for (const data of responseData) {
           getData({ name: data.name, identifier: data.identifier }, isPrivate);
         }
       } catch (error) {
+        console.log(error);
       } finally {
         setIsLoading(false);
 
@@ -203,119 +216,122 @@ export const AnnouncementDiscussion = ({
     [secretKey]
   );
 
-  const loadMore = async()=> {
+  const loadMore = async () => {
     try {
       setIsLoading(true);
 
-      const offset = comments.length
+      const offset = comments.length;
       const identifier = `cm-${selectedAnnouncement.identifier}`;
-        const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const responseData = await response.json();
+      const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const responseData = await response.json();
 
-        setComments((prev)=> [...prev, ...responseData]);
-        setIsLoading(false);
-        for (const data of responseData) {
-          getData({ name: data.name, identifier: data.identifier }, isPrivate);
-        }
+      setComments((prev) => [...prev, ...responseData]);
+      setIsLoading(false);
+      for (const data of responseData) {
+        getData({ name: data.name, identifier: data.identifier }, isPrivate);
+      }
     } catch (error) {
-      
+      console.log(error);
     }
-    
-  }
+  };
 
   const combinedListTempAndReal = useMemo(() => {
     // Combine the two lists
     const combined = [...tempPublishedList, ...comments];
-  
+
     // Remove duplicates based on the "identifier"
     const uniqueItems = new Map();
-    combined.forEach(item => {
-      uniqueItems.set(item.identifier, item);  // This will overwrite duplicates, keeping the last occurrence
+    combined.forEach((item) => {
+      uniqueItems.set(item.identifier, item); // This will overwrite duplicates, keeping the last occurrence
     });
-  
+
     // Convert the map back to an array and sort by "created" timestamp in descending order
-    const sortedList = Array.from(uniqueItems.values()).sort((a, b) => b.created - a.created);
-  
+    const sortedList = Array.from(uniqueItems.values()).sort(
+      (a, b) => b.created - a.created
+    );
+
     return sortedList;
   }, [tempPublishedList, comments]);
 
   React.useEffect(() => {
-    if(!secretKey && isPrivate) return
+    if (!secretKey && isPrivate) return;
     if (selectedAnnouncement && !firstMountRef.current && isPrivate !== null) {
       getComments(selectedAnnouncement, isPrivate);
-      firstMountRef.current = true
+      firstMountRef.current = true;
     }
   }, [selectedAnnouncement, secretKey, isPrivate]);
   return (
     <div
       style={{
-        height: isMobile ? '100%' : "100%",
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        width: '100%',
       }}
     >
-        <div style={{
-        position: "relative",
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        flexShrink: 0,
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+          position: 'relative',
+          width: '100%',
+        }}
+      >
+        <AuthenticatedContainerInnerTop
+          sx={{
+            height: '20px',
+          }}
+        >
+          <ArrowBackIcon
+            onClick={() => setSelectedAnnouncement(null)}
+            sx={{
+              cursor: 'pointer',
+            }}
+          />
+        </AuthenticatedContainerInnerTop>
 
-<AuthenticatedContainerInnerTop sx={{
-  height: '20px'
-}}>
-      <ArrowBackIcon onClick={()=> setSelectedAnnouncement(null)} sx={{
-        cursor: 'pointer'
-      }} />
-      </AuthenticatedContainerInnerTop>
         <Spacer height="20px" />
-      
       </div>
       <AnnouncementList
         announcementData={data}
         initialMessages={combinedListTempAndReal}
-        setSelectedAnnouncement={()=> {}}
+        setSelectedAnnouncement={() => {}}
         disableComment
         showLoadMore={comments.length > 0 && comments.length % 20 === 0}
         loadMore={loadMore}
         myName={myName}
-        
       />
       <div
         style={{
-          // position: 'fixed',
-          // bottom: '0px',
-          backgroundColor: "#232428",
-          minHeight: isMobile ? "0px" : "150px",
-          maxHeight: isMobile ? "auto" : "400px",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          width: "100%",
-          boxSizing: "border-box",
-          padding: isMobile ? "10px":  "20px",
-          position: isFocusedParent ? 'fixed' : 'relative',
+          backgroundColor: theme.palette.background.default,
           bottom: isFocusedParent ? '0px' : 'unset',
+          boxSizing: 'border-box',
+          display: 'flex',
+          flexDirection: 'column',
+          flexShrink: 0,
+          maxHeight: '400px',
+          minHeight: '150px',
+          overflow: 'hidden',
+          padding: '20px',
+          position: isFocusedParent ? 'fixed' : 'relative',
           top: isFocusedParent ? '0px' : 'unset',
+          width: '100%',
           zIndex: isFocusedParent ? 5 : 'unset',
-          flexShrink:0,
         }}
       >
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            // height: '100%',
-            flexGrow: isMobile && 1,
-            overflow: "auto",
+            display: 'flex',
+            flexDirection: 'column',
+            flexGrow: 1,
+            overflow: 'auto',
           }}
         >
           <TipTap
@@ -323,79 +339,78 @@ export const AnnouncementDiscussion = ({
             onEnter={publishComment}
             disableEnter
             maxHeightOffset="60px"
-            isFocusedParent={isFocusedParent} setIsFocusedParent={setIsFocusedParent}
-            
+            isFocusedParent={isFocusedParent}
+            setIsFocusedParent={setIsFocusedParent}
           />
         </div>
-        <Box sx={{
-        display: 'flex',
-        width: '100&',
-        gap: '10px',
-        justifyContent: 'center',
-        flexShrink: 0,
-        position: 'relative',
-      }}>
-          {isFocusedParent && (
-               <CustomButton
-               onClick={()=> {
-                 if(isSending) return
-                 setIsFocusedParent(false)
-                 clearEditorContent()
-                 // Unfocus the editor
-               }}
-               style={{
-                 marginTop: 'auto',
-                 alignSelf: 'center',
-                 cursor: isSending ? 'default' : 'pointer',
-                 flexShrink: 0,
-                 padding: isMobile && '5px',
-                 fontSize: isMobile && '14px',
-                 background: 'red',
-               }}
-             >
-               
-               {` Close`}
-             </CustomButton>
-           
-            )}
-        <CustomButton
-          onClick={() => {
-            if (isSending) return;
-            publishComment();
-          }}
-          style={{
-            marginTop: "auto",
-            alignSelf: "center",
-            cursor: isSending ? "default" : "pointer",
-            background: isSending && "rgba(0, 0, 0, 0.8)",
+        <Box
+          sx={{
+            display: 'flex',
             flexShrink: 0,
-            padding: isMobile && '5px',
-            fontSize: isMobile && '14px'
+            gap: '10px',
+            justifyContent: 'center',
+            position: 'relative',
+            width: '100&',
           }}
         >
-          {isSending && (
-            <CircularProgress
-              size={18}
-              sx={{
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                marginTop: "-12px",
-                marginLeft: "-12px",
-                color: "white",
+          {isFocusedParent && (
+            <CustomButton
+              onClick={() => {
+                if (isSending) return;
+                setIsFocusedParent(false);
+                clearEditorContent();
+                // Unfocus the editor
               }}
-            />
+              style={{
+                alignSelf: 'center',
+                background: 'red',
+                cursor: isSending ? 'default' : 'pointer',
+                flexShrink: 0,
+                fontSize: '14px',
+                marginTop: 'auto',
+                padding: '5px',
+              }}
+            >
+              {` Close`}
+            </CustomButton>
           )}
-          {` Publish Comment`}
-        </CustomButton>
-      
-              </Box>
+          <CustomButton
+            onClick={() => {
+              if (isSending) return;
+              publishComment();
+            }}
+            style={{
+              alignSelf: 'center',
+              background: theme.palette.background.default,
+              cursor: isSending ? 'default' : 'pointer',
+              flexShrink: 0,
+              fontSize: '14px',
+              marginTop: 'auto',
+              padding: '5px',
+            }}
+          >
+            {isSending && (
+              <CircularProgress
+                size={18}
+                sx={{
+                  color: theme.palette.text.primary,
+                  left: '50%',
+                  marginLeft: '-12px',
+                  marginTop: '-12px',
+                  position: 'absolute',
+                  top: '50%',
+                }}
+              />
+            )}
+            {` Publish Comment`}
+          </CustomButton>
+        </Box>
       </div>
-   
+
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: "Loading comments... please wait.",
+          message: 'Loading comments... please wait.',
         }}
       />
     </div>

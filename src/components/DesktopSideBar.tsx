@@ -1,120 +1,150 @@
-import { Box, ButtonBase } from '@mui/material';
-import React from 'react'
-import { HomeIcon } from "../assets/Icons/HomeIcon";
-import { MessagingIcon } from "../assets/Icons/MessagingIcon";
-import { Save } from "./Save/Save";
-import { HubsIcon } from "../assets/Icons/HubsIcon";
-import { CoreSyncStatus } from "./CoreSyncStatus";
+import { Box, ButtonBase, useTheme } from '@mui/material';
+import { HomeIcon } from '../assets/Icons/HomeIcon';
+import { Save } from './Save/Save';
 import { IconWrapper } from './Desktop/DesktopFooter';
-import AppIcon from "./../assets/svgs/AppIcon.svg";
-import { useRecoilState } from 'recoil';
 import { enabledDevModeAtom } from '../atoms/global';
 import { AppsIcon } from '../assets/Icons/AppsIcon';
+import ThemeSelector from './Theme/ThemeSelector';
+import { CoreSyncStatus } from './CoreSyncStatus';
+import LanguageSelector from './Language/LanguageSelector';
+import { MessagingIconFilled } from '../assets/Icons/MessagingIconFilled';
+import { useAtom } from 'jotai';
 
-export const DesktopSideBar = ({goToHome, setDesktopSideView, toggleSideViewDirects, hasUnreadDirects, isDirects, toggleSideViewGroups,hasUnreadGroups, isGroups, isApps, setDesktopViewMode, desktopViewMode, myName }) => {
-    const [isEnabledDevMode, setIsEnabledDevMode] =  useRecoilState(enabledDevModeAtom)
+export const DesktopSideBar = ({
+  goToHome,
+  setDesktopSideView,
+  toggleSideViewDirects,
+  hasUnreadDirects,
+  isDirects,
+  toggleSideViewGroups,
+  hasUnreadGroups,
+  isGroups,
+  isApps,
+  setDesktopViewMode,
+  desktopViewMode,
+  myName,
+}) => {
+  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+
+  const theme = useTheme();
 
   return (
-    <Box sx={{
-        width: '60px',
-        flexDirection: 'column',
-        height: '100vh',
+    <Box
+      sx={{
         alignItems: 'center',
         display: 'flex',
-        gap: '25px'
-       }}>
-        <ButtonBase
-          sx={{
-            width: '60px',
-            height: '60px',
-            paddingTop: '23px'
-          }}
-          onClick={() => {
-            goToHome();
+        flexDirection: 'column',
+        gap: '25px',
+        height: '100vh',
+        width: '60px',
+        backgroundColor: theme.palette.background.surface,
+        borderRight: `1px solid ${theme.palette.border.subtle}`,
+      }}
+    >
+      <ButtonBase
+        sx={{
+          width: '70px',
+          height: '70px',
+          paddingTop: '23px',
+        }}
+      >
+        <CoreSyncStatus />
+      </ButtonBase>
 
-          }}
-        >
-            
-            <HomeIcon
-              height={34}
-              color={desktopViewMode === 'home' ? 'white': "rgba(250, 250, 250, 0.5)"}
+      <ButtonBase
+        sx={{
+          width: '60px',
+          height: '60px',
+        }}
+        onClick={() => {
+          goToHome();
+        }}
+      >
+        <HomeIcon
+          height={34}
+          color={
+            desktopViewMode === 'home'
+              ? theme.palette.text.primary
+              : theme.palette.text.secondary
+          }
+        />
+      </ButtonBase>
 
-            />
-        
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopViewMode('apps')
-            // setIsOpenSideViewDirects(false)
-            // setIsOpenSideViewGroups(false)
-          }}
-        >
-          <IconWrapper
-            color={isApps ? 'white' : "rgba(250, 250, 250, 0.5)"}
-            label="Apps"
-            selected={isApps}
-            disableWidth
-          >
-            <AppsIcon color={isApps ? 'white' : "rgba(250, 250, 250, 0.5)"} height={30} />
-          </IconWrapper>
-        </ButtonBase>
-        <ButtonBase
-          onClick={() => {
-            setDesktopViewMode('chat')
-          }}
-        >
+      <ButtonBase
+        onClick={() => {
+          setDesktopViewMode('apps');
+        }}
+      >
         <IconWrapper
-            color={(hasUnreadDirects || hasUnreadGroups) ? "var(--unread)" : desktopViewMode === 'chat' ? 'white' :"rgba(250, 250, 250, 0.5)"}
-            label="Chat"
-            disableWidth
-          >
-            <MessagingIcon
-              height={30}
-              color={
-                (hasUnreadDirects || hasUnreadGroups)
-                  ? "var(--unread)"
-                  : desktopViewMode === 'chat'
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-    </IconWrapper>
-        </ButtonBase>
-        {/* <ButtonBase
-          onClick={() => {
-            setDesktopSideView("groups");
-            toggleSideViewGroups()
-          }}
+          color={
+            isApps ? theme.palette.text.primary : theme.palette.text.secondary
+          }
+          label="Apps"
+          selected={isApps}
+          disableWidth
         >
-            <HubsIcon
-              height={30}
-              color={
-                hasUnreadGroups
-                  ? "var(--danger)"
-                  : isGroups
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
-            />
-     
-        </ButtonBase> */}
-        <Save isDesktop disableWidth myName={myName} />
-        {/* <CoreSyncStatus imageSize="30px" position="left" /> */}
-        {isEnabledDevMode && (
-          <ButtonBase
+          <AppsIcon
+            color={
+              isApps ? theme.palette.text.primary : theme.palette.text.secondary
+            }
+            height={30}
+          />
+        </IconWrapper>
+      </ButtonBase>
+
+      <ButtonBase
+        onClick={() => {
+          setDesktopViewMode('chat');
+        }}
+      >
+        <IconWrapper
+          color={
+            hasUnreadDirects || hasUnreadGroups
+              ? theme.palette.other.unread
+              : desktopViewMode === 'chat'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+          }
+          label="Chat"
+          disableWidth
+        >
+          <MessagingIconFilled
+            height={30}
+            color={
+              hasUnreadDirects || hasUnreadGroups
+                ? theme.palette.other.unread
+                : desktopViewMode === 'chat'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+            }
+          />
+        </IconWrapper>
+      </ButtonBase>
+
+      <Save isDesktop disableWidth myName={myName} />
+
+      {isEnabledDevMode && (
+        <ButtonBase
           onClick={() => {
-            setDesktopViewMode('dev')
+            setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
-            color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"}
+            color={
+              desktopViewMode === 'dev'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
             label="Dev"
             disableWidth
           >
-           <AppsIcon color={desktopViewMode === 'dev' ? 'white' : "rgba(250, 250, 250, 0.5)"} height={30} />
+            <AppsIcon height={30} color={theme.palette.text.secondary} />
           </IconWrapper>
         </ButtonBase>
-        )}
-       </Box>
-  )
-}
+      )}
+
+      <LanguageSelector />
+      <ThemeSelector />
+    </Box>
+  );
+};

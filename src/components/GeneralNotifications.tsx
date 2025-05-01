@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { useState } from 'react';
 import {
   Box,
   ButtonBase,
@@ -8,58 +7,79 @@ import {
   Popover,
   Tooltip,
   Typography,
-} from "@mui/material";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import { formatDate } from "../utils/time";
-import { useHandlePaymentNotification } from "../hooks/useHandlePaymentNotification";
-import { executeEvent } from "../utils/events";
+  useTheme,
+} from '@mui/material';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { formatDate } from '../utils/time';
+import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
+import { executeEvent } from '../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const GeneralNotifications = ({ address }) => {
   const [anchorEl, setAnchorEl] = useState(null);
-  const {latestTx,
+
+  const {
+    latestTx,
     getNameOrAddressOfSenderMiddle,
-    hasNewPayment, setLastEnteredTimestampPayment, nameAddressOfSender} = useHandlePaymentNotification(address)
-  
+    hasNewPayment,
+    setLastEnteredTimestampPayment,
+    nameAddressOfSender,
+  } = useHandlePaymentNotification(address);
+
   const handlePopupClick = (event) => {
     event.stopPropagation(); // Prevent parent onClick from firing
     setAnchorEl(event.currentTarget);
   };
+
+  const { t } = useTranslation(['core']);
+  const theme = useTheme();
 
   return (
     <>
       <ButtonBase
         onClick={(e) => {
           handlePopupClick(e);
-     
-        
         }}
         style={{}}
       >
-         <Tooltip
-                title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>PAYMENT NOTIFICATION</span>} 
-                placement="left"
-                arrow
-                sx={{ fontSize: "24" }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: "#ffffff",
-                      backgroundColor: "#444444",
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: "#444444",
-                    },
-                  },
-                }}
-              >
-        <NotificationsIcon
-          sx={{
-            color: hasNewPayment ? "var(--unread)" : "rgba(255, 255, 255, 0.5)",
+        <Tooltip
+          title={
+            <span
+              style={{
+                color: theme.palette.text.primary,
+                fontSize: '14px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+              }}
+            >
+              {t('core:payment_notification')}
+            </span>
+          }
+          placement="left"
+          arrow
+          sx={{ fontSize: '24' }}
+          slotProps={{
+            tooltip: {
+              sx: {
+                color: theme.palette.text.primary,
+                backgroundColor: theme.palette.background.paper,
+              },
+            },
+            arrow: {
+              sx: {
+                color: theme.palette.text.primary,
+              },
+            },
           }}
-        />
+        >
+          <NotificationsIcon
+            sx={{
+              color: hasNewPayment
+                ? theme.palette.other.unread
+                : theme.palette.text.secondary,
+            }}
+          />
         </Tooltip>
       </ButtonBase>
 
@@ -67,81 +87,93 @@ export const GeneralNotifications = ({ address }) => {
         open={!!anchorEl}
         anchorEl={anchorEl}
         onClose={() => {
-          if(hasNewPayment){
-            setLastEnteredTimestampPayment(Date.now())
+          if (hasNewPayment) {
+            setLastEnteredTimestampPayment(Date.now());
           }
-          setAnchorEl(null)
-
+          setAnchorEl(null);
         }} // Close popover on click outside
       >
         <Box
           sx={{
-            width: "300px",
-            maxWidth: "100%",
-            maxHeight: "60vh",
-            overflow: "auto",
-            padding: "5px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: hasNewPayment ? "flex-start" : "center",
+            alignItems: hasNewPayment ? 'flex-start' : 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '60vh',
+            maxWidth: '100%',
+            overflow: 'auto',
+            padding: '5px',
+            width: '300px',
           }}
         >
-          {!hasNewPayment && <Typography sx={{
-            userSelect: 'none'
-          }}>No new notifications</Typography>}
+          {!hasNewPayment && (
+            <Typography
+              sx={{
+                userSelect: 'none',
+              }}
+            >
+              No new notifications
+            </Typography>
+          )}
           {hasNewPayment && (
             <MenuItem
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-                width: "100%",
-                alignItems: "flex-start",
-                textWrap: "auto",
+                alignItems: 'flex-start',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px',
+                textWrap: 'auto',
+                width: '100%',
               }}
-             onClick={() => {
-              setAnchorEl(null)
-                executeEvent('openWalletsApp', {})
+              onClick={() => {
+                setAnchorEl(null);
+                executeEvent('openWalletsApp', {});
               }}
             >
-              <Card sx={{
-                padding: '10px',
-                width: '100%',
-                backgroundColor: "#1F2023",
-                gap: '5px',
-                display: 'flex',
-                flexDirection: 'column'
-              }}>
-              <Box
+              <Card
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  justifyContent: "space-between",
+                  backgroundColor: '#1F2023',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '5px',
+                  padding: '10px',
+                  width: '100%',
                 }}
               >
-                <AccountBalanceWalletIcon
+                <Box
                   sx={{
-                    color: "white",
+                    alignItems: 'center',
+                    display: 'flex',
+                    gap: '5px',
+                    justifyContent: 'space-between',
                   }}
-                />{" "}
-                {formatDate(latestTx?.timestamp)}
-              </Box>
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  justifyContent: "space-between",
-                }}
-              >
-               
-                <Typography>{latestTx?.amount}</Typography>
-              </Box>
-              <Typography sx={{
-                fontSize: '0.8rem'
-              }}>{nameAddressOfSender.current[latestTx?.creatorAddress] || getNameOrAddressOfSenderMiddle(latestTx?.creatorAddress)}</Typography>
-          
+                >
+                  <AccountBalanceWalletIcon
+                    sx={{
+                      color: theme.palette.text.primary,
+                    }}
+                  />{' '}
+                  {formatDate(latestTx?.timestamp)}
+                </Box>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Typography>{latestTx?.amount}</Typography>
+                </Box>
+
+                <Typography
+                  sx={{
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  {nameAddressOfSender.current[latestTx?.creatorAddress] ||
+                    getNameOrAddressOfSenderMiddle(latestTx?.creatorAddress)}
+                </Typography>
               </Card>
             </MenuItem>
           )}

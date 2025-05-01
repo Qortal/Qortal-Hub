@@ -1,30 +1,24 @@
-import * as React from "react";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Checkbox from "@mui/material/Checkbox";
-import IconButton from "@mui/material/IconButton";
-import CommentIcon from "@mui/icons-material/Comment";
-import InfoIcon from "@mui/icons-material/Info";
-import GroupAddIcon from "@mui/icons-material/GroupAdd";
-import { executeEvent } from "../../utils/events";
-import { Box, ButtonBase, Collapse, Typography } from "@mui/material";
-import { Spacer } from "../../common/Spacer";
-import { getGroupNames } from "./UserListOfInvites";
-import { CustomLoader } from "../../common/CustomLoader";
-import { getBaseApiReact, isMobile } from "../../App";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import { useEffect, useState } from 'react';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import IconButton from '@mui/material/IconButton';
+import GroupAddIcon from '@mui/icons-material/GroupAdd';
+import { executeEvent } from '../../utils/events';
+import { Box, ButtonBase, Collapse, Typography, useTheme } from '@mui/material';
+import { getGroupNames } from './UserListOfInvites';
+import { CustomLoader } from '../../common/CustomLoader';
+import { getBaseApiReact } from '../../App';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { useTranslation } from 'react-i18next';
 
 export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
-  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState(
-    []
-  );
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = useState(true);
 
   const getJoinRequests = async () => {
     try {
@@ -37,12 +31,16 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
 
       setGroupsWithJoinRequests(resMoreData);
     } catch (error) {
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
 
-  React.useEffect(() => {
+  const { t } = useTranslation(['core', 'group']);
+  const theme = useTheme();
+
+  useEffect(() => {
     if (myAddress) {
       getJoinRequests();
     }
@@ -51,57 +49,65 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
   return (
     <Box
       sx={{
-        width: "100%",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
+        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
       }}
     >
       <ButtonBase
         sx={{
-          width: "322px",
-          display: "flex",
-          flexDirection: "row",
-          padding: "0px 20px",
+          display: 'flex',
+          flexDirection: 'row',
           gap: '10px',
-          justifyContent: 'flex-start'
+          justifyContent: 'flex-start',
+          padding: '0px 20px',
+          width: '322px',
         }}
-        onClick={()=> setIsExpanded((prev)=> !prev)}
+        onClick={() => setIsExpanded((prev) => !prev)}
       >
         <Typography
           sx={{
-            fontSize: "1rem",
+            fontSize: '1rem',
           }}
         >
-          Group Invites {groupsWithJoinRequests?.length > 0 && ` (${groupsWithJoinRequests?.length})`}
+          {t('group:group.invites', { postProcess: 'capitalize' })}{' '}
+          {groupsWithJoinRequests?.length > 0 &&
+            ` (${groupsWithJoinRequests?.length})`}
         </Typography>
-        {isExpanded ? <ExpandLessIcon sx={{
-      marginLeft: 'auto'
-     }}  /> : (
-      <ExpandMoreIcon sx={{
-        marginLeft: 'auto'
-       }}/>
-     )}
+        {isExpanded ? (
+          <ExpandLessIcon
+            sx={{
+              marginLeft: 'auto',
+            }}
+          />
+        ) : (
+          <ExpandMoreIcon
+            sx={{
+              marginLeft: 'auto',
+            }}
+          />
+        )}
       </ButtonBase>
+
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <Box
           sx={{
-            width: "322px",
-            height: isMobile ? "165px" : "250px",
-
-            display: "flex",
-            flexDirection: "column",
-            bgcolor: "background.paper",
-            padding: "20px",
-            borderRadius: "19px",
+            bgcolor: theme.palette.background.paper,
+            borderRadius: '19px',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '250px',
+            padding: '20px',
+            width: '322px',
           }}
         >
           {loading && groupsWithJoinRequests.length === 0 && (
             <Box
               sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
               }}
             >
               <CustomLoader />
@@ -110,31 +116,33 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
           {!loading && groupsWithJoinRequests.length === 0 && (
             <Box
               sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
+                alignItems: 'center',
+                display: 'flex',
+                height: '100%',
+                justifyContent: 'center',
+                width: '100%',
               }}
             >
               <Typography
                 sx={{
-                  fontSize: "11px",
+                  color: theme.palette.text.primary,
+                  fontSize: '11px',
                   fontWeight: 400,
-                  color: "rgba(255, 255, 255, 0.2)",
                 }}
               >
-                Nothing to display
+                {t('group:message.generic.no_display', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Box>
           )}
           <List
             sx={{
-              width: "100%",
+              width: '100%',
               maxWidth: 360,
-              bgcolor: "background.paper",
-              maxHeight: "300px",
-              overflow: "auto",
+              bgcolor: theme.palette.background.paper,
+              maxHeight: '300px',
+              overflow: 'auto',
             }}
             className="scrollable-container"
           >
@@ -142,13 +150,13 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
               return (
                 <ListItem
                   sx={{
-                    marginBottom: "20px",
+                    marginBottom: '20px',
                   }}
                   key={group?.groupId}
                   onClick={() => {
                     setOpenAddGroup(true);
                     setTimeout(() => {
-                      executeEvent("openGroupInvitesRequest", {});
+                      executeEvent('openGroupInvitesRequest', {});
                     }, 300);
                   }}
                   disablePadding
@@ -156,8 +164,8 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                     <IconButton edge="end" aria-label="comments">
                       <GroupAddIcon
                         sx={{
-                          color: "white",
-                          fontSize: "18px",
+                          color: theme.palette.text.primary,
+                          fontSize: '18px',
                         }}
                       />
                     </IconButton>
@@ -166,12 +174,15 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                   <ListItemButton disableRipple role={undefined} dense>
                     <ListItemText
                       sx={{
-                        "& .MuiTypography-root": {
-                          fontSize: "13px",
+                        '& .MuiTypography-root': {
+                          fontSize: '13px',
                           fontWeight: 400,
                         },
                       }}
-                      primary={`${group?.groupName} has invited you`}
+                      primary={t('group:message.generic.group_invited_you', {
+                        group: group?.groupName,
+                        postProcess: 'capitalize',
+                      })}
                     />
                   </ListItemButton>
                 </ListItem>

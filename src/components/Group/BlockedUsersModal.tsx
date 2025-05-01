@@ -8,64 +8,79 @@ import {
   DialogTitle,
   TextField,
   Typography,
-} from "@mui/material";
-import React, { useContext, useEffect, useState } from "react";
-import { getBaseApiReact, MyContext } from "../../App";
-import { Spacer } from "../../common/Spacer";
-import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
-import { validateAddress } from "../../utils/validateAddress";
-import { getNameInfo, requestQueueMemberNames } from "./Group";
-import { useModal } from "../../common/useModal";
-import { useRecoilState } from "recoil";
-import { isOpenBlockedModalAtom } from "../../atoms/global";
+  useTheme,
+} from '@mui/material';
+import { useContext, useEffect, useState } from 'react';
+import { getBaseApiReact, MyContext } from '../../App';
+import { Spacer } from '../../common/Spacer';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
+import { validateAddress } from '../../utils/validateAddress';
+import { getNameInfo, requestQueueMemberNames } from './Group';
+import { useModal } from '../../common/useModal';
+import { isOpenBlockedModalAtom } from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
+import { useAtom } from 'jotai';
+
 export const BlockedUsersModal = () => {
-  const [isOpenBlockedModal, setIsOpenBlockedModal] = useRecoilState(isOpenBlockedModalAtom)
+  const theme = useTheme();
+  const [isOpenBlockedModal, setIsOpenBlockedModal] = useAtom(
+    isOpenBlockedModalAtom
+  );
+
   const [hasChanged, setHasChanged] = useState(false);
-  const [value, setValue] = useState("");
-  const [addressesWithNames, setAddressesWithNames] = useState({})
+  const [value, setValue] = useState('');
+  const [addressesWithNames, setAddressesWithNames] = useState({});
   const { isShow, onCancel, onOk, show, message } = useModal();
-  const { getAllBlockedUsers, removeBlockFromList, addToBlockList, setOpenSnackGlobal, setInfoSnackCustom } =
-    useContext(MyContext);
+  const {
+    getAllBlockedUsers,
+    removeBlockFromList,
+    addToBlockList,
+    setOpenSnackGlobal,
+    setInfoSnackCustom,
+  } = useContext(MyContext);
+
   const [blockedUsers, setBlockedUsers] = useState({
     addresses: {},
     names: {},
   });
+
   const fetchBlockedUsers = () => {
     setBlockedUsers(getAllBlockedUsers());
   };
 
   useEffect(() => {
-    if(!isOpenBlockedModal) return
+    if (!isOpenBlockedModal) return;
     fetchBlockedUsers();
   }, [isOpenBlockedModal]);
 
-   const getNames = async () => {
+  const getNames = async () => {
     // const validApi = await findUsableApi();
-    const addresses = Object.keys(blockedUsers?.addresses)
-    const addressNames = {}
+    const addresses = Object.keys(blockedUsers?.addresses);
+    const addressNames = {};
 
-  
     const getMemNames = addresses.map(async (address) => {
-        const name = await requestQueueMemberNames.enqueue(() => {
-          return getNameInfo(address);
-        });
-        if (name) {
-          addressNames[address] = name
-        } 
-   
-  
+      const name = await requestQueueMemberNames.enqueue(() => {
+        return getNameInfo(address);
+      });
+      if (name) {
+        addressNames[address] = name;
+      }
+
       return true;
     });
-  
+
     await Promise.all(getMemNames);
-  
-    setAddressesWithNames(addressNames)
+
+    setAddressesWithNames(addressNames);
   };
 
   const blockUser = async (e, user?: string) => {
     try {
-      const valUser = user || value
+      const valUser = user || value;
       if (!valUser) return;
       const isAddress = validateAddress(valUser);
       let userName = null;
@@ -80,62 +95,66 @@ export const BlockedUsersModal = () => {
       if (!isAddress) {
         const response = await fetch(`${getBaseApiReact()}/names/${valUser}`);
         const data = await response.json();
-        if (!data?.owner) throw new Error("Name does not exist");
+        if (!data?.owner) throw new Error('Name does not exist');
         if (data?.owner) {
           userAddress = data.owner;
           userName = valUser;
         }
       }
-      if(!userName){
+      if (!userName) {
         await addToBlockList(userAddress, null);
         fetchBlockedUsers();
         setHasChanged(true);
-        executeEvent('updateChatMessagesWithBlocks', true)
-        setValue('')
-        return
+        executeEvent('updateChatMessagesWithBlocks', true);
+        setValue('');
+        return;
       }
       const responseModal = await show({
         userName,
         userAddress,
       });
-      if (responseModal === "both") {
+      if (responseModal === 'both') {
         await addToBlockList(userAddress, userName);
-      } else if (responseModal === "address") {
+      } else if (responseModal === 'address') {
         await addToBlockList(userAddress, null);
-      } else if (responseModal === "name") {
+      } else if (responseModal === 'name') {
         await addToBlockList(null, userName);
       }
       fetchBlockedUsers();
       setHasChanged(true);
-      setValue('')
-      if(user){
-        setIsOpenBlockedModal(false)
+      setValue('');
+      if (user) {
+        setIsOpenBlockedModal(false);
       }
-      if(responseModal === 'both' || responseModal === 'address'){
-        executeEvent('updateChatMessagesWithBlocks', true)
+      if (responseModal === 'both' || responseModal === 'address') {
+        executeEvent('updateChatMessagesWithBlocks', true);
       }
     } catch (error) {
       setOpenSnackGlobal(true);
-
-        setInfoSnackCustom({
-          type: "error",
-          message: error?.message || "Unable to block user",
-        });
+      setInfoSnackCustom({
+        type: 'error',
+        message: error?.message || 'Unable to block user',
+      });
     }
   };
+
   const blockUserFromOutsideModalFunc = (e) => {
-      const user = e.detail?.user;
-      setIsOpenBlockedModal(true)
-      blockUser(null, user)
+    const user = e.detail?.user;
+    setIsOpenBlockedModal(true);
+    blockUser(null, user);
+  };
+
+  useEffect(() => {
+    subscribeToEvent('blockUserFromOutside', blockUserFromOutsideModalFunc);
+
+    return () => {
+      unsubscribeFromEvent(
+        'blockUserFromOutside',
+        blockUserFromOutsideModalFunc
+      );
     };
-  
-    useEffect(() => {
-      subscribeToEvent("blockUserFromOutside", blockUserFromOutsideModalFunc);
-  
-      return () => {
-        unsubscribeFromEvent("blockUserFromOutside", blockUserFromOutsideModalFunc);
-      };
-    }, []);
+  }, []);
+
   return (
     <Dialog
       open={isOpenBlockedModal}
@@ -145,14 +164,14 @@ export const BlockedUsersModal = () => {
       <DialogTitle>Blocked Users</DialogTitle>
       <DialogContent
         sx={{
-          padding: "20px",
+          padding: '20px',
         }}
       >
         <Box
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
+            alignItems: 'center',
+            display: 'flex',
+            gap: '10px',
           }}
         >
           <TextField
@@ -180,16 +199,18 @@ export const BlockedUsersModal = () => {
               Blocked addresses- blocks processing of txs
             </DialogContentText>
             <Spacer height="10px" />
-            <Button variant="contained" size="small" onClick={getNames}>Fetch names</Button>
+            <Button variant="contained" size="small" onClick={getNames}>
+              Fetch names
+            </Button>
             <Spacer height="10px" />
           </>
         )}
 
         <Box
           sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
           }}
         >
           {Object.entries(blockedUsers?.addresses || {})?.map(
@@ -197,11 +218,11 @@ export const BlockedUsersModal = () => {
               return (
                 <Box
                   sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    width: "100%",
-                    justifyContent: "space-between",
+                    alignItems: 'center',
+                    display: 'flex',
+                    gap: '10px',
+                    justifyContent: 'space-between',
+                    width: '100%',
                   }}
                 >
                   <Typography>{addressesWithNames[key] || key}</Typography>
@@ -215,7 +236,7 @@ export const BlockedUsersModal = () => {
                       try {
                         await removeBlockFromList(key, undefined);
                         setHasChanged(true);
-                        setValue("");
+                        setValue('');
                         fetchBlockedUsers();
                       } catch (error) {
                         console.error(error);
@@ -241,20 +262,20 @@ export const BlockedUsersModal = () => {
 
         <Box
           sx={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
           }}
         >
           {Object.entries(blockedUsers?.names || {})?.map(([key, value]) => {
             return (
               <Box
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  width: "100%",
-                  justifyContent: "space-between",
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: '10px',
+                  justifyContent: 'space-between',
+                  width: '100%',
                 }}
               >
                 <Typography>{key}</Typography>
@@ -284,20 +305,20 @@ export const BlockedUsersModal = () => {
       <DialogActions>
         <Button
           sx={{
-            backgroundColor: "var(--green)",
-            color: "black",
-            fontWeight: "bold",
+            backgroundColor: theme.palette.background.default,
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
             opacity: 0.7,
-            "&:hover": {
-              backgroundColor: "var(--green)",
-              color: "black",
+            '&:hover': {
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
               opacity: 1,
             },
           }}
           variant="contained"
           onClick={() => {
             if (hasChanged) {
-              executeEvent("updateChatMessagesWithBlocks", true);
+              executeEvent('updateChatMessagesWithBlocks', true);
             }
             setIsOpenBlockedModal(false);
           }}
@@ -312,28 +333,37 @@ export const BlockedUsersModal = () => {
         aria-describedby="alert-dialog-description"
       >
         <DialogTitle id="alert-dialog-title">
-          {"Decide what to block"}
+          {'Decide what to block'}
         </DialogTitle>
+
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
             Blocking {message?.userName || message?.userAddress}
           </DialogContentText>
-          <Box sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            marginTop: '20px'
-          }}>
-            <InfoIcon sx={{
-              color: 'fff'
-            }}/> <Typography>Choose "block txs" or "all" to block chat messages </Typography>
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              gap: '10px',
+              marginTop: '20px',
+            }}
+          >
+            <InfoIcon
+              sx={{
+                color: theme.palette.text.primary,
+              }}
+            />{' '}
+            <Typography>
+              Choose "block txs" or "all" to block chat messages{' '}
+            </Typography>
           </Box>
         </DialogContent>
+
         <DialogActions>
           <Button
             variant="contained"
             onClick={() => {
-              onOk("address");
+              onOk('address');
             }}
           >
             Block txs
@@ -341,7 +371,7 @@ export const BlockedUsersModal = () => {
           <Button
             variant="contained"
             onClick={() => {
-              onOk("name");
+              onOk('name');
             }}
           >
             Block QDN data
@@ -349,7 +379,7 @@ export const BlockedUsersModal = () => {
           <Button
             variant="contained"
             onClick={() => {
-              onOk("both");
+              onOk('both');
             }}
           >
             Block All
