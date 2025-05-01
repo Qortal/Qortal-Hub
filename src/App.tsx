@@ -2074,6 +2074,8 @@ function App() {
                   lineHeight: 1.2,
                   maxWidth: '90%',
                   textAlign: 'center',
+                  fontSize: '16px',
+                  marginBottom: '10px',
                 }}
               >
                 {messageQortalRequest?.text1}

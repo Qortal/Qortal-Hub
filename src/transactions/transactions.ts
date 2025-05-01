@@ -24,6 +24,7 @@ import UpdateGroupTransaction from './UpdateGroupTransaction.js'
 import SellNameTransacion from './SellNameTransacion.js'
 import CancelSellNameTransacion from './CancelSellNameTransacion.js'
 import BuyNameTransacion from './BuyNameTransacion.js'
+import TransferAssetTransaction from './TransferAssetTransaction.js'
 
 
 export const transactionTypes = {
@@ -35,6 +36,7 @@ export const transactionTypes = {
 	7: BuyNameTransacion,
 	8: CreatePollTransaction,
 	9: VoteOnPollTransaction,
+	12: TransferAssetTransaction,
 	16: DeployAtTransaction,
 	18: ChatTransaction,
 	181: GroupChatTransaction,
