@@ -61,6 +61,8 @@ import {
   buyNameRequest,
   sellNameRequest,
   cancelSellNameRequest,
+  multiPaymentWithPrivateData,
+  transferAssetRequest,
 } from './qortalRequests/get';
 import { getData, storeData } from './utils/chromeStorage';
 import { executeEvent } from './utils/events';
@@ -1755,6 +1757,63 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+      case 'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA': {
+        try {
+          const res = await multiPaymentWithPrivateData(
+            request.payload,
+            isFromExtension
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+      case 'TRANSFER_ASSET': {
+        try {
+          const res = await transferAssetRequest(
+            request.payload,
+            isFromExtension
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
       case 'BUY_NAME': {
         try {
           const res = await buyNameRequest(request.payload, isFromExtension);

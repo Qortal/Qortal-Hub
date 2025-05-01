@@ -253,6 +253,8 @@ export const listOfAllQortalRequests = [
   'SELL_NAME',
   'CANCEL_SELL_NAME',
   'BUY_NAME',
+  'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
+  'TRANSFER_ASSET',
 ];
 
 export const UIQortalRequests = [
@@ -313,6 +315,8 @@ export const UIQortalRequests = [
   'SELL_NAME',
   'CANCEL_SELL_NAME',
   'BUY_NAME',
+  'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
+  'TRANSFER_ASSET',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
