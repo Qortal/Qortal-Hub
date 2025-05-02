@@ -3689,7 +3689,7 @@ export const checkThreads = async (bringBack) => {
           dataToBringBack.push(thread);
         }
       } catch (error) {
-        conosle.log({ error });
+        console.log({ error });
       }
     }
 

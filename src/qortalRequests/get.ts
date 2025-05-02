@@ -1302,10 +1302,7 @@ export const publishMultipleQDNResources = async (
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
-      body {
-        background-color: #121212;
-        color: #e0e0e0;
-      }
+
   
       .resource-container {
         display: flex;
@@ -1314,7 +1311,7 @@ export const publishMultipleQDNResources = async (
         padding: 16px;
         margin: 8px 0;
         border-radius: 8px;
-        background-color: #1e1e1e;
+        background-color: var(--background-default);
       }
       
       .resource-detail {
@@ -1323,7 +1320,7 @@ export const publishMultipleQDNResources = async (
       
       .resource-detail span {
         font-weight: bold;
-        color: #bb86fc;
+        color: var(--text-primary);
       }
   
       @media (min-width: 600px) {
@@ -3578,8 +3575,8 @@ export const createBuyOrder = async (data, isFromExtension) => {
   <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
     <style>
       .fee-container {
-        background-color: #1e1e1e;
-        color: #e0e0e0;
+        background-color: var(--background-default);
+        color: var(--text-primary);
         border: 1px solid #444;
         border-radius: 8px;
         padding: 16px;
@@ -3587,12 +3584,12 @@ export const createBuyOrder = async (data, isFromExtension) => {
       }
       .fee-label {
         font-weight: bold;
-        color: #bb86fc;
+        color: var(--text-primary);
         margin-bottom: 4px;
       }
       .fee-description {
         font-size: 14px;
-        color: #cccccc;
+        color: var(--text-primary);
         margin-bottom: 16px;
       }
     </style>
@@ -3605,7 +3602,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
       </div>
 
       <div class="fee-label">Total Locking Fee:</div>
-      <div>${+buyingFees?.unlock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
+      <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
 
     </div>
   </div>
@@ -5204,19 +5201,15 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       html: `
       <div style="max-height: 30vh; overflow-y: auto;">
       <style>
-        body {
-          background-color: #121212;
-          color: #e0e0e0;
-        }
-    
+
         .resource-container {
           display: flex;
           flex-direction: column;
-          border: 1px solid #444;
+          border: 1px solid;
           padding: 16px;
           margin: 8px 0;
           border-radius: 8px;
-          background-color: #1e1e1e;
+          background-color: var(--background-default);
         }
         
         .resource-detail {
@@ -5225,7 +5218,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         
         .resource-detail span {
           font-weight: bold;
-          color: #bb86fc;
+          color: var(--text-primary);
         }
     
         @media (min-width: 600px) {
