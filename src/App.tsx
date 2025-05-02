@@ -1028,12 +1028,7 @@ function App() {
 
   const logoutFunc = useCallback(async () => {
     try {
-      if (hasSettingsChanged) {
-        await showUnsavedChanges({
-          message:
-            'Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.',
-        }); // TODO translate
-      } else if (extState === 'authenticated') {
+      if (extState === 'authenticated') {
         await showUnsavedChanges({
           message: 'Are you sure you would like to logout?',
         });
@@ -3014,13 +3009,16 @@ function App() {
               })}
             </TextP>
             <Spacer height="100px" />
-            <CustomButton
+            <ButtonBase
+              autoFocus
               onClick={() => {
                 returnToMain();
               }}
             >
-              {t('core:action.continue', { postProcess: 'capitalize' })}
-            </CustomButton>
+              <CustomButton>
+                {t('core:action.continue', { postProcess: 'capitalize' })}
+              </CustomButton>
+            </ButtonBase>
           </Box>
         )}
         {extState === 'transfer-success-request' && (
@@ -3221,7 +3219,7 @@ function App() {
                 onClick={onOkUnsavedChanges}
                 autoFocus
               >
-                {t('core:action.decline', {
+                {t('core:action.continue_logout', {
                   postProcess: 'capitalize',
                 })}
               </Button>
@@ -3270,6 +3268,8 @@ function App() {
                     lineHeight: 1.2,
                     maxWidth: '90%',
                     textAlign: 'center',
+                    fontSize: '16px',
+                    marginBottom: '10px',
                   }}
                 >
                   {messageQortalRequestExtension?.text1}
@@ -3342,11 +3342,15 @@ function App() {
               )}
 
               {messageQortalRequestExtension?.html && (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: messageQortalRequestExtension?.html,
-                  }}
-                />
+                <>
+                  <Spacer height="15px" />
+
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: messageQortalRequestExtension?.html,
+                    }}
+                  />
+                </>
               )}
               <Spacer height="15px" />
 

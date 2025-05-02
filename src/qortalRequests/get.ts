@@ -2680,7 +2680,7 @@ export const updateForeignFee = async (data) => {
 
   const { coin, type, value } = data;
   const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
-
+  const valueStringified = JSON.stringify(+value);
   try {
     const endpoint = await createEndpoint(url);
     const response = await fetch(endpoint, {
@@ -2689,7 +2689,7 @@ export const updateForeignFee = async (data) => {
         Accept: '*/*',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ value }),
+      body: valueStringified,
     });
 
     if (!response.ok) throw new Error('Failed to update foreign fee');
@@ -3493,6 +3493,35 @@ export const sendCoin = async (data, isFromExtension) => {
   }
 };
 
+function calculateFeeFromRate(feePerKb, sizeInBytes) {
+  return (feePerKb / 1000) * sizeInBytes;
+}
+
+const getBuyingFees = async (foreignBlockchain) => {
+  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  if (!ticker) throw new Error('invalid foreign blockchain');
+  const unlockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feerequired',
+  });
+  const lockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feekb',
+  });
+  return {
+    ticker: ticker,
+    lock: {
+      sats: lockFee,
+      fee: lockFee / QORT_DECIMALS,
+    },
+    unlock: {
+      sats: unlockFee,
+      fee: unlockFee / QORT_DECIMALS,
+      byteFee300: calculateFeeFromRate(+unlockFee, 300) / QORT_DECIMALS,
+    },
+  };
+};
+
 export const createBuyOrder = async (data, isFromExtension) => {
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
@@ -3528,6 +3557,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
   const crosschainAtInfo = await Promise.all(atPromises);
   try {
+    const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
         text1:
@@ -3541,10 +3571,45 @@ export const createBuyOrder = async (data, isFromExtension) => {
             return latest + +cur?.expectedForeignAmount;
           }, 0)
         )}
-      ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
+      ${` ${buyingFees.ticker}`}`,
         highlightedText: `Is using public node: ${isGateway}`,
         fee: '',
-        foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`,
+        html: `
+  <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
+    <style>
+      .fee-container {
+        background-color: #1e1e1e;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+      .fee-label {
+        font-weight: bold;
+        color: #bb86fc;
+        margin-bottom: 4px;
+      }
+      .fee-description {
+        font-size: 14px;
+        color: #cccccc;
+        margin-bottom: 16px;
+      }
+    </style>
+
+    <div class="fee-container">
+      <div class="fee-label">Total Unlocking Fee:</div>
+      <div>${(+buyingFees?.unlock?.byteFee300 * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
+      <div class="fee-description">
+        This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'} at a 300 byte cost of ${buyingFees?.unlock?.byteFee300?.toFixed(8)}
+      </div>
+
+      <div class="fee-label">Total Locking Fee:</div>
+      <div>${+buyingFees?.unlock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
+
+    </div>
+  </div>
+`,
       },
       isFromExtension
     );

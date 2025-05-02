@@ -158,6 +158,12 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
           value={paymentPassword}
           onChange={(e) => setPaymentPassword(e.target.value)}
           autoComplete="off"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (isLoadingSendCoin) return;
+              sendCoinFunc();
+            }
+          }}
         />
       </Box>
 
