@@ -2655,7 +2655,7 @@ export const getForeignFee = async (data) => {
   }
 };
 
-export const updateForeignFee = async (data) => {
+export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2676,33 +2676,45 @@ export const updateForeignFee = async (data) => {
   }
 
   const { coin, type, value } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application to update foreign fees on your node?`,
+      text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+      text3: `value: ${value}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
   const valueStringified = JSON.stringify(+value);
-  try {
-    const endpoint = await createEndpoint(url);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: valueStringified,
-    });
 
-    if (!response.ok) throw new Error('Failed to update foreign fee');
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-    return res; // Return full response here
-  } catch (error) {
-    throw new Error(error?.message || 'Error in update foreign fee');
+  const endpoint = await createEndpoint(url);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: valueStringified,
+  });
+
+  if (!response.ok) throw new Error('Failed to update foreign fee');
+  let res;
+  try {
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+  return res; // Return full response here
 };
 
 export const getServerConnectionHistory = async (data) => {
@@ -2755,7 +2767,7 @@ export const getServerConnectionHistory = async (data) => {
   }
 };
 
-export const setCurrentForeignServer = async (data) => {
+export const setCurrentForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2777,6 +2789,21 @@ export const setCurrentForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application to set the current server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2785,37 +2812,33 @@ export const setCurrentForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/setcurrentserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to set current server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to set current server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in set current server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const addForeignServer = async (data) => {
+export const addForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2837,6 +2860,21 @@ export const addForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application to add a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2845,37 +2883,33 @@ export const addForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/addserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to add server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to add server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error.message || 'Error in adding server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const removeForeignServer = async (data) => {
+export const removeForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2897,6 +2931,21 @@ export const removeForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application to remove a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2905,34 +2954,30 @@ export const removeForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/removeserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to remove server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to remove server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in removing server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
 export const getDaySummary = async () => {
