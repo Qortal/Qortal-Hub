@@ -159,6 +159,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 },
                 ...prev,
               ]);
+              setName('');
+              setDescription('');
+              setGroupType('1');
               res(response);
               return;
             }
@@ -430,12 +433,12 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       onChange={handleChangeApprovalThreshold}
                     >
                       <MenuItem value={0}>
-                        {t('core.count.none', {
+                        {t('core:count.none', {
                           postProcess: 'capitalize',
                         })}
                       </MenuItem>
                       <MenuItem value={1}>
-                        {t('core.count.one', {
+                        {t('core:count.one', {
                           postProcess: 'capitalize',
                         })}
                       </MenuItem>
@@ -454,7 +457,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group.block_delay.minimum', {
+                      {t('group:block_delay.minimum', {
                         postProcess: 'capitalize',
                       })}
                     </Label>
@@ -466,40 +469,40 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       onChange={handleChangeMinBlock}
                     >
                       <MenuItem value={5}>
-                        {t('core.time.minute', { count: 5 })}
+                        {t('core:time.minute', { count: 5 })}
                       </MenuItem>
                       <MenuItem value={10}>
-                        {t('core.time.minute', { count: 10 })}
+                        {t('core:time.minute', { count: 10 })}
                       </MenuItem>
                       <MenuItem value={30}>
-                        {t('core.time.minute', { count: 30 })}
+                        {t('core:time.minute', { count: 30 })}
                       </MenuItem>
                       <MenuItem value={60}>
-                        {t('core.time.hour', { count: 1 })}
+                        {t('core:time.hour', { count: 1 })}
                       </MenuItem>
                       <MenuItem value={180}>
-                        {t('core.time.hour', { count: 3 })}
+                        {t('core:time.hour', { count: 3 })}
                       </MenuItem>
                       <MenuItem value={300}>
-                        {t('core.time.hour', { count: 5 })}
+                        {t('core:time.hour', { count: 5 })}
                       </MenuItem>
                       <MenuItem value={420}>
-                        {t('core.time.hour', { count: 7 })}
+                        {t('core:time.hour', { count: 7 })}
                       </MenuItem>
                       <MenuItem value={720}>
-                        {t('core.time.hour', { count: 12 })}
+                        {t('core:time.hour', { count: 12 })}
                       </MenuItem>
                       <MenuItem value={1440}>
-                        {t('core.time.day', { count: 1 })}
+                        {t('core:time.day', { count: 1 })}
                       </MenuItem>
                       <MenuItem value={4320}>
-                        {t('core.time.day', { count: 3 })}
+                        {t('core:time.day', { count: 3 })}
                       </MenuItem>
                       <MenuItem value={7200}>
-                        {t('core.time.day', { count: 5 })}
+                        {t('core:time.day', { count: 5 })}
                       </MenuItem>
                       <MenuItem value={10080}>
-                        {t('core.time.day', { count: 7 })}
+                        {t('core:time.day', { count: 7 })}
                       </MenuItem>
                     </Select>
                   </Box>
@@ -511,7 +514,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group.block_delay.maximum', {
+                      {t('group:block_delay.maximum', {
                         postProcess: 'capitalize',
                       })}
                     </Label>
@@ -523,37 +526,37 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       onChange={handleChangeMaxBlock}
                     >
                       <MenuItem value={60}>
-                        {t('core.time.hour', { count: 1 })}
+                        {t('core:time.hour', { count: 1 })}
                       </MenuItem>
                       <MenuItem value={180}>
-                        3{t('core.time.hour', { count: 3 })}
+                        3{t('core:time.hour', { count: 3 })}
                       </MenuItem>
                       <MenuItem value={300}>
-                        {t('core.time.hour', { count: 5 })}
+                        {t('core:time.hour', { count: 5 })}
                       </MenuItem>
                       <MenuItem value={420}>
-                        {t('core.time.hour', { count: 7 })}
+                        {t('core:time.hour', { count: 7 })}
                       </MenuItem>
                       <MenuItem value={720}>
-                        {t('core.time.hour', { count: 12 })}
+                        {t('core:time.hour', { count: 12 })}
                       </MenuItem>
                       <MenuItem value={1440}>
-                        {t('core.time.day', { count: 1 })}
+                        {t('core:time.day', { count: 1 })}
                       </MenuItem>
                       <MenuItem value={4320}>
-                        {t('core.time.day', { count: 3 })}
+                        {t('core:time.day', { count: 3 })}
                       </MenuItem>
                       <MenuItem value={7200}>
-                        {t('core.time.day', { count: 5 })}
+                        {t('core:time.day', { count: 5 })}
                       </MenuItem>
                       <MenuItem value={10080}>
-                        {t('core.time.day', { count: 7 })}
+                        {t('core:time.day', { count: 7 })}
                       </MenuItem>
                       <MenuItem value={14400}>
-                        {t('core.time.day', { count: 10 })}
+                        {t('core:time.day', { count: 10 })}
                       </MenuItem>
                       <MenuItem value={21600}>
-                        {t('core.time.day', { count: 15 })}
+                        {t('core:time.day', { count: 15 })}
                       </MenuItem>
                     </Select>
                   </Box>
@@ -570,7 +573,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     color="primary"
                     onClick={handleCreateGroup}
                   >
-                    {t('group.action.create', {
+                    {t('group:action.create_group', {
                       postProcess: 'capitalize',
                     })}
                   </Button>

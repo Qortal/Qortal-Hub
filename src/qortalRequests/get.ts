@@ -2655,6 +2655,11 @@ export const getForeignFee = async (data) => {
   }
 };
 
+function calculateRateFromFee(totalFee, sizeInBytes) {
+  const fee = (totalFee / sizeInBytes) * 1000;
+  return fee.toFixed(0);
+}
+
 export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
@@ -2677,11 +2682,18 @@ export const updateForeignFee = async (data, isFromExtension) => {
 
   const { coin, type, value } = data;
 
+  const text3 =
+    type === 'feerequired' ? `${value} sats` : `${value} sats per kb`;
+  const text4 =
+    type === 'feerequired'
+      ? `*The ${value} sats fee is derived from ${calculateRateFromFee(value, 300)} sats per kb, for a transaction that is approximately 300 bytes in size.`
+      : '';
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application to update foreign fees on your node?`,
+      text1: `Do you give this application permission to update foreign fees on your node?`,
       text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
-      text3: `value: ${value}`,
+      text3: `value: ${text3}`,
+      text4,
       highlightedText: `Coin: ${coin}`,
     },
     isFromExtension
@@ -2792,7 +2804,7 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application to set the current server?`,
+      text1: `Do you give this application permission to set the current server?`,
       text2: `type: ${type}`,
       text3: `host: ${host}`,
       highlightedText: `Coin: ${coin}`,
@@ -2863,7 +2875,7 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application to add a server?`,
+      text1: `Do you give this application permission to add a server?`,
       text2: `type: ${type}`,
       text3: `host: ${host}`,
       highlightedText: `Coin: ${coin}`,
@@ -2934,7 +2946,7 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application to remove a server?`,
+      text1: `Do you give this application permission to remove a server?`,
       text2: `type: ${type}`,
       text3: `host: ${host}`,
       highlightedText: `Coin: ${coin}`,
@@ -3559,7 +3571,7 @@ const getBuyingFees = async (foreignBlockchain) => {
     unlock: {
       sats: unlockFee,
       fee: unlockFee / QORT_DECIMALS,
-      byteFee300: calculateFeeFromRate(+unlockFee, 300) / QORT_DECIMALS,
+      feePerKb: +calculateRateFromFee(+unlockFee, 300) / QORT_DECIMALS,
     },
   };
 };
@@ -3641,10 +3653,10 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
     <div class="fee-container">
       <div class="fee-label">Total Unlocking Fee:</div>
-      <div>${(+buyingFees?.unlock?.byteFee300 * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
-      <div class="fee-description">
-        This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'} at a 300 byte cost of ${buyingFees?.unlock?.byteFee300?.toFixed(8)}
-      </div>
+      <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
+     <div class="fee-description">
+  This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'}, assuming a 300-byte size at a rate of ${buyingFees?.unlock?.feePerKb?.toFixed(8)} ${buyingFees.ticker} per KB.
+</div>
 
       <div class="fee-label">Total Locking Fee:</div>
       <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>

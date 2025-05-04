@@ -3316,8 +3316,8 @@ function App() {
                     >
                       {messageQortalRequestExtension?.text3}
                     </TextP>
-                    <Spacer height="15px" />
                   </Box>
+                  <Spacer height="15px" />
                 </>
               )}
 
