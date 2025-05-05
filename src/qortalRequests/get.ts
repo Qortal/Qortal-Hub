@@ -1302,10 +1302,7 @@ export const publishMultipleQDNResources = async (
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
-      body {
-        background-color: #121212;
-        color: #e0e0e0;
-      }
+
   
       .resource-container {
         display: flex;
@@ -1314,7 +1311,7 @@ export const publishMultipleQDNResources = async (
         padding: 16px;
         margin: 8px 0;
         border-radius: 8px;
-        background-color: #1e1e1e;
+        background-color: var(--background-default);
       }
       
       .resource-detail {
@@ -1323,7 +1320,7 @@ export const publishMultipleQDNResources = async (
       
       .resource-detail span {
         font-weight: bold;
-        color: #bb86fc;
+        color: var(--text-primary);
       }
   
       @media (min-width: 600px) {
@@ -2658,7 +2655,12 @@ export const getForeignFee = async (data) => {
   }
 };
 
-export const updateForeignFee = async (data) => {
+function calculateRateFromFee(totalFee, sizeInBytes) {
+  const fee = (totalFee / sizeInBytes) * 1000;
+  return fee.toFixed(0);
+}
+
+export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2679,33 +2681,52 @@ export const updateForeignFee = async (data) => {
   }
 
   const { coin, type, value } = data;
-  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
 
-  try {
-    const endpoint = await createEndpoint(url);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ value }),
-    });
+  const text3 =
+    type === 'feerequired' ? `${value} sats` : `${value} sats per kb`;
+  const text4 =
+    type === 'feerequired'
+      ? `*The ${value} sats fee is derived from ${calculateRateFromFee(value, 300)} sats per kb, for a transaction that is approximately 300 bytes in size.`
+      : '';
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to update foreign fees on your node?`,
+      text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+      text3: `value: ${text3}`,
+      text4,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
 
-    if (!response.ok) throw new Error('Failed to update foreign fee');
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-    return res; // Return full response here
-  } catch (error) {
-    throw new Error(error?.message || 'Error in update foreign fee');
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
   }
+  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
+  const valueStringified = JSON.stringify(+value);
+
+  const endpoint = await createEndpoint(url);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: valueStringified,
+  });
+
+  if (!response.ok) throw new Error('Failed to update foreign fee');
+  let res;
+  try {
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
+  }
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+  return res; // Return full response here
 };
 
 export const getServerConnectionHistory = async (data) => {
@@ -2758,7 +2779,7 @@ export const getServerConnectionHistory = async (data) => {
   }
 };
 
-export const setCurrentForeignServer = async (data) => {
+export const setCurrentForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2780,6 +2801,21 @@ export const setCurrentForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to set the current server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2788,37 +2824,33 @@ export const setCurrentForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/setcurrentserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to set current server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to set current server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in set current server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const addForeignServer = async (data) => {
+export const addForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2840,6 +2872,21 @@ export const addForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to add a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2848,37 +2895,33 @@ export const addForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/addserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to add server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to add server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error.message || 'Error in adding server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const removeForeignServer = async (data) => {
+export const removeForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2900,6 +2943,21 @@ export const removeForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to remove a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2908,34 +2966,30 @@ export const removeForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/removeserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to remove server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to remove server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in removing server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
 export const getDaySummary = async () => {
@@ -3493,6 +3547,35 @@ export const sendCoin = async (data, isFromExtension) => {
   }
 };
 
+function calculateFeeFromRate(feePerKb, sizeInBytes) {
+  return (feePerKb / 1000) * sizeInBytes;
+}
+
+const getBuyingFees = async (foreignBlockchain) => {
+  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  if (!ticker) throw new Error('invalid foreign blockchain');
+  const unlockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feerequired',
+  });
+  const lockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feekb',
+  });
+  return {
+    ticker: ticker,
+    lock: {
+      sats: lockFee,
+      fee: lockFee / QORT_DECIMALS,
+    },
+    unlock: {
+      sats: unlockFee,
+      fee: unlockFee / QORT_DECIMALS,
+      feePerKb: +calculateRateFromFee(+unlockFee, 300) / QORT_DECIMALS,
+    },
+  };
+};
+
 export const createBuyOrder = async (data, isFromExtension) => {
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
@@ -3528,6 +3611,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
   const crosschainAtInfo = await Promise.all(atPromises);
   try {
+    const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
         text1:
@@ -3541,10 +3625,45 @@ export const createBuyOrder = async (data, isFromExtension) => {
             return latest + +cur?.expectedForeignAmount;
           }, 0)
         )}
-      ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
+      ${` ${buyingFees.ticker}`}`,
         highlightedText: `Is using public node: ${isGateway}`,
         fee: '',
-        foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`,
+        html: `
+  <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
+    <style>
+      .fee-container {
+        background-color: var(--background-default);
+        color: var(--text-primary);
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+      .fee-label {
+        font-weight: bold;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+      .fee-description {
+        font-size: 14px;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+      }
+    </style>
+
+    <div class="fee-container">
+      <div class="fee-label">Total Unlocking Fee:</div>
+      <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
+     <div class="fee-description">
+  This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'}, assuming a 300-byte size at a rate of ${buyingFees?.unlock?.feePerKb?.toFixed(8)} ${buyingFees.ticker} per KB.
+</div>
+
+      <div class="fee-label">Total Locking Fee:</div>
+      <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
+
+    </div>
+  </div>
+`,
       },
       isFromExtension
     );
@@ -4934,6 +5053,70 @@ export const buyNameRequest = async (data, isFromExtension) => {
   }
 };
 
+export const signForeignFees = async (data, isFromExtension) => {
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to sign the required fees for all your trade offers?`,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+    const wallet = await getSaveWallet();
+    const address = wallet.address0;
+    const resKeyPair = await getKeyPair();
+    const parsedData = resKeyPair;
+    const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+    const uint8PublicKey = Base58.decode(parsedData.publicKey);
+    const keyPair = {
+      privateKey: uint8PrivateKey,
+      publicKey: uint8PublicKey,
+    };
+
+    const unsignedFeesUrl = await createEndpoint(
+      `/crosschain/unsignedfees/${address}`
+    );
+
+    const unsignedFeesResponse = await fetch(unsignedFeesUrl);
+
+    const unsignedFees = await unsignedFeesResponse.json();
+
+    const signedFees = [];
+
+    unsignedFees.forEach((unsignedFee) => {
+      const unsignedDataDecoded = Base58.decode(unsignedFee.data);
+
+      const signature = nacl.sign.detached(
+        unsignedDataDecoded,
+        keyPair.privateKey
+      );
+
+      const signedFee = {
+        timestamp: unsignedFee.timestamp,
+        data: `${Base58.encode(signature)}`,
+        atAddress: unsignedFee.atAddress,
+        fee: unsignedFee.fee,
+      };
+
+      signedFees.push(signedFee);
+    });
+
+    const signedFeesUrl = await createEndpoint(`/crosschain/signedfees`);
+
+    await fetch(signedFeesUrl, {
+      method: 'POST',
+      headers: {
+        Accept: '*/*',
+        'Content-Type': 'application/json',
+      },
+      body: `${JSON.stringify(signedFees)}`,
+    });
+
+    return true;
+  } else {
+    throw new Error('User declined request');
+  }
+};
 export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const requiredFields = ['payments', 'assetId'];
   requiredFields.forEach((field) => {
@@ -5075,19 +5258,15 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       html: `
       <div style="max-height: 30vh; overflow-y: auto;">
       <style>
-        body {
-          background-color: #121212;
-          color: #e0e0e0;
-        }
-    
+
         .resource-container {
           display: flex;
           flex-direction: column;
-          border: 1px solid #444;
+          border: 1px solid;
           padding: 16px;
           margin: 8px 0;
           border-radius: 8px;
-          background-color: #1e1e1e;
+          background-color: var(--background-default);
         }
         
         .resource-detail {
@@ -5096,7 +5275,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         
         .resource-detail span {
           font-weight: bold;
-          color: #bb86fc;
+          color: var(--text-primary);
         }
     
         @media (min-width: 600px) {

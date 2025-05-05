@@ -119,7 +119,7 @@ export default function ThemeManager() {
       const newTheme = { ...themeDraft, id: uid.rnd() };
       const updatedThemes = [...userThemes, newTheme];
       addUserTheme(updatedThemes);
-      setUserTheme(newTheme);
+      setUserTheme(newTheme, updatedThemes);
     }
     setOpenEditor(false);
   };
@@ -135,19 +135,22 @@ export default function ThemeManager() {
       );
 
       if (defaultTheme) {
-        setUserTheme(defaultTheme);
+        setUserTheme(defaultTheme, updatedThemes);
       } else {
         // Emergency fallback
-        setUserTheme({
-          light: lightThemeOptions,
-          dark: darkThemeOptions,
-        });
+        setUserTheme(
+          {
+            light: lightThemeOptions,
+            dark: darkThemeOptions,
+          },
+          updatedThemes
+        );
       }
     }
   };
 
   const handleApplyTheme = (theme) => {
-    setUserTheme(theme);
+    setUserTheme(theme, null);
   };
 
   const handleColorChange = (mode, fieldPath, color) => {
@@ -210,7 +213,8 @@ export default function ThemeManager() {
       const newTheme = { ...importedTheme, id: uid.rnd() };
       const updatedThemes = [...userThemes, newTheme];
       addUserTheme(updatedThemes);
-      setUserTheme(newTheme);
+
+      setUserTheme(newTheme, updatedThemes);
     } catch (error) {
       console.error(error);
     }

@@ -55,6 +55,11 @@ export const lightThemeOptions: ThemeOptions = {
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgba(39, 40, 44, 1)',
           '--primary-main': theme.palette.primary.main,
+          '--text-primary': theme.palette.text.primary,
+          '--text-secondary': theme.palette.text.secondary,
+          '--background-default': theme.palette.background.default,
+          '--background-paper': theme.palette.background.paper,
+          '--background-surface': theme.palette.background.surface,
         },
 
         '*, *::before, *::after': {

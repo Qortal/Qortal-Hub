@@ -414,8 +414,23 @@ export const AppsDesktop = ({
               setDesktopViewMode('dev');
             }}
           >
-            <IconWrapper label="Dev" disableWidth>
-              <AppsIcon height={30} />
+            <IconWrapper
+              color={
+                desktopViewMode === 'dev'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
+              label="Dev"
+              disableWidth
+            >
+              <AppsIcon
+                color={
+                  desktopViewMode === 'dev'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
+                }
+                height={30}
+              />
             </IconWrapper>
           </ButtonBase>
         )}

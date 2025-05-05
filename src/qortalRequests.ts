@@ -61,6 +61,7 @@ import {
   buyNameRequest,
   sellNameRequest,
   cancelSellNameRequest,
+  signForeignFees,
   multiPaymentWithPrivateData,
   transferAssetRequest,
 } from './qortalRequests/get';
@@ -754,7 +755,7 @@ function setupMessageListenerQortalRequest() {
 
       case 'UPDATE_FOREIGN_FEE': {
         try {
-          const res = await updateForeignFee(request.payload);
+          const res = await updateForeignFee(request.payload, isFromExtension);
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -806,7 +807,10 @@ function setupMessageListenerQortalRequest() {
 
       case 'SET_CURRENT_FOREIGN_SERVER': {
         try {
-          const res = await setCurrentForeignServer(request.payload);
+          const res = await setCurrentForeignServer(
+            request.payload,
+            isFromExtension
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -832,7 +836,7 @@ function setupMessageListenerQortalRequest() {
 
       case 'ADD_FOREIGN_SERVER': {
         try {
-          const res = await addForeignServer(request.payload);
+          const res = await addForeignServer(request.payload, isFromExtension);
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -858,7 +862,10 @@ function setupMessageListenerQortalRequest() {
 
       case 'REMOVE_FOREIGN_SERVER': {
         try {
-          const res = await removeForeignServer(request.payload);
+          const res = await removeForeignServer(
+            request.payload,
+            isFromExtension
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1892,6 +1899,32 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+      case 'SIGN_FOREIGN_FEES': {
+        try {
+          const res = await signForeignFees(request.payload, isFromExtension);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
       default:
         break;
     }
