@@ -26,6 +26,9 @@
     "peers": "connected peers",
     "version": "core version"
   },
+  "ui": {
+    "version": "UI version"
+  },
   "count": {
     "none": "none",
     "one": "one"

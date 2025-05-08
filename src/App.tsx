@@ -3570,7 +3570,11 @@ function App() {
           </Dialog>
         )}
         {isSettingsOpen && (
-          <Settings open={isSettingsOpen} setOpen={setIsSettingsOpen} />
+          <Settings
+            open={isSettingsOpen}
+            setOpen={setIsSettingsOpen}
+            rawWallet={rawWallet}
+          />
         )}
         <CustomizedSnackbars
           open={openSnack}
