@@ -4,6 +4,7 @@ import {
   Fragment,
   ReactElement,
   Ref,
+  useContext,
   useEffect,
   useState,
 } from 'react';
@@ -15,11 +16,31 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import Slide from '@mui/material/Slide';
 import { TransitionProps } from '@mui/material/transitions';
-import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControlLabel,
+  Switch,
+  TextField,
+  styled,
+  useTheme,
+} from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
 
 import ThemeManager from '../Theme/ThemeManager';
 import { useAtom } from 'jotai';
+import { decryptStoredWallet } from '../../utils/decryptWallet';
+import { Spacer } from '../../common/Spacer';
+import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
+import { walletVersion } from '../../background';
+import Base58 from '../../deps/Base58';
+import { MyContext } from '../../App';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -63,7 +84,7 @@ const Transition = forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export const Settings = ({ address, open, setOpen }) => {
+export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
 
@@ -187,9 +208,121 @@ export const Settings = ({ address, open, setOpen }) => {
               label="Enable dev mode"
             />
           )}
+          {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
           <ThemeManager />
         </Box>
       </Dialog>
     </Fragment>
+  );
+};
+
+const ExportPrivateKey = ({ rawWallet }) => {
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { setOpenSnackGlobal, setInfoSnackCustom } = useContext(MyContext);
+  const exportPrivateKeyFunc = async () => {
+    try {
+      setInfoSnackCustom({
+        type: 'info',
+        message: 'Decrypting wallet...',
+      });
+
+      setOpenSnackGlobal(true);
+      const wallet = structuredClone(rawWallet);
+
+      const res = await decryptStoredWallet(password, wallet);
+      const wallet2 = new PhraseWallet(res, wallet?.version || walletVersion);
+
+      const keyPair = Base58.encode(wallet2._addresses[0].keyPair.privateKey);
+      setPrivateKey(keyPair);
+      setInfoSnackCustom({
+        type: '',
+        message: '',
+      });
+
+      setOpenSnackGlobal(false);
+    } catch (error) {
+      setInfoSnackCustom({
+        type: 'error',
+        message: error?.message
+          ? `Error decrypting wallet: ${error?.message}`
+          : 'Error decrypting wallet',
+      });
+
+      setOpenSnackGlobal(true);
+    }
+  };
+  return (
+    <>
+      <Button
+        variant="contained"
+        sx={{
+          width: '200px',
+        }}
+        onClick={() => setIsOpen(true)}
+      >
+        Export private key
+      </Button>
+      <Dialog
+        open={isOpen}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">Export password</DialogTitle>
+        <DialogContent
+          sx={{
+            flexDirection: 'column',
+            display: 'flex',
+            gap: '10px',
+          }}
+        >
+          <DialogContentText id="alert-dialog-description">
+            Keep your private key in a secure place. Do not share!
+          </DialogContentText>
+          <Spacer height="20px" />
+          <TextField
+            autoFocus
+            type="password"
+            value={password}
+            autoComplete="off"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {privateKey && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                navigator.clipboard.writeText(privateKey);
+                setInfoSnackCustom({
+                  type: 'success',
+                  message: 'Copied privated key',
+                });
+
+                setOpenSnackGlobal(true);
+              }}
+            >
+              {`Copy private key `}
+              <ContentCopyIcon color="primary" />
+            </Button>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setIsOpen(false);
+              setPassword('');
+              setPrivateKey('');
+            }}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={exportPrivateKeyFunc}>
+            Decrypt
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };

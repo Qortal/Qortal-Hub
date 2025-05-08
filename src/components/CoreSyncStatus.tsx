@@ -6,6 +6,7 @@ import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { manifestData } from '../ExtStates/NotAuthenticated';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
@@ -75,7 +76,9 @@ export const CoreSyncStatus = () => {
       : '';
 
     let imagePath = syncingImg;
-    let message = t('core:status.synchronizing', { postProcess: 'capitalize' });
+    let message = t('core:message.status.synchronizing', {
+      postProcess: 'capitalize',
+    });
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
@@ -139,6 +142,10 @@ export const CoreSyncStatus = () => {
             <span style={{ color: '#03a9f4' }}>
               {isUsingGateway?.toString()}
             </span>
+          </h4>
+          <h4 className="lineHeight">
+            {t('core:ui.version')}:{' '}
+            <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
           </h4>
         </div>
       </div>
