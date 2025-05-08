@@ -535,7 +535,7 @@ export const Group = ({
           });
       });
     } catch (error) {
-      console.log('error', error);
+      console.error(error);
     }
   }, [setMutedGroups]);
 
@@ -2324,6 +2324,7 @@ export const Group = ({
             hasUnreadDirects={directChatHasUnread}
             show={desktopViewMode === 'apps'}
             myName={userInfo?.name}
+            myAddress={userInfo?.address}
             isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}
             hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}

@@ -38,6 +38,7 @@ export const AppsDesktop = ({
   hasUnreadGroups,
   setDesktopViewMode,
   desktopViewMode,
+  myAddress,
 }) => {
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
@@ -458,6 +459,7 @@ export const AppsDesktop = ({
             setMode={setMode}
             myApp={myApp}
             myWebsite={myWebsite}
+            myAddress={myAddress}
           />
         </Box>
       )}
@@ -485,7 +487,11 @@ export const AppsDesktop = ({
         myName={myName}
       />
       {mode === 'publish' && !selectedTab && (
-        <AppPublish names={myName ? [myName] : []} categories={categories} />
+        <AppPublish
+          names={myName ? [myName] : []}
+          categories={categories}
+          myAddress={myAddress}
+        />
       )}
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
@@ -521,6 +527,7 @@ export const AppsDesktop = ({
               setMode={setMode}
               myApp={myApp}
               myWebsite={myWebsite}
+              myAddress={myAddress}
             />
           </Box>
         </>

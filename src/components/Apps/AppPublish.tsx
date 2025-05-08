@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -72,7 +72,8 @@ const CustomMenuItem = styled(MenuItem)({
   // },
 });
 
-export const AppPublish = ({ names, categories }) => {
+export const AppPublish = ({ categories, myAddress, myName }) => {
+  const [names, setNames] = useState([]);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -152,6 +153,25 @@ export const AppPublish = ({ names, categories }) => {
     getQapp(name, appType);
   }, [name, appType]);
 
+  const getNames = useCallback(async () => {
+    if (!myAddress) return;
+    try {
+      setIsLoading('Loading names');
+      const res = await fetch(
+        `${getBaseApiReact()}/names/address/${myAddress}`
+      );
+      const data = await res.json();
+      setNames(data?.map((item) => item.name));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading('');
+    }
+  }, [myAddress]);
+  useEffect(() => {
+    getNames();
+  }, [getNames]);
+
   const publishApp = async () => {
     try {
       const data = {
@@ -196,6 +216,7 @@ export const AppPublish = ({ names, categories }) => {
             data: fileBase64,
             service: appType,
             title,
+            name,
             description,
             category,
             tag1,

@@ -1,4 +1,10 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   Box,
   Button,
@@ -31,7 +37,7 @@ import {
 } from './Apps-styles';
 import AddIcon from '@mui/icons-material/Add';
 import ImageUploader from '../../common/ImageUploader';
-import { MyContext } from '../../App';
+import { getBaseApiReact, MyContext } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background';
@@ -39,7 +45,10 @@ import { useAtom } from 'jotai';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
-export const AppsPrivate = ({ myName }) => {
+export const AppsPrivate = ({ myName, myAddress }) => {
+  const [names, setNames] = useState([]);
+  const [name, setName] = useState(0);
+
   const { openApp } = useHandlePrivateApps();
   const [file, setFile] = useState(null);
   const [logo, setLogo] = useState(null);
@@ -140,7 +149,7 @@ export const AppsPrivate = ({ myName }) => {
     try {
       if (selectedGroup === 0) return;
       if (!logo) throw new Error('Please select an image for a logo');
-      if (!myName) throw new Error('You need a Qortal name to publish');
+      if (!name) throw new Error('Please select a Qortal name');
       if (!newPrivateAppValues?.name) throw new Error('Your app needs a name');
       const base64Logo = await fileToBase64(logo);
       const base64App = await fileToBase64(file);
@@ -177,6 +186,7 @@ export const AppsPrivate = ({ myName }) => {
             data: decryptedData,
             identifier: newPrivateAppValues?.identifier,
             service: newPrivateAppValues?.service,
+            name,
           })
           .then((response) => {
             if (!response?.error) {
@@ -194,7 +204,7 @@ export const AppsPrivate = ({ myName }) => {
         {
           identifier: newPrivateAppValues?.identifier,
           service: newPrivateAppValues?.service,
-          name: myName,
+          name,
           groupId: selectedGroup,
         },
         true
@@ -219,6 +229,22 @@ export const AppsPrivate = ({ myName }) => {
       'aria-controls': `simple-tabpanel-${index}`,
     };
   }
+
+  const getNames = useCallback(async () => {
+    if (!myAddress) return;
+    try {
+      const res = await fetch(
+        `${getBaseApiReact()}/names/address/${myAddress}`
+      );
+      const data = await res.json();
+      setNames(data?.map((item) => item.name));
+    } catch (error) {
+      console.error(error);
+    }
+  }, [myAddress]);
+  useEffect(() => {
+    getNames();
+  }, [getNames]);
 
   return (
     <>
@@ -457,7 +483,34 @@ export const AppsPrivate = ({ myName }) => {
                   <input {...getInputProps()} />
                   {file ? 'Change' : 'Choose'} File
                 </PublishQAppChoseFile>
+                <Spacer height="20px" />
 
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <Label>Select a Qortal name</Label>
+
+                  <Select
+                    labelId="demo-simple-select-label"
+                    id="demo-simple-select"
+                    value={name}
+                    label="Groups where you are an admin"
+                    onChange={(e) => setName(e.target.value)}
+                  >
+                    <MenuItem value={0}>No name selected</MenuItem>
+                    {names.map((name) => {
+                      return (
+                        <MenuItem key={name} value={name}>
+                          {name}
+                        </MenuItem>
+                      );
+                    })}
+                  </Select>
+                </Box>
                 <Spacer height="20px" />
 
                 <Box
