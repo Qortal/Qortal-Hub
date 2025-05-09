@@ -133,6 +133,7 @@ export const ListOfInvites = ({
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingCancelInvite(false);
     }
@@ -168,13 +169,13 @@ export const ListOfInvites = ({
               >
                 <Box
                   sx={{
-                    width: '325px',
-                    height: '250px',
+                    alignItems: 'center',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
                     gap: '10px',
+                    height: '250px',
                     padding: '10px',
+                    width: '325px',
                   }}
                 >
                   <LoadingButton
@@ -187,6 +188,7 @@ export const ListOfInvites = ({
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -214,12 +216,12 @@ export const ListOfInvites = ({
       <p>Invitees list</p>
       <div
         style={{
-          position: 'relative',
-          height: '500px',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>

@@ -42,10 +42,11 @@ export const ListOfThreadPostsWatched = () => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred'); // TODO translate
+            rej(error.message || 'An error occurred');
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setLoading(false);
     }
@@ -58,21 +59,21 @@ export const ListOfThreadPostsWatched = () => {
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <Box
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'column',
           padding: '0px 20px',
+          width: '322px',
         }}
       >
-        <Typography
+        <Typography // TODO translate
           sx={{
             fontSize: '13px',
             fontWeight: 600,

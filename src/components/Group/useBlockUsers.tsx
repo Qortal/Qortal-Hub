@@ -164,6 +164,7 @@ export const useBlockedAddresses = () => {
           });
       });
     }
+
     if (address) {
       await new Promise((res, rej) => {
         window

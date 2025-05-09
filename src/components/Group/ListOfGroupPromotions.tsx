@@ -331,6 +331,7 @@ export const ListOfGroupPromotions = () => {
       });
       setIsLoadingJoinGroup(false);
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingJoinGroup(false);
     }
@@ -339,30 +340,30 @@ export const ListOfGroupPromotions = () => {
   return (
     <Box
       sx={{
-        width: '100%',
-        display: 'flex',
-        marginTop: '20px',
-        flexDirection: 'column',
         alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
         justifyContent: 'center',
+        marginTop: '20px',
+        width: '100%',
       }}
     >
       <Box
         sx={{
           display: 'flex',
           gap: '20px',
-          width: '100%',
           justifyContent: 'space-between',
+          width: '100%',
         }}
       >
         <ButtonBase
           sx={{
+            alignSelf: isExpanded && 'flex-start',
             display: 'flex',
             flexDirection: 'row',
-            padding: `0px ${isExpanded ? '24px' : '20px'}`,
             gap: '10px',
             justifyContent: 'flex-start',
-            alignSelf: isExpanded && 'flex-start',
+            padding: `0px ${isExpanded ? '24px' : '20px'}`,
           }}
           onClick={() => setIsExpanded((prev) => !prev)}
         >
@@ -374,6 +375,7 @@ export const ListOfGroupPromotions = () => {
             Group promotions{' '}
             {promotions.length > 0 && ` (${promotions.length})`}
           </Typography>
+
           {isExpanded ? (
             <ExpandLessIcon
               sx={{
@@ -400,19 +402,19 @@ export const ListOfGroupPromotions = () => {
         <>
           <Box
             sx={{
-              width: '750px',
-              maxWidth: '90%',
               display: 'flex',
               flexDirection: 'column',
+              maxWidth: '90%',
               padding: '0px 20px',
+              width: '750px',
             }}
           >
             <Box
               sx={{
-                width: '100%',
+                alignItems: 'center',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                width: '100%',
               }}
             >
               <Typography

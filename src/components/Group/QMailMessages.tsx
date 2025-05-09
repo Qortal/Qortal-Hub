@@ -11,7 +11,6 @@ import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { executeEvent } from '../../utils/events';
 import { CustomLoader } from '../../common/CustomLoader';
-
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -89,7 +88,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred'); // TODO translate
+            rej(error.message || 'An error occurred');
           });
       });
     } catch (error) {
@@ -129,24 +128,24 @@ export const QMailMessages = ({ userName, userAddress }) => {
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <ButtonBase
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'row',
           gap: '10px',
-          padding: '0px 20px',
           justifyContent: 'flex-start',
+          padding: '0px 20px',
+          width: '322px',
         }}
         onClick={() => setIsExpanded((prev) => !prev)}
       >
-        <Typography
+        <Typography // TODO translate
           sx={{
             fontSize: '1rem',
           }}

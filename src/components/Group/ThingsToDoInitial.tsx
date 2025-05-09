@@ -55,18 +55,18 @@ export const ThingsToDoInitial = ({
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <Box
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'column',
           padding: '0px 20px',
+          width: '322px',
         }}
       >
         <Typography
@@ -125,6 +125,7 @@ export const ThingsToDoInitial = ({
                     postProcess: 'capitalize',
                   })}
                 />
+
                 <ListItemIcon
                   sx={{
                     justifyContent: 'flex-end',
@@ -144,6 +145,7 @@ export const ThingsToDoInitial = ({
                 </ListItemIcon>
               </ListItemButton>
             </ListItem>
+
             <ListItem
               sx={{
                 marginBottom: '20px',

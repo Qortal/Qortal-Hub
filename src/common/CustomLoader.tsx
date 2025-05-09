@@ -1,6 +1,6 @@
-import React from 'react';
 import './customloader.css';
 import { Box, useTheme } from '@mui/material';
+
 export const CustomLoader = () => {
   const theme = useTheme();
   return (

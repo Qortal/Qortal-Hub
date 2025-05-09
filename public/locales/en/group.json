@@ -1,7 +1,12 @@
 {
   "action": {
     "cancel_ban": "cancel ban",
+    "copy_private_key": "copy private key",
     "create_group": "create group",
+    "disable_push_notifications": "disable all push notifications",
+    "enable_dev_mode": "enable dev mode",
+    "export_password": "export password",
+    "export_private_key": "export private key",
     "find_group": "find group",
     "join_group": "join group",
     "invite_member": "invite member",
@@ -35,16 +40,20 @@
   },
   "message": {
     "generic": {
+      "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_invited_you": "{{group}} has invited you",
       "no_display": "nothing to display",
       "no_selection": "no group selected",
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
       "only_encrypted": "only unencrypted messages will be displayed.",
+      "private_key_copied": "private key copied",
+      "secure_place": "keep your private key in a secure place. Do not share!",
       "setting_group": "setting up group... please wait."
     },
     "error": {
       "access_name": "cannot send a message without a access to your name",
+      "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
       "description_required": "please provide a description",
       "group_info": "cannot access group information",
       "name_required": "please provide a name",
@@ -55,7 +64,7 @@
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
       "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
-      "join_creation": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+      "group_join": "successfully requested to join group. It may take a couple of minutes for the changes to propagate",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",
       "loading_threads": "loading threads... please wait.",

@@ -32,6 +32,7 @@ export const lightThemeOptions: ThemeOptions = {
       unread: 'rgb(66, 151, 226)',
     },
   },
+
   components: {
     MuiCard: {
       styleOverrides: {
@@ -48,6 +49,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
@@ -113,6 +115,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiDialog: {
       styleOverrides: {
         paper: {
@@ -120,6 +123,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiPopover: {
       styleOverrides: {
         paper: {

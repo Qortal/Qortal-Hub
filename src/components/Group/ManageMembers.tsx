@@ -73,7 +73,7 @@ export const ManageMembers = ({
   const handleLeaveGroup = async () => {
     try {
       setIsLoadingLeave(true);
-      const fee = await getFee('LEAVE_GROUP');
+      const fee = await getFee('LEAVE_GROUP'); // TODO translate
       await show({
         message: 'Would you like to perform an LEAVE_GROUP transaction?',
         publishFee: fee.fee + ' QORT',
@@ -109,7 +109,7 @@ export const ManageMembers = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred'); // TODO translate
+            rej(error.message || 'An error occurred');
           });
       });
     } catch (error) {
@@ -139,6 +139,7 @@ export const ManageMembers = ({
       console.log(error);
     }
   };
+
   const getGroupInfo = async (groupId) => {
     try {
       const response = await fetch(`${getBaseApiReact()}/groups/${groupId}`);

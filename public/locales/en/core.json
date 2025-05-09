@@ -12,6 +12,7 @@
     "continue": "continue",
     "continue_logout": "continue to logout",
     "decline": "decline",
+    "decrypt": "decrypt",
     "edit": "edit",
     "export": "export",
     "import": "import",
@@ -38,6 +39,7 @@
     "payment": "payment fee",
     "publish": "publish fee"
   },
+  "general_settings": "general settings",
   "page": {
     "last": "last",
     "first": "first",
@@ -45,6 +47,7 @@
     "previous": "previous"
   },
   "downloading_qdn": "downloading from QDN",
+  "invite_list": "invite list",
   "last_height": "last height",
   "loading": "loading...",
   "loading_posts": "loading posts... please wait.",

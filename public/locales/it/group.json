@@ -2,6 +2,8 @@
   "action": {
     "cancel_ban": "annulla ban",
     "create_group": "crea gruppo",
+    "disable_push_notifications": "disabilita tutte le notifiche push",
+    "enable_dev_mode": "enable dev mode",
     "find_group": "trova gruppo",
     "join_group": "unisciti al gruppo",
     "invite_member": "invita membro",
@@ -35,6 +37,7 @@
   },
   "message": {
     "generic": {
+      "descrypt_wallet": "decriptazione del wallet...",
       "encryption_key": "la prima chiave di cifratura comune del gruppo è in fase di creazione. Attendere alcuni minuti affinché venga recuperata dalla rete. Controllo ogni 2 minuti...",
       "group_invited_you": "{{group}} ti ha invitato",
       "no_display": "niente da visualizzare",
@@ -45,6 +48,7 @@
     },
     "error": {
       "access_name": "impossibile inviare un messaggio senza accesso al tuo nome",
+      "descrypt_wallet": "errore di decriptazione del wallet {{: errorMessage }}",
       "description_required": "per favore fornisci una descrizione",
       "group_info": "impossibile accedere alle informazioni del gruppo",
       "name_required": "per favore fornisci un nome",
@@ -55,11 +59,11 @@
       "group_creation_name": "gruppo {{group_name}} creato: in attesa di conferma",
       "group_creation_label": "gruppo {{name}} creato: successo!",
       "group_invite": "invito inviato con successo a {{value}}. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
-      "join_creation": "richiesta di adesione al gruppo inviata con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
+      "group_join": "richiesta di adesione al gruppo inviata con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",
       "group_join_name": "entrato nel gruppo {{group_name}}: in attesa di conferma",
       "group_join_label": "entrato nel gruppo {{name}}: successo!",
       "loading_threads": "caricamento thread... attendere prego.",
-      "unbanned_user": "utente sbannato con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino"
+      "unbanned_user": "utente riammesso con successo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino"
     }
   }
 }

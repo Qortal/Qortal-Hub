@@ -22,6 +22,7 @@ import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmail
 import { Spacer } from '../../common/Spacer';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -60,6 +61,7 @@ export const UserListOfInvites = ({
   const [invites, setInvites] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef();
@@ -94,9 +96,12 @@ export const UserListOfInvites = ({
 
   const handleJoinGroup = async (groupId, groupName) => {
     try {
-      const fee = await getFee('JOIN_GROUP'); // TODO translate
+      const fee = await getFee('JOIN_GROUP');
+
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.join_group', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -123,8 +128,9 @@ export const UserListOfInvites = ({
               res(response);
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_join', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -140,13 +146,16 @@ export const UserListOfInvites = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoading(false);
     }
@@ -182,16 +191,22 @@ export const UserListOfInvites = ({
               >
                 <Box
                   sx={{
-                    width: '325px',
-                    height: '250px',
+                    alignItems: 'center',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
                     gap: '10px',
+                    height: '250px',
                     padding: '10px',
+                    width: '325px',
                   }}
                 >
-                  <Typography>Join {invite?.groupName}</Typography>
+                  <Typography>
+                    {t('core:action.join', {
+                      postProcess: 'capitalize',
+                    })}{' '}
+                    {invite?.groupName}
+                  </Typography>
+
                   <LoadingButton
                     loading={isLoading}
                     loadingPosition="start"
@@ -200,10 +215,13 @@ export const UserListOfInvites = ({
                       handleJoinGroup(invite?.groupId, invite?.groupName)
                     }
                   >
-                    Join group
+                    {t('group:action.join_group', {
+                      postProcess: 'capitalize',
+                    })}
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -221,7 +239,9 @@ export const UserListOfInvites = ({
                     }}
                   />
                 )}
+
                 <Spacer width="15px" />
+
                 <ListItemText
                   primary={invite?.groupName}
                   secondary={invite?.description}
@@ -242,14 +262,19 @@ export const UserListOfInvites = ({
         flexGrow: 1,
       }}
     >
-      <p>Invite list</p>
+      <p>
+        {t('core:invite_list', {
+          postProcess: 'capitalize',
+        })}
+      </p>
+
       <div
         style={{
-          position: 'relative',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexGrow: 1,
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>
