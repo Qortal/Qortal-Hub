@@ -33,7 +33,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../components/Language/LanguageSelector';
 import { MyContext } from '../App';
 
-const manifestData = {
+export const manifestData = {
   version: '0.5.4',
 };
 
