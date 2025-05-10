@@ -114,7 +114,7 @@ export const CoreSyncStatus = () => {
         </span>
 
         <div
-          className="bottom"
+          className="core-panel"
           style={{
             right: 'unset',
             left: '55px',
