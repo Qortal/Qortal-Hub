@@ -108,7 +108,7 @@ export const AppViewer = React.forwardRef(
           targetOrigin
         );
       } catch (err) {
-        console.error('Failed to send theme change to iframe:', err);
+        console.error('Failed to send language change to iframe:', err);
       }
     }, [currentLang]);
 
