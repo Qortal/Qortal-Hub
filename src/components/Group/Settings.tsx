@@ -4,6 +4,7 @@ import {
   Fragment,
   ReactElement,
   Ref,
+  useContext,
   useEffect,
   useState,
 } from 'react';
@@ -15,11 +16,30 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import Slide from '@mui/material/Slide';
 import { TransitionProps } from '@mui/material/transitions';
-import { Box, FormControlLabel, Switch, styled, useTheme } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import {
+  Box,
+  Button,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControlLabel,
+  Switch,
+  TextField,
+  styled,
+  useTheme,
+} from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
-
 import ThemeManager from '../Theme/ThemeManager';
 import { useAtom } from 'jotai';
+import { decryptStoredWallet } from '../../utils/decryptWallet';
+import { Spacer } from '../../common/Spacer';
+import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
+import { walletVersion } from '../../background';
+import Base58 from '../../deps/Base58';
+import { MyContext } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -63,11 +83,11 @@ const Transition = forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export const Settings = ({ address, open, setOpen }) => {
+export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
@@ -82,7 +102,7 @@ export const Settings = ({ address, open, setOpen }) => {
         if (response?.error) {
           console.error('Error adding user settings:', response.error);
         } else {
-          console.log('User settings added successfully'); // TODO translate
+          console.log('User settings added successfully');
         }
       })
       .catch((error) => {
@@ -113,7 +133,10 @@ export const Settings = ({ address, open, setOpen }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -136,7 +159,9 @@ export const Settings = ({ address, open, setOpen }) => {
         <AppBar sx={{ position: 'relative' }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-              General Settings
+              {t('core:general_settings', {
+                postProcess: 'capitalize',
+              })}
             </Typography>
 
             <IconButton
@@ -152,13 +177,13 @@ export const Settings = ({ address, open, setOpen }) => {
 
         <Box
           sx={{
-            flexGrow: 1,
-            overflowY: 'auto',
             color: theme.palette.text.primary,
-            padding: '20px',
-            flexDirection: 'column',
             display: 'flex',
+            flexDirection: 'column',
+            flexGrow: 1,
             gap: '20px',
+            overflowY: 'auto',
+            padding: '20px',
           }}
         >
           <FormControlLabel
@@ -168,7 +193,9 @@ export const Settings = ({ address, open, setOpen }) => {
             control={
               <LocalNodeSwitch checked={checked} onChange={handleChange} />
             }
-            label="Disable all push notifications"
+            label={t('group:action.disable_push_notifications', {
+              postProcess: 'capitalize',
+            })}
           />
           {window?.electronAPI && (
             <FormControlLabel
@@ -184,12 +211,157 @@ export const Settings = ({ address, open, setOpen }) => {
                   }}
                 />
               }
-              label="Enable dev mode"
+              label={t('group:action.enable_dev_mode', {
+                postProcess: 'capitalize',
+              })}
             />
           )}
+          {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
           <ThemeManager />
         </Box>
       </Dialog>
     </Fragment>
+  );
+};
+
+const ExportPrivateKey = ({ rawWallet }) => {
+  const [password, setPassword] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const { setOpenSnackGlobal, setInfoSnackCustom } = useContext(MyContext);
+  const { t } = useTranslation(['core', 'group']);
+
+  const exportPrivateKeyFunc = async () => {
+    try {
+      setInfoSnackCustom({
+        type: 'info',
+        message: t('group:message.generic.descrypt_wallet', {
+          postProcess: 'capitalize',
+        }),
+      });
+
+      setOpenSnackGlobal(true);
+      const wallet = structuredClone(rawWallet);
+
+      const res = await decryptStoredWallet(password, wallet);
+      const wallet2 = new PhraseWallet(res, wallet?.version || walletVersion);
+
+      const keyPair = Base58.encode(wallet2._addresses[0].keyPair.privateKey);
+      setPrivateKey(keyPair);
+      setInfoSnackCustom({
+        type: '',
+        message: '',
+      });
+
+      setOpenSnackGlobal(false);
+    } catch (error) {
+      setInfoSnackCustom({
+        type: 'error',
+        message: error?.message
+          ? t('group:message.error.decrypt_wallet', {
+              errorMessage: error?.message,
+              postProcess: 'capitalize',
+            })
+          : t('group:message.error.descrypt_wallet', {
+              postProcess: 'capitalize',
+            }),
+      });
+
+      setOpenSnackGlobal(true);
+    }
+  };
+
+  return (
+    <>
+      <Button
+        variant="contained"
+        sx={{
+          width: '200px',
+        }}
+        onClick={() => setIsOpen(true)}
+      >
+        {t('group:action.export_private_key', {
+          postProcess: 'capitalize',
+        })}
+      </Button>
+
+      <Dialog
+        open={isOpen}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {t('group:action.export_password', {
+            postProcess: 'capitalize',
+          })}
+        </DialogTitle>
+
+        <DialogContent
+          sx={{
+            flexDirection: 'column',
+            display: 'flex',
+            gap: '10px',
+          }}
+        >
+          <DialogContentText id="alert-dialog-description">
+            {t('group:message.generic.secure_place', {
+              postProcess: 'capitalize',
+            })}
+          </DialogContentText>
+
+          <Spacer height="20px" />
+
+          <TextField
+            autoFocus
+            type="password"
+            value={password}
+            autoComplete="off"
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {privateKey && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                navigator.clipboard.writeText(privateKey);
+                setInfoSnackCustom({
+                  type: 'success',
+                  message: t('group:message.generic.private_key_copied', {
+                    postProcess: 'capitalize',
+                  }),
+                });
+
+                setOpenSnackGlobal(true);
+              }}
+            >
+              {t('group:action.copy_private_key', {
+                postProcess: 'capitalize',
+              })}{' '}
+              <ContentCopyIcon color="primary" />
+            </Button>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setIsOpen(false);
+              setPassword('');
+              setPrivateKey('');
+            }}
+          >
+            {t('group:action.cancel', {
+              postProcess: 'capitalize',
+            })}
+          </Button>
+
+          <Button variant="contained" onClick={exportPrivateKeyFunc}>
+            {t('group:action.decrypt', {
+              postProcess: 'capitalize',
+            })}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };

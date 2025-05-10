@@ -5,7 +5,7 @@ import './messaging/messagesToBackground';
 import { MessageQueueProvider } from './MessageQueueContext.tsx';
 import { ThemeProvider } from './components/Theme/ThemeContext.tsx';
 import { CssBaseline } from '@mui/material';
-import '../i18n';
+import './i18n/i18n.js';
 
 createRoot(document.getElementById('root')!).render(
   <>

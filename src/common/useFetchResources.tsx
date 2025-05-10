@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { resourceDownloadControllerAtom } from '../atoms/global';
 import { getBaseApiReact } from '../App';
 import { useSetAtom } from 'jotai';

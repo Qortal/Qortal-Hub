@@ -937,6 +937,29 @@ export async function getBalanceInfo() {
   return data;
 }
 
+export async function getAssetBalanceInfo(assetId: number) {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const validApi = await getBaseApi();
+  const response = await fetch(
+    validApi +
+      `/assets/balances?address=${address}&assetid=${assetId}&ordering=ASSET_BALANCE_ACCOUNT&limit=1`
+  );
+
+  if (!response?.ok) throw new Error('Cannot fetch asset balance');
+  const data = await response.json();
+  return +data?.[0]?.balance;
+}
+
+export async function getAssetInfo(assetId: number) {
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + `/assets/info?assetId=${assetId}`);
+
+  if (!response?.ok) throw new Error('Cannot fetch asset info');
+  const data = await response.json();
+  return data;
+}
+
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
   let _url = `${buyTradeNodeBaseUrl}/crosschain/ltc/walletbalance`;
@@ -2277,6 +2300,34 @@ export async function kickFromGroup({
     recipient: qortalAddress,
     rGroupId: groupId,
     rBanReason: rBanReason,
+    lastReference: lastReference,
+  });
+
+  const signedBytes = Base58.encode(tx.signedBytes);
+
+  const res = await processTransactionVersion2(signedBytes);
+  if (!res?.signature)
+    throw new Error(res?.message || 'Transaction was not able to be processed');
+  return res;
+}
+
+export async function transferAsset({ amount, recipient, assetId }) {
+  const lastReference = await getLastRef();
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+  const uint8PublicKey = Base58.decode(parsedData.publicKey);
+  const keyPair = {
+    privateKey: uint8PrivateKey,
+    publicKey: uint8PublicKey,
+  };
+  const feeres = await getFee('TRANSFER_ASSET');
+
+  const tx = await createTransaction(12, keyPair, {
+    fee: feeres.fee,
+    recipient: recipient,
+    amount: amount,
+    assetId: assetId,
     lastReference: lastReference,
   });
 
@@ -3638,7 +3689,7 @@ export const checkThreads = async (bringBack) => {
           dataToBringBack.push(thread);
         }
       } catch (error) {
-        conosle.log({ error });
+        console.log({ error });
       }
     }
 

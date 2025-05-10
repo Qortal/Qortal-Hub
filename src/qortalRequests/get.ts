@@ -32,6 +32,11 @@ import {
   cancelSellName,
   buyName,
   getBaseApi,
+  getAssetBalanceInfo,
+  getNameOrAddress,
+  getAssetInfo,
+  getPublicKey,
+  transferAsset,
 } from '../background';
 import {
   getNameInfo,
@@ -50,6 +55,7 @@ import { QORT_DECIMALS } from '../constants/constants';
 import Base58 from '../deps/Base58';
 import ed2curve from '../deps/ed2curve';
 import nacl from '../deps/nacl-fast';
+
 import {
   base64ToUint8Array,
   createSymmetricKeyAndNonce,
@@ -78,6 +84,10 @@ import { fileToBase64 } from '../utils/fileReading';
 import { mimeToExtensionMap } from '../utils/memeTypes';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import utils from '../utils/utils';
+import ShortUniqueId from 'short-unique-id';
+import { isValidBase64WithDecode } from '../utils/decode';
+
+const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
 
@@ -1293,10 +1303,7 @@ export const publishMultipleQDNResources = async (
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
-      body {
-        background-color: #121212;
-        color: #e0e0e0;
-      }
+
   
       .resource-container {
         display: flex;
@@ -1305,7 +1312,7 @@ export const publishMultipleQDNResources = async (
         padding: 16px;
         margin: 8px 0;
         border-radius: 8px;
-        background-color: #1e1e1e;
+        background-color: var(--background-default);
       }
       
       .resource-detail {
@@ -1314,7 +1321,7 @@ export const publishMultipleQDNResources = async (
       
       .resource-detail span {
         font-weight: bold;
-        color: #bb86fc;
+        color: var(--text-primary);
       }
   
       @media (min-width: 600px) {
@@ -2649,7 +2656,12 @@ export const getForeignFee = async (data) => {
   }
 };
 
-export const updateForeignFee = async (data) => {
+function calculateRateFromFee(totalFee, sizeInBytes) {
+  const fee = (totalFee / sizeInBytes) * 1000;
+  return fee.toFixed(0);
+}
+
+export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2670,33 +2682,52 @@ export const updateForeignFee = async (data) => {
   }
 
   const { coin, type, value } = data;
-  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
 
-  try {
-    const endpoint = await createEndpoint(url);
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ value }),
-    });
+  const text3 =
+    type === 'feerequired' ? `${value} sats` : `${value} sats per kb`;
+  const text4 =
+    type === 'feerequired'
+      ? `*The ${value} sats fee is derived from ${calculateRateFromFee(value, 300)} sats per kb, for a transaction that is approximately 300 bytes in size.`
+      : '';
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to update foreign fees on your node?`,
+      text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+      text3: `value: ${text3}`,
+      text4,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
 
-    if (!response.ok) throw new Error('Failed to update foreign fee');
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-    return res; // Return full response here
-  } catch (error) {
-    throw new Error(error?.message || 'Error in update foreign fee');
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
   }
+  const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
+  const valueStringified = JSON.stringify(+value);
+
+  const endpoint = await createEndpoint(url);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: valueStringified,
+  });
+
+  if (!response.ok) throw new Error('Failed to update foreign fee');
+  let res;
+  try {
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
+  }
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+  return res; // Return full response here
 };
 
 export const getServerConnectionHistory = async (data) => {
@@ -2749,7 +2780,7 @@ export const getServerConnectionHistory = async (data) => {
   }
 };
 
-export const setCurrentForeignServer = async (data) => {
+export const setCurrentForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2771,6 +2802,21 @@ export const setCurrentForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to set the current server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2779,37 +2825,33 @@ export const setCurrentForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/setcurrentserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to set current server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to set current server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in set current server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const addForeignServer = async (data) => {
+export const addForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2831,6 +2873,21 @@ export const addForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to add a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2839,37 +2896,33 @@ export const addForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/addserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to add server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to add server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error.message || 'Error in adding server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
-export const removeForeignServer = async (data) => {
+export const removeForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error('This action cannot be done through a public node');
@@ -2891,6 +2944,21 @@ export const removeForeignServer = async (data) => {
   }
 
   const { coin, host, port, type } = data;
+
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to remove a server?`,
+      text2: `type: ${type}`,
+      text3: `host: ${host}`,
+      highlightedText: `Coin: ${coin}`,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
   const body = {
     hostName: host,
     port: port,
@@ -2899,34 +2967,30 @@ export const removeForeignServer = async (data) => {
 
   const url = `/crosschain/${coin.toLowerCase()}/removeserver`;
 
+  const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Accept: '*/*',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) throw new Error('Failed to remove server');
+
+  let res;
   try {
-    const endpoint = await createEndpoint(url); // Assuming createEndpoint is available
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        Accept: '*/*',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) throw new Error('Failed to remove server');
-
-    let res;
-    try {
-      res = await response.clone().json();
-    } catch (e) {
-      res = await response.text();
-    }
-
-    if (res?.error && res?.message) {
-      throw new Error(res.message);
-    }
-
-    return res; // Return the full response
-  } catch (error) {
-    throw new Error(error?.message || 'Error in removing server');
+    res = await response.clone().json();
+  } catch (e) {
+    res = await response.text();
   }
+
+  if (res?.error && res?.message) {
+    throw new Error(res.message);
+  }
+
+  return res; // Return the full response
 };
 
 export const getDaySummary = async () => {
@@ -3484,6 +3548,35 @@ export const sendCoin = async (data, isFromExtension) => {
   }
 };
 
+function calculateFeeFromRate(feePerKb, sizeInBytes) {
+  return (feePerKb / 1000) * sizeInBytes;
+}
+
+const getBuyingFees = async (foreignBlockchain) => {
+  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  if (!ticker) throw new Error('invalid foreign blockchain');
+  const unlockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feerequired',
+  });
+  const lockFee = await getForeignFee({
+    coin: ticker,
+    type: 'feekb',
+  });
+  return {
+    ticker: ticker,
+    lock: {
+      sats: lockFee,
+      fee: lockFee / QORT_DECIMALS,
+    },
+    unlock: {
+      sats: unlockFee,
+      fee: unlockFee / QORT_DECIMALS,
+      feePerKb: +calculateRateFromFee(+unlockFee, 300) / QORT_DECIMALS,
+    },
+  };
+};
+
 export const createBuyOrder = async (data, isFromExtension) => {
   const requiredFields = ['crosschainAtInfo', 'foreignBlockchain'];
   const missingFields: string[] = [];
@@ -3519,6 +3612,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
 
   const crosschainAtInfo = await Promise.all(atPromises);
   try {
+    const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
         text1:
@@ -3532,10 +3626,45 @@ export const createBuyOrder = async (data, isFromExtension) => {
             return latest + +cur?.expectedForeignAmount;
           }, 0)
         )}
-      ${` ${crosschainAtInfo?.[0]?.foreignBlockchain}`}`,
+      ${` ${buyingFees.ticker}`}`,
         highlightedText: `Is using public node: ${isGateway}`,
         fee: '',
-        foreignFee: `${sellerForeignFee[foreignBlockchain].value} ${sellerForeignFee[foreignBlockchain].ticker}`,
+        html: `
+  <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
+    <style>
+      .fee-container {
+        background-color: var(--background-default);
+        color: var(--text-primary);
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+      }
+      .fee-label {
+        font-weight: bold;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+      }
+      .fee-description {
+        font-size: 14px;
+        color: var(--text-primary);
+        margin-bottom: 16px;
+      }
+    </style>
+
+    <div class="fee-container">
+      <div class="fee-label">Total Unlocking Fee:</div>
+      <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
+     <div class="fee-description">
+  This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'}, assuming a 300-byte size at a rate of ${buyingFees?.unlock?.feePerKb?.toFixed(8)} ${buyingFees.ticker} per KB.
+</div>
+
+      <div class="fee-label">Total Locking Fee:</div>
+      <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
+
+    </div>
+  </div>
+`,
       },
       isFromExtension
     );
@@ -4923,4 +5052,460 @@ export const buyNameRequest = async (data, isFromExtension) => {
   } else {
     throw new Error('User declined request');
   }
+};
+
+export const signForeignFees = async (data, isFromExtension) => {
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to sign the required fees for all your trade offers?`,
+    },
+    isFromExtension
+  );
+  const { accepted } = resPermission;
+  if (accepted) {
+    const wallet = await getSaveWallet();
+    const address = wallet.address0;
+    const resKeyPair = await getKeyPair();
+    const parsedData = resKeyPair;
+    const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+    const uint8PublicKey = Base58.decode(parsedData.publicKey);
+    const keyPair = {
+      privateKey: uint8PrivateKey,
+      publicKey: uint8PublicKey,
+    };
+
+    const unsignedFeesUrl = await createEndpoint(
+      `/crosschain/unsignedfees/${address}`
+    );
+
+    const unsignedFeesResponse = await fetch(unsignedFeesUrl);
+
+    const unsignedFees = await unsignedFeesResponse.json();
+
+    const signedFees = [];
+
+    unsignedFees.forEach((unsignedFee) => {
+      const unsignedDataDecoded = Base58.decode(unsignedFee.data);
+
+      const signature = nacl.sign.detached(
+        unsignedDataDecoded,
+        keyPair.privateKey
+      );
+
+      const signedFee = {
+        timestamp: unsignedFee.timestamp,
+        data: `${Base58.encode(signature)}`,
+        atAddress: unsignedFee.atAddress,
+        fee: unsignedFee.fee,
+      };
+
+      signedFees.push(signedFee);
+    });
+
+    const signedFeesUrl = await createEndpoint(`/crosschain/signedfees`);
+
+    await fetch(signedFeesUrl, {
+      method: 'POST',
+      headers: {
+        Accept: '*/*',
+        'Content-Type': 'application/json',
+      },
+      body: `${JSON.stringify(signedFees)}`,
+    });
+
+    return true;
+  } else {
+    throw new Error('User declined request');
+  }
+};
+export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
+  const requiredFields = ['payments', 'assetId'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(`Missing required field: ${field}`);
+    }
+  });
+  const resKeyPair = await getKeyPair();
+  const parsedData = resKeyPair;
+  const privateKey = parsedData.privateKey;
+  const userPublicKey = parsedData.publicKey;
+  const { fee: paymentFee } = await getFee('TRANSFER_ASSET');
+  const { fee: arbitraryFee } = await getFee('ARBITRARY');
+
+  let name = null;
+  const payments = data.payments;
+  const assetId = data.assetId;
+  const pendingTransactions = [];
+  const pendingAdditionalArbitraryTxs = [];
+  const additionalArbitraryTxsWithoutPayment =
+    data?.additionalArbitraryTxsWithoutPayment || [];
+  let totalAmount = 0;
+  let fee = 0;
+  for (const payment of payments) {
+    const paymentRefId = uid.rnd();
+    const requiredFieldsPayment = ['recipient', 'amount'];
+
+    for (const field of requiredFieldsPayment) {
+      if (!payment[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    const confirmReceiver = await getNameOrAddress(payment.recipient);
+    if (confirmReceiver.error) {
+      throw new Error('Invalid receiver address or name');
+    }
+    const receiverPublicKey = await getPublicKey(confirmReceiver);
+
+    const amount = +payment.amount.toFixed(8);
+
+    pendingTransactions.push({
+      type: 'PAYMENT',
+      recipientAddress: confirmReceiver,
+      amount: amount,
+      paymentRefId,
+    });
+
+    fee = fee + +paymentFee;
+    totalAmount = totalAmount + amount;
+
+    if (payment.arbitraryTxs && payment.arbitraryTxs.length > 0) {
+      for (const arbitraryTx of payment.arbitraryTxs) {
+        const requiredFieldsArbitraryTx = ['service', 'identifier', 'base64'];
+
+        for (const field of requiredFieldsArbitraryTx) {
+          if (!arbitraryTx[field]) {
+            throw new Error(`Missing required field: ${field}`);
+          }
+        }
+
+        if (!name) {
+          const getName = await getNameInfo();
+          if (!getName) throw new Error('Name needed to publish');
+          name = getName;
+        }
+
+        const isValid = isValidBase64WithDecode(arbitraryTx.base64);
+        if (!isValid) throw new Error('Invalid base64 data');
+        if (!arbitraryTx?.service?.includes('_PRIVATE'))
+          throw new Error('Please use a PRIVATE service');
+        const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
+        pendingTransactions.push({
+          type: 'ARBITRARY',
+          identifier: arbitraryTx.identifier,
+          service: arbitraryTx.service,
+          base64: arbitraryTx.base64,
+          description: arbitraryTx?.description || '',
+          paymentRefId,
+          publicKeys: [receiverPublicKey, ...additionalPublicKeys],
+        });
+
+        fee = fee + +arbitraryFee;
+      }
+    }
+  }
+
+  if (
+    additionalArbitraryTxsWithoutPayment &&
+    additionalArbitraryTxsWithoutPayment.length > 0
+  ) {
+    for (const arbitraryTx of additionalArbitraryTxsWithoutPayment) {
+      const requiredFieldsArbitraryTx = ['service', 'identifier', 'base64'];
+
+      for (const field of requiredFieldsArbitraryTx) {
+        if (!arbitraryTx[field]) {
+          throw new Error(`Missing required field: ${field}`);
+        }
+      }
+
+      if (!name) {
+        const getName = await getNameInfo();
+        if (!getName) throw new Error('Name needed to publish');
+        name = getName;
+      }
+
+      const isValid = isValidBase64WithDecode(arbitraryTx.base64);
+      if (!isValid) throw new Error('Invalid base64 data');
+      if (!arbitraryTx?.service?.includes('_PRIVATE'))
+        throw new Error('Please use a PRIVATE service');
+      const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
+      pendingAdditionalArbitraryTxs.push({
+        type: 'ARBITRARY',
+        identifier: arbitraryTx.identifier,
+        service: arbitraryTx.service,
+        base64: arbitraryTx.base64,
+        description: arbitraryTx?.description || '',
+        publicKeys: additionalPublicKeys,
+      });
+
+      fee = fee + +arbitraryFee;
+    }
+  }
+
+  if (!name) throw new Error('A name is needed to publish');
+  const balance = await getBalanceInfo();
+
+  if (+balance < fee) throw new Error('Your QORT balance is insufficient');
+  const assetBalance = await getAssetBalanceInfo(assetId);
+  const assetInfo = await getAssetInfo(assetId);
+  if (assetBalance < totalAmount)
+    throw new Error('Your asset balance is insufficient');
+
+  const resPermission = await getUserPermission(
+    {
+      text1:
+        'Do you give this application permission to make the following payments and publishes?',
+      text2: `Asset used in payments: ${assetInfo.name}`,
+      html: `
+      <div style="max-height: 30vh; overflow-y: auto;">
+      <style>
+
+        .resource-container {
+          display: flex;
+          flex-direction: column;
+          border: 1px solid;
+          padding: 16px;
+          margin: 8px 0;
+          border-radius: 8px;
+          background-color: var(--background-default);
+        }
+        
+        .resource-detail {
+          margin-bottom: 8px;
+        }
+        
+        .resource-detail span {
+          font-weight: bold;
+          color: var(--text-primary);
+        }
+    
+        @media (min-width: 600px) {
+          .resource-container {
+            flex-direction: row;
+            flex-wrap: wrap;
+          }
+          .resource-detail {
+            flex: 1 1 45%;
+            margin-bottom: 0;
+            padding: 4px 0;
+          }
+        }
+      </style>
+    
+      ${pendingTransactions
+        .filter((item) => item.type === 'PAYMENT')
+        .map(
+          (payment) => `
+          <div class="resource-container">
+            <div class="resource-detail"><span>Recipient:</span> ${
+              payment.recipientAddress
+            }</div>
+            <div class="resource-detail"><span>Amount:</span> ${payment.amount}</div>
+          </div>`
+        )
+        .join('')}
+         ${[...pendingTransactions, ...pendingAdditionalArbitraryTxs]
+           .filter((item) => item.type === 'ARBITRARY')
+           .map(
+             (arbitraryTx) => `
+          <div class="resource-container">
+            <div class="resource-detail"><span>Service:</span> ${
+              arbitraryTx.service
+            }</div>
+            <div class="resource-detail"><span>Name:</span> ${name}</div>
+            <div class="resource-detail"><span>Identifier:</span> ${
+              arbitraryTx.identifier
+            }</div>
+          </div>`
+           )
+           .join('')}
+    </div>
+    
+        `,
+      highlightedText: `Total Amount: ${totalAmount}`,
+      fee: fee,
+    },
+    isFromExtension
+  );
+  const { accepted, checkbox1 = false } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
+
+  // const failedTxs = []
+  const paymentsDone = {};
+
+  const transactionsDone = [];
+
+  for (const transaction of pendingTransactions) {
+    const type = transaction.type;
+
+    if (type === 'PAYMENT') {
+      const makePayment = await retryTransaction(
+        transferAsset,
+        [
+          {
+            amount: transaction.amount,
+            assetId,
+            recipient: transaction.recipientAddress,
+          },
+        ],
+        true
+      );
+      if (makePayment) {
+        transactionsDone.push(makePayment?.signature);
+        if (transaction.paymentRefId) {
+          paymentsDone[transaction.paymentRefId] = makePayment;
+        }
+      }
+    } else if (type === 'ARBITRARY' && paymentsDone[transaction.paymentRefId]) {
+      const objectToEncrypt = {
+        data: transaction.base64,
+        payment: paymentsDone[transaction.paymentRefId],
+      };
+
+      const toBase64 = await retryTransaction(
+        objectToBase64,
+        [objectToEncrypt],
+        true
+      );
+
+      if (!toBase64) continue; // Skip if encryption fails
+
+      const encryptDataResponse = await retryTransaction(
+        encryptDataGroup,
+        [
+          {
+            data64: toBase64,
+            publicKeys: transaction.publicKeys,
+            privateKey,
+            userPublicKey,
+          },
+        ],
+        true
+      );
+
+      if (!encryptDataResponse) continue; // Skip if encryption fails
+
+      const resPublish = await retryTransaction(
+        publishData,
+        [
+          {
+            registeredName: encodeURIComponent(name),
+            file: encryptDataResponse,
+            service: transaction.service,
+            identifier: encodeURIComponent(transaction.identifier),
+            uploadType: 'file',
+            description: transaction?.description,
+            isBase64: true,
+            apiVersion: 2,
+            withFee: true,
+          },
+        ],
+        true
+      );
+
+      if (resPublish?.signature) {
+        transactionsDone.push(resPublish?.signature);
+      }
+    }
+  }
+
+  for (const transaction of pendingAdditionalArbitraryTxs) {
+    const objectToEncrypt = {
+      data: transaction.base64,
+    };
+
+    const toBase64 = await retryTransaction(
+      objectToBase64,
+      [objectToEncrypt],
+      true
+    );
+
+    if (!toBase64) continue; // Skip if encryption fails
+
+    const encryptDataResponse = await retryTransaction(
+      encryptDataGroup,
+      [
+        {
+          data64: toBase64,
+          publicKeys: transaction.publicKeys,
+          privateKey,
+          userPublicKey,
+        },
+      ],
+      true
+    );
+
+    if (!encryptDataResponse) continue; // Skip if encryption fails
+
+    const resPublish = await retryTransaction(
+      publishData,
+      [
+        {
+          registeredName: encodeURIComponent(name),
+          file: encryptDataResponse,
+          service: transaction.service,
+          identifier: encodeURIComponent(transaction.identifier),
+          uploadType: 'file',
+          description: transaction?.description,
+          isBase64: true,
+          apiVersion: 2,
+          withFee: true,
+        },
+      ],
+      true
+    );
+
+    if (resPublish?.signature) {
+      transactionsDone.push(resPublish?.signature);
+    }
+  }
+
+  return transactionsDone;
+};
+
+export const transferAssetRequest = async (data, isFromExtension) => {
+  const requiredFields = ['amount', 'assetId', 'recipient'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(`Missing required field: ${field}`);
+    }
+  });
+  const amount = data.amount;
+  const assetId = data.assetId;
+  const recipient = data.recipient;
+
+  const { fee } = await getFee('TRANSFER_ASSET');
+  const balance = await getBalanceInfo();
+
+  if (+balance < +fee) throw new Error('Your QORT balance is insufficient');
+  const assetBalance = await getAssetBalanceInfo(assetId);
+  if (assetBalance < amount)
+    throw new Error('Your asset balance is insufficient');
+  const confirmReceiver = await getNameOrAddress(recipient);
+  if (confirmReceiver.error) {
+    throw new Error('Invalid receiver address or name');
+  }
+  const assetInfo = await getAssetInfo(assetId);
+  const resPermission = await getUserPermission(
+    {
+      text1: `Do you give this application permission to transfer the following asset?`,
+      text2: `Asset: ${assetInfo?.name}`,
+      highlightedText: `Amount: ${amount}`,
+      fee: fee,
+    },
+    isFromExtension
+  );
+
+  const { accepted } = resPermission;
+  if (!accepted) {
+    throw new Error('User declined request');
+  }
+  const res = await transferAsset({
+    amount,
+    recipient: confirmReceiver,
+    assetId,
+  });
+  return res;
 };

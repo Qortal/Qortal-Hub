@@ -54,7 +54,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [bans, setBans] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [isLoadingUnban, setIsLoadingUnban] = useState(false);
   const { t } = useTranslation(['core', 'group']);
 
@@ -88,7 +88,10 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
     try {
       const fee = await getFee('CANCEL_GROUP_BAN');
       await show({
-        message: t('group:question.cancel_ban', { postProcess: 'capitalize' }),
+        message: t('group:question.perform_transaction', {
+          action: 'CANCEL_GROUP_BAN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingUnban(true);
@@ -165,13 +168,13 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               >
                 <Box
                   sx={{
-                    width: '325px',
-                    height: '250px',
+                    alignItems: 'center',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
                     gap: '10px',
+                    height: '250px',
                     padding: '10px',
+                    width: '325px',
                   }}
                 >
                   <LoadingButton
@@ -214,12 +217,12 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       <p>{t('group:ban_list', { postProcess: 'capitalize' })}</p>
       <div
         style={{
-          position: 'relative',
-          height: '500px',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>

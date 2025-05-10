@@ -6,6 +6,7 @@ import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { manifestData } from '../ExtStates/NotAuthenticated';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
@@ -75,7 +76,9 @@ export const CoreSyncStatus = () => {
       : '';
 
     let imagePath = syncingImg;
-    let message = t('core:status.synchronizing', { postProcess: 'capitalize' });
+    let message = t('core:message.status.synchronizing', {
+      postProcess: 'capitalize',
+    });
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
@@ -111,7 +114,7 @@ export const CoreSyncStatus = () => {
         </span>
 
         <div
-          className="bottom"
+          className="core-panel"
           style={{
             right: 'unset',
             left: '55px',
@@ -119,26 +122,36 @@ export const CoreSyncStatus = () => {
           }}
         >
           <h3>{t('core:core.information', { postProcess: 'capitalize' })}</h3>
+
           <h4 className="lineHeight">
             {t('core:core.version', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
           </h4>
+
           <h4 className="lineHeight">{message}</h4>
+
           <h4 className="lineHeight">
             {t('core:core.block_height', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{height || ''}</span>
           </h4>
+
           <h4 className="lineHeight">
             {t('core:core.peers', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {numberOfConnections || ''}
             </span>
           </h4>
+
           <h4 className="lineHeight">
             {t('auth:node.using_public', { postProcess: 'capitalize' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {isUsingGateway?.toString()}
             </span>
+          </h4>
+
+          <h4 className="lineHeight">
+            {t('core:ui.version', { postProcess: 'capitalize' })}:{' '}
+            <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
           </h4>
         </div>
       </div>

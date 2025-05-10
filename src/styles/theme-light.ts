@@ -32,6 +32,7 @@ export const lightThemeOptions: ThemeOptions = {
       unread: 'rgb(66, 151, 226)',
     },
   },
+
   components: {
     MuiCard: {
       styleOverrides: {
@@ -48,6 +49,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
@@ -55,6 +57,11 @@ export const lightThemeOptions: ThemeOptions = {
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgba(39, 40, 44, 1)',
           '--primary-main': theme.palette.primary.main,
+          '--text-primary': theme.palette.text.primary,
+          '--text-secondary': theme.palette.text.secondary,
+          '--background-default': theme.palette.background.default,
+          '--background-paper': theme.palette.background.paper,
+          '--background-surface': theme.palette.background.surface,
         },
 
         '*, *::before, *::after': {
@@ -108,6 +115,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiDialog: {
       styleOverrides: {
         paper: {
@@ -115,6 +123,7 @@ export const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiPopover: {
       styleOverrides: {
         paper: {

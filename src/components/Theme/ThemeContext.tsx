@@ -25,7 +25,7 @@ const ThemeContext = createContext({
   toggleTheme: () => {},
   userThemes: [defaultTheme],
   addUserTheme: (themes) => {},
-  setUserTheme: (theme) => {},
+  setUserTheme: (theme, themes) => {},
   currentThemeId: 'default',
 });
 
@@ -83,13 +83,13 @@ export const ThemeProvider = ({ children }) => {
     saveSettings(themes);
   };
 
-  const setUserTheme = (theme) => {
+  const setUserTheme = (theme, themes) => {
     if (theme.id === 'default') {
       setCurrentThemeId('default');
-      saveSettings(userThemes, themeMode, 'default');
+      saveSettings(themes || userThemes, themeMode, 'default');
     } else {
       setCurrentThemeId(theme.id);
-      saveSettings(userThemes, themeMode, theme.id);
+      saveSettings(themes || userThemes, themeMode, theme.id);
     }
   };
 

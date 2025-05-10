@@ -1028,12 +1028,7 @@ function App() {
 
   const logoutFunc = useCallback(async () => {
     try {
-      if (hasSettingsChanged) {
-        await showUnsavedChanges({
-          message:
-            'Your settings have changed. If you logout you will lose your changes. Click on the save button in the header to keep your changed settings.',
-        }); // TODO translate
-      } else if (extState === 'authenticated') {
+      if (extState === 'authenticated') {
         await showUnsavedChanges({
           message: 'Are you sure you would like to logout?',
         });
@@ -2074,6 +2069,8 @@ function App() {
                   lineHeight: 1.2,
                   maxWidth: '90%',
                   textAlign: 'center',
+                  fontSize: '16px',
+                  marginBottom: '10px',
                 }}
               >
                 {messageQortalRequest?.text1}
@@ -3012,13 +3009,16 @@ function App() {
               })}
             </TextP>
             <Spacer height="100px" />
-            <CustomButton
+            <ButtonBase
+              autoFocus
               onClick={() => {
                 returnToMain();
               }}
             >
-              {t('core:action.continue', { postProcess: 'capitalize' })}
-            </CustomButton>
+              <CustomButton>
+                {t('core:action.continue', { postProcess: 'capitalize' })}
+              </CustomButton>
+            </ButtonBase>
           </Box>
         )}
         {extState === 'transfer-success-request' && (
@@ -3268,6 +3268,8 @@ function App() {
                     lineHeight: 1.2,
                     maxWidth: '90%',
                     textAlign: 'center',
+                    fontSize: '16px',
+                    marginBottom: '10px',
                   }}
                 >
                   {messageQortalRequestExtension?.text1}
@@ -3314,8 +3316,8 @@ function App() {
                     >
                       {messageQortalRequestExtension?.text3}
                     </TextP>
-                    <Spacer height="15px" />
                   </Box>
+                  <Spacer height="15px" />
                 </>
               )}
 
@@ -3340,11 +3342,15 @@ function App() {
               )}
 
               {messageQortalRequestExtension?.html && (
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: messageQortalRequestExtension?.html,
-                  }}
-                />
+                <>
+                  <Spacer height="15px" />
+
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: messageQortalRequestExtension?.html,
+                    }}
+                  />
+                </>
               )}
               <Spacer height="15px" />
 
@@ -3564,7 +3570,11 @@ function App() {
           </Dialog>
         )}
         {isSettingsOpen && (
-          <Settings open={isSettingsOpen} setOpen={setIsSettingsOpen} />
+          <Settings
+            open={isSettingsOpen}
+            setOpen={setIsSettingsOpen}
+            rawWallet={rawWallet}
+          />
         )}
         <CustomizedSnackbars
           open={openSnack}

@@ -1,26 +1,17 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Avatar, Box, Popover, Typography, useTheme } from '@mui/material';
-// import { MAIL_SERVICE_TYPE, THREAD_SERVICE_TYPE } from "../../constants/mail";
 import { Thread } from './Thread';
 import {
   AllThreadP,
   ArrowDownIcon,
   ComposeContainer,
   ComposeContainerBlank,
-  ComposeIcon,
   ComposeP,
   GroupContainer,
   InstanceFooter,
   InstanceListContainer,
   InstanceListContainerRow,
   InstanceListContainerRowCheck,
-  InstanceListContainerRowCheckIcon,
   InstanceListContainerRowMain,
   InstanceListContainerRowMainP,
   InstanceListHeader,
@@ -48,7 +39,6 @@ import {
   getTempPublish,
   handleUnencryptedPublishes,
 } from '../../Chat/GroupAnnouncements';
-import CheckSVG from '../../../assets/svgs/Check.svg';
 import ArrowDownSVG from '../../../assets/svgs/ArrowDown.svg';
 import { LoadingSnackbar } from '../../Snackbar/LoadingSnackbar';
 import { executeEvent } from '../../../utils/events';
@@ -73,9 +63,9 @@ export const GroupMail = ({
   hide,
   isPrivate,
 }) => {
-  const [viewedThreads, setViewedThreads] = React.useState<any>({});
+  const [viewedThreads, setViewedThreads] = useState<any>({});
   const [filterMode, setFilterMode] = useState<string>('Recently active');
-  const [currentThread, setCurrentThread] = React.useState(null);
+  const [currentThread, setCurrentThread] = useState(null);
   const [recentThreads, setRecentThreads] = useState<any[]>([]);
   const [allThreads, setAllThreads] = useState<any[]>([]);
   const [members, setMembers] = useState<any>(null);
@@ -178,7 +168,10 @@ export const GroupMail = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -186,7 +179,7 @@ export const GroupMail = ({
     }
   };
 
-  const getAllThreads = React.useCallback(
+  const getAllThreads = useCallback(
     async (groupId: string, mode: string, isInitial?: boolean) => {
       try {
         setIsLoading(true);
@@ -206,7 +199,7 @@ export const GroupMail = ({
         });
         const responseData = await response.json();
 
-        let fullArrayMsg = isInitial ? [] : [...allThreads];
+        const fullArrayMsg = isInitial ? [] : [...allThreads];
         const getMessageForThreads = responseData.map(async (message: any) => {
           let fullObject: any = null;
           if (message?.metadata?.description) {
@@ -271,13 +264,12 @@ export const GroupMail = ({
       } finally {
         if (isInitial) {
           setIsLoading(false);
-          // dispatch(setIsLoadingCustom(null));
         }
       }
     },
     [allThreads, isPrivate]
   );
-  const getMailMessages = React.useCallback(
+  const getMailMessages = useCallback(
     async (groupId: string, members: any) => {
       try {
         setIsLoading(true);
@@ -315,7 +307,7 @@ export const GroupMail = ({
           .sort((a, b) => b.created - a.created)
           .slice(0, 10);
 
-        let fullThreadArray: any = [];
+        const fullThreadArray: any = [];
         const getMessageForThreads = newArray.map(async (message: any) => {
           try {
             const identifierQuery = message.threadId;
@@ -327,6 +319,7 @@ export const GroupMail = ({
               },
             });
             const responseData = await response.json();
+
             if (responseData.length > 0) {
               const thread = responseData[0];
               if (thread?.metadata?.description) {
@@ -342,7 +335,7 @@ export const GroupMail = ({
                 };
                 fullThreadArray.push(fullObject);
               } else {
-                let threadRes = await Promise.race([
+                const threadRes = await Promise.race([
                   getEncryptedResource(
                     {
                       name: thread.name,
@@ -377,13 +370,12 @@ export const GroupMail = ({
         console.log(error);
       } finally {
         setIsLoading(false);
-        // dispatch(setIsLoadingCustom(null));
       }
     },
     [secretKey, isPrivate]
   );
 
-  const getMessages = React.useCallback(async () => {
+  const getMessages = useCallback(async () => {
     // if ( !groupId || members?.length === 0) return;
     if (!groupId || isPrivate === null) return;
 
@@ -400,7 +392,6 @@ export const GroupMail = ({
     if (filterModeRef.current !== filterMode) {
       firstMount.current = false;
     }
-    // if (groupId && !firstMount.current && members.length > 0) {
     if (groupId && !firstMount.current && isPrivate !== null) {
       if (filterMode === 'Recently active') {
         getMessages();
@@ -427,11 +418,6 @@ export const GroupMail = ({
       if (groupData && Array.isArray(groupData?.members)) {
         for (const member of groupData.members) {
           if (member.member) {
-            // const res = await getNameInfo(member.member);
-            // const resAddress = await qortalRequest({
-            //   action: "GET_ACCOUNT_DATA",
-            //   address: member.member,
-            // });
             const name = res;
             const publicKey = resAddress.publicKey;
             if (name) {
@@ -464,16 +450,6 @@ export const GroupMail = ({
     },
     [filterMode]
   );
-
-  // useEffect(()=> {
-  //   if(user?.name){
-  //     const threads = JSON.parse(
-  //       localStorage.getItem(`qmail_threads_viewedtimestamp_${user.name}`) || "{}"
-  //     );
-  //     setViewedThreads(threads)
-
-  //   }
-  // }, [user?.name, currentThread])
 
   const handleCloseThreadFilterList = () => {
     setIsOpenFilterList(false);
@@ -596,7 +572,7 @@ export const GroupMail = ({
             padding: '0px',
           }}
         >
-          <InstanceListHeader></InstanceListHeader>
+          <InstanceListHeader />
           <InstanceListContainer>
             {filterOptions?.map((filter) => {
               return (
@@ -621,6 +597,7 @@ export const GroupMail = ({
                       />
                     )}
                   </InstanceListContainerRowCheck>
+
                   <InstanceListContainerRowMain>
                     <InstanceListContainerRowMainP>
                       {filter}
@@ -630,9 +607,10 @@ export const GroupMail = ({
               );
             })}
           </InstanceListContainer>
-          <InstanceFooter></InstanceFooter>
+          <InstanceFooter />
         </InstanceListParent>
       </Popover>
+
       <ThreadContainerFullWidth>
         <ThreadContainer>
           <Box
@@ -674,7 +652,9 @@ export const GroupMail = ({
               )}
             </ComposeContainerBlank>
           </Box>
+
           <Spacer height="30px" />
+
           <Box
             sx={{
               alignItems: 'center',
@@ -700,10 +680,12 @@ export const GroupMail = ({
               viewedThreads[
                 `qmail_threads_${thread?.threadData?.groupId}_${thread?.threadId}`
               ];
+
             const shouldAppearLighter =
               hasViewedRecent &&
               filterMode === 'Recently active' &&
               thread?.threadData?.createdAt < hasViewedRecent?.timestamp;
+
             return (
               <SingleThreadParent
                 sx={{
@@ -771,13 +753,17 @@ export const GroupMail = ({
                     >
                       <ThreadSingleLastMessageP>
                         <ThreadSingleLastMessageSpanP>
-                          last message:{' '}
+                          {t('group:last_message', {
+                            postProcess: 'capitalize',
+                          })}
+                          :{' '}
                         </ThreadSingleLastMessageSpanP>
                         {formatDate(thread?.created)}
                       </ThreadSingleLastMessageP>
                     </div>
                   )}
                 </div>
+
                 <CustomButton
                   onClick={() => {
                     setTimeout(() => {
@@ -834,6 +820,7 @@ export const GroupMail = ({
           </Box>
         </ThreadContainer>
       </ThreadContainerFullWidth>
+
       <LoadingSnackbar
         open={isLoading}
         info={{

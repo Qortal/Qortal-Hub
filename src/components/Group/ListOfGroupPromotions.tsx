@@ -51,6 +51,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
+
+const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+const uid = new ShortUniqueId({ length: 8 });
+
 export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
@@ -65,13 +70,11 @@ export function utf8ToBase64(inputString: string): string {
   return base64String;
 }
 
-const uid = new ShortUniqueId({ length: 8 });
-
 export function getGroupId(str) {
   const match = str.match(/group-(\d+)-/);
   return match ? match[1] : null;
 }
-const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 export const ListOfGroupPromotions = () => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null);
@@ -98,7 +101,8 @@ export const ListOfGroupPromotions = () => {
   const setTxList = useSetAtom(txListAtom);
 
   const theme = useTheme();
-  const listRef = useRef();
+  const { t } = useTranslation(['core', 'group']);
+  const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
     getItemKey: React.useCallback(
@@ -120,6 +124,7 @@ export const ListOfGroupPromotions = () => {
       console.log(error);
     }
   }, []);
+
   const getPromotions = useCallback(async () => {
     try {
       setPromotionTimeInterval(Date.now());
@@ -135,6 +140,7 @@ export const ListOfGroupPromotions = () => {
       let data: any[] = [];
       const uniqueGroupIds = new Set();
       const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
           const name = await requestQueuePromos.enqueue(async () => {
@@ -213,6 +219,7 @@ export const ListOfGroupPromotions = () => {
     setPopoverAnchor(null);
     setOpenPopoverIndex(null);
   };
+
   const publishPromo = async () => {
     try {
       setIsLoadingPublish(true);
@@ -235,9 +242,12 @@ export const ListOfGroupPromotions = () => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
-      }); // TODO translate
+      });
       setInfoSnack({
         type: 'success',
         message:
@@ -264,7 +274,10 @@ export const ListOfGroupPromotions = () => {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'JOIN_GROUP',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingJoinGroup(true);
@@ -331,6 +344,7 @@ export const ListOfGroupPromotions = () => {
       });
       setIsLoadingJoinGroup(false);
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingJoinGroup(false);
     }
@@ -339,30 +353,30 @@ export const ListOfGroupPromotions = () => {
   return (
     <Box
       sx={{
-        width: '100%',
-        display: 'flex',
-        marginTop: '20px',
-        flexDirection: 'column',
         alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
         justifyContent: 'center',
+        marginTop: '20px',
+        width: '100%',
       }}
     >
       <Box
         sx={{
           display: 'flex',
           gap: '20px',
-          width: '100%',
           justifyContent: 'space-between',
+          width: '100%',
         }}
       >
         <ButtonBase
           sx={{
+            alignSelf: isExpanded && 'flex-start',
             display: 'flex',
             flexDirection: 'row',
-            padding: `0px ${isExpanded ? '24px' : '20px'}`,
             gap: '10px',
             justifyContent: 'flex-start',
-            alignSelf: isExpanded && 'flex-start',
+            padding: `0px ${isExpanded ? '24px' : '20px'}`,
           }}
           onClick={() => setIsExpanded((prev) => !prev)}
         >
@@ -374,6 +388,7 @@ export const ListOfGroupPromotions = () => {
             Group promotions{' '}
             {promotions.length > 0 && ` (${promotions.length})`}
           </Typography>
+
           {isExpanded ? (
             <ExpandLessIcon
               sx={{
@@ -400,19 +415,19 @@ export const ListOfGroupPromotions = () => {
         <>
           <Box
             sx={{
-              width: '750px',
-              maxWidth: '90%',
               display: 'flex',
               flexDirection: 'column',
+              maxWidth: '90%',
               padding: '0px 20px',
+              width: '750px',
             }}
           >
             <Box
               sx={{
-                width: '100%',
+                alignItems: 'center',
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'center',
+                width: '100%',
               }}
             >
               <Typography

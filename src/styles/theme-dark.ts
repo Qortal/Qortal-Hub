@@ -48,6 +48,7 @@ export const darkThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
@@ -55,14 +56,22 @@ export const darkThemeOptions: ThemeOptions = {
           '--bg-primary': 'rgba(31, 32, 35, 1)',
           '--bg-2': 'rgb(39, 40, 44)',
           '--primary-main': theme.palette.primary.main,
+          '--text-primary': theme.palette.text.primary,
+          '--text-secondary': theme.palette.text.secondary,
+          '--background-default': theme.palette.background.default,
+          '--background-paper': theme.palette.background.paper,
+          '--background-surface': theme.palette.background.surface,
         },
+
         '*, *::before, *::after': {
           boxSizing: 'border-box',
         },
+
         html: {
           padding: 0,
           margin: 0,
         },
+
         body: {
           padding: 0,
           margin: 0,
@@ -95,6 +104,7 @@ export const darkThemeOptions: ThemeOptions = {
         },
       }),
     },
+
     MuiIcon: {
       defaultProps: {
         style: {
@@ -103,6 +113,7 @@ export const darkThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiDialog: {
       styleOverrides: {
         paper: {
@@ -110,6 +121,7 @@ export const darkThemeOptions: ThemeOptions = {
         },
       },
     },
+
     MuiPopover: {
       styleOverrides: {
         paper: {

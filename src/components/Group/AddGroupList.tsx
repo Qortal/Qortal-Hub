@@ -48,7 +48,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);
@@ -113,7 +113,8 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       const fee = await getFee('JOIN_GROUP');
 
       await show({
-        message: t('group:question.join_group', {
+        message: t('group:question.perform_transaction', {
+          action: 'JOIN_GROUP',
           postProcess: 'capitalize',
         }),
         publishFee: fee.fee + ' QORT',
@@ -157,8 +158,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   {
                     ...response,
                     type: 'joined-group-request',
-                    label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Requested to join Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_request', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
+                    labelDone: t('group:message.success.group_join_outcome', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
                     done: false,
                     groupId,
                   },

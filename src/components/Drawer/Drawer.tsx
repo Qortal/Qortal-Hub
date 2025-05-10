@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
+
 export const DrawerComponent = ({ open, setOpen, children }) => {
   const toggleDrawer = (newOpen: boolean) => () => {
     setOpen(newOpen);

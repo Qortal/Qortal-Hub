@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -18,7 +12,6 @@ import {
   ComposeP,
   GroupContainer,
   GroupNameP,
-  MailIconImg,
   ShowMessageReturnButton,
   SingleThreadParent,
   ThreadContainer,
@@ -222,7 +215,7 @@ export const Thread = ({
     }
   };
 
-  const getMailMessages = React.useCallback(
+  const getMailMessages = useCallback(
     async (groupInfo: any, before, after, isReverse, groupId) => {
       try {
         setTempPublishedList([]);
@@ -328,7 +321,7 @@ export const Thread = ({
     },
     [messages, secretKey]
   );
-  const getMessages = React.useCallback(async () => {
+  const getMessages = useCallback(async () => {
     if (
       !currentThread ||
       (!secretKey && isPrivate) ||
@@ -410,7 +403,7 @@ export const Thread = ({
 
   const interval = useRef<any>(null);
 
-  const checkNewMessages = React.useCallback(
+  const checkNewMessages = useCallback(
     async (groupInfo: any) => {
       try {
         let threadId = groupInfo.threadId;
@@ -494,7 +487,7 @@ export const Thread = ({
     firstMount.current = true;
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     subscribeToEvent('threadFetchMode', threadFetchModeFunc);
 
     return () => {
@@ -656,6 +649,7 @@ export const Thread = ({
         <div ref={threadBeginningRef} />
         <ThreadContainer>
           <Spacer height={'30px'} />
+
           <Box
             sx={{
               alignItems: 'center',
@@ -715,6 +709,7 @@ export const Thread = ({
             >
               {t('core:page.previous', { postProcess: 'capitalize' })}
             </Button>
+
             <Button
               sx={{
                 textTransformation: 'capitalize',
@@ -733,6 +728,7 @@ export const Thread = ({
             >
               {t('core:page.next', { postProcess: 'capitalize' })}
             </Button>
+
             <Button
               sx={{
                 textTransformation: 'capitalize',
@@ -1006,6 +1002,7 @@ export const Thread = ({
               >
                 {t('core:page.first', { postProcess: 'capitalize' })}
               </Button>
+
               <Button
                 sx={{
                   textTransformation: 'capitalize',
@@ -1024,6 +1021,7 @@ export const Thread = ({
               >
                 {t('core:page.previous', { postProcess: 'capitalize' })}
               </Button>
+
               <Button
                 sx={{
                   textTransformation: 'capitalize',
@@ -1042,6 +1040,7 @@ export const Thread = ({
               >
                 {t('core:page.next', { postProcess: 'capitalize' })}
               </Button>
+
               <Button
                 sx={{
                   textTransformation: 'capitalize',
@@ -1061,12 +1060,14 @@ export const Thread = ({
                 {t('core:page.last', { postProcess: 'capitalize' })}
               </Button>
             </Box>
+
             <Spacer height="30px" />
           </Box>
 
           <div ref={containerRef} />
         </ThreadContainer>
       </ThreadContainerFullWidth>
+
       <LoadingSnackbar
         open={isLoading}
         info={{

@@ -180,7 +180,7 @@ export const AppsDevModeNavBar = () => {
           >
             <RefreshIcon
               sx={{
-                color: 'rgba(250, 250, 250, 0.5)',
+                color: theme.palette.text.primary,
                 width: '40px',
                 height: 'auto',
               }}

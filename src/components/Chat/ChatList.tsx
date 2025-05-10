@@ -23,7 +23,7 @@ export const ChatList = ({
   hasSecretKey,
   isPrivate,
 }) => {
-  const parentRef = useRef();
+  const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);

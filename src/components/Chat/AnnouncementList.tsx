@@ -18,7 +18,7 @@ export const AnnouncementList = ({
   loadMore,
   myName,
 }) => {
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
 
   useEffect(() => {

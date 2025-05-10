@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { supportedLanguages } from '../../../i18n';
-import { Tooltip, useTheme } from '@mui/material';
+import { supportedLanguages } from '../../i18n/i18n';
+import {
+  FormControl,
+  MenuItem,
+  Select,
+  Tooltip,
+  useTheme,
+} from '@mui/material';
 
 const LanguageSelector = () => {
   const { i18n, t } = useTranslation(['core']);
@@ -19,20 +25,6 @@ const LanguageSelector = () => {
   const { name, flag } =
     supportedLanguages[currentLang] || supportedLanguages['en'];
 
-  // Detect clicks outside the component
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (selectorRef.current && !selectorRef.current.contains(event.target)) {
-        setShowSelect(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
   return (
     <div
       ref={selectorRef}
@@ -44,33 +36,13 @@ const LanguageSelector = () => {
         position: 'absolute',
       }}
     >
-      <Tooltip
-        title={t('core:action.change_language', {
-          postProcess: 'capitalize',
-        })}
-      >
-        {showSelect ? (
-          <select
-            style={{
-              fontSize: '1rem',
-              border: '2px',
-              background: theme.palette.background.default,
-              color: theme.palette.text.primary,
-              cursor: 'pointer',
-              position: 'relative',
-              bottom: '7px',
-            }}
-            value={currentLang}
-            onChange={handleChange}
-            autoFocus
-          >
-            {Object.entries(supportedLanguages).map(([code, { name }]) => (
-              <option key={code} value={code}>
-                {code.toUpperCase()} - {name}
-              </option>
-            ))}
-          </select>
-        ) : (
+      {!showSelect && (
+        <Tooltip
+          key={currentLang}
+          title={t('core:action.change_language', {
+            postProcess: 'capitalize',
+          })}
+        >
           <button
             onClick={() => setShowSelect(true)}
             style={{
@@ -81,10 +53,36 @@ const LanguageSelector = () => {
             }}
             aria-label={`Current language: ${name}`}
           >
-            {showSelect ? undefined : flag}
+            {flag}
           </button>
-        )}
-      </Tooltip>
+        </Tooltip>
+      )}
+
+      {showSelect && (
+        <FormControl
+          size="small"
+          sx={{
+            minWidth: 120,
+            backgroundColor: theme.palette.background.paper,
+          }}
+        >
+          <Select
+            open
+            labelId="language-select-label"
+            id="language-select"
+            value={currentLang}
+            onChange={handleChange}
+            autoFocus
+            onClose={() => setShowSelect(false)}
+          >
+            {Object.entries(supportedLanguages).map(([code, { name }]) => (
+              <MenuItem key={code} value={code}>
+                {code.toUpperCase()} – {name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
     </div>
   );
 };
