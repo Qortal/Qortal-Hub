@@ -5,6 +5,7 @@
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
+    "cancel_invitation": "cancel invitation",
     "change": "change",
     "change_language": "change language",
     "choose": "choose",
@@ -48,8 +49,11 @@
     "publish": "publish fee"
   },
   "general_settings": "general settings",
-  "invite_list": "invite list",
   "last_height": "last height",
+  "list": {
+    "invite": "invite list",
+    "join_request": "join request list"
+  },
   "loading": "loading...",
   "loading_posts": "loading posts... please wait.",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",

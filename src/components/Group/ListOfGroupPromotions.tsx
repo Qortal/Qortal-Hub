@@ -140,6 +140,7 @@ export const ListOfGroupPromotions = () => {
       let data: any[] = [];
       const uniqueGroupIds = new Set();
       const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
           const name = await requestQueuePromos.enqueue(async () => {
@@ -241,9 +242,12 @@ export const ListOfGroupPromotions = () => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
-      }); // TODO translate
+      });
       setInfoSnack({
         type: 'success',
         message:

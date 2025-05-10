@@ -264,7 +264,7 @@ export const UserListOfInvites = ({
       }}
     >
       <p>
-        {t('core:invite_list', {
+        {t('core:list.invite', {
           postProcess: 'capitalize',
         })}
       </p>

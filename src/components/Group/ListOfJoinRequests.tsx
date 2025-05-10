@@ -15,11 +15,12 @@ import {
   List,
 } from 'react-virtualized';
 import { getNameInfo } from './Group';
-import { getBaseApi, getFee } from '../../background';
+import { getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
 import { txListAtom } from '../../atoms/global';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -59,11 +60,11 @@ export const ListOfJoinRequests = ({
 }) => {
   const [invites, setInvites] = useState([]);
   const [txList, setTxList] = useAtom(txListAtom);
-
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [isLoadingAccept, setIsLoadingAccept] = useState(false);
+  const { t } = useTranslation(['core', 'group']);
 
   const getInvites = async (groupId) => {
     try {
@@ -93,7 +94,8 @@ export const ListOfJoinRequests = ({
 
   const handleAcceptJoinRequest = async (address) => {
     try {
-      const fee = await getFee('GROUP_INVITE'); // TODO translate
+      const fee = await getFee('GROUP_INVITE');
+
       await show({
         message: t('group:question.perform_transaction', {
           action: 'GROUP_INVITE',
@@ -101,7 +103,9 @@ export const ListOfJoinRequests = ({
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingAccept(true);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('inviteToGroup', {
@@ -114,19 +118,23 @@ export const ListOfJoinRequests = ({
               setIsLoadingAccept(false);
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully accepted join request. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success,group_join', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
               res(response);
-
               setTxList((prev) => [
                 {
                   ...response,
                   type: 'join-request-accept',
-                  label: `Accepted join request: awaiting confirmation`,
-                  labelDone: `User successfully joined!`,
+                  label: t('group:message.success,invitation_request', {
+                    postProcess: 'capitalize',
+                  }),
+                  labelDone: t('group:message.success,user_joined', {
+                    postProcess: 'capitalize',
+                  }),
                   done: false,
                   groupId,
                   qortalAddress: address,
@@ -147,13 +155,16 @@ export const ListOfJoinRequests = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error?.message || 'An error occurred',
+              message:
+                error?.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingAccept(false);
     }
@@ -161,13 +172,15 @@ export const ListOfJoinRequests = ({
 
   const rowRenderer = ({ index, key, parent, style }) => {
     const member = invites[index];
-    const findJoinRequsetInTxList = txList?.find(
+    const findJoinRequestInTxList = txList?.find(
       (tx) =>
         tx?.groupId === groupId &&
         tx?.qortalAddress === member?.joiner &&
         tx?.type === 'join-request-accept'
     );
-    if (findJoinRequsetInTxList) return null;
+
+    if (findJoinRequestInTxList) return null;
+
     return (
       <CellMeasurer
         key={key}
@@ -210,10 +223,11 @@ export const ListOfJoinRequests = ({
                     variant="contained"
                     onClick={() => handleAcceptJoinRequest(member?.joiner)}
                   >
-                    Accept
+                    {t('core:action.accept', { postProcess: 'capitalize' })}
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -238,7 +252,7 @@ export const ListOfJoinRequests = ({
 
   return (
     <div>
-      <p>Join request list</p>
+      <p>{t('core:list.join_request', { postProcess: 'capitalize' })}</p>
       <div
         style={{
           position: 'relative',

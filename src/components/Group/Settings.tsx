@@ -133,7 +133,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {

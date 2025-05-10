@@ -31,6 +31,7 @@
     "type": "group type"
   },
   "invitation_expiry": "invitation Expiry Time",
+  "invitees_list": "invitees list",
   "join_requests": "join requests",
   "question": {
     "perform_transaction": "would you like to perform a {{action}} transaction?",
@@ -72,10 +73,13 @@
       "group_join_label": "joined group {{name}}: success!",
       "group_join_request": "requested to join Group {{group_name}}: awaiting confirmation",
       "group_join_outcome": "requested to join Group {{group_name}}: success!",
+      "invitation_cancellation": "successfully canceled invitation. It may take a couple of minutes for the changes to propagate",
+      "invitation_request": "accepted join request: awaiting confirmation",
       "loading_threads": "loading threads... please wait.",
       "post_creation": "successfully created post. It may take some time for the publish to propagate",
       "thread_creation": "successfully created thread. It may take some time for the publish to propagate",
-      "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate"
+      "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate",
+      "user_joined": "user successfully joined!"
     }
   }
 }
