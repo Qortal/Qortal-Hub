@@ -1,4 +1,14 @@
-import * as React from 'react';
+import {
+  forwardRef,
+  Fragment,
+  ReactElement,
+  Ref,
+  SyntheticEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
@@ -25,6 +35,7 @@ import { Spacer } from '../../common/Spacer';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 function a11yProps(index: number) {
   return {
@@ -33,37 +44,35 @@ function a11yProps(index: number) {
   };
 }
 
-const Transition = React.forwardRef(function Transition(
+const Transition = forwardRef(function Transition(
   props: TransitionProps & {
-    children: React.ReactElement;
+    children: ReactElement;
   },
-  ref: React.Ref<unknown>
+  ref: Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
 export const ManageMembers = ({
-  address,
   open,
   setOpen,
   selectedGroup,
-
   isAdmin,
   isOwner,
 }) => {
-  const [membersWithNames, setMembersWithNames] = React.useState([]);
-  const [tab, setTab] = React.useState('create');
-  const [value, setValue] = React.useState(0);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [isLoadingMembers, setIsLoadingMembers] = React.useState(false);
-  const [isLoadingLeave, setIsLoadingLeave] = React.useState(false);
-  const [groupInfo, setGroupInfo] = React.useState(null);
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+  const [membersWithNames, setMembersWithNames] = useState([]);
+  const [value, setValue] = useState(0);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [isLoadingLeave, setIsLoadingLeave] = useState(false);
+  const [groupInfo, setGroupInfo] = useState(null);
+  const handleChange = (event: SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
   const theme = useTheme();
-  const { show } = React.useContext(MyContext);
+  const { t } = useTranslation(['core', 'group']);
+  const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
 
   const handleClose = () => {
@@ -73,7 +82,7 @@ export const ManageMembers = ({
   const handleLeaveGroup = async () => {
     try {
       setIsLoadingLeave(true);
-      const fee = await getFee('LEAVE_GROUP'); // TODO translate
+      const fee = await getFee('LEAVE_GROUP');
       await show({
         message: t('group:question.perform_transaction', {
           action: 'LEAVE_GROUP',
@@ -93,8 +102,14 @@ export const ManageMembers = ({
                 {
                   ...response,
                   type: 'leave-group',
-                  label: `Left Group ${selectedGroup?.groupName}: awaiting confirmation`,
-                  labelDone: `Left Group ${selectedGroup?.groupName}: success!`,
+                  label: t('group:message.success.group_leave_name', {
+                    group_name: selectedGroup?.groupName,
+                    postProcess: 'capitalize',
+                  }),
+                  labelDone: t('group:message.success.group_leave_label', {
+                    group_name: selectedGroup?.groupName,
+                    postProcess: 'capitalize',
+                  }),
                   done: false,
                   groupId: selectedGroup?.groupId,
                 },
@@ -103,8 +118,9 @@ export const ManageMembers = ({
               res(response);
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully requested to leave group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_leave', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               return;
@@ -112,7 +128,10 @@ export const ManageMembers = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -122,7 +141,7 @@ export const ManageMembers = ({
     }
   };
 
-  const getMembersWithNames = React.useCallback(async (groupId) => {
+  const getMembersWithNames = useCallback(async (groupId) => {
     try {
       setIsLoadingMembers(true);
       const res = await getGroupMembers(groupId);
@@ -153,7 +172,7 @@ export const ManageMembers = ({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedGroup?.groupId) {
       getMembers(selectedGroup?.groupId);
       getGroupInfo(selectedGroup?.groupId);
@@ -164,7 +183,7 @@ export const ManageMembers = ({
     setValue(4);
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     subscribeToEvent('openGroupJoinRequest', openGroupJoinRequestFunc);
 
     return () => {
@@ -173,7 +192,7 @@ export const ManageMembers = ({
   }, []);
 
   return (
-    <React.Fragment>
+    <Fragment>
       <Dialog
         fullScreen
         open={open}
@@ -188,18 +207,20 @@ export const ManageMembers = ({
         >
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-              Manage Members
+              {t('group:action.manage_members', { postProcess: 'capitalize' })}
             </Typography>
+
             <IconButton
-              edge="start"
-              color="inherit"
-              onClick={handleClose}
               aria-label="close"
+              color="inherit"
+              edge="start"
+              onClick={handleClose}
             >
               <CloseIcon />
             </IconButton>
           </Toolbar>
         </AppBar>
+
         <Box
           sx={{
             bgcolor: theme.palette.background.default,
@@ -288,12 +309,19 @@ export const ManageMembers = ({
             }}
           >
             <Box>
-              <Typography>GroupId: {groupInfo?.groupId}</Typography>
-
-              <Typography>GroupName: {groupInfo?.groupName}</Typography>
+              <Typography>
+                {t('group:group.id', { postProcess: 'capitalize' })}:{' '}
+                {groupInfo?.groupId}
+              </Typography>
 
               <Typography>
-                Number of members: {groupInfo?.memberCount}
+                {t('group:group.name', { postProcess: 'capitalize' })}:{' '}
+                {groupInfo?.groupName}
+              </Typography>
+
+              <Typography>
+                {t('group:group.member_number', { postProcess: 'capitalize' })}:{' '}
+                {groupInfo?.memberCount}
               </Typography>
 
               <ButtonBase
@@ -305,7 +333,11 @@ export const ManageMembers = ({
                   await navigator.clipboard.writeText(link);
                 }}
               >
-                <InsertLinkIcon /> <Typography>Join Group Link</Typography>
+                <InsertLinkIcon />
+
+                <Typography>
+                  {t('group:join_link', { postProcess: 'capitalize' })}
+                </Typography>
               </ButtonBase>
             </Box>
 
@@ -319,10 +351,11 @@ export const ManageMembers = ({
                 variant="contained"
                 onClick={handleLeaveGroup}
               >
-                Leave Group
+                {t('group:action.leave_group', { postProcess: 'capitalize' })}
               </LoadingButton>
             )}
           </Card>
+
           {value === 0 && (
             <Box
               sx={{
@@ -335,7 +368,7 @@ export const ManageMembers = ({
                 variant="contained"
                 onClick={() => getMembersWithNames(selectedGroup?.groupId)}
               >
-                Load members with names
+                {t('group:action.load_members', { postProcess: 'capitalize' })}
               </Button>
 
               <Spacer height="10px" />
@@ -351,6 +384,7 @@ export const ManageMembers = ({
               />
             </Box>
           )}
+
           {value === 1 && (
             <Box
               sx={{
@@ -430,10 +464,12 @@ export const ManageMembers = ({
         <LoadingSnackbar
           open={isLoadingMembers}
           info={{
-            message: 'Loading member list with names... please wait.',
+            message: t('group:message.generic.loading_members', {
+              postProcess: 'capitalize',
+            }),
           }}
         />
       </Dialog>
-    </React.Fragment>
+    </Fragment>
   );
 };

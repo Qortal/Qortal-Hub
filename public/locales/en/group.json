@@ -12,7 +12,10 @@
     "join_group": "join group",
     "kick_member": "kick member from group",
     "invite_member": "invite member",
+    "leave_group": "leave group",
+    "load_members": "load members with names",
     "make_admin": "make an admin",
+    "manage_members": "manage members",
     "refetch_page": "refetch page",
     "remove_admin": "remove as admin",
     "return_to_thread": "return to threads"
@@ -27,6 +30,7 @@
   "group": {
     "closed": "closed (private) - users need permission to join",
     "description": "description of group",
+    "id": "group id",
     "invites": "group invites",
     "management": "group management",
     "member_number": "number of members",
@@ -36,11 +40,8 @@
   },
   "invitation_expiry": "invitation Expiry Time",
   "invitees_list": "invitees list",
+  "join_link": "join group link",
   "join_requests": "join requests",
-  "question": {
-    "perform_transaction": "would you like to perform a {{action}} transaction?",
-    "provide_thread": "please provide a thread title"
-  },
   "message": {
     "generic": {
       "already_in_group": "you are already in this group!",
@@ -48,6 +49,7 @@
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_invited_you": "{{group}} has invited you",
+      "loading_members": "loading member list with names... please wait.",
       "no_display": "nothing to display",
       "no_selection": "no group selected",
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
@@ -79,6 +81,9 @@
       "group_join_request": "requested to join Group {{group_name}}: awaiting confirmation",
       "group_join_outcome": "requested to join Group {{group_name}}: success!",
       "group_kick": "successfully kicked member from group. It may take a couple of minutes for the changes to propagate",
+      "group_leave": "successfully requested to leave group. It may take a couple of minutes for the changes to propagate",
+      "group_leave_name": "left group {{group_name}}: awaiting confirmation",
+      "group_leave_label": "left group {{name}}: success!",
       "group_member_admin": "successfully made member an admin. It may take a couple of minutes for the changes to propagate",
       "group_remove_member": "successfully removed member as an admin. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "successfully canceled invitation. It may take a couple of minutes for the changes to propagate",
@@ -89,5 +94,10 @@
       "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate",
       "user_joined": "user successfully joined!"
     }
-  }
+  },
+  "question": {
+    "perform_transaction": "would you like to perform a {{action}} transaction?",
+    "provide_thread": "please provide a thread title"
+  },
+  "thread_posts": "new thread posts"
 }
