@@ -5,6 +5,7 @@ interface NameListItem {
   name: string;
   address: string;
 }
+
 export const useNameSearch = (value: string, limit = 20) => {
   const [nameList, setNameList] = useState<NameListItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -48,6 +49,7 @@ export const useNameSearch = (value: string, limit = 20) => {
       clearTimeout(handler);
     };
   }, [value, limit, checkIfNameExisits]);
+
   return {
     isLoading,
     results: nameList,
