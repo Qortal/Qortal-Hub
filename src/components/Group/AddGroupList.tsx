@@ -158,8 +158,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   {
                     ...response,
                     type: 'joined-group-request',
-                    label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Requested to join Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_request', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
+                    labelDone: t('group:message.success.group_join_outcome', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
                     done: false,
                     groupId,
                   },

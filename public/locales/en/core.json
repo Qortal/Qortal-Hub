@@ -35,28 +35,17 @@
     "one": "one"
   },
   "description": "description",
+  "downloading_qdn": "downloading from QDN",
   "fee": {
     "payment": "payment fee",
     "publish": "publish fee"
   },
   "general_settings": "general settings",
-  "page": {
-    "last": "last",
-    "first": "first",
-    "next": "next",
-    "previous": "previous"
-  },
-  "downloading_qdn": "downloading from QDN",
   "invite_list": "invite list",
   "last_height": "last height",
   "loading": "loading...",
   "loading_posts": "loading posts... please wait.",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
-  "minting_status": "minting status",
-  "new_user": "are you a new user?",
-  "payment_notification": "payment notification",
-  "price": "price",
-  "q_mail": "q-mail",
   "message": {
     "error": {
       "generic": "an error occurred",
@@ -76,6 +65,17 @@
       "transfer": "the transfer was succesful!"
     }
   },
+  "minting_status": "minting status",
+  "new_user": "are you a new user?",
+  "page": {
+    "last": "last",
+    "first": "first",
+    "next": "next",
+    "previous": "previous"
+  },
+  "payment_notification": "payment notification",
+  "price": "price",
+  "q_mail": "q-mail",
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",

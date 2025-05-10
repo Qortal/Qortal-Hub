@@ -331,6 +331,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       postProcess: 'capitalize',
                     })}
                   </Label>
+
                   <Input
                     placeholder={t('group:group.name', {
                       postProcess: 'capitalize',
@@ -339,6 +340,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     onChange={(e) => setName(e.target.value)}
                   />
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',

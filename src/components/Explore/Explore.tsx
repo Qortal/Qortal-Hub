@@ -40,6 +40,7 @@ export const Explore = ({ setDesktopViewMode }) => {
           }}
           src={qTradeLogo}
         />
+
         <Typography
           sx={{
             fontSize: '1rem',
@@ -66,6 +67,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             color: theme.palette.text.primary,
           }}
         />
+
         <Typography
           sx={{
             fontSize: '1rem',
@@ -94,6 +96,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             color: theme.palette.text.primary,
           }}
         />
+
         <Typography
           sx={{
             fontSize: '1rem',
@@ -102,6 +105,7 @@ export const Explore = ({ setDesktopViewMode }) => {
           {t('tutorial:initial.general_chat', { postProcess: 'capitalize' })}
         </Typography>
       </ButtonBase>
+
       <ButtonBase
         sx={{
           '&:hover': { backgroundColor: theme.palette.background.paper },
@@ -119,6 +123,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             color: theme.palette.text.primary,
           }}
         />
+
         <Typography
           sx={{
             fontSize: '1rem',
