@@ -63,6 +63,7 @@ export const DownloadWallet = ({
       wallet,
       qortAddress: rawWallet.address0,
     });
+
     return {
       wallet,
       qortAddress: rawWallet.address0,

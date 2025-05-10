@@ -3,10 +3,8 @@ import Box from '@mui/material/Box';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import AppIcon from '../../assets/svgs/AppIcon.svg';
-
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useAtom } from 'jotai';
 

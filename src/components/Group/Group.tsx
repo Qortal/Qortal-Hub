@@ -9,20 +9,12 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
-import CampaignIcon from '@mui/icons-material/Campaign';
 import { AddGroup } from './AddGroup';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CreateIcon from '@mui/icons-material/Create';
 import {
   AuthenticatedContainerInnerRight,
@@ -52,7 +44,6 @@ import {
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
 import { useMessageQueue } from '../../MessageQueueContext';
-import { ContextMenu } from '../ContextMenu';
 import { HomeDesktop } from './HomeDesktop';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
@@ -63,7 +54,6 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './QMailMessages';
 import { AdminSpace } from '../Chat/AdminSpace';
-
 import {
   addressInfoControllerAtom,
   groupAnnouncementsAtom,
@@ -77,9 +67,6 @@ import {
   timestampEnterDataAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
-import PersonOffIcon from '@mui/icons-material/PersonOff';
-import LockIcon from '@mui/icons-material/Lock';
-import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
@@ -92,6 +79,7 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
     groupId
   }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
   const response = await fetch(url);
+
   if (!response.ok) {
     throw new Error('network error');
   }
@@ -100,9 +88,11 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const filterId = adminData.filter(
     (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
   );
+
   if (filterId?.length === 0) {
     return false;
   }
+
   const sortedData = filterId.sort((a: any, b: any) => {
     // Get the most recent date for both a and b
     const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
@@ -114,24 +104,18 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
 
   return sortedData[0];
 };
-
 interface GroupProps {
-  myAddress: string;
-  isFocused: boolean;
-  userInfo: any;
   balance: number;
+  isFocused: boolean;
+  myAddress: string;
+  userInfo: any;
 }
 
 export const timeDifferenceForNotificationChats = 900000;
-
 export const requestQueueMemberNames = new RequestQueueWithPromise(5);
 export const requestQueueAdminMemberNames = new RequestQueueWithPromise(5);
 
-// const audio = new Audio(chrome.runtime?.getURL("msg-not1.wav"));
-
 export const getGroupAdminsAddress = async (groupNumber: number) => {
-  // const validApi = await findUsableApi();
-
   const response = await fetch(
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
@@ -422,27 +406,24 @@ export const Group = ({
 
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [isLoadingNotifyAdmin, setIsLoadingNotifyAdmin] = React.useState(false);
-  const [isLoadingGroups, setIsLoadingGroups] = React.useState(true);
-  const [isLoadingGroup, setIsLoadingGroup] = React.useState(false);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [isLoadingNotifyAdmin, setIsLoadingNotifyAdmin] = useState(false);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isLoadingGroup, setIsLoadingGroup] = useState(false);
   const [firstSecretKeyInCreation, setFirstSecretKeyInCreation] =
-    React.useState(false);
-  const [groupSection, setGroupSection] = React.useState('home');
+    useState(false);
+  const [groupSection, setGroupSection] = useState('home');
   const [groupAnnouncements, setGroupAnnouncements] = useAtom(
     groupAnnouncementsAtom
   );
-
-  const [defaultThread, setDefaultThread] = React.useState(null);
-  const [isOpenDrawer, setIsOpenDrawer] = React.useState(false);
+  const [defaultThread, setDefaultThread] = useState(null);
+  const [isOpenDrawer, setIsOpenDrawer] = useState(false);
   const setIsOpenBlockedUserModal = useSetAtom(isOpenBlockedModalAtom);
-
-  const [hideCommonKeyPopup, setHideCommonKeyPopup] = React.useState(false);
-  const [isLoadingGroupMessage, setIsLoadingGroupMessage] = React.useState('');
-  const [drawerMode, setDrawerMode] = React.useState('groups');
+  const [hideCommonKeyPopup, setHideCommonKeyPopup] = useState(false);
+  const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
+  const [drawerMode, setDrawerMode] = useState('groups');
   const setMutedGroups = useSetAtom(mutedGroupsAtom);
-
   const [mobileViewMode, setMobileViewMode] = useState('home');
   const [mobileViewModeKeepOpen, setMobileViewModeKeepOpen] = useState('');
   const isFocusedRef = useRef(true);
@@ -531,7 +512,10 @@ export const Group = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -557,7 +541,10 @@ export const Group = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -586,7 +573,10 @@ export const Group = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -1106,7 +1096,10 @@ export const Group = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
       setInfoSnack({

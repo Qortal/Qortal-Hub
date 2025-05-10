@@ -1,8 +1,7 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import {
   Box,
-  Button,
   ButtonBase,
   CircularProgress,
   Dialog,
@@ -11,13 +10,14 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { CustomButton, CustomButtonAccept } from '../../styles/App-styles';
+import { CustomButtonAccept } from '../../styles/App-styles';
 import { getBaseApiReact, MyContext } from '../../App';
 import { getFee } from '../../background';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const JoinGroup = () => {
   const { show } = useContext(MyContext);
@@ -29,7 +29,9 @@ export const JoinGroup = () => {
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
+
   const handleJoinGroup = async (e) => {
     setGroupInfo(null);
     const groupId = e?.detail?.groupId;
@@ -41,6 +43,7 @@ export const JoinGroup = () => {
         const groupData = await response.json();
         setGroupInfo(groupData);
       } catch (error) {
+        console.log(error);
       } finally {
         setIsLoadingInfo(false);
       }
@@ -60,15 +63,22 @@ export const JoinGroup = () => {
       (item) => +item?.groupId === +groupInfo?.groupId
     );
   }, [memberGroups, groupInfo]);
+
   const joinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
+
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'JOIN_GROUP',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingJoinGroup(true);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('joinGroup', {
@@ -78,8 +88,9 @@ export const JoinGroup = () => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_join', {
+                  postProcess: 'capitalize',
+                }),
               });
 
               if (isOpen) {
@@ -87,8 +98,14 @@ export const JoinGroup = () => {
                   {
                     ...response,
                     type: 'joined-group',
-                    label: `Joined Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Joined Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
+                    labelDone: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
                     done: false,
                     groupId,
                   },
@@ -99,15 +116,20 @@ export const JoinGroup = () => {
                   {
                     ...response,
                     type: 'joined-group-request',
-                    label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Requested to join Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_request', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
+                    labelDone: t('group:message.success.group_join_outcome', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalize',
+                    }),
                     done: false,
                     groupId,
                   },
                   ...prev,
                 ]);
               }
-
               setOpenSnack(true);
               res(response);
               return;
@@ -123,7 +145,9 @@ export const JoinGroup = () => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
@@ -131,10 +155,12 @@ export const JoinGroup = () => {
       });
       setIsLoadingJoinGroup(false);
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingJoinGroup(false);
     }
   };
+
   return (
     <>
       <Dialog
@@ -146,32 +172,31 @@ export const JoinGroup = () => {
           {!groupInfo && (
             <Box
               sx={{
-                width: '325px',
-                height: '150px',
-                display: 'flex',
                 alignItems: 'center',
+                display: 'flex',
+                height: '150px',
                 justifyContent: 'center',
+                width: '325px',
               }}
             >
-              {' '}
               <CircularProgress
                 size={25}
                 sx={{
                   color: theme.palette.text.primary,
                 }}
-              />{' '}
+              />
             </Box>
           )}
           <Box
             sx={{
-              width: '325px',
-              height: 'auto',
-              maxHeight: '400px',
+              alignItems: 'center',
               display: !groupInfo ? 'none' : 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
               gap: '10px',
+              height: 'auto',
+              maxHeight: '400px',
               padding: '10px',
+              width: '325px',
             }}
           >
             <Typography
@@ -180,16 +205,20 @@ export const JoinGroup = () => {
                 fontWeight: 600,
               }}
             >
-              Group name: {` ${groupInfo?.groupName}`}
+              {t('group:group.name', { postProcess: 'capitalize' })}:{' '}
+              {` ${groupInfo?.groupName}`}
             </Typography>
+
             <Typography
               sx={{
                 fontSize: '15px',
                 fontWeight: 600,
               }}
             >
-              Number of members: {` ${groupInfo?.memberCount}`}
+              {t('group:group.member_number', { postProcess: 'capitalize' })}:{' '}
+              {` ${groupInfo?.memberCount}`}
             </Typography>
+
             {groupInfo?.description && (
               <Typography
                 sx={{
@@ -207,7 +236,9 @@ export const JoinGroup = () => {
                   fontWeight: 600,
                 }}
               >
-                *You are already in this group!
+                {t('group:message.generic.already_in_group', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             )}
             {!isInGroup && groupInfo?.isOpen === false && (
@@ -217,12 +248,14 @@ export const JoinGroup = () => {
                   fontWeight: 600,
                 }}
               >
-                *This is a closed/private group, so you will need to wait until
-                an admin accepts your request
+                {t('group:message.generic.closed_group', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             )}
           </Box>
         </DialogContent>
+
         <DialogActions>
           <ButtonBase
             onClick={() => {
@@ -242,7 +275,9 @@ export const JoinGroup = () => {
                 opacity: isInGroup ? 0.1 : 1,
               }}
             >
-              Join
+              {t('core:action.join', {
+                postProcess: 'capitalize',
+              })}
             </CustomButtonAccept>
           </ButtonBase>
 
@@ -255,7 +290,9 @@ export const JoinGroup = () => {
             }}
             onClick={() => setIsOpen(false)}
           >
-            Close
+            {t('core:action.close', {
+              postProcess: 'capitalize',
+            })}
           </CustomButtonAccept>
         </DialogActions>
       </Dialog>
@@ -269,14 +306,14 @@ export const JoinGroup = () => {
       {isLoadingJoinGroup && (
         <Box
           sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
+            alignItems: 'center',
             bottom: 0,
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'center',
+            left: 0,
+            position: 'absolute',
+            right: 0,
+            top: 0,
           }}
         >
           <FidgetSpinner

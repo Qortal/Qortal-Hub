@@ -1,5 +1,5 @@
-import { Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import {
@@ -19,7 +19,6 @@ export const WalletsAppWrapper = () => {
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
-
   const [selectedTab, setSelectedTab] = useState({
     tabId: '5558589',
     name: 'Q-Wallets',
@@ -60,17 +59,17 @@ export const WalletsAppWrapper = () => {
       {isOpen && (
         <Box
           sx={{
-            position: 'fixed',
-            height: '100vh',
-            width: '100vw',
-            backgroundColor: theme.palette.background.paper, // TODO: set color theme
-            zIndex: 100,
-            bottom: 0,
-            right: 0,
-            overflow: 'hidden',
+            backgroundColor: theme.palette.background.paper,
             borderTopLeftRadius: '10px',
             borderTopRightRadius: '10px',
+            bottom: 0,
             boxShadow: 4,
+            height: '100vh',
+            overflow: 'hidden',
+            position: 'fixed',
+            right: 0,
+            width: '100vw',
+            zIndex: 100,
           }}
         >
           <Box
@@ -85,11 +84,11 @@ export const WalletsAppWrapper = () => {
                 display: 'flex',
                 alignItems: 'center',
                 padding: '5px',
-
                 justifyContent: 'space-between',
               }}
             >
               <Typography>Q-Wallets</Typography>
+
               <ButtonBase onClick={handleClose}>
                 <CloseIcon
                   sx={{
@@ -108,6 +107,7 @@ export const WalletsAppWrapper = () => {
               ref={iframeRef}
               skipAuth={true}
             />
+
             <AppsNavBarParent>
               <AppsNavBarLeft
                 sx={{
@@ -126,6 +126,7 @@ export const WalletsAppWrapper = () => {
                 >
                   <NavBack />
                 </ButtonBase>
+
                 <ButtonBase
                   onClick={() => {
                     if (selectedTab?.refreshFunc) {

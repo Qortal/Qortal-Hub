@@ -11,12 +11,12 @@ import MailIcon from '@mui/icons-material/Mail';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { executeEvent } from '../../utils/events';
 import { CustomLoader } from '../../common/CustomLoader';
-
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
@@ -54,6 +54,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
 
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const getMails = useCallback(async () => {
     try {
@@ -89,7 +90,10 @@ export const QMailMessages = ({ userName, userAddress }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred'); // TODO translate
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -129,20 +133,20 @@ export const QMailMessages = ({ userName, userAddress }) => {
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <ButtonBase
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'row',
           gap: '10px',
-          padding: '0px 20px',
           justifyContent: 'flex-start',
+          padding: '0px 20px',
+          width: '322px',
         }}
         onClick={() => setIsExpanded((prev) => !prev)}
       >
@@ -151,8 +155,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
             fontSize: '1rem',
           }}
         >
-          Latest Q-Mails
+          {t('group:latest_mails', { postProcess: 'capitalize' })}
         </Typography>
+
         <MarkEmailUnreadIcon
           sx={{
             color: anyUnread
@@ -195,9 +200,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
           {loading && mails.length === 0 && (
             <Box
               sx={{
-                width: '100%',
                 display: 'flex',
                 justifyContent: 'center',
+                width: '100%',
               }}
             >
               <CustomLoader />
@@ -206,11 +211,11 @@ export const QMailMessages = ({ userName, userAddress }) => {
           {!loading && mails.length === 0 && (
             <Box
               sx={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
                 alignItems: 'center',
+                display: 'flex',
                 height: '100%',
+                justifyContent: 'center',
+                width: '100%',
               }}
             >
               <Typography
@@ -220,7 +225,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
                   color: theme.palette.primary,
                 }}
               >
-                Nothing to display
+                {t('group:message.generic.no_display', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Box>
           )}

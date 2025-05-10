@@ -1,4 +1,4 @@
-import React from 'react';
+import { FC } from 'react';
 import { Box, Modal, useTheme } from '@mui/material';
 
 interface MyModalProps {
@@ -9,7 +9,7 @@ interface MyModalProps {
   customStyles?: any;
 }
 
-export const ReusableModal: React.FC<MyModalProps> = ({
+export const ReusableModal: FC<MyModalProps> = ({
   open,
   onClose,
   onSubmit,

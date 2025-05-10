@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { useState } from 'react';
 import { ButtonBase, Typography, useTheme } from '@mui/material';
 import Box from '@mui/material/Box';
 import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
@@ -81,18 +81,18 @@ export const DesktopHeader = ({
   setGroupSection,
   isPrivate,
 }) => {
-  const [value, setValue] = React.useState(0);
+  const [value, setValue] = useState(0);
   const theme = useTheme();
   return (
     <Box
       sx={{
-        width: '100%',
-        display: 'flex',
         alignItems: 'center',
+        display: 'flex',
         height: '70px', // Footer height
-        zIndex: 1,
         justifyContent: 'space-between',
         padding: '10px',
+        width: '100%',
+        zIndex: 1,
       }}
     >
       <Box
@@ -126,11 +126,12 @@ export const DesktopHeader = ({
             : selectedGroup?.groupName}
         </Typography>
       </Box>
+
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '20px',
-          alignItems: 'center',
           visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile',
         }}
       >
@@ -219,6 +220,7 @@ export const DesktopHeader = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setOpenManageMembers(true);
@@ -226,17 +228,18 @@ export const DesktopHeader = ({
         >
           <IconWrapper
             color={theme.palette.text.secondary}
+            customHeight="55px"
             label="Members"
             selected={false}
-            customHeight="55px"
           >
             <MembersIcon
+              color={theme.palette.text.secondary}
               height={25}
               width={20}
-              color={theme.palette.text.secondary}
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setGroupSection('adminSpace');

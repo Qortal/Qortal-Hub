@@ -168,6 +168,7 @@ export const QortPrice = () => {
           )}
         </Box>
       </Tooltip>
+
       <Box
         sx={{
           display: 'flex',
@@ -198,6 +199,7 @@ export const QortPrice = () => {
           </Typography>
         )}
       </Box>
+
       <Tooltip
         title={
           <span style={{ fontSize: '14px', fontWeight: 700 }}>
