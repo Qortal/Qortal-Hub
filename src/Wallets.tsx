@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { Fragment, useContext, useEffect, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import Divider from '@mui/material/Divider';
@@ -32,6 +32,7 @@ import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './components';
 import { HtmlTooltip } from './ExtStates/NotAuthenticated';
 import { MyContext } from './App';
+import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
   return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
@@ -44,11 +45,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
   const { hasSeenGettingStarted } = useContext(MyContext);
-
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth']);
   const { isShow, onCancel, onOk, show } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -83,7 +84,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       }
 
       let error: any = null;
-      let uniqueInitialMap = new Map();
+      const uniqueInitialMap = new Map();
 
       // Only add a message if it doesn't already exist in the Map
       importedWallets.forEach((wallet) => {
@@ -92,7 +93,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           uniqueInitialMap.set(wallet?.address0, wallet);
         }
       });
+
       const data = Array.from(uniqueInitialMap.values());
+
       if (data && data?.length > 0) {
         const uniqueNewWallets = data.filter(
           (newWallet) =>
@@ -148,10 +151,19 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         setPassword('');
         setSeedError('');
       } else {
-        setSeedError('Could not create account.');
+        setSeedError(
+          t('auth:message.error.account_creation', {
+            postProcess: 'capitalize',
+          })
+        );
       }
     } catch (error) {
-      setSeedError(error?.message || 'Could not create account.');
+      setSeedError(
+        error?.message ||
+          t('auth:message.error.account_creation', {
+            postProcess: 'capitalize',
+          })
+      );
     } finally {
       setIsLoadingEncryptSeed(false);
     }
@@ -189,19 +201,29 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     <div>
       {wallets?.length === 0 || !wallets ? (
         <>
-          <Typography>No accounts saved</Typography>
+          <Typography>
+            {t('auth:message.generic.no_account', {
+              postProcess: 'capitalize',
+            })}
+          </Typography>
+
           <Spacer height="75px" />
         </>
       ) : (
         <>
-          <Typography>Your saved accounts</Typography>
+          <Typography>
+            {t('auth:message.generic.your_accounts', {
+              postProcess: 'capitalize',
+            })}
+          </Typography>
+
           <Spacer height="30px" />
         </>
       )}
 
       {rawWallet && (
         <Box>
-          <Typography>Selected Account:</Typography>
+          <Typography>Selected Account:</Typography> // TODO translate
           {rawWallet?.name && <Typography>{rawWallet.name}</Typography>}
           {rawWallet?.address0 && (
             <Typography>{rawWallet?.address0}</Typography>
@@ -249,7 +271,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         <HtmlTooltip
           disableHoverListener={hasSeenGettingStarted === true}
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
@@ -260,7 +282,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                 here to access it. This phrase is one of the ways to recover
                 your account.
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton
@@ -277,7 +299,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         <HtmlTooltip
           disableHoverListener={hasSeenGettingStarted === true}
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
@@ -288,7 +310,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                 already made, in order to login with them afterwards. You will
                 need access to your backup JSON file in order to do so.
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton
