@@ -16,6 +16,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
@@ -53,6 +54,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
 
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const getMails = useCallback(async () => {
     try {
@@ -88,7 +90,10 @@ export const QMailMessages = ({ userName, userAddress }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -145,13 +150,14 @@ export const QMailMessages = ({ userName, userAddress }) => {
         }}
         onClick={() => setIsExpanded((prev) => !prev)}
       >
-        <Typography // TODO translate
+        <Typography
           sx={{
             fontSize: '1rem',
           }}
         >
-          Latest Q-Mails
+          {t('group:latest_mails', { postProcess: 'capitalize' })}
         </Typography>
+
         <MarkEmailUnreadIcon
           sx={{
             color: anyUnread
@@ -194,9 +200,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
           {loading && mails.length === 0 && (
             <Box
               sx={{
-                width: '100%',
                 display: 'flex',
                 justifyContent: 'center',
+                width: '100%',
               }}
             >
               <CustomLoader />
@@ -205,11 +211,11 @@ export const QMailMessages = ({ userName, userAddress }) => {
           {!loading && mails.length === 0 && (
             <Box
               sx={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
                 alignItems: 'center',
+                display: 'flex',
                 height: '100%',
+                justifyContent: 'center',
+                width: '100%',
               }}
             >
               <Typography
@@ -219,7 +225,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
                   color: theme.palette.primary,
                 }}
               >
-                Nothing to display
+                {t('group:message.generic.no_display', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Box>
           )}
