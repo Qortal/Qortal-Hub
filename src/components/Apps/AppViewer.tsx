@@ -5,6 +5,7 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from './useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 export const AppViewer = React.forwardRef(
   ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
@@ -22,11 +23,13 @@ export const AppViewer = React.forwardRef(
       );
     const [url, setUrl] = useState('');
     const { themeMode } = useThemeContext();
+    const { i18n } = useTranslation(['core']);
+    const currentLang = i18n.language;
 
     useEffect(() => {
       if (app?.isPreview) return;
       if (isDevMode) {
-        setUrl(app?.url);
+        setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
         return;
       }
       let hasQueryParam = false;
@@ -35,14 +38,14 @@ export const AppViewer = React.forwardRef(
       }
 
       setUrl(
-        `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
       );
     }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview]);
 
     useEffect(() => {
       if (app?.isPreview && app?.url) {
         resetHistory();
-        setUrl(app.url);
+        setUrl(app.url + `&theme=${themeMode}&lang=${currentLang}`);
       }
     }, [app?.url, app?.isPreview]);
     const defaultUrl = useMemo(() => {
@@ -55,11 +58,14 @@ export const AppViewer = React.forwardRef(
         if (isDevMode) {
           resetHistory();
           if (!app?.isPreview || app?.isPrivate) {
-            setUrl(app?.url + `?time=${Date.now()}`);
+            setUrl(
+              app?.url +
+                `?time=${Date.now()}&theme=${themeMode}&lang=${currentLang}`
+            );
           }
           return;
         }
-        const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
         setUrl(constructUrl);
       }
     };
@@ -70,7 +76,7 @@ export const AppViewer = React.forwardRef(
       return () => {
         unsubscribeFromEvent('refreshApp', refreshAppFunc);
       };
-    }, [app, path, isDevMode]);
+    }, [app, path, isDevMode, themeMode, currentLang]);
 
     useEffect(() => {
       const iframe = iframeRef?.current;
@@ -86,6 +92,25 @@ export const AppViewer = React.forwardRef(
         console.error('Failed to send theme change to iframe:', err);
       }
     }, [themeMode]);
+
+    useEffect(() => {
+      const iframe = iframeRef?.current;
+      if (!iframe) return;
+
+      try {
+        const targetOrigin = new URL(iframe.src).origin;
+        iframe.contentWindow?.postMessage(
+          {
+            action: 'LANGUAGE_CHANGED',
+            language: currentLang,
+            requestedHandler: 'UI',
+          },
+          targetOrigin
+        );
+      } catch (err) {
+        console.error('Failed to send language change to iframe:', err);
+      }
+    }, [currentLang]);
 
     const removeTrailingSlash = (str) => str.replace(/\/$/, '');
 
@@ -181,12 +206,12 @@ export const AppViewer = React.forwardRef(
         } catch (error) {
           if (isDevMode) {
             setUrl(
-              `${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+              `${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
             );
             return;
           }
           setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
           );
           // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
         }
@@ -209,7 +234,7 @@ export const AppViewer = React.forwardRef(
           navigateBackAppFunc
         );
       };
-    }, [app, history]);
+    }, [app, history, themeMode, currentLang]);
 
     // Function to navigate back in iframe
     const navigateForwardInIframe = async () => {
