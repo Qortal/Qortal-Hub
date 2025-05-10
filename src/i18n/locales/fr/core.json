@@ -1,57 +1,112 @@
 {
-  "add": "ajouter",
-  "cancel": "annuler",
-  "choose": "choisir",
-  "close": "fermer",
-  "continue": "continuer",
+  "action": {
+    "add": "ajouter",
+    "accept": "accepter",
+    "backup_account": "sauvegarder le compte",
+    "backup_wallet": "sauvegarder le portefeuille",
+    "cancel": "annuler",
+    "cancel_invitation": "annuler l'invitation",
+    "change": "changer",
+    "change_language": "changer de langue",
+    "choose": "choisir",
+    "close": "fermer",
+    "continue": "continuer",
+    "continue_logout": "continuer la déconnexion",
+    "create_thread": "créer un fil",
+    "decline": "refuser",
+    "decrypt": "déchiffrer",
+    "edit": "modifier",
+    "export": "exporter",
+    "import": "importer",
+    "invite": "inviter",
+    "join": "rejoindre",
+    "logout": "se déconnecter",
+    "new": {
+      "post": "nouveau message",
+      "thread": "nouveau fil"
+    },
+    "notify": "notifier",
+    "post": "publier",
+    "post_message": "envoyer un message"
+  },
+  "admin": "administrateur",
   "core": {
     "block_height": "hauteur de bloc",
     "information": "informations du noyau",
     "peers": "pairs connectés",
     "version": "version du noyau"
   },
+  "ui": {
+    "version": "version de l'interface"
+  },
+  "count": {
+    "none": "aucun",
+    "one": "un"
+  },
   "description": "description",
-  "edit": "éditer",
-  "export": "exporter",
-  "import": "importer",
+  "downloading_qdn": "téléchargement depuis QDN",
+  "fee": {
+    "payment": "frais de paiement",
+    "publish": "frais de publication"
+  },
+  "general_settings": "paramètres généraux",
   "last_height": "dernière hauteur",
+  "list": {
+    "invite": "liste d'invitations",
+    "join_request": "liste des demandes d'adhésion",
+    "member": "liste des membres"
+  },
   "loading": "chargement...",
-  "logout": "se déconnecter",
-  "minting_status": "statut de frappe",
-  "payment_notification": "notification de paiement",
-  "price": "prix",
-  "q_mail": "q-mail",
-  "result": {
+  "loading_posts": "chargement des messages... veuillez patienter.",
+  "message_us": "veuillez nous contacter sur Telegram ou Discord si vous avez besoin de 4 QORT pour commencer à discuter sans limites",
+  "message": {
     "error": {
-      "generic": "une erreur s'est produite",
+      "generic": "une erreur est survenue",
       "incorrect_password": "mot de passe incorrect",
+      "missing_field": "champ manquant : {{ field }}",
       "save_qdn": "impossible d'enregistrer dans QDN"
     },
     "status": {
-      "minting": "(frappe en cours)",
-      "not_minting": "(pas de frappe)",
+      "minting": "(en cours de minage)",
+      "not_minting": "(non miné)",
       "synchronized": "synchronisé",
-      "synchronizing": "synchronisation en cours"
+      "synchronizing": "synchronisation"
     },
     "success": {
-      "publish_qdn": "publié avec succès dans QDN"
+      "order_submitted": "votre ordre d'achat a été envoyé",
+      "publish_qdn": "publié avec succès sur QDN",
+      "request_read": "j'ai lu cette demande",
+      "transfer": "le transfert a réussi !"
     }
   },
+  "minting_status": "état du minage",
+  "page": {
+    "last": "dernier",
+    "first": "premier",
+    "next": "suivant",
+    "previous": "précédent"
+  },
+  "payment_notification": "notification de paiement",
+  "price": "prix",
+  "q_mail": "q-mail",
+  "question": {
+    "new_user": "êtes-vous un nouvel utilisateur ?"
+  },
   "save_options": {
-    "no_pinned_changes": "vous n'avez actuellement aucune modification de vos applications épinglées",
-    "overwrite_changes": "l'application n'a pas pu télécharger vos applications épinglées existantes enregistrées dans QDN. Voulez-vous écraser ces modifications ?",
-    "overwrite_qdn": "écraser dans QDN",
-    "publish_qdn": "souhaitez-vous publier vos paramètres dans QDN (chiffré) ?",
+    "no_pinned_changes": "vous n'avez actuellement aucun changement dans vos applications épinglées",
+    "overwrite_changes": "l'application n'a pas pu télécharger vos applications épinglées enregistrées sur QDN. Voulez-vous écraser ces modifications ?",
+    "overwrite_qdn": "écraser sur QDN",
+    "publish_qdn": "voulez-vous publier vos paramètres sur QDN (chiffrés) ?",
     "qdn": "utiliser l'enregistrement QDN",
-    "register_name": "vous devez avoir un nom Qortal enregistré pour enregistrer vos applications épinglées dans QDN.",
-    "reset_pinned": "vous n'aimez pas vos modifications locales actuelles ? Voulez-vous réinitialiser les applications épinglées par défaut ?",
-    "reset_qdn": "vous n'aimez pas vos modifications locales actuelles ? Voulez-vous réinitialiser vos applications épinglées enregistrées dans QDN ?",
-    "revert_default": "revenir aux paramètres par défaut",
-    "revert_qdn": "revenir à QDN",
-    "save_qdn": "enregistrer dans QDN",
+    "register_name": "vous devez avoir un nom Qortal enregistré pour enregistrer vos applications épinglées sur QDN.",
+    "reset_pinned": "vous n'aimez pas vos changements locaux actuels ? Voulez-vous réinitialiser les applications par défaut ?",
+    "reset_qdn": "vous n'aimez pas vos changements locaux actuels ? Voulez-vous restaurer les applications enregistrées sur QDN ?",
+    "revert_default": "réinitialiser aux valeurs par défaut",
+    "revert_qdn": "restaurer depuis QDN",
+    "save_qdn": "enregistrer sur QDN",
     "save": "enregistrer",
-    "settings": "vous utilisez la méthode d'exportation/importation pour enregistrer les paramètres.",
-    "unsaved_changes": "vous avez des modifications non enregistrées de vos applications épinglées. Enregistrez-les dans QDN."
+    "settings": "vous utilisez la méthode d'exportation/importation pour sauvegarder les paramètres.",
+    "unsaved_changes": "vous avez des modifications non enregistrées dans vos applications épinglées. Enregistrez-les sur QDN."
   },
   "settings": "paramètres",
   "supply": "approvisionnement",
@@ -59,11 +114,18 @@
     "dark": "mode sombre",
     "light": "mode clair"
   },
+  "time": {
+    "day_one": "{{count}} jour",
+    "day_other": "{{count}} jours",
+    "hour_one": "{{count}} heure",
+    "hour_other": "{{count}} heures",
+    "minute_one": "{{count}} minute",
+    "minute_other": "{{count}} minutes"
+  },
   "title": "titre",
   "tutorial": "tutoriel",
   "user_lookup": "recherche d'utilisateur",
   "wallet": {
-    "backup_wallet": "sauvegarder le portefeuille",
     "wallet": "portefeuille",
     "wallet_other": "portefeuilles"
   },
