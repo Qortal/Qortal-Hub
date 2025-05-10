@@ -15,6 +15,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const inviteMember = async () => {
     try {
       const fee = await getFee('GROUP_INVITE');
+
       await show({
         message: t('group:question.perform_transaction', {
           action: 'GROUP_INVITE',
@@ -22,7 +23,9 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingInvite(true);
+
       if (!expiryTime || !value) return;
       new Promise((res, rej) => {
         window
@@ -42,7 +45,6 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               });
               setOpenSnack(true);
               res(response);
-
               setValue('');
               return;
             }
@@ -56,7 +58,11 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error?.message || 'An error occurred',
+              message:
+                error?.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalize',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -81,16 +87,21 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       }}
     >
       {t('group:action.invite_member', { postProcess: 'capitalize' })}
+
       <Spacer height="20px" />
+
       <Input
         value={value}
         placeholder="Name or address"
         onChange={(e) => setValue(e.target.value)}
       />
+
       <Spacer height="20px" />
+
       <Label>
         {t('group:invitation_expiry', { postProcess: 'capitalize' })}
       </Label>
+
       <Select
         labelId="demo-simple-select-label"
         id="demo-simple-select"
@@ -109,7 +120,9 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         <MenuItem value={1296000}>{t('core:time.day', { count: 15 })}</MenuItem>
         <MenuItem value={2592000}>{t('core:time.day', { count: 30 })}</MenuItem>
       </Select>
+
       <Spacer height="20px" />
+
       <LoadingButton
         variant="contained"
         loadingPosition="start"

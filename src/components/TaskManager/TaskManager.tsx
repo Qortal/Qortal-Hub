@@ -198,9 +198,11 @@ export const TaskManager = ({ getUserInfo }) => {
                 />
               )}
             </ListItemIcon>
+
             <ListItemText primary="Ongoing Transactions" />
             {open ? <ExpandLess /> : <ExpandMore />}
           </ListItemButton>
+
           <Collapse in={open} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
               {txList.map((item) => (

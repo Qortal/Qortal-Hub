@@ -446,7 +446,7 @@ export const AppsDevModeHome = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '5px',
-              }}
+              }} // TODO translate
             >
               <Label>Domain</Label>
               <Input

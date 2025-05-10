@@ -322,7 +322,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             sx={{
               display: 'flex',
               flexDirection: 'column',
-            }}
+            }} // TODO translate
           >
             <Label>Name</Label>
             <Input

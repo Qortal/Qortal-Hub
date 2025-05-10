@@ -371,7 +371,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   }}
                 >
                   <Label>
-                    {' '}
                     {t('group:group.type', {
                       postProcess: 'capitalize',
                     })}
@@ -428,6 +427,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         postProcess: 'capitalize',
                       })}
                     </Label>
+
                     <Select
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"

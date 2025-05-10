@@ -1,5 +1,6 @@
 {
   "action": {
+    "add_promotion": "add promotion",
     "ban": "ban member from group",
     "cancel_ban": "cancel ban",
     "copy_private_key": "copy private key",
@@ -16,9 +17,11 @@
     "load_members": "load members with names",
     "make_admin": "make an admin",
     "manage_members": "manage members",
+    "promote_group": "promote your group to non-members",
     "refetch_page": "refetch page",
     "remove_admin": "remove as admin",
-    "return_to_thread": "return to threads"
+    "return_to_thread": "return to threads",
+    "select_group": "select a group"
   },
   "advanced_options": "advanced options",
   "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
@@ -36,6 +39,9 @@
     "member_number": "number of members",
     "name": "group name",
     "open": "open (public)",
+    "private": "private group",
+    "promotions": "group promotions",
+    "public": "public group",
     "type": "group type"
   },
   "invitation_expiry": "invitation Expiry Time",
@@ -46,12 +52,16 @@
   "latest_mails": "latest Q-Mails",
   "message": {
     "generic": {
+      "admin_only": "only groups where you are an admin will be shown",
       "already_in_group": "you are already in this group!",
       "closed_group": "this is a closed/private group, so you will need to wait until an admin accepts your request",
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_invited_you": "{{group}} has invited you",
+      "invalid_data": "error loading content: Invalid Data",
+      "latest_promotion": "only the latest promotion from the week will be shown for your group.",
       "loading_members": "loading member list with names... please wait.",
+      "max_chars": " Max 200 characters. Publish Fee",
       "no_display": "nothing to display",
       "no_selection": "no group selected",
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
@@ -66,6 +76,7 @@
       "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
       "description_required": "please provide a description",
       "group_info": "cannot access group information",
+      "group_promotion": "error publishing the promotion. Please try again",
       "group_secret_key": "cannot get group secret key",
       "name_required": "please provide a name",
       "notify_admins": "try notifying an admin from the list of admins below:",
@@ -87,6 +98,7 @@
       "group_leave_name": "left group {{group_name}}: awaiting confirmation",
       "group_leave_label": "left group {{name}}: success!",
       "group_member_admin": "successfully made member an admin. It may take a couple of minutes for the changes to propagate",
+      "group_promotion": "successfully published promotion. It may take a couple of minutes for the promotion to appear",
       "group_remove_member": "successfully removed member as an admin. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "successfully canceled invitation. It may take a couple of minutes for the changes to propagate",
       "invitation_request": "accepted join request: awaiting confirmation",

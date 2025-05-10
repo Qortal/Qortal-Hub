@@ -152,7 +152,6 @@ export const AppsPrivate = ({ myName }) => {
       const object64 = await objectToBase64(objectToSave);
       const decryptedData = await window.sendMessage(
         'ENCRYPT_QORTAL_GROUP_DATA',
-
         {
           base64: object64,
           groupId: selectedGroup,
@@ -313,7 +312,7 @@ export const AppsPrivate = ({ myName }) => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '5px',
-                  }}
+                  }} // TODO translate
                 >
                   <Label>Select a group</Label>
                   <Label>Only private groups will be shown</Label>

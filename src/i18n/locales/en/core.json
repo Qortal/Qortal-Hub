@@ -27,7 +27,8 @@
     },
     "notify": "notify",
     "post": "post",
-    "post_message": "post message"
+    "post_message": "post message",
+    "publish": "publish"
   },
   "admin": "admin",
   "core": {
