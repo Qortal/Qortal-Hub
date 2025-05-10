@@ -118,27 +118,6 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
                           width: 'auto',
                         }}
                       >
-                        {/* <FileElement
-                        fileInfo={{ ...file, mimeTypeSaved: file?.type }}
-                        title={file?.filename}
-                        mode="mail"
-                        otherUser={message?.user}
-                      >
-                        <MailAttachmentImg src={AttachmentMailSVG} />
-
-                        <Typography
-                          sx={{
-                            fontSize: "16px",
-                            transition: '0.2s all',
-                            "&:hover": {
-                              color: 'rgba(255, 255, 255, 0.90)',
-                              textDecoration: 'underline'
-                            }
-                          }}
-                        >
-                          {file?.originalFilename || file?.filename}
-                        </Typography>
-                      </FileElement> */}
                         {message?.attachments?.length > 1 && isFirst && (
                           <Box
                             sx={{

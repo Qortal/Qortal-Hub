@@ -452,6 +452,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       <MenuItem value={100}>100%</MenuItem>
                     </Select>
                   </Box>
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -464,6 +465,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         postProcess: 'capitalize',
                       })}
                     </Label>
+
                     <Select
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
@@ -509,6 +511,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       </MenuItem>
                     </Select>
                   </Box>
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -521,6 +524,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         postProcess: 'capitalize',
                       })}
                     </Label>
+
                     <Select
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
@@ -564,6 +568,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     </Select>
                   </Box>
                 </Collapse>
+
                 <Box
                   sx={{
                     display: 'flex',

@@ -48,7 +48,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
   const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);

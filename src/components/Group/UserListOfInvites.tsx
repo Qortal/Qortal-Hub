@@ -64,7 +64,7 @@ export const UserListOfInvites = ({
   const { t } = useTranslation(['core', 'group']);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
 
   const getRequests = async () => {
     try {

@@ -102,7 +102,7 @@ export const ListOfGroupPromotions = () => {
 
   const theme = useTheme();
   const { t } = useTranslation(['core', 'group']);
-  const listRef = useRef();
+  const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
     getItemKey: React.useCallback(

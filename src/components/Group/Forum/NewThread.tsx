@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Input, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import {
@@ -8,7 +8,6 @@ import {
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
   NewMessageSendButton,
@@ -143,13 +142,13 @@ export const NewThread = ({
   isPrivate,
 }: NewMessageProps) => {
   const { t } = useTranslation(['core', 'group']);
-  const { show } = React.useContext(MyContext);
+  const { show } = useContext(MyContext);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [threadTitle, setThreadTitle] = useState<string>('');
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
   const editorRef = useRef(null);
   const theme = useTheme();
   const setEditorRef = (editorInstance) => {

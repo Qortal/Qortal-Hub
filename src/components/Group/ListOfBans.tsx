@@ -54,7 +54,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [bans, setBans] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
-  const listRef = useRef();
+  const listRef = useRef(null);
   const [isLoadingUnban, setIsLoadingUnban] = useState(false);
   const { t } = useTranslation(['core', 'group']);
 

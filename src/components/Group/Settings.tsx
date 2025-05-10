@@ -228,7 +228,6 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const { setOpenSnackGlobal, setInfoSnackCustom } = useContext(MyContext);
   const { t } = useTranslation(['core', 'group']);
 
