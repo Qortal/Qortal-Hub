@@ -1,69 +1,131 @@
 {
-  "add": "hinzufügen",
-  "cancel": "abbrechen",
-  "choose": "auswählen",
-  "close": "schließen",
-  "continue": "fortfahren",
+  "action": {
+    "add": "hinzufügen",
+    "accept": "akzeptieren",
+    "backup_account": "Konto sichern",
+    "backup_wallet": "Wallet sichern",
+    "cancel": "abbrechen",
+    "cancel_invitation": "Einladung abbrechen",
+    "change": "ändern",
+    "change_language": "Sprache ändern",
+    "choose": "wählen",
+    "close": "schließen",
+    "continue": "fortfahren",
+    "continue_logout": "mit dem Abmelden fortfahren",
+    "create_thread": "Thread erstellen",
+    "decline": "ablehnen",
+    "decrypt": "entschlüsseln",
+    "edit": "bearbeiten",
+    "export": "exportieren",
+    "import": "importieren",
+    "invite": "einladen",
+    "join": "beitreten",
+    "logout": "abmelden",
+    "new": {
+      "post": "neuer Beitrag",
+      "thread": "neuer Thread"
+    },
+    "notify": "benachrichtigen",
+    "post": "veröffentlichen",
+    "post_message": "Nachricht senden"
+  },
+  "admin": "Administrator",
   "core": {
     "block_height": "Blockhöhe",
     "information": "Kerninformationen",
     "peers": "verbundene Peers",
-    "version": "Kernversion"
+    "version": "Core-Version"
+  },
+  "ui": {
+    "version": "UI-Version"
+  },
+  "count": {
+    "none": "keine",
+    "one": "eins"
   },
   "description": "Beschreibung",
-  "edit": "bearbeiten",
-  "export": "exportieren",
-  "import": "importieren",
+  "downloading_qdn": "Herunterladen von QDN",
+  "fee": {
+    "payment": "Zahlungsgebühr",
+    "publish": "Veröffentlichungsgebühr"
+  },
+  "general_settings": "allgemeine Einstellungen",
   "last_height": "letzte Höhe",
-  "loading": "Lade...",
-  "logout": "abmelden",
-  "minting_status": "Präge-Status",
-  "payment_notification": "Zahlungsbenachrichtigung",
-  "price": "Preis",
-  "q_mail": "Q-Mail",
-  "result": {
+  "list": {
+    "invite": "Einladungsliste",
+    "join_request": "Beitrittsanfragenliste",
+    "member": "Mitgliederliste"
+  },
+  "loading": "Lädt...",
+  "loading_posts": "Beiträge werden geladen... bitte warten.",
+  "message_us": "Bitte kontaktiere uns über Telegram oder Discord, wenn du 4 QORT benötigst, um ohne Einschränkungen zu chatten",
+  "message": {
     "error": {
       "generic": "Ein Fehler ist aufgetreten",
-      "incorrect_password": "Falsches Passwort",
+      "incorrect_password": "falsches Passwort",
+      "missing_field": "fehlt: {{ field }}",
       "save_qdn": "Speichern in QDN nicht möglich"
     },
     "status": {
-      "minting": "(Prägung)",
-      "not_minting": "(keine Prägung)",
+      "minting": "(minting)",
+      "not_minting": "(kein minting)",
       "synchronized": "synchronisiert",
       "synchronizing": "synchronisiere"
     },
     "success": {
-      "publish_qdn": "Erfolgreich in QDN veröffentlicht"
+      "order_submitted": "Deine Kauforder wurde übermittelt",
+      "publish_qdn": "Erfolgreich in QDN veröffentlicht",
+      "request_read": "Ich habe diese Anfrage gelesen",
+      "transfer": "Die Übertragung war erfolgreich!"
     }
   },
+  "minting_status": "Minting-Status",
+  "page": {
+    "last": "letzte",
+    "first": "erste",
+    "next": "nächste",
+    "previous": "vorherige"
+  },
+  "payment_notification": "Zahlungsbenachrichtigung",
+  "price": "Preis",
+  "q_mail": "Q-Mail",
+  "question": {
+    "new_user": "Bist du ein neuer Benutzer?"
+  },
   "save_options": {
-    "no_pinned_changes": "Derzeit keine Änderungen an Ihren angehefteten Apps",
-    "overwrite_changes": "Die App konnte Ihre vorhandenen in QDN gespeicherten angehefteten Apps nicht herunterladen. Möchten Sie diese Änderungen überschreiben?",
-    "overwrite_qdn": "In QDN überschreiben",
-    "publish_qdn": "Möchten Sie Ihre Einstellungen in QDN (verschlüsselt) veröffentlichen?",
+    "no_pinned_changes": "Du hast derzeit keine Änderungen an deinen angehefteten Apps",
+    "overwrite_changes": "Die App konnte deine gespeicherten angehefteten QDN-Apps nicht laden. Möchtest du diese Änderungen überschreiben?",
+    "overwrite_qdn": "in QDN überschreiben",
+    "publish_qdn": "Möchtest du deine Einstellungen verschlüsselt in QDN veröffentlichen?",
     "qdn": "QDN-Speicherung verwenden",
-    "register_name": "Sie benötigen einen registrierten Qortal-Namen, um Ihre angehefteten Apps in QDN zu speichern.",
-    "reset_pinned": "Gefällt Ihnen Ihre aktuellen lokalen Änderungen nicht? Möchten Sie zu den Standard-Anheftungen zurückkehren?",
-    "reset_qdn": "Gefällt Ihnen Ihre aktuellen lokalen Änderungen nicht? Möchten Sie zu Ihren in QDN gespeicherten Anheftungen zurückkehren?",
-    "revert_default": "Auf Standard zurücksetzen",
-    "revert_qdn": "Auf QDN zurücksetzen",
-    "save_qdn": "In QDN speichern",
+    "register_name": "Du brauchst einen registrierten Qortal-Namen, um deine angehefteten Apps in QDN zu speichern.",
+    "reset_pinned": "Gefällt dir deine lokale Änderung nicht? Möchtest du auf die Standard-Apps zurücksetzen?",
+    "reset_qdn": "Gefällt dir deine lokale Änderung nicht? Möchtest du auf deine in QDN gespeicherten Apps zurücksetzen?",
+    "revert_default": "auf Standard zurücksetzen",
+    "revert_qdn": "auf QDN zurücksetzen",
+    "save_qdn": "in QDN speichern",
     "save": "speichern",
-    "settings": "Sie verwenden die Export/Import-Methode zum Speichern von Einstellungen.",
-    "unsaved_changes": "Sie haben nicht gespeicherte Änderungen an Ihren angehefteten Apps. Speichern Sie sie in QDN."
+    "settings": "Du nutzt die Export-/Import-Methode zum Speichern der Einstellungen.",
+    "unsaved_changes": "Du hast nicht gespeicherte Änderungen an deinen angehefteten Apps. Speichere sie in QDN."
   },
   "settings": "Einstellungen",
-  "supply": "Angebot",
+  "supply": "Versorgung",
   "theme": {
-    "dark": "Dunkelmodus",
-    "light": "Hellmodus"
+    "dark": "dunkler Modus",
+    "light": "heller Modus"
+  },
+  "time": {
+    "day_one": "{{count}} Tag",
+    "day_other": "{{count}} Tage",
+    "hour_one": "{{count}} Stunde",
+    "hour_other": "{{count}} Stunden",
+    "minute_one": "{{count}} Minute",
+    "minute_other": "{{count}} Minuten"
   },
   "title": "Titel",
   "tutorial": "Tutorial",
   "user_lookup": "Benutzersuche",
   "wallet": {
-    "backup_wallet": "Wallet sichern",
     "wallet": "Wallet",
     "wallet_other": "Wallets"
   },
