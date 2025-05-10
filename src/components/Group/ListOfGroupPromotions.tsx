@@ -51,6 +51,11 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
+
+const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+const uid = new ShortUniqueId({ length: 8 });
+
 export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
@@ -65,13 +70,11 @@ export function utf8ToBase64(inputString: string): string {
   return base64String;
 }
 
-const uid = new ShortUniqueId({ length: 8 });
-
 export function getGroupId(str) {
   const match = str.match(/group-(\d+)-/);
   return match ? match[1] : null;
 }
-const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 export const ListOfGroupPromotions = () => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null);
@@ -98,6 +101,7 @@ export const ListOfGroupPromotions = () => {
   const setTxList = useSetAtom(txListAtom);
 
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
   const listRef = useRef();
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
@@ -120,6 +124,7 @@ export const ListOfGroupPromotions = () => {
       console.log(error);
     }
   }, []);
+
   const getPromotions = useCallback(async () => {
     try {
       setPromotionTimeInterval(Date.now());
@@ -213,6 +218,7 @@ export const ListOfGroupPromotions = () => {
     setPopoverAnchor(null);
     setOpenPopoverIndex(null);
   };
+
   const publishPromo = async () => {
     try {
       setIsLoadingPublish(true);
@@ -264,7 +270,10 @@ export const ListOfGroupPromotions = () => {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'JOIN_GROUP',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingJoinGroup(true);

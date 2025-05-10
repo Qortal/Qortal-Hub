@@ -88,7 +88,10 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
     try {
       const fee = await getFee('CANCEL_GROUP_BAN');
       await show({
-        message: t('group:question.cancel_ban', { postProcess: 'capitalize' }),
+        message: t('group:question.perform_transaction', {
+          action: 'CANCEL_GROUP_BAN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingUnban(true);

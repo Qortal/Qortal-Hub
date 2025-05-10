@@ -19,6 +19,7 @@ import {
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background';
 import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -41,6 +42,7 @@ const ListOfMembers = ({
   const [isLoadingMakeAdmin, setIsLoadingMakeAdmin] = useState(false);
   const [isLoadingRemoveAdmin, setIsLoadingRemoveAdmin] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
   const listRef = useRef();
 
   const handlePopoverOpen = (event, index) => {
@@ -57,7 +59,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('GROUP_KICK');
       await show({
-        message: 'Would you like to perform a GROUP_KICK transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_KICK',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -106,7 +111,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('GROUP_BAN'); // TODO translate
       await show({
-        message: 'Would you like to perform a GROUP_BAN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_BAN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingBan(true);
@@ -155,7 +163,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: 'Would you like to perform a ADD_GROUP_ADMIN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'ADD_GROUP_ADMIN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingMakeAdmin(true);
@@ -203,7 +214,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: 'Would you like to perform a REMOVE_GROUP_ADMIN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'REMOVE_GROUP_ADMIN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingRemoveAdmin(true);

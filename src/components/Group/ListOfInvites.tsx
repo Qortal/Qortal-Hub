@@ -18,6 +18,7 @@ import { getNameInfo } from './Group';
 import { getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -59,7 +60,7 @@ export const ListOfInvites = ({
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const [isLoadingCancelInvite, setIsLoadingCancelInvite] = useState(false);
-
+  const { t } = useTranslation(['core', 'group']);
   const listRef = useRef();
 
   const getInvites = async (groupId) => {
@@ -92,8 +93,12 @@ export const ListOfInvites = ({
     try {
       // TODO translate
       const fee = await getFee('CANCEL_GROUP_INVITE');
+
       await show({
-        message: 'Would you like to perform a CANCEL_GROUP_INVITE transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'CANCEL_GROUP_INVITE',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingCancelInvite(true);

@@ -208,12 +208,6 @@ export const NewThread = ({
       }
 
       if (errorMsg) {
-        // dispatch(
-        //   setNotification({
-        //     msg: errorMsg,
-        //     alertType: "error",
-        //   })
-        // );
         throw new Error(errorMsg);
       }
 
@@ -221,13 +215,18 @@ export const NewThread = ({
 
       if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>')
         throw new Error('Please provide a first message to the thread');
+
       const fee = await getFee('ARBITRARY');
       let feeToShow = fee.fee;
+
       if (!isMessage) {
         feeToShow = +feeToShow * 2;
       }
       await show({
-        message: 'Would you like to perform a ARBITRARY transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalize',
+        }),
         publishFee: feeToShow + ' QORT',
       });
 
@@ -516,7 +515,6 @@ export const NewThread = ({
               overrideMobile
               customEditorHeight="240px"
             />
-
           </Box>
         </InstanceListContainer>
 

@@ -1,8 +1,7 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import {
   Box,
-  Button,
   ButtonBase,
   CircularProgress,
   Dialog,
@@ -11,13 +10,14 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { CustomButton, CustomButtonAccept } from '../../styles/App-styles';
+import { CustomButtonAccept } from '../../styles/App-styles';
 import { getBaseApiReact, MyContext } from '../../App';
 import { getFee } from '../../background';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const JoinGroup = () => {
   const { show } = useContext(MyContext);
@@ -29,7 +29,9 @@ export const JoinGroup = () => {
   const [isLoadingInfo, setIsLoadingInfo] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
+
   const handleJoinGroup = async (e) => {
     setGroupInfo(null);
     const groupId = e?.detail?.groupId;
@@ -41,6 +43,7 @@ export const JoinGroup = () => {
         const groupData = await response.json();
         setGroupInfo(groupData);
       } catch (error) {
+        console.log(error);
       } finally {
         setIsLoadingInfo(false);
       }
@@ -60,12 +63,16 @@ export const JoinGroup = () => {
       (item) => +item?.groupId === +groupInfo?.groupId
     );
   }, [memberGroups, groupInfo]);
+
   const joinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
       await show({
-        message: 'Would you like to perform an JOIN_GROUP transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'JOIN_GROUP',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingJoinGroup(true);

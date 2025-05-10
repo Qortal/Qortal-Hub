@@ -75,7 +75,10 @@ export const ManageMembers = ({
       setIsLoadingLeave(true);
       const fee = await getFee('LEAVE_GROUP'); // TODO translate
       await show({
-        message: 'Would you like to perform an LEAVE_GROUP transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'LEAVE_GROUP',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 

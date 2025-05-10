@@ -31,6 +31,7 @@ import {
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -101,6 +102,7 @@ export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
     console.log(error);
   }
 };
+
 export const handleUnencryptedPublishes = (publishes) => {
   let publishesData = [];
   publishes.forEach((pub) => {
@@ -149,6 +151,7 @@ export const GroupAnnouncements = ({
     editorRef.current = editorInstance;
   };
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
+  const { t } = useTranslation(['core', 'group']);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state
@@ -209,7 +212,6 @@ export const GroupAnnouncements = ({
     )
       return;
     setIsLoading(true);
-    // initWebsocketMessageGroup()
     hasInitializedWebsocket.current = true;
   }, [secretKey, isPrivate]);
 
@@ -287,7 +289,10 @@ export const GroupAnnouncements = ({
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: 'Would you like to perform a ARBITRARY transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -329,7 +334,7 @@ export const GroupAnnouncements = ({
         setTempData(selectedGroup);
         clearEditorContent();
       }
-      // send chat message
+      // TODO send chat message
     } catch (error) {
       if (!error) return;
       setInfoSnack({

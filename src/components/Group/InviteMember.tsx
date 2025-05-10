@@ -16,7 +16,8 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
     try {
       const fee = await getFee('GROUP_INVITE');
       await show({
-        message: t('group:question.group_invite', {
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_INVITE',
           postProcess: 'capitalize',
         }),
         publishFee: fee.fee + ' QORT',

@@ -32,10 +32,7 @@
   "invitation_expiry": "invitation Expiry Time",
   "join_requests": "join requests",
   "question": {
-    "cancel_ban": "would you like to perform a CANCEL_GROUP_BAN transaction?",
-    "create_group": "would you like to perform an CREATE_GROUP transaction?",
-    "group_invite": "would you like to perform a GROUP_INVITE transaction?",
-    "join_group": "would you like to perform an JOIN_GROUP transaction?",
+    "perform_transaction": "would you like to perform a {{action}} transaction?",
     "provide_thread": "please provide a thread title"
   },
   "message": {

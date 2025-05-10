@@ -95,7 +95,10 @@ export const ListOfJoinRequests = ({
     try {
       const fee = await getFee('GROUP_INVITE'); // TODO translate
       await show({
-        message: 'Would you like to perform a GROUP_INVITE transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_INVITE',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingAccept(true);
