@@ -1,33 +1,22 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  Avatar,
   Box,
   Button,
-  ButtonBase,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
-  Input,
   ListItem,
-  ListItemAvatar,
-  ListItemButton,
   ListItemIcon,
   ListItemText,
   List,
-  MenuItem,
-  Popover,
-  Select,
   TextField,
   Typography,
   useTheme,
 } from '@mui/material';
 import { Label } from './Group/AddGroup';
 import { Spacer } from '../common/Spacer';
-import { LoadingButton } from '@mui/lab';
-import { getBaseApiReact, MyContext } from '../App';
+import { getBaseApiReact } from '../App';
 import { getFee } from '../background';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
@@ -43,6 +32,7 @@ enum Availability {
   AVAILABLE = 'available',
   NOT_AVAILABLE = 'not-available',
 }
+
 export const RegisterName = ({
   setOpenSnack,
   setInfoSnack,
@@ -77,7 +67,6 @@ export const RegisterName = ({
       }
     } catch (error) {
       console.error(error);
-    } finally {
     }
   };
   // Debounce logic
@@ -195,21 +184,22 @@ export const RegisterName = ({
       aria-describedby="alert-dialog-description"
     >
       <DialogTitle id="alert-dialog-title">{'Register name'}</DialogTitle>
+
       <DialogContent>
         <Box
           sx={{
-            width: '400px',
-            maxWidth: '90vw',
-            height: '500px',
-            maxHeight: '90vh',
+            alignItems: 'center',
             display: 'flex',
             flexDirection: 'column',
-            alignItems: 'center',
             gap: '10px',
+            height: '500px',
+            maxHeight: '90vh',
+            maxWidth: '90vw',
             padding: '10px',
+            width: '400px',
           }}
         >
-          <Label>Choose a name</Label>
+          <Label>Choose a name</Label> // TODO: translate
           <TextField
             autoComplete="off"
             autoFocus
@@ -237,6 +227,7 @@ export const RegisterName = ({
                   requires a {nameFee} QORT fee
                 </Typography>
               </Box>
+
               <Spacer height="10px" />
             </>
           )}
@@ -307,6 +298,7 @@ export const RegisterName = ({
               </ListItemIcon>
               <ListItemText primary="Publish data to Qortal: anything from apps to videos. Fully decentralized!" />
             </ListItem>
+
             <ListItem disablePadding>
               <ListItemIcon>
                 <RadioButtonCheckedIcon
@@ -320,6 +312,7 @@ export const RegisterName = ({
           </List>
         </Box>
       </DialogContent>
+
       <DialogActions>
         <Button
           disabled={isLoadingRegisterName}
@@ -331,6 +324,7 @@ export const RegisterName = ({
         >
           Close
         </Button>
+
         <Button
           disabled={
             !registerNameValue.trim() ||

@@ -19,6 +19,7 @@ import {
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background';
 import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -41,7 +42,8 @@ const ListOfMembers = ({
   const [isLoadingMakeAdmin, setIsLoadingMakeAdmin] = useState(false);
   const [isLoadingRemoveAdmin, setIsLoadingRemoveAdmin] = useState(false);
   const theme = useTheme();
-  const listRef = useRef();
+  const { t } = useTranslation(['core', 'group']);
+  const listRef = useRef(null);
 
   const handlePopoverOpen = (event, index) => {
     setPopoverAnchor(event.currentTarget);
@@ -57,7 +59,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('GROUP_KICK');
       await show({
-        message: 'Would you like to perform a GROUP_KICK transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_KICK',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -72,8 +77,9 @@ const ListOfMembers = ({
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully kicked member from group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_kick', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -90,7 +96,9 @@ const ListOfMembers = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
@@ -104,12 +112,18 @@ const ListOfMembers = ({
   };
   const handleBan = async (address) => {
     try {
-      const fee = await getFee('GROUP_BAN'); // TODO translate
+      const fee = await getFee('GROUP_BAN');
+
       await show({
-        message: 'Would you like to perform a GROUP_BAN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'GROUP_BAN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingBan(true);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('banFromGroup', {
@@ -121,8 +135,9 @@ const ListOfMembers = ({
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully banned member from group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_ban', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -139,13 +154,16 @@ const ListOfMembers = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingBan(false);
     }
@@ -155,7 +173,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: 'Would you like to perform a ADD_GROUP_ADMIN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'ADD_GROUP_ADMIN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingMakeAdmin(true);
@@ -169,8 +190,9 @@ const ListOfMembers = ({
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully made member an admin. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_member_admin', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -187,13 +209,16 @@ const ListOfMembers = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingMakeAdmin(false);
     }
@@ -203,7 +228,10 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: 'Would you like to perform a REMOVE_GROUP_ADMIN transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'REMOVE_GROUP_ADMIN',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingRemoveAdmin(true);
@@ -217,8 +245,9 @@ const ListOfMembers = ({
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully removed member as an admin. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_remove_member', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -235,13 +264,16 @@ const ListOfMembers = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingRemoveAdmin(false);
     }
@@ -276,13 +308,13 @@ const ListOfMembers = ({
             >
               <Box
                 sx={{
-                  width: '325px',
-                  height: '250px',
+                  alignItems: 'center',
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center',
                   gap: '10px',
+                  height: '250px',
                   padding: '10px',
+                  width: '325px',
                 }}
               >
                 {isOwner && (
@@ -293,48 +325,49 @@ const ListOfMembers = ({
                       variant="contained"
                       onClick={() => handleKick(member?.member)}
                     >
-                      Kick member from group
+                      {t('group:action.kick_member', {
+                        postProcess: 'capitalize',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingBan}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => handleBan(member?.member)}
                     >
-                      Ban member from group
+                      {t('group:action.ban', {
+                        postProcess: 'capitalize',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingMakeAdmin}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => makeAdmin(member?.member)}
                     >
-                      Make an admin
+                      {t('group:action.make_admin', {
+                        postProcess: 'capitalize',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingRemoveAdmin}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => removeAdmin(member?.member)}
                     >
-                      Remove as admin
+                      {t('group:action.remove_admin', {
+                        postProcess: 'capitalize',
+                      })}
                     </LoadingButton>
                   </>
                 )}
               </Box>
             </Popover>
-            <ListItem
-              key={member?.member}
-              // secondaryAction={
-              //   <Checkbox
-              //     edge="end"
-              //     onChange={handleToggle(value)}
-              //     checked={checked.indexOf(value) !== -1}
-              //     inputProps={{ 'aria-labelledby': labelId }}
-              //   />
-              // }
-              disablePadding
-            >
+
+            <ListItem key={member?.member} disablePadding>
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -348,6 +381,7 @@ const ListOfMembers = ({
                     }
                   />
                 </ListItemAvatar>
+
                 <ListItemText
                   id={''}
                   primary={member?.name || member?.member}
@@ -359,7 +393,9 @@ const ListOfMembers = ({
                       marginLeft: 'auto',
                     }}
                   >
-                    Admin
+                    {t('core:admin', {
+                      postProcess: 'capitalize',
+                    })}
                   </Typography>
                 )}
               </ListItemButton>
@@ -372,28 +408,31 @@ const ListOfMembers = ({
 
   return (
     <div>
-      <p>Member list</p>
+      <p>
+        {t('core:list.member', {
+          postProcess: 'capitalize',
+        })}
+      </p>
       <div
         style={{
-          position: 'relative',
-          height: '500px',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>
           {({ height, width }) => (
             <List
-              ref={listRef}
-              width={width}
+              deferredMeasurementCache={cache}
               height={height}
+              ref={listRef}
               rowCount={members.length}
               rowHeight={cache.rowHeight}
               rowRenderer={rowRenderer}
-              //   onScroll={handleScroll}
-              deferredMeasurementCache={cache}
+              width={width}
             />
           )}
         </AutoSizer>

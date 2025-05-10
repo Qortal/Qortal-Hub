@@ -56,6 +56,7 @@ const commonThemeOptions = {
       xl: 1536,
     },
   },
+
   components: {
     MuiButton: {
       styleOverrides: {
@@ -72,6 +73,7 @@ const commonThemeOptions = {
         disableRipple: true,
       },
     },
+
     MuiModal: {
       styleOverrides: {
         root: {

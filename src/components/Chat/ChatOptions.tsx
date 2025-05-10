@@ -60,8 +60,8 @@ export const ChatOptions = ({
   const [searchValue, setSearchValue] = useState('');
   const [selectedMember, setSelectedMember] = useState(0);
   const theme = useTheme();
-  const parentRef = useRef();
-  const parentRefMentions = useRef();
+  const parentRef = useRef(null);
+  const parentRefMentions = useRef(null);
   const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null);
   const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
   const messages = useMemo(() => {

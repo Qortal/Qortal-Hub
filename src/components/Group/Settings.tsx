@@ -20,7 +20,6 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   Box,
   Button,
-  ButtonBase,
   DialogActions,
   DialogContent,
   DialogContentText,
@@ -32,7 +31,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { enabledDevModeAtom } from '../../atoms/global';
-
 import ThemeManager from '../Theme/ThemeManager';
 import { useAtom } from 'jotai';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
@@ -41,6 +39,7 @@ import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import { walletVersion } from '../../background';
 import Base58 from '../../deps/Base58';
 import { MyContext } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -87,8 +86,8 @@ const Transition = forwardRef(function Transition(
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
@@ -103,7 +102,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         if (response?.error) {
           console.error('Error adding user settings:', response.error);
         } else {
-          console.log('User settings added successfully'); // TODO translate
+          console.log('User settings added successfully');
         }
       })
       .catch((error) => {
@@ -134,7 +133,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
@@ -157,7 +159,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         <AppBar sx={{ position: 'relative' }}>
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-              General Settings
+              {t('core:general_settings', {
+                postProcess: 'capitalize',
+              })}
             </Typography>
 
             <IconButton
@@ -173,13 +177,13 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
 
         <Box
           sx={{
-            flexGrow: 1,
-            overflowY: 'auto',
             color: theme.palette.text.primary,
-            padding: '20px',
-            flexDirection: 'column',
             display: 'flex',
+            flexDirection: 'column',
+            flexGrow: 1,
             gap: '20px',
+            overflowY: 'auto',
+            padding: '20px',
           }}
         >
           <FormControlLabel
@@ -189,7 +193,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             control={
               <LocalNodeSwitch checked={checked} onChange={handleChange} />
             }
-            label="Disable all push notifications"
+            label={t('group:action.disable_push_notifications', {
+              postProcess: 'capitalize',
+            })}
           />
           {window?.electronAPI && (
             <FormControlLabel
@@ -205,7 +211,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                   }}
                 />
               }
-              label="Enable dev mode"
+              label={t('group:action.enable_dev_mode', {
+                postProcess: 'capitalize',
+              })}
             />
           )}
           {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
@@ -220,13 +228,16 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const { setOpenSnackGlobal, setInfoSnackCustom } = useContext(MyContext);
+  const { t } = useTranslation(['core', 'group']);
+
   const exportPrivateKeyFunc = async () => {
     try {
       setInfoSnackCustom({
         type: 'info',
-        message: 'Decrypting wallet...',
+        message: t('group:message.generic.descrypt_wallet', {
+          postProcess: 'capitalize',
+        }),
       });
 
       setOpenSnackGlobal(true);
@@ -247,13 +258,19 @@ const ExportPrivateKey = ({ rawWallet }) => {
       setInfoSnackCustom({
         type: 'error',
         message: error?.message
-          ? `Error decrypting wallet: ${error?.message}`
-          : 'Error decrypting wallet',
+          ? t('group:message.error.decrypt_wallet', {
+              errorMessage: error?.message,
+              postProcess: 'capitalize',
+            })
+          : t('group:message.error.descrypt_wallet', {
+              postProcess: 'capitalize',
+            }),
       });
 
       setOpenSnackGlobal(true);
     }
   };
+
   return (
     <>
       <Button
@@ -263,14 +280,22 @@ const ExportPrivateKey = ({ rawWallet }) => {
         }}
         onClick={() => setIsOpen(true)}
       >
-        Export private key
+        {t('group:action.export_private_key', {
+          postProcess: 'capitalize',
+        })}
       </Button>
+
       <Dialog
         open={isOpen}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
-        <DialogTitle id="alert-dialog-title">Export password</DialogTitle>
+        <DialogTitle id="alert-dialog-title">
+          {t('group:action.export_password', {
+            postProcess: 'capitalize',
+          })}
+        </DialogTitle>
+
         <DialogContent
           sx={{
             flexDirection: 'column',
@@ -279,9 +304,13 @@ const ExportPrivateKey = ({ rawWallet }) => {
           }}
         >
           <DialogContentText id="alert-dialog-description">
-            Keep your private key in a secure place. Do not share!
+            {t('group:message.generic.secure_place', {
+              postProcess: 'capitalize',
+            })}
           </DialogContentText>
+
           <Spacer height="20px" />
+
           <TextField
             autoFocus
             type="password"
@@ -296,17 +325,22 @@ const ExportPrivateKey = ({ rawWallet }) => {
                 navigator.clipboard.writeText(privateKey);
                 setInfoSnackCustom({
                   type: 'success',
-                  message: 'Copied privated key',
+                  message: t('group:message.generic.private_key_copied', {
+                    postProcess: 'capitalize',
+                  }),
                 });
 
                 setOpenSnackGlobal(true);
               }}
             >
-              {`Copy private key `}
+              {t('group:action.copy_private_key', {
+                postProcess: 'capitalize',
+              })}{' '}
               <ContentCopyIcon color="primary" />
             </Button>
           )}
         </DialogContent>
+
         <DialogActions>
           <Button
             variant="contained"
@@ -316,10 +350,15 @@ const ExportPrivateKey = ({ rawWallet }) => {
               setPrivateKey('');
             }}
           >
-            Cancel
+            {t('group:action.cancel', {
+              postProcess: 'capitalize',
+            })}
           </Button>
+
           <Button variant="contained" onClick={exportPrivateKeyFunc}>
-            Decrypt
+            {t('group:action.decrypt', {
+              postProcess: 'capitalize',
+            })}
           </Button>
         </DialogActions>
       </Dialog>

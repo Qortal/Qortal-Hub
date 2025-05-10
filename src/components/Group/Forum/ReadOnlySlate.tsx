@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { createEditor } from 'slate';
 import {
   withReact,
@@ -96,7 +96,7 @@ interface ReadOnlySlateProps {
   content: any;
   mode?: string;
 }
-const ReadOnlySlate: React.FC<ReadOnlySlateProps> = ({ content, mode }) => {
+const ReadOnlySlate: FC<ReadOnlySlateProps> = ({ content, mode }) => {
   const [load, setLoad] = useState(false);
   const editor = useMemo(() => withReact(createEditor()), []);
   const value = useMemo(() => content, [content]);

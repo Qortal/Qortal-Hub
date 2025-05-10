@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { useEffect, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -9,10 +9,12 @@ import { Box, Typography } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useTranslation } from 'react-i18next';
 
 export const ListOfThreadPostsWatched = () => {
-  const [posts, setPosts] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { t } = useTranslation(['core', 'group']);
 
   const getPosts = async () => {
     try {
@@ -42,34 +44,38 @@ export const ListOfThreadPostsWatched = () => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred'); // TODO translate
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     getPosts();
   }, []);
 
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <Box
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'column',
           padding: '0px 20px',
+          width: '322px',
         }}
       >
         <Typography
@@ -78,8 +84,12 @@ export const ListOfThreadPostsWatched = () => {
             fontWeight: 600,
           }}
         >
-          New Thread Posts:
+          {t('group:thread_posts', {
+            postProcess: 'capitalize',
+          })}
+          :
         </Typography>
+
         <Spacer height="10px" />
       </Box>
 
@@ -97,9 +107,9 @@ export const ListOfThreadPostsWatched = () => {
         {loading && posts.length === 0 && (
           <Box
             sx={{
-              width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
             <CustomLoader />
@@ -108,11 +118,11 @@ export const ListOfThreadPostsWatched = () => {
         {!loading && posts.length === 0 && (
           <Box
             sx={{
-              width: '100%',
-              display: 'flex',
-              justifyContent: 'center',
               alignItems: 'center',
+              display: 'flex',
               height: '100%',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <Typography
@@ -122,7 +132,9 @@ export const ListOfThreadPostsWatched = () => {
                 color: 'rgba(255, 255, 255, 0.2)',
               }}
             >
-              Nothing to display
+              {t('group:message.generic.no_display', {
+                postProcess: 'capitalize',
+              })}
             </Typography>
           </Box>
         )}
@@ -130,11 +142,11 @@ export const ListOfThreadPostsWatched = () => {
           <List
             className="scrollable-container"
             sx={{
-              width: '100%',
-              maxWidth: 360,
               bgcolor: 'background.paper',
               maxHeight: '300px',
+              maxWidth: 360,
               overflow: 'auto',
+              width: '100%',
             }}
           >
             {posts?.map((post) => {

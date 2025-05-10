@@ -18,6 +18,7 @@ import { getNameInfo } from './Group';
 import { getFee } from '../../background';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 export const getMemberInvites = async (groupNumber) => {
   const response = await fetch(
@@ -59,8 +60,8 @@ export const ListOfInvites = ({
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const [isLoadingCancelInvite, setIsLoadingCancelInvite] = useState(false);
-
-  const listRef = useRef();
+  const { t } = useTranslation(['core', 'group']);
+  const listRef = useRef(null);
 
   const getInvites = async (groupId) => {
     try {
@@ -90,13 +91,18 @@ export const ListOfInvites = ({
 
   const handleCancelInvitation = async (address) => {
     try {
-      // TODO translate
       const fee = await getFee('CANCEL_GROUP_INVITE');
+
       await show({
-        message: 'Would you like to perform a CANCEL_GROUP_INVITE transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'CANCEL_GROUP_INVITE',
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingCancelInvite(true);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('cancelInvitationToGroup', {
@@ -107,8 +113,9 @@ export const ListOfInvites = ({
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully canceled invitation. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.invitation_cancellation', {
+                  postProcess: 'capitalize',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -126,13 +133,18 @@ export const ListOfInvites = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalize',
+                }),
             });
             setOpenSnack(true);
             rej(error);
           });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingCancelInvite(false);
     }
@@ -168,13 +180,13 @@ export const ListOfInvites = ({
               >
                 <Box
                   sx={{
-                    width: '325px',
-                    height: '250px',
+                    alignItems: 'center',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
                     gap: '10px',
+                    height: '250px',
                     padding: '10px',
+                    width: '325px',
                   }}
                 >
                   <LoadingButton
@@ -183,10 +195,13 @@ export const ListOfInvites = ({
                     variant="contained"
                     onClick={() => handleCancelInvitation(member?.invitee)}
                   >
-                    Cancel Invitation
+                    {t('core:action.cancel_invitation', {
+                      postProcess: 'capitalize',
+                    })}
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -200,6 +215,7 @@ export const ListOfInvites = ({
                     }
                   />
                 </ListItemAvatar>
+
                 <ListItemText primary={member?.name || member?.invitee} />
               </ListItemButton>
             </ListItem>
@@ -211,15 +227,19 @@ export const ListOfInvites = ({
 
   return (
     <div>
-      <p>Invitees list</p>
+      <p>
+        {t('group:invitees_list', {
+          postProcess: 'capitalize',
+        })}
+      </p>
       <div
         style={{
-          position: 'relative',
-          height: '500px',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>

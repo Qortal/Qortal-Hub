@@ -56,7 +56,7 @@ export const AppsCategoryDesktop = ({
   isShow,
 }) => {
   const [searchValue, setSearchValue] = useState('');
-  const virtuosoRef = useRef();
+  const virtuosoRef = useRef(null);
   const theme = useTheme();
 
   const categoryList = useMemo(() => {

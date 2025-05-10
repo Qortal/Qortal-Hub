@@ -1,71 +1,133 @@
 {
-  "add": "agregar",
-  "cancel": "cancelar",
-  "choose": "elegir",
-  "close": "cerrar",
-  "continue": "continuar",
+  "action": {
+    "add": "añadir",
+    "accept": "aceptar",
+    "backup_account": "respaldar cuenta",
+    "backup_wallet": "respaldar monedero",
+    "cancel": "cancelar",
+    "cancel_invitation": "cancelar invitación",
+    "change": "cambiar",
+    "change_language": "cambiar idioma",
+    "choose": "elegir",
+    "close": "cerrar",
+    "continue": "continuar",
+    "continue_logout": "continuar para cerrar sesión",
+    "create_thread": "crear hilo",
+    "decline": "rechazar",
+    "decrypt": "descifrar",
+    "edit": "editar",
+    "export": "exportar",
+    "import": "importar",
+    "invite": "invitar",
+    "join": "unirse",
+    "logout": "cerrar sesión",
+    "new": {
+      "post": "nueva publicación",
+      "thread": "nuevo hilo"
+    },
+    "notify": "notificar",
+    "post": "publicar",
+    "post_message": "enviar mensaje"
+  },
+  "admin": "administrador",
   "core": {
-    "block_height": "altura de bloque",
+    "block_height": "altura del bloque",
     "information": "información del núcleo",
     "peers": "pares conectados",
     "version": "versión del núcleo"
   },
+  "ui": {
+    "version": "versión de la interfaz"
+  },
+  "count": {
+    "none": "ninguno",
+    "one": "uno"
+  },
   "description": "descripción",
-  "edit": "editar",
-  "export": "exportar",
-  "import": "importar",
+  "downloading_qdn": "descargando desde QDN",
+  "fee": {
+    "payment": "tarifa de pago",
+    "publish": "tarifa de publicación"
+  },
+  "general_settings": "configuración general",
   "last_height": "última altura",
+  "list": {
+    "invite": "lista de invitaciones",
+    "join_request": "lista de solicitudes de unión",
+    "member": "lista de miembros"
+  },
   "loading": "cargando...",
-  "logout": "cerrar sesión",
-  "minting_status": "estado de acuñación",
-  "payment_notification": "notificación de pago",
-  "price": "precio",
-  "q_mail": "q-mail",
-  "result": {
+  "loading_posts": "cargando publicaciones... por favor espera.",
+  "message_us": "por favor contáctanos en Telegram o Discord si necesitas 4 QORT para comenzar a chatear sin limitaciones",
+  "message": {
     "error": {
       "generic": "ocurrió un error",
       "incorrect_password": "contraseña incorrecta",
+      "missing_field": "falta: {{ field }}",
       "save_qdn": "no se pudo guardar en QDN"
     },
     "status": {
-      "minting": "(acuñando)",
-      "not_minting": "(no acuñando)",
+      "minting": "(generando)",
+      "not_minting": "(no generando)",
       "synchronized": "sincronizado",
       "synchronizing": "sincronizando"
     },
     "success": {
-      "publish_qdn": "publicado exitosamente en QDN"
+      "order_submitted": "tu orden de compra fue enviada",
+      "publish_qdn": "publicado correctamente en QDN",
+      "request_read": "he leído esta solicitud",
+      "transfer": "¡la transferencia fue exitosa!"
     }
+  },
+  "minting_status": "estado de generación",
+  "page": {
+    "last": "última",
+    "first": "primera",
+    "next": "siguiente",
+    "previous": "anterior"
+  },
+  "payment_notification": "notificación de pago",
+  "price": "precio",
+  "q_mail": "q-mail",
+  "question": {
+    "new_user": "¿eres un usuario nuevo?"
   },
   "save_options": {
     "no_pinned_changes": "actualmente no tienes cambios en tus aplicaciones fijadas",
-    "overwrite_changes": "la aplicación no pudo descargar tus aplicaciones fijadas existentes guardadas en QDN. ¿Deseas sobrescribir esos cambios?",
+    "overwrite_changes": "la aplicación no pudo descargar tus aplicaciones fijadas guardadas en QDN. ¿Deseas sobrescribir esos cambios?",
     "overwrite_qdn": "sobrescribir en QDN",
-    "publish_qdn": "¿Deseas publicar tus configuraciones en QDN (cifrado)?",
-    "qdn": "usar guardado en QDN",
-    "register_name": "necesitas un nombre Qortal registrado para guardar tus aplicaciones fijadas en QDN.",
-    "reset_pinned": "¿No te gustan tus cambios locales actuales? ¿Deseas restablecer las aplicaciones fijadas predeterminadas?",
-    "reset_qdn": "¿No te gustan tus cambios locales actuales? ¿Deseas restablecer tus aplicaciones fijadas guardadas en QDN?",
-    "revert_default": "restablecer a predeterminado",
-    "revert_qdn": "restablecer a QDN",
+    "publish_qdn": "¿quieres publicar tu configuración en QDN (cifrada)?",
+    "qdn": "usar guardado QDN",
+    "register_name": "necesitas un nombre de Qortal registrado para guardar tus aplicaciones fijadas en QDN.",
+    "reset_pinned": "¿no te gustan tus cambios locales actuales? ¿Quieres restablecer las aplicaciones fijadas por defecto?",
+    "reset_qdn": "¿no te gustan tus cambios locales actuales? ¿Quieres restablecer tus aplicaciones fijadas guardadas en QDN?",
+    "revert_default": "restablecer a valores predeterminados",
+    "revert_qdn": "restablecer desde QDN",
     "save_qdn": "guardar en QDN",
     "save": "guardar",
-    "settings": "estás utilizando el método de exportación/importación para guardar configuraciones.",
+    "settings": "estás usando el método de exportación/importación para guardar la configuración.",
     "unsaved_changes": "tienes cambios no guardados en tus aplicaciones fijadas. Guárdalos en QDN."
   },
-  "settings": "configuraciones",
-  "supply": "suministro",
+  "settings": "configuración",
+  "supply": "oferta",
   "theme": {
     "dark": "modo oscuro",
     "light": "modo claro"
+  },
+  "time": {
+    "day_one": "{{count}} día",
+    "day_other": "{{count}} días",
+    "hour_one": "{{count}} hora",
+    "hour_other": "{{count}} horas",
+    "minute_one": "{{count}} minuto",
+    "minute_other": "{{count}} minutos"
   },
   "title": "título",
   "tutorial": "tutorial",
   "user_lookup": "búsqueda de usuario",
   "wallet": {
-    "backup_wallet": "respaldar billetera",
-    "wallet": "billetera",
-    "wallet_other": "billeteras"
+    "wallet": "monedero",
+    "wallet_other": "monederos"
   },
   "welcome": "bienvenido"
 }

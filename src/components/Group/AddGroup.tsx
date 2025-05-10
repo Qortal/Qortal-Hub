@@ -118,7 +118,8 @@ export const AddGroup = ({ address, open, setOpen }) => {
       const fee = await getFee('CREATE_GROUP');
 
       await show({
-        message: t('group:question.create_group', {
+        message: t('group:question.perform_transaction', {
+          action: 'CREATE_GROUP',
           postProcess: 'capitalize',
         }),
         publishFee: fee.fee + ' QORT',
@@ -330,6 +331,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       postProcess: 'capitalize',
                     })}
                   </Label>
+
                   <Input
                     placeholder={t('group:group.name', {
                       postProcess: 'capitalize',
@@ -338,6 +340,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     onChange={(e) => setName(e.target.value)}
                   />
                 </Box>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -449,6 +452,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       <MenuItem value={100}>100%</MenuItem>
                     </Select>
                   </Box>
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -461,6 +465,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         postProcess: 'capitalize',
                       })}
                     </Label>
+
                     <Select
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
@@ -506,6 +511,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       </MenuItem>
                     </Select>
                   </Box>
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -518,6 +524,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         postProcess: 'capitalize',
                       })}
                     </Label>
+
                     <Select
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
@@ -561,6 +568,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     </Select>
                   </Box>
                 </Collapse>
+
                 <Box
                   sx={{
                     display: 'flex',

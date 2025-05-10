@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -17,27 +17,27 @@ export const ThingsToDoInitial = ({
   balance,
   userInfo,
 }) => {
-  const [checked1, setChecked1] = React.useState(false);
-  const [checked2, setChecked2] = React.useState(false);
+  const [checked1, setChecked1] = useState(false);
+  const [checked2, setChecked2] = useState(false);
   const { t } = useTranslation(['core', 'tutorial']);
   const theme = useTheme();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (balance && +balance >= 6) {
       setChecked1(true);
     }
   }, [balance]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (name) setChecked2(true);
   }, [name]);
 
-  const isLoaded = React.useMemo(() => {
+  const isLoaded = useMemo(() => {
     if (userInfo !== null) return true;
     return false;
   }, [userInfo]);
 
-  const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(() => {
+  const hasDoneNameAndBalanceAndIsLoaded = useMemo(() => {
     if (isLoaded && checked1 && checked2) return true;
     return false;
   }, [checked1, isLoaded, checked2]);
@@ -55,18 +55,18 @@ export const ThingsToDoInitial = ({
   return (
     <Box
       sx={{
-        width: '100%',
+        alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        width: '100%',
       }}
     >
       <Box
         sx={{
-          width: '322px',
           display: 'flex',
           flexDirection: 'column',
           padding: '0px 20px',
+          width: '322px',
         }}
       >
         <Typography
@@ -125,6 +125,7 @@ export const ThingsToDoInitial = ({
                     postProcess: 'capitalize',
                   })}
                 />
+
                 <ListItemIcon
                   sx={{
                     justifyContent: 'flex-end',
@@ -144,6 +145,7 @@ export const ThingsToDoInitial = ({
                 </ListItemIcon>
               </ListItemButton>
             </ListItem>
+
             <ListItem
               sx={{
                 marginBottom: '20px',

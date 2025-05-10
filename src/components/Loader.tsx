@@ -1,9 +1,9 @@
-import React from 'react'
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress } from '@mui/material';
 
 export const Loader = () => {
   return (
-    <Box sx={{
+    <Box
+      sx={{
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
@@ -11,13 +11,14 @@ export const Loader = () => {
         height: '100%',
         position: 'fixed',
         top: '0px',
-        left:'0px',
+        left: '0px',
         right: '0px',
         bottom: '0px',
         zIndex: 10,
-        background: 'rgba(0, 0, 0, 0.4)'
-    }}>
-         <CircularProgress color="success" size={25} />
+        background: 'rgba(0, 0, 0, 0.4)',
+      }}
+    >
+      <CircularProgress color="success" size={25} />
     </Box>
-  )
-}
+  );
+};

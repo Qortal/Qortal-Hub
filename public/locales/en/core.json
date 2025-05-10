@@ -5,21 +5,31 @@
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
+    "cancel_invitation": "cancel invitation",
     "change": "change",
     "change_language": "change language",
     "choose": "choose",
     "close": "close",
     "continue": "continue",
     "continue_logout": "continue to logout",
+    "create_thread": "create thread",
     "decline": "decline",
+    "decrypt": "decrypt",
     "edit": "edit",
     "export": "export",
     "import": "import",
     "invite": "invite",
     "join": "join",
     "logout": "logout",
-    "notify": "notify"
+    "new": {
+      "post": "new post",
+      "thread": "new thread"
+    },
+    "notify": "notify",
+    "post": "post",
+    "post_message": "post message"
   },
+  "admin": "admin",
   "core": {
     "block_height": "block height",
     "information": "core information",
@@ -34,30 +44,26 @@
     "one": "one"
   },
   "description": "description",
+  "downloading_qdn": "downloading from QDN",
   "fee": {
     "payment": "payment fee",
     "publish": "publish fee"
   },
-  "page": {
-    "last": "last",
-    "first": "first",
-    "next": "next",
-    "previous": "previous"
-  },
-  "downloading_qdn": "downloading from QDN",
+  "general_settings": "general settings",
   "last_height": "last height",
+  "list": {
+    "invite": "invite list",
+    "join_request": "join request list",
+    "member": "member list"
+  },
   "loading": "loading...",
   "loading_posts": "loading posts... please wait.",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
-  "minting_status": "minting status",
-  "new_user": "are you a new user?",
-  "payment_notification": "payment notification",
-  "price": "price",
-  "q_mail": "q-mail",
   "message": {
     "error": {
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
+      "missing_field": "missing: {{ field }}",
       "save_qdn": "unable to save to QDN"
     },
     "status": {
@@ -72,6 +78,19 @@
       "request_read": "I have read this request",
       "transfer": "the transfer was succesful!"
     }
+  },
+  "minting_status": "minting status",
+  "page": {
+    "last": "last",
+    "first": "first",
+    "next": "next",
+    "previous": "previous"
+  },
+  "payment_notification": "payment notification",
+  "price": "price",
+  "q_mail": "q-mail",
+  "question": {
+    "new_user": "are you a new user?"
   },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",

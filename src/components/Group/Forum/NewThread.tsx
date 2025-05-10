@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, Input, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import {
@@ -8,7 +8,6 @@ import {
   InstanceFooter,
   InstanceListContainer,
   InstanceListHeader,
-  NewMessageCloseImg,
   NewMessageHeaderP,
   NewMessageInputRow,
   NewMessageSendButton,
@@ -143,13 +142,13 @@ export const NewThread = ({
   isPrivate,
 }: NewMessageProps) => {
   const { t } = useTranslation(['core', 'group']);
-  const { show } = React.useContext(MyContext);
+  const { show } = useContext(MyContext);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [threadTitle, setThreadTitle] = useState<string>('');
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
   const editorRef = useRef(null);
   const theme = useTheme();
   const setEditorRef = (editorInstance) => {
@@ -203,31 +202,37 @@ export const NewThread = ({
       // if (!description) missingFields.push('subject')
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
-        const errMsg = `Missing: ${missingFieldsString}`;
-        errorMsg = errMsg; // TODO translate
+        const errMsg = t('group:message.error.missing_field', {
+          field: missingFieldsString,
+          postProcess: 'capitalize',
+        });
+        errorMsg = errMsg;
       }
 
       if (errorMsg) {
-        // dispatch(
-        //   setNotification({
-        //     msg: errorMsg,
-        //     alertType: "error",
-        //   })
-        // );
         throw new Error(errorMsg);
       }
 
       const htmlContent = editorRef.current.getHTML();
 
-      if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>')
-        throw new Error('Please provide a first message to the thread');
+      if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
+        const errMsg = t('group:message.generic.provide_message', {
+          postProcess: 'capitalize',
+        });
+        throw new Error(errMsg);
+      }
+
       const fee = await getFee('ARBITRARY');
       let feeToShow = fee.fee;
+
       if (!isMessage) {
         feeToShow = +feeToShow * 2;
       }
       await show({
-        message: 'Would you like to perform a ARBITRARY transaction?',
+        message: t('group:question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalize',
+        }),
         publishFee: feeToShow + ' QORT',
       });
 
@@ -238,6 +243,7 @@ export const NewThread = ({
           delete reply.reply;
         }
       }
+
       const mailObject: any = {
         createdAt: Date.now(),
         version: 1,
@@ -250,7 +256,10 @@ export const NewThread = ({
       const secretKey =
         isPrivate === false ? null : await getSecretKey(false, true);
       if (!secretKey && isPrivate) {
-        throw new Error('Cannot get group secret key');
+        const errMsg = t('group:message.error.group_secret_key', {
+          postProcess: 'capitalize',
+        });
+        throw new Error(errMsg);
       }
 
       if (!isMessage) {
@@ -273,17 +282,18 @@ export const NewThread = ({
           isPrivate === false
             ? threadToBase64
             : await encryptSingleFunc(threadToBase64, secretKey);
-        let identifierThread = `grp-${groupInfo.groupId}-thread-${idThread}`;
+        const identifierThread = `grp-${groupInfo.groupId}-thread-${idThread}`;
         await publishGroupEncryptedResource({
           identifier: identifierThread,
           encryptedData: encryptSingleThread,
         });
 
-        let identifierPost = `thmsg-${identifierThread}-${idMsg}`;
+        const identifierPost = `thmsg-${identifierThread}-${idMsg}`;
         await publishGroupEncryptedResource({
           identifier: identifierPost,
           encryptedData: encryptSingleFirstPost,
         });
+
         const dataToSaveToStorage = {
           name: myName,
           identifier: identifierThread,
@@ -292,6 +302,7 @@ export const NewThread = ({
           created: Date.now(),
           groupId: groupInfo.groupId,
         };
+
         const dataToSaveToStoragePost = {
           name: myName,
           identifier: identifierPost,
@@ -300,6 +311,7 @@ export const NewThread = ({
           created: Date.now(),
           threadId: identifierThread,
         };
+
         await saveTempPublish({ data: dataToSaveToStorage, key: 'thread' });
         await saveTempPublish({
           data: dataToSaveToStoragePost,
@@ -307,36 +319,32 @@ export const NewThread = ({
         });
         setInfoSnack({
           type: 'success',
-          message:
-            'Successfully created thread. It may take some time for the publish to propagate',
+          message: t('group:message.success.thread_creation', {
+            postProcess: 'capitalize',
+          }),
         });
         setOpenSnack(true);
 
-        // dispatch(
-        //   setNotification({
-        //     msg: "Message sent",
-        //     alertType: "success",
-        //   })
-        // );
         if (publishCallback) {
           publishCallback();
         }
         closeModal();
       } else {
-        if (!currentThread) throw new Error('unable to locate thread Id');
+        if (!currentThread) {
+          const errMsg = t('group:message.error.thread_id', {
+            postProcess: 'capitalize',
+          });
+          throw new Error(errMsg);
+        }
         const idThread = currentThread.threadId;
         const messageToBase64 = await objectToBase64(mailObject);
         const encryptSinglePost =
           isPrivate === false
             ? messageToBase64
             : await encryptSingleFunc(messageToBase64, secretKey);
-        const idMsg = uid.rnd();
-        let identifier = `thmsg-${idThread}-${idMsg}`;
-        const res = await publishGroupEncryptedResource({
-          identifier: identifier,
-          encryptedData: encryptSinglePost,
-        });
 
+        const idMsg = uid.rnd();
+        const identifier = `thmsg-${idThread}-${idMsg}`;
         const dataToSaveToStoragePost = {
           threadId: idThread,
           name: myName,
@@ -349,32 +357,17 @@ export const NewThread = ({
           data: dataToSaveToStoragePost,
           key: 'thread-post',
         });
-        // await qortalRequest(multiplePublishMsg);
-        // dispatch(
-        //   setNotification({
-        //     msg: "Message sent",
-        //     alertType: "success",
-        //   })
-        // );
         setInfoSnack({
           type: 'success',
-          message:
-            'Successfully created post. It may take some time for the publish to propagate',
+          message: t('group:message.success.post_creation', {
+            postProcess: 'capitalize',
+          }),
         });
         setOpenSnack(true);
         if (publishCallback) {
           publishCallback();
         }
-        // messageCallback({
-        //   identifier,
-        //   id: identifier,
-        //   name,
-        //   service: MAIL_SERVICE_TYPE,
-        //   created: Date.now(),
-        //   ...mailObject,
-        // });
       }
-
       closeModal();
     } catch (error: any) {
       if (error?.message) {
@@ -393,6 +386,7 @@ export const NewThread = ({
   const sendMail = () => {
     publishQDNResource();
   };
+
   return (
     <Box
       sx={{
@@ -407,7 +401,15 @@ export const NewThread = ({
         onClick={() => setIsOpen(true)}
       >
         <ComposeIcon />
-        <ComposeP>{currentThread ? 'New Post' : 'New Thread'}</ComposeP>
+        <ComposeP>
+          {currentThread
+            ? t('core:action.new.post', {
+                postProcess: 'capitalize',
+              })
+            : t('core:action.new.thread', {
+                postProcess: 'capitalize',
+              })}
+        </ComposeP>
       </ComposeContainer>
 
       <ReusableModal
@@ -433,8 +435,15 @@ export const NewThread = ({
           }}
         >
           <NewMessageHeaderP>
-            {isMessage ? 'Post Message' : 'New Thread'}
+            {isMessage
+              ? t('core:action.post_message', {
+                  postProcess: 'capitalize',
+                })
+              : t('core:action.new.thread', {
+                  postProcess: 'capitalize',
+                })}
           </NewMessageHeaderP>
+
           <CloseContainer
             sx={{
               height: '40px',
@@ -448,6 +457,7 @@ export const NewThread = ({
             />
           </CloseContainer>
         </InstanceListHeader>
+
         <InstanceListContainer
           sx={{
             backgroundColor: theme.palette.background.paper,
@@ -459,6 +469,7 @@ export const NewThread = ({
           {!isMessage && (
             <>
               <Spacer height="10px" />
+
               <NewMessageInputRow>
                 <Input
                   id="standard-adornment-name"
@@ -516,28 +527,27 @@ export const NewThread = ({
               overrideMobile
               customEditorHeight="240px"
             />
-
           </Box>
         </InstanceListContainer>
 
         <InstanceFooter
           sx={{
-            backgroundColor: theme.palette.background.paper,
-            padding: '20px 42px',
             alignItems: 'center',
+            backgroundColor: theme.palette.background.paper,
             height: '90px',
+            padding: '20px 42px',
           }}
         >
           <NewMessageSendButton onClick={sendMail}>
             {isSending && (
               <Box
                 sx={{
+                  alignItems: 'center',
+                  display: 'flex',
                   height: '100%',
+                  justifyContent: 'center',
                   position: 'absolute',
                   width: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
                 }}
               >
                 <CircularProgress
@@ -550,7 +560,13 @@ export const NewThread = ({
             )}
 
             <NewMessageSendP>
-              {isMessage ? 'Post' : 'Create Thread'}
+              {isMessage
+                ? t('core:action.post', {
+                    postProcess: 'capitalize',
+                  })
+                : t('core:action.create_thread', {
+                    postProcess: 'capitalize',
+                  })}
             </NewMessageSendP>
 
             {isMessage ? (

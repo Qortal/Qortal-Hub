@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Logo2 from '../assets/svgs/Logo2.svg';
 import { MyContext, getArbitraryEndpointReact, getBaseApiReact } from '../App';
 import {
