@@ -51,7 +51,7 @@ export const AppsHomeDesktop = ({
         <AppLibrarySubTitle
           sx={{
             fontSize: '30px',
-          }}
+          }} // TODO translate
         >
           Apps Dashboard
         </AppLibrarySubTitle>

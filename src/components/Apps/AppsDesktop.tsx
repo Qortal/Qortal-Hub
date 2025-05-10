@@ -17,7 +17,6 @@ import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import { AppsNavBarDesktop } from './AppsNavBarDesktop';
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { enabledDevModeAtom } from '../../atoms/global';
@@ -98,8 +97,6 @@ export const AppsDesktop = ({
       setCategories(responseData);
     } catch (error) {
       console.log(error);
-    } finally {
-      // dispatch(setIsLoadingGlobal(false))
     }
   }, []);
 
@@ -135,8 +132,6 @@ export const AppsDesktop = ({
       setAvailableQapps(combine);
     } catch (error) {
       console.log(error);
-    } finally {
-      // dispatch(setIsLoadingGlobal(false))
     }
   }, []);
   useEffect(() => {
@@ -338,13 +333,13 @@ export const AppsDesktop = ({
       <Box
         sx={{
           alignItems: 'center',
+          backgroundColor: theme.palette.background.surface,
+          borderRight: `1px solid ${theme.palette.border.subtle}`,
           display: 'flex',
           flexDirection: 'column',
           gap: '25px',
           height: '100vh',
           width: '60px',
-          backgroundColor: theme.palette.background.surface,
-          borderRight: `1px solid ${theme.palette.border.subtle}`,
         }}
       >
         <ButtonBase
@@ -407,6 +402,7 @@ export const AppsDesktop = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <Save isDesktop disableWidth myName={myName} />
         {isEnabledDevMode && (
           <ButtonBase
@@ -445,10 +441,10 @@ export const AppsDesktop = ({
         <Box
           sx={{
             display: 'flex',
-            width: '100%',
             flexDirection: 'column',
             height: '100vh',
             overflow: 'auto',
+            width: '100%',
           }}
         >
           <Spacer height="30px" />
@@ -515,6 +511,7 @@ export const AppsDesktop = ({
             }}
           >
             <Spacer height="30px" />
+
             <AppsHomeDesktop
               myName={myName}
               availableQapps={availableQapps}

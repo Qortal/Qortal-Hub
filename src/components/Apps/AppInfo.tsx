@@ -1,4 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -172,7 +171,7 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isSelectedAppPinned
+                {isSelectedAppPinned // TODO translate
                   ? 'Unpin from dashboard'
                   : 'Pin to dashboard'}
               </AppDownloadButtonText>

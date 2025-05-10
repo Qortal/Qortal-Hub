@@ -106,6 +106,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       const fee = await getFee('CREATE_POLL');
 
       await show({
+        // TODO translate
         message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
         publishFee: fee.fee + ' QORT',
       });

@@ -166,7 +166,7 @@ export const AppInfoSnippet = ({
           sx={{
             backgroundColor: theme.palette.background.paper,
             opacity: isSelectedAppPinned ? 0.6 : 1,
-          }}
+          }} // TODO translate
         >
           <AppDownloadButtonText>
             {' '}
