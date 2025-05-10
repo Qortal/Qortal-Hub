@@ -29,6 +29,7 @@
     "post": "post",
     "post_message": "post message"
   },
+  "admin": "admin",
   "core": {
     "block_height": "block height",
     "information": "core information",
@@ -52,7 +53,8 @@
   "last_height": "last height",
   "list": {
     "invite": "invite list",
-    "join_request": "join request list"
+    "join_request": "join request list",
+    "member": "member list"
   },
   "loading": "loading...",
   "loading_posts": "loading posts... please wait.",

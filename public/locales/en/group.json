@@ -1,5 +1,6 @@
 {
   "action": {
+    "ban": "ban member from group",
     "cancel_ban": "cancel ban",
     "copy_private_key": "copy private key",
     "create_group": "create group",
@@ -9,8 +10,11 @@
     "export_private_key": "export private key",
     "find_group": "find group",
     "join_group": "join group",
+    "kick_member": "kick member from group",
     "invite_member": "invite member",
+    "make_admin": "make an admin",
     "refetch_page": "refetch page",
+    "remove_admin": "remove as admin",
     "return_to_thread": "return to threads"
   },
   "advanced_options": "advanced options",
@@ -64,6 +68,7 @@
       "thread_id": "unable to locate thread Id"
     },
     "success": {
+      "group_ban": "successfully banned member from group. It may take a couple of minutes for the changes to propagate",
       "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
@@ -73,6 +78,9 @@
       "group_join_label": "joined group {{name}}: success!",
       "group_join_request": "requested to join Group {{group_name}}: awaiting confirmation",
       "group_join_outcome": "requested to join Group {{group_name}}: success!",
+      "group_kick": "successfully kicked member from group. It may take a couple of minutes for the changes to propagate",
+      "group_member_admin": "successfully made member an admin. It may take a couple of minutes for the changes to propagate",
+      "group_remove_member": "successfully removed member as an admin. It may take a couple of minutes for the changes to propagate",
       "invitation_cancellation": "successfully canceled invitation. It may take a couple of minutes for the changes to propagate",
       "invitation_request": "accepted join request: awaiting confirmation",
       "loading_threads": "loading threads... please wait.",
