@@ -48,6 +48,7 @@
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
       "only_encrypted": "only unencrypted messages will be displayed.",
       "private_key_copied": "private key copied",
+      "provide_message": "please provide a first message to the thread",
       "secure_place": "keep your private key in a secure place. Do not share!",
       "setting_group": "setting up group... please wait."
     },
@@ -56,8 +57,10 @@
       "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
       "description_required": "please provide a description",
       "group_info": "cannot access group information",
+      "group_secret_key": "cannot get group secret key",
       "name_required": "please provide a name",
-      "notify_admins": "try notifying an admin from the list of admins below:"
+      "notify_admins": "try notifying an admin from the list of admins below:",
+      "thread_id": "unable to locate thread Id"
     },
     "success": {
       "group_creation": "successfully created group. It may take a couple of minutes for the changes to propagate",
@@ -70,6 +73,8 @@
       "group_join_request": "requested to join Group {{group_name}}: awaiting confirmation",
       "group_join_outcome": "requested to join Group {{group_name}}: success!",
       "loading_threads": "loading threads... please wait.",
+      "post_creation": "successfully created post. It may take some time for the publish to propagate",
+      "thread_creation": "successfully created thread. It may take some time for the publish to propagate",
       "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate"
     }
   }

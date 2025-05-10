@@ -11,6 +11,7 @@
     "close": "close",
     "continue": "continue",
     "continue_logout": "continue to logout",
+    "create_thread": "create thread",
     "decline": "decline",
     "decrypt": "decrypt",
     "edit": "edit",
@@ -19,7 +20,13 @@
     "invite": "invite",
     "join": "join",
     "logout": "logout",
-    "notify": "notify"
+    "new": {
+      "post": "new post",
+      "thread": "new thread"
+    },
+    "notify": "notify",
+    "post": "post",
+    "post_message": "post message"
   },
   "core": {
     "block_height": "block height",
@@ -50,6 +57,7 @@
     "error": {
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
+      "missing_field": "missing: {{ field }}",
       "save_qdn": "unable to save to QDN"
     },
     "status": {
@@ -66,7 +74,6 @@
     }
   },
   "minting_status": "minting status",
-  "new_user": "are you a new user?",
   "page": {
     "last": "last",
     "first": "first",
@@ -76,6 +83,9 @@
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
+  "question": {
+    "new_user": "are you a new user?"
+  },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
