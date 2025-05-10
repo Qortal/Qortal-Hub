@@ -2,8 +2,8 @@ import { useTheme } from '@mui/material';
 
 export const CopyIcon = ({ color, height = 11, width = 10 }) => {
   const theme = useTheme();
-
   const setColor = color ? color : theme.palette.text.primary;
+
   return (
     <svg
       width={width}
