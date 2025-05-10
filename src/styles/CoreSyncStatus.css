@@ -15,8 +15,7 @@
   box-sizing: border-box;
   font-size: 13px;
   font-weight: normal;
-  max-width: 250px;
-  min-width: 225px;
+  width: max-content;
   opacity: 0;
   padding: 10px 10px;
   position: absolute;
