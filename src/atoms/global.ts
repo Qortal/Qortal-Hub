@@ -18,37 +18,36 @@ export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Q-Nodecontrol', service: 'APP' },
 ]);
 
-export const canSaveSettingToQdnAtom = atomWithReset(false);
-export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
-export const settingsLocalLastUpdatedAtom = atomWithReset(0);
-export const oldPinnedAppsAtom = atomWithReset([]);
-export const isUsingImportExportSettingsAtom = atomWithReset(null);
-export const fullScreenAtom = atomWithReset(false);
-export const hasSettingsChangedAtom = atomWithReset(false);
-export const navigationControllerAtom = atomWithReset({});
-export const enabledDevModeAtom = atomWithReset(false);
-export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
-export const promotionTimeIntervalAtom = atomWithReset(0);
-export const promotionsAtom = atomWithReset([]);
-export const resourceDownloadControllerAtom = atomWithReset({});
-export const blobControllerAtom = atomWithReset({});
-export const selectedGroupIdAtom = atomWithReset(null);
 export const addressInfoControllerAtom = atomWithReset({});
+export const blobControllerAtom = atomWithReset({});
+export const canSaveSettingToQdnAtom = atomWithReset(false);
+export const enabledDevModeAtom = atomWithReset(false);
+export const fullScreenAtom = atomWithReset(false);
+export const groupAnnouncementsAtom = atomWithReset({});
+export const groupChatTimestampsAtom = atomWithReset({});
+export const groupsOwnerNamesAtom = atomWithReset({});
+export const groupsPropertiesAtom = atomWithReset({});
+export const hasSettingsChangedAtom = atomWithReset(false);
 export const isDisabledEditorEnterAtom = atomWithReset(false);
-export const qMailLastEnteredTimestampAtom = atomWithReset(null);
+export const isOpenBlockedModalAtom = atomWithReset(false);
+export const isRunningPublicNodeAtom = atomWithReset(false);
+export const isUsingImportExportSettingsAtom = atomWithReset(null);
 export const lastPaymentSeenTimestampAtom = atomWithReset(null);
 export const mailsAtom = atomWithReset([]);
-export const groupsPropertiesAtom = atomWithReset({});
-export const groupsOwnerNamesAtom = atomWithReset({});
-export const isOpenBlockedModalAtom = atomWithReset(false);
-export const groupAnnouncementsAtom = atomWithReset({});
-export const mutedGroupsAtom = atomWithReset([]);
-export const groupChatTimestampsAtom = atomWithReset({});
-export const timestampEnterDataAtom = atomWithReset({});
-
-export const txListAtom = atomWithReset([]);
 export const memberGroupsAtom = atomWithReset([]);
-export const isRunningPublicNodeAtom = atomWithReset(false);
+export const mutedGroupsAtom = atomWithReset([]);
+export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
+export const navigationControllerAtom = atomWithReset({});
+export const oldPinnedAppsAtom = atomWithReset([]);
+export const promotionsAtom = atomWithReset([]);
+export const promotionTimeIntervalAtom = atomWithReset(0);
+export const qMailLastEnteredTimestampAtom = atomWithReset(null);
+export const resourceDownloadControllerAtom = atomWithReset({});
+export const selectedGroupIdAtom = atomWithReset(null);
+export const settingsLocalLastUpdatedAtom = atomWithReset(0);
+export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
+export const timestampEnterDataAtom = atomWithReset({});
+export const txListAtom = atomWithReset([]);
 
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
