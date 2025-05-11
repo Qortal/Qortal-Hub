@@ -292,6 +292,11 @@ export const ChatList = ({
                         message.editTimestamp =
                           chatReferences[message.signature]?.edit?.timestamp;
                       }
+                      if (chatReferences[message.signature]?.edit?.images) {
+                        message.images =
+                          chatReferences[message.signature]?.edit?.images;
+                        message.isEdit = true;
+                      }
                     }
 
                     // Check if message is updating

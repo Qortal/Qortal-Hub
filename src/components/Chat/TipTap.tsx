@@ -30,6 +30,7 @@ import MentionList from './MentionList.jsx';
 import { isDisabledEditorEnterAtom } from '../../atoms/global.js';
 import { Box, Checkbox, Typography, useTheme } from '@mui/material';
 import { useAtom } from 'jotai';
+import { fileToBase64 } from '../../utils/fileReading/index.js';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -114,7 +115,7 @@ const MenuBar = React.memo(
     };
 
     useEffect(() => {
-      if (editor) {
+      if (editor && !isChat) {
         editor.view.dom.addEventListener('paste', handlePaste);
         return () => {
           editor.view.dom.removeEventListener('paste', handlePaste);
@@ -366,11 +367,42 @@ export default ({
   customEditorHeight,
   membersWithNames,
   enableMentions,
+  insertImage,
 }) => {
   const theme = useTheme();
   const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useAtom(
     isDisabledEditorEnterAtom
   );
+
+  const handleImageUpload = async (file) => {
+    try {
+      if (!file.type.includes('image')) return;
+      let compressedFile = file;
+      if (file.type !== 'image/gif') {
+        await new Promise<void>((resolve) => {
+          new Compressor(file, {
+            quality: 0.6,
+            maxWidth: 1200,
+            mimeType: 'image/webp',
+            success(result) {
+              compressedFile = result;
+              resolve();
+            },
+            error(err) {
+              console.error('Image compression error:', err);
+            },
+          });
+        });
+      }
+
+      if (compressedFile) {
+        const toBase64 = await fileToBase64(compressedFile);
+        insertImage(toBase64);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const extensionsFiltered = isChat
     ? extensions.filter((item) => item?.name !== 'image')
@@ -542,6 +574,24 @@ export default ({
               }
             }
             return false;
+          },
+          handlePaste(view, event) {
+            if (!isChat) return;
+            const items = event.clipboardData?.items;
+            if (!items) return false;
+
+            for (const item of items) {
+              if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) {
+                  event.preventDefault(); // Block the default paste
+                  handleImageUpload(file); // Custom handler
+                  return true; // Let ProseMirror know we handled it
+                }
+              }
+            }
+
+            return false; // fallback to default behavior otherwise
           },
         }}
       />
