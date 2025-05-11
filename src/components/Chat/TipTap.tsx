@@ -385,9 +385,7 @@ export default ({
             maxWidth: 1200,
             mimeType: 'image/webp',
             success(result) {
-              compressedFile = new File([result], 'image.webp', {
-                type: 'image/webp',
-              });
+              compressedFile = result;
               resolve();
             },
             error(err) {
