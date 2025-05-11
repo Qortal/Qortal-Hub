@@ -1228,7 +1228,6 @@ export const publishMultipleQDNResources = async (
   sender,
   isFromExtension
 ) => {
-  console.log('data', data);
   const requiredFields = ['resources'];
   const missingFields: string[] = [];
   let feeAmount = null;
@@ -1695,7 +1694,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       ? fullMessageObject
       : {
           messageText: tiptapJson,
-          images: [''],
+          images: [],
           repliedTo: '',
           version: 3,
         };

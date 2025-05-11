@@ -400,7 +400,6 @@ export default ({
       if (compressedFile) {
         const toBase64 = await fileToBase64(compressedFile);
         insertImage(toBase64);
-        console.log('toBase64', toBase64);
       }
     } catch (error) {
       console.error(error);
