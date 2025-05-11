@@ -121,7 +121,7 @@ const MenuBar = React.memo(
           editor.view.dom.removeEventListener('paste', handlePaste);
         };
       }
-    }, [editor]);
+    }, [editor, isChat]);
 
     return (
       <div className="control-group">
@@ -374,35 +374,38 @@ export default ({
     isDisabledEditorEnterAtom
   );
 
-  const handleImageUpload = async (file) => {
-    try {
-      if (!file.type.includes('image')) return;
-      let compressedFile = file;
-      if (file.type !== 'image/gif') {
-        await new Promise<void>((resolve) => {
-          new Compressor(file, {
-            quality: 0.6,
-            maxWidth: 1200,
-            mimeType: 'image/webp',
-            success(result) {
-              compressedFile = result;
-              resolve();
-            },
-            error(err) {
-              console.error('Image compression error:', err);
-            },
+  const handleImageUpload = useCallback(
+    async (file) => {
+      try {
+        if (!file.type.includes('image')) return;
+        let compressedFile = file;
+        if (file.type !== 'image/gif') {
+          await new Promise<void>((resolve) => {
+            new Compressor(file, {
+              quality: 0.6,
+              maxWidth: 1200,
+              mimeType: 'image/webp',
+              success(result) {
+                compressedFile = result;
+                resolve();
+              },
+              error(err) {
+                console.error('Image compression error:', err);
+              },
+            });
           });
-        });
-      }
+        }
 
-      if (compressedFile) {
-        const toBase64 = await fileToBase64(compressedFile);
-        insertImage(toBase64);
+        if (compressedFile) {
+          const toBase64 = await fileToBase64(compressedFile);
+          insertImage(toBase64);
+        }
+      } catch (error) {
+        console.error(error);
       }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+    },
+    [insertImage]
+  );
 
   const extensionsFiltered = isChat
     ? extensions.filter((item) => item?.name !== 'image')

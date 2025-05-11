@@ -843,7 +843,9 @@ export const ChatGroup = ({
                 };
               })
             : chatReference
-              ? onEditMessage?.images || []
+              ? isDeleteImage
+                ? []
+                : onEditMessage?.images || []
               : [];
 
         const otherData = {
