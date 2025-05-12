@@ -294,7 +294,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               display: 'inline',
             }}
           >
-            Add seed-phrase
+            {t('auth:action.add.seed_phrase', { postProcess: 'capitalize' })}
           </CustomButton>
         </HtmlTooltip>
 
@@ -308,9 +308,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                   fontSize: '16px',
                 }}
               >
-                Use this option to connect additional Qortal wallets you've
-                already made, in order to login with them afterwards. You will
-                need access to your backup JSON file in order to do so.
+                {t('auth:tips.additional_wallet', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Fragment>
           }
@@ -322,7 +322,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             {...getRootProps()}
           >
             <input {...getInputProps()} />
-            Add account
+            {t('auth:action.add.account', {
+              postProcess: 'capitalize',
+            })}
           </CustomButton>
         </HtmlTooltip>
       </Box>
@@ -338,7 +340,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         }}
       >
         <DialogTitle id="alert-dialog-title">
-          Type or paste in your seed-phrase
+          {t('auth:message.generic.type_seed', {
+            postProcess: 'capitalize',
+          })}
         </DialogTitle>
 
         <DialogContent>
@@ -346,9 +350,13 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             sx={{
               display: 'flex',
               flexDirection: 'column',
-            }} // TODO translate
+            }}
           >
-            <Label>Name</Label>
+            <Label>
+              {t('auth:name', {
+                postProcess: 'capitalize',
+              })}
+            </Label>
             <Input
               placeholder="Name"
               value={seedName}
@@ -357,7 +365,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Spacer height="7px" />
 
-            <Label>Seed-phrase</Label>
+            <Label>
+              {t('auth:seed', {
+                postProcess: 'capitalize',
+              })}
+            </Label>
             <PasswordField
               placeholder="Seed-phrase"
               id="standard-adornment-password"
@@ -371,7 +383,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Spacer height="7px" />
 
-            <Label>Choose new password</Label>
+            <Label>
+              {t('auth:action.choose_password', {
+                postProcess: 'capitalize',
+              })}
+            </Label>
             <PasswordField
               id="standard-adornment-password"
               value={password}
@@ -383,6 +399,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             />
           </Box>
         </DialogContent>
+
         <DialogActions>
           <Button
             disabled={isLoadingEncryptSeed}
@@ -395,7 +412,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               setSeedError('');
             }}
           >
-            Close
+            {t('core:action.close', {
+              postProcess: 'capitalize',
+            })}
           </Button>
           <LoadingButton
             loading={isLoadingEncryptSeed}
@@ -407,7 +426,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             }}
             autoFocus
           >
-            Add
+            {t('core:action.add', {
+              postProcess: 'capitalize',
+            })}
           </LoadingButton>
           <Typography
             sx={{
@@ -428,6 +449,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth']);
 
   useEffect(() => {
     if (wallet?.name) {
@@ -463,6 +485,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           <ListItemAvatar>
             <Avatar alt="" src="/static/images/avatar/1.jpg" />
           </ListItemAvatar>
+
           <ListItemText
             primary={
               wallet?.name
@@ -492,7 +515,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                     marginTop: '5px',
                   }}
                 >
-                  Login
+                  {t('core:action.login', {
+                    postProcess: 'capitalize',
+                  })}
                 </Typography>
               </Box>
             }
@@ -519,7 +544,11 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             padding: '8px',
           }}
         >
-          <Label>Name</Label>
+          <Label>
+            {t('auth:name', {
+              postProcess: 'capitalize',
+            })}
+          </Label>
           <Input
             placeholder="Name"
             value={name}
@@ -531,7 +560,11 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
 
           <Spacer height="10px" />
 
-          <Label>Note</Label>
+          <Label>
+            {t('auth:note', {
+              postProcess: 'capitalize',
+            })}
+          </Label>
           <Input
             placeholder="Note"
             value={note}
@@ -559,7 +592,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               variant="contained"
               onClick={() => setIsEdit(false)}
             >
-              Close
+              {t('core:action.close', {
+                postProcess: 'capitalize',
+              })}
             </Button>
             <Button
               sx={{
@@ -575,7 +610,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               variant="contained"
               onClick={() => updateWalletItem(idx, null)}
             >
-              Remove
+              {t('core:action.remove', {
+                postProcess: 'capitalize',
+              })}
             </Button>
             <Button
               sx={{
@@ -598,7 +635,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                 setIsEdit(false);
               }}
             >
-              Save
+              {t('core:action.save', {
+                postProcess: 'capitalize',
+              })}
             </Button>
           </Box>
         </Box>

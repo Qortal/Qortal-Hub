@@ -20,6 +20,7 @@
     "import": "import",
     "invite": "invite",
     "join": "join",
+    "login": "login",
     "logout": "logout",
     "new": {
       "post": "new post",
@@ -28,7 +29,9 @@
     "notify": "notify",
     "post": "post",
     "post_message": "post message",
-    "publish": "publish"
+    "publish": "publish",
+    "remove": "remove",
+    "save": "save"
   },
   "admin": "admin",
   "core": {
