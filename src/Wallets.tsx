@@ -83,7 +83,6 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         }
       }
 
-      let error: any = null;
       const uniqueInitialMap = new Map();
 
       // Only add a message if it doesn't already exist in the Map
@@ -223,7 +222,12 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
       {rawWallet && (
         <Box>
-          <Typography>Selected Account:</Typography> // TODO translate
+          <Typography>
+            {t('auth:account.selected', {
+              postProcess: 'capitalize',
+            })}
+            :
+          </Typography>
           {rawWallet?.name && <Typography>{rawWallet.name}</Typography>}
           {rawWallet?.address0 && (
             <Typography>{rawWallet?.address0}</Typography>
@@ -233,12 +237,12 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       {wallets?.length > 0 && (
         <List
           sx={{
-            width: '100%',
-            maxWidth: '500px',
-            maxHeight: '60vh',
-            overflowY: 'auto',
-            overflowX: 'hidden',
             backgroundColor: theme.palette.background.paper,
+            maxHeight: '60vh',
+            maxWidth: '500px',
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            width: '100%',
           }}
         >
           {wallets?.map((wallet, idx) => {
@@ -260,11 +264,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
       <Box
         sx={{
+          alignItems: 'center',
+          bottom: wallets?.length === 0 ? 'unset' : '20px',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
           position: wallets?.length === 0 ? 'relative' : 'fixed',
-          bottom: wallets?.length === 0 ? 'unset' : '20px',
           right: wallets?.length === 0 ? 'unset' : '20px',
         }}
       >
@@ -278,9 +282,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                   fontSize: '16px',
                 }}
               >
-                Already have a Qortal account? Enter your secret backup phrase
-                here to access it. This phrase is one of the ways to recover
-                your account.
+                {t('auth:tips.existing_account', { postProcess: 'capitalize' })}
               </Typography>
             </Fragment>
           }

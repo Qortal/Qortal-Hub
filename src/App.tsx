@@ -2513,7 +2513,7 @@ function App() {
                 setExtstate('create-wallet');
               }}
             >
-              {t('auth:create_account', { postProcess: 'capitalize' })}
+              {t('auth:action.create_account', { postProcess: 'capitalize' })}
             </CustomButton>
           </>
         )}
@@ -2610,7 +2610,7 @@ function App() {
                   fontWeight: 600,
                 }}
               >
-                {t('auth:authenticate', { postProcess: 'capitalize' })}
+                {t('auth:action.authenticate', { postProcess: 'capitalize' })}
               </TextP>
             </Box>
 
@@ -2662,7 +2662,7 @@ function App() {
               <Spacer height="20px" />
 
               <CustomButton onClick={authenticateWallet}>
-                {t('auth:authenticate', { postProcess: 'capitalize' })}
+                {t('auth:action.authenticate', { postProcess: 'capitalize' })}
               </CustomButton>
 
               <ErrorText>{walletToBeDecryptedError}</ErrorText>
@@ -2930,7 +2930,9 @@ function App() {
                   <Spacer height="17px" />
 
                   <CustomButton onClick={createAccountFunc}>
-                    {t('auth:create_account', { postProcess: 'capitalize' })}
+                    {t('auth:action.create_account', {
+                      postProcess: 'capitalize',
+                    })}
                   </CustomButton>
                 </Box>
                 <ErrorText>{walletToBeDownloadedError}</ErrorText>

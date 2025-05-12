@@ -572,7 +572,7 @@ export const NotAuthenticated = ({
               },
             }}
           >
-            {t('auth:create_account', { postProcess: 'capitalize' })}
+            {t('auth:action.create_account', { postProcess: 'capitalize' })}
           </CustomButton>
         </HtmlTooltip>
       </Box>
@@ -953,7 +953,9 @@ export const NotAuthenticated = ({
                     setCustomNodeToSaveIndex(null);
                   }}
                 >
-                  {t('auth:return_to_list', { postProcess: 'capitalize' })}
+                  {t('auth:action.return_to_list', {
+                    postProcess: 'capitalize',
+                  })}
                 </Button>
 
                 <Button

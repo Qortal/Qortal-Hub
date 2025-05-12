@@ -67,6 +67,9 @@
       "missing_field": "missing: {{ field }}",
       "save_qdn": "unable to save to QDN"
     },
+    "question": {
+      "new_user": "are you a new user?"
+    },
     "status": {
       "minting": "(minting)",
       "not_minting": "(not minting)",
@@ -90,9 +93,6 @@
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
-  "question": {
-    "new_user": "are you a new user?"
-  },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",

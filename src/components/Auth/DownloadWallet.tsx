@@ -157,7 +157,7 @@ export const DownloadWallet = ({
             fontWeight: 600,
           }}
         >
-          {t('auth:download_account', { postProcess: 'capitalize' })}
+          {t('auth:action.download_account', { postProcess: 'capitalize' })}
         </TextP>
       </Box>
 
@@ -247,13 +247,13 @@ export const DownloadWallet = ({
             onClick={async () => {
               await saveFileToDiskFunc();
               await showInfo({
-                message: t('auth:keep_secure', {
+                message: t('auth:message.generic.keep_secure', {
                   postProcess: 'capitalize',
                 }),
               });
             }}
           >
-            {t('auth:download_account', {
+            {t('auth:action.download_account', {
               postProcess: 'capitalize',
             })}
           </CustomButton>
