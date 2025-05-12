@@ -1,6 +1,10 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import Logo2 from '../assets/svgs/Logo2.svg';
-import { MyContext, getArbitraryEndpointReact, getBaseApiReact } from '../App';
+import {
+  MyContext,
+  getArbitraryEndpointReact,
+  getBaseApiReact,
+} from '../../App';
 import {
   Avatar,
   Box,
@@ -10,10 +14,10 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { Spacer } from '../common/Spacer';
-import ImageUploader from '../common/ImageUploader';
-import { getFee } from '../background';
-import { fileToBase64 } from '../utils/fileReading';
+import { Spacer } from '../../common/Spacer';
+import ImageUploader from '../../common/ImageUploader';
+import { getFee } from '../../background';
+import { fileToBase64 } from '../../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
 
