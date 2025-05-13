@@ -62,6 +62,7 @@
       "latest_promotion": "only the latest promotion from the week will be shown for your group.",
       "loading_members": "loading member list with names... please wait.",
       "max_chars": " Max 200 characters. Publish Fee",
+      "manage_minting": "manage your minting",
       "no_display": "nothing to display",
       "no_selection": "no group selected",
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
@@ -80,7 +81,9 @@
       "group_secret_key": "cannot get group secret key",
       "name_required": "please provide a name",
       "notify_admins": "try notifying an admin from the list of admins below:",
-      "thread_id": "unable to locate thread Id"
+      "timeout_reward": "timeout waiting for reward share confirmation",
+      "thread_id": "unable to locate thread Id",
+      "unable_minting": "unable to start minting"
     },
     "success": {
       "group_ban": "successfully banned member from group. It may take a couple of minutes for the changes to propagate",
@@ -104,6 +107,10 @@
       "invitation_request": "accepted join request: awaiting confirmation",
       "loading_threads": "loading threads... please wait.",
       "post_creation": "successfully created post. It may take some time for the publish to propagate",
+      "rewardshare_add": "add rewardshare: awaiting confirmation",
+      "rewardshare_add_label": "add rewardshare: success!",
+      "rewardshare_remove": "remove rewardshare: awaiting confirmation",
+      "rewardshare_remove_label": "remove rewardshare: success!",
       "thread_creation": "successfully created thread. It may take some time for the publish to propagate",
       "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate",
       "user_joined": "user successfully joined!"

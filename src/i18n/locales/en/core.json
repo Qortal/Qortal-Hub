@@ -67,6 +67,8 @@
     "error": {
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
+      "minting_account_add": "unable to add minting account",
+      "minting_account_remove": "unable to remove minting account",
       "missing_field": "missing: {{ field }}",
       "save_qdn": "unable to save to QDN"
     },
