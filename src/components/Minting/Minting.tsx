@@ -21,7 +21,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { getFee, getNameOrAddress } from '../../background';
+import { getFee } from '../../background';
 import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../common/useModal';
@@ -658,18 +658,34 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           sx={{
             backgroundColor: theme.palette.background.default,
             padding: '10px',
-          }} // TODO translate
+          }}
         >
-          <Typography>Account: {handleNames(accountInfo?.address)}</Typography>
-
-          <Typography>Level: {accountInfo?.level}</Typography>
-
           <Typography>
-            blocks remaining until next level: {_levelUpBlocks()}
+            {t('auth:account.account_one', {
+              postProcess: 'capitalize',
+            })}
+            : {handleNames(accountInfo?.address)}
           </Typography>
 
           <Typography>
-            This node is minting: {nodeInfos?.isMintingPossible?.toString()}
+            {t('core:level', {
+              postProcess: 'capitalize',
+            })}
+            : {accountInfo?.level}
+          </Typography>
+
+          <Typography>
+            {t('group:message.generic.next_level', {
+              postProcess: 'capitalize',
+            })}{' '}
+            {_levelUpBlocks()}
+          </Typography>
+
+          <Typography>
+            {t('group:message.generic.node_minting', {
+              postProcess: 'capitalize',
+            })}{' '}
+            {nodeInfos?.isMintingPossible?.toString()}
           </Typography>
         </Card>
 
@@ -706,12 +722,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
               variant="contained"
             >
-              Start minting
+              {t('core:action.start_minting', {
+                postProcess: 'capitalize',
+              })}
             </Button>
+
             {mintingAccounts?.length > 1 && (
               <Typography>
-                Only 2 minting keys are allowed per node. Please remove one if
-                you would like to mint with this account.
+                {t('group:message.generic.minting_keys_per_node', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             )}
           </Box>
@@ -720,7 +740,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         <Spacer height="10px" />
 
         {mintingAccounts?.length > 0 && (
-          <Typography>Node's minting accounts</Typography>
+          <Typography>Node's minting accounts</Typography> // TODO translate
         )}
         <Card
           sx={{
@@ -742,7 +762,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               </Typography>
             </Box>
           )}
+
           <Spacer height="10px" />
+
           {mintingAccounts?.map((acct) => (
             <Box
               key={acct?.mintingAccount}

@@ -1778,6 +1778,7 @@ function App() {
             <QMailStatus />
 
             <Spacer height="20px" />
+
             {extState === 'authenticated' && (
               <GeneralNotifications address={userInfo?.address} />
             )}

@@ -536,7 +536,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                         {t('core:time.hour', { count: 1 })}
                       </MenuItem>
                       <MenuItem value={180}>
-                        3{t('core:time.hour', { count: 3 })}
+                        {t('core:time.hour', { count: 3 })}
                       </MenuItem>
                       <MenuItem value={300}>
                         {t('core:time.hour', { count: 5 })}
