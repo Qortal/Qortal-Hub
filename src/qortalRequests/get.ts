@@ -1694,7 +1694,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       ? fullMessageObject
       : {
           messageText: tiptapJson,
-          images: [''],
+          images: [],
           repliedTo: '',
           version: 3,
         };

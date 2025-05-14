@@ -1,3 +1,5 @@
+//TODO
+
 import { useRef, useState, useCallback, useMemo } from 'react';
 
 interface State {
@@ -34,7 +36,7 @@ export const useModal = () => {
   const onCancel = useCallback(() => {
     const { reject } = promiseConfig.current || {};
     hide();
-    reject?.();
+    reject?.('Declined');
   }, [hide]);
 
   return useMemo(
