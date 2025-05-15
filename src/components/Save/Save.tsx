@@ -155,7 +155,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         const fee = await getFee('ARBITRARY');
 
         await show({
-          message: t('core:save.publish_qnd', { postProcess: 'capitalize' }),
+          message: t('core:save_options.publish_qnd', {
+            postProcess: 'capitalize',
+          }),
           publishFee: fee.fee + ' QORT',
         });
         const response = await new Promise((res, rej) => {
@@ -184,7 +186,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
           setSettingsQdnLastUpdated(Date.now());
           setInfoSnack({
             type: 'success',
-            message: t('core:message.success.publish_qdn', {
+            message: t('core:message.success.published_qdn', {
               postProcess: 'capitalize',
             }),
           });

@@ -12,6 +12,8 @@
     "close": "close",
     "continue": "continue",
     "continue_logout": "continue to logout",
+    "create_apps": "create apps",
+    "create_file": "create file",
     "create_thread": "create thread",
     "choose_name": "choose a name",
     "decline": "decline",
@@ -39,11 +41,16 @@
     "register_name": "register name",
     "remove": "remove",
     "save": "save",
+    "select_app_type": "select App Type",
+    "select_category": "select Category",
+    "select_name_app": "select Name/App",
     "start_minting": "start minting",
     "unpin": "unpin",
     "unpin_from_dashboard": "unpin from dashboard"
   },
   "admin": "admin",
+  "app": "app",
+  "app_service_type": "app service type",
   "category": "category",
   "core": {
     "block_height": "block height",
@@ -83,7 +90,8 @@
       "incorrect_password": "incorrect password",
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
-      "missing_field": "missing: {{ field }}",
+      "missing_fields": "missing: {{ fields }}",
+      "publish_app": "unable to publish app",
       "save_qdn": "unable to save to QDN"
     },
     "generic": {
@@ -93,8 +101,11 @@
       "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
       "no_description": "no description",
+      "one_app_per_name": "note: Currently, only one App and Website is allowed per Name.",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
-      "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party."
+      "publishing": "publishing... Please wait.",
+      "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party.",
+      "select_zip": "select .zip file containing static content:"
     },
     "question": {
       "new_user": "are you a new user?"
@@ -107,12 +118,14 @@
     },
     "success": {
       "order_submitted": "your buy order was submitted",
-      "publish_qdn": "successfully published to QDN",
+      "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
+      "published_qdn": "successfully published to QDN",
       "request_read": "I have read this request",
       "transfer": "the transfer was succesful!"
     }
   },
   "minting_status": "minting status",
+  "name_app": "name/App",
   "none": "none",
   "page": {
     "last": "last",
@@ -130,6 +143,7 @@
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
     "overwrite_qdn": "overwrite to QDN",
+    "publish_app": "would you like to publish this app?",
     "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
     "qdn": "use QDN saving",
     "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
@@ -144,6 +158,7 @@
   },
   "settings": "settings",
   "supply": "supply",
+  "tags": "tags",
   "theme": {
     "dark": "dark mode",
     "light": "light mode"
@@ -163,5 +178,6 @@
     "wallet": "wallet",
     "wallet_other": "wallets"
   },
+  "website": "website",
   "welcome": "welcome"
 }

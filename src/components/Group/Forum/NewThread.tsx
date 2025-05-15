@@ -202,7 +202,7 @@ export const NewThread = ({
       // if (!description) missingFields.push('subject')
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
-        const errMsg = t('group:message.error.missing_field', {
+        const errMsg = t('core:message.error.missing_fields', {
           field: missingFieldsString,
           postProcess: 'capitalize',
         });

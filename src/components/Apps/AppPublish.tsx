@@ -169,17 +169,25 @@ export const AppPublish = ({ names, categories }) => {
       });
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
-        const errorMsg = `Missing fields: ${missingFieldsString}`;
+        const errorMsg = t('core:message.error.missing_fields', {
+          fields: missingFieldsString,
+          postProcess: 'capitalize',
+        });
         throw new Error(errorMsg);
       }
       const fee = await getFee('ARBITRARY');
 
       await show({
-        // TODO translate
-        message: 'Would you like to publish this app?',
+        message: t('core:save_options.publish_app', {
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
-      setIsLoading('Publishing... Please wait.');
+      setIsLoading(
+        t('core:message.generic.publishing', {
+          postProcess: 'capitalize',
+        })
+      );
       const fileBase64 = await fileToBase64(file);
       await new Promise((res, rej) => {
         window
@@ -204,13 +212,17 @@ export const AppPublish = ({ names, categories }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', { postProcess: 'capitalize' })
+            );
           });
       });
       setInfoSnack({
         type: 'success',
-        message:
-          'Successfully published. Please wait a couple minutes for the network to propogate the changes.',
+        message: t('core:message.success.published', {
+          postProcess: 'capitalize',
+        }),
       });
       setOpenSnack(true);
       const dataObj = {
@@ -229,7 +241,11 @@ export const AppPublish = ({ names, categories }) => {
     } catch (error) {
       setInfoSnack({
         type: 'error',
-        message: error?.message || 'Unable to publish app',
+        message:
+          error?.message ||
+          t('core:message.error.publish_app', {
+            postProcess: 'capitalize',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -250,18 +266,27 @@ export const AppPublish = ({ names, categories }) => {
           width: 'auto',
         }}
       >
-        <AppLibrarySubTitle>Create Apps!</AppLibrarySubTitle>
+        <AppLibrarySubTitle>
+          {t('core:action.create_apps', {
+            postProcess: 'capitalize',
+          })}
+          !
+        </AppLibrarySubTitle>
 
         <Spacer height="18px" />
 
         <PublishQAppInfo>
-          Note: Currently, only one App and Website is allowed per Name.
+          {t('core:message.generic.one_app_per_name', {
+            postProcess: 'capitalize',
+          })}
         </PublishQAppInfo>
 
         <Spacer height="18px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          Name/App
+          {t('core:name_app', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <CustomSelect
@@ -276,7 +301,9 @@ export const AppPublish = ({ names, categories }) => {
                 color: theme.palette.text.secondary,
               }}
             >
-              Select Name/App
+              {t('core:action.select_name_app', {
+                postProcess: 'capitalize',
+              })}
             </em>
             {/* This is the placeholder item */}
           </CustomMenuItem>
@@ -288,7 +315,9 @@ export const AppPublish = ({ names, categories }) => {
         <Spacer height="15px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          App service type
+          {t('core:app_service_type', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <CustomSelect
@@ -303,17 +332,29 @@ export const AppPublish = ({ names, categories }) => {
                 color: theme.palette.text.secondary,
               }}
             >
-              Select App Type
+              {t('core:action.select_app_type', {
+                postProcess: 'capitalize',
+              })}
             </em>
           </CustomMenuItem>
-          <CustomMenuItem value={'APP'}>App</CustomMenuItem>
-          <CustomMenuItem value={'WEBSITE'}>Website</CustomMenuItem>
+          <CustomMenuItem value={'APP'}>
+            {t('core:app', {
+              postProcess: 'capitalize',
+            })}
+          </CustomMenuItem>
+          <CustomMenuItem value={'WEBSITE'}>
+            {t('core:website', {
+              postProcess: 'capitalize',
+            })}
+          </CustomMenuItem>
         </CustomSelect>
 
         <Spacer height="15px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          Title
+          {t('core:title', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <InputBase
@@ -338,7 +379,9 @@ export const AppPublish = ({ names, categories }) => {
         <Spacer height="15px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          Description
+          {t('core:description', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <InputBase
@@ -363,7 +406,9 @@ export const AppPublish = ({ names, categories }) => {
         <Spacer height="15px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          Category
+          {t('core:category', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <CustomSelect
@@ -378,7 +423,9 @@ export const AppPublish = ({ names, categories }) => {
                 color: theme.palette.text.secondary,
               }}
             >
-              Select Category
+              {t('core:action.select_category', {
+                postProcess: 'capitalize',
+              })}
             </em>
           </CustomMenuItem>
           {categories?.map((category) => {
@@ -393,7 +440,9 @@ export const AppPublish = ({ names, categories }) => {
         <Spacer height="15px" />
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          Tags
+          {t('core:tags', {
+            postProcess: 'capitalize',
+          })}
         </InputLabel>
 
         <AppPublishTagsContainer>
@@ -487,7 +536,7 @@ export const AppPublish = ({ names, categories }) => {
         <Spacer height="30px" />
 
         <PublishQAppInfo>
-          Select .zip file containing static content:{' '}
+          {t('core:message.generic.select_zip', { postProcess: 'capitalize' })}
         </PublishQAppInfo>
 
         <Spacer height="10px" />
@@ -507,7 +556,7 @@ export const AppPublish = ({ names, categories }) => {
         <PublishQAppChoseFile {...getRootProps()}>
           {' '}
           <input {...getInputProps()} />
-          Choose File
+          {t('core:action.choose_file', { postProcess: 'capitalize' })}
         </PublishQAppChoseFile>
 
         <Spacer height="35px" />
@@ -518,7 +567,7 @@ export const AppPublish = ({ names, categories }) => {
           }}
           onClick={publishApp}
         >
-          Publish
+          {t('core:action.publish', { postProcess: 'capitalize' })}
         </PublishQAppCTAButton>
       </AppsWidthLimiter>
 
