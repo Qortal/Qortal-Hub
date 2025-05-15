@@ -118,6 +118,9 @@
       "invitation_request": "accepted join request: awaiting confirmation",
       "loading_threads": "loading threads... please wait.",
       "post_creation": "successfully created post. It may take some time for the publish to propagate",
+      "registered_name": "successfully registered. It may take a couple of minutes for the changes to propagate",
+      "registered_name_label": "registered name: awaiting confirmation. This may take a couple minutes.",
+      "registered_name_success": "registered name: success!",
       "rewardshare_add": "add rewardshare: awaiting confirmation",
       "rewardshare_add_label": "add rewardshare: success!",
       "rewardshare_creation": "confirming creation of rewardshare on chain. Please be patient, this could take up to 90 seconds.",
@@ -131,7 +134,8 @@
   },
   "question": {
     "perform_transaction": "would you like to perform a {{action}} transaction?",
-    "provide_thread": "please provide a thread title"
+    "provide_thread": "please provide a thread title",
+    "register_name": "would you like to register this name?"
   },
   "thread_posts": "new thread posts"
 }
