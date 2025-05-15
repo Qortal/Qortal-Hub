@@ -16,6 +16,7 @@
     "choose_name": "choose a name",
     "decline": "decline",
     "decrypt": "decrypt",
+    "download": "download",
     "edit": "edit",
     "enter_name": "enter a name",
     "export": "export",
@@ -29,15 +30,21 @@
       "thread": "new thread"
     },
     "notify": "notify",
+    "open": "open",
+    "pin": "pin",
+    "pin_from_dashboard": "pin from dashboard",
     "post": "post",
     "post_message": "post message",
     "publish": "publish",
     "register_name": "register name",
     "remove": "remove",
     "save": "save",
-    "start_minting": "start minting"
+    "start_minting": "start minting",
+    "unpin": "unpin",
+    "unpin_from_dashboard": "unpin from dashboard"
   },
   "admin": "admin",
+  "category": "category",
   "core": {
     "block_height": "block height",
     "information": "core information",
@@ -71,6 +78,7 @@
   "message": {
     "error": {
       "address_not_found": "your address was not found",
+      "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
       "minting_account_add": "unable to add minting account",
@@ -84,6 +92,7 @@
       "name_checking": "checking if name already exists",
       "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
+      "no_description": "no description",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
       "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party."
     },
@@ -104,6 +113,7 @@
     }
   },
   "minting_status": "minting status",
+  "none": "none",
   "page": {
     "last": "last",
     "first": "first",
@@ -112,7 +122,10 @@
   },
   "payment_notification": "payment notification",
   "price": "price",
-  "q_mail": "q-mail",
+  "q_apps": {
+    "about": "about this Q-App",
+    "q_mail": "q-mail"
+  },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",

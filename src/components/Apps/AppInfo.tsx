@@ -172,9 +172,13 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isSelectedAppPinned // TODO translate
-                  ? 'Unpin from dashboard'
-                  : 'Pin to dashboard'}
+                {isSelectedAppPinned
+                  ? t('core:action.unpin_from_dashboard', {
+                      postProcess: 'capitalize',
+                    })
+                  : t('core:action.pin_from_dashboard', {
+                      postProcess: 'capitalize',
+                    })}
               </AppDownloadButtonText>
             </AppDownloadButton>
 
@@ -194,7 +198,13 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isInstalled ? 'Open' : 'Download'}
+                {isInstalled
+                  ? t('core:action.open', {
+                      postProcess: 'capitalize',
+                    })
+                  : t('core:action.download', {
+                      postProcess: 'capitalize',
+                    })}
               </AppDownloadButtonText>
             </AppDownloadButton>
           </Box>
@@ -217,25 +227,40 @@ export const AppInfo = ({ app, myName }) => {
             <Spacer width="16px" />
 
             <AppsCategoryInfoSub>
-              <AppsCategoryInfoLabel>Category:</AppsCategoryInfoLabel>
+              <AppsCategoryInfoLabel>
+                {t('core:category', {
+                  postProcess: 'capitalize',
+                })}
+                :
+              </AppsCategoryInfoLabel>
 
               <Spacer height="4px" />
 
               <AppsCategoryInfoValue>
-                {app?.metadata?.categoryName || 'none'}
+                {app?.metadata?.categoryName ||
+                  t('core:none', {
+                    postProcess: 'capitalize',
+                  })}
               </AppsCategoryInfoValue>
             </AppsCategoryInfoSub>
           </AppsCategoryInfo>
 
           <Spacer height="30px" />
 
-          <AppInfoAppName>About this Q-App</AppInfoAppName>
+          <AppInfoAppName>
+            {t('core:q_apps.about', {
+              postProcess: 'capitalize',
+            })}
+          </AppInfoAppName>
         </AppsWidthLimiter>
 
         <Spacer height="20px" />
 
         <AppsInfoDescription>
-          {app?.metadata?.description || 'No description'}
+          {app?.metadata?.description ||
+            t('core:message.generic.no_description', {
+              postProcess: 'capitalize',
+            })}
         </AppsInfoDescription>
       </Box>
     </AppsLibraryContainer>

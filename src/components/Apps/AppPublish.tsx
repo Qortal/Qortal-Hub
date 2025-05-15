@@ -1,20 +1,8 @@
 import React, { useContext, useEffect, useState } from 'react';
 import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
-  AppDownloadButton,
-  AppDownloadButtonText,
-  AppInfoAppName,
-  AppInfoSnippetContainer,
-  AppInfoSnippetLeft,
-  AppInfoSnippetMiddle,
-  AppInfoSnippetRight,
-  AppInfoUserName,
   AppLibrarySubTitle,
   AppPublishTagsContainer,
   AppsLibraryContainer,
-  AppsParent,
   AppsWidthLimiter,
   PublishQAppCTAButton,
   PublishQAppChoseFile,
@@ -28,10 +16,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
-import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
-import { Add } from '@mui/icons-material';
 import { MyContext, getBaseApiReact } from '../../App';
-import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { useDropzone } from 'react-dropzone';
@@ -39,6 +24,7 @@ import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
 import { fileToBase64 } from '../../utils/fileReading';
+import { useTranslation } from 'react-i18next';
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -81,6 +67,7 @@ export const AppPublish = ({ names, categories }) => {
   const [file, setFile] = useState(null);
   const { show } = useContext(MyContext);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth', 'group']);
   const [tag1, setTag1] = useState('');
   const [tag2, setTag2] = useState('');
   const [tag3, setTag3] = useState('');
@@ -106,9 +93,11 @@ export const AppPublish = ({ names, categories }) => {
         errors.forEach((error) => {
           if (error.code === 'file-too-large') {
             console.error(
-              `File ${file.name} is too large. Max size allowed is ${
-                maxFileSize / (1024 * 1024)
-              } MB.`
+              t('core:message.error.file_too_large', {
+                filename: file.name,
+                size: maxFileSize / (1024 * 1024),
+                postProcess: 'capitalize',
+              })
             );
           }
         });
@@ -142,6 +131,7 @@ export const AppPublish = ({ names, categories }) => {
         setTag5(myApp?.metadata?.tags[4] || '');
       }
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoading('');
     }
