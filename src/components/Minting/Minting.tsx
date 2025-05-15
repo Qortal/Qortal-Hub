@@ -740,7 +740,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         <Spacer height="10px" />
 
         {mintingAccounts?.length > 0 && (
-          <Typography>Node's minting accounts</Typography> // TODO translate
+          <Typography>
+            {t('group:message.generic.node_minting_account', {
+              postProcess: 'capitalize',
+            })}
+          </Typography>
         )}
         <Card
           sx={{
@@ -757,8 +761,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                You currently have a minting key for this account attached to
-                this node
+                {t('group:message.generic.node_minting_key', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
             </Box>
           )}
@@ -775,8 +780,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                Minting account: {handleNames(acct?.mintingAccount)}
+                {t('group:message.generic.minting_account', {
+                  postProcess: 'capitalize',
+                })}{' '}
+                {handleNames(acct?.mintingAccount)}
               </Typography>
+
               <Button
                 size="small"
                 sx={{
@@ -797,7 +806,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
                 variant="contained"
               >
-                Remove minting account
+                {t('group:action.remove_minting_account', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
 
               <Divider />
@@ -808,13 +819,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
           {mintingAccounts?.length > 1 && (
             <Typography>
-              Only 2 minting keys are allowed per node. Please remove one if you
-              would like to add a different account.
+              {t('group:message.generic.minting_keys_per_node_different', {
+                postProcess: 'capitalize',
+              })}
             </Typography>
           )}
         </Card>
 
         <Spacer height="20px" />
+
         {!isPartOfMintingGroup && (
           <Card
             sx={{
@@ -832,12 +845,19 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                You are currently not part of the MINTER group
+                {t('group:message.generic.minter_group', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
+
               <Typography>
-                Visit the Q-Mintership app to apply to be a minter
+                {t('group:message.generic.mintership_app', {
+                  postProcess: 'capitalize',
+                })}
               </Typography>
+
               <Spacer height="10px" />
+
               <Button
                 size="small"
                 sx={{
@@ -861,7 +881,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
                 variant="contained"
               >
-                Visit Q-Mintership
+                {t('group:action.visit_q_mintership', {
+                  postProcess: 'capitalize',
+                })}
               </Button>
             </Box>
           </Card>
@@ -880,13 +902,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             <DialogContent>
               {!isShowNext && (
                 <Typography>
-                  Confirming creation of rewardshare on chain. Please be
-                  patient, this could take up to 90 seconds.
+                  {t('group:message.success.rewardshare_creation', {
+                    postProcess: 'capitalize',
+                  })}
                 </Typography>
               )}
               {isShowNext && (
                 <Typography>
-                  Rewardshare confirmed. Please click Next.
+                  {t('group:message.success.rewardshare_confirmed', {
+                    postProcess: 'capitalize',
+                  })}
                 </Typography>
               )}
             </DialogContent>
@@ -898,21 +923,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 onClick={onOk}
                 autoFocus
               >
-                Next
+                {t('core:page.next', { postProcess: 'capitalize' })}
               </Button>
             </DialogActions>
           </Dialog>
         )}
       </DialogContent>
+
       <DialogActions>
         <Button
           //   disabled={isLoadingPublish}
           variant="contained"
           onClick={() => setIsOpenMinting(false)}
         >
-          Close
+          {t('core:action.close', { postProcess: 'capitalize' })}
         </Button>
       </DialogActions>
+
       <Snackbar
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         open={openSnack}
