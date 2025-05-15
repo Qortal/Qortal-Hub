@@ -27,8 +27,8 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
-
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const AppInfo = ({ app, myName }) => {
   const isInstalled = app?.status?.status === 'READY';
@@ -37,6 +37,7 @@ export const AppInfo = ({ app, myName }) => {
   );
 
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth', 'group']);
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
