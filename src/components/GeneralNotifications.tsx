@@ -111,7 +111,7 @@ export const GeneralNotifications = ({ address }) => {
                 userSelect: 'none',
               }}
             >
-              No new notifications
+              {t('core:message.generic.no_notifications')}
             </Typography>
           )}
           {hasNewPayment && (

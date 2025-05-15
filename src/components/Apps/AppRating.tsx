@@ -7,6 +7,7 @@ import { StarFilledIcon } from '../../assets/Icons/StarFilled';
 import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
 import { AppInfoUserName } from './Apps-styles';
 import { Spacer } from '../../common/Spacer';
+import { useTranslation } from 'react-i18next';
 
 export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [value, setValue] = useState(0);
@@ -19,6 +20,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasCalledRef = useRef(false);
+  const { t } = useTranslation(['core', 'group']);
 
   const getRating = useCallback(async (name, service) => {
     try {
@@ -101,26 +103,39 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const rateFunc = async (event, chosenValue, currentValue) => {
     try {
       const newValue = chosenValue || currentValue;
-      if (!myName) throw new Error('You need a name to rate.');
+      if (!myName)
+        throw new Error(
+          t('core:message.generic.name_rate', {
+            postProcess: 'capitalize',
+          })
+        );
       if (!app?.name) return;
       const fee = await getFee('CREATE_POLL');
 
       await show({
-        // TODO translate
-        message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
+        message: t('core:message.error.generic', {
+          rate: newValue,
+          postProcess: 'capitalize',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
+        const pollDescription = t('core:message.error.generic', {
+          name: app.name,
+          service: app.service,
+          postProcess: 'capitalize',
+        });
+
         await new Promise((res, rej) => {
           window
             .sendMessage(
               'createPoll',
               {
                 pollName: pollName,
-                pollDescription: `Rating for ${app.service} ${app.name}`,
+                pollDescription: pollDescription,
                 pollOptions: pollOptions,
                 pollOwnerAddress: myName,
               },
@@ -137,7 +152,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                   message:
                     'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
                 });
-                setOpenSnack(true);
+                setOpenSnack(true); // TODO translate
               }
             })
             .catch((error) => {

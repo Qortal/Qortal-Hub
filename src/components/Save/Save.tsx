@@ -233,7 +233,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         {isDesktop ? (
           <IconWrapper
             disableWidth={disableWidth}
-            label={t('core:save_options.save', {
+            label={t('core:action.save', {
               postProcess: 'capitalize',
             })}
             selected={false}
@@ -409,7 +409,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                       onClick={saveToQdn}
                       variant="contained"
                     >
-                      {t('core:save_options.save_qdn', {
+                      {t('core:action.save_qdn', {
                         postProcess: 'capitalize',
                       })}
                     </LoadingButton>
