@@ -273,7 +273,7 @@ export const AppsLibraryDesktop = ({
             }}
             onClick={() => {
               executeEvent('navigateBack', {});
-            }}
+            }} // TODO translate
           >
             <ReturnIcon />
             <ComposeP>Return to Apps Dashboard</ComposeP>

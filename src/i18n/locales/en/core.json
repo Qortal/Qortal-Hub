@@ -13,13 +13,16 @@
     "continue": "continue",
     "continue_logout": "continue to logout",
     "create_thread": "create thread",
+    "choose_name": "choose a name",
     "decline": "decline",
     "decrypt": "decrypt",
     "edit": "edit",
+    "enter_name": "enter a name",
     "export": "export",
     "import": "import",
     "invite": "invite",
     "join": "join",
+    "login": "login",
     "logout": "logout",
     "new": {
       "post": "new post",
@@ -27,7 +30,12 @@
     },
     "notify": "notify",
     "post": "post",
-    "post_message": "post message"
+    "post_message": "post message",
+    "publish": "publish",
+    "register_name": "register name",
+    "remove": "remove",
+    "save": "save",
+    "start_minting": "start minting"
   },
   "admin": "admin",
   "core": {
@@ -51,6 +59,7 @@
   },
   "general_settings": "general settings",
   "last_height": "last height",
+  "level": "level",
   "list": {
     "invite": "invite list",
     "join_request": "join request list",
@@ -61,10 +70,25 @@
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {
+      "address_not_found": "your address was not found",
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
+      "minting_account_add": "unable to add minting account",
+      "minting_account_remove": "unable to remove minting account",
       "missing_field": "missing: {{ field }}",
       "save_qdn": "unable to save to QDN"
+    },
+    "generic": {
+      "name_available": "{{ name }} is available",
+      "name_benefits": "benefits of a name",
+      "name_checking": "checking if name already exists",
+      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_unavailable": "{{ name }} is unavailable",
+      "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
+      "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party."
+    },
+    "question": {
+      "new_user": "are you a new user?"
     },
     "status": {
       "minting": "(minting)",
@@ -89,9 +113,6 @@
   "payment_notification": "payment notification",
   "price": "price",
   "q_mail": "q-mail",
-  "question": {
-    "new_user": "are you a new user?"
-  },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
     "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",

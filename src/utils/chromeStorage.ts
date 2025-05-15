@@ -7,22 +7,25 @@ const keysToEncrypt = ['keyPair'];
 
 async function initializeKeyAndIV() {
   if (!inMemoryKey) {
-    inMemoryKey = await generateKey();  // Generates the key in memory
+    inMemoryKey = await generateKey(); // Generates the key in memory
   }
 }
 
 async function generateKey(): Promise<CryptoKey> {
   return await crypto.subtle.generateKey(
     {
-      name: "AES-GCM",
-      length: 256
+      name: 'AES-GCM',
+      length: 256,
     },
     true,
-    ["encrypt", "decrypt"]
+    ['encrypt', 'decrypt']
   );
 }
 
-async function encryptData(data: string, key: CryptoKey): Promise<{ iv: Uint8Array; encryptedData: ArrayBuffer }> {
+async function encryptData(
+  data: string,
+  key: CryptoKey
+): Promise<{ iv: Uint8Array; encryptedData: ArrayBuffer }> {
   const encoder = new TextEncoder();
   const encodedData = encoder.encode(data);
 
@@ -31,8 +34,8 @@ async function encryptData(data: string, key: CryptoKey): Promise<{ iv: Uint8Arr
 
   const encryptedData = await crypto.subtle.encrypt(
     {
-      name: "AES-GCM",
-      iv: iv
+      name: 'AES-GCM',
+      iv: iv,
     },
     key,
     encodedData
@@ -41,11 +44,15 @@ async function encryptData(data: string, key: CryptoKey): Promise<{ iv: Uint8Arr
   return { iv, encryptedData };
 }
 
-async function decryptData(encryptedData: ArrayBuffer, key: CryptoKey, iv: Uint8Array): Promise<string> {
+async function decryptData(
+  encryptedData: ArrayBuffer,
+  key: CryptoKey,
+  iv: Uint8Array
+): Promise<string> {
   const decryptedData = await crypto.subtle.decrypt(
     {
-      name: "AES-GCM",
-      iv: iv
+      name: 'AES-GCM',
+      iv: iv,
     },
     key,
     encryptedData
@@ -83,7 +90,10 @@ export const storeData = async (key: string, payload: any): Promise<string> => {
     const { iv, encryptedData } = await encryptData(base64Data, inMemoryKey);
 
     // Combine IV and encrypted data into a single Uint8Array
-    const combinedData = new Uint8Array([...iv, ...new Uint8Array(encryptedData)]);
+    const combinedData = new Uint8Array([
+      ...iv,
+      ...new Uint8Array(encryptedData),
+    ]);
     const encryptedBase64Data = btoa(String.fromCharCode(...combinedData));
     await SecureStoragePlugin.set({ key, value: encryptedBase64Data });
   } else {
@@ -91,9 +101,8 @@ export const storeData = async (key: string, payload: any): Promise<string> => {
     await SecureStoragePlugin.set({ key, value: base64Data });
   }
 
-  return "Data saved successfully";
+  return 'Data saved successfully';
 };
-
 
 export const getData = async <T = any>(key: string): Promise<T | null> => {
   await initializeKeyAndIV();
@@ -105,13 +114,17 @@ export const getData = async <T = any>(key: string): Promise<T | null> => {
       if (keysToEncrypt.includes(key) && inMemoryKey) {
         // Decode the Base64-encoded encrypted data
         const combinedData = atob(storedDataBase64.value)
-          .split("")
+          .split('')
           .map((c) => c.charCodeAt(0));
 
         const iv = new Uint8Array(combinedData.slice(0, 12)); // First 12 bytes are the IV
         const encryptedData = new Uint8Array(combinedData.slice(12)).buffer;
 
-        const decryptedBase64Data = await decryptData(encryptedData, inMemoryKey, iv);
+        const decryptedBase64Data = await decryptData(
+          encryptedData,
+          inMemoryKey,
+          iv
+        );
         return base64ToJson(decryptedBase64Data);
       } else {
         // Decode non-encrypted data
@@ -121,21 +134,21 @@ export const getData = async <T = any>(key: string): Promise<T | null> => {
       return null;
     }
   } catch (error) {
-    return null
+    return null;
   }
 };
 
-
-
-
-
 // Remove keys from storage and log out
-export async function removeKeysAndLogout(keys: string[], event: MessageEvent, request: any) {
+export async function removeKeysAndLogout(
+  keys: string[],
+  event: MessageEvent,
+  request: any
+) {
   try {
     for (const key of keys) {
       try {
         await SecureStoragePlugin.remove({ key });
-        await SecureStoragePlugin.remove({ key: `${key}_iv` });  // Remove associated IV
+        await SecureStoragePlugin.remove({ key: `${key}_iv` }); // Remove associated IV
       } catch (error) {
         console.warn(`Key not found: ${key}`);
       }
@@ -144,13 +157,13 @@ export async function removeKeysAndLogout(keys: string[], event: MessageEvent, r
     event.source.postMessage(
       {
         requestId: request.requestId,
-        action: "logout",
+        action: 'logout',
         payload: true,
-        type: "backgroundMessageResponse",
+        type: 'backgroundMessageResponse',
       },
       event.origin
     );
   } catch (error) {
-    console.error("Error removing keys:", error);
+    console.error('Error removing keys:', error);
   }
 }

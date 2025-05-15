@@ -15,7 +15,7 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
-import { GroupAvatar } from '../GroupAvatar';
+import { GroupAvatar } from './GroupAvatar';
 
 export const getPublishesFromAdminsAdminSpace = async (
   admins: string[],

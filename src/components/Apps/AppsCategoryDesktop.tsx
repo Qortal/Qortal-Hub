@@ -16,20 +16,6 @@ import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 
-const ScrollerStyled = styled('div')({
-  // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-
-  // Hide scrollbar for Firefox
-  scrollbarWidth: 'none',
-
-  // Hide scrollbar for IE and older Edge
-  msOverflowStyle: 'none',
-});
-
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
   width: '100%',
@@ -99,7 +85,8 @@ export const AppsCategoryDesktop = ({
   }, [debouncedValue, categoryList]);
 
   const rowRenderer = (index) => {
-    let app = searchedList[index];
+    const app = searchedList[index];
+
     return (
       <AppInfoSnippet
         key={`${app?.service}-${app?.name}`}
@@ -205,9 +192,6 @@ export const AppsCategoryDesktop = ({
               itemContent={rowRenderer}
               atBottomThreshold={50}
               followOutput="smooth"
-              // components={{
-              //   Scroller: ScrollerStyled, // Use the styled scroller component
-              // }}
             />
           </StyledVirtuosoContainer>
         </AppsWidthLimiter>

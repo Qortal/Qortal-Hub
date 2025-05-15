@@ -7,11 +7,9 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { useAtom } from 'jotai';
 
 export const useHandlePaymentNotification = (address) => {
-  const [latestTx, setLatestTx] = useState(null);
-
   const nameAddressOfSender = useRef({});
   const isFetchingName = useRef({});
-
+  const [latestTx, setLatestTx] = useState(null);
   const [lastEnteredTimestampPayment, setLastEnteredTimestampPayment] = useAtom(
     lastPaymentSeenTimestampAtom
   );
@@ -63,6 +61,7 @@ export const useHandlePaymentNotification = (address) => {
       const key = `last-seen-payment-${address}`;
 
       const res = await getData<any>(key).catch(() => null);
+
       if (res) {
         setLastEnteredTimestampPayment(res);
       }
@@ -76,6 +75,7 @@ export const useHandlePaymentNotification = (address) => {
       const latestTx = responseData.filter(
         (tx) => tx?.creatorAddress !== address && tx?.recipient === address
       )[0];
+
       if (!latestTx) {
         return; // continue to the next group
       }
@@ -128,6 +128,7 @@ export const useHandlePaymentNotification = (address) => {
       );
     };
   }, [setLastEnteredTimestampPaymentEventFunc]);
+
   return {
     latestTx,
     getNameOrAddressOfSenderMiddle,

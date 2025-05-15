@@ -80,13 +80,13 @@ export const AppsDevModeNavBar = () => {
   return (
     <AppsNavBarParent
       sx={{
-        position: 'relative',
+        borderRadius: '0px 30px 30px 0px',
         flexDirection: 'column',
-        width: '59px',
         height: 'unset',
         maxHeight: '70vh',
-        borderRadius: '0px 30px 30px 0px',
         padding: '10px',
+        position: 'relative',
+        width: '59px',
       }}
     >
       <AppsNavBarLeft

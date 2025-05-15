@@ -310,7 +310,9 @@ export const AppsDevMode = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <Save isDesktop disableWidth myName={myName} />
+
         <ButtonBase
           onClick={() => {
             setDesktopViewMode('dev');
@@ -342,10 +344,10 @@ export const AppsDevMode = ({
         <Box
           sx={{
             display: 'flex',
-            width: '100%',
             flexDirection: 'column',
             height: '100vh',
             overflow: 'auto',
+            width: '100%',
           }}
         >
           <Spacer height="30px" />
@@ -387,6 +389,7 @@ export const AppsDevMode = ({
             }}
           >
             <Spacer height="30px" />
+
             <AppsDevModeHome
               myName={myName}
               availableQapps={availableQapps}

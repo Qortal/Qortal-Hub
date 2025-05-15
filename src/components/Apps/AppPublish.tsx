@@ -185,6 +185,7 @@ export const AppPublish = ({ names, categories }) => {
       const fee = await getFee('ARBITRARY');
 
       await show({
+        // TODO translate
         message: 'Would you like to publish this app?',
         publishFee: fee.fee + ' QORT',
       });
