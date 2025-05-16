@@ -29,6 +29,7 @@
     "edit": "edit",
     "enter_name": "enter a name",
     "export": "export",
+    "get_qort": "get QORT at Q-Trade",
     "import": "import",
     "invite": "invite",
     "join": "join",
@@ -59,6 +60,7 @@
     "select_category": "select Category",
     "select_name_app": "select Name/App",
     "start_minting": "start minting",
+    "transfer_qort": "Transfer QORT",
     "unpin": "unpin",
     "unpin_app": "unpin app",
     "unpin_from_dashboard": "unpin from dashboard",
@@ -97,6 +99,7 @@
     "payment": "payment fee",
     "publish": "publish fee"
   },
+  "for": "for",
   "general_settings": "general settings",
   "identifier": "identifier",
   "last_height": "last height",
@@ -138,7 +141,11 @@
       "unable_rate": "unable to rate"
     },
     "generic": {
+      "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
+      "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
       "devmode_local_node": "please use your local node for dev mode! Logout and use Local node.",
+      "fee_qort": "fee: {{ message }} QORT",
+      "foreign_fee": "foreign fee: {{ message }}",
       "name_available": "{{ name }} is available",
       "name_benefits": "benefits of a name",
       "name_checking": "checking if name already exists",
@@ -148,6 +155,7 @@
       "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
       "no_description": "no description",
+      "no_minting_details": "cannot view minting details on the gateway",
       "no_notifications": "no new notifications",
       "no_pinned_changes": "you currently do not have any changes to your pinned apps",
       "no_results": "no results",
@@ -155,6 +163,7 @@
       "overwrite_qdn": "overwrite to QDN",
       "password_confirm": "please confirm a password",
       "password_enter": "please enter a password",
+      "payment_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting a payment</span>",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
       "publishing": "publishing... Please wait.",
       "qdn": "use QDN saving",
@@ -240,6 +249,8 @@
   "user_lookup": "user lookup",
   "zip": "zip",
   "wallet": {
+    "litecoin": "litecoin wallet",
+    "qortal": "qortal wallet",
     "wallet": "wallet",
     "wallet_other": "wallets"
   },

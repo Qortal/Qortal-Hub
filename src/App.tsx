@@ -136,7 +136,7 @@ import { QortPayment } from './components/QortPayment';
 import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
 import ThemeSelector from './components/Theme/ThemeSelector.tsx';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
@@ -1295,7 +1295,7 @@ function App() {
             <Tooltip
               title={
                 <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  LITECOIN WALLET
+                  {t('core:wallet.litecoin', { postProcess: 'capitalizeAll' })}
                 </span>
               }
               placement="left"
@@ -1322,8 +1322,8 @@ function App() {
                 src={ltcLogo}
                 style={{
                   cursor: 'pointer',
-                  width: '20px',
                   height: 'auto',
+                  width: '20px',
                 }}
               />
             </Tooltip>
@@ -1332,7 +1332,7 @@ function App() {
             <Tooltip
               title={
                 <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  QORTAL WALLET
+                  {t('core:wallet.qortal', { postProcess: 'capitalizeAll' })}
                 </span>
               }
               placement="left"
@@ -1401,9 +1401,9 @@ function App() {
             {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
               <Box
                 sx={{
-                  gap: '10px',
-                  display: 'flex',
                   alignItems: 'center',
+                  display: 'flex',
+                  gap: '10px',
                 }}
               >
                 <TextP
@@ -1441,9 +1441,9 @@ function App() {
 
             <TextP
               sx={{
-                textAlign: 'center',
-                lineHeight: '24px',
                 fontSize: '20px',
+                lineHeight: '24px',
+                textAlign: 'center',
               }}
             >
               {userInfo?.name}
@@ -1470,15 +1470,17 @@ function App() {
             </ButtonBase>
 
             <Spacer height="10px" />
+
             {qortBalanceLoading && (
               <CircularProgress color="success" size={16} />
             )}
+
             {!qortBalanceLoading && balance >= 0 && (
               <Box
                 sx={{
-                  gap: '10px',
-                  display: 'flex',
                   alignItems: 'center',
+                  display: 'flex',
+                  gap: '10px',
                 }}
               >
                 <TextP
@@ -1519,22 +1521,28 @@ function App() {
                   executeEvent('openRegisterName', {});
                 }}
               >
-                REGISTER NAME
+                {t('core:action.register_name', {
+                  postProcess: 'capitalizeAll',
+                })}
               </TextP>
             )}
+
             <Spacer height="20px" />
+
             <CustomButton
               onClick={() => {
                 setIsOpenSendQort(true);
-                // setExtstate("send-qort");
                 setIsOpenDrawerProfile(false);
               }}
             >
-              Transfer QORT
+              {t('core:action.transfer_qort', {
+                postProcess: 'capitalizeFirst',
+              })}
             </CustomButton>
             <AddressQRCode targetAddress={rawWallet?.address0} />
           </>
         )}
+
         <TextP
           sx={{
             cursor: 'pointer',
@@ -1552,7 +1560,7 @@ function App() {
             executeEvent('open-apps-mode', {});
           }}
         >
-          Get QORT at Q-Trade
+          {t('core:action.get_qort', { postProcess: 'capitalizeFirst' })}
         </TextP>
       </AuthenticatedContainerInnerLeft>
     );
@@ -1574,9 +1582,9 @@ function App() {
 
         <AuthenticatedContainerInnerRight
           sx={{
+            borderLeft: `1px solid ${theme.palette.border.subtle}`,
             height: '100%',
             justifyContent: 'space-between',
-            borderLeft: `1px solid ${theme.palette.border.subtle}`,
           }}
         >
           <Box
@@ -1845,7 +1853,9 @@ function App() {
                   const res = await isRunningGateway();
                   if (res)
                     throw new Error(
-                      'Cannot view minting details on the gateway'
+                      t('core:message.generic.no_minting_details', {
+                        postProcess: 'capitalizeFirst',
+                      })
                     );
                   setIsOpenMinting(true);
                 } catch (error) {
@@ -2002,26 +2012,24 @@ function App() {
       }}
     >
       <PdfViewer />
+
       <MyContext.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
-            getRootProps={getRootProps}
-            getInputProps={getInputProps}
-            setExtstate={setExtstate}
             apiKey={apiKey}
-            globalApiKey={globalApiKey}
-            setApiKey={setApiKey}
-            handleSetGlobalApikey={handleSetGlobalApikey}
             currentNode={currentNode}
+            getInputProps={getInputProps}
+            getRootProps={getRootProps}
+            globalApiKey={globalApiKey}
+            handleSetGlobalApikey={handleSetGlobalApikey}
+            setApiKey={setApiKey}
             setCurrentNode={setCurrentNode}
+            setExtstate={setExtstate}
             setUseLocalNode={setUseLocalNode}
             useLocalNode={useLocalNode}
           />
         )}
-        {/* {extState !== "not-authenticated" && (
-        <button onClick={logoutFunc}>logout</button>
-      )} */}
         {extState === 'authenticated' && isMainWindow && (
           <Box
             sx={{
@@ -2046,6 +2054,7 @@ function App() {
             {renderProfile()}
           </Box>
         )}
+
         {isOpenSendQort && isMainWindow && (
           <Box
             sx={{
@@ -2060,6 +2069,7 @@ function App() {
             }}
           >
             <Spacer height="22px" />
+
             <Box
               sx={{
                 boxSizing: 'border-box',
@@ -2093,6 +2103,7 @@ function App() {
             />
           </Box>
         )}
+
         {isShowQortalRequest && !isMainWindow && (
           <>
             <Spacer height="120px" />
@@ -2141,6 +2152,7 @@ function App() {
                 <Spacer height="15px" />
               </>
             )}
+
             {messageQortalRequest?.text3 && (
               <>
                 <Box
@@ -2217,23 +2229,25 @@ function App() {
                     maxWidth: '90%',
                   }}
                 >
-                  {'Fee: '}
-                  {messageQortalRequest?.fee}
-                  {' QORT'}
+                  {t('core:message.generic.fee_qort', {
+                    message: messageQortalRequest?.fee,
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </TextP>
 
                 <Spacer height="15px" />
               </>
             )}
+
             {messageQortalRequest?.checkbox1 && (
               <Box
                 sx={{
+                  alignItems: 'center',
                   display: 'flex',
                   gap: '10px',
-                  alignItems: 'center',
                   justifyContent: 'center',
-                  width: '90%',
                   marginTop: '20px',
+                  width: '90%',
                 }}
               >
                 <Checkbox
@@ -2278,7 +2292,7 @@ function App() {
                 }}
                 onClick={() => onOkQortalRequest('accepted')}
               >
-                accept
+                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
               <CustomButton
                 sx={{
@@ -2286,12 +2300,14 @@ function App() {
                 }}
                 onClick={() => onCancelQortalRequest()}
               >
-                decline
+                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             </Box>
+
             <ErrorText>{sendPaymentError}</ErrorText>
           </>
         )}
+
         {extState === 'web-app-request-buy-order' && !isMainWindow && (
           <>
             <Spacer height="100px" />
@@ -2302,22 +2318,34 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The Application <br></br>{' '}
-              <TextItalic>{requestBuyOrder?.hostname}</TextItalic> <br></br>
-              <TextSpan>
-                is requesting {requestBuyOrder?.crosschainAtInfo?.length}{' '}
-                {`buy order${
-                  requestBuyOrder?.crosschainAtInfo.length === 1 ? '' : 's'
-                }`}
-              </TextSpan>
+              <Trans
+                i18nKey="message.generic.buy_order_request"
+                ns="core"
+                components={{
+                  br: <br />,
+                  italic: <TextItalic />,
+                  span: <TextSpan />,
+                }}
+                values={{
+                  hostname: requestBuyOrder?.hostname,
+                  count: requestBuyOrder?.crosschainAtInfo?.length || 0,
+                }}
+                tOptions={{ postProcess: ['capitalizeFirst'] }}
+              >
+                The Application <br />
+                <italic>{{ hostname }}</italic> <br />
+                <span>is requesting {{ count }} buy order</span>
+              </Trans>
             </TextP>
+
             <Spacer height="10px" />
+
             <TextP
               sx={{
-                textAlign: 'center',
-                lineHeight: '24px',
                 fontSize: '20px',
                 fontWeight: 700,
+                lineHeight: '24px',
+                textAlign: 'center',
               }}
             >
               {requestBuyOrder?.crosschainAtInfo?.reduce((latest, cur) => {
@@ -2325,7 +2353,9 @@ function App() {
               }, 0)}{' '}
               QORT
             </TextP>
+
             <Spacer height="15px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2333,9 +2363,11 @@ function App() {
                 fontSize: '14px',
               }}
             >
-              FOR
+              {t('core:for', { postProcess: 'capitalizeAll' })}
             </TextP>
+
             <Spacer height="15px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2353,6 +2385,7 @@ function App() {
             </TextP>
 
             <Spacer height="29px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2366,17 +2399,19 @@ function App() {
                 }}
                 onClick={() => confirmBuyOrder(false)}
               >
-                accept
+                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
+
               <CustomButton
                 sx={{
                   minWidth: '102px',
                 }}
                 onClick={() => confirmBuyOrder(true)}
               >
-                decline
+                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             </Box>
+
             <ErrorText>{sendPaymentError}</ErrorText>
           </>
         )}
@@ -2390,11 +2425,28 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The Application <br></br>{' '}
-              <TextItalic>{sendqortState?.hostname}</TextItalic> <br></br>
-              <TextSpan>is requesting a payment</TextSpan>
+              <Trans
+                i18nKey="message.generic.payment_request"
+                ns="core"
+                components={{
+                  br: <br />,
+                  italic: <TextItalic />,
+                  span: <TextSpan />,
+                }}
+                values={{
+                  hostname: requestBuyOrder?.hostname,
+                  count: requestBuyOrder?.crosschainAtInfo?.length || 0,
+                }}
+                tOptions={{ postProcess: ['capitalizeFirst'] }}
+              >
+                The Application <br />
+                <italic>{{ hostname }}</italic> <br />
+                <span>is requesting {{ count }} a payment</span>
+              </Trans>
             </TextP>
+
             <Spacer height="10px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2404,7 +2456,9 @@ function App() {
             >
               {sendqortState?.description}
             </TextP>
+
             <Spacer height="15px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2417,6 +2471,7 @@ function App() {
             </TextP>
 
             <Spacer height="29px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2430,23 +2485,27 @@ function App() {
                 }}
                 onClick={() => confirmPayment(false)}
               >
-                accept
+                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
+
               <CustomButton
                 sx={{
                   minWidth: '102px',
                 }}
                 onClick={() => confirmPayment(true)}
               >
-                decline
+                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             </Box>
+
             <ErrorText>{sendPaymentError}</ErrorText>
           </>
         )}
+
         {extState === 'web-app-request-connection' && !isMainWindow && (
           <>
             <Spacer height="48px" />
+
             <div
               className="image-container"
               style={{
@@ -2456,7 +2515,9 @@ function App() {
             >
               <img src={Logo1Dark} className="base-image" />
             </div>
+
             <Spacer height="38px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -2467,7 +2528,9 @@ function App() {
               <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
               <TextSpan>is requestion a connection</TextSpan>
             </TextP>
+
             <Spacer height="38px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2487,7 +2550,7 @@ function App() {
                   )
                 }
               >
-                accept
+                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
               <CustomButton
                 sx={{
@@ -2501,14 +2564,16 @@ function App() {
                   )
                 }
               >
-                decline
+                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             </Box>
           </>
         )}
+
         {extState === 'web-app-request-authentication' && !isMainWindow && (
           <>
             <Spacer height="48px" />
+
             <div
               className="image-container"
               style={{
@@ -2518,6 +2583,7 @@ function App() {
             >
               <img src={Logo1Dark} className="base-image" />
             </div>
+
             <Spacer height="38px" />
 
             <TextP
@@ -2535,8 +2601,8 @@ function App() {
 
             <Box
               sx={{
-                display: 'flex',
                 alignItems: 'center',
+                display: 'flex',
                 gap: '14px',
               }}
             ></Box>
@@ -2545,7 +2611,9 @@ function App() {
 
             <CustomButton {...getRootProps()}>
               <input {...getInputProps()} />
-              Authenticate
+              {t('auth:action.authenticate', {
+                postProcess: 'capitalizeFirst',
+              })}
             </CustomButton>
 
             <Spacer height="6px" />
@@ -2561,6 +2629,7 @@ function App() {
             </CustomButton>
           </>
         )}
+
         {extState === 'wallets' && (
           <>
             <Spacer height="22px" />
@@ -2596,6 +2665,7 @@ function App() {
             />
           </>
         )}
+
         {rawWallet && extState === 'wallet-dropped' && (
           <>
             <Spacer height="22px" />
@@ -2622,7 +2692,9 @@ function App() {
                 }}
               />
             </Box>
+
             <Spacer height="10px" />
+
             <div
               className="image-container"
               style={{
@@ -2632,12 +2704,14 @@ function App() {
             >
               <img src={Logo1Dark} className="base-image" />
             </div>
+
             <Spacer height="35px" />
+
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center',
               }}
             >
               <Typography>
@@ -2683,6 +2757,7 @@ function App() {
               {useLocalNode ? (
                 <>
                   <Spacer height="20px" />
+
                   <Typography
                     sx={{
                       fontSize: '12px',
@@ -2695,6 +2770,7 @@ function App() {
               ) : (
                 <>
                   <Spacer height="20px" />
+
                   <Typography
                     sx={{
                       fontSize: '12px',
@@ -2729,6 +2805,7 @@ function App() {
             walletToBeDownloaded={walletToBeDownloaded}
           />
         )}
+
         {extState === 'create-wallet' && (
           <>
             {!walletToBeDownloaded && (
@@ -2786,7 +2863,9 @@ function App() {
                     fontSize: '18px',
                   }}
                 >
-                  Set up your Qortal account
+                  {t('auth:action.setup_qortal_account', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </TextP>
 
                 <Spacer height="14px" />
@@ -2801,11 +2880,11 @@ function App() {
                 >
                   <Box
                     sx={{
+                      alignItems: 'center',
                       display: creationStep === 1 ? 'flex' : 'none',
                       flexDirection: 'column',
-                      alignItems: 'center',
-                      width: '350px',
                       maxWidth: '95%',
+                      width: '350px',
                     }}
                   >
                     <Typography
@@ -2813,33 +2892,39 @@ function App() {
                         fontSize: '14px',
                       }}
                     >
-                      A ‘{' '}
-                      <span
-                        onClick={() => {
-                          setShowSeed(true);
+                      <Trans
+                        ns="auth"
+                        i18nKey="message.generic.seedphrase_notice"
+                        components={{
+                          seed: (
+                            <span
+                              onClick={() => setShowSeed(true)}
+                              style={{
+                                fontSize: '14px',
+                                color: 'steelblue',
+                                cursor: 'pointer',
+                              }}
+                            />
+                          ),
                         }}
-                        style={{
-                          fontSize: '14px',
-                          color: 'steelblue',
-                          cursor: 'pointer',
-                        }}
+                        tOptions={{ postProcess: ['capitalizeFirst'] }}
                       >
-                        SEEDPHRASE
-                      </span>{' '}
-                      ’ has been randomly generated in the background.
+                        A <seed>SEEDPHRASE</seed> has been randomly generated in
+                        the background.
+                      </Trans>
                     </Typography>
+
                     <Typography
                       sx={{
                         fontSize: '14px',
                         marginTop: '5px',
                       }}
                     >
-                      If you wish to VIEW THE SEEDPHRASE, click the word
-                      'SEEDPHRASE' in this text. Seedphrases are used to
-                      generate the private key for your Qortal account. For
-                      security by default, seedphrases are NOT displayed unless
-                      specifically chosen.
+                      {t('auth:tips.view_seedphrase', {
+                        postProcess: 'capitalizeFirst',
+                      })}
                     </Typography>
+
                     <Typography
                       sx={{
                         fontSize: '18px',
@@ -2847,25 +2932,36 @@ function App() {
                         textAlign: 'center',
                       }}
                     >
-                      Create your Qortal account by clicking{' '}
-                      <span
-                        style={{
-                          fontWeight: 'bold',
+                      <Trans
+                        i18nKey="action.create_qortal_account"
+                        ns="auth"
+                        components={{
+                          next: (
+                            <span
+                              style={{
+                                fontWeight: 'bold',
+                              }}
+                            />
+                          ),
                         }}
+                        tOptions={{ postProcess: ['capitalizeFirst'] }}
                       >
-                        NEXT
-                      </span>{' '}
-                      below.
+                        Create your Qortal account by clicking <next>NEXT</next>{' '}
+                        below.
+                      </Trans>
                     </Typography>
+
                     <Spacer height="17px" />
+
                     <CustomButton
                       onClick={() => {
                         setCreationStep(2);
                       }}
                     >
-                      Next
+                      {t('core:page.next', { postProcess: 'capitalizeFirst' })}
                     </CustomButton>
                   </Box>
+
                   <div
                     style={{
                       display: 'none',
@@ -2876,6 +2972,7 @@ function App() {
                       template="adverb verb noun adjective noun adverb verb noun adjective noun adjective verbed adjective noun"
                     ></random-sentence-generator>
                   </div>
+
                   <Dialog
                     open={showSeed}
                     aria-labelledby="alert-dialog-title"
@@ -2896,7 +2993,9 @@ function App() {
                             fontSize: '14px',
                           }}
                         >
-                          Your seedphrase
+                          {t('auth:seed_your', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                         </Typography>
 
                         <Box
@@ -2918,16 +3017,21 @@ function App() {
                           }}
                           onClick={exportSeedphrase}
                         >
-                          Export Seedphrase
+                          {t('auth:action.export_seedphrase', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                         </CustomButton>
                       </Box>
                     </DialogContent>
+
                     <DialogActions>
                       <Button
                         variant="contained"
                         onClick={() => setShowSeed(false)}
                       >
-                        close
+                        {t('core:action.close', {
+                          postProcess: 'capitalizeFirst',
+                        })}
                       </Button>
                     </DialogActions>
                   </Dialog>
@@ -2978,7 +3082,9 @@ function App() {
                   <Spacer height="5px" />
 
                   <Typography variant="body2">
-                    There is no minimum length requirement
+                    {t('auth:message.generic.no_minimum_length', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </Typography>
 
                   <Spacer height="17px" />
@@ -2989,6 +3095,7 @@ function App() {
                     })}
                   </CustomButton>
                 </Box>
+
                 <ErrorText>{walletToBeDownloadedError}</ErrorText>
               </>
             )}
@@ -2996,17 +3103,24 @@ function App() {
             {walletToBeDownloaded && (
               <>
                 <Spacer height="48px" />
+
                 <SuccessIcon />
+
                 <Spacer height="45px" />
+
                 <TextP
                   sx={{
                     textAlign: 'center',
                     lineHeight: '15px',
                   }}
                 >
-                  Congrats, you’re all set up!
+                  {t('auth:message.generic.congrats_setup', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </TextP>
+
                 <Spacer height="50px" />
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -3016,17 +3130,24 @@ function App() {
                   }}
                 >
                   <WarningIcon color="warning" />
+
                   <Typography>
-                    Save your account in a place where you will remember it!
+                    {t('auth:tips.safe_place', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </Typography>
                 </Box>
+
                 <Spacer height="50px" />
+
                 <CustomButton
                   onClick={async () => {
                     await saveFileToDiskFunc();
                     returnToMain();
                     await showInfo({
-                      message: `Keep your wallet file secure.`,
+                      message: t('auth:tips.wallet_secure', {
+                        postProcess: 'capitalizeFirst',
+                      }),
                     });
                   }}
                 >
@@ -3038,6 +3159,7 @@ function App() {
             )}
           </>
         )}
+
         {isOpenSendQortSuccess && (
           <Box
             sx={{
@@ -3052,8 +3174,11 @@ function App() {
             }}
           >
             <Spacer height="48px" />
+
             <SuccessIcon />
+
             <Spacer height="45px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -3064,7 +3189,9 @@ function App() {
                 postProcess: 'capitalizeFirst',
               })}
             </TextP>
+
             <Spacer height="100px" />
+
             <ButtonBase
               autoFocus
               onClick={() => {
@@ -3077,11 +3204,15 @@ function App() {
             </ButtonBase>
           </Box>
         )}
+
         {extState === 'transfer-success-request' && (
           <>
             <Spacer height="48px" />
+
             <SuccessIcon />
+
             <Spacer height="45px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -3092,7 +3223,9 @@ function App() {
                 postProcess: 'capitalizeFirst',
               })}
             </TextP>
+
             <Spacer height="100px" />
+
             <CustomButton
               onClick={() => {
                 window.close();
@@ -3102,11 +3235,15 @@ function App() {
             </CustomButton>
           </>
         )}
+
         {extState === 'buy-order-submitted' && (
           <>
             <Spacer height="48px" />
+
             <SuccessIcon />
+
             <Spacer height="45px" />
+
             <TextP
               sx={{
                 textAlign: 'center',
@@ -3117,7 +3254,9 @@ function App() {
                 postProcess: 'capitalizeFirst',
               })}
             </TextP>
+
             <Spacer height="100px" />
+
             <CustomButton
               onClick={() => {
                 window.close();
@@ -3131,12 +3270,11 @@ function App() {
         {countdown && (
           <Box
             style={{
+              left: '20px',
               position: 'absolute',
               top: '20px',
-              left: '20px',
             }}
           >
-            {/* <Spacer  height="25px"/> */}
             <CountdownCircleTimer
               isPlaying
               duration={countdown}
@@ -3152,6 +3290,7 @@ function App() {
             </CountdownCircleTimer>
           </Box>
         )}
+
         {isLoading && <Loader />}
         {isShow && (
           <Dialog
@@ -3165,6 +3304,7 @@ function App() {
             <DialogTitle id="alert-dialog-title">
               {message.paymentFee ? 'Payment' : 'Publish'}
             </DialogTitle>
+
             <DialogContent>
               <DialogContentText id="alert-dialog-description">
                 {message.message}
@@ -3186,6 +3326,7 @@ function App() {
                 </DialogContentText>
               )}
             </DialogContent>
+
             <DialogActions>
               <Button
                 sx={{
@@ -3207,6 +3348,7 @@ function App() {
                   postProcess: 'capitalizeFirst',
                 })}
               </Button>
+
               <Button
                 sx={{
                   backgroundColor: theme.palette.other.danger,
@@ -3229,6 +3371,7 @@ function App() {
             </DialogActions>
           </Dialog>
         )}
+
         {isShowInfo && (
           <Dialog
             open={isShowInfo}
@@ -3238,11 +3381,13 @@ function App() {
             <DialogTitle id="alert-dialog-title">
               {'Important Info'}
             </DialogTitle>
+
             <DialogContent>
               <DialogContentText id="alert-dialog-description">
                 {messageInfo.message}
               </DialogContentText>
             </DialogContent>
+
             <DialogActions>
               <Button variant="contained" onClick={onOkInfo} autoFocus>
                 {t('core:action.close', {
@@ -3252,24 +3397,30 @@ function App() {
             </DialogActions>
           </Dialog>
         )}
+
         {isShowUnsavedChanges && (
           <Dialog
             open={isShowUnsavedChanges}
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
           >
-            <DialogTitle id="alert-dialog-title">{'LOGOUT'}</DialogTitle>
+            <DialogTitle id="alert-dialog-title">
+              {t('core:action.logout', { postProcess: 'capitalizeAll' })}
+            </DialogTitle>
+
             <DialogContent>
               <DialogContentText id="alert-dialog-description">
                 {messageUnsavedChanges.message}
               </DialogContentText>
             </DialogContent>
+
             <DialogActions>
               <Button variant="contained" onClick={onCancelUnsavedChanges}>
                 {t('core:action.cancel', {
                   postProcess: 'capitalizeFirst',
                 })}
               </Button>
+
               <Button
                 variant="contained"
                 onClick={onOkUnsavedChanges}
@@ -3282,6 +3433,7 @@ function App() {
             </DialogActions>
           </Dialog>
         )}
+
         {isShowQortalRequestExtension && isMainWindow && (
           <Dialog
             open={isShowQortalRequestExtension}
@@ -3301,15 +3453,16 @@ function App() {
             >
               {({ remainingTime }) => <TextP>{remainingTime}</TextP>}
             </CountdownCircleTimer>
+
             <Box
               sx={{
-                display: 'flex',
-                padding: '20px',
-                flexDirection: 'column',
                 alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
                 justifyContent: 'flex-start',
                 maxHeight: '90vh',
                 overflow: 'auto',
+                padding: '20px',
               }}
             >
               <Box
@@ -3331,9 +3484,11 @@ function App() {
                   {messageQortalRequestExtension?.text1}
                 </TextP>
               </Box>
+
               {messageQortalRequestExtension?.text2 && (
                 <>
                   <Spacer height="10px" />
+
                   <Box
                     sx={{
                       display: 'flex',
@@ -3351,9 +3506,11 @@ function App() {
                       {messageQortalRequestExtension?.text2}
                     </TextP>
                   </Box>
+
                   <Spacer height="15px" />
                 </>
               )}
+
               {messageQortalRequestExtension?.text3 && (
                 <>
                   <Box
@@ -3373,6 +3530,7 @@ function App() {
                       {messageQortalRequestExtension?.text3}
                     </TextP>
                   </Box>
+
                   <Spacer height="15px" />
                 </>
               )}
@@ -3408,6 +3566,7 @@ function App() {
                   />
                 </>
               )}
+
               <Spacer height="15px" />
 
               <TextP
@@ -3466,13 +3625,16 @@ function App() {
                       maxWidth: '90%',
                     }}
                   >
-                    {'App Fee: '}
-                    {messageQortalRequestExtension?.appFee}
-                    {' QORT'}
+                    {t('core:message.generic.fee_qort', {
+                      message: messageQortalRequestExtension?.appFee,
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </TextP>
+
                   <Spacer height="15px" />
                 </>
               )}
+
               {messageQortalRequestExtension?.foreignFee && (
                 <>
                   <Spacer height="15px" />
@@ -3486,12 +3648,16 @@ function App() {
                       maxWidth: '90%',
                     }}
                   >
-                    {'Foreign Fee: '}
-                    {messageQortalRequestExtension?.foreignFee}
+                    {t('core:message.generic.foreign_fee', {
+                      message: messageQortalRequestExtension?.foreignFee,
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </TextP>
+
                   <Spacer height="15px" />
                 </>
               )}
+
               {messageQortalRequestExtension?.checkbox1 && (
                 <Box
                   sx={{
@@ -3565,6 +3731,7 @@ function App() {
               )}
 
               <Spacer height="29px" />
+
               <Box
                 sx={{
                   alignItems: 'center',
@@ -3608,6 +3775,7 @@ function App() {
                     postProcess: 'capitalizeFirst',
                   })}
                 </CustomButtonAccept>
+
                 <CustomButtonAccept
                   color="black"
                   bgColor={theme.palette.other.danger}
@@ -3625,6 +3793,7 @@ function App() {
             </Box>
           </Dialog>
         )}
+
         {isSettingsOpen && (
           <Settings
             open={isSettingsOpen}
@@ -3632,22 +3801,26 @@ function App() {
             rawWallet={rawWallet}
           />
         )}
+
         <CustomizedSnackbars
           open={openSnack}
           setOpen={setOpenSnack}
           info={infoSnack}
           setInfo={setInfoSnack}
         />
+
         <DrawerComponent
           open={isOpenDrawerProfile}
           setOpen={setIsOpenDrawerProfile}
         >
           {renderProfileLeft()}
         </DrawerComponent>
+
         <UserLookup
           isOpenDrawerLookup={isOpenDrawerLookup}
           setIsOpenDrawerLookup={setIsOpenDrawerLookup}
         />
+
         <RegisterName
           balance={balance}
           show={show}
@@ -3657,14 +3830,15 @@ function App() {
         />
         <BuyQortInformation balance={balance} />
       </MyContext.Provider>
+
       {extState === 'create-wallet' && walletToBeDownloaded && (
         <ButtonBase
           onClick={() => {
             showTutorial('important-information', true);
           }}
           sx={{
-            position: 'fixed',
             bottom: '25px',
+            position: 'fixed',
             right: '25px',
           }}
         >
@@ -3675,6 +3849,7 @@ function App() {
           />
         </ButtonBase>
       )}
+
       {isOpenMinting && (
         <Minting
           setIsOpenMinting={setIsOpenMinting}
