@@ -423,7 +423,7 @@ export const AnnouncementDiscussion = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('core:loading_comments', {
+          message: t('core:loading.comments', {
             postProcess: 'capitalizeFirst',
           }),
         }}

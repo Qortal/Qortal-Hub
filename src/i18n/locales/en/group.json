@@ -94,6 +94,7 @@
       "group_secret_key": "cannot get group secret key",
       "name_required": "please provide a name",
       "notify_admins": "try notifying an admin from the list of admins below:",
+      "qortals_required": "you need at least {{ quantity }} QORT to send a message",
       "timeout_reward": "timeout waiting for reward share confirmation",
       "thread_id": "unable to locate thread Id",
       "unable_minting": "unable to start minting"

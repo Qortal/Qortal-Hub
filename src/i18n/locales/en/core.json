@@ -14,6 +14,7 @@
     "choose": "choose",
     "choose_file": "choose file",
     "close": "close",
+    "close_chat": "close Direct Chat",
     "continue": "continue",
     "continue_logout": "continue to logout",
     "copy_link": "copy link",
@@ -106,9 +107,12 @@
     "join_request": "join request list",
     "member": "member list"
   },
-  "loading": "loading...",
-  "loading_comments": "loading comments... please wait.",
-  "loading_posts": "loading posts... please wait.",
+  "loading": {
+    "generic": "loading...",
+    "chat": "loading chat... please wait.",
+    "comments": "loading comments... please wait.",
+    "posts": "loading posts... please wait."
+  },
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {
@@ -116,7 +120,9 @@
       "app_need_name": "your app needs a name",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
+      "invalid_signature": "invalid signature",
       "invalid_zip": "invalid zip",
+      "message_size": "your message size is of {{ size }} bytes out of a maximum of {{ maximum }}",
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
       "missing_fields": "missing: {{ fields }}",
