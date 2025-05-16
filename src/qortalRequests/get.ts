@@ -55,7 +55,6 @@ import { QORT_DECIMALS } from '../constants/constants';
 import Base58 from '../deps/Base58';
 import ed2curve from '../deps/ed2curve';
 import nacl from '../deps/nacl-fast';
-
 import {
   base64ToUint8Array,
   createSymmetricKeyAndNonce,
@@ -132,6 +131,7 @@ export async function retryTransaction(
   throwError,
   retries = MAX_RETRIES
 ) {
+  // TODO transalte
   let attempt = 0;
   while (attempt < retries) {
     try {
