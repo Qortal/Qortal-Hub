@@ -1,9 +1,8 @@
-import React, { useContext } from 'react';
+import { forwardRef } from 'react';
 import { AppViewer } from './AppViewer';
 import Frame from 'react-frame-component';
-import { MyContext } from '../../App';
 
-const AppViewerContainer = React.forwardRef(
+const AppViewerContainer = forwardRef(
   ({ app, isSelected, hide, isDevMode, customHeight, skipAuth }, ref) => {
     return (
       <Frame

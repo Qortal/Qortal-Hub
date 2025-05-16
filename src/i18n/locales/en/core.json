@@ -117,6 +117,7 @@
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
       "missing_fields": "missing: {{ fields }}",
+      "navigation_timeout": "navigation timeout",
       "publish_app": "unable to publish app",
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
