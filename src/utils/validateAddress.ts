@@ -4,6 +4,7 @@ import Base58 from '../deps/Base58';
 
 export const validateAddress = (address) => {
   let isAddress = false;
+
   try {
     const decodePubKey = Base58.decode(address);
 
