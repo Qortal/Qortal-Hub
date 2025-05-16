@@ -351,7 +351,7 @@ export const GroupAnnouncements = ({
     }
   };
 
-  const getAnnouncements = React.useCallback(
+  const getAnnouncements = useCallback(
     async (selectedGroup, isPrivate) => {
       try {
         const offset = 0;
@@ -387,7 +387,7 @@ export const GroupAnnouncements = ({
     [secretKey]
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!secretKey && isPrivate) return;
     if (
       selectedGroup &&
@@ -432,7 +432,7 @@ export const GroupAnnouncements = ({
 
   const theme = useTheme();
 
-  const checkNewMessages = React.useCallback(async () => {
+  const checkNewMessages = useCallback(async () => {
     try {
       const identifier = `grp-${selectedGroup}-anc-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${0}&reverse=true&prefix=true`;

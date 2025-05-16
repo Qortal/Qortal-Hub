@@ -37,7 +37,8 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
         setSendPaymentError('Please enter your wallet password');
         return;
       }
-      const fee = await getFee('PAYMENT');
+
+      const fee = await getFee('PAYMENT'); // TODO translate
 
       await show({
         message: `Would you like to transfer ${Number(paymentAmount)} QORT?`,
@@ -148,7 +149,7 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
         <Spacer height="6px" />
 
         <CustomLabel htmlFor="standard-adornment-password">
-          Confirm Wallet Password
+          Confirm wallet password
         </CustomLabel>
 
         <Spacer height="5px" />
