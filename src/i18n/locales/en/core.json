@@ -128,6 +128,8 @@
       "missing_fields": "missing: {{ fields }}",
       "navigation_timeout": "navigation timeout",
       "network_generic": "network error",
+      "password_not_matching": "password fields do not match!",
+      "password_wrong": "unable to authenticate. Wrong password",
       "publish_app": "unable to publish app",
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
@@ -147,18 +149,30 @@
       "name_unavailable": "{{ name }} is unavailable",
       "no_description": "no description",
       "no_notifications": "no new notifications",
+      "no_pinned_changes": "you currently do not have any changes to your pinned apps",
       "no_results": "no results",
       "one_app_per_name": "note: Currently, only one App and Website is allowed per Name.",
+      "overwrite_qdn": "overwrite to QDN",
+      "password_confirm": "please confirm a password",
+      "password_enter": "please enter a password",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
       "publishing": "publishing... Please wait.",
+      "qdn": "use QDN saving",
       "rating": "rating for {{ service }} {{ name }}",
+      "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
+      "revert_default": "revert to default",
+      "revert_qdn": "revert to QDN",
+      "save_qdn": "save to QDN",
       "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party.",
       "select_file": "please select a file",
       "select_image": "please select an image for a logo",
       "select_zip": "select .zip file containing static content:",
-      "space_for_admins": "sorry, this space is only for Admins."
+      "settings": "you are using the export/import way of saving settings.",
+      "space_for_admins": "sorry, this space is only for Admins.",
+      "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN."
     },
     "question": {
+      "logout": "are you sure you would like to logout?",
       "new_user": "are you a new user?"
     },
     "status": {
@@ -204,17 +218,6 @@
     "register_name": "would you like to register this name?",
     "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
     "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?"
-  },
-  "save_options": {
-    "no_pinned_changes": "you currently do not have any changes to your pinned apps",
-    "overwrite_qdn": "overwrite to QDN",
-    "qdn": "use QDN saving",
-    "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
-    "revert_default": "revert to default",
-    "revert_qdn": "revert to QDN",
-    "save_qdn": "save to QDN",
-    "settings": "you are using the export/import way of saving settings.",
-    "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN."
   },
   "server": "server",
   "settings": "settings",

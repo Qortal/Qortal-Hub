@@ -44,8 +44,6 @@ import {
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from './utils/generateWallet/generateWallet';
-import { kdf } from './deps/kdf';
-import { generateSaveWalletData } from './utils/generateWallet/storeWallet';
 import { crypto, walletVersion } from './constants/decryptWallet';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
 import {
@@ -147,21 +145,21 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 
 type extStates =
-  | 'not-authenticated'
   | 'authenticated'
-  | 'send-qort'
-  | 'web-app-request-connection'
-  | 'web-app-request-payment'
-  | 'web-app-request-authentication'
-  | 'download-wallet'
+  | 'buy-order-submitted'
   | 'create-wallet'
+  | 'download-wallet'
+  | 'group'
+  | 'not-authenticated'
+  | 'send-qort'
   | 'transfer-success-regular'
   | 'transfer-success-request'
   | 'wallet-dropped'
-  | 'web-app-request-buy-order'
-  | 'buy-order-submitted'
   | 'wallets'
-  | 'group';
+  | 'web-app-request-authentication'
+  | 'web-app-request-buy-order'
+  | 'web-app-request-connection'
+  | 'web-app-request-payment';
 
 interface MyContextInterface {
   isShow: boolean;
@@ -277,6 +275,7 @@ export const getBaseApiReactSocket = (customApi?: string) => {
 };
 
 export const isMainWindow = true;
+
 function App() {
   const [extState, setExtstate] = useState<extStates>('not-authenticated');
   const [desktopViewMode, setDesktopViewMode] = useState('home');
@@ -308,18 +307,22 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
 
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   const [
     walletToBeDownloadedPasswordConfirm,
     setWalletToBeDownloadedPasswordConfirm,
   ] = useState<string>('');
+
   const [walletToBeDownloadedError, setWalletToBeDownloadedError] =
     useState<string>('');
+
   const [walletToBeDecryptedError, setWalletToBeDecryptedError] =
     useState<string>('');
+
   const [isFocused, setIsFocused] = useState(true);
+
   const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
   );
@@ -328,6 +331,7 @@ function App() {
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
+
   const {
     showTutorial,
     openTutorialModal,
@@ -335,7 +339,9 @@ function App() {
     setOpenTutorialModal,
     hasSeenGettingStarted,
   } = useHandleTutorials();
+
   const { isShow, onCancel, onOk, show, message } = useModal();
+
   const {
     isShow: isShowUnsavedChanges,
     onCancel: onCancelUnsavedChanges,
@@ -343,6 +349,7 @@ function App() {
     show: showUnsavedChanges,
     message: messageUnsavedChanges,
   } = useModal();
+
   const {
     isShow: isShowInfo,
     onCancel: onCancelInfo,
@@ -358,6 +365,7 @@ function App() {
     isShow: isShowQortalRequest,
     message: messageQortalRequest,
   } = useModal();
+
   const {
     onCancel: onCancelQortalRequestExtension,
     onOk: onOkQortalRequestExtension,
@@ -365,6 +373,7 @@ function App() {
     isShow: isShowQortalRequestExtension,
     message: messageQortalRequestExtension,
   } = useModal();
+
   const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
   const [infoSnack, setInfoSnack] = useState(null);
@@ -375,15 +384,18 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
+
   const {
     isUserBlocked,
     addToBlockList,
     removeBlockFromList,
     getAllBlockedUsers,
   } = useBlockedAddresses();
+
   const [currentNode, setCurrentNode] = useState({
     url: 'http://127.0.0.1:12391',
   });
+
   const [useLocalNode, setUseLocalNode] = useState(false);
 
   const [confirmRequestRead, setConfirmRequestRead] = useState(false);
@@ -662,10 +674,15 @@ function App() {
           'kdfThreads',
         ];
         for (const field of requiredFields) {
-          if (!(field in pf)) throw new Error(field + ' not found in JSON');
+          if (!(field in pf))
+            throw new Error(
+              t('auth:message.error.field_not_found_json', {
+                field: field,
+                postProcess: 'capitalizeFirst',
+              })
+            );
         }
         setRawWallet(pf);
-        // setExtstate("authenticated");
         setExtstate('wallet-dropped');
         setdecryptedWallet(null);
       } catch (e) {
@@ -958,25 +975,39 @@ function App() {
   const createAccountFunc = async () => {
     try {
       if (!walletToBeDownloadedPassword) {
-        setWalletToBeDownloadedError('Please enter a password');
+        setWalletToBeDownloadedError(
+          t('core:message.generic.password_enter', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
         return;
       }
       if (!walletToBeDownloadedPasswordConfirm) {
-        setWalletToBeDownloadedError('Please confirm your password');
+        setWalletToBeDownloadedError(
+          t('core:message.generic.password_confirm', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
         return;
       }
       if (
         walletToBeDownloadedPasswordConfirm !== walletToBeDownloadedPassword
       ) {
-        setWalletToBeDownloadedError('Password fields do not match!');
+        setWalletToBeDownloadedError(
+          t('core:message.error.password_not_matching', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
         return;
       }
       setIsLoading(true);
+
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
         }, 250);
       });
+
       const res = await createAccount(generatorRef.current.parsedString);
       const wallet = await res.generateSaveWalletData(
         walletToBeDownloadedPassword,
@@ -1029,9 +1060,10 @@ function App() {
   const logoutFunc = useCallback(async () => {
     try {
       if (extState === 'authenticated') {
-        // TODO translate
         await showUnsavedChanges({
-          message: 'Are you sure you would like to logout?',
+          message: t('core:question.logout', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
       }
       window
@@ -1091,7 +1123,6 @@ function App() {
     setWalletToBeDownloadedPassword('');
     setShowSeed(false);
     setCreationStep(1);
-
     setWalletToBeDownloadedPasswordConfirm('');
     setWalletToBeDownloadedError('');
     setSendqortState(null);
@@ -1166,7 +1197,11 @@ function App() {
           console.error('Failed to decrypt wallet:', error);
         });
     } catch (error) {
-      setWalletToBeDecryptedError('Unable to authenticate. Wrong password');
+      setWalletToBeDecryptedError(
+        t('core:message.error.password_wrong', {
+          postProcess: 'capitalizeFirst',
+        })
+      );
     }
   };
 
@@ -1242,17 +1277,18 @@ function App() {
     return (
       <AuthenticatedContainerInnerLeft
         sx={{
+          minWidth: '225px',
           overflowY: 'auto',
           padding: '0px 20px',
-          minWidth: '225px',
         }}
       >
         <Spacer height="20px" />
+
         <Box
           sx={{
-            width: '100%',
             display: 'flex',
             justifyContent: 'flex-start',
+            width: '100%',
           }}
         >
           {authenticatedMode === 'qort' && (
@@ -1455,6 +1491,7 @@ function App() {
                 >
                   {balance?.toFixed(2)} QORT
                 </TextP>
+
                 <RefreshIcon
                   onClick={getBalanceFunc}
                   sx={{
@@ -2082,6 +2119,7 @@ function App() {
             {messageQortalRequest?.text2 && (
               <>
                 <Spacer height="10px" />
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -2099,6 +2137,7 @@ function App() {
                     {messageQortalRequest?.text2}
                   </TextP>
                 </Box>
+
                 <Spacer height="15px" />
               </>
             )}
@@ -2182,6 +2221,7 @@ function App() {
                   {messageQortalRequest?.fee}
                   {' QORT'}
                 </TextP>
+
                 <Spacer height="15px" />
               </>
             )}
@@ -2627,7 +2667,7 @@ function App() {
                 {t('auth:wallet.password', { postProcess: 'capitalizeFirst' })}
               </CustomLabel>
 
-              <Spacer height="5px" />
+              <Spacer height="10px" />
 
               <PasswordField
                 id="standard-adornment-password"
@@ -2903,7 +2943,9 @@ function App() {
                   <Spacer height="14px" />
 
                   <CustomLabel htmlFor="standard-adornment-password">
-                    Wallet Password
+                    {t('auth:wallet.password', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </CustomLabel>
 
                   <Spacer height="5px" />
@@ -2919,7 +2961,9 @@ function App() {
                   <Spacer height="6px" />
 
                   <CustomLabel htmlFor="standard-adornment-password">
-                    Confirm Wallet Password
+                    {t('auth:wallet.password_confirmation', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </CustomLabel>
 
                   <Spacer height="5px" />
