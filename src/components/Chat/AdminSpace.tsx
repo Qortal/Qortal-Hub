@@ -1,7 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
-import { MyContext } from '../../App';
+import { useEffect, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
+import { useTranslation } from 'react-i18next';
 
 export const AdminSpace = ({
   selectedGroup,
@@ -19,6 +19,8 @@ export const AdminSpace = ({
   isOwner,
 }) => {
   const [isMoved, setIsMoved] = useState(false);
+  const { t } = useTranslation(['core', 'group']);
+
   useEffect(() => {
     if (hide) {
       setTimeout(() => setIsMoved(true), 300); // Wait for the fade-out to complete before moving
@@ -35,10 +37,10 @@ export const AdminSpace = ({
         height: 'calc(100vh - 70px)',
         left: hide && '-1000px',
         opacity: hide ? 0 : 1,
+        overflow: 'auto',
         position: hide ? 'fixed' : 'relative',
         visibility: hide && 'hidden',
         width: '100%',
-        overflow: 'auto',
       }}
     >
       {!isAdmin && (
@@ -50,9 +52,14 @@ export const AdminSpace = ({
             width: '100%',
           }}
         >
-          <Typography>Sorry, this space is only for Admins.</Typography>
+          <Typography>
+            {t('core:message.generic.space_for_admins', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
         </Box>
       )}
+
       {isAdmin && (
         <AdminSpaceInner
           setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup}

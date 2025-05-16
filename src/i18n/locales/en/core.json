@@ -112,12 +112,12 @@
       "app_need_name": "your app needs a name",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
-      "incorrect_password": "incorrect password",
       "invalid_zip": "invalid zip",
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
       "missing_fields": "missing: {{ fields }}",
       "navigation_timeout": "navigation timeout",
+      "network_generic": "network error",
       "publish_app": "unable to publish app",
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
@@ -145,7 +145,8 @@
       "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party.",
       "select_file": "please select a file",
       "select_image": "please select an image for a logo",
-      "select_zip": "select .zip file containing static content:"
+      "select_zip": "select .zip file containing static content:",
+      "space_for_admins": "sorry, this space is only for Admins."
     },
     "question": {
       "new_user": "are you a new user?"

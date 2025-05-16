@@ -33,6 +33,7 @@
     "maximum": "maximum Block delay for Group Transaction Approvals"
   },
   "group": {
+    "avatar": "group avatar",
     "closed": "closed (private) - users need permission to join",
     "description": "description of group",
     "id": "group id",
