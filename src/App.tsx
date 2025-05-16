@@ -1029,6 +1029,7 @@ function App() {
   const logoutFunc = useCallback(async () => {
     try {
       if (extState === 'authenticated') {
+        // TODO translate
         await showUnsavedChanges({
           message: 'Are you sure you would like to logout?',
         });
