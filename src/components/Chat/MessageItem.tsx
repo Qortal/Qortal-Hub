@@ -1,4 +1,5 @@
-import React, {
+import {
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -77,7 +78,7 @@ const getBadgeImg = (level) => {
   }
 };
 
-const UserBadge = React.memo(({ userInfo }) => {
+const UserBadge = memo(({ userInfo }) => {
   return (
     <Tooltip disableFocusListener title={`level ${userInfo ?? 0}`}>
       <img
@@ -92,7 +93,7 @@ const UserBadge = React.memo(({ userInfo }) => {
   );
 });
 
-export const MessageItem = React.memo(
+export const MessageItem = memo(
   ({
     message,
     onSeen,

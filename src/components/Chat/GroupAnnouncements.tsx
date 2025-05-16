@@ -1,7 +1,9 @@
-import React, {
+import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -140,9 +142,9 @@ export const GroupAnnouncements = ({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const { show } = React.useContext(MyContext);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const { show } = useContext(MyContext);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
   const hasInitialized = useRef(false);
   const hasInitializedWebsocket = useRef(false);
   const editorRef = useRef(null);
@@ -150,12 +152,13 @@ export const GroupAnnouncements = ({
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
-  const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
-  const { t } = useTranslation(['core', 'group']);
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state
   };
+
   useEffect(() => {
     if (!selectedGroup) return;
     (async () => {

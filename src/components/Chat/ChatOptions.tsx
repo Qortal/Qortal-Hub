@@ -387,6 +387,7 @@ export const ChatOptions = ({
             }}
           />
         </Box>
+
         <Box
           sx={{
             alignItems: 'center',

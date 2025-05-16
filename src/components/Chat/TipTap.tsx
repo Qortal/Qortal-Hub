@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -42,7 +42,7 @@ function textMatcher(doc, from) {
   return { start, query };
 }
 
-const MenuBar = React.memo(
+const MenuBar = memo(
   ({
     setEditorRef,
     isChat,

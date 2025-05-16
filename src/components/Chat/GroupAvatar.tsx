@@ -77,8 +77,10 @@ export const GroupAvatar = ({
     try {
       if (!groupId) return;
       const fee = await getFee('ARBITRARY');
+
       if (+balance < +fee.fee)
         throw new Error(`Publishing an Avatar requires ${fee.fee}`);
+
       await show({
         message: 'Would you like to publish an avatar?',
         publishFee: fee.fee + ' QORT',
@@ -132,6 +134,7 @@ export const GroupAvatar = ({
         >
           {myName?.charAt(0)}
         </Avatar>
+
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
@@ -142,6 +145,7 @@ export const GroupAvatar = ({
             change avatar
           </Typography>
         </ButtonBase>
+
         <PopoverComp
           myName={myName}
           avatarFile={avatarFile}
@@ -170,6 +174,7 @@ export const GroupAvatar = ({
         >
           {myName?.charAt(0)}
         </Avatar>
+
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
@@ -180,6 +185,7 @@ export const GroupAvatar = ({
             change avatar
           </Typography>
         </ButtonBase>
+
         <PopoverComp
           myName={myName}
           avatarFile={avatarFile}
@@ -208,6 +214,7 @@ export const GroupAvatar = ({
           set avatar
         </Typography>
       </ButtonBase>
+
       <PopoverComp
         myName={myName}
         avatarFile={avatarFile}
@@ -258,11 +265,15 @@ const PopoverComp = ({
         >
           (500 KB max. for GIFS){' '}
         </Typography>
+
         <ImageUploader onPick={(file) => setAvatarFile(file)}>
           <Button variant="contained">Choose Image</Button>
         </ImageUploader>
+
         {avatarFile?.name}
+
         <Spacer height="25px" />
+
         {!myName && (
           <Box
             sx={{
@@ -283,6 +294,7 @@ const PopoverComp = ({
         )}
 
         <Spacer height="25px" />
+
         <LoadingButton
           loading={isLoading}
           disabled={!avatarFile || !myName}

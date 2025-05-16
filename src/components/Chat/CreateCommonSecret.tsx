@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
@@ -34,9 +34,9 @@ export const CreateCommonSecret = ({
   const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
 
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const theme = useTheme();
 

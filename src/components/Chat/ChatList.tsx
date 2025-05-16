@@ -202,11 +202,11 @@ export const ChatList = ({
           ref={parentRef}
           className="List"
           style={{
+            display: 'flex',
             flexGrow: 1,
+            height: '0px',
             overflow: 'auto',
             position: 'relative',
-            display: 'flex',
-            height: '0px',
           }}
         >
           <div
@@ -391,6 +391,7 @@ export const ChatList = ({
             </div>
           </div>
         </div>
+
         {showScrollButton && (
           <button
             onClick={() => scrollToBottom()}
