@@ -152,7 +152,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       } else {
         setSeedError(
           t('auth:message.error.account_creation', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })
         );
       }
@@ -160,7 +160,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       setSeedError(
         error?.message ||
           t('auth:message.error.account_creation', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })
       );
     } finally {
@@ -202,7 +202,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         <>
           <Typography>
             {t('auth:message.generic.no_account', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Typography>
 
@@ -212,7 +212,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         <>
           <Typography>
             {t('auth:message.generic.your_accounts', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Typography>
 
@@ -224,7 +224,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         <Box>
           <Typography>
             {t('auth:account.selected', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
             :
           </Typography>
@@ -282,7 +282,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                   fontSize: '16px',
                 }}
               >
-                {t('auth:tips.existing_account', { postProcess: 'capitalize' })}
+                {t('auth:tips.existing_account', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
             </Fragment>
           }
@@ -294,7 +296,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               display: 'inline',
             }}
           >
-            {t('auth:action.add.seed_phrase', { postProcess: 'capitalize' })}
+            {t('auth:action.add.seed_phrase', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         </HtmlTooltip>
 
@@ -309,7 +313,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                 }}
               >
                 {t('auth:tips.additional_wallet', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             </Fragment>
@@ -323,7 +327,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           >
             <input {...getInputProps()} />
             {t('auth:action.add.account', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </CustomButton>
         </HtmlTooltip>
@@ -341,7 +345,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       >
         <DialogTitle id="alert-dialog-title">
           {t('auth:message.generic.type_seed', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })}
         </DialogTitle>
 
@@ -354,7 +358,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           >
             <Label>
               {t('auth:name', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Label>
             <Input
@@ -367,7 +371,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Label>
               {t('auth:seed', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Label>
             <PasswordField
@@ -385,7 +389,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Label>
               {t('auth:action.choose_password', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Label>
             <PasswordField
@@ -413,7 +417,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             }}
           >
             {t('core:action.close', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Button>
           <LoadingButton
@@ -427,7 +431,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             autoFocus
           >
             {t('core:action.add', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </LoadingButton>
           <Typography
@@ -516,7 +520,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                   }}
                 >
                   {t('core:action.login', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 </Typography>
               </Box>
@@ -546,7 +550,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
         >
           <Label>
             {t('auth:name', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Label>
           <Input
@@ -562,7 +566,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
 
           <Label>
             {t('auth:note', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Label>
           <Input
@@ -593,7 +597,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               onClick={() => setIsEdit(false)}
             >
               {t('core:action.close', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Button>
             <Button
@@ -611,7 +615,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               onClick={() => updateWalletItem(idx, null)}
             >
               {t('core:action.remove', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Button>
             <Button
@@ -636,7 +640,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               }}
             >
               {t('core:action.save', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Button>
           </Box>

@@ -24,6 +24,7 @@ import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -47,9 +48,9 @@ export const AppsDesktop = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const { showTutorial } = useContext(MyContext);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const myApp = useMemo(() => {
     return availableQapps.find(
@@ -104,7 +105,6 @@ export const AppsDesktop = ({
     try {
       let apps = [];
       let websites = [];
-      // dispatch(setIsLoadingGlobal(true))
       const url = `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const response = await fetch(url, {
@@ -113,6 +113,7 @@ export const AppsDesktop = ({
           'Content-Type': 'application/json',
         },
       });
+
       if (!response?.ok) return;
       const responseData = await response.json();
       const urlWebsites = `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
@@ -123,6 +124,7 @@ export const AppsDesktop = ({
           'Content-Type': 'application/json',
         },
       });
+
       if (!responseWebsites?.ok) return;
       const responseDataWebsites = await responseWebsites.json();
 

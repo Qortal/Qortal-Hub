@@ -66,7 +66,7 @@ export const QMailStatus = () => {
             }}
           >
             {t('core:q_apps.q_mail', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </span>
         }

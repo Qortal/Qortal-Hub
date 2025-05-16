@@ -101,7 +101,7 @@ export const UserListOfInvites = ({
       await show({
         message: t('group:question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -130,7 +130,7 @@ export const UserListOfInvites = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -149,7 +149,9 @@ export const UserListOfInvites = ({
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -203,7 +205,7 @@ export const UserListOfInvites = ({
                 >
                   <Typography>
                     {t('core:action.join', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}{' '}
                     {invite?.groupName}
                   </Typography>
@@ -217,7 +219,7 @@ export const UserListOfInvites = ({
                     }
                   >
                     {t('group:action.join_group', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
                   </LoadingButton>
                 </Box>
@@ -265,7 +267,7 @@ export const UserListOfInvites = ({
     >
       <p>
         {t('core:list.invite', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         })}
       </p>
 

@@ -174,10 +174,10 @@ export const AppInfo = ({ app, myName }) => {
               <AppDownloadButtonText>
                 {isSelectedAppPinned
                   ? t('core:action.unpin_from_dashboard', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })
                   : t('core:action.pin_from_dashboard', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
               </AppDownloadButtonText>
             </AppDownloadButton>
@@ -200,10 +200,10 @@ export const AppInfo = ({ app, myName }) => {
               <AppDownloadButtonText>
                 {isInstalled
                   ? t('core:action.open', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })
                   : t('core:action.download', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
               </AppDownloadButtonText>
             </AppDownloadButton>
@@ -229,7 +229,7 @@ export const AppInfo = ({ app, myName }) => {
             <AppsCategoryInfoSub>
               <AppsCategoryInfoLabel>
                 {t('core:category', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
                 :
               </AppsCategoryInfoLabel>
@@ -239,7 +239,7 @@ export const AppInfo = ({ app, myName }) => {
               <AppsCategoryInfoValue>
                 {app?.metadata?.categoryName ||
                   t('core:none', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
               </AppsCategoryInfoValue>
             </AppsCategoryInfoSub>
@@ -249,7 +249,7 @@ export const AppInfo = ({ app, myName }) => {
 
           <AppInfoAppName>
             {t('core:q_apps.about', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </AppInfoAppName>
         </AppsWidthLimiter>
@@ -259,7 +259,7 @@ export const AppInfo = ({ app, myName }) => {
         <AppsInfoDescription>
           {app?.metadata?.description ||
             t('core:message.generic.no_description', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
         </AppsInfoDescription>
       </Box>

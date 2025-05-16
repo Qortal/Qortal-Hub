@@ -106,7 +106,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       if (!myName)
         throw new Error(
           t('core:message.generic.name_rate', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })
         );
       if (!app?.name) return;
@@ -115,7 +115,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       await show({
         message: t('core:message.error.generic', {
           rate: newValue,
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -126,7 +126,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         const pollDescription = t('core:message.error.generic', {
           name: app.name,
           service: app.service,
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         });
 
         await new Promise((res, rej) => {
@@ -150,7 +150,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 setInfoSnack({
                   type: 'success',
                   message: t('core:message.success.rated_app', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   }),
                 });
                 setOpenSnack(true);
@@ -169,7 +169,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         if (isNaN(optionIndex) || optionIndex === -1)
           throw new Error(
             t('core:message.error.rating_option', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })
           );
         await new Promise((res, rej) => {
@@ -191,7 +191,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 setInfoSnack({
                   type: 'success',
                   message: t('core:message.success.rated_app', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   }),
                 });
                 setOpenSnack(true);
@@ -209,7 +209,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         message:
           error?.message ||
           t('core:message.error.unable_rate', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           }),
       });
       setOpenSnack(true);

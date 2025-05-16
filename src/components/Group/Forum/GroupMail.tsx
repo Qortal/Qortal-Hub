@@ -170,7 +170,9 @@ export const GroupMail = ({
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -754,7 +756,7 @@ export const GroupMail = ({
                       <ThreadSingleLastMessageP>
                         <ThreadSingleLastMessageSpanP>
                           {t('group:last_message', {
-                            postProcess: 'capitalize',
+                            postProcess: 'capitalizeFirst',
                           })}
                           :{' '}
                         </ThreadSingleLastMessageSpanP>
@@ -791,7 +793,7 @@ export const GroupMail = ({
                     }}
                   >
                     {t('core:page.last', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
                   </Typography>
                   <ArrowForwardIosIcon
@@ -825,7 +827,7 @@ export const GroupMail = ({
         open={isLoading}
         info={{
           message: t('group:message.success.loading_threads', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           }),
         }}
       />

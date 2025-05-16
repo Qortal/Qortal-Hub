@@ -291,7 +291,7 @@ export const GroupAnnouncements = ({
       await show({
         message: t('group:question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });

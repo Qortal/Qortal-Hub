@@ -240,14 +240,16 @@ export const ListOfGroupPromotions = () => {
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
       setInfoSnack({
         type: 'success',
         message: t('group:message.success.group_promotion', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
       });
       setOpenSnack(true);
@@ -260,7 +262,7 @@ export const ListOfGroupPromotions = () => {
         message:
           error?.message ||
           t('group:message.error.group_promotion', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           }),
       });
       setOpenSnack(true);
@@ -276,7 +278,7 @@ export const ListOfGroupPromotions = () => {
       await show({
         message: t('group:question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -291,7 +293,7 @@ export const ListOfGroupPromotions = () => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
 
@@ -302,11 +304,11 @@ export const ListOfGroupPromotions = () => {
                     type: 'joined-group',
                     label: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -320,11 +322,11 @@ export const ListOfGroupPromotions = () => {
                     type: 'joined-group-request',
                     label: t('group:message.success.group_join_request', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_outcome', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -350,7 +352,9 @@ export const ListOfGroupPromotions = () => {
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -399,7 +403,7 @@ export const ListOfGroupPromotions = () => {
               fontSize: '1rem',
             }}
           >
-            {t('group:group.promotions', { postProcess: 'capitalize' })}{' '}
+            {t('group:group.promotions', { postProcess: 'capitalizeFirst' })}{' '}
             {promotions.length > 0 && ` (${promotions.length})`}
           </Typography>
 
@@ -458,7 +462,9 @@ export const ListOfGroupPromotions = () => {
                   fontSize: '12px',
                 }}
               >
-                {t('group.action.add_promotion', { postProcess: 'capitalize' })}
+                {t('group.action.add_promotion', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Button>
             </Box>
 
@@ -505,7 +511,7 @@ export const ListOfGroupPromotions = () => {
                   }}
                 >
                   {t('group.message.generic.no_display', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 </Typography>
               </Box>
@@ -570,7 +576,7 @@ export const ListOfGroupPromotions = () => {
                             fallback={
                               <Typography>
                                 {t('group.message.generic.invalid_data', {
-                                  postProcess: 'capitalize',
+                                  postProcess: 'capitalizeFirst',
                                 })}
                               </Typography>
                             }
@@ -622,7 +628,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   >
                                     {t('group:group.name', {
-                                      postProcess: 'capitalize',
+                                      postProcess: 'capitalizeFirst',
                                     })}
                                     : {` ${promotion?.groupName}`}
                                   </Typography>
@@ -634,7 +640,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   >
                                     {t('group:group.member_number', {
-                                      postProcess: 'capitalize',
+                                      postProcess: 'capitalizeFirst',
                                     })}
                                     : {` ${promotion?.memberCount}`}
                                   </Typography>
@@ -658,7 +664,7 @@ export const ListOfGroupPromotions = () => {
                                       }}
                                     >
                                       {t('group:message.generic.closed_group', {
-                                        postProcess: 'capitalize',
+                                        postProcess: 'capitalizeFirst',
                                       })}
                                     </Typography>
                                   )}
@@ -681,7 +687,7 @@ export const ListOfGroupPromotions = () => {
                                       onClick={handlePopoverClose}
                                     >
                                       {t('core:action.close', {
-                                        postProcess: 'capitalize',
+                                        postProcess: 'capitalizeFirst',
                                       })}
                                     </LoadingButton>
 
@@ -697,7 +703,7 @@ export const ListOfGroupPromotions = () => {
                                       }
                                     >
                                       {t('core:action.join', {
-                                        postProcess: 'capitalize',
+                                        postProcess: 'capitalizeFirst',
                                       })}
                                     </LoadingButton>
                                   </Box>
@@ -783,10 +789,10 @@ export const ListOfGroupPromotions = () => {
                                 >
                                   {promotion?.isOpen
                                     ? t('group:group.public', {
-                                        postProcess: 'capitalize',
+                                        postProcess: 'capitalizeFirst',
                                       })
                                     : t('group:group.private', {
-                                        postProcess: 'capitalize',
+                                        postProcess: 'capitalizeFirst',
                                       })}
                                 </Typography>
                               </Box>
@@ -822,7 +828,7 @@ export const ListOfGroupPromotions = () => {
                                   }}
                                 >
                                   {t('group:action.join_group', {
-                                    postProcess: 'capitalize',
+                                    postProcess: 'capitalizeFirst',
                                   })}
                                   : {` ${promotion?.groupName}`}
                                 </Button>
@@ -850,19 +856,19 @@ export const ListOfGroupPromotions = () => {
         aria-describedby="alert-dialog-description"
       >
         <DialogTitle id="alert-dialog-title">
-          {t('group:action.promote_group', { postProcess: 'capitalize' })}
+          {t('group:action.promote_group', { postProcess: 'capitalizeFirst' })}
         </DialogTitle>
 
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
             {t('group:message.generic.latest_promotion', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </DialogContentText>
 
           <DialogContentText id="alert-dialog-description2">
             {t('group:message.generic.max_chars', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
             : {fee && fee} {' QORT'}
           </DialogContentText>
@@ -878,13 +884,13 @@ export const ListOfGroupPromotions = () => {
           >
             <Label>
               {t('group:action.select_group', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Label>
 
             <Label>
               {t('group:message.generic.admin_only', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Label>
 
@@ -936,7 +942,7 @@ export const ListOfGroupPromotions = () => {
             onClick={() => setIsShowModal(false)}
           >
             {t('core:action.close', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Button>
           <Button
@@ -946,7 +952,7 @@ export const ListOfGroupPromotions = () => {
             autoFocus
           >
             {t('core:action.publish', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Button>
         </DialogActions>

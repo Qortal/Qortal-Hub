@@ -36,13 +36,15 @@ export const NewUsersCTA = ({ balance }) => {
             textAlign: 'center',
           }}
         >
-          {t('core:message.question.new_user', { postProcess: 'capitalize' })}
+          {t('core:message.question.new_user', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Typography>
 
         <Spacer height="20px" />
 
         <Typography>
-          {t('core:message_us', { postProcess: 'capitalize' })}
+          {t('core:message_us', { postProcess: 'capitalizeFirst' })}
         </Typography>
 
         <Spacer height="20px" />

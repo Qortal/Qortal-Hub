@@ -7,4 +7,4 @@ In JSON file:
 
 In GUI:
 
-- If the first letter of the translation must be uppercase, use the postProcess, for example: `{t_auth('advanced_users', { postProcess: 'capitalize' })}`
+- If the first letter of the translation must be uppercase, use the postProcess, for example: `{t_auth('advanced_users', { postProcess: 'capitalizeFirst' })}`

@@ -173,10 +173,10 @@ export const AppInfoSnippet = ({
           <AppDownloadButtonText>
             {isSelectedAppPinned
               ? t('core:action.unpin', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })
               : t('core:action.pin', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
           </AppDownloadButtonText>
         </AppDownloadButton>
@@ -196,10 +196,10 @@ export const AppInfoSnippet = ({
           <AppDownloadButtonText>
             {isInstalled
               ? t('core:action.open', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })
               : t('core:action.download', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
           </AppDownloadButtonText>
         </AppDownloadButton>

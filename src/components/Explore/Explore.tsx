@@ -46,7 +46,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             fontSize: '1rem',
           }}
         >
-          {t('tutorial:initial.trade_qort', { postProcess: 'capitalize' })}
+          {t('tutorial:initial.trade_qort', { postProcess: 'capitalizeFirst' })}
         </Typography>
       </ButtonBase>
 
@@ -73,7 +73,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             fontSize: '1rem',
           }}
         >
-          {t('tutorial:initial.see_apps', { postProcess: 'capitalize' })}
+          {t('tutorial:initial.see_apps', { postProcess: 'capitalizeFirst' })}
         </Typography>
       </ButtonBase>
 
@@ -102,7 +102,9 @@ export const Explore = ({ setDesktopViewMode }) => {
             fontSize: '1rem',
           }}
         >
-          {t('tutorial:initial.general_chat', { postProcess: 'capitalize' })}
+          {t('tutorial:initial.general_chat', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Typography>
       </ButtonBase>
 
@@ -129,7 +131,7 @@ export const Explore = ({ setDesktopViewMode }) => {
             fontSize: '1rem',
           }}
         >
-          {t('core:wallet.wallet_other', { postProcess: 'capitalize' })}
+          {t('core:wallet.wallet_other', { postProcess: 'capitalizeFirst' })}
         </Typography>
       </ButtonBase>
     </Box>

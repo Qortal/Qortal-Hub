@@ -92,7 +92,9 @@ export const QMailMessages = ({ userName, userAddress }) => {
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -155,7 +157,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
             fontSize: '1rem',
           }}
         >
-          {t('group:latest_mails', { postProcess: 'capitalize' })}
+          {t('group:latest_mails', { postProcess: 'capitalizeFirst' })}
         </Typography>
 
         <MarkEmailUnreadIcon
@@ -226,7 +228,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
                 }}
               >
                 {t('group:message.generic.no_display', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             </Box>
