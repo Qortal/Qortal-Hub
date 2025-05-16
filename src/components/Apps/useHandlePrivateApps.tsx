@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import { useContext, useState } from 'react';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReact, MyContext } from '../../App';
 import { createEndpoint } from '../../background';
@@ -7,10 +7,9 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
-import { base64ToBlobUrl } from '../../utils/fileReading';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
-import { useAtom, useSetAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');

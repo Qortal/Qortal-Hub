@@ -77,26 +77,26 @@ export const CoreSyncStatus = () => {
 
     let imagePath = syncingImg;
     let message = t('core:message.status.synchronizing', {
-      postProcess: 'capitalize',
+      postProcess: 'capitalizeFirst',
     });
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
-      message = `${t(`core:message.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalize' })} ${t('core:message.status.minting')}`;
+      message = `${t(`core:message.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalizeFirst' })} ${t('core:message.status.minting')}`;
     } else if (isSynchronizing === true && syncPercent === 99) {
       imagePath = syncingImg;
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncedImg;
-      message = `${t('core:message.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
-      message = `${t('core:message.status.synchronized', { postProcess: 'capitalize' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     }
 
     return (
@@ -121,36 +121,38 @@ export const CoreSyncStatus = () => {
             top: '10px',
           }}
         >
-          <h3>{t('core:core.information', { postProcess: 'capitalize' })}</h3>
+          <h3>
+            {t('core:core.information', { postProcess: 'capitalizeFirst' })}
+          </h3>
 
           <h4 className="lineHeight">
-            {t('core:core.version', { postProcess: 'capitalize' })}:{' '}
+            {t('core:core.version', { postProcess: 'capitalizeFirst' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
           </h4>
 
           <h4 className="lineHeight">{message}</h4>
 
           <h4 className="lineHeight">
-            {t('core:core.block_height', { postProcess: 'capitalize' })}:{' '}
+            {t('core:core.block_height', { postProcess: 'capitalizeFirst' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{height || ''}</span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('core:core.peers', { postProcess: 'capitalize' })}:{' '}
+            {t('core:core.peers', { postProcess: 'capitalizeFirst' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {numberOfConnections || ''}
             </span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('auth:node.using_public', { postProcess: 'capitalize' })}:{' '}
+            {t('auth:node.using_public', { postProcess: 'capitalizeFirst' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {isUsingGateway?.toString()}
             </span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('core:ui.version', { postProcess: 'capitalize' })}:{' '}
+            {t('core:ui.version', { postProcess: 'capitalizeFirst' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
           </h4>
         </div>

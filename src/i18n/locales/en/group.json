@@ -78,6 +78,7 @@
       "no_selection": "no group selected",
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
       "only_encrypted": "only unencrypted messages will be displayed.",
+      "only_private_groups": "only private groups will be shown",
       "private_key_copied": "private key copied",
       "provide_message": "please provide a first message to the thread",
       "secure_place": "keep your private key in a secure place. Do not share!",
@@ -131,11 +132,6 @@
       "unbanned_user": "successfully unbanned user. It may take a couple of minutes for the changes to propagate",
       "user_joined": "user successfully joined!"
     }
-  },
-  "question": {
-    "perform_transaction": "would you like to perform a {{action}} transaction?",
-    "provide_thread": "please provide a thread title",
-    "register_name": "would you like to register this name?"
   },
   "thread_posts": "new thread posts"
 }

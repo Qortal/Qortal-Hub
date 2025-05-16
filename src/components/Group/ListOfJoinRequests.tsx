@@ -97,9 +97,9 @@ export const ListOfJoinRequests = ({
       const fee = await getFee('GROUP_INVITE');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'GROUP_INVITE',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -119,7 +119,7 @@ export const ListOfJoinRequests = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success,group_join', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -130,10 +130,10 @@ export const ListOfJoinRequests = ({
                   ...response,
                   type: 'join-request-accept',
                   label: t('group:message.success,invitation_request', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   }),
                   labelDone: t('group:message.success,user_joined', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   }),
                   done: false,
                   groupId,
@@ -157,7 +157,9 @@ export const ListOfJoinRequests = ({
               type: 'error',
               message:
                 error?.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -223,7 +225,9 @@ export const ListOfJoinRequests = ({
                     variant="contained"
                     onClick={() => handleAcceptJoinRequest(member?.joiner)}
                   >
-                    {t('core:action.accept', { postProcess: 'capitalize' })}
+                    {t('core:action.accept', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </LoadingButton>
                 </Box>
               </Popover>
@@ -252,7 +256,7 @@ export const ListOfJoinRequests = ({
 
   return (
     <div>
-      <p>{t('core:list.join_request', { postProcess: 'capitalize' })}</p>
+      <p>{t('core:list.join_request', { postProcess: 'capitalizeFirst' })}</p>
       <div
         style={{
           position: 'relative',

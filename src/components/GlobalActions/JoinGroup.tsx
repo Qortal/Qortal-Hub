@@ -70,9 +70,9 @@ export const JoinGroup = () => {
       const fee = await getFee('JOIN_GROUP');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -89,7 +89,7 @@ export const JoinGroup = () => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
 
@@ -100,11 +100,11 @@ export const JoinGroup = () => {
                     type: 'joined-group',
                     label: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -118,11 +118,11 @@ export const JoinGroup = () => {
                     type: 'joined-group-request',
                     label: t('group:message.success.group_join_request', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_outcome', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -147,7 +147,9 @@ export const JoinGroup = () => {
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -205,7 +207,7 @@ export const JoinGroup = () => {
                 fontWeight: 600,
               }}
             >
-              {t('group:group.name', { postProcess: 'capitalize' })}:{' '}
+              {t('group:group.name', { postProcess: 'capitalizeFirst' })}:{' '}
               {` ${groupInfo?.groupName}`}
             </Typography>
 
@@ -215,8 +217,10 @@ export const JoinGroup = () => {
                 fontWeight: 600,
               }}
             >
-              {t('group:group.member_number', { postProcess: 'capitalize' })}:{' '}
-              {` ${groupInfo?.memberCount}`}
+              {t('group:group.member_number', {
+                postProcess: 'capitalizeFirst',
+              })}
+              : {` ${groupInfo?.memberCount}`}
             </Typography>
 
             {groupInfo?.description && (
@@ -237,7 +241,7 @@ export const JoinGroup = () => {
                 }}
               >
                 {t('group:message.generic.already_in_group', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             )}
@@ -249,7 +253,7 @@ export const JoinGroup = () => {
                 }}
               >
                 {t('group:message.generic.closed_group', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             )}
@@ -276,7 +280,7 @@ export const JoinGroup = () => {
               }}
             >
               {t('core:action.join', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </CustomButtonAccept>
           </ButtonBase>
@@ -291,7 +295,7 @@ export const JoinGroup = () => {
             onClick={() => setIsOpen(false)}
           >
             {t('core:action.close', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </CustomButtonAccept>
         </DialogActions>

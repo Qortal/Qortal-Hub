@@ -135,7 +135,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -160,7 +162,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
               {t('core:general_settings', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </Typography>
 
@@ -194,7 +196,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               <LocalNodeSwitch checked={checked} onChange={handleChange} />
             }
             label={t('group:action.disable_push_notifications', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           />
           {window?.electronAPI && (
@@ -212,7 +214,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                 />
               }
               label={t('group:action.enable_dev_mode', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             />
           )}
@@ -236,7 +238,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
       setInfoSnackCustom({
         type: 'info',
         message: t('group:message.generic.descrypt_wallet', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
       });
 
@@ -260,10 +262,10 @@ const ExportPrivateKey = ({ rawWallet }) => {
         message: error?.message
           ? t('group:message.error.decrypt_wallet', {
               errorMessage: error?.message,
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })
           : t('group:message.error.descrypt_wallet', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             }),
       });
 
@@ -281,7 +283,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
         onClick={() => setIsOpen(true)}
       >
         {t('group:action.export_private_key', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         })}
       </Button>
 
@@ -292,7 +294,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
       >
         <DialogTitle id="alert-dialog-title">
           {t('group:action.export_password', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })}
         </DialogTitle>
 
@@ -305,7 +307,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
         >
           <DialogContentText id="alert-dialog-description">
             {t('group:message.generic.secure_place', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </DialogContentText>
 
@@ -326,7 +328,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
                 setInfoSnackCustom({
                   type: 'success',
                   message: t('group:message.generic.private_key_copied', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   }),
                 });
 
@@ -334,7 +336,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
               }}
             >
               {t('group:action.copy_private_key', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}{' '}
               <ContentCopyIcon color="primary" />
             </Button>
@@ -351,13 +353,13 @@ const ExportPrivateKey = ({ rawWallet }) => {
             }}
           >
             {t('group:action.cancel', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Button>
 
           <Button variant="contained" onClick={exportPrivateKeyFunc}>
             {t('group:action.decrypt', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </Button>
         </DialogActions>

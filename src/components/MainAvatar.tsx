@@ -65,6 +65,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
 
   const publishAvatar = async () => {
     try {
+      // TODO translate
       const fee = await getFee('ARBITRARY');
       if (+balance < +fee.fee)
         throw new Error(`Publishing an Avatar requires ${fee.fee}`);

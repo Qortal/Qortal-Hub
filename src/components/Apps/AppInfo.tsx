@@ -27,8 +27,8 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
-
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const AppInfo = ({ app, myName }) => {
   const isInstalled = app?.status?.status === 'READY';
@@ -37,6 +37,7 @@ export const AppInfo = ({ app, myName }) => {
   );
 
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth', 'group']);
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
@@ -171,9 +172,13 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isSelectedAppPinned // TODO translate
-                  ? 'Unpin from dashboard'
-                  : 'Pin to dashboard'}
+                {isSelectedAppPinned
+                  ? t('core:action.unpin_from_dashboard', {
+                      postProcess: 'capitalizeFirst',
+                    })
+                  : t('core:action.pin_from_dashboard', {
+                      postProcess: 'capitalizeFirst',
+                    })}
               </AppDownloadButtonText>
             </AppDownloadButton>
 
@@ -193,7 +198,13 @@ export const AppInfo = ({ app, myName }) => {
               }}
             >
               <AppDownloadButtonText>
-                {isInstalled ? 'Open' : 'Download'}
+                {isInstalled
+                  ? t('core:action.open', {
+                      postProcess: 'capitalizeFirst',
+                    })
+                  : t('core:action.download', {
+                      postProcess: 'capitalizeFirst',
+                    })}
               </AppDownloadButtonText>
             </AppDownloadButton>
           </Box>
@@ -216,25 +227,40 @@ export const AppInfo = ({ app, myName }) => {
             <Spacer width="16px" />
 
             <AppsCategoryInfoSub>
-              <AppsCategoryInfoLabel>Category:</AppsCategoryInfoLabel>
+              <AppsCategoryInfoLabel>
+                {t('core:category', {
+                  postProcess: 'capitalizeFirst',
+                })}
+                :
+              </AppsCategoryInfoLabel>
 
               <Spacer height="4px" />
 
               <AppsCategoryInfoValue>
-                {app?.metadata?.categoryName || 'none'}
+                {app?.metadata?.categoryName ||
+                  t('core:none', {
+                    postProcess: 'capitalizeFirst',
+                  })}
               </AppsCategoryInfoValue>
             </AppsCategoryInfoSub>
           </AppsCategoryInfo>
 
           <Spacer height="30px" />
 
-          <AppInfoAppName>About this Q-App</AppInfoAppName>
+          <AppInfoAppName>
+            {t('core:q_apps.about', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </AppInfoAppName>
         </AppsWidthLimiter>
 
         <Spacer height="20px" />
 
         <AppsInfoDescription>
-          {app?.metadata?.description || 'No description'}
+          {app?.metadata?.description ||
+            t('core:message.generic.no_description', {
+              postProcess: 'capitalizeFirst',
+            })}
         </AppsInfoDescription>
       </Box>
     </AppsLibraryContainer>

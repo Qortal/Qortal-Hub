@@ -609,7 +609,7 @@ export const Thread = ({
             <ReturnIcon />
             <ComposeP>
               {t('group:action.return_to_thread', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </ComposeP>
           </ShowMessageReturnButton>
@@ -688,7 +688,7 @@ export const Thread = ({
               disabled={!hasFirstPage}
               variant="contained"
             >
-              {t('core:page.first', { postProcess: 'capitalize' })}
+              {t('core:page.first', { postProcess: 'capitalizeFirst' })}
             </Button>
 
             <Button
@@ -707,7 +707,7 @@ export const Thread = ({
               disabled={!hasPreviousPage}
               variant="contained"
             >
-              {t('core:page.previous', { postProcess: 'capitalize' })}
+              {t('core:page.previous', { postProcess: 'capitalizeFirst' })}
             </Button>
 
             <Button
@@ -726,7 +726,7 @@ export const Thread = ({
               disabled={!hasNextPage}
               variant="contained"
             >
-              {t('core:page.next', { postProcess: 'capitalize' })}
+              {t('core:page.next', { postProcess: 'capitalizeFirst' })}
             </Button>
 
             <Button
@@ -745,7 +745,7 @@ export const Thread = ({
               disabled={!hasLastPage}
               variant="contained"
             >
-              {t('core:page.last', { postProcess: 'capitalize' })}
+              {t('core:page.last', { postProcess: 'capitalizeFirst' })}
             </Button>
           </Box>
 
@@ -929,7 +929,9 @@ export const Thread = ({
                         fontSize: '18px',
                       }}
                     >
-                      {t('core:downloading_qdn', { postProcess: 'capitalize' })}
+                      {t('core:downloading_qdn', {
+                        postProcess: 'capitalizeFirst',
+                      })}
                     </Typography>
                   </Box>
                 </Box>
@@ -961,7 +963,7 @@ export const Thread = ({
                   }}
                 >
                   {t('group:action.refetch_page', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 </Button>
               </Box>
@@ -1000,7 +1002,7 @@ export const Thread = ({
                 disabled={!hasFirstPage}
                 variant="contained"
               >
-                {t('core:page.first', { postProcess: 'capitalize' })}
+                {t('core:page.first', { postProcess: 'capitalizeFirst' })}
               </Button>
 
               <Button
@@ -1019,7 +1021,7 @@ export const Thread = ({
                 disabled={!hasPreviousPage}
                 variant="contained"
               >
-                {t('core:page.previous', { postProcess: 'capitalize' })}
+                {t('core:page.previous', { postProcess: 'capitalizeFirst' })}
               </Button>
 
               <Button
@@ -1038,7 +1040,7 @@ export const Thread = ({
                 disabled={!hasNextPage}
                 variant="contained"
               >
-                {t('core:page.next', { postProcess: 'capitalize' })}
+                {t('core:page.next', { postProcess: 'capitalizeFirst' })}
               </Button>
 
               <Button
@@ -1057,7 +1059,7 @@ export const Thread = ({
                 disabled={!hasLastPage}
                 variant="contained"
               >
-                {t('core:page.last', { postProcess: 'capitalize' })}
+                {t('core:page.last', { postProcess: 'capitalizeFirst' })}
               </Button>
             </Box>
 
@@ -1071,7 +1073,7 @@ export const Thread = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('core:loading_posts', { postProcess: 'capitalize' }),
+          message: t('core:loading_posts', { postProcess: 'capitalizeFirst' }),
         }}
       />
     </GroupContainer>

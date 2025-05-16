@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
-
 import {
   executeEvent,
   subscribeToEvent,
@@ -10,7 +9,6 @@ import {
 import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
-
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
@@ -137,7 +135,6 @@ export const AppsDevMode = ({
     setTabs(copyTabs);
     setSelectedTab(newTab);
     setMode('viewer');
-
     setIsNewTabWindow(false);
   };
 
@@ -260,6 +257,7 @@ export const AppsDevMode = ({
             }
           />
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setDesktopViewMode('apps');
@@ -282,6 +280,7 @@ export const AppsDevMode = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setDesktopViewMode('chat');
@@ -351,6 +350,7 @@ export const AppsDevMode = ({
           }}
         >
           <Spacer height="30px" />
+
           <AppsDevModeHome
             myName={myName}
             availableQapps={availableQapps}

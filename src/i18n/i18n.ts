@@ -2,9 +2,15 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
-const capitalize = {
+const capitalizeAll = {
   type: 'postProcessor',
-  name: 'capitalize',
+  name: 'capitalizeAll',
+  process: (value: string) => value.toUpperCase(),
+};
+
+const capitalizeFirst = {
+  type: 'postProcessor',
+  name: 'capitalizeFirst',
   process: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
 };
 
@@ -38,7 +44,8 @@ for (const path in modules) {
 i18n
   .use(initReactI18next)
   .use(LanguageDetector)
-  .use(capitalize as any)
+  .use(capitalizeAll as any)
+  .use(capitalizeFirst as any)
   .init({
     resources,
     fallbackLng: 'en',
