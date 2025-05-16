@@ -3,6 +3,7 @@ import { CellMeasurerCache } from 'react-virtualized';
 import { AnnouncementItem } from './AnnouncementItem';
 import { Box } from '@mui/material';
 import { CustomButton } from '../../styles/App-styles';
+import { useTranslation } from 'react-i18next';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -18,8 +19,8 @@ export const AnnouncementList = ({
   loadMore,
   myName,
 }) => {
-  const listRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     cache.clearAll();
@@ -36,9 +37,9 @@ export const AnnouncementList = ({
         flexDirection: 'column',
         flexGrow: 1,
         flexShrink: 1,
+        overflow: 'auto',
         position: 'relative',
         width: '100%',
-        overflow: 'auto',
       }}
     >
       {messages.map((message) => {
@@ -69,19 +70,7 @@ export const AnnouncementList = ({
           </div>
         );
       })}
-      {/* <AutoSizer>
-        {({ height, width }) => (
-          <List
-            ref={listRef}
-            width={width}
-            height={height}
-            rowCount={messages.length}
-            rowHeight={cache.rowHeight}
-            rowRenderer={rowRenderer}
-            deferredMeasurementCache={cache}
-          />
-        )}
-      </AutoSizer> */}
+
       <Box
         sx={{
           display: 'flex',
@@ -92,7 +81,9 @@ export const AnnouncementList = ({
       >
         {showLoadMore && (
           <CustomButton onClick={loadMore}>
-            Load older announcements
+            {t('core:action.load_announcements', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         )}
       </Box>

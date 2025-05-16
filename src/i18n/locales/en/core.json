@@ -31,6 +31,8 @@
     "import": "import",
     "invite": "invite",
     "join": "join",
+    "leave_comment": "leave comment",
+    "load_announcements": "load older announcements",
     "login": "login",
     "logout": "logout",
     "new": {
@@ -46,6 +48,7 @@
     "post_message": "post message",
     "publish": "publish",
     "publish_app": "publish your app",
+    "publish_comment": "publish comment",
     "register_name": "register name",
     "remove": "remove",
     "return_apps_dashboard": "return to Apps Dashboard",
@@ -104,6 +107,7 @@
     "member": "member list"
   },
   "loading": "loading...",
+  "loading_comments": "loading comments... please wait.",
   "loading_posts": "loading posts... please wait.",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {

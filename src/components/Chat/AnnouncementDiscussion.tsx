@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import TipTap from './TipTap';
 import {
   AuthenticatedContainerInnerTop,
@@ -8,7 +8,7 @@ import { Box, CircularProgress, useTheme } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import ShortUniqueId from 'short-unique-id';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { getBaseApi, getFee } from '../../background';
+import { getFee } from '../../background';
 import {
   decryptPublishes,
   getTempPublish,
@@ -24,6 +24,7 @@ import {
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const tempKey = 'accouncement-comment';
 
@@ -39,10 +40,10 @@ export const AnnouncementDiscussion = ({
   isPrivate,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
-
   const [comments, setComments] = useState([]);
   const [tempPublishedList, setTempPublishedList] = useState([]);
   const firstMountRef = useRef(false);
@@ -100,7 +101,12 @@ export const AnnouncementDiscussion = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -131,9 +137,13 @@ export const AnnouncementDiscussion = ({
       pauseAllQueues();
       const fee = await getFee('ARBITRARY');
       await show({
-        message: 'Would you like to perform a ARBITRARY transaction?',
+        message: t('core:question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
+
       if (isSending) return;
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
@@ -155,10 +165,11 @@ export const AnnouncementDiscussion = ({
             : await encryptChatMessage(message64, secretKeyObject);
         const randomUid = uid.rnd();
         const identifier = `cm-${selectedAnnouncement.identifier}-${randomUid}`;
+
         const res = await publishAnc({
           encryptedData: encryptSingle,
           identifier,
-        });
+        }); // TODO remove unused?
 
         const dataToSaveToStorage = {
           name: myName,
@@ -168,12 +179,13 @@ export const AnnouncementDiscussion = ({
           created: Date.now(),
           announcementId: selectedAnnouncement.identifier,
         };
+
         await saveTempPublish({ data: dataToSaveToStorage, key: tempKey });
         setTempData();
 
         clearEditorContent();
       }
-      // send chat message
+      // TODO send chat message
     } catch (error) {
       console.error(error);
     } finally {
@@ -182,14 +194,12 @@ export const AnnouncementDiscussion = ({
     }
   };
 
-  const getComments = React.useCallback(
+  const getComments = useCallback(
     async (selectedAnnouncement, isPrivate) => {
       try {
         setIsLoading(true);
 
         const offset = 0;
-
-        // dispatch(setIsLoadingGlobal(true))
         const identifier = `cm-${selectedAnnouncement.identifier}`;
         const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
         const response = await fetch(url, {
@@ -209,8 +219,6 @@ export const AnnouncementDiscussion = ({
         console.log(error);
       } finally {
         setIsLoading(false);
-
-        // dispatch(setIsLoadingGlobal(false))
       }
     },
     [secretKey]
@@ -259,7 +267,7 @@ export const AnnouncementDiscussion = ({
     return sortedList;
   }, [tempPublishedList, comments]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!secretKey && isPrivate) return;
     if (selectedAnnouncement && !firstMountRef.current && isPrivate !== null) {
       getComments(selectedAnnouncement, isPrivate);
@@ -299,6 +307,7 @@ export const AnnouncementDiscussion = ({
 
         <Spacer height="20px" />
       </div>
+
       <AnnouncementList
         announcementData={data}
         initialMessages={combinedListTempAndReal}
@@ -308,6 +317,7 @@ export const AnnouncementDiscussion = ({
         loadMore={loadMore}
         myName={myName}
       />
+
       <div
         style={{
           backgroundColor: theme.palette.background.default,
@@ -343,6 +353,7 @@ export const AnnouncementDiscussion = ({
             setIsFocusedParent={setIsFocusedParent}
           />
         </div>
+
         <Box
           sx={{
             display: 'flex',
@@ -359,7 +370,7 @@ export const AnnouncementDiscussion = ({
                 if (isSending) return;
                 setIsFocusedParent(false);
                 clearEditorContent();
-                // Unfocus the editor
+                // TODO Unfocus the editor
               }}
               style={{
                 alignSelf: 'center',
@@ -371,7 +382,7 @@ export const AnnouncementDiscussion = ({
                 padding: '5px',
               }}
             >
-              {` Close`}
+              {t('core:action.close', { postProcess: 'capitalizeFirst' })}
             </CustomButton>
           )}
           <CustomButton
@@ -402,7 +413,9 @@ export const AnnouncementDiscussion = ({
                 }}
               />
             )}
-            {` Publish Comment`}
+            {t('core:action.publish_comment', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         </Box>
       </div>
@@ -410,7 +423,9 @@ export const AnnouncementDiscussion = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading comments... please wait.',
+          message: t('core:loading_comments', {
+            postProcess: 'capitalizeFirst',
+          }),
         }}
       />
     </div>
