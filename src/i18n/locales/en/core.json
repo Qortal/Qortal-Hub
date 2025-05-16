@@ -183,22 +183,27 @@
     "q_mail": "q-mail",
     "q_sandbox": "q-Sandbox"
   },
-  "save_options": {
-    "no_pinned_changes": "you currently do not have any changes to your pinned apps",
-    "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
-    "overwrite_qdn": "overwrite to QDN",
+  "question": {
+    "perform_transaction": "would you like to perform a {{action}} transaction?",
+    "provide_thread": "please provide a thread title",
     "publish_app": "would you like to publish this app?",
     "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
-    "qdn": "use QDN saving",
+    "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
     "rate_app": "would you like to rate this app a rating of {{ rate }}?. It will create a POLL tx.",
-    "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
+    "register_name": "would you like to register this name?",
     "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
-    "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
+    "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?"
+  },
+  "save_options": {
+    "no_pinned_changes": "you currently do not have any changes to your pinned apps",
+    "overwrite_qdn": "overwrite to QDN",
+    "qdn": "use QDN saving",
+    "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
     "revert_default": "revert to default",
     "revert_qdn": "revert to QDN",
     "save_qdn": "save to QDN",
     "settings": "you are using the export/import way of saving settings.",
-    "unsaved_changes": " you have unsaved changes to your pinned apps. Save them to QDN."
+    "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN."
   },
   "server": "server",
   "settings": "settings",

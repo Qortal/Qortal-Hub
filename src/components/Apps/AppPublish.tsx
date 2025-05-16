@@ -178,7 +178,7 @@ export const AppPublish = ({ names, categories }) => {
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: t('core:save_options.publish_app', {
+        message: t('core:question.publish_app', {
           postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',

@@ -113,7 +113,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       const fee = await getFee('JOIN_GROUP');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'JOIN_GROUP',
           postProcess: 'capitalizeFirst',
         }),

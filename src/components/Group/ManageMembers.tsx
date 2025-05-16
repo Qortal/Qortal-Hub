@@ -84,7 +84,7 @@ export const ManageMembers = ({
       setIsLoadingLeave(true);
       const fee = await getFee('LEAVE_GROUP');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'LEAVE_GROUP',
           postProcess: 'capitalizeFirst',
         }),

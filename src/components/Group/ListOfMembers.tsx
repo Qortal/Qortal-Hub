@@ -59,7 +59,7 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('GROUP_KICK');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'GROUP_KICK',
           postProcess: 'capitalizeFirst',
         }),
@@ -117,7 +117,7 @@ const ListOfMembers = ({
       const fee = await getFee('GROUP_BAN');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'GROUP_BAN',
           postProcess: 'capitalizeFirst',
         }),
@@ -177,7 +177,7 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'ADD_GROUP_ADMIN',
           postProcess: 'capitalizeFirst',
         }),
@@ -234,7 +234,7 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'REMOVE_GROUP_ADMIN',
           postProcess: 'capitalizeFirst',
         }),

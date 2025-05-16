@@ -118,7 +118,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
       const fee = await getFee('CREATE_GROUP');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'CREATE_GROUP',
           postProcess: 'capitalizeFirst',
         }),

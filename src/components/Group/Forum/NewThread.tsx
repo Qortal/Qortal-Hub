@@ -182,7 +182,7 @@ export const NewThread = ({
       const missingFields: string[] = [];
 
       if (!isMessage && !threadTitle) {
-        errorMsg = t('group:question.provide_thread', {
+        errorMsg = t('core:question.provide_thread', {
           postProcess: 'capitalizeFirst',
         });
       }
@@ -229,7 +229,7 @@ export const NewThread = ({
         feeToShow = +feeToShow * 2;
       }
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:question.perform_transaction', {
           action: 'ARBITRARY',
           postProcess: 'capitalizeFirst',
         }),

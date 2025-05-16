@@ -133,10 +133,5 @@
       "user_joined": "user successfully joined!"
     }
   },
-  "question": {
-    "perform_transaction": "would you like to perform a {{action}} transaction?",
-    "provide_thread": "please provide a thread title",
-    "register_name": "would you like to register this name?"
-  },
   "thread_posts": "new thread posts"
 }
