@@ -1,14 +1,12 @@
-import React, { useContext, useMemo, useState } from 'react';
+import { useContext, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   AppLibrarySubTitle,
   AppsContainer,
-  AppsParent,
 } from './Apps-styles';
 import { Buffer } from 'buffer';
-
 import {
   Avatar,
   Box,
@@ -17,13 +15,11 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   Input,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { MyContext, getBaseApiReact } from '../../App';
-import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../common/useModal';
@@ -31,6 +27,8 @@ import { createEndpoint, isUsingLocal } from '../../background';
 import { Label } from '../Group/AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
+import { useTranslation } from 'react-i18next';
+
 const uid = new ShortUniqueId({ length: 8 });
 
 export const AppsDevModeHome = ({
@@ -43,7 +41,7 @@ export const AppsDevModeHome = ({
   const [domain, setDomain] = useState('127.0.0.1');
   const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
-
+  const { t } = useTranslation(['core', 'group']);
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     openSnackGlobal,
@@ -61,6 +59,7 @@ export const AppsDevModeHome = ({
       console.log('No file selected.');
     }
   };
+
   const handleSelectDirectry = async (existingDirectoryPath) => {
     const { buffer, directoryPath } =
       await window.electron.selectAndZipDirectory(existingDirectoryPath);
@@ -79,8 +78,7 @@ export const AppsDevModeHome = ({
 
         setInfoSnackCustom({
           type: 'error',
-          message:
-            'Please use your local node for dev mode! Logout and use Local node.',
+          message: '',
         });
         return;
       }
@@ -115,20 +113,21 @@ export const AppsDevModeHome = ({
       const usingLocal = await isUsingLocal();
       if (!usingLocal) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message:
-            'Please use your local node for dev mode! Logout and use Local node.',
+          message: t('core:message.generic.devmode_local_node', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
       if (!myName) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message: 'You need a name to use preview',
+          message: t('core:message.generic.name_preview', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
@@ -137,15 +136,16 @@ export const AppsDevModeHome = ({
 
       if (!buffer) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message: 'Please select a file',
+          message: t('core:message.generic.select_file', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
-      const postBody = Buffer.from(buffer).toString('base64');
 
+      const postBody = Buffer.from(buffer).toString('base64');
       const endpoint = await createEndpoint(
         `/arbitrary/APP/${myName}/zip?preview=true`
       );
@@ -156,6 +156,7 @@ export const AppsDevModeHome = ({
         },
         body: postBody,
       });
+
       if (!response?.ok) throw new Error('Invalid zip');
       const previewPath = await response.text();
       if (tabId) {
@@ -192,20 +193,21 @@ export const AppsDevModeHome = ({
       const usingLocal = await isUsingLocal();
       if (!usingLocal) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message:
-            'Please use your local node for dev mode! Logout and use Local node.',
+          message: t('core:message.generic.devmode_local_node', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
       if (!myName) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message: 'You need a name to use preview',
+          message: t('core:message.generic.name_preview', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
@@ -214,15 +216,16 @@ export const AppsDevModeHome = ({
 
       if (!buffer) {
         setOpenSnackGlobal(true);
-
         setInfoSnackCustom({
           type: 'error',
-          message: 'Please select a file',
+          message: t('core:message.generic.select_file', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         return;
       }
-      const postBody = Buffer.from(buffer).toString('base64');
 
+      const postBody = Buffer.from(buffer).toString('base64');
       const endpoint = await createEndpoint(
         `/arbitrary/APP/${myName}/zip?preview=true`
       );
@@ -233,8 +236,15 @@ export const AppsDevModeHome = ({
         },
         body: postBody,
       });
-      if (!response?.ok) throw new Error('Invalid zip');
+
+      if (!response?.ok)
+        throw new Error(
+          t('core:message.error.invalid_zip', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       const previewPath = await response.text();
+
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
@@ -276,7 +286,7 @@ export const AppsDevModeHome = ({
             fontSize: '30px',
           }}
         >
-          Dev Mode Apps
+          {t('core:devmode_apps', { postProcess: 'capitalizeFirst' })}
         </AppLibrarySubTitle>
       </AppsContainer>
 
@@ -301,7 +311,9 @@ export const AppsDevModeHome = ({
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
-            <AppCircleLabel>Server</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:server', { postProcess: 'capitalizeFirst' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 
@@ -319,7 +331,9 @@ export const AppsDevModeHome = ({
               <Add>+</Add>
             </AppCircle>
 
-            <AppCircleLabel>Zip</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:zip', { postProcess: 'capitalizeFirst' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 
@@ -336,7 +350,9 @@ export const AppsDevModeHome = ({
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
-            <AppCircleLabel>Directory</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:directory', { postProcess: 'capitalizeFirst' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 
@@ -365,7 +381,9 @@ export const AppsDevModeHome = ({
                     objectFit: 'fill',
                   },
                 }}
-                alt="Q-Sandbox"
+                alt={t('core:q_apps.q_sandbox', {
+                  postProcess: 'capitalizeFirst',
+                })}
                 src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/Q-Sandbox/qortal_avatar?async=true`}
               >
                 <img
@@ -378,7 +396,11 @@ export const AppsDevModeHome = ({
               </Avatar>
             </AppCircle>
 
-            <AppCircleLabel>Q-Sandbox</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:q_apps.q_sandbox', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 
@@ -407,7 +429,9 @@ export const AppsDevModeHome = ({
                     objectFit: 'fill',
                   },
                 }}
-                alt="API"
+                alt={t('core:api', {
+                  postProcess: 'capitalizeAll',
+                })}
                 src={swaggerSVG}
               >
                 <img
@@ -420,7 +444,11 @@ export const AppsDevModeHome = ({
               </Avatar>
             </AppCircle>
 
-            <AppCircleLabel>API</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:api', {
+                postProcess: 'capitalizeAll',
+              })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
       </AppsContainer>
@@ -437,7 +465,9 @@ export const AppsDevModeHome = ({
           }}
         >
           <DialogTitle id="alert-dialog-title">
-            {'Add custom framework'}
+            {t('core:action.add_custom_framework', {
+              postProcess: 'capitalizeFirst',
+            })}
           </DialogTitle>
 
           <DialogContent>
@@ -446,15 +476,22 @@ export const AppsDevModeHome = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '5px',
-              }} // TODO translate
+              }}
             >
-              <Label>Domain</Label>
+              <Label>
+                {t('core:domain', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Label>
               <Input
-                placeholder="Domain"
+                placeholder={t('core:domain', {
+                  postProcess: 'capitalizeFirst',
+                })}
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
               />
             </Box>
+
             <Box
               sx={{
                 display: 'flex',
@@ -463,9 +500,15 @@ export const AppsDevModeHome = ({
                 marginTop: '15px',
               }}
             >
-              <Label>Port</Label>
+              <Label>
+                {t('core:port', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Label>
               <Input
-                placeholder="Port"
+                placeholder={t('core:port', {
+                  postProcess: 'capitalizeFirst',
+                })}
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
               />
@@ -474,15 +517,20 @@ export const AppsDevModeHome = ({
 
           <DialogActions>
             <Button variant="contained" onClick={onCancel}>
-              Close
+              {t('core:action.close', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
+
             <Button
               disabled={!domain || !port}
               variant="contained"
               onClick={() => onOk({ portVal: port, domainVal: domain })}
               autoFocus
             >
-              Add
+              {t('core:action.add', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
           </DialogActions>
         </Dialog>

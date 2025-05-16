@@ -16,6 +16,7 @@ import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
 import ThemeSelector from '../Theme/ThemeSelector';
 import LanguageSelector from '../Language/LanguageSelector';
+import { useTranslation } from 'react-i18next';
 
 export const AppsHomeDesktop = ({
   setMode,
@@ -26,6 +27,7 @@ export const AppsHomeDesktop = ({
 }) => {
   const [qortalUrl, setQortalUrl] = useState('');
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const openQortalUrl = () => {
     try {
@@ -41,6 +43,7 @@ export const AppsHomeDesktop = ({
       console.log(error);
     }
   };
+
   return (
     <>
       <AppsContainer
@@ -51,9 +54,9 @@ export const AppsHomeDesktop = ({
         <AppLibrarySubTitle
           sx={{
             fontSize: '30px',
-          }} // TODO translate
+          }}
         >
-          Apps Dashboard
+          {t('core:apps_dashboard', { postProcess: 'capitalizeFirst' })}
         </AppLibrarySubTitle>
       </AppsContainer>
 
@@ -66,14 +69,14 @@ export const AppsHomeDesktop = ({
       >
         <Box
           sx={{
-            display: 'flex',
-            gap: '20px',
             alignItems: 'center',
             backgroundColor: theme.palette.background.paper,
-            padding: '7px',
             borderRadius: '20px',
-            width: '100%',
+            display: 'flex',
+            gap: '20px',
             maxWidth: '500px',
+            padding: '7px',
+            width: '100%',
           }}
         >
           <Input
@@ -143,7 +146,9 @@ export const AppsHomeDesktop = ({
               <AddIcon />
             </AppCircle>
 
-            <AppCircleLabel>Library</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:library', { postProcess: 'capitalizeFirst' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 

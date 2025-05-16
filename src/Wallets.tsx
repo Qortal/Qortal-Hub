@@ -357,7 +357,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             }}
           >
             <Label>
-              {t('auth:name', {
+              {t('core:name', {
                 postProcess: 'capitalizeFirst',
               })}
             </Label>
@@ -549,7 +549,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           }}
         >
           <Label>
-            {t('auth:name', {
+            {t('core:name', {
               postProcess: 'capitalizeFirst',
             })}
           </Label>

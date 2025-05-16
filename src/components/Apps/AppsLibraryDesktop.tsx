@@ -41,6 +41,7 @@ import { Virtuoso } from 'react-virtuoso';
 import { executeEvent } from '../../utils/events';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
+import { useTranslation } from 'react-i18next';
 
 const officialAppList = [
   'q-tube',
@@ -104,6 +105,7 @@ export const AppsLibraryDesktop = ({
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef(null);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(
@@ -210,9 +212,13 @@ export const AppsLibraryDesktop = ({
                       ml: 1,
                       paddingLeft: '12px',
                     }}
-                    placeholder="Search for apps"
+                    placeholder={t('core:action.search_apps', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                     inputProps={{
-                      'aria-label': 'Search for apps',
+                      'aria-label': t('core:action.search_apps', {
+                        postProcess: 'capitalizeFirst',
+                      }),
                       fontSize: '16px',
                       fontWeight: 400,
                     }}
@@ -273,10 +279,14 @@ export const AppsLibraryDesktop = ({
             }}
             onClick={() => {
               executeEvent('navigateBack', {});
-            }} // TODO translate
+            }}
           >
             <ReturnIcon />
-            <ComposeP>Return to Apps Dashboard</ComposeP>
+            <ComposeP>
+              {t('core:action.return_apps_dashboard', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </ComposeP>
           </ShowMessageReturnButton>
 
           <Spacer height="20px" />
@@ -302,7 +312,11 @@ export const AppsLibraryDesktop = ({
             </AppsWidthLimiter>
           ) : searchedList?.length === 0 && debouncedValue ? (
             <AppsWidthLimiter>
-              <Typography>No results</Typography>
+              <Typography>
+                {t('core:message.generic.no_results', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Typography>
             </AppsWidthLimiter>
           ) : (
             <>
@@ -311,7 +325,7 @@ export const AppsLibraryDesktop = ({
                   fontSize: '30px',
                 }}
               >
-                Official Apps
+                {t('core:apps_official', { postProcess: 'capitalizeFirst' })}
               </AppLibrarySubTitle>
 
               <Spacer height="45px" />
@@ -396,7 +410,13 @@ export const AppsLibraryDesktop = ({
                       textAlign: 'start',
                     }}
                   >
-                    {hasPublishApp ? 'Update your app' : 'Publish your app'}
+                    {hasPublishApp
+                      ? t('core:action.update_app', {
+                          postProcess: 'capitalizeFirst',
+                        })
+                      : t('core:action.publish_app', {
+                          postProcess: 'capitalizeFirst',
+                        })}
                   </AppLibrarySubTitle>
 
                   <Spacer height="18px" />
@@ -422,7 +442,13 @@ export const AppsLibraryDesktop = ({
                       }}
                     >
                       <PublishQAppCTAButton>
-                        {hasPublishApp ? 'Update' : 'Publish'}
+                        {hasPublishApp
+                          ? t('core:action.update', {
+                              postProcess: 'capitalizeFirst',
+                            })
+                          : t('core:action.publish', {
+                              postProcess: 'capitalizeFirst',
+                            })}
                       </PublishQAppCTAButton>
 
                       <Spacer width="20px" />
@@ -441,7 +467,9 @@ export const AppsLibraryDesktop = ({
                       fontSize: '30px',
                     }}
                   >
-                    Categories
+                    {t('core:category_other', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                   </AppLibrarySubTitle>
 
                   <Spacer height="18px" />
@@ -480,7 +508,7 @@ export const AppsLibraryDesktop = ({
                           },
                         }}
                       >
-                        All
+                        {t('core:all', { postProcess: 'capitalizeFirst' })}
                       </Box>
                     </ButtonBase>
 

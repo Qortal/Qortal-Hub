@@ -54,13 +54,23 @@ export const AppsDesktop = ({
 
   const myApp = useMemo(() => {
     return availableQapps.find(
-      (app) => app.name === myName && app.service === 'APP'
+      (app) =>
+        app.name === myName &&
+        app.service ===
+          t('core:app', {
+            postProcess: 'capitalizeAll',
+          })
     );
   }, [myName, availableQapps]);
 
   const myWebsite = useMemo(() => {
     return availableQapps.find(
-      (app) => app.name === myName && app.service === 'WEBSITE'
+      (app) =>
+        app.name === myName &&
+        app.service ===
+          t('core:website', {
+            postProcess: 'capitalizeAll',
+          })
     );
   }, [myName, availableQapps]);
 
@@ -247,7 +257,6 @@ export const AppsDesktop = ({
     setTabs((prev) => [...prev, newTab]);
     setSelectedTab(newTab);
     setMode('viewer');
-
     setIsNewTabWindow(false);
   };
 
@@ -258,6 +267,7 @@ export const AppsDesktop = ({
       unsubscribeFromEvent('addTab', addTabFunc);
     };
   }, [tabs]);
+
   const setSelectedTabFunc = (e) => {
     const data = e.detail?.data;
     if (e.detail?.isDevMode) return;
@@ -327,9 +337,9 @@ export const AppsDesktop = ({
   return (
     <AppsParent
       sx={{
-        position: !show && 'fixed',
-        left: !show && '-200vw',
         flexDirection: 'row',
+        left: !show && '-200vw',
+        position: !show && 'fixed',
       }}
     >
       <Box
@@ -450,6 +460,7 @@ export const AppsDesktop = ({
           }}
         >
           <Spacer height="30px" />
+
           <AppsHomeDesktop
             myName={myName}
             availableQapps={availableQapps}
@@ -476,15 +487,18 @@ export const AppsDesktop = ({
       {mode === 'appInfo-from-category' && !selectedTab && (
         <AppInfo app={selectedAppInfo} myName={myName} />
       )}
+
       <AppsCategoryDesktop
         availableQapps={availableQapps}
         isShow={mode === 'category' && !selectedTab}
         category={selectedCategory}
         myName={myName}
       />
+
       {mode === 'publish' && !selectedTab && (
         <AppPublish names={myName ? [myName] : []} categories={categories} />
       )}
+
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
           iframeRefs.current[tab.tabId] = React.createRef();

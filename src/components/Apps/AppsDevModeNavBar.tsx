@@ -23,7 +23,6 @@ export const AppsDevModeNavBar = () => {
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
-
   const theme = useTheme();
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);

@@ -1,20 +1,26 @@
 {
   "action": {
     "add": "add",
+    "add_custom_framework": "add custom framework",
     "accept": "accept",
+    "access": "access",
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
     "cancel_invitation": "cancel invitation",
     "change": "change",
+    "change_file": "change file",
     "change_language": "change language",
     "choose": "choose",
+    "choose_file": "choose file",
     "close": "close",
     "continue": "continue",
     "continue_logout": "continue to logout",
+    "copy_link": "copy link",
     "create_apps": "create apps",
     "create_file": "create file",
     "create_thread": "create thread",
+    "choose_logo": "choose a logo",
     "choose_name": "choose a name",
     "decline": "decline",
     "decrypt": "decrypt",
@@ -34,30 +40,44 @@
     "notify": "notify",
     "open": "open",
     "pin": "pin",
+    "pin_app": "pin app",
     "pin_from_dashboard": "pin from dashboard",
     "post": "post",
     "post_message": "post message",
     "publish": "publish",
+    "publish_app": "publish your app",
     "register_name": "register name",
     "remove": "remove",
+    "return_apps_dashboard": "return to Apps Dashboard",
     "save": "save",
+    "search_apps": "search for apps",
     "select_app_type": "select App Type",
     "select_category": "select Category",
     "select_name_app": "select Name/App",
     "start_minting": "start minting",
     "unpin": "unpin",
-    "unpin_from_dashboard": "unpin from dashboard"
+    "unpin_app": "unpin app",
+    "unpin_from_dashboard": "unpin from dashboard",
+    "update": "update",
+    "update_app": "update your app"
   },
   "admin": "admin",
+  "all": "all",
+  "api": "API",
   "app": "app",
+  "app_name": "app name",
   "app_service_type": "app service type",
+  "apps_dashboard": "apps Dashboard",
+  "apps_official": "official Apps",
   "category": "category",
+  "category_other": "categories",
   "core": {
     "block_height": "block height",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
   },
+  "domain": "domain",
   "ui": {
     "version": "UI version"
   },
@@ -66,14 +86,18 @@
     "one": "one"
   },
   "description": "description",
+  "devmode_apps": "dev Mode Apps",
+  "directory": "directory",
   "downloading_qdn": "downloading from QDN",
   "fee": {
     "payment": "payment fee",
     "publish": "publish fee"
   },
   "general_settings": "general settings",
+  "identifier": "identifier",
   "last_height": "last height",
   "level": "level",
+  "library": "library",
   "list": {
     "invite": "invite list",
     "join_request": "join request list",
@@ -85,31 +109,41 @@
   "message": {
     "error": {
       "address_not_found": "your address was not found",
+      "app_need_name": "your app needs a name",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
       "incorrect_password": "incorrect password",
+      "invalid_zip": "invalid zip",
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
       "missing_fields": "missing: {{ fields }}",
       "publish_app": "unable to publish app",
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
+      "unable_encrypt_app": "unable to encrypt app. App not published'",
+      "unable_publish_app": "unable to publish app",
       "unable_rate": "unable to rate"
     },
     "generic": {
+      "devmode_local_node": "please use your local node for dev mode! Logout and use Local node.",
       "name_available": "{{ name }} is available",
       "name_benefits": "benefits of a name",
       "name_checking": "checking if name already exists",
+      "name_preview": "you need a name to use preview",
+      "name_publish": "you need a Qortal name to publish",
       "name_rate": "you need a name to rate.",
       "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
       "no_description": "no description",
       "no_notifications": "no new notifications",
+      "no_results": "no results",
       "one_app_per_name": "note: Currently, only one App and Website is allowed per Name.",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
       "publishing": "publishing... Please wait.",
       "rating": "rating for {{ service }} {{ name }}",
       "secure_ownership": "secure ownership of data published by your name. You can even sell your name, along with your data to a third party.",
+      "select_file": "please select a file",
+      "select_image": "please select an image for a logo",
       "select_zip": "select .zip file containing static content:"
     },
     "question": {
@@ -131,6 +165,7 @@
     }
   },
   "minting_status": "minting status",
+  "name": "name",
   "name_app": "name/App",
   "none": "none",
   "page": {
@@ -140,10 +175,12 @@
     "previous": "previous"
   },
   "payment_notification": "payment notification",
+  "port": "port",
   "price": "price",
   "q_apps": {
     "about": "about this Q-App",
-    "q_mail": "q-mail"
+    "q_mail": "q-mail",
+    "q_sandbox": "q-Sandbox"
   },
   "save_options": {
     "no_pinned_changes": "you currently do not have any changes to your pinned apps",
@@ -162,6 +199,7 @@
     "settings": "you are using the export/import way of saving settings.",
     "unsaved_changes": " you have unsaved changes to your pinned apps. Save them to QDN."
   },
+  "server": "server",
   "settings": "settings",
   "supply": "supply",
   "tags": "tags",
@@ -180,6 +218,7 @@
   "title": "title",
   "tutorial": "tutorial",
   "user_lookup": "user lookup",
+  "zip": "zip",
   "wallet": {
     "wallet": "wallet",
     "wallet_other": "wallets"
