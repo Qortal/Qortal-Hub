@@ -92,7 +92,9 @@
       "minting_account_remove": "unable to remove minting account",
       "missing_fields": "missing: {{ fields }}",
       "publish_app": "unable to publish app",
-      "save_qdn": "unable to save to QDN"
+      "rating_option": "cannot find rating option",
+      "save_qdn": "unable to save to QDN",
+      "unable_rate": "unable to rate"
     },
     "generic": {
       "name_available": "{{ name }} is available",
@@ -123,6 +125,7 @@
       "order_submitted": "your buy order was submitted",
       "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
       "published_qdn": "successfully published to QDN",
+      "rated_app": "successfully rated. Please wait a couple minutes for the network to propogate the changes.",
       "request_read": "I have read this request",
       "transfer": "the transfer was succesful!"
     }

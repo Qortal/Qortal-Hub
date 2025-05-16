@@ -149,10 +149,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 res(response);
                 setInfoSnack({
                   type: 'success',
-                  message:
-                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalize',
+                  }),
                 });
-                setOpenSnack(true); // TODO translate
+                setOpenSnack(true);
               }
             })
             .catch((error) => {
@@ -166,7 +167,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
           (option) => +option.optionName === +newValue
         );
         if (isNaN(optionIndex) || optionIndex === -1)
-          throw new Error('Cannot find rating option');
+          throw new Error(
+            t('core:message.error.rating_option', {
+              postProcess: 'capitalize',
+            })
+          );
         await new Promise((res, rej) => {
           window
             .sendMessage(
@@ -185,8 +190,9 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 res(response);
                 setInfoSnack({
                   type: 'success',
-                  message:
-                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalize',
+                  }),
                 });
                 setOpenSnack(true);
               }
@@ -200,7 +206,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       console.log('error', error);
       setInfoSnack({
         type: 'error',
-        message: error?.message || 'Unable to rate',
+        message:
+          error?.message ||
+          t('core:message.error.unable_rate', {
+            postProcess: 'capitalize',
+          }),
       });
       setOpenSnack(true);
     }
@@ -210,8 +220,8 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
     <div>
       <Box
         sx={{
-          display: 'flex',
           alignItems: 'center',
+          display: 'flex',
           flexDirection: ratingCountPosition === 'top' ? 'column' : 'row',
         }}
       >
@@ -222,8 +232,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}{' '}
               {' RATINGS'}
             </AppInfoUserName>
+
             <Spacer height="6px" />
+
             <AppInfoUserName>{value?.toFixed(1)}</AppInfoUserName>
+
             <Spacer height="6px" />
           </>
         )}
