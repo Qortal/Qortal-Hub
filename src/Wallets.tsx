@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { Fragment, useContext, useEffect, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import Divider from '@mui/material/Divider';
@@ -32,6 +32,7 @@ import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './components';
 import { HtmlTooltip } from './ExtStates/NotAuthenticated';
 import { MyContext } from './App';
+import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
   return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
@@ -44,11 +45,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
   const { hasSeenGettingStarted } = useContext(MyContext);
-
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth']);
   const { isShow, onCancel, onOk, show } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -82,8 +83,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         }
       }
 
-      let error: any = null;
-      let uniqueInitialMap = new Map();
+      const uniqueInitialMap = new Map();
 
       // Only add a message if it doesn't already exist in the Map
       importedWallets.forEach((wallet) => {
@@ -92,7 +92,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           uniqueInitialMap.set(wallet?.address0, wallet);
         }
       });
+
       const data = Array.from(uniqueInitialMap.values());
+
       if (data && data?.length > 0) {
         const uniqueNewWallets = data.filter(
           (newWallet) =>
@@ -148,10 +150,19 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         setPassword('');
         setSeedError('');
       } else {
-        setSeedError('Could not create account.');
+        setSeedError(
+          t('auth:message.error.account_creation', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       }
     } catch (error) {
-      setSeedError(error?.message || 'Could not create account.');
+      setSeedError(
+        error?.message ||
+          t('auth:message.error.account_creation', {
+            postProcess: 'capitalizeFirst',
+          })
+      );
     } finally {
       setIsLoadingEncryptSeed(false);
     }
@@ -189,19 +200,34 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     <div>
       {wallets?.length === 0 || !wallets ? (
         <>
-          <Typography>No accounts saved</Typography>
+          <Typography>
+            {t('auth:message.generic.no_account', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
+
           <Spacer height="75px" />
         </>
       ) : (
         <>
-          <Typography>Your saved accounts</Typography>
+          <Typography>
+            {t('auth:message.generic.your_accounts', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
+
           <Spacer height="30px" />
         </>
       )}
 
       {rawWallet && (
         <Box>
-          <Typography>Selected Account:</Typography>
+          <Typography>
+            {t('auth:account.selected', {
+              postProcess: 'capitalizeFirst',
+            })}
+            :
+          </Typography>
           {rawWallet?.name && <Typography>{rawWallet.name}</Typography>}
           {rawWallet?.address0 && (
             <Typography>{rawWallet?.address0}</Typography>
@@ -211,12 +237,12 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       {wallets?.length > 0 && (
         <List
           sx={{
-            width: '100%',
-            maxWidth: '500px',
-            maxHeight: '60vh',
-            overflowY: 'auto',
-            overflowX: 'hidden',
             backgroundColor: theme.palette.background.paper,
+            maxHeight: '60vh',
+            maxWidth: '500px',
+            overflowX: 'hidden',
+            overflowY: 'auto',
+            width: '100%',
           }}
         >
           {wallets?.map((wallet, idx) => {
@@ -238,29 +264,29 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
       <Box
         sx={{
+          alignItems: 'center',
+          bottom: wallets?.length === 0 ? 'unset' : '20px',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
           position: wallets?.length === 0 ? 'relative' : 'fixed',
-          bottom: wallets?.length === 0 ? 'unset' : '20px',
           right: wallets?.length === 0 ? 'unset' : '20px',
         }}
       >
         <HtmlTooltip
           disableHoverListener={hasSeenGettingStarted === true}
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
                   fontSize: '16px',
                 }}
               >
-                Already have a Qortal account? Enter your secret backup phrase
-                here to access it. This phrase is one of the ways to recover
-                your account.
+                {t('auth:tips.existing_account', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton
@@ -270,25 +296,27 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               display: 'inline',
             }}
           >
-            Add seed-phrase
+            {t('auth:action.add.seed_phrase', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         </HtmlTooltip>
 
         <HtmlTooltip
           disableHoverListener={hasSeenGettingStarted === true}
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
                   fontSize: '16px',
                 }}
               >
-                Use this option to connect additional Qortal wallets you've
-                already made, in order to login with them afterwards. You will
-                need access to your backup JSON file in order to do so.
+                {t('auth:tips.additional_wallet', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton
@@ -298,7 +326,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             {...getRootProps()}
           >
             <input {...getInputProps()} />
-            Add account
+            {t('auth:action.add.account', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         </HtmlTooltip>
       </Box>
@@ -314,7 +344,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         }}
       >
         <DialogTitle id="alert-dialog-title">
-          Type or paste in your seed-phrase
+          {t('auth:message.generic.type_seed', {
+            postProcess: 'capitalizeFirst',
+          })}
         </DialogTitle>
 
         <DialogContent>
@@ -324,7 +356,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               flexDirection: 'column',
             }}
           >
-            <Label>Name</Label>
+            <Label>
+              {t('core:name', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Label>
             <Input
               placeholder="Name"
               value={seedName}
@@ -333,7 +369,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Spacer height="7px" />
 
-            <Label>Seed-phrase</Label>
+            <Label>
+              {t('auth:seed', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Label>
             <PasswordField
               placeholder="Seed-phrase"
               id="standard-adornment-password"
@@ -347,7 +387,11 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
             <Spacer height="7px" />
 
-            <Label>Choose new password</Label>
+            <Label>
+              {t('auth:action.choose_password', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Label>
             <PasswordField
               id="standard-adornment-password"
               value={password}
@@ -359,6 +403,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             />
           </Box>
         </DialogContent>
+
         <DialogActions>
           <Button
             disabled={isLoadingEncryptSeed}
@@ -371,7 +416,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               setSeedError('');
             }}
           >
-            Close
+            {t('core:action.close', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Button>
           <LoadingButton
             loading={isLoadingEncryptSeed}
@@ -383,7 +430,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             }}
             autoFocus
           >
-            Add
+            {t('core:action.add', {
+              postProcess: 'capitalizeFirst',
+            })}
           </LoadingButton>
           <Typography
             sx={{
@@ -404,6 +453,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth']);
 
   useEffect(() => {
     if (wallet?.name) {
@@ -439,6 +489,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           <ListItemAvatar>
             <Avatar alt="" src="/static/images/avatar/1.jpg" />
           </ListItemAvatar>
+
           <ListItemText
             primary={
               wallet?.name
@@ -468,7 +519,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                     marginTop: '5px',
                   }}
                 >
-                  Login
+                  {t('core:action.login', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </Typography>
               </Box>
             }
@@ -495,7 +548,11 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             padding: '8px',
           }}
         >
-          <Label>Name</Label>
+          <Label>
+            {t('core:name', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Label>
           <Input
             placeholder="Name"
             value={name}
@@ -507,7 +564,11 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
 
           <Spacer height="10px" />
 
-          <Label>Note</Label>
+          <Label>
+            {t('auth:note', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Label>
           <Input
             placeholder="Note"
             value={note}
@@ -535,7 +596,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               variant="contained"
               onClick={() => setIsEdit(false)}
             >
-              Close
+              {t('core:action.close', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
             <Button
               sx={{
@@ -551,7 +614,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               variant="contained"
               onClick={() => updateWalletItem(idx, null)}
             >
-              Remove
+              {t('core:action.remove', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
             <Button
               sx={{
@@ -574,7 +639,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
                 setIsEdit(false);
               }}
             >
-              Save
+              {t('core:action.save', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
           </Box>
         </Box>

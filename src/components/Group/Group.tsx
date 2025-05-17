@@ -373,7 +373,6 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
-
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
   const lastFetchedSecretKey = useRef(null);
@@ -396,14 +395,11 @@ export const Group = ({
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
-
   const setMemberGroups = useSetAtom(memberGroupsAtom);
-
   const lastGroupNotification = useRef<null | number>(null);
   const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
   );
-
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
@@ -514,7 +510,9 @@ export const Group = ({
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -543,7 +541,9 @@ export const Group = ({
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -575,7 +575,9 @@ export const Group = ({
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -1098,7 +1100,9 @@ export const Group = ({
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
@@ -1995,7 +1999,7 @@ export const Group = ({
                 }}
               >
                 {t('group:message.generic.no_selection', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             </Box>
@@ -2094,7 +2098,7 @@ export const Group = ({
                     {' '}
                     <Typography>
                       {t('group:message.generic.encryption_key', {
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     </Typography>
                   </div>
@@ -2120,21 +2124,21 @@ export const Group = ({
                       {' '}
                       <Typography>
                         {t('group:message.generic.not_part_group', {
-                          postProcess: 'capitalize',
+                          postProcess: 'capitalizeFirst',
                         })}
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
                         <strong>
                           {t('group:message.generic.only_encrypted', {
-                            postProcess: 'capitalize',
+                            postProcess: 'capitalizeFirst',
                           })}
                         </strong>
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
                         {t('group:message.generic.notify_admins', {
-                          postProcess: 'capitalize',
+                          postProcess: 'capitalizeFirst',
                         })}
                       </Typography>
                       <Spacer height="25px" />
@@ -2156,7 +2160,7 @@ export const Group = ({
                               onClick={() => notifyAdmin(admin)}
                             >
                               {t('core:action.notify', {
-                                postProcess: 'capitalize',
+                                postProcess: 'capitalizeFirst',
                               })}
                             </LoadingButton>
                           </Box>
@@ -2382,7 +2386,7 @@ export const Group = ({
             message:
               isLoadingGroupMessage ||
               t('group:message.generic.setting_group', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               }),
           }}
         />
@@ -2391,7 +2395,7 @@ export const Group = ({
           open={isLoadingGroups}
           info={{
             message: t('group:message.generic.setting_group', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             }),
           }}
         />

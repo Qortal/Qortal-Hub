@@ -1,4 +1,4 @@
-import React, {
+import {
   useCallback,
   useContext,
   useEffect,
@@ -50,6 +50,8 @@ import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
 import ImageIcon from '@mui/icons-material/Image';
 import { messageHasImage } from '../../utils/chat';
+import { useTranslation } from 'react-i18next';
+
 const uid = new ShortUniqueId({ length: 5 });
 const uidImages = new ShortUniqueId({ length: 12 });
 
@@ -75,8 +77,8 @@ export const ChatGroup = ({
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMoved, setIsMoved] = useState(false);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
   const hasInitialized = useRef(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [replyMessage, setReplyMessage] = useState(null);
@@ -93,8 +95,8 @@ export const ChatGroup = ({
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const lastReadTimestamp = useRef(null);
-
   const handleUpdateRef = useRef(null);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getTimestampEnterChat = async (selectedGroup) => {
     try {
@@ -129,7 +131,12 @@ export const ChatGroup = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -154,9 +161,6 @@ export const ChatGroup = ({
     return Array.from(uniqueMembers);
   }, [messages]);
 
-  const triggerRerender = () => {
-    forceUpdate(); // Trigger re-render by updating the state
-  };
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
@@ -168,6 +172,7 @@ export const ChatGroup = ({
     }
     return [];
   }, [selectedGroup, queueChats]);
+
   const tempChatReferences = useMemo(() => {
     if (!selectedGroup) return [];
     if (queueChats[selectedGroup]) {
@@ -183,12 +188,6 @@ export const ChatGroup = ({
       secretKeyRef.current = secretKey;
     }
   }, [secretKey]);
-
-  // const getEncryptedSecretKey = useCallback(()=> {
-  //     const response = getResource()
-  //     const decryptResponse = decryptResource()
-  //     return
-  // }, [])
 
   const checkForFirstSecretKeyNotification = (messages) => {
     messages?.forEach((message) => {
@@ -250,7 +249,6 @@ export const ChatGroup = ({
       const dataRemovedBlock = responseData?.filter((item) => {
         return !isUserBlocked(item?.sender, item?.senderName);
       });
-
       decryptMessages(dataRemovedBlock, false);
     } catch (error) {
       console.error(error);
@@ -273,6 +271,7 @@ export const ChatGroup = ({
               const filterUIMessages = encryptedMessages.filter(
                 (item) => !isExtMsg(item.data)
               );
+
               const decodedUIMessages =
                 decodeBase64ForUIChatMessages(filterUIMessages);
 
@@ -280,6 +279,7 @@ export const ChatGroup = ({
                 ...decodedUIMessages,
                 ...response,
               ];
+
               const combineUIAndExtensionMsgs = processWithNewMessages(
                 combineUIAndExtensionMsgsBefore.map((item) => ({
                   ...item,
@@ -287,16 +287,24 @@ export const ChatGroup = ({
                 })),
                 selectedGroup
               );
+
               res(combineUIAndExtensionMsgs);
 
               if (isInitiated) {
                 const formatted = combineUIAndExtensionMsgs
                   .filter((rawItem) => !rawItem?.chatReference)
                   .map((item) => {
+                    const message = (
+                      <p>
+                        {t('group:message.generic.group_key_created', {
+                          postProcess: 'capitalizeFirst',
+                        })}
+                      </p>
+                    );
                     const additionalFields =
-                      item?.data === 'NDAwMQ=='
+                      item?.data === 'NDAwMQ==' // TODO put magic string somewhere in a file
                         ? {
-                            text: '<p>First group key created.</p>',
+                            text: message,
                           }
                         : {};
                     return {
@@ -362,7 +370,9 @@ export const ChatGroup = ({
                             !newTimestamp
                           ) {
                             console.warn(
-                              'Invalid content, sender, or timestamp in reaction data',
+                              t('group:message.generic.invalid_content', {
+                                postProcess: 'capitalizeFirst',
+                              }),
                               item
                             );
                             return;
@@ -435,10 +445,17 @@ export const ChatGroup = ({
                 const formatted = combineUIAndExtensionMsgs
                   .filter((rawItem) => !rawItem?.chatReference)
                   .map((item) => {
+                    const message = (
+                      <p>
+                        {t('group:message.generic.group_key_created', {
+                          postProcess: 'capitalizeFirst',
+                        })}
+                      </p>
+                    );
                     const additionalFields =
                       item?.data === 'NDAwMQ=='
                         ? {
-                            text: '<p>First group key created.</p>',
+                            text: message,
                           }
                         : {};
                     const divide =
@@ -510,7 +527,9 @@ export const ChatGroup = ({
                             !newTimestamp
                           ) {
                             console.warn(
-                              'Invalid content, sender, or timestamp in reaction data',
+                              t('group:message.generic.invalid_content', {
+                                postProcess: 'capitalizeFirst',
+                              }),
                               item
                             );
                             return;
@@ -583,7 +602,12 @@ export const ChatGroup = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -615,6 +639,7 @@ export const ChatGroup = ({
       console.error('Error during ping:', error);
     }
   };
+
   const initWebsocketMessageGroup = () => {
     let socketLink = `${getBaseApiReactSocket()}/websockets/chat/messages?txGroupId=${selectedGroup}&encoding=BASE64&limit=100`;
     socketRef.current = new WebSocket(socketLink);
@@ -709,7 +734,12 @@ export const ChatGroup = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -744,7 +774,12 @@ export const ChatGroup = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -760,12 +795,22 @@ export const ChatGroup = ({
 
   const sendMessage = async () => {
     try {
-      if (messageSize > 4000) return;
+      if (messageSize > 4000) return; // TODO magic number
       if (isPrivate === null)
-        throw new Error('Unable to determine if group is private');
+        throw new Error(
+          t('group:message.error.unable_determine_group_private', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       if (isSending) return;
       if (+balance < 4)
-        throw new Error('You need at least 4 QORT to send a message');
+        // TODO magic number
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: 4,
+            postProcess: 'capitalizeFirst',
+          })
+        );
       pauseAllQueues();
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
@@ -782,23 +827,36 @@ export const ChatGroup = ({
         if (replyMessage?.chatReference) {
           repliedTo = replyMessage?.chatReference;
         }
-        let chatReference = onEditMessage?.signature;
+
+        const chatReference = onEditMessage?.signature;
 
         const publicData = isPrivate
           ? {}
           : {
               isEdited: chatReference ? true : false,
             };
-        const imagesToPublish = [];
+
+        interface ImageToPublish {
+          service: string;
+          identifier: string;
+          name: string;
+          base64: string;
+        }
+
+        const imagesToPublish: ImageToPublish[] = [];
         const deleteImage =
           onEditMessage && isDeleteImage && messageHasImage(onEditMessage);
+
         if (deleteImage) {
           const fee = await getFee('ARBITRARY');
-
           await show({
             publishFee: fee.fee + ' QORT',
-            message: 'Would you like to delete your previous chat image?',
+            message: t('core:message.question.delete_chat_image', {
+              postProcess: 'capitalizeFirst',
+            }),
           });
+
+          // TODO magic string
           await window.sendMessage('publishOnQDN', {
             data: 'RA==',
             identifier: onEditMessage?.images[0]?.identifier,
@@ -806,12 +864,14 @@ export const ChatGroup = ({
             uploadType: 'base64',
           });
         }
+
         if (chatImagesToSave?.length > 0) {
           const imageToSave = chatImagesToSave[0];
 
           const base64ToSave = isPrivate
             ? await encryptChatMessage(imageToSave, secretKeyObject)
             : imageToSave;
+
           // 1 represents public group, 0 is private
           const identifier = `grp-q-manager_${isPrivate ? 0 : 1}_group_${selectedGroup}_${uidImages.rnd()}`;
           imagesToPublish.push({
@@ -823,14 +883,18 @@ export const ChatGroup = ({
 
           const res = await window.sendMessage(
             'PUBLISH_MULTIPLE_QDN_RESOURCES',
-
             {
               resources: imagesToPublish,
             },
             240000,
             true
           );
-          if (res !== true) throw new Error('Unable to publish images');
+          if (res !== true)
+            throw new Error(
+              t('core:message.error.unable_publish_image', {
+                postProcess: 'capitalizeFirst',
+              })
+            );
         }
 
         const images =
@@ -869,7 +933,6 @@ export const ChatGroup = ({
           isPrivate === false
             ? JSON.stringify(objectMessage)
             : await encryptChatMessage(message64, secretKeyObject);
-        // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
 
         const sendMessageFunc = async () => {
           return await sendChatGroup({
@@ -980,18 +1043,25 @@ export const ChatGroup = ({
       .setContent(message?.messageText || message?.text)
       .run();
   }, []);
+
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
       try {
         if (isSending) return;
         if (+balance < 4)
-          throw new Error('You need at least 4 QORT to send a message');
-        pauseAllQueues();
+          // TODO magic number
+          throw new Error(
+            t('group:message.error.qortals_required', {
+              quantity: 4,
+              postProcess: 'capitalizeFirst',
+            })
+          );
 
+        pauseAllQueues();
         setIsSending(true);
+
         const message = '';
         const secretKeyObject = await getSecretKey(false, true);
-
         const otherData = {
           specialId: uid.rnd(),
           type: 'reaction',
@@ -1012,8 +1082,6 @@ export const ChatGroup = ({
                 secretKeyObject,
                 reactiontypeNumber
               );
-        // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
-
         const sendMessageFunc = async () => {
           return await sendChatGroup({
             groupId: selectedGroup,
@@ -1034,12 +1102,6 @@ export const ChatGroup = ({
           chatReference: chatMessage.signature,
         };
         addToQueue(sendMessageFunc, messageObj, 'chat-reaction', selectedGroup);
-        // setTimeout(() => {
-        //   executeEvent("sent-new-message-group", {})
-        // }, 150);
-        // clearEditorContent()
-        // setReplyMessage(null)
-
         // send chat message
       } catch (error) {
         const errorMsg = error?.message || error;
@@ -1071,7 +1133,9 @@ export const ChatGroup = ({
       ) {
         setInfoSnack({
           type: 'error',
-          message: 'This message already has an image',
+          message: t('core:message.generic.message_with_image', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         setOpenSnack(true);
         return;
@@ -1080,6 +1144,7 @@ export const ChatGroup = ({
     },
     [chatImagesToSave, onEditMessage?.images, isDeleteImage]
   );
+
   return (
     <div
       style={{
@@ -1088,34 +1153,36 @@ export const ChatGroup = ({
         height: '100%',
         left: hide && '-100000px',
         opacity: hide ? 0 : 1,
+        padding: '10px',
         position: hide ? 'absolute' : 'relative',
         width: '100%',
-        padding: '10px',
       }}
     >
       <ChatList
-        isPrivate={isPrivate}
-        hasSecretKey={!!secretKey}
-        openQManager={openQManager}
-        enableMentions
-        onReply={onReply}
-        onEdit={onEdit}
         chatId={selectedGroup}
-        initialMessages={messages}
-        myAddress={myAddress}
-        tempMessages={tempMessages}
-        handleReaction={handleReaction}
         chatReferences={chatReferences}
-        tempChatReferences={tempChatReferences}
+        enableMentions
+        handleReaction={handleReaction}
+        hasSecretKey={!!secretKey}
+        initialMessages={messages}
+        isPrivate={isPrivate}
         members={members}
+        myAddress={myAddress}
         myName={myName}
+        onEdit={onEdit}
+        onReply={onReply}
+        openQManager={openQManager}
         selectedGroup={selectedGroup}
+        tempChatReferences={tempChatReferences}
+        tempMessages={tempMessages}
       />
 
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
             backgroundColor: theme.palette.background.surface,
+            border: `1px solid ${theme.palette.border.subtle}`,
+            borderRadius: '10px',
             bottom: isFocusedParent ? '0px' : 'unset',
             boxSizing: 'border-box',
             display: 'flex',
@@ -1128,8 +1195,6 @@ export const ChatGroup = ({
             top: isFocusedParent ? '0px' : 'unset',
             width: '100%',
             zIndex: isFocusedParent ? 5 : 'unset',
-            border: `1px solid ${theme.palette.border.subtle}`,
-            borderRadius: '10px',
           }}
         >
           <div
@@ -1147,9 +1212,9 @@ export const ChatGroup = ({
               sx={{
                 alignItems: 'flex-start',
                 display: 'flex',
-                width: '100%',
-                gap: '10px',
                 flexWrap: 'wrap',
+                gap: '10px',
+                width: '100%',
               }}
             >
               {!isDeleteImage &&
@@ -1159,19 +1224,20 @@ export const ChatGroup = ({
                   <div
                     key={index}
                     style={{
-                      position: 'relative',
                       height: '50px',
+                      position: 'relative',
                       width: '50px',
                     }}
                   >
                     <ImageIcon
                       color="primary"
                       sx={{
+                        borderRadius: '3px',
                         height: '100%',
                         width: '100%',
-                        borderRadius: '3px',
                       }}
                     />
+
                     <Tooltip title="Delete image">
                       <IconButton
                         onClick={() => setIsDeleteImage(true)}
@@ -1201,12 +1267,13 @@ export const ChatGroup = ({
                     </Tooltip>
                   </div>
                 ))}
+
               {chatImagesToSave.map((imgBase64, index) => (
                 <div
                   key={index}
                   style={{
-                    position: 'relative',
                     height: '50px',
+                    position: 'relative',
                     width: '50px',
                   }}
                 >
@@ -1219,6 +1286,7 @@ export const ChatGroup = ({
                       borderRadius: '3px',
                     }}
                   />
+
                   <Tooltip title="Remove image">
                     <IconButton
                       onClick={() =>
@@ -1253,6 +1321,7 @@ export const ChatGroup = ({
                 </div>
               ))}
             </Box>
+
             {replyMessage && (
               <Box
                 sx={{
@@ -1277,6 +1346,7 @@ export const ChatGroup = ({
                 </ButtonBase>
               </Box>
             )}
+
             {onEditMessage && (
               <Box
                 sx={{
@@ -1322,13 +1392,19 @@ export const ChatGroup = ({
                   width: '100%',
                 }}
               >
-                <Typography
+                <Typography //TODO magic number
                   sx={{
                     fontSize: '12px',
                     color:
                       messageSize > 4000 ? theme.palette.other.danger : 'unset',
                   }}
-                >{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
+                >
+                  {t('core:message.error.message_size', {
+                    maximum: 4000,
+                    size: messageSize,
+                    postProcess: 'capitalizeFirst',
+                  })}
+                </Typography>
               </Box>
             )}
           </div>
@@ -1379,6 +1455,7 @@ export const ChatGroup = ({
           </Box>
         </div>
       )}
+
       {isOpenQManager !== null && (
         <Box
           sx={{
@@ -1418,6 +1495,7 @@ export const ChatGroup = ({
               }}
             >
               <Typography>Q-Manager</Typography>
+
               <ButtonBase
                 onClick={() => {
                   setIsOpenQManager(false);
@@ -1430,14 +1508,16 @@ export const ChatGroup = ({
                 />
               </ButtonBase>
             </Box>
+
             <Divider />
+
             <AppViewerContainer
               customHeight="560px"
               app={{
-                tabId: '5558588',
                 name: 'Q-Manager',
-                service: 'APP',
                 path: `?groupId=${selectedGroup}`,
+                service: 'APP',
+                tabId: '5558588',
               }}
               isSelected
             />
@@ -1448,7 +1528,7 @@ export const ChatGroup = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading chat... please wait.',
+          message: t('core:loading.chat', { postProcess: 'capitalizeFirst' }),
         }}
       />
 

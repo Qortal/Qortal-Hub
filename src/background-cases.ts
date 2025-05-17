@@ -52,7 +52,6 @@ import {
   sendChatGroup,
   sendChatNotification,
   sendCoin,
-  setChatHeads,
   setGroupData,
   updateThreadActivity,
   walletVersion,
@@ -104,7 +103,7 @@ export async function getWalletInfoCase(request, event) {
           {
             requestId: request.requestId,
             action: 'getWalletInfo',
-            error: 'No wallet info found',
+            error: 'No wallet info found', // TODO translate
             type: 'backgroundMessageResponse',
           },
           event.origin

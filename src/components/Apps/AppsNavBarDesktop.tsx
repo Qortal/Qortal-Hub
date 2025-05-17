@@ -32,6 +32,7 @@ import {
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export function saveToLocalStorage(key, subKey, newValue) {
   try {
@@ -75,7 +76,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
   );
 
   const theme = useTheme();
-
+  const { t } = useTranslation(['core', 'group']);
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -238,6 +239,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
               }}
             />
           </ButtonBase>
+
           <ButtonBase
             onClick={(e) => {
               if (!selectedTab) return;
@@ -274,9 +276,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
           paper: {
             sx: {
               backgroundColor: theme.palette.background.default,
+              borderRadius: '5px',
               color: theme.palette.text.primary,
               width: '148px',
-              borderRadius: '5px',
             },
           },
         }}
@@ -375,9 +377,18 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                   : theme.palette.text.primary,
               },
             }}
-            primary={`${isSelectedAppPinned ? 'Unpin app' : 'Pin app'}`}
+            primary={`${
+              isSelectedAppPinned
+                ? t('core:action.unpin_app', {
+                    postProcess: 'capitalizeFirst',
+                  })
+                : t('core:action.pin_app', {
+                    postProcess: 'capitalizeFirst',
+                  })
+            }}`}
           />
         </MenuItem>
+
         <MenuItem
           onClick={() => {
             if (selectedTab?.refreshFunc) {
@@ -404,6 +415,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
               }}
             />
           </ListItemIcon>
+
           <ListItemText
             sx={{
               '& .MuiTypography-root': {
@@ -447,7 +459,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                   color: theme.palette.text.primary,
                 },
               }}
-              primary="Copy link"
+              primary={t('core:action.copy_link', {
+                postProcess: 'capitalizeFirst',
+              })}
             />
           </MenuItem>
         )}

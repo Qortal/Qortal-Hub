@@ -76,9 +76,9 @@ export const ThingsToDoInitial = ({
           }}
         >
           {!isLoaded
-            ? t('core:loading', { postProcess: 'capitalize' })
+            ? t('core:loading.generic', { postProcess: 'capitalizeFirst' })
             : t('tutorial:initial.getting_started', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
         </Typography>
 
@@ -122,7 +122,7 @@ export const ThingsToDoInitial = ({
                     },
                   }}
                   primary={t('tutorial:initial.6_qort', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 />
 
@@ -171,7 +171,7 @@ export const ThingsToDoInitial = ({
                     },
                   }}
                   primary={t('tutorial:initial.register_name', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 />
                 <ListItemIcon

@@ -21,12 +21,13 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { getFee, getNameOrAddress } from '../../background';
+import { getFee } from '../../background';
 import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../common/useModal';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
@@ -44,7 +45,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
-
+  const { t } = useTranslation(['core', 'auth', 'group']);
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
@@ -223,13 +224,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || 'An error occurred' });
+            rej({
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
+            });
           });
       });
     } catch (error) {
       setInfo({
         type: 'error',
-        message: error?.message || 'Unable to add minting account',
+        message:
+          error?.message ||
+          t('core:message.error.minting_account_add', {
+            postProcess: 'capitalizeFirst',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -263,13 +274,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             rej({ message: response.error });
           })
           .catch((error) => {
-            rej({ message: error.message || 'An error occurred' });
+            rej({
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
+            });
           });
       });
     } catch (error) {
       setInfo({
         type: 'error',
-        message: error?.message || 'Unable to remove minting account',
+        message:
+          error?.message ||
+          t('core:message.error.minting_account_remove', {
+            postProcess: 'capitalizeFirst',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -278,9 +299,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   }, []);
 
   const createRewardShare = useCallback(async (publicKey, recipient) => {
-    const fee = await getFee('REWARD_SHARE'); // TODO translate
+    const fee = await getFee('REWARD_SHARE');
     await show({
-      message: 'Would you like to perform an REWARD_SHARE transaction?',
+      message: t('core:message.question.perform_transaction', {
+        // TODO move from group into core namespace
+        action: 'REWARD_SHARE',
+        postProcess: 'capitalizeFirst',
+      }),
       publishFee: fee.fee + ' QORT',
     });
     return await new Promise((res, rej) => {
@@ -295,8 +320,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 recipient,
                 ...response,
                 type: 'add-rewardShare',
-                label: `Add rewardshare: awaiting confirmation`,
-                labelDone: `Add rewardshare: success!`,
+                label: t('group:message.success.rewardshare_add', {
+                  postProcess: 'capitalizeFirst',
+                }),
+                labelDone: t('group:message.success.rewardshare_add_label', {
+                  postProcess: 'capitalizeFirst',
+                }),
                 done: false,
               },
               ...prev,
@@ -307,7 +336,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || 'An error occurred' });
+          rej({
+            message:
+              error.message ||
+              t('core:message.error.generic', {
+                postProcess: 'capitalizeFirst',
+              }),
+          });
         });
     });
   }, []);
@@ -326,7 +361,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || 'An error occurred' });
+          rej({
+            message:
+              error.message ||
+              t('core:message.error.generic', {
+                postProcess: 'capitalizeFirst',
+              }),
+          });
         });
     });
   }, []);
@@ -350,7 +391,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       await sleep(pollingInterval); // Wait before the next poll
     }
 
-    throw new Error('Timeout waiting for reward share confirmation');
+    throw new Error(
+      t('group:message.error.timeout_reward', {
+        postProcess: 'capitalizeFirst',
+      })
+    );
   };
 
   const startMinting = async () => {
@@ -382,7 +427,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       setShowWaitDialog(false);
       setInfo({
         type: 'error',
-        message: error?.message || 'Unable to start minting',
+        message:
+          error?.message ||
+          t('group:message.error.unable_minting', {
+            postProcess: 'capitalizeFirst',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -420,8 +469,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 ...rewardShare,
                 ...response,
                 type: 'remove-rewardShare',
-                label: `Remove rewardshare: awaiting confirmation`,
-                labelDone: `Remove rewardshare: success!`,
+                label: t('group:message.success.rewardshare_remove', {
+                  postProcess: 'capitalizeFirst',
+                }),
+                labelDone: t('group:message.success.rewardshare_remove_label', {
+                  postProcess: 'capitalizeFirst',
+                }),
                 done: false,
               },
               ...prev,
@@ -431,59 +484,67 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           rej({ message: response.error });
         })
         .catch((error) => {
-          rej({ message: error.message || 'An error occurred' });
+          rej({
+            message:
+              error.message ||
+              t('core:message.error.generic', {
+                postProcess: 'capitalizeFirst',
+              }),
+          });
         });
     });
   }, []);
 
-  const handleRemoveRewardShare = async (rewardShare) => {
-    try {
-      setIsLoading(true);
+  // TODO unused functions. Remove??
 
-      const privateRewardShare = await removeRewardShare(rewardShare);
-    } catch (error) {
-      setInfo({
-        type: 'error',
-        message: error?.message || 'Unable to remove reward share',
-      });
-      setOpenSnack(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // const handleRemoveRewardShare = async (rewardShare) => {
+  //   try {
+  //     setIsLoading(true);
 
-  const createRewardShareForPotentialMinter = async (receiver) => {
-    try {
-      setIsLoading(true);
-      const confirmReceiver = await getNameOrAddress(receiver);
-      if (confirmReceiver.error)
-        throw new Error('Invalid receiver address or name');
-      const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
-      if (!isInMinterGroup) throw new Error('Account not in Minter Group');
-      const publicKey = await getPublicKeyFromAddress(confirmReceiver);
-      const findRewardShare = rewardShares?.find(
-        (item) =>
-          item?.recipient === confirmReceiver &&
-          item?.mintingAccount === myAddress
-      );
-      if (findRewardShare) {
-        const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-        setRewardsharekey(privateRewardShare);
-      } else {
-        await createRewardShare(publicKey, confirmReceiver);
-        const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-        setRewardsharekey(privateRewardShare);
-      }
-    } catch (error) {
-      setInfo({
-        type: 'error',
-        message: error?.message || 'Unable to create reward share',
-      });
-      setOpenSnack(true);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  //     const privateRewardShare = await removeRewardShare(rewardShare);
+  //   } catch (error) {
+  //     setInfo({
+  //       type: 'error',
+  //       message: error?.message || 'Unable to remove reward share',
+  //     });
+  //     setOpenSnack(true);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
+
+  // const createRewardShareForPotentialMinter = async (receiver) => {
+  //   try {
+  //     setIsLoading(true);
+  //     const confirmReceiver = await getNameOrAddress(receiver);
+  //     if (confirmReceiver.error)
+  //       throw new Error('Invalid receiver address or name');
+  //     const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
+  //     if (!isInMinterGroup) throw new Error('Account not in Minter Group');
+  //     const publicKey = await getPublicKeyFromAddress(confirmReceiver);
+  //     const findRewardShare = rewardShares?.find(
+  //       (item) =>
+  //         item?.recipient === confirmReceiver &&
+  //         item?.mintingAccount === myAddress
+  //     );
+  //     if (findRewardShare) {
+  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
+  //       setRewardsharekey(privateRewardShare);
+  //     } else {
+  //       await createRewardShare(publicKey, confirmReceiver);
+  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
+  //       setRewardsharekey(privateRewardShare);
+  //     }
+  //   } catch (error) {
+  //     setInfo({
+  //       type: 'error',
+  //       message: error?.message || 'Unable to create reward share',
+  //     });
+  //     setOpenSnack(true);
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
 
   useEffect(() => {
     getNodeInfos();
@@ -558,7 +619,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         },
       }}
     >
-      <DialogTitle id="alert-dialog-title">{'Manage your minting'}</DialogTitle>
+      <DialogTitle id="alert-dialog-title">
+        {t('group:message.generic.manage_minting', {
+          postProcess: 'capitalizeFirst',
+        })}
+      </DialogTitle>
+
       <IconButton
         sx={{
           position: 'absolute',
@@ -606,19 +672,37 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             padding: '10px',
           }}
         >
-          <Typography>Account: {handleNames(accountInfo?.address)}</Typography>
-
-          <Typography>Level: {accountInfo?.level}</Typography>
-
           <Typography>
-            blocks remaining until next level: {_levelUpBlocks()}
+            {t('auth:account.account_one', {
+              postProcess: 'capitalizeFirst',
+            })}
+            : {handleNames(accountInfo?.address)}
           </Typography>
 
           <Typography>
-            This node is minting: {nodeInfos?.isMintingPossible?.toString()}
+            {t('core:level', {
+              postProcess: 'capitalizeFirst',
+            })}
+            : {accountInfo?.level}
+          </Typography>
+
+          <Typography>
+            {t('group:message.generic.next_level', {
+              postProcess: 'capitalizeFirst',
+            })}{' '}
+            {_levelUpBlocks()}
+          </Typography>
+
+          <Typography>
+            {t('group:message.generic.node_minting', {
+              postProcess: 'capitalizeFirst',
+            })}{' '}
+            {nodeInfos?.isMintingPossible?.toString()}
           </Typography>
         </Card>
+
         <Spacer height="10px" />
+
         {isPartOfMintingGroup && !accountIsMinting && (
           <Box
             sx={{
@@ -650,19 +734,29 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
               variant="contained"
             >
-              Start minting
+              {t('core:action.start_minting', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Button>
+
             {mintingAccounts?.length > 1 && (
               <Typography>
-                Only 2 minting keys are allowed per node. Please remove one if
-                you would like to mint with this account.
+                {t('group:message.generic.minting_keys_per_node', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
             )}
           </Box>
         )}
+
         <Spacer height="10px" />
+
         {mintingAccounts?.length > 0 && (
-          <Typography>Node's minting accounts</Typography>
+          <Typography>
+            {t('group:message.generic.node_minting_account', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
         )}
         <Card
           sx={{
@@ -679,12 +773,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                You currently have a minting key for this account attached to
-                this node
+                {t('group:message.generic.node_minting_key', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
             </Box>
           )}
+
           <Spacer height="10px" />
+
           {mintingAccounts?.map((acct) => (
             <Box
               key={acct?.mintingAccount}
@@ -695,8 +792,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                Minting account: {handleNames(acct?.mintingAccount)}
+                {t('group:message.generic.minting_account', {
+                  postProcess: 'capitalizeFirst',
+                })}{' '}
+                {handleNames(acct?.mintingAccount)}
               </Typography>
+
               <Button
                 size="small"
                 sx={{
@@ -717,7 +818,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
                 variant="contained"
               >
-                Remove minting account
+                {t('group:action.remove_minting_account', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Button>
 
               <Divider />
@@ -728,13 +831,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
           {mintingAccounts?.length > 1 && (
             <Typography>
-              Only 2 minting keys are allowed per node. Please remove one if you
-              would like to add a different account.
+              {t('group:message.generic.minting_keys_per_node_different', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Typography>
           )}
         </Card>
 
         <Spacer height="20px" />
+
         {!isPartOfMintingGroup && (
           <Card
             sx={{
@@ -752,12 +857,19 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Typography>
-                You are currently not part of the MINTER group
+                {t('group:message.generic.minter_group', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
+
               <Typography>
-                Visit the Q-Mintership app to apply to be a minter
+                {t('group:message.generic.mintership_app', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
+
               <Spacer height="10px" />
+
               <Button
                 size="small"
                 sx={{
@@ -781,7 +893,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 }}
                 variant="contained"
               >
-                Visit Q-Mintership
+                {t('group:action.visit_q_mintership', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Button>
             </Box>
           </Card>
@@ -800,13 +914,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             <DialogContent>
               {!isShowNext && (
                 <Typography>
-                  Confirming creation of rewardshare on chain. Please be
-                  patient, this could take up to 90 seconds.
+                  {t('group:message.success.rewardshare_creation', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </Typography>
               )}
               {isShowNext && (
                 <Typography>
-                  Rewardshare confirmed. Please click Next.
+                  {t('group:message.success.rewardshare_confirmed', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </Typography>
               )}
             </DialogContent>
@@ -818,21 +935,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 onClick={onOk}
                 autoFocus
               >
-                Next
+                {t('core:page.next', { postProcess: 'capitalizeFirst' })}
               </Button>
             </DialogActions>
           </Dialog>
         )}
       </DialogContent>
+
       <DialogActions>
         <Button
           //   disabled={isLoadingPublish}
           variant="contained"
           onClick={() => setIsOpenMinting(false)}
         >
-          Close
+          {t('core:action.close', { postProcess: 'capitalizeFirst' })}
         </Button>
       </DialogActions>
+
       <Snackbar
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         open={openSnack}

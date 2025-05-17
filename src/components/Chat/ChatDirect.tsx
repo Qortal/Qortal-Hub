@@ -1,12 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from 'react';
-
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
@@ -31,9 +23,9 @@ import {
 } from '../../utils/events';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ShortUniqueId from 'short-unique-id';
-import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { ReplyPreview } from './MessageItem';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -50,21 +42,20 @@ export const ChatDirect = ({
   setMobileViewModeKeepOpen,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [onEditMessage, setOnEditMessage] = useState(null);
-
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [directToValue, setDirectToValue] = useState('');
   const hasInitialized = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [publicKeyOfRecipient, setPublicKeyOfRecipient] = React.useState('');
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [publicKeyOfRecipient, setPublicKeyOfRecipient] = useState('');
   const hasInitializedWebsocket = useRef(false);
   const [chatReferences, setChatReferences] = useState({});
-
   const editorRef = useRef(null);
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
@@ -74,12 +65,8 @@ export const ChatDirect = ({
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
-  const [, forceUpdate] = useReducer((x) => x + 1, 0);
-
-  const triggerRerender = () => {
-    forceUpdate(); // Trigger re-render by updating the state
-  };
   const publicKeyOfRecipientRef = useRef(null);
+
   const getPublicKeyFunc = async (address) => {
     try {
       const publicKey = await getPublicKey(address);
@@ -229,7 +216,12 @@ export const ChatDirect = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -397,11 +389,20 @@ export const ChatDirect = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
-      throw new Error(error);
+      if (error instanceof Error) {
+        throw new Error(error.message);
+      } else {
+        throw new Error(String(error));
+      }
     }
   };
   const clearEditorContent = () => {
@@ -432,8 +433,14 @@ export const ChatDirect = ({
     try {
       if (messageSize > 4000) return;
 
+      // TODO set magic number in a proper file
       if (+balance < 4)
-        throw new Error('You need at least 4 QORT to send a message');
+        throw new Error(
+          t('group:message.error.qortals_required', {
+            quantity: 4,
+            postProcess: 'capitalizeFirst',
+          })
+        );
       if (isSending) return;
       if (editorRef.current) {
         const htmlContent = editorRef.current.getHTML();
@@ -500,7 +507,10 @@ export const ChatDirect = ({
         type: 'error',
         message:
           errorMsg === 'invalid signature'
-            ? 'You need at least 4 QORT to send a message'
+            ? t('group:message.error.qortals_required', {
+                quantity: 4,
+                postProcess: 'capitalizeFirst',
+              })
             : errorMsg,
       });
       setOpenSnack(true);
@@ -566,13 +576,14 @@ export const ChatDirect = ({
             fontSize: '14px',
           }}
         >
-          Close Direct Chat
+          {t('core:action.close_chat', { postProcess: 'capitalizeFirst' })}
         </Typography>
       </Box>
 
       {isNewChat && (
         <>
           <Spacer height="30px" />
+
           <Input
             sx={{
               fontSize: '18px',
@@ -686,13 +697,19 @@ export const ChatDirect = ({
                 width: '100%',
               }}
             >
-              <Typography
+              <Typography // TODO set magic number in a proper file
                 sx={{
                   fontSize: '12px',
                   color:
                     messageSize > 4000 ? theme.palette.other.danger : 'unset',
                 }}
-              >{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
+              >
+                {t('core:message.error.message_size', {
+                  maximum: 4000,
+                  size: messageSize,
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Typography>
             </Box>
           )}
         </div>
@@ -746,7 +763,7 @@ export const ChatDirect = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading chat... please wait.',
+          message: t('core:loading.chat', { postProcess: 'capitalizeFirst' }),
         }}
       />
 

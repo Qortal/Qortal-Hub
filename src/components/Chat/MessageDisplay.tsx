@@ -171,8 +171,9 @@ export const MessageDisplay = ({ htmlContent, isReply }) => {
           }
         }
       } catch (error) {
-        //error
+        console.log(error);
       }
+
       const res = extractComponents(url);
       if (res) {
         const { service, name, identifier, path } = res;

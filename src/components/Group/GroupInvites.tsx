@@ -71,7 +71,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             fontSize: '1rem',
           }}
         >
-          {t('group:group.invites', { postProcess: 'capitalize' })}{' '}
+          {t('group:group.invites', { postProcess: 'capitalizeFirst' })}{' '}
           {groupsWithJoinRequests?.length > 0 &&
             ` (${groupsWithJoinRequests?.length})`}
         </Typography>
@@ -131,7 +131,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                 }}
               >
                 {t('group:message.generic.no_display', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>
             </Box>
@@ -181,7 +181,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                       }}
                       primary={t('group:message.generic.group_invited_you', {
                         group: group?.groupName,
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     />
                   </ListItemButton>

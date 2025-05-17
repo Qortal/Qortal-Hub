@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
@@ -7,7 +7,7 @@ import { useQortalMessageListener } from './useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-export const AppViewer = React.forwardRef(
+export const AppViewer = forwardRef(
   ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
     // const iframeRef = useRef(null);
     const { window: frameWindow } = useFrame();
@@ -23,7 +23,7 @@ export const AppViewer = React.forwardRef(
       );
     const [url, setUrl] = useState('');
     const { themeMode } = useThemeContext();
-    const { i18n } = useTranslation(['core']);
+    const { i18n, t } = useTranslation(['core']);
     const currentLang = i18n.language;
 
     useEffect(() => {
@@ -184,7 +184,13 @@ export const AppViewer = React.forwardRef(
           // Timeout after 200ms if no response
           setTimeout(() => {
             window.removeEventListener('message', handleNavigationSuccess);
-            reject(new Error('Navigation timeout'));
+            reject(
+              new Error(
+                t('core:message.error.navigation_timeout', {
+                  postProcess: 'capitalizeFirst',
+                })
+              )
+            );
           }, 200);
           const targetOrigin = iframeRef.current
             ? new URL(iframeRef.current.src).origin

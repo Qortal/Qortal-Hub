@@ -34,7 +34,6 @@ import {
 import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
-
 import {
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
@@ -89,9 +88,7 @@ export const ListOfGroupPromotions = () => {
   const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
-
   const [isExpanded, setIsExpanded] = React.useState(false);
-
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [fee, setFee] = useState(null);
@@ -99,7 +96,6 @@ export const ListOfGroupPromotions = () => {
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
   const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
-
   const theme = useTheme();
   const { t } = useTranslation(['core', 'group']);
   const listRef = useRef(null);
@@ -245,14 +241,17 @@ export const ListOfGroupPromotions = () => {
           .catch((error) => {
             rej(
               error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
             );
           });
       });
       setInfoSnack({
         type: 'success',
-        message:
-          'Successfully published promotion. It may take a couple of minutes for the promotion to appear',
+        message: t('group:message.success.group_promotion', {
+          postProcess: 'capitalizeFirst',
+        }),
       });
       setOpenSnack(true);
       setText('');
@@ -262,7 +261,10 @@ export const ListOfGroupPromotions = () => {
       setInfoSnack({
         type: 'error',
         message:
-          error?.message || 'Error publishing the promotion. Please try again',
+          error?.message ||
+          t('group:message.error.group_promotion', {
+            postProcess: 'capitalizeFirst',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -275,9 +277,9 @@ export const ListOfGroupPromotions = () => {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -291,8 +293,9 @@ export const ListOfGroupPromotions = () => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully requested to join group. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.group_join', {
+                  postProcess: 'capitalizeFirst',
+                }),
               });
 
               if (isOpen) {
@@ -300,8 +303,14 @@ export const ListOfGroupPromotions = () => {
                   {
                     ...response,
                     type: 'joined-group',
-                    label: `Joined Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Joined Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirst',
+                    }),
+                    labelDone: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirst',
+                    }),
                     done: false,
                     groupId,
                   },
@@ -312,15 +321,20 @@ export const ListOfGroupPromotions = () => {
                   {
                     ...response,
                     type: 'joined-group-request',
-                    label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Requested to join Group ${group?.groupName}: success!`,
+                    label: t('group:message.success.group_join_request', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirst',
+                    }),
+                    labelDone: t('group:message.success.group_join_outcome', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirst',
+                    }),
                     done: false,
                     groupId,
                   },
                   ...prev,
                 ]);
               }
-
               setOpenSnack(true);
               handlePopoverClose();
               res(response);
@@ -337,7 +351,11 @@ export const ListOfGroupPromotions = () => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -386,7 +404,7 @@ export const ListOfGroupPromotions = () => {
               fontSize: '1rem',
             }}
           >
-            Group promotions{' '}
+            {t('group:group.promotions', { postProcess: 'capitalizeFirst' })}{' '}
             {promotions.length > 0 && ` (${promotions.length})`}
           </Typography>
 
@@ -445,7 +463,9 @@ export const ListOfGroupPromotions = () => {
                   fontSize: '12px',
                 }}
               >
-                Add Promotion
+                {t('group.action.add_promotion', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Button>
             </Box>
 
@@ -491,7 +511,9 @@ export const ListOfGroupPromotions = () => {
                     color: 'rgba(255, 255, 255, 0.2)',
                   }}
                 >
-                  Nothing to display
+                  {t('group.message.generic.no_display', {
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </Typography>
               </Box>
             )}
@@ -538,23 +560,25 @@ export const ListOfGroupPromotions = () => {
                           ref={rowVirtualizer.measureElement} //measure dynamic row height
                           key={promotion?.identifier}
                           style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: '50%', // Move to the center horizontally
-                            transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                            width: '100%', // Control width (90% of the parent)
-                            padding: '10px 0',
-                            display: 'flex',
                             alignItems: 'center',
-                            overscrollBehavior: 'none',
+                            display: 'flex',
                             flexDirection: 'column',
                             gap: '5px',
+                            left: '50%', // Move to the center horizontally
+                            overscrollBehavior: 'none',
+                            padding: '10px 0',
+                            position: 'absolute',
+                            top: 0,
+                            transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
+                            width: '100%', // Control width (90% of the parent)
                           }}
                         >
                           <ErrorBoundary
                             fallback={
                               <Typography>
-                                Error loading content: Invalid Data
+                                {t('group:message.generic.invalid_data', {
+                                  postProcess: 'capitalizeFirst',
+                                })}
                               </Typography>
                             }
                           >
@@ -569,7 +593,7 @@ export const ListOfGroupPromotions = () => {
                               <Popover
                                 open={openPopoverIndex === promotion?.groupId}
                                 anchorEl={popoverAnchor}
-                                onClose={(event, reason) => {
+                                onClose={(reason) => {
                                   if (reason === 'backdropClick') {
                                     // Prevent closing on backdrop click
                                     return;
@@ -604,7 +628,10 @@ export const ListOfGroupPromotions = () => {
                                       fontWeight: 600,
                                     }}
                                   >
-                                    Group name: {` ${promotion?.groupName}`}
+                                    {t('group:group.name', {
+                                      postProcess: 'capitalizeFirst',
+                                    })}
+                                    : {` ${promotion?.groupName}`}
                                   </Typography>
 
                                   <Typography
@@ -613,8 +640,10 @@ export const ListOfGroupPromotions = () => {
                                       fontWeight: 600,
                                     }}
                                   >
-                                    Number of members:{' '}
-                                    {` ${promotion?.memberCount}`}
+                                    {t('group:group.member_number', {
+                                      postProcess: 'capitalizeFirst',
+                                    })}
+                                    : {` ${promotion?.memberCount}`}
                                   </Typography>
 
                                   {promotion?.description && (
@@ -635,9 +664,9 @@ export const ListOfGroupPromotions = () => {
                                         fontWeight: 600,
                                       }}
                                     >
-                                      *This is a closed/private group, so you
-                                      will need to wait until an admin accepts
-                                      your request
+                                      {t('group:message.generic.closed_group', {
+                                        postProcess: 'capitalizeFirst',
+                                      })}
                                     </Typography>
                                   )}
 
@@ -658,7 +687,9 @@ export const ListOfGroupPromotions = () => {
                                       variant="contained"
                                       onClick={handlePopoverClose}
                                     >
-                                      Close
+                                      {t('core:action.close', {
+                                        postProcess: 'capitalizeFirst',
+                                      })}
                                     </LoadingButton>
 
                                     <LoadingButton
@@ -672,7 +703,9 @@ export const ListOfGroupPromotions = () => {
                                         )
                                       }
                                     >
-                                      Join
+                                      {t('core:action.join', {
+                                        postProcess: 'capitalizeFirst',
+                                      })}
                                     </LoadingButton>
                                   </Box>
                                 </Box>
@@ -756,8 +789,12 @@ export const ListOfGroupPromotions = () => {
                                   }}
                                 >
                                   {promotion?.isOpen
-                                    ? 'Public group'
-                                    : 'Private group'}
+                                    ? t('group:group.public', {
+                                        postProcess: 'capitalizeFirst',
+                                      })
+                                    : t('group:group.private', {
+                                        postProcess: 'capitalizeFirst',
+                                      })}
                                 </Typography>
                               </Box>
 
@@ -791,7 +828,10 @@ export const ListOfGroupPromotions = () => {
                                     color: theme.palette.text.primary,
                                   }}
                                 >
-                                  Join Group: {` ${promotion?.groupName}`}
+                                  {t('group:action.join_group', {
+                                    postProcess: 'capitalizeFirst',
+                                  })}
+                                  : {` ${promotion?.groupName}`}
                                 </Button>
                               </Box>
                             </Box>
@@ -811,90 +851,114 @@ export const ListOfGroupPromotions = () => {
 
       <Spacer height="20px" />
 
-      {isShowModal && (
-        <Dialog
-          open={isShowModal}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-        >
-          <DialogTitle id="alert-dialog-title">
-            {'Promote your group to non-members'}
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText id="alert-dialog-description">
-              Only the latest promotion from the week will be shown for your
-              group.
-            </DialogContentText>
-            <DialogContentText id="alert-dialog-description2">
-              Max 200 characters. Publish Fee: {fee && fee} {' QORT'}
-            </DialogContentText>
-            <Spacer height="20px" />
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '5px',
-              }}
+      <Dialog
+        open={isShowModal}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          {t('group:action.promote_group', { postProcess: 'capitalizeFirst' })}
+        </DialogTitle>
+
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            {t('group:message.generic.latest_promotion', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </DialogContentText>
+
+          <DialogContentText id="alert-dialog-description2">
+            {t('group:message.generic.max_chars', {
+              postProcess: 'capitalizeFirst',
+            })}
+            : {fee && fee} {' QORT'}
+          </DialogContentText>
+
+          <Spacer height="20px" />
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px',
+            }}
+          >
+            <Label>
+              {t('group:action.select_group', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Label>
+
+            <Label>
+              {t('group:message.generic.admin_only', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Label>
+
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={selectedGroup}
+              label="Groups where you are an admin"
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              variant="outlined"
             >
-              <Label>Select a group</Label>
-              <Label>Only groups where you are an admin will be shown</Label>
-              <Select
-                labelId="demo-simple-select-label"
-                id="demo-simple-select"
-                value={selectedGroup}
-                label="Groups where you are an admin"
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                variant="outlined"
-              >
-                {myGroupsWhereIAmAdmin?.map((group) => {
-                  return (
-                    <MenuItem key={group?.groupId} value={group?.groupId}>
-                      {group?.groupName}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </Box>
-            <Spacer height="20px" />
-            <TextField
-              label="Promotion text"
-              variant="filled"
-              fullWidth
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              inputProps={{
-                maxLength: 200,
-              }}
-              multiline={true}
-              sx={{
-                '& .MuiFormLabel-root': {
-                  color: theme.palette.text.primary,
-                },
-                '& .MuiFormLabel-root.Mui-focused': {
-                  color: theme.palette.text.primary,
-                },
-              }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button
-              disabled={isLoadingPublish}
-              variant="contained"
-              onClick={() => setIsShowModal(false)}
-            >
-              Close
-            </Button>
-            <Button
-              disabled={!text.trim() || !selectedGroup || isLoadingPublish}
-              variant="contained"
-              onClick={publishPromo}
-              autoFocus
-            >
-              Publish
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+              {myGroupsWhereIAmAdmin?.map((group) => {
+                return (
+                  <MenuItem key={group?.groupId} value={group?.groupId}>
+                    {group?.groupName}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </Box>
+
+          <Spacer height="20px" />
+
+          <TextField
+            label="Promotion text"
+            variant="filled"
+            fullWidth
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            inputProps={{
+              maxLength: 200,
+            }}
+            multiline={true}
+            sx={{
+              '& .MuiFormLabel-root': {
+                color: theme.palette.text.primary,
+              },
+              '& .MuiFormLabel-root.Mui-focused': {
+                color: theme.palette.text.primary,
+              },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            disabled={isLoadingPublish}
+            variant="contained"
+            onClick={() => setIsShowModal(false)}
+          >
+            {t('core:action.close', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Button>
+          <Button
+            disabled={!text.trim() || !selectedGroup || isLoadingPublish}
+            variant="contained"
+            onClick={publishPromo}
+            autoFocus
+          >
+            {t('core:action.publish', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}

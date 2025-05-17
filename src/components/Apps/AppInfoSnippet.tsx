@@ -23,6 +23,7 @@ import {
 } from '../../atoms/global';
 import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const AppInfoSnippet = ({
   app,
@@ -41,6 +42,7 @@ export const AppInfoSnippet = ({
   );
 
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth', 'group']);
 
   return (
     <AppInfoSnippetContainer
@@ -169,8 +171,13 @@ export const AppInfoSnippet = ({
           }}
         >
           <AppDownloadButtonText>
-            {' '}
-            {isSelectedAppPinned ? 'Unpin' : 'Pin'}
+            {isSelectedAppPinned
+              ? t('core:action.unpin', {
+                  postProcess: 'capitalizeFirst',
+                })
+              : t('core:action.pin', {
+                  postProcess: 'capitalizeFirst',
+                })}
           </AppDownloadButtonText>
         </AppDownloadButton>
 
@@ -187,7 +194,13 @@ export const AppInfoSnippet = ({
           }}
         >
           <AppDownloadButtonText>
-            {isInstalled ? 'Open' : 'Download'}
+            {isInstalled
+              ? t('core:action.open', {
+                  postProcess: 'capitalizeFirst',
+                })
+              : t('core:action.download', {
+                  postProcess: 'capitalizeFirst',
+                })}
           </AppDownloadButtonText>
         </AppDownloadButton>
       </AppInfoSnippetRight>

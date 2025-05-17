@@ -1,4 +1,5 @@
-import React, {
+import {
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -47,6 +48,7 @@ import level9Img from '../../assets/badges/level-9.png';
 import level10Img from '../../assets/badges/level-10.png';
 import { Embed } from '../Embeds/Embed';
 import { buildImageEmbedLink, messageHasImage } from '../../utils/chat';
+import { useTranslation } from 'react-i18next';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -77,7 +79,7 @@ const getBadgeImg = (level) => {
   }
 };
 
-const UserBadge = React.memo(({ userInfo }) => {
+const UserBadge = memo(({ userInfo }) => {
   return (
     <Tooltip disableFocusListener title={`level ${userInfo ?? 0}`}>
       <img
@@ -92,7 +94,7 @@ const UserBadge = React.memo(({ userInfo }) => {
   );
 });
 
-export const MessageItem = React.memo(
+export const MessageItem = memo(
   ({
     message,
     onSeen,
@@ -168,12 +170,15 @@ export const MessageItem = React.memo(
     }, [message?.id]);
 
     const theme = useTheme();
+    const { t } = useTranslation(['auth', 'core', 'group']);
 
     return (
       <>
         {message?.divide && (
           <div className="unread-divider" id="unread-divider-id">
-            Unread messages below
+            {t('core:message.generic.unread_messages', {
+              postProcess: 'capitalizeFirst',
+            })}
           </div>
         )}
 
@@ -261,6 +266,7 @@ export const MessageItem = React.memo(
                     {message?.senderName || message?.sender}
                   </Typography>
                 </WrapperUserAction>
+
                 <Box
                   sx={{
                     display: 'flex',
@@ -278,6 +284,7 @@ export const MessageItem = React.memo(
                         <EditIcon />
                       </ButtonBase>
                     )}
+
                   {!isShowingAsReply && (
                     <ButtonBase
                       onClick={() => {
@@ -287,6 +294,7 @@ export const MessageItem = React.memo(
                       <ReplyIcon />
                     </ButtonBase>
                   )}
+
                   {!isShowingAsReply && handleReaction && (
                     <ReactionPicker
                       onReaction={(val) => {
@@ -306,6 +314,7 @@ export const MessageItem = React.memo(
                   )}
                 </Box>
               </Box>
+
               {reply && (
                 <>
                   <Spacer height="20px" />
@@ -332,6 +341,7 @@ export const MessageItem = React.memo(
                         flexShrink: 0,
                       }}
                     />
+
                     <Box
                       sx={{
                         padding: '5px',
@@ -343,11 +353,16 @@ export const MessageItem = React.memo(
                           fontWeight: 600,
                         }}
                       >
-                        Replied to {reply?.senderName || reply?.senderAddress}
+                        {t('core:message.generic.replied_to', {
+                          person: reply?.senderName || reply?.senderAddress,
+                          postProcess: 'capitalizeFirst',
+                        })}
                       </Typography>
+
                       {reply?.messageText && (
                         <MessageDisplay htmlContent={htmlReply} />
                       )}
+
                       {reply?.decryptedData?.type === 'notification' ? (
                         <MessageDisplay
                           htmlContent={reply.decryptedData?.data?.message}
@@ -359,6 +374,7 @@ export const MessageItem = React.memo(
                   </Box>
                 </>
               )}
+
               {htmlText && <MessageDisplay htmlContent={htmlText} />}
 
               {message?.decryptedData?.type === 'notification' ? (
@@ -453,14 +469,17 @@ export const MessageItem = React.memo(
                   >
                     <Box sx={{ p: 2 }}>
                       <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
-                        People who reacted with {selectedReaction}
+                        {t('core:message.generic.people_reaction', {
+                          reaction: selectedReaction,
+                          postProcess: 'capitalizeFirst',
+                        })}
                       </Typography>
 
                       <List
                         sx={{
-                          overflow: 'auto',
-                          maxWidth: '300px',
                           maxHeight: '300px',
+                          maxWidth: '300px',
+                          overflow: 'auto',
                         }}
                       >
                         {reactions[selectedReaction]?.map((reactionItem) => (
@@ -473,6 +492,7 @@ export const MessageItem = React.memo(
                           </ListItem>
                         ))}
                       </List>
+
                       <Button
                         variant="contained"
                         color="primary"
@@ -494,12 +514,17 @@ export const MessageItem = React.memo(
                         {reactions[selectedReaction]?.find(
                           (item) => item?.sender === myAddress
                         )
-                          ? 'Remove Reaction'
-                          : 'Add Reaction'}
+                          ? t('core:action.remove_reaction', {
+                              postProcess: 'capitalizeFirst',
+                            })
+                          : t('core:action.add_reaction', {
+                              postProcess: 'capitalizeFirst',
+                            })}
                       </Button>
                     </Box>
                   </Popover>
                 )}
+
                 <Box
                   sx={{
                     alignItems: 'center',
@@ -525,8 +550,12 @@ export const MessageItem = React.memo(
                       }}
                     >
                       {message?.status === 'failed-permanent'
-                        ? 'Failed to update'
-                        : 'Updating...'}
+                        ? t('core:message.error.update_failed', {
+                            postProcess: 'capitalizeFirst',
+                          })
+                        : t('core:message.generic.updating', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                     </Typography>
                   ) : isTemp ? (
                     <Typography
@@ -537,8 +566,12 @@ export const MessageItem = React.memo(
                       }}
                     >
                       {message?.status === 'failed-permanent'
-                        ? 'Failed to send'
-                        : 'Sending...'}
+                        ? t('core:message.error.send_failed', {
+                            postProcess: 'capitalizeFirst',
+                          })
+                        : t('core:message.generic.sending', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                     </Typography>
                   ) : (
                     <>
@@ -551,7 +584,9 @@ export const MessageItem = React.memo(
                             fontStyle: 'italic',
                           }}
                         >
-                          Edited
+                          {t('core:message.generic.edited', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                         </Typography>
                       )}
                       <Typography
@@ -577,6 +612,7 @@ export const MessageItem = React.memo(
 
 export const ReplyPreview = ({ message, isEdit = false }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   return (
     <Box
@@ -612,7 +648,9 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
               fontWeight: 600,
             }}
           >
-            Editing Message
+            {t('core:message.generic.editing_message', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         ) : (
           <Typography
@@ -621,7 +659,10 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
               fontWeight: 600,
             }}
           >
-            Replied to {message?.senderName || message?.senderAddress}
+            {t('core:message.generic.replied_to', {
+              person: message?.senderName || message?.senderAddress,
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         )}
 

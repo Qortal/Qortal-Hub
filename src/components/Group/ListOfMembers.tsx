@@ -59,9 +59,9 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('GROUP_KICK');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'GROUP_KICK',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -78,7 +78,7 @@ const ListOfMembers = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_kick', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -98,7 +98,9 @@ const ListOfMembers = ({
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -115,9 +117,9 @@ const ListOfMembers = ({
       const fee = await getFee('GROUP_BAN');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'GROUP_BAN',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -136,7 +138,7 @@ const ListOfMembers = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_ban', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -156,7 +158,9 @@ const ListOfMembers = ({
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -173,9 +177,9 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'ADD_GROUP_ADMIN',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -191,7 +195,7 @@ const ListOfMembers = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_member_admin', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -211,7 +215,9 @@ const ListOfMembers = ({
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -228,9 +234,9 @@ const ListOfMembers = ({
     try {
       const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'REMOVE_GROUP_ADMIN',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -246,7 +252,7 @@ const ListOfMembers = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_remove_member', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -266,7 +272,9 @@ const ListOfMembers = ({
               type: 'error',
               message:
                 error.message ||
-                t('core:message.error.generic', { postProcess: 'capitalize' }),
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -326,7 +334,7 @@ const ListOfMembers = ({
                       onClick={() => handleKick(member?.member)}
                     >
                       {t('group:action.kick_member', {
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     </LoadingButton>
 
@@ -337,7 +345,7 @@ const ListOfMembers = ({
                       onClick={() => handleBan(member?.member)}
                     >
                       {t('group:action.ban', {
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     </LoadingButton>
 
@@ -348,7 +356,7 @@ const ListOfMembers = ({
                       onClick={() => makeAdmin(member?.member)}
                     >
                       {t('group:action.make_admin', {
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     </LoadingButton>
 
@@ -359,7 +367,7 @@ const ListOfMembers = ({
                       onClick={() => removeAdmin(member?.member)}
                     >
                       {t('group:action.remove_admin', {
-                        postProcess: 'capitalize',
+                        postProcess: 'capitalizeFirst',
                       })}
                     </LoadingButton>
                   </>
@@ -394,7 +402,7 @@ const ListOfMembers = ({
                     }}
                   >
                     {t('core:admin', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
                   </Typography>
                 )}
@@ -410,7 +418,7 @@ const ListOfMembers = ({
     <div>
       <p>
         {t('core:list.member', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         })}
       </p>
       <div

@@ -7,6 +7,7 @@ import { StarFilledIcon } from '../../assets/Icons/StarFilled';
 import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
 import { AppInfoUserName } from './Apps-styles';
 import { Spacer } from '../../common/Spacer';
+import { useTranslation } from 'react-i18next';
 
 export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [value, setValue] = useState(0);
@@ -19,6 +20,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasCalledRef = useRef(false);
+  const { t } = useTranslation(['core', 'group']);
 
   const getRating = useCallback(async (name, service) => {
     try {
@@ -101,25 +103,39 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const rateFunc = async (event, chosenValue, currentValue) => {
     try {
       const newValue = chosenValue || currentValue;
-      if (!myName) throw new Error('You need a name to rate.');
+      if (!myName)
+        throw new Error(
+          t('core:message.generic.name_rate', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       if (!app?.name) return;
       const fee = await getFee('CREATE_POLL');
 
       await show({
-        message: `Would you like to rate this app a rating of ${newValue}?. It will create a POLL tx.`,
+        message: t('core:message.question.rate_app', {
+          rate: newValue,
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
+        const pollDescription = t('core:message.error.generic', {
+          name: app.name,
+          service: app.service,
+          postProcess: 'capitalizeFirst',
+        });
+
         await new Promise((res, rej) => {
           window
             .sendMessage(
               'createPoll',
               {
                 pollName: pollName,
-                pollDescription: `Rating for ${app.service} ${app.name}`,
+                pollDescription: pollDescription,
                 pollOptions: pollOptions,
                 pollOwnerAddress: myName,
               },
@@ -133,8 +149,9 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 res(response);
                 setInfoSnack({
                   type: 'success',
-                  message:
-                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalizeFirst',
+                  }),
                 });
                 setOpenSnack(true);
               }
@@ -150,7 +167,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
           (option) => +option.optionName === +newValue
         );
         if (isNaN(optionIndex) || optionIndex === -1)
-          throw new Error('Cannot find rating option');
+          throw new Error(
+            t('core:message.error.rating_option', {
+              postProcess: 'capitalizeFirst',
+            })
+          );
         await new Promise((res, rej) => {
           window
             .sendMessage(
@@ -169,8 +190,9 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 res(response);
                 setInfoSnack({
                   type: 'success',
-                  message:
-                    'Successfully rated. Please wait a couple minutes for the network to propogate the changes.',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalizeFirst',
+                  }),
                 });
                 setOpenSnack(true);
               }
@@ -184,7 +206,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       console.log('error', error);
       setInfoSnack({
         type: 'error',
-        message: error?.message || 'Unable to rate',
+        message:
+          error?.message ||
+          t('core:message.error.unable_rate', {
+            postProcess: 'capitalizeFirst',
+          }),
       });
       setOpenSnack(true);
     }
@@ -194,8 +220,8 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
     <div>
       <Box
         sx={{
-          display: 'flex',
           alignItems: 'center',
+          display: 'flex',
           flexDirection: ratingCountPosition === 'top' ? 'column' : 'row',
         }}
       >
@@ -206,8 +232,11 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}{' '}
               {' RATINGS'}
             </AppInfoUserName>
+
             <Spacer height="6px" />
+
             <AppInfoUserName>{value?.toFixed(1)}</AppInfoUserName>
+
             <Spacer height="6px" />
           </>
         )}

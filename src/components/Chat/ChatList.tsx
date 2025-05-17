@@ -5,6 +5,7 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
+import { useTranslation } from 'react-i18next';
 
 export const ChatList = ({
   initialMessages,
@@ -180,6 +181,7 @@ export const ChatList = ({
   }, []);
 
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   return (
     <Box
@@ -202,11 +204,11 @@ export const ChatList = ({
           ref={parentRef}
           className="List"
           style={{
+            display: 'flex',
             flexGrow: 1,
+            height: '0px',
             overflow: 'auto',
             position: 'relative',
-            display: 'flex',
-            height: '0px',
           }}
         >
           <div
@@ -324,19 +326,23 @@ export const ChatList = ({
                     <div
                       key={virtualRow.index}
                       style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: '50%',
-                        transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
-                        width: '100%',
-                        padding: '10px 0',
-                        display: 'flex',
                         alignItems: 'center',
+                        display: 'flex',
                         flexDirection: 'column',
                         gap: '5px',
+                        left: '50%',
+                        padding: '10px 0',
+                        position: 'absolute',
+                        top: 0,
+                        transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
+                        width: '100%',
                       }}
                     >
-                      <Typography>Error loading message.</Typography>
+                      <Typography>
+                        {t('core:message.error.message_loading', {
+                          postProcess: 'capitalizeFirst',
+                        })}
+                      </Typography>
                     </div>
                   );
                 }
@@ -363,26 +369,28 @@ export const ChatList = ({
                     <ErrorBoundary
                       fallback={
                         <Typography>
-                          Error loading content: Invalid Data
+                          {t('group:message.generic.invalid_data', {
+                            postProcess: 'capitalizeFirst',
+                          })}
                         </Typography>
                       }
                     >
                       <MessageItem
+                        handleReaction={handleReaction}
                         isLast={index === messages.length - 1}
+                        isPrivate={isPrivate}
+                        isTemp={!!message?.isTemp}
+                        isUpdating={isUpdating}
                         lastSignature={lastSignature}
                         message={message}
-                        onSeen={handleMessageSeen}
-                        isTemp={!!message?.isTemp}
                         myAddress={myAddress}
-                        onReply={onReply}
                         onEdit={onEdit}
+                        onReply={onReply}
+                        onSeen={handleMessageSeen}
+                        reactions={reactions}
                         reply={reply}
                         replyIndex={replyIndex}
                         scrollToItem={goToMessage}
-                        handleReaction={handleReaction}
-                        reactions={reactions}
-                        isUpdating={isUpdating}
-                        isPrivate={isPrivate}
                       />
                     </ErrorBoundary>
                   </div>
@@ -391,6 +399,7 @@ export const ChatList = ({
             </div>
           </div>
         </div>
+
         {showScrollButton && (
           <button
             onClick={() => scrollToBottom()}
@@ -408,9 +417,12 @@ export const ChatList = ({
               zIndex: 10,
             }}
           >
-            Scroll to Unread Messages
+            {t('group:action.scroll_unread_messages', {
+              postProcess: 'capitalizeFirst',
+            })}
           </button>
         )}
+
         {showScrollDownButton && !showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
@@ -431,10 +443,13 @@ export const ChatList = ({
               textTransform: 'none',
             }}
           >
-            Scroll to bottom
+            {t('group:action.scroll_unread_messages', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Button>
         )}
       </div>
+
       {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
           openQManager={openQManager}

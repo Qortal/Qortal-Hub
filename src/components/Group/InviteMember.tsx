@@ -15,14 +15,17 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const inviteMember = async () => {
     try {
       const fee = await getFee('GROUP_INVITE');
+
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'GROUP_INVITE',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingInvite(true);
+
       if (!expiryTime || !value) return;
       new Promise((res, rej) => {
         window
@@ -37,12 +40,11 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
                 type: 'success',
                 message: t('group:message.success.group_invite', {
                   value: value,
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
               res(response);
-
               setValue('');
               return;
             }
@@ -56,7 +58,11 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error?.message || 'An error occurred',
+              message:
+                error?.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -80,22 +86,27 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         flexDirection: 'column',
       }}
     >
-      {t('group:action.invite_member', { postProcess: 'capitalize' })}
+      {t('group:action.invite_member', { postProcess: 'capitalizeFirst' })}
+
       <Spacer height="20px" />
+
       <Input
         value={value}
         placeholder="Name or address"
         onChange={(e) => setValue(e.target.value)}
       />
+
       <Spacer height="20px" />
+
       <Label>
-        {t('group:invitation_expiry', { postProcess: 'capitalize' })}
+        {t('group:invitation_expiry', { postProcess: 'capitalizeFirst' })}
       </Label>
+
       <Select
         labelId="demo-simple-select-label"
         id="demo-simple-select"
         value={expiryTime}
-        label={t('group:invitation_expiry', { postProcess: 'capitalize' })}
+        label={t('group:invitation_expiry', { postProcess: 'capitalizeFirst' })}
         onChange={handleChange}
       >
         <MenuItem value={10800}>{t('core:time.hour', { count: 3 })}</MenuItem>
@@ -109,14 +120,16 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         <MenuItem value={1296000}>{t('core:time.day', { count: 15 })}</MenuItem>
         <MenuItem value={2592000}>{t('core:time.day', { count: 30 })}</MenuItem>
       </Select>
+
       <Spacer height="20px" />
+
       <LoadingButton
         variant="contained"
         loadingPosition="start"
         loading={isLoadingInvite}
         onClick={inviteMember}
       >
-        {t('core:action.invite', { postProcess: 'capitalize' })}
+        {t('core:action.invite', { postProcess: 'capitalizeFirst' })}
       </LoadingButton>
     </Box>
   );

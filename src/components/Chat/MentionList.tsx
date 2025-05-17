@@ -1,6 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default forwardRef((props, ref) => {
+  const { t } = useTranslation(['auth', 'core', 'group']);
+
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   const selectItem = (index) => {
@@ -61,7 +64,11 @@ export default forwardRef((props, ref) => {
           </button>
         ))
       ) : (
-        <div className="item">No result</div>
+        <div className="item">
+          {t('core:message.generic.no_results', {
+            postProcess: 'capitalizeFirst',
+          })}
+        </div>
       )}
     </div>
   );

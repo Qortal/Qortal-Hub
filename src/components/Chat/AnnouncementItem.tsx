@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { MessageDisplay } from './MessageDisplay';
 import { Avatar, Box, Typography, useTheme } from '@mui/material';
 import { formatTimestamp } from '../../utils/time';
 import ChatBubbleIcon from '@mui/icons-material/ChatBubble';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
-import { getBaseApi } from '../../background';
 import { requestQueueCommentCount } from './GroupAnnouncements';
 import { CustomLoader } from '../../common/CustomLoader';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../App';
 import { WrapperUserAction } from '../WrapperUserAction';
+import { useTranslation } from 'react-i18next';
 
 export const AnnouncementItem = ({
   message,
@@ -18,12 +18,12 @@ export const AnnouncementItem = ({
   myName,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [commentLength, setCommentLength] = useState(0);
-  const getNumberOfComments = React.useCallback(async () => {
+
+  const getNumberOfComments = useCallback(async () => {
     try {
       const offset = 0;
-
-      // dispatch(setIsLoadingGlobal(true))
       const identifier = `cm-${message.identifier}`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=0&includemetadata=false&offset=${offset}&reverse=true&prefix=true`;
 
@@ -84,6 +84,7 @@ export const AnnouncementItem = ({
             {message?.name?.charAt(0)}
           </Avatar>
         </WrapperUserAction>
+
         <Box
           sx={{
             display: 'flex',
@@ -106,6 +107,7 @@ export const AnnouncementItem = ({
               {message?.name}
             </Typography>
           </WrapperUserAction>
+
           {!messageData?.decryptedData && (
             <Box
               sx={{
@@ -117,6 +119,7 @@ export const AnnouncementItem = ({
               <CustomLoader />
             </Box>
           )}
+
           {messageData?.decryptedData?.message && (
             <>
               {messageData?.type === 'notification' ? (
@@ -150,6 +153,7 @@ export const AnnouncementItem = ({
           </Box>
         </Box>
       </Box>
+
       {!disableComment && (
         <Box
           sx={{
@@ -189,10 +193,13 @@ export const AnnouncementItem = ({
                   fontSize: '14px',
                 }}
               >
-                Leave comment
+                {t('core:action.leave_comment', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
             )}
           </Box>
+
           <ArrowForwardIosIcon
             sx={{
               fontSize: '20px',

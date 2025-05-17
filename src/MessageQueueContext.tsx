@@ -1,11 +1,16 @@
-import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import ShortUniqueId from "short-unique-id";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useRef,
+} from 'react';
+import ShortUniqueId from 'short-unique-id';
 
 const MessageQueueContext = createContext(null);
+const uid = new ShortUniqueId({ length: 8 });
 
 export const useMessageQueue = () => useContext(MessageQueueContext);
-
-const uid = new ShortUniqueId({ length: 8 });
 
 export const MessageQueueProvider = ({ children }) => {
   const messageQueueRef = useRef([]);
@@ -21,39 +26,41 @@ export const MessageQueueProvider = ({ children }) => {
   const processingPromiseRef = useRef(Promise.resolve());
 
   // Function to add a message to the queue
-  const addToQueue = useCallback((sendMessageFunc, messageObj, type, groupDirectId) => {
-    const tempId = uid.rnd();
-    const chatData = {
-      ...messageObj,
-      type,
-      groupDirectId,
-      signature: uid.rnd(),
-      identifier: tempId,
-      retries: 0, // Retry count for display purposes
-      status: 'pending' // Initial status is 'pending'
-    };
+  const addToQueue = useCallback(
+    (sendMessageFunc, messageObj, type, groupDirectId) => {
+      const tempId = uid.rnd();
+      const chatData = {
+        ...messageObj,
+        type,
+        groupDirectId,
+        signature: uid.rnd(),
+        identifier: tempId,
+        retries: 0, // Retry count for display purposes
+        status: 'pending', // Initial status is 'pending'
+      };
 
-    // Add chat data to queueChats for status tracking
-    setQueueChats((prev) => ({
-      ...prev,
-      [groupDirectId]: [...(prev[groupDirectId] || []), chatData]
-    }));
+      // Add chat data to queueChats for status tracking
+      setQueueChats((prev) => ({
+        ...prev,
+        [groupDirectId]: [...(prev[groupDirectId] || []), chatData],
+      }));
 
-    // Add the message to the global messageQueueRef
-    messageQueueRef.current.push({
-      func: sendMessageFunc,
-      identifier: tempId,
-      groupDirectId,
-      specialId: messageObj?.message?.specialId
-    });
+      // Add the message to the global messageQueueRef
+      messageQueueRef.current.push({
+        func: sendMessageFunc,
+        identifier: tempId,
+        groupDirectId,
+        specialId: messageObj?.message?.specialId,
+      });
 
-    // Start processing the queue
-    processQueue([], groupDirectId);
-  }, []);
+      // Start processing the queue
+      processQueue([], groupDirectId);
+    },
+    []
+  );
 
   // Function to process the message queue
   const processQueue = useCallback((newMessages = [], groupDirectId) => {
-
     processingPromiseRef.current = processingPromiseRef.current
       .then(() => processQueueInternal(newMessages, groupDirectId))
       .catch((err) => console.error('Error in processQueue:', err));
@@ -62,7 +69,7 @@ export const MessageQueueProvider = ({ children }) => {
   // Internal function to handle queue processing
   const processQueueInternal = async (newMessages, groupDirectId) => {
     // Remove any messages from the queue that match the specialId from newMessages
-    
+
     // If the queue is empty, no need to process
     if (messageQueueRef.current.length === 0) return;
 
@@ -92,7 +99,6 @@ export const MessageQueueProvider = ({ children }) => {
 
         // Remove the message from the queue after successful sending
         messageQueueRef.current.shift();
-
       } catch (error) {
         console.error('Message sending failed', error);
 
@@ -110,7 +116,8 @@ export const MessageQueueProvider = ({ children }) => {
               updatedChats[groupDirectId][chatIndex].status = 'failed';
             } else {
               // Max retries reached, set status to 'failed-permanent'
-              updatedChats[groupDirectId][chatIndex].status = 'failed-permanent';
+              updatedChats[groupDirectId][chatIndex].status =
+                'failed-permanent';
 
               // Remove the message from the queue after max retries
               messageQueueRef.current.shift();
@@ -127,33 +134,39 @@ export const MessageQueueProvider = ({ children }) => {
 
   // Method to process with new messages and groupDirectId
   const processWithNewMessages = (newMessages, groupDirectId) => {
-    let updatedNewMessages = newMessages
+    let updatedNewMessages = newMessages;
     if (newMessages.length > 0) {
       // Remove corresponding entries in queueChats for the provided groupDirectId
       setQueueChats((prev) => {
         const updatedChats = { ...prev };
         if (updatedChats[groupDirectId]) {
-  
-          updatedNewMessages = newMessages?.map((msg)=> {
-            const findTempMsg = updatedChats[groupDirectId]?.find((msg2)=> msg2?.message?.specialId === msg?.specialId)
-            if(findTempMsg){
+          updatedNewMessages = newMessages?.map((msg) => {
+            const findTempMsg = updatedChats[groupDirectId]?.find(
+              (msg2) => msg2?.message?.specialId === msg?.specialId
+            );
+            if (findTempMsg) {
               return {
                 ...msg,
-                tempSignature: findTempMsg?.signature
-              }
+                tempSignature: findTempMsg?.signature,
+              };
             }
-            return msg
-          })
-        
-
-          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
-            return !newMessages.some(newMsg => newMsg?.specialId === chat?.message?.specialId);
+            return msg;
           });
+
+          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
+            (chat) => {
+              return !newMessages.some(
+                (newMsg) => newMsg?.specialId === chat?.message?.specialId
+              );
+            }
+          );
 
           // Remove messages with status 'failed-permanent'
-          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter((chat) => {
-            return chat?.status !== 'failed-permanent';
-          });
+          updatedChats[groupDirectId] = updatedChats[groupDirectId].filter(
+            (chat) => {
+              return chat?.status !== 'failed-permanent';
+            }
+          );
 
           // If no more chats for this group, delete the groupDirectId entry
           if (updatedChats[groupDirectId].length === 0) {
@@ -162,27 +175,36 @@ export const MessageQueueProvider = ({ children }) => {
         }
         return updatedChats;
       });
-      
     }
     setTimeout(() => {
-      if(!messageQueueRef.current.find((msg) => msg?.groupDirectId === groupDirectId)){
+      if (
+        !messageQueueRef.current.find(
+          (msg) => msg?.groupDirectId === groupDirectId
+        )
+      ) {
         setQueueChats((prev) => {
           const updatedChats = { ...prev };
           if (updatedChats[groupDirectId]) {
-            delete  updatedChats[groupDirectId]
+            delete updatedChats[groupDirectId];
           }
-  
-          return updatedChats
-        }
-          )
+
+          return updatedChats;
+        });
       }
     }, 300);
-    
-    return updatedNewMessages
+
+    return updatedNewMessages;
   };
 
   return (
-    <MessageQueueContext.Provider value={{ addToQueue, queueChats, clearStatesMessageQueueProvider, processWithNewMessages }}>
+    <MessageQueueContext.Provider
+      value={{
+        addToQueue,
+        queueChats,
+        clearStatesMessageQueueProvider,
+        processWithNewMessages,
+      }}
+    >
       {children}
     </MessageQueueContext.Provider>
   );

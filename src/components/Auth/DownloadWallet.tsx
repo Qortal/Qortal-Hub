@@ -76,14 +76,16 @@ export const DownloadWallet = ({
       if (!keepCurrentPassword && !newPassword) {
         setWalletToBeDownloadedError(
           t('auth:wallet.error.missing_new_password', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           })
         );
         return;
       }
       if (!walletToBeDownloadedPassword) {
         setWalletToBeDownloadedError(
-          t('auth:wallet.error.missing_password', { postProcess: 'capitalize' })
+          t('auth:wallet.error.missing_password', {
+            postProcess: 'capitalizeFirst',
+          })
         );
         return;
       }
@@ -157,7 +159,9 @@ export const DownloadWallet = ({
             fontWeight: 600,
           }}
         >
-          {t('auth:download_account', { postProcess: 'capitalize' })}
+          {t('auth:action.download_account', {
+            postProcess: 'capitalizeFirst',
+          })}
         </TextP>
       </Box>
 
@@ -167,7 +171,7 @@ export const DownloadWallet = ({
         <>
           <CustomLabel htmlFor="standard-adornment-password">
             {t('auth:wallet.password_confirmation', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </CustomLabel>
 
@@ -206,34 +210,38 @@ export const DownloadWallet = ({
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Typography sx={{ fontSize: '14px' }}>
                   {t('auth:wallet.keep_password', {
-                    postProcess: 'capitalize',
+                    postProcess: 'capitalizeFirst',
                   })}
                 </Typography>
               </Box>
             }
           />
+
           <Spacer height="20px" />
+
           {!keepCurrentPassword && (
             <>
               <CustomLabel htmlFor="standard-adornment-password">
                 {t('auth:wallet.new_password', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 })}
               </CustomLabel>
 
               <Spacer height="5px" />
+
               <PasswordField
                 id="standard-adornment-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
+
               <Spacer height="20px" />
             </>
           )}
 
           <CustomButton onClick={confirmPasswordToDownload}>
             {t('auth:password_confirmation', {
-              postProcess: 'capitalize',
+              postProcess: 'capitalizeFirst',
             })}
           </CustomButton>
 
@@ -247,14 +255,14 @@ export const DownloadWallet = ({
             onClick={async () => {
               await saveFileToDiskFunc();
               await showInfo({
-                message: t('auth:keep_secure', {
-                  postProcess: 'capitalize',
+                message: t('auth:message.generic.keep_secure', {
+                  postProcess: 'capitalizeFirst',
                 }),
               });
             }}
           >
-            {t('auth:download_account', {
-              postProcess: 'capitalize',
+            {t('auth:action.download_account', {
+              postProcess: 'capitalizeFirst',
             })}
           </CustomButton>
         </>

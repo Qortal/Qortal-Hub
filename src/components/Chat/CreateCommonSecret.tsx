@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
@@ -18,6 +18,7 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const CreateCommonSecret = ({
   groupId,
@@ -34,14 +35,14 @@ export const CreateCommonSecret = ({
   const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
 
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getPublishesFromAdmins = async (admins: string[]) => {
-    // const validApi = await findUsableApi();
     const queryString = admins.map((name) => `name=${name}`).join('&');
     const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
       groupId
@@ -55,9 +56,11 @@ export const CreateCommonSecret = ({
     const filterId = adminData.filter(
       (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
     );
+
     if (filterId?.length === 0) {
       return false;
     }
+
     const sortedData = filterId.sort((a: any, b: any) => {
       // Get the most recent date for both a and b
       const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
@@ -78,8 +81,13 @@ export const CreateCommonSecret = ({
       pauseAllQueues();
 
       const { names } = await getGroupAdmins(groupId);
+
       if (!names.length) {
-        throw new Error('Network error');
+        throw new Error(
+          t('core:message.error.network_generic', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       }
       const publish = await getPublishesFromAdmins(names);
 
@@ -92,15 +100,18 @@ export const CreateCommonSecret = ({
           publish.identifier
         }?encoding=base64&rebuild=true`
       );
+
       const data = await res.text();
-
       const decryptedKey: any = await decryptResource(data);
-
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
 
       if (decryptedKeyToObject) {
         return decryptedKeyToObject;
@@ -113,17 +124,31 @@ export const CreateCommonSecret = ({
   const createCommonSecret = async () => {
     try {
       const fee = await getFee('ARBITRARY');
+
       await show({
-        message: 'Would you like to perform an ARBITRARY transaction?',
+        message: t('core:message.question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoading(true);
 
       const secretKey2 = await getSecretKey();
+
       if (!secretKey2 && secretKey2 !== false)
-        throw new Error('invalid secret key');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
+
       if (secretKey2 && !validateSecretKey(secretKey2))
-        throw new Error('invalid secret key');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
 
       const secretKeyToSend = !secretKey2 ? null : secretKey2;
 
@@ -136,16 +161,26 @@ export const CreateCommonSecret = ({
           if (!response?.error) {
             setInfoSnack({
               type: 'success',
-              message:
-                'Successfully re-encrypted secret key. It may take a couple of minutes for the changes to propagate. Refresh the group in 5 mins.',
+              message: t('auth:message.success.reencrypted_secret_key', {
+                postProcess: 'capitalizeFirst',
+              }),
             });
             setOpenSnack(true);
             setTxList((prev) => [
               {
                 ...response,
                 type: 'created-common-secret',
-                label: `Published secret key for group ${groupId}: awaiting confirmation`,
-                labelDone: `Published secret key for group ${groupId}: success!`,
+                label: t('group:message.success.published_secret_key', {
+                  group_id: groupId,
+                  postProcess: 'capitalizeFirst',
+                }),
+                labelDone: t(
+                  'group:message.success.published_secret_key_label',
+                  {
+                    group_id: groupId,
+                    postProcess: 'capitalizeFirst',
+                  }
+                ),
                 done: false,
                 groupId,
               },
@@ -187,13 +222,15 @@ export const CreateCommonSecret = ({
         variant="contained"
         onClick={createCommonSecret}
       >
-        Re-encrypt key
+        {t('auth:action.reencrypt_key', { postProcess: 'capitalizeFirst' })}
       </LoadingButton>
 
       {noSecretKey ? (
         <Box>
           <Typography>
-            There is no group secret key. Be the first admin to publish one!
+            {t('group:message.generic.group_no_secret_key', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       ) : isOwner &&
@@ -202,14 +239,17 @@ export const CreateCommonSecret = ({
         userInfo.name !== secretKeyDetails?.name ? (
         <Box>
           <Typography>
-            The latest group secret key was published by a non-owner. As the
-            owner of the group please re-encrypt the key as a safeguard
+            {t('group:message.generic.group_secret_key_no_owner', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       ) : isForceShowCreationKeyPopup ? null : (
         <Box>
           <Typography>
-            The group member list has changed. Please re-encrypt the secret key.
+            {t('group:message.generic.group_member_list_changed', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       )}
@@ -228,7 +268,7 @@ export const CreateCommonSecret = ({
           }}
           size="small"
         >
-          Hide
+          {t('core:action.hide', { postProcess: 'capitalizeFirst' })}
         </Button>
       </Box>
 

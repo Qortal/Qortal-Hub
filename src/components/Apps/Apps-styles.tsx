@@ -351,7 +351,7 @@ export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
   justifyContent: 'center',
   width: '120px',
   '&:hover': {
-    backgroundColor: 'action.hover', // background on hover
+    backgroundColor: 'action.hover',
   },
 }));
 

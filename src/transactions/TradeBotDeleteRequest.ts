@@ -1,35 +1,35 @@
 // @ts-nocheck
 
 /**
- * CrossChain - DELETE TradeOffer 
- * 
+ * CrossChain - DELETE TradeOffer
+ *
  * These are special types of transactions (JSON ENCODED)
  */
 
 export default class DeleteTradeOffer {
-	constructor() {
-		// ...
-	}
+  constructor() {
+    // ...
+  }
 
-	createTransaction(txnReq) {
-		this.creatorPublicKey(txnReq.creatorPublicKey)
-		this.atAddress(txnReq.atAddress)
+  createTransaction(txnReq) {
+    this.creatorPublicKey(txnReq.creatorPublicKey);
+    this.atAddress(txnReq.atAddress);
 
-		return this.txnRequest()
-	}
+    return this.txnRequest();
+  }
 
-	creatorPublicKey(creatorPublicKey) {
-		this._creatorPublicKey = creatorPublicKey
-	}
+  creatorPublicKey(creatorPublicKey) {
+    this._creatorPublicKey = creatorPublicKey;
+  }
 
-	atAddress(atAddress) {
-		this._atAddress = atAddress
-	}
+  atAddress(atAddress) {
+    this._atAddress = atAddress;
+  }
 
-	txnRequest() {
-		return {
-			creatorPublicKey: this._creatorPublicKey,
-			atAddress: this._atAddress
-		}
-	}
+  txnRequest() {
+    return {
+      creatorPublicKey: this._creatorPublicKey,
+      atAddress: this._atAddress,
+    };
+  }
 }

@@ -25,6 +25,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 enum Availability {
   NULL = 'null',
@@ -50,6 +51,7 @@ export const RegisterName = ({
   );
   const [nameFee, setNameFee] = useState(null);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'auth', 'group']);
   const checkIfNameExisits = async (name) => {
     if (!name?.trim()) {
       setIsNameAvailable(Availability.NULL);
@@ -110,12 +112,24 @@ export const RegisterName = ({
 
   const registerName = async () => {
     try {
-      if (!userInfo?.address) throw new Error('Your address was not found');
-      if (!registerNameValue) throw new Error('Enter a name');
+      if (!userInfo?.address)
+        throw new Error(
+          t('core:message.error.address_not_found', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
+      if (!registerNameValue)
+        throw new Error(
+          t('core:action.enter_name', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
 
       const fee = await getFee('REGISTER_NAME');
       await show({
-        message: 'Would you like to register this name?',
+        message: t('core:message.question.register_name', {
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoadingRegisterName(true);
@@ -130,8 +144,9 @@ export const RegisterName = ({
               setIsLoadingRegisterName(false);
               setInfoSnack({
                 type: 'success',
-                message:
-                  'Successfully registered. It may take a couple of minutes for the changes to propagate',
+                message: t('group:message.success.registered_name', {
+                  postProcess: 'capitalizeFirst',
+                }),
               });
               setIsOpen(false);
               setRegisterNameValue('');
@@ -140,8 +155,15 @@ export const RegisterName = ({
                 {
                   ...response,
                   type: 'register-name',
-                  label: `Registered name: awaiting confirmation. This may take a couple minutes.`,
-                  labelDone: `Registered name: success!`,
+                  label: t('group:message.success.registered_name_label', {
+                    postProcess: 'capitalizeFirst',
+                  }),
+                  labelDone: t(
+                    'group:message.success.registered_name_success',
+                    {
+                      postProcess: 'capitalizeFirst',
+                    }
+                  ),
                   done: false,
                 },
                 ...prev.filter((item) => !item.done),
@@ -158,7 +180,11 @@ export const RegisterName = ({
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -199,7 +225,9 @@ export const RegisterName = ({
             width: '400px',
           }}
         >
-          <Label>Choose a name</Label> // TODO: translate
+          <Label>
+            {t('core:action.choose_name', { postProcess: 'capitalizeFirst' })}
+          </Label>
           <TextField
             autoComplete="off"
             autoFocus
@@ -210,6 +238,7 @@ export const RegisterName = ({
           {(!balance || (nameFee && balance && balance < nameFee)) && (
             <>
               <Spacer height="10px" />
+
               <Box
                 sx={{
                   display: 'flex',
@@ -223,15 +252,20 @@ export const RegisterName = ({
                   }}
                 />
                 <Typography>
-                  Your balance is {balance ?? 0} QORT. A name registration
-                  requires a {nameFee} QORT fee
+                  {t('core:message.generic.name_registration', {
+                    balance: balance ?? 0,
+                    fee: { nameFee },
+                    postProcess: 'capitalizeFirst',
+                  })}
                 </Typography>
               </Box>
 
               <Spacer height="10px" />
             </>
           )}
+
           <Spacer height="5px" />
+
           {isNameAvailable === Availability.AVAILABLE && (
             <Box
               sx={{
@@ -245,9 +279,15 @@ export const RegisterName = ({
                   color: theme.palette.text.primary,
                 }}
               />
-              <Typography>{registerNameValue} is available</Typography>
+              <Typography>
+                {t('core:message.generic.name_available', {
+                  name: registerNameValue,
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Typography>
             </Box>
           )}
+
           {isNameAvailable === Availability.NOT_AVAILABLE && (
             <Box
               sx={{
@@ -261,9 +301,15 @@ export const RegisterName = ({
                   color: theme.palette.text.primary,
                 }}
               />
-              <Typography>{registerNameValue} is unavailable</Typography>
+              <Typography>
+                {t('core:message.generic.name_unavailable', {
+                  name: registerNameValue,
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Typography>
             </Box>
           )}
+
           {isNameAvailable === Availability.LOADING && (
             <Box
               sx={{
@@ -273,17 +319,27 @@ export const RegisterName = ({
               }}
             >
               <BarSpinner width="16px" color={theme.palette.text.primary} />
-              <Typography>Checking if name already existis</Typography>
+
+              <Typography>
+                {t('core:message.generic.name_checking', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              </Typography>
             </Box>
           )}
+
           <Spacer height="25px" />
+
           <Typography
             sx={{
               textDecoration: 'underline',
             }}
           >
-            Benefits of a name
+            {t('core:message.generic.name_benefits', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
+
           <List
             sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}
             aria-label="contacts"
@@ -296,7 +352,11 @@ export const RegisterName = ({
                   }}
                 />
               </ListItemIcon>
-              <ListItemText primary="Publish data to Qortal: anything from apps to videos. Fully decentralized!" />
+              <ListItemText
+                primary={t('core:message.generic.publish_data', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              />
             </ListItem>
 
             <ListItem disablePadding>
@@ -307,7 +367,11 @@ export const RegisterName = ({
                   }}
                 />
               </ListItemIcon>
-              <ListItemText primary="Secure ownership of data published by your name. You can even sell your name, along with your data to a third party." />
+              <ListItemText
+                primary={t('core:message.generic.secure_ownership', {
+                  postProcess: 'capitalizeFirst',
+                })}
+              />
             </ListItem>
           </List>
         </Box>
@@ -322,7 +386,7 @@ export const RegisterName = ({
             setRegisterNameValue('');
           }}
         >
-          Close
+          {t('core:action.close', { postProcess: 'capitalizeFirst' })}
         </Button>
 
         <Button
@@ -337,7 +401,7 @@ export const RegisterName = ({
           onClick={registerName}
           autoFocus
         >
-          Register Name
+          {t('core:action.register_name', { postProcess: 'capitalizeFirst' })}
         </Button>
       </DialogActions>
     </Dialog>

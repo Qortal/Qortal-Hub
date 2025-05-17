@@ -94,9 +94,9 @@ export const ListOfInvites = ({
       const fee = await getFee('CANCEL_GROUP_INVITE');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'CANCEL_GROUP_INVITE',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -114,7 +114,7 @@ export const ListOfInvites = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.invitation_cancellation', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
               setOpenSnack(true);
@@ -136,7 +136,7 @@ export const ListOfInvites = ({
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
             });
             setOpenSnack(true);
@@ -196,7 +196,7 @@ export const ListOfInvites = ({
                     onClick={() => handleCancelInvitation(member?.invitee)}
                   >
                     {t('core:action.cancel_invitation', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
                   </LoadingButton>
                 </Box>
@@ -229,7 +229,7 @@ export const ListOfInvites = ({
     <div>
       <p>
         {t('group:invitees_list', {
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         })}
       </p>
       <div

@@ -17,7 +17,6 @@ import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import { AppsNavBarDesktop } from './AppsNavBarDesktop';
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { enabledDevModeAtom } from '../../atoms/global';
@@ -25,6 +24,7 @@ import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -49,19 +49,29 @@ export const AppsDesktop = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const { showTutorial } = useContext(MyContext);
   const theme = useTheme();
+  const { t } = useTranslation(['core', 'group']);
 
   const myApp = useMemo(() => {
     return availableQapps.find(
-      (app) => app.name === myName && app.service === 'APP'
+      (app) =>
+        app.name === myName &&
+        app.service ===
+          t('core:app', {
+            postProcess: 'capitalizeAll',
+          })
     );
   }, [myName, availableQapps]);
 
   const myWebsite = useMemo(() => {
     return availableQapps.find(
-      (app) => app.name === myName && app.service === 'WEBSITE'
+      (app) =>
+        app.name === myName &&
+        app.service ===
+          t('core:website', {
+            postProcess: 'capitalizeAll',
+          })
     );
   }, [myName, availableQapps]);
 
@@ -99,8 +109,6 @@ export const AppsDesktop = ({
       setCategories(responseData);
     } catch (error) {
       console.log(error);
-    } finally {
-      // dispatch(setIsLoadingGlobal(false))
     }
   }, []);
 
@@ -108,7 +116,6 @@ export const AppsDesktop = ({
     try {
       let apps = [];
       let websites = [];
-      // dispatch(setIsLoadingGlobal(true))
       const url = `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
 
       const response = await fetch(url, {
@@ -117,6 +124,7 @@ export const AppsDesktop = ({
           'Content-Type': 'application/json',
         },
       });
+
       if (!response?.ok) return;
       const responseData = await response.json();
       const urlWebsites = `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`;
@@ -127,6 +135,7 @@ export const AppsDesktop = ({
           'Content-Type': 'application/json',
         },
       });
+
       if (!responseWebsites?.ok) return;
       const responseDataWebsites = await responseWebsites.json();
 
@@ -136,8 +145,6 @@ export const AppsDesktop = ({
       setAvailableQapps(combine);
     } catch (error) {
       console.log(error);
-    } finally {
-      // dispatch(setIsLoadingGlobal(false))
     }
   }, []);
   useEffect(() => {
@@ -251,7 +258,6 @@ export const AppsDesktop = ({
     setTabs((prev) => [...prev, newTab]);
     setSelectedTab(newTab);
     setMode('viewer');
-
     setIsNewTabWindow(false);
   };
 
@@ -262,6 +268,7 @@ export const AppsDesktop = ({
       unsubscribeFromEvent('addTab', addTabFunc);
     };
   }, [tabs]);
+
   const setSelectedTabFunc = (e) => {
     const data = e.detail?.data;
     if (e.detail?.isDevMode) return;
@@ -331,21 +338,21 @@ export const AppsDesktop = ({
   return (
     <AppsParent
       sx={{
-        position: !show && 'fixed',
-        left: !show && '-200vw',
         flexDirection: 'row',
+        left: !show && '-200vw',
+        position: !show && 'fixed',
       }}
     >
       <Box
         sx={{
           alignItems: 'center',
+          backgroundColor: theme.palette.background.surface,
+          borderRight: `1px solid ${theme.palette.border.subtle}`,
           display: 'flex',
           flexDirection: 'column',
           gap: '25px',
           height: '100vh',
           width: '60px',
-          backgroundColor: theme.palette.background.surface,
-          borderRight: `1px solid ${theme.palette.border.subtle}`,
         }}
       >
         <ButtonBase
@@ -408,6 +415,7 @@ export const AppsDesktop = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <Save isDesktop disableWidth myName={myName} />
         {isEnabledDevMode && (
           <ButtonBase
@@ -446,13 +454,14 @@ export const AppsDesktop = ({
         <Box
           sx={{
             display: 'flex',
-            width: '100%',
             flexDirection: 'column',
             height: '100vh',
             overflow: 'auto',
+            width: '100%',
           }}
         >
           <Spacer height="30px" />
+
           <AppsHomeDesktop
             myName={myName}
             availableQapps={availableQapps}
@@ -480,12 +489,14 @@ export const AppsDesktop = ({
       {mode === 'appInfo-from-category' && !selectedTab && (
         <AppInfo app={selectedAppInfo} myName={myName} />
       )}
+
       <AppsCategoryDesktop
         availableQapps={availableQapps}
         isShow={mode === 'category' && !selectedTab}
         category={selectedCategory}
         myName={myName}
       />
+
       {mode === 'publish' && !selectedTab && (
         <AppPublish
           names={myName ? [myName] : []}
@@ -493,6 +504,7 @@ export const AppsDesktop = ({
           myAddress={myAddress}
         />
       )}
+
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
           iframeRefs.current[tab.tabId] = React.createRef();
@@ -521,6 +533,7 @@ export const AppsDesktop = ({
             }}
           >
             <Spacer height="30px" />
+
             <AppsHomeDesktop
               myName={myName}
               availableQapps={availableQapps}

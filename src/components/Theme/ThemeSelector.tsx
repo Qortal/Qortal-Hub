@@ -23,10 +23,10 @@ const ThemeSelector = () => {
         title={
           themeMode === 'dark'
             ? t('core:theme.light', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })
             : t('core:theme.light', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })
         }
       >

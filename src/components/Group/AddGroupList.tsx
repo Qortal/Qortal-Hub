@@ -113,9 +113,9 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       const fee = await getFee('JOIN_GROUP');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -131,7 +131,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.join_group', {
-                  postProcess: 'capitalize',
+                  postProcess: 'capitalizeFirst',
                 }),
               });
 
@@ -142,11 +142,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     type: 'joined-group',
                     label: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -160,11 +160,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     type: 'joined-group-request',
                     label: t('group:message.success.group_join_request', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     labelDone: t('group:message.success.group_join_outcome', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     }),
                     done: false,
                     groupId,
@@ -243,7 +243,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   }}
                 >
                   <Typography>
-                    {t('core:action.join', { postProcess: 'capitalize' })}{' '}
+                    {t('core:action.join', { postProcess: 'capitalizeFirst' })}{' '}
                     {group?.groupName}
                   </Typography>
                   <Typography>
@@ -257,7 +257,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     onClick={() => handleJoinGroup(group, group?.isOpen)}
                   >
                     {t('group:action.join_group', {
-                      postProcess: 'capitalize',
+                      postProcess: 'capitalizeFirst',
                     })}
                   </LoadingButton>
                 </Box>

@@ -155,7 +155,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         const fee = await getFee('ARBITRARY');
 
         await show({
-          message: t('core:save.publish_qnd', { postProcess: 'capitalize' }),
+          message: t('core:message.generic.publish_qnd', {
+            postProcess: 'capitalizeFirst',
+          }),
           publishFee: fee.fee + ' QORT',
         });
         const response = await new Promise((res, rej) => {
@@ -176,7 +178,9 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             .catch((error) => {
               rej(
                 error.message ||
-                  t('core:message.error.generic', { postProcess: 'capitalize' })
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirst',
+                  })
               );
             });
         });
@@ -185,8 +189,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
           setSettingsQdnLastUpdated(Date.now());
           setInfoSnack({
             type: 'success',
-            message: t('core:message.success.publish_qdn', {
-              postProcess: 'capitalize',
+            message: t('core:message.success.published_qdn', {
+              postProcess: 'capitalizeFirst',
             }),
           });
           setOpenSnack(true);
@@ -199,7 +203,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         message:
           error?.message ||
           t('core:message.error.save_qdn', {
-            postProcess: 'capitalize',
+            postProcess: 'capitalizeFirst',
           }),
       });
       setOpenSnack(true);
@@ -232,8 +236,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         {isDesktop ? (
           <IconWrapper
             disableWidth={disableWidth}
-            label={t('core:save_options.save', {
-              postProcess: 'capitalize',
+            label={t('core:action.save', {
+              postProcess: 'capitalizeFirst',
             })}
             selected={false}
             color={
@@ -303,8 +307,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   fontSize: '14px',
                 }}
               >
-                {t('core:save_options.settings', {
-                  postProcess: 'capitalize',
+                {t('core:message.generic.settings', {
+                  postProcess: 'capitalizeFirst',
                 })}
               </Typography>{' '}
               <Spacer height="40px" />
@@ -332,8 +336,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   },
                 }}
               >
-                {t('core:save_options.qdn', {
-                  postProcess: 'capitalize',
+                {t('core:message.generic.qdn', {
+                  postProcess: 'capitalizeFirst',
                 })}
               </Button>
             </Box>
@@ -363,8 +367,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     fontSize: '14px',
                   }}
                 >
-                  {t('core:save_options.register_name', {
-                    postProcess: 'capitalize',
+                  {t('core:message.generic.register_name', {
+                    postProcess: 'capitalizeFirst',
                   })}
                 </Typography>
               </Box>
@@ -384,8 +388,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         fontSize: '14px',
                       }}
                     >
-                      {t('core:save_options.unsaved_changes', {
-                        postProcess: 'capitalize',
+                      {t('core:message.generic.unsaved_changes', {
+                        postProcess: 'capitalizeFirst',
                       })}
                     </Typography>
 
@@ -408,8 +412,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                       onClick={saveToQdn}
                       variant="contained"
                     >
-                      {t('core:save_options.save_qdn', {
-                        postProcess: 'capitalize',
+                      {t('core:action.save_qdn', {
+                        postProcess: 'capitalizeFirst',
                       })}
                     </LoadingButton>
                     <Spacer height="20px" />
@@ -421,8 +425,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               fontSize: '14px',
                             }}
                           >
-                            {t('core:save_options.reset_qdn', {
-                              postProcess: 'capitalize',
+                            {t('core:message.question.reset_qdn', {
+                              postProcess: 'capitalizeFirst',
                             })}
                           </Typography>
                           <Spacer height="10px" />
@@ -443,8 +447,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               },
                             }}
                           >
-                            {t('core:save_options.revert_qdn', {
-                              postProcess: 'capitalize',
+                            {t('core:message.generic.revert_qdn', {
+                              postProcess: 'capitalizeFirst',
                             })}
                           </LoadingButton>
                         </>
@@ -458,8 +462,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             }}
                           >
                             {' '}
-                            {t('core:save_options.reset_pinned', {
-                              postProcess: 'capitalize',
+                            {t('core:message.question.reset_pinned', {
+                              postProcess: 'capitalizeFirst',
                             })}
                           </Typography>
                           <Spacer height="10px" />
@@ -468,8 +472,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             onClick={revertChanges}
                             variant="contained"
                           >
-                            {t('core:save_options.revert_default', {
-                              postProcess: 'capitalize',
+                            {t('core:message.generic.revert_default', {
+                              postProcess: 'capitalizeFirst',
                             })}
                           </LoadingButton>
                         </>
@@ -492,8 +496,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                           fontSize: '14px',
                         }}
                       >
-                        {t('core:save_options.overwrite_changes', {
-                          postProcess: 'capitalize',
+                        {t('core:message.question.overwrite_changes', {
+                          postProcess: 'capitalizeFirst',
                         })}
                       </Typography>
                       <Spacer height="10px" />
@@ -514,8 +518,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                           },
                         }}
                       >
-                        {t('core:save_options.overwrite_qdn', {
-                          postProcess: 'capitalize',
+                        {t('core:message.generic.overwrite_qdn', {
+                          postProcess: 'capitalizeFirst',
                         })}
                       </LoadingButton>
                     </Box>
@@ -534,8 +538,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                         fontSize: '14px',
                       }}
                     >
-                      {t('core:save_options.no_pinned_changes', {
-                        postProcess: 'capitalize',
+                      {t('core:message.generic.no_pinned_changes', {
+                        postProcess: 'capitalizeFirst',
                       })}
                     </Typography>
                   </Box>
@@ -592,7 +596,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
               }}
             >
               {t('core:action.import', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </ButtonBase>
 
@@ -617,7 +621,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
               }}
             >
               {t('core:action.export', {
-                postProcess: 'capitalize',
+                postProcess: 'capitalizeFirst',
               })}
             </ButtonBase>
           </Box>

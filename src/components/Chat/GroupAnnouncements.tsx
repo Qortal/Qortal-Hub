@@ -1,7 +1,9 @@
-import React, {
+import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -140,9 +142,9 @@ export const GroupAnnouncements = ({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const { show } = React.useContext(MyContext);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
+  const { show } = useContext(MyContext);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
   const hasInitialized = useRef(false);
   const hasInitializedWebsocket = useRef(false);
   const editorRef = useRef(null);
@@ -150,12 +152,13 @@ export const GroupAnnouncements = ({
   const setEditorRef = (editorInstance) => {
     editorRef.current = editorInstance;
   };
-  const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
-  const { t } = useTranslation(['core', 'group']);
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state
   };
+
   useEffect(() => {
     if (!selectedGroup) return;
     (async () => {
@@ -231,7 +234,12 @@ export const GroupAnnouncements = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -254,7 +262,12 @@ export const GroupAnnouncements = ({
           rej(response.error);
         })
         .catch((error) => {
-          rej(error.message || 'An error occurred');
+          rej(
+            error.message ||
+              t('core:message.error.generic', {
+                postProcess: 'capitalizeFirst',
+              })
+          );
         });
     });
   };
@@ -289,9 +302,9 @@ export const GroupAnnouncements = ({
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: t('group:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalize',
+          postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -334,7 +347,7 @@ export const GroupAnnouncements = ({
         setTempData(selectedGroup);
         clearEditorContent();
       }
-      // TODO send chat message
+      // send chat message
     } catch (error) {
       if (!error) return;
       setInfoSnack({
@@ -348,7 +361,7 @@ export const GroupAnnouncements = ({
     }
   };
 
-  const getAnnouncements = React.useCallback(
+  const getAnnouncements = useCallback(
     async (selectedGroup, isPrivate) => {
       try {
         const offset = 0;
@@ -384,7 +397,7 @@ export const GroupAnnouncements = ({
     [secretKey]
   );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!secretKey && isPrivate) return;
     if (
       selectedGroup &&
@@ -429,7 +442,7 @@ export const GroupAnnouncements = ({
 
   const theme = useTheme();
 
-  const checkNewMessages = React.useCallback(async () => {
+  const checkNewMessages = useCallback(async () => {
     try {
       const identifier = `grp-${selectedGroup}-anc-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=20&includemetadata=false&offset=${0}&reverse=true&prefix=true`;
@@ -583,7 +596,9 @@ export const GroupAnnouncements = ({
               fontSize: '30px',
             }}
           />
-          Group Announcements
+          {t('group:message.generic.group_announcement', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Box>
 
         <Spacer height={'25px'} />
@@ -602,10 +617,13 @@ export const GroupAnnouncements = ({
               fontSize: '16px',
             }}
           >
-            No announcements
+            {t('group:message.generic.no_announcement', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       )}
+
       <AnnouncementList
         announcementData={announcementData}
         initialMessages={combinedListTempAndReal}
@@ -686,7 +704,7 @@ export const GroupAnnouncements = ({
                   padding: '5px',
                 }}
               >
-                {` Close`}
+                {t('core:action.close', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             )}
 
@@ -720,7 +738,9 @@ export const GroupAnnouncements = ({
                   }}
                 />
               )}
-              {` Publish Announcement`}
+              {t('group:action.publish_announcement', {
+                postProcess: 'capitalizeFirst',
+              })}
             </CustomButton>
           </Box>
         </div>
@@ -736,7 +756,9 @@ export const GroupAnnouncements = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading announcements... please wait.',
+          message: t('core:loading.announcements', {
+            postProcess: 'capitalizeFirst',
+          }),
         }}
       />
     </div>

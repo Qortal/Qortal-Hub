@@ -1,7 +1,7 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { executeEvent } from '../../utils/events';
 import { navigationControllerAtom } from '../../atoms/global';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { saveFile } from '../../qortalRequests/get';
 import { mimeToExtensionMap } from '../../utils/memeTypes';
 import { MyContext } from '../../App';

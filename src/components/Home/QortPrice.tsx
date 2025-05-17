@@ -152,7 +152,7 @@ export const QortPrice = () => {
               fontWeight: 'bold',
             }}
           >
-            {t('core:price', { postProcess: 'capitalize' })}
+            {t('core:price', { postProcess: 'capitalizeFirst' })}
           </Typography>
 
           {!ltcPerQort ? (
@@ -184,7 +184,7 @@ export const QortPrice = () => {
             fontWeight: 'bold',
           }}
         >
-          {t('core:supply', { postProcess: 'capitalize' })}
+          {t('core:supply', { postProcess: 'capitalizeFirst' })}
         </Typography>
 
         {!supply ? (
@@ -238,7 +238,7 @@ export const QortPrice = () => {
               fontWeight: 'bold',
             }}
           >
-            {t('core:last_height', { postProcess: 'capitalize' })}
+            {t('core:last_height', { postProcess: 'capitalizeFirst' })}
           </Typography>
 
           {!lastBlock?.height ? (
