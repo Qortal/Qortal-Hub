@@ -3,6 +3,7 @@ import { EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import ListItem from '@tiptap/extension-list-item';
+import TextStyle from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import IconButton from '@mui/material/IconButton';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
@@ -354,7 +355,8 @@ const MenuBar = memo(
 );
 
 const extensions = [
-  Color.configure({ types: [ListItem.name] }),
+  Color.configure({ types: [TextStyle.name, ListItem.name] }),
+  TextStyle.configure({ types: [ListItem.name] }),
   StarterKit.configure({
     bulletList: {
       keepMarks: true,

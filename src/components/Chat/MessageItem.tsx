@@ -34,6 +34,7 @@ import { Spacer } from '../../common/Spacer';
 import { ReactionPicker } from '../ReactionPicker';
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
+import TextStyle from '@tiptap/extension-text-style';
 import level0Img from '../../assets/badges/level-0.png';
 import level1Img from '../../assets/badges/level-1.png';
 import level2Img from '../../assets/badges/level-2.png';
@@ -139,6 +140,7 @@ export const MessageItem = memo(
           Underline,
           Highlight,
           Mention,
+          TextStyle,
         ]);
       }
     }, [message?.editTimestamp]);
@@ -150,6 +152,7 @@ export const MessageItem = memo(
           Underline,
           Highlight,
           Mention,
+          TextStyle,
         ]);
       }
     }, [reply?.editTimestamp]);
@@ -670,6 +673,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
               Underline,
               Highlight,
               Mention,
+              TextStyle,
             ])}
           />
         )}
