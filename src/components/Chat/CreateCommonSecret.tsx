@@ -170,8 +170,17 @@ export const CreateCommonSecret = ({
               {
                 ...response,
                 type: 'created-common-secret',
-                label: `Published secret key for group ${groupId}: awaiting confirmation`,
-                labelDone: `Published secret key for group ${groupId}: success!`,
+                label: t('group:message.success.published_secret_key', {
+                  group_id: groupId,
+                  postProcess: 'capitalizeFirst',
+                }),
+                labelDone: t(
+                  'group:message.success.published_secret_key_label',
+                  {
+                    group_id: groupId,
+                    postProcess: 'capitalizeFirst',
+                  }
+                ),
                 done: false,
                 groupId,
               },
@@ -213,13 +222,15 @@ export const CreateCommonSecret = ({
         variant="contained"
         onClick={createCommonSecret}
       >
-        Re-encrypt key
+        {t('auth:action.reencrypt_key', { postProcess: 'capitalizeFirst' })}
       </LoadingButton>
 
       {noSecretKey ? (
         <Box>
           <Typography>
-            There is no group secret key. Be the first admin to publish one!
+            {t('group:message.generic.group_no_secret_key', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       ) : isOwner &&
@@ -228,14 +239,17 @@ export const CreateCommonSecret = ({
         userInfo.name !== secretKeyDetails?.name ? (
         <Box>
           <Typography>
-            The latest group secret key was published by a non-owner. As the
-            owner of the group please re-encrypt the key as a safeguard
+            {t('group:message.generic.group_secret_key_no_owner', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       ) : isForceShowCreationKeyPopup ? null : (
         <Box>
           <Typography>
-            The group member list has changed. Please re-encrypt the secret key.
+            {t('group:message.generic.group_member_list_changed', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       )}
@@ -254,7 +268,7 @@ export const CreateCommonSecret = ({
           }}
           size="small"
         >
-          Hide
+          {t('core:action.hide', { postProcess: 'capitalizeFirst' })}
         </Button>
       </Box>
 
