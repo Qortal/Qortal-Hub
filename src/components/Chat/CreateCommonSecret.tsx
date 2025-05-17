@@ -126,7 +126,7 @@ export const CreateCommonSecret = ({
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: t('core:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
           postProcess: 'capitalizeFirst',
         }),

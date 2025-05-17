@@ -206,7 +206,18 @@
     },
     "question": {
       "logout": "are you sure you would like to logout?",
-      "new_user": "are you a new user?"
+      "new_user": "are you a new user?",
+      "delete_chat_image": "would you like to delete your previous chat image?",
+      "perform_transaction": "would you like to perform a {{action}} transaction?",
+      "provide_thread": "please provide a thread title",
+      "publish_app": "would you like to publish this app?",
+      "publish_avatar": "would you like to publish an avatar?",
+      "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
+      "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
+      "rate_app": "would you like to rate this app a rating of {{ rate }}?. It will create a POLL tx.",
+      "register_name": "would you like to register this name?",
+      "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
+      "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?"
     },
     "status": {
       "minting": "(minting)",
@@ -241,19 +252,6 @@
     "q_mail": "q-mail",
     "q_manager": "q-manager",
     "q_sandbox": "q-Sandbox"
-  },
-  "question": {
-    "delete_chat_image": "would you like to delete your previous chat image?",
-    "perform_transaction": "would you like to perform a {{action}} transaction?",
-    "provide_thread": "please provide a thread title",
-    "publish_app": "would you like to publish this app?",
-    "publish_avatar": "would you like to publish an avatar?",
-    "publish_qdn": "would you like to publish your settings to QDN (encrypted)?",
-    "overwrite_changes": "the app was unable to download your existing QDN-saved pinned apps. Would you like to overwrite those changes?",
-    "rate_app": "would you like to rate this app a rating of {{ rate }}?. It will create a POLL tx.",
-    "register_name": "would you like to register this name?",
-    "reset_pinned": "don't like your current local changes? Would you like to reset to the default pinned apps?",
-    "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?"
   },
   "server": "server",
   "settings": "settings",

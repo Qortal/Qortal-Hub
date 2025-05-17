@@ -113,7 +113,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       const fee = await getFee('CREATE_POLL');
 
       await show({
-        message: t('core:question.rate_app', {
+        message: t('core:message.question.rate_app', {
           rate: newValue,
           postProcess: 'capitalizeFirst',
         }),

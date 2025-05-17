@@ -99,7 +99,7 @@ export const UserListOfInvites = ({
       const fee = await getFee('JOIN_GROUP');
 
       await show({
-        message: t('core:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
           postProcess: 'capitalizeFirst',
         }),

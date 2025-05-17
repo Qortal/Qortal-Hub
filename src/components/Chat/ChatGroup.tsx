@@ -851,7 +851,7 @@ export const ChatGroup = ({
           const fee = await getFee('ARBITRARY');
           await show({
             publishFee: fee.fee + ' QORT',
-            message: t('core:question.delete_chat_image', {
+            message: t('core:message.question.delete_chat_image', {
               postProcess: 'capitalizeFirst',
             }),
           });

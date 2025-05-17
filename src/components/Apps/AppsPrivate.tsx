@@ -192,7 +192,7 @@ export const AppsPrivate = ({ myName }) => {
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: t('core:question.publish_app', {
+        message: t('core:message.question.publish_app', {
           postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',

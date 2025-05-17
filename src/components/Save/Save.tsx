@@ -424,7 +424,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               fontSize: '14px',
                             }}
                           >
-                            {t('core:question.reset_qdn', {
+                            {t('core:message.question.reset_qdn', {
                               postProcess: 'capitalizeFirst',
                             })}
                           </Typography>
@@ -461,7 +461,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                             }}
                           >
                             {' '}
-                            {t('core:question.reset_pinned', {
+                            {t('core:message.question.reset_pinned', {
                               postProcess: 'capitalizeFirst',
                             })}
                           </Typography>
@@ -495,7 +495,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                           fontSize: '14px',
                         }}
                       >
-                        {t('core:question.overwrite_changes', {
+                        {t('core:message.question.overwrite_changes', {
                           postProcess: 'capitalizeFirst',
                         })}
                       </Typography>

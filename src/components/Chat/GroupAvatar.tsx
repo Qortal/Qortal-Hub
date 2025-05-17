@@ -89,7 +89,7 @@ export const GroupAvatar = ({
         );
 
       await show({
-        message: t('core:question.publish_avatar', {
+        message: t('core:message.question.publish_avatar', {
           postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',
