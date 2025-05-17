@@ -449,6 +449,7 @@ export const ChatList = ({
           </Button>
         )}
       </div>
+
       {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
           openQManager={openQManager}

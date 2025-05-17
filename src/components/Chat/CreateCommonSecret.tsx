@@ -18,6 +18,7 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const CreateCommonSecret = ({
   groupId,
@@ -39,9 +40,9 @@ export const CreateCommonSecret = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getPublishesFromAdmins = async (admins: string[]) => {
-    // const validApi = await findUsableApi();
     const queryString = admins.map((name) => `name=${name}`).join('&');
     const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
       groupId
@@ -55,9 +56,11 @@ export const CreateCommonSecret = ({
     const filterId = adminData.filter(
       (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
     );
+
     if (filterId?.length === 0) {
       return false;
     }
+
     const sortedData = filterId.sort((a: any, b: any) => {
       // Get the most recent date for both a and b
       const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
@@ -78,8 +81,13 @@ export const CreateCommonSecret = ({
       pauseAllQueues();
 
       const { names } = await getGroupAdmins(groupId);
+
       if (!names.length) {
-        throw new Error('Network error');
+        throw new Error(
+          t('core:message.error.network_generic', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       }
       const publish = await getPublishesFromAdmins(names);
 
@@ -92,15 +100,18 @@ export const CreateCommonSecret = ({
           publish.identifier
         }?encoding=base64&rebuild=true`
       );
+
       const data = await res.text();
-
       const decryptedKey: any = await decryptResource(data);
-
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
 
       if (decryptedKeyToObject) {
         return decryptedKeyToObject;
@@ -113,17 +124,31 @@ export const CreateCommonSecret = ({
   const createCommonSecret = async () => {
     try {
       const fee = await getFee('ARBITRARY');
+
       await show({
-        message: 'Would you like to perform an ARBITRARY transaction?',
+        message: t('core:question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoading(true);
 
       const secretKey2 = await getSecretKey();
+
       if (!secretKey2 && secretKey2 !== false)
-        throw new Error('invalid secret key');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
+
       if (secretKey2 && !validateSecretKey(secretKey2))
-        throw new Error('invalid secret key');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
 
       const secretKeyToSend = !secretKey2 ? null : secretKey2;
 
@@ -136,8 +161,9 @@ export const CreateCommonSecret = ({
           if (!response?.error) {
             setInfoSnack({
               type: 'success',
-              message:
-                'Successfully re-encrypted secret key. It may take a couple of minutes for the changes to propagate. Refresh the group in 5 mins.',
+              message: t('auth:message.success.reencrypted_secret_key', {
+                postProcess: 'capitalizeFirst',
+              }),
             });
             setOpenSnack(true);
             setTxList((prev) => [

@@ -55,6 +55,7 @@
     "remove": "remove",
     "return_apps_dashboard": "return to Apps Dashboard",
     "save": "save",
+    "search": "search",
     "search_apps": "search for apps",
     "select_app_type": "select App Type",
     "select_category": "select Category",
@@ -148,6 +149,7 @@
       "devmode_local_node": "please use your local node for dev mode! Logout and use Local node.",
       "fee_qort": "fee: {{ message }} QORT",
       "foreign_fee": "foreign fee: {{ message }}",
+      "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
       "name_available": "{{ name }} is available",
       "name_benefits": "benefits of a name",
@@ -218,6 +220,7 @@
   "q_apps": {
     "about": "about this Q-App",
     "q_mail": "q-mail",
+    "q_manager": "q-manager",
     "q_sandbox": "q-Sandbox"
   },
   "question": {
@@ -234,6 +237,9 @@
   },
   "server": "server",
   "settings": "settings",
+  "sort": {
+    "by_member": "by member"
+  },
   "supply": "supply",
   "tags": "tags",
   "theme": {

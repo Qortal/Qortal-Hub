@@ -24,7 +24,6 @@ import {
   AppsSearchLeft,
   AppsSearchRight,
 } from '../Apps/Apps-styles';
-
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { CellMeasurerCache } from 'react-virtualized';
 import { getBaseApiReact } from '../../App';
@@ -60,10 +59,12 @@ export const ChatOptions = ({
   const [searchValue, setSearchValue] = useState('');
   const [selectedMember, setSelectedMember] = useState(0);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const parentRef = useRef(null);
   const parentRefMentions = useRef(null);
   const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null);
   const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
+
   const messages = useMemo(() => {
     return untransformedMessages?.map((item) => {
       if (item?.messageText) {
@@ -80,7 +81,7 @@ export const ChatOptions = ({
             messageText: transformedMessage,
           };
         } catch (error) {
-          // error
+          console.log(error);
         }
       } else return item;
     });
@@ -102,7 +103,12 @@ export const ChatOptions = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -154,6 +160,7 @@ export const ChatOptions = ({
       }
       return [];
     }
+
     if (selectedMember) {
       return messages
         .filter(
@@ -165,6 +172,7 @@ export const ChatOptions = ({
         )
         ?.sort((a, b) => b?.timestamp - a?.timestamp);
     }
+
     return messages
       .filter((message) =>
         extractTextFromHTML(
@@ -187,6 +195,7 @@ export const ChatOptions = ({
         )
         ?.sort((a, b) => b?.timestamp - a?.timestamp);
     }
+
     return messages
       .filter((message) =>
         extractTextFromHTML(message?.decryptedData?.message)?.includes(
@@ -251,6 +260,7 @@ export const ChatOptions = ({
             }}
           />
         </Box>
+
         <Box
           sx={{
             alignItems: 'center',
@@ -268,9 +278,12 @@ export const ChatOptions = ({
                 color: theme.palette.text.primary,
               }}
             >
-              No results
+              {t('core:message.generic.no_results', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Typography>
           )}
+
           <Box
             sx={{
               display: 'flex',
@@ -416,6 +429,7 @@ export const ChatOptions = ({
                 }}
               />
             </AppsSearchLeft>
+
             <AppsSearchRight>
               {searchValue && (
                 <ButtonBase
@@ -428,6 +442,7 @@ export const ChatOptions = ({
               )}
             </AppsSearchRight>
           </AppsSearchContainer>
+
           <Box
             sx={{
               alignItems: 'center',
@@ -445,8 +460,11 @@ export const ChatOptions = ({
               value={selectedMember}
             >
               <MenuItem value={0}>
-                <em>By member</em>
+                <em>
+                  {t('core:sort.by_member', { postProcess: 'capitalizeFirst' })}
+                </em>
               </MenuItem>
+
               {members?.map((member) => {
                 return (
                   <MenuItem key={member} value={member}>
@@ -455,6 +473,7 @@ export const ChatOptions = ({
                 );
               })}
             </Select>
+
             {!!selectedMember && (
               <CloseIcon
                 onClick={() => {
@@ -476,9 +495,12 @@ export const ChatOptions = ({
                 color: theme.palette.text.secondary,
               }}
             >
-              No results
+              {t('core:message.generic.no_results', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Typography>
           )}
+
           <Box
             sx={{
               display: 'flex',
@@ -545,7 +567,9 @@ export const ChatOptions = ({
                           <ErrorBoundary
                             fallback={
                               <Typography>
-                                Error loading content: Invalid Data
+                                {t('group.message.generic.invalid_data', {
+                                  postProcess: 'capitalizeFirst',
+                                })}
                               </Typography>
                             }
                           >
@@ -567,6 +591,7 @@ export const ChatOptions = ({
       </Box>
     );
   }
+
   return (
     <Box
       sx={{
@@ -606,7 +631,7 @@ export const ChatOptions = ({
                   fontWeight: 700,
                 }}
               >
-                SEARCH
+                {t('core:action.search', { postProcess: 'capitalizeAll' })}
               </span>
             }
             placement="left"
@@ -629,6 +654,7 @@ export const ChatOptions = ({
             <SearchIcon />
           </Tooltip>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setMode('default');
@@ -646,7 +672,7 @@ export const ChatOptions = ({
                   fontWeight: 700,
                 }}
               >
-                Q-MANAGER
+                {t('core:q_apps.q_manager', { postProcess: 'capitalizeAll' })}
               </span>
             }
             placement="left"
@@ -669,6 +695,7 @@ export const ChatOptions = ({
             <InsertLinkIcon sx={{ color: theme.palette.text.primary }} />
           </Tooltip>
         </ButtonBase>
+
         <ContextMenuMentions
           getTimestampMention={getTimestampMention}
           groupId={selectedGroup}
@@ -689,7 +716,9 @@ export const ChatOptions = ({
                     fontWeight: 700,
                   }}
                 >
-                  MENTIONED
+                  {t('core:message.generic.mentioned', {
+                    postProcess: 'capitalizeAll',
+                  })}
                 </span>
               }
               placement="left"
@@ -768,6 +797,7 @@ const ShowMessage = ({ message, goToMessage, messages }) => {
           >
             {message?.senderName?.charAt(0)}
           </Avatar>
+
           <Typography
             sx={{
               fontWight: 600,
@@ -788,6 +818,7 @@ const ShowMessage = ({ message, goToMessage, messages }) => {
       >
         {formatTimestamp(message.timestamp)}
       </Typography>
+
       <Box
         style={{
           cursor: 'pointer',
