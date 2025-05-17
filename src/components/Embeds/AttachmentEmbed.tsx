@@ -1,19 +1,12 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useState } from 'react';
 import { MyContext, getBaseApiReact } from '../../App';
 import {
   Card,
   CardContent,
-  CardHeader,
   Typography,
-  RadioGroup,
-  Radio,
-  FormControlLabel,
-  Button,
   Box,
   ButtonBase,
   Divider,
-  Dialog,
-  IconButton,
   CircularProgress,
   useTheme,
 } from '@mui/material';
@@ -27,8 +20,8 @@ import { Spacer } from '../../common/Spacer';
 import { FileAttachmentContainer, FileAttachmentFont } from './Embed-styles';
 import DownloadIcon from '@mui/icons-material/Download';
 import SaveIcon from '@mui/icons-material/Save';
-
 import { decodeIfEncoded } from '../../utils/decode';
+import { useTranslation } from 'react-i18next';
 
 export const AttachmentCard = ({
   resourceData,
@@ -45,6 +38,7 @@ export const AttachmentCard = ({
   const [isOpen, setIsOpen] = useState(true);
   const { downloadResource } = useContext(MyContext);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const saveToDisk = async () => {
     const { name, service, identifier } = resourceData;
@@ -64,16 +58,15 @@ export const AttachmentCard = ({
     let blobUrl;
     try {
       const { name, service, identifier, key } = resourceData;
-
       const url = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?encoding=base64`;
       const res = await fetch(url);
       const data = await res.text();
       let decryptedData;
+
       try {
         if (key && encryptionType === 'private') {
           decryptedData = await window.sendMessage(
             'DECRYPT_DATA_WITH_SHARING_KEY',
-
             {
               encryptedData: data,
               key: decodeURIComponent(key),
@@ -91,11 +84,19 @@ export const AttachmentCard = ({
           );
         }
       } catch (error) {
-        throw new Error('Unable to decrypt');
+        throw new Error(
+          t('auth:message.error.unable_decrypt', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       }
 
       if (!decryptedData || decryptedData?.error)
-        throw new Error('Could not decrypt data');
+        throw new Error(
+          t('auth:message.error.decrypt_data', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       blobUrl = base64ToBlobUrl(decryptedData, resourceData?.mimeType);
       const response = await fetch(blobUrl);
       const blob = await response.blob();
@@ -108,18 +109,18 @@ export const AttachmentCard = ({
       }
     }
   };
+
   return (
     <Card
       sx={{
         backgroundColor: theme.palette.background.default,
         height: '250px',
-        // height: isOpen ? "auto" : "150px",
       }}
     >
       <Box
         sx={{
-          display: 'flex',
           alignItems: 'center',
+          display: 'flex',
           justifyContent: 'space-between',
           padding: '16px 16px 0px 16px',
         }}
@@ -136,12 +137,15 @@ export const AttachmentCard = ({
               color: theme.palette.text.primary,
             }}
           />
-          <Typography>ATTACHMENT embed</Typography>
+          <Typography>
+            {t('core:attachment', { postProcess: 'capitalizeAll' })}
+          </Typography>
         </Box>
+
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'center',
+            display: 'flex',
             gap: '10px',
           }}
         >
@@ -154,6 +158,7 @@ export const AttachmentCard = ({
               }}
             />
           </ButtonBase>
+
           {external && (
             <ButtonBase>
               <OpenInNewIcon
@@ -167,6 +172,7 @@ export const AttachmentCard = ({
           )}
         </Box>
       </Box>
+
       <Box
         sx={{
           padding: '8px 16px 8px 16px',
@@ -177,35 +183,47 @@ export const AttachmentCard = ({
             fontSize: '12px',
           }}
         >
-          Created by {decodeIfEncoded(owner)}
+          {t('core:message.generic.created_by', {
+            owner: decodeIfEncoded(owner),
+            postProcess: 'capitalizeFirst',
+          })}
         </Typography>
+
         <Typography
           sx={{
             fontSize: '12px',
           }}
         >
           {encryptionType === 'private'
-            ? 'ENCRYPTED'
+            ? t('core:message.generic.encrypted', {
+                postProcess: 'capitalizeAll',
+              })
             : encryptionType === 'group'
-              ? 'GROUP ENCRYPTED'
-              : 'Not encrypted'}
+              ? t('group:message.generic.group_encrypted', {
+                  postProcess: 'capitalizeAll',
+                })
+              : t('core:message.generic.encrypted_not', {
+                  postProcess: 'capitalizeAll',
+                })}
         </Typography>
       </Box>
+
       <Divider sx={{ borderColor: 'rgb(255 255 255 / 10%)' }} />
+
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
-          alignItems: 'center',
         }}
       >
         {isLoadingParent && isOpen && (
           <Box
             sx={{
-              width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
             {' '}
@@ -215,9 +233,9 @@ export const AttachmentCard = ({
         {errorMsg && (
           <Box
             sx={{
-              width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
             {' '}
@@ -249,8 +267,8 @@ export const AttachmentCard = ({
           )}
           <ButtonBase
             sx={{
-              width: '90%',
               maxWidth: '400px',
+              width: '90%',
             }}
             onClick={() => {
               if (resourceDetails?.status?.status === 'READY') {
@@ -267,15 +285,23 @@ export const AttachmentCard = ({
             <FileAttachmentContainer>
               <Typography>
                 {resourceDetails?.status?.status === 'DOWNLOADED'
-                  ? 'BUILDING'
+                  ? t('core:message.error.generic.building', {
+                      postProcess: 'capitalizeAll',
+                    })
                   : resourceDetails?.status?.status}
               </Typography>
+
               {!resourceDetails && (
                 <>
                   <DownloadIcon />
-                  <FileAttachmentFont>Download File</FileAttachmentFont>
+                  <FileAttachmentFont>
+                    {t('core:action.download_file', {
+                      postProcess: 'capitalizeFirst',
+                    })}
+                  </FileAttachmentFont>
                 </>
               )}
+
               {resourceDetails &&
                 resourceDetails?.status?.status !== 'READY' &&
                 resourceDetails?.status?.status !== 'FAILED_TO_DOWNLOAD' && (
@@ -287,16 +313,23 @@ export const AttachmentCard = ({
                       }}
                     />
                     <FileAttachmentFont>
-                      Downloading:{' '}
-                      {resourceDetails?.status?.percentLoaded || '0'}%
+                      {t('core:message.generic.downloading', {
+                        postProcess: 'capitalizeFirst',
+                      })}
+                      : {resourceDetails?.status?.percentLoaded || '0'}%
                     </FileAttachmentFont>
                   </>
                 )}
+
               {resourceDetails &&
                 resourceDetails?.status?.status === 'READY' && (
                   <>
                     <SaveIcon />
-                    <FileAttachmentFont>Save to Disk</FileAttachmentFont>
+                    <FileAttachmentFont>
+                      {t('core:action.save_disk', {
+                        postProcess: 'capitalizeFirst',
+                      })}
+                    </FileAttachmentFont>
                   </>
                 )}
             </FileAttachmentContainer>

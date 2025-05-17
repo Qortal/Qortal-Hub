@@ -70,6 +70,7 @@
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_announcement": "group Announcements",
+      "group_encrypted": "group encrypted",
       "group_invited_you": "{{group}} has invited you",
       "group_key_created": "first group key created.",
       "group_member_list_changed": "the group member list has changed. Please re-encrypt the secret key.",
