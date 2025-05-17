@@ -16,6 +16,8 @@ import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
 import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
 import { GroupAvatar } from './GroupAvatar';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 
 export const getPublishesFromAdminsAdminSpace = async (
   admins: string[],
@@ -26,7 +28,7 @@ export const getPublishesFromAdminsAdminSpace = async (
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error('network error');
+    throw new Error(i18next.t('core:message.error.network_generic'));
   }
   const adminData = await response.json();
 
@@ -72,6 +74,7 @@ export const AdminSpaceInner = ({
   const [isLoadingPublishKey, setIsLoadingPublishKey] = useState(false);
   const { show, setInfoSnackCustom, setOpenSnackGlobal } =
     useContext(MyContext);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getAdminGroupSecretKey = useCallback(async () => {
     try {
@@ -81,20 +84,24 @@ export const AdminSpaceInner = ({
         selectedGroup
       );
       if (getLatestPublish === false) return;
-      let data;
 
       const res = await fetch(
         `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${
           getLatestPublish.name
         }/${getLatestPublish.identifier}?encoding=base64&rebuild=true`
       );
-      data = await res.text();
 
+      const data = await res.text();
       const decryptedKey: any = await decryptResource(data);
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       setAdminGroupSecretKey(decryptedKeyToObject);
       setAdminGroupSecretKeyPublishDetails(getLatestPublish);
     } catch (error) {
@@ -125,7 +132,10 @@ export const AdminSpaceInner = ({
       const fee = await getFee('ARBITRARY');
 
       await show({
-        message: 'Would you like to perform an ARBITRARY transaction?',
+        message: t('core:message.question.perform_transaction', {
+          action: 'ARBITRARY',
+          postProcess: 'capitalizeFirst',
+        }),
         publishFee: fee.fee + ' QORT',
       });
 
@@ -141,22 +151,31 @@ export const AdminSpaceInner = ({
           if (!response?.error) {
             setInfoSnackCustom({
               type: 'success',
-              message:
-                'Successfully re-encrypted secret key. It may take a couple of minutes for the changes to propagate. Refresh the group in 5 mins.',
+              message: t('auth:message.success.reencrypted_secret_key', {
+                postProcess: 'capitalizeFirst',
+              }),
             });
             setOpenSnackGlobal(true);
             return;
           }
           setInfoSnackCustom({
             type: 'error',
-            message: response?.error || 'unable to re-encrypt secret key',
+            message:
+              response?.error ||
+              t('auth:message.error.unable_reencrypt_secret_key', {
+                postProcess: 'capitalizeFirst',
+              }),
           });
           setOpenSnackGlobal(true);
         })
         .catch((error) => {
           setInfoSnackCustom({
             type: 'error',
-            message: error?.message || 'unable to re-encrypt secret key',
+            message:
+              error?.message ||
+              t('auth:message.error.unable_reencrypt_secret_key', {
+                postProcess: 'capitalizeFirst',
+              }),
           });
           setOpenSnackGlobal(true);
         });
@@ -184,10 +203,13 @@ export const AdminSpaceInner = ({
           fontSize: '14px',
         }}
       >
-        Reminder: After publishing the key, it will take a couple of minutes for
-        it to appear. Please just wait.
+        {t('auth:message.error.publishing_key', {
+          postProcess: 'capitalizeFirst',
+        })}
       </Typography>
+
       <Spacer height="25px" />
+
       <Box
         sx={{
           border: '1px solid gray',
@@ -201,28 +223,43 @@ export const AdminSpaceInner = ({
         }}
       >
         {isFetchingGroupSecretKey && (
-          <Typography>Fetching Group secret key publishes</Typography>
-        )}
-        {!isFetchingGroupSecretKey &&
-          groupSecretKeyPublishDetails === false && (
-            <Typography>No secret key published yet</Typography>
-          )}
-        {groupSecretKeyPublishDetails && (
           <Typography>
-            Last encryption date:{' '}
-            {formatTimestampForum(
-              groupSecretKeyPublishDetails?.updated ||
-                groupSecretKeyPublishDetails?.created
-            )}{' '}
-            {` by ${groupSecretKeyPublishDetails?.name}`}
+            {t('auth:message.generic.fetching_group_secret_key', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         )}
+
+        {!isFetchingGroupSecretKey &&
+          groupSecretKeyPublishDetails === false && (
+            <Typography>
+              {t('auth:message.generic.no_secret_key_published', {
+                postProcess: 'capitalizeFirst',
+              })}
+            </Typography>
+          )}
+
+        {groupSecretKeyPublishDetails && (
+          <Typography>
+            {t('auth:message.generic.last_encryption_date', {
+              date: formatTimestampForum(
+                groupSecretKeyPublishDetails?.updated ||
+                  groupSecretKeyPublishDetails?.created
+              ),
+              name: groupSecretKeyPublishDetails?.name,
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
+        )}
+
         <Button
           disabled={isFetchingGroupSecretKey}
           onClick={() => setIsForceShowCreationKeyPopup(true)}
           variant="contained"
         >
-          Publish group secret key
+          {t('auth:action.publish_group_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Button>
 
         <Spacer height="20px" />
@@ -232,9 +269,9 @@ export const AdminSpaceInner = ({
             fontSize: '14px',
           }}
         >
-          This key is to encrypt GROUP related content. This is the only one
-          used in this UI as of now. All group members will be able to see
-          content encrypted with this key.
+          {t('auth:tips.key_encrypt_group', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Typography>
       </Box>
 
@@ -253,26 +290,41 @@ export const AdminSpaceInner = ({
         }}
       >
         {isFetchingAdminGroupSecretKey && (
-          <Typography>Fetching Admins secret key</Typography>
-        )}
-        {!isFetchingAdminGroupSecretKey && !adminGroupSecretKey && (
-          <Typography>No secret key published yet</Typography>
-        )}
-        {adminGroupSecretKeyPublishDetails && (
           <Typography>
-            Last encryption date:{' '}
-            {formatTimestampForum(
-              adminGroupSecretKeyPublishDetails?.updated ||
-                adminGroupSecretKeyPublishDetails?.created
-            )}
+            {t('auth:message.generic.fetching_admin_secret_key', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         )}
+
+        {!isFetchingAdminGroupSecretKey && !adminGroupSecretKey && (
+          <Typography>
+            {t('auth:message.generic.no_secret_key_published', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
+        )}
+
+        {adminGroupSecretKeyPublishDetails && (
+          <Typography>
+            {t('auth:message.generic.last_encryption_date', {
+              date: formatTimestampForum(
+                adminGroupSecretKeyPublishDetails?.updated ||
+                  adminGroupSecretKeyPublishDetails?.created
+              ),
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
+        )}
+
         <Button
           disabled={isFetchingAdminGroupSecretKey}
           onClick={createCommonSecretForAdmins}
           variant="contained"
         >
-          Publish admin secret key
+          {t('auth:action.publish_admin_secret_key', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Button>
 
         <Spacer height="20px" />
@@ -282,11 +334,14 @@ export const AdminSpaceInner = ({
             fontSize: '14px',
           }}
         >
-          This key is to encrypt ADMIN related content. Only admins would see
-          content encrypted with it.
+          {t('auth:tips.key_encrypt_admin', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Typography>
       </Box>
+
       <Spacer height="25px" />
+
       {isOwner && (
         <Box
           sx={{
@@ -301,7 +356,11 @@ export const AdminSpaceInner = ({
             alignItems: 'center',
           }}
         >
-          <Typography>Group Avatar</Typography>
+          <Typography>
+            {t('group:group.avatar', {
+              postProcess: 'capitalizeFirst',
+            })}
+          </Typography>
 
           <GroupAvatar
             setOpenSnack={setOpenSnackGlobal}

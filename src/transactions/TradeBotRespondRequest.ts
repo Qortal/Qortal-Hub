@@ -2,40 +2,40 @@
 
 /**
  * CrossChain - TradeBot Respond Request (Buy Action)
- * 
+ *
  * These are special types of transactions (JSON ENCODED)
  */
 
 export default class TradeBotRespondRequest {
-	constructor() {
-		// ...
-	}
+  constructor() {
+    // ...
+  }
 
-	createTransaction(txnReq) {
-		this.atAddress(txnReq.atAddress)
-		this.foreignKey(txnReq.foreignKey)
-		this.receivingAddress(txnReq.receivingAddress)
+  createTransaction(txnReq) {
+    this.atAddress(txnReq.atAddress);
+    this.foreignKey(txnReq.foreignKey);
+    this.receivingAddress(txnReq.receivingAddress);
 
-		return this.txnRequest()
-	}
+    return this.txnRequest();
+  }
 
-	atAddress(atAddress) {
-		this._atAddress = atAddress
-	}
+  atAddress(atAddress) {
+    this._atAddress = atAddress;
+  }
 
-	foreignKey(foreignKey) {
-		this._foreignKey = foreignKey
-	}
+  foreignKey(foreignKey) {
+    this._foreignKey = foreignKey;
+  }
 
-	receivingAddress(receivingAddress) {
-		this._receivingAddress = receivingAddress
-	}
+  receivingAddress(receivingAddress) {
+    this._receivingAddress = receivingAddress;
+  }
 
-	txnRequest() {
-		return {
-			atAddress: this._atAddress,
-			foreignKey: this._foreignKey,
-			receivingAddress: this._receivingAddress
-		}
-	}
+  txnRequest() {
+    return {
+      atAddress: this._atAddress,
+      foreignKey: this._foreignKey,
+      receivingAddress: this._receivingAddress,
+    };
+  }
 }

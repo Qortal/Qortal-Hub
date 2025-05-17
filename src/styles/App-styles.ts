@@ -228,5 +228,5 @@ export const CustomLabel = styled(InputLabel)(({ theme }) => ({
   fontFamily: 'Inter',
   fontSize: '15px',
   fontWeight: 400,
-  lineHeight: '12px',
+  lineHeight: '24px',
 }));

@@ -76,7 +76,7 @@ export const ThingsToDoInitial = ({
           }}
         >
           {!isLoaded
-            ? t('core:loading', { postProcess: 'capitalizeFirst' })
+            ? t('core:loading.generic', { postProcess: 'capitalizeFirst' })
             : t('tutorial:initial.getting_started', {
                 postProcess: 'capitalizeFirst',
               })}

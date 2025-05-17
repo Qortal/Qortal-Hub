@@ -276,7 +276,7 @@ export const ListOfGroupPromotions = () => {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
       await show({
-        message: t('core:question.perform_transaction', {
+        message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
           postProcess: 'capitalizeFirst',
         }),
@@ -575,7 +575,7 @@ export const ListOfGroupPromotions = () => {
                           <ErrorBoundary
                             fallback={
                               <Typography>
-                                {t('group.message.generic.invalid_data', {
+                                {t('group:message.generic.invalid_data', {
                                   postProcess: 'capitalizeFirst',
                                 })}
                               </Typography>

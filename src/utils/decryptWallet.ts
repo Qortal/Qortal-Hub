@@ -4,6 +4,7 @@ import { crypto } from '../constants/decryptWallet';
 import Base58 from '../deps/Base58';
 import { AES_CBC, HmacSha512 } from 'asmcrypto.js';
 import { doInitWorkers, kdf } from '../deps/kdf';
+import i18n from 'i18next';
 
 export const decryptStoredWallet = async (password, wallet) => {
   const threads = doInitWorkers(crypto.kdfThreads);
@@ -18,7 +19,7 @@ export const decryptStoredWallet = async (password, wallet) => {
     .process(encryptedSeedBytes)
     .finish().result;
   if (Base58.encode(mac) !== wallet.mac) {
-    throw new Error('Incorrect password');
+    throw new Error(i18n.t('auth:message.error.incorrect_password')); // TODO: i18n non-react integration
   }
   const decryptedBytes = AES_CBC.decrypt(
     encryptedSeedBytes,

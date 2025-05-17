@@ -127,7 +127,7 @@ export const RegisterName = ({
 
       const fee = await getFee('REGISTER_NAME');
       await show({
-        message: t('core:question.register_name', {
+        message: t('core:message.question.register_name', {
           postProcess: 'capitalizeFirst',
         }),
         publishFee: fee.fee + ' QORT',

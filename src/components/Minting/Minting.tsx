@@ -301,7 +301,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const createRewardShare = useCallback(async (publicKey, recipient) => {
     const fee = await getFee('REWARD_SHARE');
     await show({
-      message: t('core:question.perform_transaction', {
+      message: t('core:message.question.perform_transaction', {
         // TODO move from group into core namespace
         action: 'REWARD_SHARE',
         postProcess: 'capitalizeFirst',

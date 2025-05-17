@@ -216,7 +216,9 @@ export const DownloadWallet = ({
               </Box>
             }
           />
+
           <Spacer height="20px" />
+
           {!keepCurrentPassword && (
             <>
               <CustomLabel htmlFor="standard-adornment-password">
@@ -226,11 +228,13 @@ export const DownloadWallet = ({
               </CustomLabel>
 
               <Spacer height="5px" />
+
               <PasswordField
                 id="standard-adornment-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
+
               <Spacer height="20px" />
             </>
           )}

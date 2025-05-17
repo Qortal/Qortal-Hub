@@ -373,7 +373,6 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
-
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
   const lastFetchedSecretKey = useRef(null);
@@ -396,14 +395,11 @@ export const Group = ({
   const [openAddGroup, setOpenAddGroup] = useState(false);
   const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
-
   const setMemberGroups = useSetAtom(memberGroupsAtom);
-
   const lastGroupNotification = useRef<null | number>(null);
   const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
   );
-
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);

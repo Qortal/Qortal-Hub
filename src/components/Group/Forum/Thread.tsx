@@ -1073,7 +1073,7 @@ export const Thread = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('core:loading_posts', { postProcess: 'capitalizeFirst' }),
+          message: t('core:loading.posts', { postProcess: 'capitalizeFirst' }),
         }}
       />
     </GroupContainer>

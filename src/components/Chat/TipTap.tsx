@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
@@ -31,6 +31,8 @@ import { isDisabledEditorEnterAtom } from '../../atoms/global.js';
 import { Box, Checkbox, Typography, useTheme } from '@mui/material';
 import { useAtom } from 'jotai';
 import { fileToBase64 } from '../../utils/fileReading/index.js';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -42,7 +44,7 @@ function textMatcher(doc, from) {
   return { start, query };
 }
 
-const MenuBar = React.memo(
+const MenuBar = memo(
   ({
     setEditorRef,
     isChat,
@@ -52,6 +54,7 @@ const MenuBar = React.memo(
     const { editor } = useCurrentEditor();
     const fileInputRef = useRef(null);
     const theme = useTheme();
+    const { t } = useTranslation(['auth', 'core', 'group']);
 
     useEffect(() => {
       if (editor && setEditorRef) {
@@ -143,6 +146,7 @@ const MenuBar = React.memo(
           >
             <FormatBoldIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleItalic().run()}
             disabled={!editor.can().chain().focus().toggleItalic().run()}
@@ -155,6 +159,7 @@ const MenuBar = React.memo(
           >
             <FormatItalicIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleStrike().run()}
             disabled={!editor.can().chain().focus().toggleStrike().run()}
@@ -167,6 +172,7 @@ const MenuBar = React.memo(
           >
             <StrikethroughSIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleCode().run()}
             disabled={!editor.can().chain().focus().toggleCode().run()}
@@ -179,6 +185,7 @@ const MenuBar = React.memo(
           >
             <CodeIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().unsetAllMarks().run()}
             sx={{
@@ -194,6 +201,7 @@ const MenuBar = React.memo(
           >
             <FormatClearIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             sx={{
@@ -205,6 +213,7 @@ const MenuBar = React.memo(
           >
             <FormatListBulletedIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             sx={{
@@ -216,6 +225,7 @@ const MenuBar = React.memo(
           >
             <FormatListNumberedIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             sx={{
@@ -227,6 +237,7 @@ const MenuBar = React.memo(
           >
             <DeveloperModeIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             sx={{
@@ -238,6 +249,7 @@ const MenuBar = React.memo(
           >
             <FormatQuoteIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
             disabled={!editor.can().chain().focus().setHorizontalRule().run()}
@@ -245,6 +257,7 @@ const MenuBar = React.memo(
           >
             <HorizontalRuleIcon />
           </IconButton>
+
           <IconButton
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 1 }).run()
@@ -258,6 +271,7 @@ const MenuBar = React.memo(
           >
             <FormatHeadingIcon fontSize="small" />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().chain().focus().undo().run()}
@@ -265,6 +279,7 @@ const MenuBar = React.memo(
           >
             <UndoIcon />
           </IconButton>
+
           <IconButton
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().chain().focus().redo().run()}
@@ -272,13 +287,14 @@ const MenuBar = React.memo(
           >
             <RedoIcon />
           </IconButton>
+
           {isChat && (
             <Box
               sx={{
-                display: 'flex',
                 alignItems: 'center',
-                marginLeft: '5px',
                 cursor: 'pointer',
+                display: 'flex',
+                marginLeft: '5px',
               }}
               onClick={() => {
                 setIsDisabledEditorEnter(!isDisabledEditorEnter);
@@ -304,10 +320,13 @@ const MenuBar = React.memo(
                   color: theme.palette.text.primary,
                 }}
               >
-                disable enter
+                {t('core:action.disable_enter', {
+                  postProcess: 'capitalizeFirst',
+                })}
               </Typography>
             </Box>
           )}
+
           {!isChat && (
             <>
               <IconButton
@@ -319,6 +338,7 @@ const MenuBar = React.memo(
               >
                 <ImageIcon />
               </IconButton>
+
               <input
                 type="file"
                 ref={fileInputRef}
@@ -348,7 +368,7 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: 'Start typing here...',
+    placeholder: 'Start typing here...', // doesn't work i18next.t('core:action.start_typing'),
   }),
   ImageResize,
 ];
@@ -415,12 +435,6 @@ export default ({
     editorRef.current = editorInstance;
     setEditorRef(editorInstance);
   }, []);
-
-  // const users = [
-  //   { id: 1, label: 'Alice' },
-  //   { id: 2, label: 'Bob' },
-  //   { id: 3, label: 'Charlie' },
-  // ];
 
   const users = useMemo(() => {
     return (membersWithNames || [])?.map((item) => {
