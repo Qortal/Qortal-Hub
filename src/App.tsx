@@ -1061,7 +1061,7 @@ function App() {
     try {
       if (extState === 'authenticated') {
         await showUnsavedChanges({
-          message: t('core:question.logout', {
+          message: t('core:message.question.logout', {
             postProcess: 'capitalizeFirst',
           }),
         });

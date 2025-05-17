@@ -368,7 +368,7 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: i18next.t('core:action.start_typing'),
+    placeholder: 'Start typing here...', // doesn't work i18next.t('core:action.start_typing'),
   }),
   ImageResize,
 ];
