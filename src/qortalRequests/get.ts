@@ -85,7 +85,7 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import utils from '../utils/utils';
 import ShortUniqueId from 'short-unique-id';
 import { isValidBase64WithDecode } from '../utils/decode';
-
+//TODO translate
 const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);

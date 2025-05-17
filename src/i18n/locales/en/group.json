@@ -22,6 +22,8 @@
     "remove_admin": "remove as admin",
     "remove_minting_account": "remove minting account",
     "return_to_thread": "return to threads",
+    "scroll_bottom": "scroll to bottom",
+    "scroll_unread_messages": "scroll to Unread Messages",
     "select_group": "select a group",
     "visit_q_mintership": "visit Q-Mintership"
   },

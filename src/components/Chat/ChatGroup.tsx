@@ -827,23 +827,33 @@ export const ChatGroup = ({
         if (replyMessage?.chatReference) {
           repliedTo = replyMessage?.chatReference;
         }
-        let chatReference = onEditMessage?.signature;
+
+        const chatReference = onEditMessage?.signature;
 
         const publicData = isPrivate
           ? {}
           : {
               isEdited: chatReference ? true : false,
             };
-        const imagesToPublish = [];
+
+        interface ImageToPublish {
+          service: string;
+          identifier: string;
+          name: string;
+          base64: string;
+        }
+
+        const imagesToPublish: ImageToPublish[] = [];
         const deleteImage =
           onEditMessage && isDeleteImage && messageHasImage(onEditMessage);
 
         if (deleteImage) {
           const fee = await getFee('ARBITRARY');
-          // TODO translate
           await show({
             publishFee: fee.fee + ' QORT',
-            message: 'Would you like to delete your previous chat image?',
+            message: t('core:question.delete_chat_image', {
+              postProcess: 'capitalizeFirst',
+            }),
           });
 
           // TODO magic string
@@ -853,6 +863,7 @@ export const ChatGroup = ({
             service: onEditMessage?.images[0]?.service,
           });
         }
+
         if (chatImagesToSave?.length > 0) {
           const imageToSave = chatImagesToSave[0];
 
@@ -877,7 +888,12 @@ export const ChatGroup = ({
             240000,
             true
           );
-          if (res !== true) throw new Error('Unable to publish images');
+          if (res !== true)
+            throw new Error(
+              t('core:message.error.unable_publish_image', {
+                postProcess: 'capitalizeFirst',
+              })
+            );
         }
 
         const images =
@@ -916,7 +932,6 @@ export const ChatGroup = ({
           isPrivate === false
             ? JSON.stringify(objectMessage)
             : await encryptChatMessage(message64, secretKeyObject);
-        // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
 
         const sendMessageFunc = async () => {
           return await sendChatGroup({
@@ -1033,13 +1048,19 @@ export const ChatGroup = ({
       try {
         if (isSending) return;
         if (+balance < 4)
-          throw new Error('You need at least 4 QORT to send a message');
-        pauseAllQueues();
+          // TODO magic number
+          throw new Error(
+            t('group:message.error.qortals_required', {
+              quantity: 4,
+              postProcess: 'capitalizeFirst',
+            })
+          );
 
+        pauseAllQueues();
         setIsSending(true);
+
         const message = '';
         const secretKeyObject = await getSecretKey(false, true);
-
         const otherData = {
           specialId: uid.rnd(),
           type: 'reaction',
@@ -1060,8 +1081,6 @@ export const ChatGroup = ({
                 secretKeyObject,
                 reactiontypeNumber
               );
-        // const res = await sendChatGroup({groupId: selectedGroup,messageText: encryptSingle})
-
         const sendMessageFunc = async () => {
           return await sendChatGroup({
             groupId: selectedGroup,
@@ -1113,7 +1132,9 @@ export const ChatGroup = ({
       ) {
         setInfoSnack({
           type: 'error',
-          message: 'This message already has an image',
+          message: t('core:message.generic.message_with_image', {
+            postProcess: 'capitalizeFirst',
+          }),
         });
         setOpenSnack(true);
         return;
@@ -1122,6 +1143,7 @@ export const ChatGroup = ({
     },
     [chatImagesToSave, onEditMessage?.images, isDeleteImage]
   );
+
   return (
     <div
       style={{
@@ -1130,34 +1152,36 @@ export const ChatGroup = ({
         height: '100%',
         left: hide && '-100000px',
         opacity: hide ? 0 : 1,
+        padding: '10px',
         position: hide ? 'absolute' : 'relative',
         width: '100%',
-        padding: '10px',
       }}
     >
       <ChatList
-        isPrivate={isPrivate}
-        hasSecretKey={!!secretKey}
-        openQManager={openQManager}
-        enableMentions
-        onReply={onReply}
-        onEdit={onEdit}
         chatId={selectedGroup}
-        initialMessages={messages}
-        myAddress={myAddress}
-        tempMessages={tempMessages}
-        handleReaction={handleReaction}
         chatReferences={chatReferences}
-        tempChatReferences={tempChatReferences}
+        enableMentions
+        handleReaction={handleReaction}
+        hasSecretKey={!!secretKey}
+        initialMessages={messages}
+        isPrivate={isPrivate}
         members={members}
+        myAddress={myAddress}
         myName={myName}
+        onEdit={onEdit}
+        onReply={onReply}
+        openQManager={openQManager}
         selectedGroup={selectedGroup}
+        tempChatReferences={tempChatReferences}
+        tempMessages={tempMessages}
       />
 
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
             backgroundColor: theme.palette.background.surface,
+            border: `1px solid ${theme.palette.border.subtle}`,
+            borderRadius: '10px',
             bottom: isFocusedParent ? '0px' : 'unset',
             boxSizing: 'border-box',
             display: 'flex',
@@ -1170,8 +1194,6 @@ export const ChatGroup = ({
             top: isFocusedParent ? '0px' : 'unset',
             width: '100%',
             zIndex: isFocusedParent ? 5 : 'unset',
-            border: `1px solid ${theme.palette.border.subtle}`,
-            borderRadius: '10px',
           }}
         >
           <div
@@ -1189,9 +1211,9 @@ export const ChatGroup = ({
               sx={{
                 alignItems: 'flex-start',
                 display: 'flex',
-                width: '100%',
-                gap: '10px',
                 flexWrap: 'wrap',
+                gap: '10px',
+                width: '100%',
               }}
             >
               {!isDeleteImage &&
@@ -1201,19 +1223,20 @@ export const ChatGroup = ({
                   <div
                     key={index}
                     style={{
-                      position: 'relative',
                       height: '50px',
+                      position: 'relative',
                       width: '50px',
                     }}
                   >
                     <ImageIcon
                       color="primary"
                       sx={{
+                        borderRadius: '3px',
                         height: '100%',
                         width: '100%',
-                        borderRadius: '3px',
                       }}
                     />
+
                     <Tooltip title="Delete image">
                       <IconButton
                         onClick={() => setIsDeleteImage(true)}
@@ -1243,12 +1266,13 @@ export const ChatGroup = ({
                     </Tooltip>
                   </div>
                 ))}
+
               {chatImagesToSave.map((imgBase64, index) => (
                 <div
                   key={index}
                   style={{
-                    position: 'relative',
                     height: '50px',
+                    position: 'relative',
                     width: '50px',
                   }}
                 >
@@ -1261,6 +1285,7 @@ export const ChatGroup = ({
                       borderRadius: '3px',
                     }}
                   />
+
                   <Tooltip title="Remove image">
                     <IconButton
                       onClick={() =>
@@ -1295,6 +1320,7 @@ export const ChatGroup = ({
                 </div>
               ))}
             </Box>
+
             {replyMessage && (
               <Box
                 sx={{
@@ -1319,6 +1345,7 @@ export const ChatGroup = ({
                 </ButtonBase>
               </Box>
             )}
+
             {onEditMessage && (
               <Box
                 sx={{
@@ -1364,13 +1391,19 @@ export const ChatGroup = ({
                   width: '100%',
                 }}
               >
-                <Typography
+                <Typography //TODO magic number
                   sx={{
                     fontSize: '12px',
                     color:
                       messageSize > 4000 ? theme.palette.other.danger : 'unset',
                   }}
-                >{`Your message size is of ${messageSize} bytes out of a maximum of 4000`}</Typography>
+                >
+                  {t('core:message.error.message_size', {
+                    maximum: 4000,
+                    size: messageSize,
+                    postProcess: 'capitalizeFirst',
+                  })}
+                </Typography>
               </Box>
             )}
           </div>
@@ -1421,6 +1454,7 @@ export const ChatGroup = ({
           </Box>
         </div>
       )}
+
       {isOpenQManager !== null && (
         <Box
           sx={{
@@ -1479,10 +1513,10 @@ export const ChatGroup = ({
             <AppViewerContainer
               customHeight="560px"
               app={{
-                tabId: '5558588',
                 name: 'Q-Manager',
-                service: 'APP',
                 path: `?groupId=${selectedGroup}`,
+                service: 'APP',
+                tabId: '5558588',
               }}
               isSelected
             />
@@ -1493,7 +1527,7 @@ export const ChatGroup = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading chat... please wait.',
+          message: t('core:loading.chat', { postProcess: 'capitalizeFirst' }),
         }}
       />
 

@@ -125,6 +125,7 @@
       "generic": "an error occurred",
       "invalid_signature": "invalid signature",
       "invalid_zip": "invalid zip",
+      "message_loading": "error loading message.",
       "message_size": "your message size is of {{ size }} bytes out of a maximum of {{ maximum }}",
       "minting_account_add": "unable to add minting account",
       "minting_account_remove": "unable to remove minting account",
@@ -138,6 +139,7 @@
       "save_qdn": "unable to save to QDN",
       "unable_encrypt_app": "unable to encrypt app. App not published'",
       "unable_publish_app": "unable to publish app",
+      "unable_publish_image": "unable to publish image",
       "unable_rate": "unable to rate"
     },
     "generic": {
@@ -146,6 +148,7 @@
       "devmode_local_node": "please use your local node for dev mode! Logout and use Local node.",
       "fee_qort": "fee: {{ message }} QORT",
       "foreign_fee": "foreign fee: {{ message }}",
+      "message_with_image": "this message already has an image",
       "name_available": "{{ name }} is available",
       "name_benefits": "benefits of a name",
       "name_checking": "checking if name already exists",
@@ -218,6 +221,7 @@
     "q_sandbox": "q-Sandbox"
   },
   "question": {
+    "delete_chat_image": "would you like to delete your previous chat image?",
     "perform_transaction": "would you like to perform a {{action}} transaction?",
     "provide_thread": "please provide a thread title",
     "publish_app": "would you like to publish this app?",
