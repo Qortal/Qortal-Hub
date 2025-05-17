@@ -66,6 +66,15 @@ export async function getNameInfo() {
   }
 }
 
+export async function getAllUserNames() {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + '/names/address/' + address);
+  const nameData = await response.json();
+  return nameData.map((item) => item.name);
+}
+
 async function getKeyPair() {
   const res = await getData<any>('keyPair').catch(() => null);
   if (res) {
@@ -285,9 +294,10 @@ export const publishOnQDN = async ({
   tag4,
   tag5,
   uploadType = 'file',
+  name,
 }) => {
   if (data && service) {
-    const registeredName = await getNameInfo();
+    const registeredName = name || (await getNameInfo());
     if (!registeredName) throw new Error('You need a name to publish');
 
     const res = await publishData({

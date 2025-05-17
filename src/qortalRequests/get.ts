@@ -39,6 +39,7 @@ import {
   transferAsset,
 } from '../background';
 import {
+  getAllUserNames,
   getNameInfo,
   uint8ArrayToObject,
 } from '../backgroundFunctions/encryption';
@@ -1065,7 +1066,8 @@ export const publishQDNResource = async (
   if (appFee && appFee > 0 && appFeeRecipient) {
     hasAppFee = true;
   }
-  const registeredName = await getNameInfo();
+
+  const registeredName = data?.name || (await getNameInfo());
   const name = registeredName;
   if (!name) {
     throw new Error('User has no Qortal name');
@@ -1145,6 +1147,7 @@ export const publishQDNResource = async (
       text1: 'Do you give this application permission to publish to QDN?',
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
+      text4: `name: ${registeredName}`,
       fee: fee.fee,
       ...handleDynamicValues,
     },
@@ -1265,10 +1268,19 @@ export const publishMultipleQDNResources = async (
 
   const fee = await getFee('ARBITRARY');
   const registeredName = await getNameInfo();
+
   const name = registeredName;
   if (!name) {
     throw new Error('You need a Qortal name to publish.');
   }
+  const userNames = await getAllUserNames();
+  data.resources?.forEach((item) => {
+    if (item?.name && !userNames?.includes(item.name))
+      throw new Error(
+        `The name ${item.name}, does not belong to the publisher.`
+      );
+  });
+
   const appFee = data?.appFee ? +data.appFee : undefined;
   const appFeeRecipient = data?.appFeeRecipient;
   let hasAppFee = false;
@@ -1336,7 +1348,7 @@ export const publishMultipleQDNResources = async (
           <div class="resource-detail"><span>Service:</span> ${
             resource.service
           }</div>
-          <div class="resource-detail"><span>Name:</span> ${name}</div>
+          <div class="resource-detail"><span>Name:</span> ${resource?.name || name}</div>
           <div class="resource-detail"><span>Identifier:</span> ${
             resource.identifier
           }</div>
@@ -1377,6 +1389,7 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
+          name: resource?.name || name,
         });
         continue;
       }
@@ -1386,6 +1399,7 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
+          name: resource?.name || name,
         });
         continue;
       }
@@ -1415,6 +1429,7 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
+          name: resource?.name || name,
         });
         continue;
       }
@@ -1448,6 +1463,7 @@ export const publishMultipleQDNResources = async (
             reason: errorMsg,
             identifier: resource.identifier,
             service: resource.service,
+            name: resource?.name || name,
           });
           continue;
         }
@@ -1463,8 +1479,8 @@ export const publishMultipleQDNResources = async (
           publishData,
           [
             {
-              registeredName: encodeURIComponent(name),
               data: rawData,
+              registeredName: encodeURIComponent(resource?.name || name),
               service: service,
               identifier: encodeURIComponent(identifier),
               uploadType: dataType,
@@ -1495,6 +1511,7 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
+          name: resource?.name || name,
         });
       }
     } catch (error) {
@@ -1502,6 +1519,7 @@ export const publishMultipleQDNResources = async (
         reason: error?.message || 'Unknown error',
         identifier: resource.identifier,
         service: resource.service,
+        name: resource?.name || name,
       });
     }
   }
@@ -4311,9 +4329,10 @@ export const updateNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('UPDATE_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to register this name?`,
-      highlightedText: data.newName,
-      text2: data?.description,
+      text1: `Do you give this application permission to update this name?`,
+      text2: `previous name: ${oldName}`,
+      text3: `new name: ${newName}`,
+      text4: data?.description,
       fee: fee.fee,
     },
     isFromExtension
@@ -4747,7 +4766,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] !== undefined && data[field] !== null) {
+    if (data[field] === undefined || data[field] === null) {
       missingFields.push(field);
     }
   });
@@ -4799,7 +4818,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] !== undefined && data[field] !== null) {
+    if (data[field] === undefined || data[field] === null) {
       missingFields.push(field);
     }
   });
@@ -4934,7 +4953,7 @@ export const sellNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['salePrice', 'nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] !== undefined && data[field] !== null) {
+    if (data[field] === undefined || data[field] === null) {
       missingFields.push(field);
     }
   });
@@ -4978,7 +4997,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] !== undefined && data[field] !== null) {
+    if (data[field] === undefined || data[field] === null) {
       missingFields.push(field);
     }
   });
@@ -5018,7 +5037,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] !== undefined && data[field] !== null) {
+    if (data[field] === undefined || data[field] === null) {
       missingFields.push(field);
     }
   });
