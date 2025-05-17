@@ -185,7 +185,7 @@ export const AnnouncementDiscussion = ({
 
         clearEditorContent();
       }
-      // TODO send chat message
+      // send chat message
     } catch (error) {
       console.error(error);
     } finally {
