@@ -302,7 +302,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     const fee = await getFee('REWARD_SHARE');
     await show({
       message: t('core:message.question.perform_transaction', {
-        // TODO move from group into core namespace
         action: 'REWARD_SHARE',
         postProcess: 'capitalizeFirst',
       }),
@@ -494,57 +493,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         });
     });
   }, []);
-
-  // TODO unused functions. Remove??
-
-  // const handleRemoveRewardShare = async (rewardShare) => {
-  //   try {
-  //     setIsLoading(true);
-
-  //     const privateRewardShare = await removeRewardShare(rewardShare);
-  //   } catch (error) {
-  //     setInfo({
-  //       type: 'error',
-  //       message: error?.message || 'Unable to remove reward share',
-  //     });
-  //     setOpenSnack(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  // const createRewardShareForPotentialMinter = async (receiver) => {
-  //   try {
-  //     setIsLoading(true);
-  //     const confirmReceiver = await getNameOrAddress(receiver);
-  //     if (confirmReceiver.error)
-  //       throw new Error('Invalid receiver address or name');
-  //     const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
-  //     if (!isInMinterGroup) throw new Error('Account not in Minter Group');
-  //     const publicKey = await getPublicKeyFromAddress(confirmReceiver);
-  //     const findRewardShare = rewardShares?.find(
-  //       (item) =>
-  //         item?.recipient === confirmReceiver &&
-  //         item?.mintingAccount === myAddress
-  //     );
-  //     if (findRewardShare) {
-  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-  //       setRewardsharekey(privateRewardShare);
-  //     } else {
-  //       await createRewardShare(publicKey, confirmReceiver);
-  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-  //       setRewardsharekey(privateRewardShare);
-  //     }
-  //   } catch (error) {
-  //     setInfo({
-  //       type: 'error',
-  //       message: error?.message || 'Unable to create reward share',
-  //     });
-  //     setOpenSnack(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
 
   useEffect(() => {
     getNodeInfos();
