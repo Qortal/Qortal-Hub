@@ -166,11 +166,10 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
       const registeredName = await getNameInfo();
       const data = await publishData({
         registeredName,
-        file: encryptedData,
+        data: encryptedData,
         service: 'DOCUMENT_PRIVATE',
         identifier: `symmetric-qchat-group-${groupId}`,
-        uploadType: 'file',
-        isBase64: true,
+        uploadType: 'base64',
         withFee: true,
       });
       return {
@@ -230,11 +229,10 @@ export const encryptAndPublishSymmetricKeyGroupChatForAdmins = async ({
       const registeredName = await getNameInfo();
       const data = await publishData({
         registeredName,
-        file: encryptedData,
+        data: encryptedData,
         service: 'DOCUMENT_PRIVATE',
         identifier: `admins-symmetric-qchat-group-${groupId}`,
-        uploadType: 'file',
-        isBase64: true,
+        uploadType: 'base64',
         withFee: true,
       });
       return {
@@ -259,11 +257,10 @@ export const publishGroupEncryptedResource = async ({
       if (!registeredName) throw new Error('You need a name to publish');
       const data = await publishData({
         registeredName,
-        file: encryptedData,
+        data: encryptedData,
         service: 'DOCUMENT',
         identifier,
-        uploadType: 'file',
-        isBase64: true,
+        uploadType: 'base64',
         withFee: true,
       });
       return data;
@@ -295,11 +292,10 @@ export const publishOnQDN = async ({
 
     const res = await publishData({
       registeredName,
-      file: data,
+      data,
       service,
       identifier,
       uploadType,
-      isBase64: true,
       withFee: true,
       title,
       description,

@@ -1,266 +1,369 @@
 // @ts-nocheck
 
-import { Buffer } from "buffer"
-import Base58 from "../../deps/Base58"
-import nacl from "../../deps/nacl-fast"
-import utils from "../../utils/utils"
-import {  createEndpoint, getBaseApi } from "../../background";
-import { getData } from "../../utils/chromeStorage";
+import { Buffer } from 'buffer';
+import Base58 from '../../deps/Base58';
+import nacl from '../../deps/nacl-fast';
+import utils from '../../utils/utils';
+import { createEndpoint, getBaseApi } from '../../background';
+import { getData } from '../../utils/chromeStorage';
 
-export async function reusableGet(endpoint){
-	const validApi = await getBaseApi();
-  
-	const response = await fetch(validApi + endpoint);
-	const data = await response.json();
-	return data
-  }
-  
-  async function reusablePost(endpoint,  _body){
-	// const validApi = await findUsableApi();
-	const url = await createEndpoint(endpoint)
-	const response = await fetch(url, {
-	  method: 'POST',
-	  headers: {
-		  'Content-Type': 'application/json'
-	  },
-	  body: _body
+export async function reusableGet(endpoint) {
+  const validApi = await getBaseApi();
+
+  const response = await fetch(validApi + endpoint);
+  const data = await response.json();
+  return data;
+}
+
+async function reusablePost(endpoint, _body) {
+  // const validApi = await findUsableApi();
+  const url = await createEndpoint(endpoint);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: _body,
   });
-  let data 
+  let data;
   try {
-	data = await response.clone().json()
+    data = await response.clone().json();
   } catch (e) {
-	data = await response.text()
+    data = await response.text();
   }
-  return data
+  return data;
+}
+
+async function reusablePostStream(endpoint, _body) {
+  const url = await createEndpoint(endpoint);
+
+  const headers = {};
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: _body,
+  });
+
+  return response; // return the actual response so calling code can use response.ok
+}
+
+async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      const response = await reusablePostStream(endpoint, formData);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+      return; // Success
+    } catch (err) {
+      attempt++;
+      console.warn(
+        `Chunk ${index} failed (attempt ${attempt}): ${err.message}`
+      );
+      if (attempt >= maxRetries) {
+        throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
+      }
+      // Wait 10 seconds before next retry
+      await new Promise((res) => setTimeout(res, 10_000));
+    }
   }
+}
 
 async function getKeyPair() {
-	const res = await getData<any>("keyPair").catch(() => null);
-	if (res) {
-	  return res
-	} else {
-	  throw new Error("Wallet not authenticated");
-	}
+  const res = await getData<any>('keyPair').catch(() => null);
+  if (res) {
+    return res;
+  } else {
+    throw new Error('Wallet not authenticated');
   }
+}
 
 export const publishData = async ({
-	registeredName,
-	file,
-	service,
-	identifier,
-	uploadType,
-	isBase64,
-	filename,
-	withFee,
-	title,
-	description,
-	category,
-	tag1,
-	tag2,
-	tag3,
-	tag4,
-	tag5,
-	feeAmount
+  registeredName,
+  data,
+  service,
+  identifier,
+  uploadType,
+  filename,
+  withFee,
+  title,
+  description,
+  category,
+  tag1,
+  tag2,
+  tag3,
+  tag4,
+  tag5,
+  feeAmount,
 }: any) => {
-	
-	const validateName = async (receiverName: string) => {
-		return await reusableGet(`/names/${receiverName}`) 
-	}
+  console.log('data', data);
+  const validateName = async (receiverName: string) => {
+    return await reusableGet(`/names/${receiverName}`);
+  };
 
-	const convertBytesForSigning = async (transactionBytesBase58: string) => {
-        return await reusablePost('/transactions/convert', transactionBytesBase58)
-	}
+  const convertBytesForSigning = async (transactionBytesBase58: string) => {
+    return await reusablePost('/transactions/convert', transactionBytesBase58);
+  };
 
-	const getArbitraryFee = async () => {
-		const timestamp = Date.now()
+  const getArbitraryFee = async () => {
+    const timestamp = Date.now();
 
-        let fee = await reusableGet(`/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`) 
+    let fee = await reusableGet(
+      `/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
+    );
 
-		return {
-			timestamp,
-			fee: Number(fee),
-			feeToShow: (Number(fee) / 1e8).toFixed(8)
-		}
-	}
+    return {
+      timestamp,
+      fee: Number(fee),
+      feeToShow: (Number(fee) / 1e8).toFixed(8),
+    };
+  };
 
-    const signArbitraryWithFee = (arbitraryBytesBase58, arbitraryBytesForSigningBase58, keyPair) => {
-        if (!arbitraryBytesBase58) {
-            throw new Error('ArbitraryBytesBase58 not defined')
-        }
-    
-        if (!keyPair) {
-            throw new Error('keyPair not defined')
-        }
-    
-        const arbitraryBytes = Base58.decode(arbitraryBytesBase58)
-        const _arbitraryBytesBuffer = Object.keys(arbitraryBytes).map(function (key) { return arbitraryBytes[key]; })
-        const arbitraryBytesBuffer = new Uint8Array(_arbitraryBytesBuffer)
-        const arbitraryBytesForSigning = Base58.decode(arbitraryBytesForSigningBase58)
-        const _arbitraryBytesForSigningBuffer = Object.keys(arbitraryBytesForSigning).map(function (key) { return arbitraryBytesForSigning[key]; })
-        const arbitraryBytesForSigningBuffer = new Uint8Array(_arbitraryBytesForSigningBuffer)
-        const signature = nacl.sign.detached(arbitraryBytesForSigningBuffer, keyPair.privateKey)
-    
-        return utils.appendBuffer(arbitraryBytesBuffer, signature)
+  const signArbitraryWithFee = (
+    arbitraryBytesBase58,
+    arbitraryBytesForSigningBase58,
+    keyPair
+  ) => {
+    if (!arbitraryBytesBase58) {
+      throw new Error('ArbitraryBytesBase58 not defined');
     }
 
-     const processTransactionVersion2 = async (bytes) => {
+    if (!keyPair) {
+      throw new Error('keyPair not defined');
+    }
 
-        return await reusablePost('/transactions/process?apiVersion=2', Base58.encode(bytes))
-     } 
+    const arbitraryBytes = Base58.decode(arbitraryBytesBase58);
+    const _arbitraryBytesBuffer = Object.keys(arbitraryBytes).map(
+      function (key) {
+        return arbitraryBytes[key];
+      }
+    );
+    const arbitraryBytesBuffer = new Uint8Array(_arbitraryBytesBuffer);
+    const arbitraryBytesForSigning = Base58.decode(
+      arbitraryBytesForSigningBase58
+    );
+    const _arbitraryBytesForSigningBuffer = Object.keys(
+      arbitraryBytesForSigning
+    ).map(function (key) {
+      return arbitraryBytesForSigning[key];
+    });
+    const arbitraryBytesForSigningBuffer = new Uint8Array(
+      _arbitraryBytesForSigningBuffer
+    );
+    const signature = nacl.sign.detached(
+      arbitraryBytesForSigningBuffer,
+      keyPair.privateKey
+    );
 
-	const signAndProcessWithFee = async (transactionBytesBase58: string) => {
-		let convertedBytesBase58 = await convertBytesForSigning(
-			transactionBytesBase58
-		)
+    return utils.appendBuffer(arbitraryBytesBuffer, signature);
+  };
 
-		
-		if (convertedBytesBase58.error) {
-			throw new Error('Error when signing')
-		}
+  const processTransactionVersion2 = async (bytes) => {
+    return await reusablePost(
+      '/transactions/process?apiVersion=2',
+      Base58.encode(bytes)
+    );
+  };
 
+  const signAndProcessWithFee = async (transactionBytesBase58: string) => {
+    let convertedBytesBase58 = await convertBytesForSigning(
+      transactionBytesBase58
+    );
 
-        const resKeyPair = await getKeyPair()
-        const parsedData = resKeyPair
-        const uint8PrivateKey = Base58.decode(parsedData.privateKey);
-        const uint8PublicKey = Base58.decode(parsedData.publicKey);
-        const keyPair = {
-          privateKey: uint8PrivateKey,
-          publicKey: uint8PublicKey
-        };
+    if (convertedBytesBase58.error) {
+      throw new Error('Error when signing');
+    }
 
-        let signedArbitraryBytes =  signArbitraryWithFee(transactionBytesBase58, convertedBytesBase58, keyPair)
-        const response = await processTransactionVersion2(signedArbitraryBytes)
+    const resKeyPair = await getKeyPair();
+    const parsedData = resKeyPair;
+    const uint8PrivateKey = Base58.decode(parsedData.privateKey);
+    const uint8PublicKey = Base58.decode(parsedData.publicKey);
+    const keyPair = {
+      privateKey: uint8PrivateKey,
+      publicKey: uint8PublicKey,
+    };
 
-		let myResponse = { error: '' }
+    let signedArbitraryBytes = signArbitraryWithFee(
+      transactionBytesBase58,
+      convertedBytesBase58,
+      keyPair
+    );
+    const response = await processTransactionVersion2(signedArbitraryBytes);
 
-		if (response === false) {
-			throw new Error('Error when signing')
-		} else {
-			myResponse = response
-		}
+    let myResponse = { error: '' };
 
-		return myResponse
-	}
+    if (response === false) {
+      throw new Error('Error when signing');
+    } else {
+      myResponse = response;
+    }
 
-	const validate = async () => {
-		let validNameRes = await validateName(registeredName)
+    return myResponse;
+  };
 
-		if (validNameRes.error) {
-			throw new Error('Name not found')
-		}
+  const validate = async () => {
+    let validNameRes = await validateName(registeredName);
 
-		let fee = null
+    if (validNameRes.error) {
+      throw new Error('Name not found');
+    }
 
-		if (withFee && feeAmount) {
-			fee = feeAmount
-		} else if (withFee) {
-			const res = await getArbitraryFee()
-			if (res.fee) {
-				fee = res.fee
-			} else {
-				throw new Error('unable to get fee')
-			}
-		}
-		
-		let transactionBytes = await uploadData(registeredName, file, fee)
-		if (!transactionBytes || transactionBytes.error) {
-			throw new Error(transactionBytes?.message || 'Error when uploading')
-		} else if (transactionBytes.includes('Error 500 Internal Server Error')) {
-			throw new Error('Error when uploading')
-		}
+    let fee = null;
 
-		let signAndProcessRes
+    if (withFee && feeAmount) {
+      fee = feeAmount;
+    } else if (withFee) {
+      const res = await getArbitraryFee();
+      if (res.fee) {
+        fee = res.fee;
+      } else {
+        throw new Error('unable to get fee');
+      }
+    }
 
-		if (withFee) {
-			signAndProcessRes = await signAndProcessWithFee(transactionBytes)
-		}
+    let transactionBytes = await uploadData(registeredName, data, fee);
+    console.log('transactionBytes length', transactionBytes?.length);
+    if (!transactionBytes || transactionBytes.error) {
+      throw new Error(transactionBytes?.message || 'Error when uploading');
+    } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
+      throw new Error('Error when uploading');
+    }
 
-		if (signAndProcessRes?.error) {
-			throw new Error('Error when signing')
-		}
+    let signAndProcessRes;
 
-		return signAndProcessRes
-	}
+    if (withFee) {
+      signAndProcessRes = await signAndProcessWithFee(transactionBytes);
+    }
 
-	const uploadData = async (registeredName: string, file:any, fee: number) => {
+    if (signAndProcessRes?.error) {
+      throw new Error('Error when signing');
+    }
 
-			let postBody = ''
-			let urlSuffix = ''
+    return signAndProcessRes;
+  };
 
-			if (file != null) {
-				// If we're sending zipped data, make sure to use the /zip version of the POST /arbitrary/* API
-				if (uploadType === 'zip') {
-					urlSuffix = '/zip'
-				}
+  const uploadData = async (registeredName: string, data: any, fee: number) => {
+    console.log('data', uploadType, data);
+    let postBody = '';
+    let urlSuffix = '';
 
-				// If we're sending file data, use the /base64 version of the POST /arbitrary/* API
-				else if (uploadType === 'file') {
-					urlSuffix = '/base64'
-				}
+    if (data != null) {
+      if (uploadType === 'base64') {
+        urlSuffix = '/base64';
+      }
 
-				// Base64 encode the file to work around compatibility issues between javascript and java byte arrays
-				if (isBase64) {
-					postBody = file
-				}
+      if (uploadType === 'base64') {
+        postBody = data;
+      }
+    } else {
+      throw new Error('No data provided');
+    }
 
-				if (!isBase64) {
-					let fileBuffer = new Uint8Array(await file.arrayBuffer())
-					postBody = Buffer.from(fileBuffer).toString("base64")
-				}
+    let uploadDataUrl = `/arbitrary/${service}/${registeredName}`;
+    let paramQueries = '';
+    if (identifier?.trim().length > 0) {
+      uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}`;
+    }
 
-			}
-			
-			let uploadDataUrl = `/arbitrary/${service}/${registeredName}${urlSuffix}`
-			if (identifier?.trim().length > 0) {
-				uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}${urlSuffix}`
-			}
-			
-				uploadDataUrl = uploadDataUrl + `?fee=${fee}`
-			
+    paramQueries = paramQueries + `?fee=${fee}`;
 
-			if (filename != null && filename != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&filename=' + encodeURIComponent(filename)
-			}
+    if (filename != null && filename != 'undefined') {
+      paramQueries = paramQueries + '&filename=' + encodeURIComponent(filename);
+    }
 
-			if (title != null && title != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&title=' + encodeURIComponent(title)
-			}
+    if (title != null && title != 'undefined') {
+      paramQueries = paramQueries + '&title=' + encodeURIComponent(title);
+    }
 
-			if (description != null && description != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&description=' + encodeURIComponent(description)
-			}
+    if (description != null && description != 'undefined') {
+      paramQueries =
+        paramQueries + '&description=' + encodeURIComponent(description);
+    }
 
-			if (category != null && category != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&category=' + encodeURIComponent(category)
-			}
+    if (category != null && category != 'undefined') {
+      paramQueries = paramQueries + '&category=' + encodeURIComponent(category);
+    }
 
-			if (tag1 != null && tag1 != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag1)
-			}
+    if (tag1 != null && tag1 != 'undefined') {
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag1);
+    }
 
-			if (tag2 != null && tag2 != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag2)
-			}
+    if (tag2 != null && tag2 != 'undefined') {
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag2);
+    }
 
-			if (tag3 != null && tag3 != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag3)
-			}
+    if (tag3 != null && tag3 != 'undefined') {
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag3);
+    }
 
-			if (tag4 != null && tag4 != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag4)
-			}
+    if (tag4 != null && tag4 != 'undefined') {
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag4);
+    }
 
-			if (tag5 != null && tag5 != 'undefined') {
-				uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag5)
-			}
+    if (tag5 != null && tag5 != 'undefined') {
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag5);
+    }
+    if (uploadType === 'zip') {
+      paramQueries = paramQueries + '&isZip=' + true;
+    }
 
-            return await reusablePost(uploadDataUrl, postBody)
-		
-	}
+    if (uploadType === 'base64') {
+      if (urlSuffix) {
+        uploadDataUrl = uploadDataUrl + urlSuffix;
+      }
+      uploadDataUrl = uploadDataUrl + paramQueries;
+      return await reusablePost(uploadDataUrl, postBody);
+    }
 
-	try {
-		return await validate()
-	} catch (error: any) {
-		throw new Error(error?.message)
-	}
-}
+    const file = data;
+    const urlCheck = `/arbitrary/check-tmp-space?totalSize=${file.size}`;
+
+    const checkEndpoint = await createEndpoint(urlCheck);
+    const checkRes = await fetch(checkEndpoint);
+    if (!checkRes.ok) {
+      throw new Error('Not enough space on your hard drive');
+    }
+
+    const chunkUrl = uploadDataUrl + `/chunk`;
+    const chunkSize = 5 * 1024 * 1024; // 5MB
+
+    const totalChunks = Math.ceil(file.size / chunkSize);
+
+    for (let index = 0; index < totalChunks; index++) {
+      const start = index * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end);
+
+      const formData = new FormData();
+      formData.append('chunk', chunk, file.name); // Optional: include filename
+      formData.append('index', index);
+
+      await uploadChunkWithRetry(chunkUrl, formData, index);
+    }
+    const finalizeUrl = uploadDataUrl + `/finalize` + paramQueries;
+
+    const finalizeEndpoint = await createEndpoint(finalizeUrl);
+
+    const response = await fetch(finalizeEndpoint, {
+      method: 'POST',
+      headers: {},
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Finalize failed: ${errorText}`);
+    }
+
+    const result = await response.text(); // Base58-encoded unsigned transaction
+    return result;
+  };
+
+  try {
+    return await validate();
+  } catch (error: any) {
+    throw new Error(error?.message);
+  }
+};

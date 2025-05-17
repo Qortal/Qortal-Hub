@@ -233,6 +233,7 @@ export const ListOfGroupPromotions = () => {
             data: data,
             identifier: identifier,
             service: 'DOCUMENT',
+            uploadType: 'base64',
           })
           .then((response) => {
             if (!response?.error) {

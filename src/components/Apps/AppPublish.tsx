@@ -189,11 +189,10 @@ export const AppPublish = ({ names, categories }) => {
         publishFee: fee.fee + ' QORT',
       });
       setIsLoading('Publishing... Please wait.');
-      const fileBase64 = await fileToBase64(file);
       await new Promise((res, rej) => {
         window
           .sendMessage('publishOnQDN', {
-            data: fileBase64,
+            data: file,
             service: appType,
             title,
             description,

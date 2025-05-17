@@ -177,6 +177,7 @@ export const AppsPrivate = ({ myName }) => {
             data: decryptedData,
             identifier: newPrivateAppValues?.identifier,
             service: newPrivateAppValues?.service,
+            uploadType: 'base64',
           })
           .then((response) => {
             if (!response?.error) {

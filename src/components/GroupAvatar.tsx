@@ -87,6 +87,7 @@ export const GroupAvatar = ({
             data: avatarBase64,
             identifier: `qortal_group_avatar_${groupId}`,
             service: 'THUMBNAIL',
+            uploadType: 'base64',
           })
           .then((response) => {
             if (!response?.error) {

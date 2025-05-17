@@ -615,13 +615,22 @@ export const useQortalMessageListener = (
         );
       } else if (event?.data?.action === 'SAVE_FILE') {
         try {
-          const res = await saveFile(event.data, null, true, {
+          await saveFile(event.data, null, true, {
             openSnackGlobal,
             setOpenSnackGlobal,
             infoSnackCustom,
             setInfoSnackCustom,
           });
-        } catch (error) {}
+          event.ports[0].postMessage({
+            result: true,
+            error: null,
+          });
+        } catch (error) {
+          event.ports[0].postMessage({
+            result: null,
+            error: error?.message || 'Failed to save file',
+          });
+        }
       } else if (
         event?.data?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' ||
         event?.data?.action === 'PUBLISH_QDN_RESOURCE' ||

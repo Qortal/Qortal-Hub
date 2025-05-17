@@ -1076,7 +1076,7 @@ export const publishQDNResource = async (
   const title = data.title;
   const description = data.description;
   const category = data.category;
-
+  const file = data?.file || data?.blob;
   const tags = data?.tags || [];
   const result = {};
 
@@ -1091,9 +1091,7 @@ export const publishQDNResource = async (
   if (data.identifier == null) {
     identifier = 'default';
   }
-  if (data?.file || data?.blob) {
-    data64 = await fileToBase64(data?.file || data?.blob);
-  }
+
   if (
     data.encrypt &&
     (!data.publicKeys ||
@@ -1108,6 +1106,9 @@ export const publishQDNResource = async (
       const parsedData = resKeyPair;
       const privateKey = parsedData.privateKey;
       const userPublicKey = parsedData.publicKey;
+      if (data?.file || data?.blob) {
+        data64 = await fileToBase64(data?.file || data?.blob);
+      }
       const encryptDataResponse = encryptDataGroup({
         data64,
         publicKeys: data.publicKeys,
@@ -1154,11 +1155,10 @@ export const publishQDNResource = async (
     try {
       const resPublish = await publishData({
         registeredName: encodeURIComponent(name),
-        file: data64,
+        data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: 'file',
-        isBase64: true,
+        uploadType: data64 ? 'base64' : 'file',
         filename: filename,
         title,
         description,
@@ -1263,13 +1263,6 @@ export const publishMultipleQDNResources = async (
     }
   }
 
-  // if (
-  //   data.encrypt &&
-  //   (!data.publicKeys ||
-  //     (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
-  // ) {
-  //   throw new Error("Encrypting data requires public keys");
-  // }
   const fee = await getFee('ARBITRARY');
   const registeredName = await getNameInfo();
   const name = registeredName;
@@ -1398,14 +1391,13 @@ export const publishMultipleQDNResources = async (
       }
       const service = resource.service;
       let identifier = resource.identifier;
-      let data64 = resource?.data64 || resource?.base64;
+      let rawData = resource?.data64 || resource?.base64;
       const filename = resource.filename;
       const title = resource.title;
       const description = resource.description;
       const category = resource.category;
       const tags = resource?.tags || [];
       const result = {};
-
       // Fill tags dynamically while maintaining backward compatibility
       for (let i = 0; i < 5; i++) {
         result[`tag${i + 1}`] = tags[i] || resource[`tag${i + 1}`] || undefined;
@@ -1427,22 +1419,27 @@ export const publishMultipleQDNResources = async (
         continue;
       }
       if (resource.file) {
-        data64 = await fileToBase64(resource.file);
+        rawData = resource.file;
       }
+
       if (resourceEncrypt) {
         try {
+          if (resource?.file) {
+            rawData = await fileToBase64(resource.file);
+          }
+          console.log('encrypteddata', rawData);
           const resKeyPair = await getKeyPair();
           const parsedData = resKeyPair;
           const privateKey = parsedData.privateKey;
           const userPublicKey = parsedData.publicKey;
           const encryptDataResponse = encryptDataGroup({
-            data64,
+            data64: rawData,
             publicKeys: data.publicKeys,
             privateKey,
             userPublicKey,
           });
           if (encryptDataResponse) {
-            data64 = encryptDataResponse;
+            rawData = encryptDataResponse;
           }
         } catch (error) {
           const errorMsg =
@@ -1457,16 +1454,21 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
+        const dataType =
+          resource?.base64 || resource?.data64 || resourceEncrypt
+            ? 'base64'
+            : 'file';
+        console.log('dataType', dataType);
         await retryTransaction(
           publishData,
           [
             {
               registeredName: encodeURIComponent(name),
-              file: data64,
+              data: rawData,
               service: service,
               identifier: encodeURIComponent(identifier),
-              uploadType: 'file',
-              isBase64: true,
+              uploadType: dataType,
+              // isBase64: true,
               filename: filename,
               title,
               description,
@@ -1902,6 +1904,41 @@ export const joinGroup = async (data, isFromExtension) => {
 
 export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   try {
+    if (data?.location) {
+      const requiredFieldsLocation = ['service', 'name', 'filename'];
+      const missingFieldsLocation: string[] = [];
+      requiredFieldsLocation.forEach((field) => {
+        if (!data?.location[field]) {
+          missingFieldsLocation.push(field);
+        }
+      });
+      if (missingFieldsLocation.length > 0) {
+        const missingFieldsString = missingFieldsLocation.join(', ');
+        const errorMsg = `Missing fields: ${missingFieldsString}`;
+        throw new Error(errorMsg);
+      }
+      const resPermission = await getUserPermission(
+        {
+          text1: 'Would you like to download:',
+          highlightedText: `${data?.location?.filename}`,
+        },
+        isFromExtension
+      );
+      const { accepted } = resPermission;
+      if (!accepted) throw new Error('User declined to save file');
+      const a = document.createElement('a');
+      let locationUrl = `/arbitrary/${data.location.service}/${data.location.name}`;
+      if (data.location.identifier) {
+        locationUrl = locationUrl + `/${data.location.identifier}`;
+      }
+      const endpoint = await createEndpoint(locationUrl);
+      a.href = endpoint;
+      a.download = data.location.filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return true;
+    }
     const requiredFields = ['filename', 'blob'];
     const missingFields: string[] = [];
     requiredFields.forEach((field) => {
@@ -1916,6 +1953,8 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     }
     const filename = data.filename;
     const blob = data.blob;
+
+    const mimeType = blob.type || data.mimeType;
     const resPermission = await getUserPermission(
       {
         text1: 'Would you like to download:',
@@ -1924,50 +1963,17 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       isFromExtension
     );
     const { accepted } = resPermission;
+    if (!accepted) throw new Error('User declined to save file');
+    showSaveFilePicker(
+      {
+        filename,
+        mimeType,
+        blob,
+      },
+      snackMethods
+    );
 
-    if (accepted) {
-      const mimeType = blob.type || data.mimeType;
-      let backupExention = filename.split('.').pop();
-      if (backupExention) {
-        backupExention = '.' + backupExention;
-      }
-      const fileExtension = mimeToExtensionMap[mimeType] || backupExention;
-      let fileHandleOptions = {};
-      if (!mimeType) {
-        throw new Error('A mimeType could not be derived');
-      }
-      if (!fileExtension) {
-        const obj = {};
-        throw new Error('A file extension could not be derived');
-      }
-      if (fileExtension && mimeType) {
-        fileHandleOptions = {
-          accept: {
-            [mimeType]: [fileExtension],
-          },
-        };
-      }
-
-      showSaveFilePicker(
-        {
-          filename,
-          mimeType,
-          blob,
-        },
-        snackMethods
-      );
-      // sendToSaveFilePicker(
-      //   {
-      //     filename,
-      //     mimeType,
-      //     blob,
-      //     fileId
-      //   }
-      // );
-      return true;
-    } else {
-      throw new Error('User declined to save file');
-    }
+    return true;
   } catch (error) {
     throw new Error(error?.message || 'Failed to initiate download');
   }
@@ -5391,12 +5397,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         [
           {
             registeredName: encodeURIComponent(name),
-            file: encryptDataResponse,
+            data: encryptDataResponse,
             service: transaction.service,
             identifier: encodeURIComponent(transaction.identifier),
-            uploadType: 'file',
+            uploadType: 'base64',
             description: transaction?.description,
-            isBase64: true,
             apiVersion: 2,
             withFee: true,
           },
@@ -5443,12 +5448,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       [
         {
           registeredName: encodeURIComponent(name),
-          file: encryptDataResponse,
+          data: encryptDataResponse,
           service: transaction.service,
           identifier: encodeURIComponent(transaction.identifier),
-          uploadType: 'file',
+          uploadType: 'base64',
           description: transaction?.description,
-          isBase64: true,
           apiVersion: 2,
           withFee: true,
         },
