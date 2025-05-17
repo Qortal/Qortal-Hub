@@ -32,6 +32,7 @@ import {
 
 import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const GroupList = ({
   selectGroupFunc,
@@ -49,6 +50,7 @@ export const GroupList = ({
   myAddress,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   return (
@@ -86,7 +88,9 @@ export const GroupList = ({
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
             }
-            label="Groups"
+            label={t('group:group.group_other', {
+              postProcess: 'capitalizeFirst',
+            })}
             selected={desktopSideView === 'groups'}
             customWidth="75px"
           >
@@ -102,6 +106,7 @@ export const GroupList = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setDesktopSideView('directs');
@@ -116,7 +121,9 @@ export const GroupList = ({
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
             }
-            label="Messaging"
+            label={t('group:group.messaging', {
+              postProcess: 'capitalizeFirst',
+            })}
             selected={desktopSideView === 'directs'}
           >
             <MessagingIcon
@@ -165,6 +172,7 @@ export const GroupList = ({
           ))}
         </List>
       </div>
+
       <div
         style={{
           display: 'flex',
@@ -185,7 +193,7 @@ export const GroupList = ({
                 color: theme.palette.text.primary,
               }}
             />
-            Group
+            {t('group:group.group', { postProcess: 'capitalizeFirst' })}
           </CustomButton>
 
           {!isRunningPublicNode && (
@@ -273,6 +281,7 @@ const GroupItem = React.memo(
                 </Avatar>
               )}
             </ListItemAvatar>
+
             <ListItemText
               primary={group.groupId === '0' ? 'General' : group.groupName}
               secondary={
@@ -302,6 +311,7 @@ const GroupItem = React.memo(
                 fontSize: '16px',
               }}
             />
+
             {announcement && !announcement?.seentimestamp && (
               <CampaignIcon
                 sx={{
@@ -311,6 +321,7 @@ const GroupItem = React.memo(
                 }}
               />
             )}
+
             <Box
               sx={{
                 display: 'flex',
@@ -335,6 +346,7 @@ const GroupItem = React.memo(
                     }}
                   />
                 )}
+
               {groupProperty?.isOpen === false && (
                 <LockIcon
                   sx={{
