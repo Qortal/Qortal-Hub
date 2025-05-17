@@ -3,7 +3,6 @@ import { EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import ListItem from '@tiptap/extension-list-item';
-import TextStyle from '@tiptap/extension-text-style';
 import Placeholder from '@tiptap/extension-placeholder';
 import IconButton from '@mui/material/IconButton';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
@@ -32,7 +31,7 @@ import { Box, Checkbox, Typography, useTheme } from '@mui/material';
 import { useAtom } from 'jotai';
 import { fileToBase64 } from '../../utils/fileReading/index.js';
 import { useTranslation } from 'react-i18next';
-import { t } from 'i18next';
+import i18next from 'i18next';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -355,8 +354,7 @@ const MenuBar = memo(
 );
 
 const extensions = [
-  Color.configure({ types: [TextStyle.name, ListItem.name] }),
-  TextStyle.configure({ types: [ListItem.name] }),
+  Color.configure({ types: [ListItem.name] }),
   StarterKit.configure({
     bulletList: {
       keepMarks: true,
@@ -368,9 +366,7 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: t('core:action.start_typing', {
-      postProcess: 'capitalizeFirst',
-    }),
+    placeholder: i18next.t('core:action.start_typing'),
   }),
   ImageResize,
 ];
