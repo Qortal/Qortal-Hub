@@ -369,7 +369,7 @@ export const ChatList = ({
                     <ErrorBoundary
                       fallback={
                         <Typography>
-                          {t('group.message.generic.invalid_data', {
+                          {t('group:message.generic.invalid_data', {
                             postProcess: 'capitalizeFirst',
                           })}
                         </Typography>

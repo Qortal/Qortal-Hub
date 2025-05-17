@@ -34,6 +34,7 @@ import { ContextMenuMentions } from '../ContextMenuMentions';
 import { convert } from 'html-to-text';
 import { generateHTML } from '@tiptap/react';
 import ErrorBoundary from '../../common/ErrorBoundary';
+import { useTranslation } from 'react-i18next';
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
@@ -567,7 +568,7 @@ export const ChatOptions = ({
                           <ErrorBoundary
                             fallback={
                               <Typography>
-                                {t('group.message.generic.invalid_data', {
+                                {t('group:message.generic.invalid_data', {
                                   postProcess: 'capitalizeFirst',
                                 })}
                               </Typography>
