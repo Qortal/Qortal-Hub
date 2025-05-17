@@ -44,6 +44,7 @@
     "login": "login",
     "logout": "logout",
     "new": {
+      "chat": "chat",
       "post": "new post",
       "thread": "new thread"
     },
@@ -185,6 +186,7 @@
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "no data for image",
       "no_description": "no description",
+      "no_messages": "no messages",
       "no_minting_details": "cannot view minting details on the gateway",
       "no_notifications": "no new notifications",
       "no_pinned_changes": "you currently do not have any changes to your pinned apps",

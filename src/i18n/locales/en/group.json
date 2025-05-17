@@ -59,6 +59,7 @@
   "join_link": "join group link",
   "join_requests": "join requests",
   "last_message": "last message",
+  "last_message_date": "last message: {{date }}",
   "latest_mails": "latest Q-Mails",
   "message": {
     "generic": {

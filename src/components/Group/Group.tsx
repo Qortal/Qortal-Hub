@@ -1750,9 +1750,9 @@ export const Group = ({
               >
                 <Box
                   sx={{
+                    alignItems: 'center',
                     display: 'flex',
                     width: '100%',
-                    alignItems: 'center',
                   }}
                 >
                   <ListItemAvatar>
@@ -1766,12 +1766,18 @@ export const Group = ({
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>
                   </ListItemAvatar>
+
                   <ListItemText
                     primary={direct?.name || direct?.address}
                     secondary={
                       !direct?.timestamp
-                        ? 'no messages'
-                        : `last message: ${formatEmailDate(direct?.timestamp)}`
+                        ? t('core:message.generic.no_messages', {
+                            postProcess: 'capitalizeFirst',
+                          })
+                        : t('group:last_message_date', {
+                            date: formatEmailDate(direct?.timestamp),
+                            postProcess: 'capitalizeFirst',
+                          })
                     }
                     primaryTypographyProps={{
                       style: {
@@ -1815,6 +1821,7 @@ export const Group = ({
             </List>
           ))}
         </div>
+
         <div
           style={{
             display: 'flex',
@@ -1835,7 +1842,9 @@ export const Group = ({
                 color: theme.palette.text.primary,
               }}
             />
-            New Chat
+            {t('core:action.new.chat', {
+              postProcess: 'capitalizeFirst',
+            })}
           </CustomButton>
         </div>
       </div>
