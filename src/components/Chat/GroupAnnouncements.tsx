@@ -234,7 +234,12 @@ export const GroupAnnouncements = ({
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                })
+            );
           });
       });
     } catch (error) {
@@ -257,7 +262,12 @@ export const GroupAnnouncements = ({
           rej(response.error);
         })
         .catch((error) => {
-          rej(error.message || 'An error occurred');
+          rej(
+            error.message ||
+              t('core:message.error.generic', {
+                postProcess: 'capitalizeFirst',
+              })
+          );
         });
     });
   };
@@ -337,7 +347,7 @@ export const GroupAnnouncements = ({
         setTempData(selectedGroup);
         clearEditorContent();
       }
-      // TODO send chat message
+      // send chat message
     } catch (error) {
       if (!error) return;
       setInfoSnack({
@@ -586,7 +596,9 @@ export const GroupAnnouncements = ({
               fontSize: '30px',
             }}
           />
-          Group Announcements
+          {t('group:message.generic.group_announcement', {
+            postProcess: 'capitalizeFirst',
+          })}
         </Box>
 
         <Spacer height={'25px'} />
@@ -605,10 +617,13 @@ export const GroupAnnouncements = ({
               fontSize: '16px',
             }}
           >
-            No announcements
+            {t('group:message.generic.no_announcement', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
         </Box>
       )}
+
       <AnnouncementList
         announcementData={announcementData}
         initialMessages={combinedListTempAndReal}
@@ -689,7 +704,7 @@ export const GroupAnnouncements = ({
                   padding: '5px',
                 }}
               >
-                {` Close`}
+                {t('core:action.close', { postProcess: 'capitalizeFirst' })}
               </CustomButton>
             )}
 
@@ -723,7 +738,9 @@ export const GroupAnnouncements = ({
                   }}
                 />
               )}
-              {` Publish Announcement`}
+              {t('group:action.publish_announcement', {
+                postProcess: 'capitalizeFirst',
+              })}
             </CustomButton>
           </Box>
         </div>
@@ -739,7 +756,9 @@ export const GroupAnnouncements = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: 'Loading announcements... please wait.',
+          message: t('core:loading.announcements', {
+            postProcess: 'capitalizeFirst',
+          }),
         }}
       />
     </div>
