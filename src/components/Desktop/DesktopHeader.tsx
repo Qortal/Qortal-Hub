@@ -127,7 +127,7 @@ export const DesktopHeader = ({
           }}
         >
           {selectedGroup?.groupId === '0'
-            ? t('core:general', { postProcess: 'capitalizeFirst' })
+            ? t('core:general', { postProcess: 'capitalizeFirstChar' })
             : selectedGroup?.groupName}
         </Typography>
       </Box>
@@ -151,7 +151,9 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label={t('core:announcement', { postProcess: 'capitalizeFirst' })}
+            label={t('core:announcement', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={isAnnouncement}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -179,7 +181,7 @@ export const DesktopHeader = ({
             color={
               isChat ? theme.palette.text.primary : theme.palette.text.secondary
             }
-            label={t('core:chat', { postProcess: 'capitalizeFirst' })}
+            label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
             selected={isChat}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -209,7 +211,9 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label={t('core:thread_other', { postProcess: 'capitalizeFirst' })}
+            label={t('core:thread_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={isForum}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -234,7 +238,9 @@ export const DesktopHeader = ({
           <IconWrapper
             color={theme.palette.text.secondary}
             customHeight="55px"
-            label={t('core:member_other', { postProcess: 'capitalizeFirst' })}
+            label={t('core:member_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={false}
           >
             <MembersIcon
@@ -256,7 +262,9 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label={t('core:admin_other', { postProcess: 'capitalizeFirst' })}
+            label={t('core:admin_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={groupSection === 'adminSpace'}
             customHeight="55px"
             selectColor={theme.palette.action.selected}

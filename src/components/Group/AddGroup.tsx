@@ -105,13 +105,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
       if (!name)
         throw new Error(
           t('group:message.error.name_required', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       if (!description)
         throw new Error(
           t('group:message.error.description_required', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
@@ -120,7 +120,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'CREATE_GROUP',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -140,7 +140,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_creation', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -150,11 +150,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   type: 'created-group',
                   label: t('group:message.success.group_creation_name', {
                     group_name: name,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   labelDone: t('group:message.success.group_creation_label', {
                     group_name: name,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   done: false,
                 },
@@ -173,7 +173,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
           });
@@ -227,7 +227,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
         >
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
-              {t('group:group.management', { postProcess: 'capitalizeFirst' })}
+              {t('group:group.management', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
 
             <IconButton
@@ -269,7 +271,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
             >
               <Tab
                 label={t('group:action.create_group', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 {...a11yProps(0)}
                 sx={{
@@ -281,7 +283,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               />
               <Tab
                 label={t('group:action.find_group', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 {...a11yProps(1)}
                 sx={{
@@ -293,7 +295,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               />
               <Tab
                 label={t('group:group.invites', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 {...a11yProps(2)}
                 sx={{
@@ -330,13 +332,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 >
                   <Label>
                     {t('group:group.name', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
                   <Input
                     placeholder={t('group:group.name', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -352,13 +354,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 >
                   <Label>
                     {t('group:group.description', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
                   <Input
                     placeholder={t('group:group.description', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -374,7 +376,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 >
                   <Label>
                     {t('group:group.type', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
@@ -387,12 +389,12 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   >
                     <MenuItem value={1}>
                       {t('group:group.open', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </MenuItem>
                     <MenuItem value={0}>
                       {t('group:group.closed', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </MenuItem>
                   </Select>
@@ -409,7 +411,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 >
                   <Typography>
                     {t('group:advanced_options', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
 
@@ -426,7 +428,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   >
                     <Label>
                       {t('group:approval_threshold', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
 
@@ -439,12 +441,12 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     >
                       <MenuItem value={0}>
                         {t('core:count.none', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </MenuItem>
                       <MenuItem value={1}>
                         {t('core:count.one', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </MenuItem>
                       <MenuItem value={20}>20%</MenuItem>
@@ -464,7 +466,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   >
                     <Label>
                       {t('group:block_delay.minimum', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
 
@@ -523,7 +525,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                   >
                     <Label>
                       {t('group:block_delay.maximum', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
 
@@ -584,7 +586,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     onClick={handleCreateGroup}
                   >
                     {t('group:action.create_group', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Button>
                 </Box>

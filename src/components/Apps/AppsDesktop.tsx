@@ -383,7 +383,7 @@ export const AppsDesktop = ({
         >
           <IconWrapper
             label={t('core:app_other', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             disableWidth
           >
@@ -405,7 +405,7 @@ export const AppsDesktop = ({
                   : theme.palette.text.secondary
             }
             label={t('core:chat', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             disableWidth
           >
@@ -436,7 +436,7 @@ export const AppsDesktop = ({
                   : theme.palette.text.secondary
               }
               label={t('core:dev', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
               disableWidth
             >

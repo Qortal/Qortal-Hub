@@ -81,7 +81,7 @@ export const DesktopSideBar = ({
           color={
             isApps ? theme.palette.text.primary : theme.palette.text.secondary
           }
-          label={t('core:app_other', { postProcess: 'capitalizeFirst' })}
+          label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
           selected={isApps}
           disableWidth
         >
@@ -107,7 +107,7 @@ export const DesktopSideBar = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
           }
-          label={t('core:chat', { postProcess: 'capitalizeFirst' })}
+          label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
           disableWidth
         >
           <MessagingIconFilled
@@ -137,7 +137,7 @@ export const DesktopSideBar = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label={t('core:dev', { postProcess: 'capitalizeFirst' })}
+            label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
           >
             <AppsIcon height={30} color={theme.palette.text.secondary} />

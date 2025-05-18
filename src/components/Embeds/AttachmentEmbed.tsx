@@ -86,7 +86,7 @@ export const AttachmentCard = ({
       } catch (error) {
         throw new Error(
           t('auth:message.error.unable_decrypt', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       }
@@ -94,7 +94,7 @@ export const AttachmentCard = ({
       if (!decryptedData || decryptedData?.error)
         throw new Error(
           t('auth:message.error.decrypt_data', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       blobUrl = base64ToBlobUrl(decryptedData, resourceData?.mimeType);
@@ -185,7 +185,7 @@ export const AttachmentCard = ({
         >
           {t('core:message.generic.created_by', {
             owner: decodeIfEncoded(owner),
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
 
@@ -203,7 +203,7 @@ export const AttachmentCard = ({
                   postProcess: 'capitalizeAll',
                 })
               : t('core:message.generic.encrypted_not', {
-                  postProcess: 'capitalizeAll',
+                  postProcess: 'capitalizeFirstChar',
                 })}
         </Typography>
       </Box>
@@ -296,7 +296,7 @@ export const AttachmentCard = ({
                   <DownloadIcon />
                   <FileAttachmentFont>
                     {t('core:action.download_file', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </FileAttachmentFont>
                 </>
@@ -314,7 +314,7 @@ export const AttachmentCard = ({
                     />
                     <FileAttachmentFont>
                       {t('core:message.generic.downloading', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                       : {resourceDetails?.status?.percentLoaded || '0'}%
                     </FileAttachmentFont>
@@ -327,7 +327,7 @@ export const AttachmentCard = ({
                     <SaveIcon />
                     <FileAttachmentFont>
                       {t('core:action.save_disk', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </FileAttachmentFont>
                   </>

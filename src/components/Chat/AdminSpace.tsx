@@ -54,7 +54,7 @@ export const AdminSpace = ({
         >
           <Typography>
             {t('core:message.generic.space_for_admins', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>

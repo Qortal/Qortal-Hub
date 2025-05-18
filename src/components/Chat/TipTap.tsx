@@ -321,7 +321,7 @@ const MenuBar = memo(
                 }}
               >
                 {t('core:action.disable_enter', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>

@@ -107,7 +107,7 @@ export const ChatOptions = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -280,7 +280,7 @@ export const ChatOptions = ({
               }}
             >
               {t('core:message.generic.no_results', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           )}
@@ -455,7 +455,7 @@ export const ChatOptions = ({
             <Select
               id="demo-simple-select"
               label={t('core:sort.by_member', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
               labelId="demo-simple-select-label"
               onChange={(e) => setSelectedMember(e.target.value)}
@@ -464,7 +464,9 @@ export const ChatOptions = ({
             >
               <MenuItem value={0}>
                 <em>
-                  {t('core:sort.by_member', { postProcess: 'capitalizeFirst' })}
+                  {t('core:sort.by_member', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </em>
               </MenuItem>
 
@@ -499,7 +501,7 @@ export const ChatOptions = ({
               }}
             >
               {t('core:message.generic.no_results', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           )}
@@ -571,7 +573,7 @@ export const ChatOptions = ({
                             fallback={
                               <Typography>
                                 {t('group:message.generic.invalid_data', {
-                                  postProcess: 'capitalizeFirst',
+                                  postProcess: 'capitalizeFirstChar',
                                 })}
                               </Typography>
                             }

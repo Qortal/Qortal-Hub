@@ -183,19 +183,19 @@ export const NewThread = ({
 
       if (!isMessage && !threadTitle) {
         errorMsg = t('core:message.question.provide_thread', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
       }
 
       if (!name) {
         errorMsg = t('group:message.error.access_name', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
       }
 
       if (!groupInfo) {
         errorMsg = t('group:message.error.group_info', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
       }
 
@@ -204,7 +204,7 @@ export const NewThread = ({
         const missingFieldsString = missingFields.join(', ');
         const errMsg = t('core:message.error.missing_fields', {
           field: missingFieldsString,
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
         errorMsg = errMsg;
       }
@@ -217,7 +217,7 @@ export const NewThread = ({
 
       if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') {
         const errMsg = t('group:message.generic.provide_message', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
         throw new Error(errMsg);
       }
@@ -231,7 +231,7 @@ export const NewThread = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: feeToShow + ' QORT',
       });
@@ -257,7 +257,7 @@ export const NewThread = ({
         isPrivate === false ? null : await getSecretKey(false, true);
       if (!secretKey && isPrivate) {
         const errMsg = t('group:message.error.group_secret_key', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
         throw new Error(errMsg);
       }
@@ -320,7 +320,7 @@ export const NewThread = ({
         setInfoSnack({
           type: 'success',
           message: t('group:message.success.thread_creation', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         setOpenSnack(true);
@@ -332,7 +332,7 @@ export const NewThread = ({
       } else {
         if (!currentThread) {
           const errMsg = t('group:message.error.thread_id', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           });
           throw new Error(errMsg);
         }
@@ -360,7 +360,7 @@ export const NewThread = ({
         setInfoSnack({
           type: 'success',
           message: t('group:message.success.post_creation', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         setOpenSnack(true);
@@ -404,10 +404,10 @@ export const NewThread = ({
         <ComposeP>
           {currentThread
             ? t('core:action.new.post', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             : t('core:action.new.thread', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
         </ComposeP>
       </ComposeContainer>
@@ -437,10 +437,10 @@ export const NewThread = ({
           <NewMessageHeaderP>
             {isMessage
               ? t('core:action.post_message', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
               : t('core:action.new.thread', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
           </NewMessageHeaderP>
 
@@ -562,10 +562,10 @@ export const NewThread = ({
             <NewMessageSendP>
               {isMessage
                 ? t('core:action.post', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })
                 : t('core:action.create_thread', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
             </NewMessageSendP>
 

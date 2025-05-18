@@ -82,7 +82,7 @@ export const AnnouncementList = ({
         {showLoadMore && (
           <CustomButton onClick={loadMore}>
             {t('core:action.load_announcements', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
         )}

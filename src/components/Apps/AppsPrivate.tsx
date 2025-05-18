@@ -103,7 +103,7 @@ export const AppsPrivate = ({ myName }) => {
               t('core:message.error.file_too_large', {
                 filename: file.name,
                 size: maxFileSize / (1024 * 1024),
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             );
           }
@@ -146,21 +146,21 @@ export const AppsPrivate = ({ myName }) => {
       if (!logo)
         throw new Error(
           t('core:message.generic.select_image', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
       if (!myName)
         throw new Error(
           t('core:message.generic.name_publish', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
       if (!newPrivateAppValues?.name)
         throw new Error(
           t('core:message.error.app_need_name', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
@@ -184,7 +184,7 @@ export const AppsPrivate = ({ myName }) => {
         throw new Error(
           decryptedData?.error ||
             t('core:message.error.unable_encrypt_app', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
         );
       }
@@ -193,7 +193,7 @@ export const AppsPrivate = ({ myName }) => {
 
       await show({
         message: t('core:message.question.publish_app', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -216,7 +216,7 @@ export const AppsPrivate = ({ myName }) => {
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -239,7 +239,7 @@ export const AppsPrivate = ({ myName }) => {
         message:
           error?.message ||
           t('core:message.error.unable_publish_app', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
       });
     }
@@ -322,7 +322,7 @@ export const AppsPrivate = ({ myName }) => {
             >
               <Tab
                 label={t('core:action.access_app', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 {...a11yProps(0)}
                 sx={{
@@ -334,7 +334,7 @@ export const AppsPrivate = ({ myName }) => {
               />
               <Tab
                 label={t('core:action.publish_app', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 {...a11yProps(1)}
                 sx={{
@@ -358,12 +358,12 @@ export const AppsPrivate = ({ myName }) => {
                 >
                   <Label>
                     {t('group:action.select_group', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
                   <Label>
                     {t('group:message.generic.only_private_groups', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
@@ -372,7 +372,7 @@ export const AppsPrivate = ({ myName }) => {
                     id="demo-simple-select"
                     value={privateAppValues?.groupId}
                     label={t('group:group.group_other', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     onChange={(e) => {
                       setPrivateAppValues((prev) => {
@@ -385,7 +385,7 @@ export const AppsPrivate = ({ myName }) => {
                   >
                     <MenuItem value={0}>
                       {t('group:message.generic.no_selection', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </MenuItem>
 
@@ -412,7 +412,7 @@ export const AppsPrivate = ({ myName }) => {
                   }}
                 >
                   <Label>
-                    {t('core:name', { postProcess: 'capitalizeFirst' })}
+                    {t('core:name', { postProcess: 'capitalizeFirstChar' })}
                   </Label>
                   <Input
                     placeholder="name"
@@ -437,12 +437,14 @@ export const AppsPrivate = ({ myName }) => {
                   }}
                 >
                   <Label>
-                    {t('core:identifier', { postProcess: 'capitalizeFirst' })}
+                    {t('core:identifier', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                   </Label>
 
                   <Input
                     placeholder={t('core:identifier', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     value={privateAppValues?.identifier}
                     onChange={(e) =>
@@ -464,7 +466,9 @@ export const AppsPrivate = ({ myName }) => {
                     setIsOpenPrivateModal(false);
                   }}
                 >
-                  {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+                  {t('core:action.close', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
                 <Button
                   disabled={
@@ -477,7 +481,9 @@ export const AppsPrivate = ({ myName }) => {
                   onClick={() => addPrivateApp()}
                   autoFocus
                 >
-                  {t('core:action.access', { postProcess: 'capitalizeFirst' })}
+                  {t('core:action.access', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               </DialogActions>
             </>
@@ -492,7 +498,7 @@ export const AppsPrivate = ({ myName }) => {
                   }}
                 >
                   {t('core:message.generic.select_zip', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </PublishQAppInfo>
 
@@ -526,10 +532,10 @@ export const AppsPrivate = ({ myName }) => {
                   <input {...getInputProps()} />
                   {file
                     ? t('core:action.change_file', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })
                     : t('core:action.choose_file', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                 </PublishQAppChoseFile>
 
@@ -544,13 +550,13 @@ export const AppsPrivate = ({ myName }) => {
                 >
                   <Label>
                     {t('group:action.select_group', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
                   <Label>
                     {t('group:amessage.generic.admin_only', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
 
@@ -559,13 +565,13 @@ export const AppsPrivate = ({ myName }) => {
                     id="demo-simple-select"
                     value={selectedGroup}
                     label={t('group:group.groups_admin', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     onChange={(e) => setSelectedGroup(e.target.value)}
                   >
                     <MenuItem value={0}>
                       {t('group:message.generic.no_selection', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </MenuItem>
 
@@ -592,11 +598,13 @@ export const AppsPrivate = ({ myName }) => {
                   }}
                 >
                   <Label>
-                    {t('core:identifier', { postProcess: 'capitalizeFirst' })}
+                    {t('core:identifier', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                   </Label>
                   <Input
                     placeholder={t('core:identifier', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     value={newPrivateAppValues?.identifier}
                     onChange={(e) =>
@@ -621,12 +629,12 @@ export const AppsPrivate = ({ myName }) => {
                   }}
                 >
                   <Label>
-                    {t('core:app_name', { postProcess: 'capitalizeFirst' })}
+                    {t('core:app_name', { postProcess: 'capitalizeFirstChar' })}
                   </Label>
 
                   <Input
                     placeholder={t('core:app_name', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     value={newPrivateAppValues?.name}
                     onChange={(e) =>
@@ -645,7 +653,7 @@ export const AppsPrivate = ({ myName }) => {
                 <ImageUploader onPick={(file) => setLogo(file)}>
                   <Button variant="contained">
                     {t('core:action.choose_logo', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Button>
                 </ImageUploader>
@@ -663,7 +671,9 @@ export const AppsPrivate = ({ myName }) => {
                     clearFields();
                   }}
                 >
-                  {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+                  {t('core:action.close', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
 
                 <Button
@@ -677,7 +687,9 @@ export const AppsPrivate = ({ myName }) => {
                   onClick={() => publishPrivateApp()}
                   autoFocus
                 >
-                  {t('core:action.publish', { postProcess: 'capitalizeFirst' })}
+                  {t('core:action.publish', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               </DialogActions>
             </>

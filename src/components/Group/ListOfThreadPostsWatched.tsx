@@ -47,7 +47,7 @@ export const ListOfThreadPostsWatched = () => {
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -87,7 +87,7 @@ export const ListOfThreadPostsWatched = () => {
           }}
         >
           {t('group:thread_posts', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
           :
         </Typography>
@@ -135,7 +135,7 @@ export const ListOfThreadPostsWatched = () => {
               }}
             >
               {t('group:message.generic.no_display', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           </Box>

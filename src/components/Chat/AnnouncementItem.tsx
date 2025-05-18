@@ -194,7 +194,7 @@ export const AnnouncementItem = ({
                 }}
               >
                 {t('core:action.leave_comment', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             )}

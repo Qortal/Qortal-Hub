@@ -99,7 +99,7 @@ export const AdminSpaceInner = ({
       if (!validateSecretKey(decryptedKeyToObject))
         throw new Error(
           t('auth:message.error.invalid_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       setAdminGroupSecretKey(decryptedKeyToObject);
@@ -134,7 +134,7 @@ export const AdminSpaceInner = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -152,7 +152,7 @@ export const AdminSpaceInner = ({
             setInfoSnackCustom({
               type: 'success',
               message: t('auth:message.success.reencrypted_secret_key', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
             });
             setOpenSnackGlobal(true);
@@ -163,7 +163,7 @@ export const AdminSpaceInner = ({
             message:
               response?.error ||
               t('auth:message.error.unable_reencrypt_secret_key', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           });
           setOpenSnackGlobal(true);
@@ -174,7 +174,7 @@ export const AdminSpaceInner = ({
             message:
               error?.message ||
               t('auth:message.error.unable_reencrypt_secret_key', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           });
           setOpenSnackGlobal(true);
@@ -204,7 +204,7 @@ export const AdminSpaceInner = ({
         }}
       >
         {t('auth:message.error.publishing_key', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })}
       </Typography>
 
@@ -225,7 +225,7 @@ export const AdminSpaceInner = ({
         {isFetchingGroupSecretKey && (
           <Typography>
             {t('auth:message.generic.fetching_group_secret_key', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -234,7 +234,7 @@ export const AdminSpaceInner = ({
           groupSecretKeyPublishDetails === false && (
             <Typography>
               {t('auth:message.generic.no_secret_key_published', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           )}
@@ -247,7 +247,7 @@ export const AdminSpaceInner = ({
                   groupSecretKeyPublishDetails?.created
               ),
               name: groupSecretKeyPublishDetails?.name,
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -258,7 +258,7 @@ export const AdminSpaceInner = ({
           variant="contained"
         >
           {t('auth:action.publish_group_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Button>
 
@@ -270,7 +270,7 @@ export const AdminSpaceInner = ({
           }}
         >
           {t('auth:tips.key_encrypt_group', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
       </Box>
@@ -292,7 +292,7 @@ export const AdminSpaceInner = ({
         {isFetchingAdminGroupSecretKey && (
           <Typography>
             {t('auth:message.generic.fetching_admin_secret_key', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -300,7 +300,7 @@ export const AdminSpaceInner = ({
         {!isFetchingAdminGroupSecretKey && !adminGroupSecretKey && (
           <Typography>
             {t('auth:message.generic.no_secret_key_published', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -312,7 +312,7 @@ export const AdminSpaceInner = ({
                 adminGroupSecretKeyPublishDetails?.updated ||
                   adminGroupSecretKeyPublishDetails?.created
               ),
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -323,7 +323,7 @@ export const AdminSpaceInner = ({
           variant="contained"
         >
           {t('auth:action.publish_admin_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Button>
 
@@ -335,7 +335,7 @@ export const AdminSpaceInner = ({
           }}
         >
           {t('auth:tips.key_encrypt_admin', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
       </Box>
@@ -358,7 +358,7 @@ export const AdminSpaceInner = ({
         >
           <Typography>
             {t('group:group.avatar', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
 

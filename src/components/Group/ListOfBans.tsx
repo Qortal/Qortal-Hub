@@ -90,7 +90,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'CANCEL_GROUP_BAN',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -108,7 +108,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.unbanned_user', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               handlePopoverClose();
@@ -184,7 +184,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
                     onClick={() => handleCancelBan(member?.offender)}
                   >
                     {t('group:action.cancel_ban', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
                 </Box>
@@ -214,7 +214,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
   return (
     <div>
-      <p>{t('group:ban_list', { postProcess: 'capitalizeFirst' })}</p>
+      <p>{t('group:ban_list', { postProcess: 'capitalizeFirstChar' })}</p>
       <div
         style={{
           display: 'flex',

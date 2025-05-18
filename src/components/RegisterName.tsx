@@ -115,20 +115,20 @@ export const RegisterName = ({
       if (!userInfo?.address)
         throw new Error(
           t('core:message.error.address_not_found', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       if (!registerNameValue)
         throw new Error(
           t('core:action.enter_name', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
       const fee = await getFee('REGISTER_NAME');
       await show({
         message: t('core:message.question.register_name', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -145,7 +145,7 @@ export const RegisterName = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.registered_name', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setIsOpen(false);
@@ -156,12 +156,12 @@ export const RegisterName = ({
                   ...response,
                   type: 'register-name',
                   label: t('group:message.success.registered_name_label', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   labelDone: t(
                     'group:message.success.registered_name_success',
                     {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }
                   ),
                   done: false,
@@ -183,7 +183,7 @@ export const RegisterName = ({
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);
@@ -226,7 +226,9 @@ export const RegisterName = ({
           }}
         >
           <Label>
-            {t('core:action.choose_name', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.choose_name', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Label>
           <TextField
             autoComplete="off"
@@ -255,7 +257,7 @@ export const RegisterName = ({
                   {t('core:message.generic.name_registration', {
                     balance: balance ?? 0,
                     fee: { nameFee },
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>
@@ -282,7 +284,7 @@ export const RegisterName = ({
               <Typography>
                 {t('core:message.generic.name_available', {
                   name: registerNameValue,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -304,7 +306,7 @@ export const RegisterName = ({
               <Typography>
                 {t('core:message.generic.name_unavailable', {
                   name: registerNameValue,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -322,7 +324,7 @@ export const RegisterName = ({
 
               <Typography>
                 {t('core:message.generic.name_checking', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -336,7 +338,7 @@ export const RegisterName = ({
             }}
           >
             {t('core:message.generic.name_benefits', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
 
@@ -354,7 +356,7 @@ export const RegisterName = ({
               </ListItemIcon>
               <ListItemText
                 primary={t('core:message.generic.publish_data', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               />
             </ListItem>
@@ -369,7 +371,7 @@ export const RegisterName = ({
               </ListItemIcon>
               <ListItemText
                 primary={t('core:message.generic.secure_ownership', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               />
             </ListItem>
@@ -386,7 +388,7 @@ export const RegisterName = ({
             setRegisterNameValue('');
           }}
         >
-          {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
         </Button>
 
         <Button
@@ -401,7 +403,9 @@ export const RegisterName = ({
           onClick={registerName}
           autoFocus
         >
-          {t('core:action.register_name', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.register_name', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
       </DialogActions>
     </Dialog>

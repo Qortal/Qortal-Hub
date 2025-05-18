@@ -348,7 +348,7 @@ export const NotAuthenticated = ({
             console.error(
               'Failed to set API key:',
               error.message ||
-                t('core:error', { postProcess: 'capitalizeFirst' })
+                t('core:error', { postProcess: 'capitalizeFirstChar' })
             );
           });
       } else {
@@ -358,7 +358,7 @@ export const NotAuthenticated = ({
           setInfoSnack({
             type: 'error',
             message: t('auth:apikey.select_valid', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             }),
           });
           setOpenSnack(true);
@@ -384,7 +384,7 @@ export const NotAuthenticated = ({
               'Failed to set API key:',
               error.message ||
                 t('core:error', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -396,7 +396,7 @@ export const NotAuthenticated = ({
           message:
             error?.message ||
             t('auth:apikey.select_valid', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             }),
         });
         setOpenSnack(true);
@@ -478,7 +478,7 @@ export const NotAuthenticated = ({
           fontSize: '18px',
         }}
       >
-        {t('auth:welcome', { postProcess: 'capitalizeFirst' })}
+        {t('auth:welcome', { postProcess: 'capitalizeFirstChar' })}
         <TextSpan
           sx={{
             fontSize: '18px',
@@ -508,13 +508,17 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                {t('auth:tips.digital_id', { postProcess: 'capitalizeFirst' })}
+                {t('auth:tips.digital_id', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
             </Fragment>
           }
         >
           <CustomButton onClick={() => setExtstate('wallets')}>
-            {t('auth:account.account_many', { postProcess: 'capitalizeFirst' })}
+            {t('auth:account.account_many', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </CustomButton>
         </HtmlTooltip>
       </Box>
@@ -539,7 +543,9 @@ export const NotAuthenticated = ({
                   fontSize: '18px',
                 }}
               >
-                {t('auth:tips.new_users', { postProcess: 'capitalizeFirst' })}
+                {t('auth:tips.new_users', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <Spacer height="10px" />
               <Typography
@@ -548,7 +554,9 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                {t('auth:tips.new_account', { postProcess: 'capitalizeFirst' })}
+                {t('auth:tips.new_account', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
             </Fragment>
           }
@@ -570,7 +578,7 @@ export const NotAuthenticated = ({
             }}
           >
             {t('auth:action.create_account', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
         </HtmlTooltip>
@@ -584,7 +592,7 @@ export const NotAuthenticated = ({
           visibility: !useLocalNode && 'hidden',
         }}
       >
-        {t('auth:node.using', { postProcess: 'capitalizeFirst' })}:{' '}
+        {t('auth:node.using', { postProcess: 'capitalizeFirstChar' })}:{' '}
         {currentNode?.url}
       </Typography>
 
@@ -612,7 +620,7 @@ export const NotAuthenticated = ({
                 textDecoration: 'underline',
               }}
             >
-              {t('auth:advanced_users', { postProcess: 'capitalizeFirst' })}
+              {t('auth:advanced_users', { postProcess: 'capitalizeFirstChar' })}
             </Typography>
             <Box
               sx={{
@@ -662,10 +670,10 @@ export const NotAuthenticated = ({
                 label={
                   isLocal
                     ? t('auth:node.use_local', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:node.use_custom', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })
                 }
               />
@@ -680,10 +688,10 @@ export const NotAuthenticated = ({
                 >
                   {apiKey
                     ? t('auth:node.use_local', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:apikey.import', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                 </Button>
                 <Typography
@@ -692,8 +700,8 @@ export const NotAuthenticated = ({
                     visibility: importedApiKey ? 'visible' : 'hidden',
                   }}
                 >
-                  {t('auth:apikey.key', { postProcess: 'capitalizeFirst' })}:{' '}
-                  {importedApiKey}
+                  {t('auth:apikey.key', { postProcess: 'capitalizeFirstChar' })}
+                  : {importedApiKey}
                 </Typography>
               </>
             )}
@@ -705,7 +713,7 @@ export const NotAuthenticated = ({
               variant="contained"
               component="label"
             >
-              {t('auth:node.choose', { postProcess: 'capitalizeFirst' })}
+              {t('auth:node.choose', { postProcess: 'capitalizeFirstChar' })}
             </Button>
           </>
           <Typography
@@ -714,7 +722,7 @@ export const NotAuthenticated = ({
               fontSize: '12px',
             }}
           >
-            {t('auth:build_version', { postProcess: 'capitalizeFirst' })}:
+            {t('auth:build_version', { postProcess: 'capitalizeFirstChar' })}:
             {manifestData?.version}
           </Typography>
         </Box>
@@ -735,7 +743,8 @@ export const NotAuthenticated = ({
         >
           <DialogTitle id="alert-dialog-title">
             {' '}
-            {t('auth:node.custom_many', { postProcess: 'capitalizeFirst' })}:
+            {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
+            :
           </DialogTitle>
           <DialogContent>
             <Box
@@ -806,7 +815,7 @@ export const NotAuthenticated = ({
                         variant="contained"
                       >
                         {t('core:action.choose', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Button>
                     </Box>
@@ -867,7 +876,7 @@ export const NotAuthenticated = ({
                             variant="contained"
                           >
                             {t('core:action.choose', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })}
                           </Button>
 
@@ -882,7 +891,7 @@ export const NotAuthenticated = ({
                             variant="contained"
                           >
                             {t('core:action.edit', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })}
                           </Button>
 
@@ -897,7 +906,7 @@ export const NotAuthenticated = ({
                             variant="contained"
                           >
                             {t('core:remove', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })}
                           </Button>
                         </Box>
@@ -937,7 +946,7 @@ export const NotAuthenticated = ({
           <DialogActions>
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
-                {t('core:action.add', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.add', { postProcess: 'capitalizeFirstChar' })}
               </Button>
             )}
 
@@ -950,7 +959,9 @@ export const NotAuthenticated = ({
                   }}
                   autoFocus
                 >
-                  {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+                  {t('core:action.close', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               </>
             )}
@@ -965,7 +976,7 @@ export const NotAuthenticated = ({
                   }}
                 >
                   {t('auth:action.return_to_list', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Button>
 
@@ -975,7 +986,7 @@ export const NotAuthenticated = ({
                   onClick={() => saveCustomNodes(customNodes)}
                   autoFocus
                 >
-                  {t('core:save', { postProcess: 'capitalizeFirst' })}
+                  {t('core:save', { postProcess: 'capitalizeFirstChar' })}
                 </Button>
               </>
             )}
@@ -990,7 +1001,7 @@ export const NotAuthenticated = ({
           aria-describedby="alert-dialog-description"
         >
           <DialogTitle id="alert-dialog-title">
-            {t('auth:apikey.enter', { postProcess: 'capitalizeFirst' })}
+            {t('auth:apikey.enter', { postProcess: 'capitalizeFirstChar' })}
           </DialogTitle>
           <DialogContent>
             <Box
@@ -1010,7 +1021,7 @@ export const NotAuthenticated = ({
                 component="label"
               >
                 {t('auth:apikey.alternative', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 <input
                   type="file"
@@ -1066,7 +1077,7 @@ export const NotAuthenticated = ({
               }}
               autoFocus
             >
-              {t('core:save', { postProcess: 'capitalizeFirst' })}
+              {t('core:save', { postProcess: 'capitalizeFirstChar' })}
             </Button>
 
             <Button
@@ -1076,7 +1087,7 @@ export const NotAuthenticated = ({
                 setShowSelectApiKey(false);
               }}
             >
-              {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
             </Button>
           </DialogActions>
         </Dialog>

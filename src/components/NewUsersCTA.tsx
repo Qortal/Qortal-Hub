@@ -37,14 +37,14 @@ export const NewUsersCTA = ({ balance }) => {
           }}
         >
           {t('core:message.question.new_user', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
 
         <Spacer height="20px" />
 
         <Typography>
-          {t('core:message_us', { postProcess: 'capitalizeFirst' })}
+          {t('core:message_us', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
 
         <Spacer height="20px" />

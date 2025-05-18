@@ -144,7 +144,7 @@ export const GroupJoinRequests = ({
             fontSize: '1rem',
           }}
         >
-          {t('group:join_requests', { postProcess: 'capitalizeFirst' })}{' '}
+          {t('group:join_requests', { postProcess: 'capitalizeFirstChar' })}{' '}
           {filteredJoinRequests?.filter((group) => group?.data?.length > 0)
             ?.length > 0 &&
             ` (${filteredJoinRequests?.filter((group) => group?.data?.length > 0)?.length})`}
@@ -207,7 +207,7 @@ export const GroupJoinRequests = ({
                   }}
                 >
                   {t('group:message.generic.no_display', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>

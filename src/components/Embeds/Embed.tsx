@@ -108,7 +108,7 @@ export const Embed = ({ embedLink }) => {
       if (!parsedData?.name)
         throw new Error(
           t('core:message.error.invalid_poll_embed_link_name', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       const pollRes = await getPoll(parsedData.name);
@@ -117,7 +117,7 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.message ||
           t('core:message.error.invalid_embed_link', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
       );
     } finally {
@@ -181,7 +181,7 @@ export const Embed = ({ embedLink }) => {
               } catch (error) {
                 throw new Error(
                   t('auth:message.error.unable_decrypt', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })
                 );
               }
@@ -189,7 +189,7 @@ export const Embed = ({ embedLink }) => {
               if (!decryptedData || decryptedData?.error)
                 throw new Error(
                   t('auth:message.error.decrypt_data', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })
                 );
               imageFinalUrl = base64ToBlobUrl(
@@ -210,7 +210,7 @@ export const Embed = ({ embedLink }) => {
             } else {
               throw new Error(
                 t('core:message.generic.no_data_image', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
               );
             }
@@ -239,7 +239,7 @@ export const Embed = ({ embedLink }) => {
       } else {
         setErrorMsg(
           t('core:message.error.unable_download_image', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
         return null;
@@ -249,7 +249,9 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.error ||
           error?.message ||
-          t('core:message.error.generic', { postProcess: 'capitalizeFirst' })
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
       return null;
     }
@@ -262,7 +264,7 @@ export const Embed = ({ embedLink }) => {
       if (!parsedData?.name || !parsedData?.service || !parsedData?.identifier)
         throw new Error(
           t('core:message.error.invalid_image_embed_link_name', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       let image = await getImage(
@@ -280,7 +282,7 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.message ||
           t('core:message.error.invalid_embed_link', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
       );
     } finally {
@@ -322,7 +324,7 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.message ||
           t('core:message.error.invalid_embed_link', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
       );
     }
@@ -336,7 +338,7 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.message ||
           t('core:message.error.invalid_embed_link', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
       );
     }

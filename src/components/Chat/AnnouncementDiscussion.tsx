@@ -104,7 +104,7 @@ export const AnnouncementDiscussion = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -139,7 +139,7 @@ export const AnnouncementDiscussion = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -382,7 +382,7 @@ export const AnnouncementDiscussion = ({
                 padding: '5px',
               }}
             >
-              {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
             </CustomButton>
           )}
           <CustomButton
@@ -414,7 +414,7 @@ export const AnnouncementDiscussion = ({
               />
             )}
             {t('core:action.publish_comment', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
         </Box>
@@ -424,7 +424,7 @@ export const AnnouncementDiscussion = ({
         open={isLoading}
         info={{
           message: t('core:loading.comments', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         }}
       />

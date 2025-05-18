@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -10,13 +10,13 @@ import {
   IconButton,
   useTheme,
 } from '@mui/material';
-
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CustomLoader } from '../../common/CustomLoader';
 import ImageIcon from '@mui/icons-material/Image';
 import CloseIcon from '@mui/icons-material/Close';
 import { decodeIfEncoded } from '../../utils/decode';
+import { useTranslation } from 'react-i18next';
 
 export const ImageCard = ({
   image,
@@ -30,19 +30,15 @@ export const ImageCard = ({
   encryptionType,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [isOpen, setIsOpen] = useState(true);
   const [height, setHeight] = useState('400px');
+
   useEffect(() => {
     if (isOpen) {
       fetchImage();
     }
   }, [isOpen]);
-
-  // useEffect(()=> {
-  //   if(errorMsg){
-  //     setHeight('300px')
-  //   }
-  // }, [errorMsg])
 
   return (
     <Card
@@ -72,12 +68,15 @@ export const ImageCard = ({
               color: theme.palette.text.primary,
             }}
           />
-          <Typography>IMAGE embed</Typography>
+          <Typography>
+            {t('core:image_embed', { postProcess: 'capitalizeFirstWord' })}
+          </Typography>
         </Box>
+
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'center',
+            display: 'flex',
             gap: '10px',
           }}
         >
@@ -90,6 +89,7 @@ export const ImageCard = ({
               }}
             />
           </ButtonBase>
+
           {external && (
             <ButtonBase>
               <OpenInNewIcon
@@ -103,6 +103,7 @@ export const ImageCard = ({
           )}
         </Box>
       </Box>
+
       <Box
         sx={{
           padding: '8px 16px 8px 16px',
@@ -113,27 +114,39 @@ export const ImageCard = ({
             fontSize: '12px',
           }}
         >
-          Created by {decodeIfEncoded(owner)}
+          {t('core:message.error.created_by', {
+            owner: decodeIfEncoded(owner),
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
+
         <Typography
           sx={{
             fontSize: '12px',
           }}
         >
           {encryptionType === 'private'
-            ? 'ENCRYPTED'
+            ? t('core:message.generic.encrypted', {
+                postProcess: 'capitalizeAll',
+              })
             : encryptionType === 'group'
-              ? 'GROUP ENCRYPTED'
-              : 'Not encrypted'}
+              ? t('group:message.generic.group_encrypted', {
+                  postProcess: 'capitalizeAll',
+                })
+              : t('core:message.generic.encrypted_not', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
         </Typography>
       </Box>
+
       <Divider sx={{ borderColor: 'rgb(255 255 255 / 10%)' }} />
+
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
-          alignItems: 'center',
         }}
       >
         {isLoadingParent && isOpen && (
@@ -144,10 +157,10 @@ export const ImageCard = ({
               justifyContent: 'center',
             }}
           >
-            {' '}
-            <CustomLoader />{' '}
+            <CustomLoader />
           </Box>
         )}
+
         {errorMsg && (
           <Box
             sx={{
@@ -164,7 +177,7 @@ export const ImageCard = ({
               }}
             >
               {errorMsg}
-            </Typography>{' '}
+            </Typography>
           </Box>
         )}
       </Box>
@@ -189,10 +202,10 @@ export function ImageViewer({ src, alt = '' }) {
       {/* Image in container */}
       <Box
         sx={{
-          maxWidth: '100%', // Prevent horizontal overflow
+          cursor: 'pointer',
           display: 'flex',
           justifyContent: 'center',
-          cursor: 'pointer',
+          maxWidth: '100%', // Prevent horizontal overflow
         }}
         onClick={handleOpenFullscreen}
       >
@@ -226,13 +239,13 @@ export function ImageViewer({ src, alt = '' }) {
       >
         <Box
           sx={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            justifyContent: 'center',
             alignItems: 'center',
             backgroundColor: theme.palette.background.paper, // Optional: dark background for fullscreen mode
+            display: 'flex',
+            height: '100%',
+            justifyContent: 'center',
+            position: 'relative',
+            width: '100%',
           }}
         >
           {/* Close Button */}

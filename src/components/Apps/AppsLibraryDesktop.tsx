@@ -213,11 +213,11 @@ export const AppsLibraryDesktop = ({
                       paddingLeft: '12px',
                     }}
                     placeholder={t('core:action.search_apps', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                     inputProps={{
                       'aria-label': t('core:action.search_apps', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       }),
                       fontSize: '16px',
                       fontWeight: 400,
@@ -284,7 +284,7 @@ export const AppsLibraryDesktop = ({
             <ReturnIcon />
             <ComposeP>
               {t('core:action.return_apps_dashboard', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </ComposeP>
           </ShowMessageReturnButton>
@@ -314,7 +314,7 @@ export const AppsLibraryDesktop = ({
             <AppsWidthLimiter>
               <Typography>
                 {t('core:message.generic.no_results', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </AppsWidthLimiter>
@@ -325,7 +325,9 @@ export const AppsLibraryDesktop = ({
                   fontSize: '30px',
                 }}
               >
-                {t('core:apps_official', { postProcess: 'capitalizeFirst' })}
+                {t('core:apps_official', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </AppLibrarySubTitle>
 
               <Spacer height="45px" />
@@ -412,10 +414,10 @@ export const AppsLibraryDesktop = ({
                   >
                     {hasPublishApp
                       ? t('core:action.update_app', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })
                       : t('core:action.publish_app', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                   </AppLibrarySubTitle>
 
@@ -444,10 +446,10 @@ export const AppsLibraryDesktop = ({
                       <PublishQAppCTAButton>
                         {hasPublishApp
                           ? t('core:action.update', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })
                           : t('core:action.publish', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })}
                       </PublishQAppCTAButton>
 
@@ -468,7 +470,7 @@ export const AppsLibraryDesktop = ({
                     }}
                   >
                     {t('core:category_other', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </AppLibrarySubTitle>
 
@@ -508,7 +510,7 @@ export const AppsLibraryDesktop = ({
                           },
                         }}
                       >
-                        {t('core:all', { postProcess: 'capitalizeFirst' })}
+                        {t('core:all', { postProcess: 'capitalizeFirstChar' })}
                       </Box>
                     </ButtonBase>
 

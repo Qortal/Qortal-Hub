@@ -187,7 +187,7 @@ export const AppViewer = forwardRef(
             reject(
               new Error(
                 t('core:message.error.navigation_timeout', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
               )
             );

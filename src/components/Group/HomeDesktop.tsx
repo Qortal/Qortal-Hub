@@ -85,7 +85,7 @@ export const HomeDesktop = ({
             padding: '10px',
           }}
         >
-          {t('core:welcome', { postProcess: 'capitalizeFirst' })}
+          {t('core:welcome', { postProcess: 'capitalizeFirstChar' })}
           {userInfo?.name ? (
             <span
               style={{
@@ -218,7 +218,7 @@ export const HomeDesktop = ({
                   }}
                 >
                   {t('tutorial:initial.explore', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>{' '}
               </Box>

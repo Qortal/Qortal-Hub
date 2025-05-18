@@ -269,7 +269,7 @@ export const AppsDevMode = ({
               isApps ? theme.palette.text.primary : theme.palette.text.secondary
             }
             label={t('core:app_other', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             disableWidth
           >
@@ -298,7 +298,7 @@ export const AppsDevMode = ({
                   : theme.palette.text.secondary
             }
             label={t('core:chat', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             disableWidth
           >
@@ -329,7 +329,7 @@ export const AppsDevMode = ({
                 : theme.palette.text.secondary
             }
             label={t('core:dev', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             disableWidth
           >

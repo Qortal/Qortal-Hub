@@ -89,7 +89,7 @@ export const GroupList = ({
                   : theme.palette.text.secondary
             }
             label={t('group:group.group_other', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             selected={desktopSideView === 'groups'}
             customWidth="75px"
@@ -122,7 +122,7 @@ export const GroupList = ({
                   : theme.palette.text.secondary
             }
             label={t('group:group.messaging', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             selected={desktopSideView === 'directs'}
           >
@@ -193,7 +193,7 @@ export const GroupList = ({
                 color: theme.palette.text.primary,
               }}
             />
-            {t('group:group.group', { postProcess: 'capitalizeFirst' })}
+            {t('group:group.group', { postProcess: 'capitalizeFirstChar' })}
           </CustomButton>
 
           {!isRunningPublicNode && (

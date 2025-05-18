@@ -177,7 +177,7 @@ export const MessageItem = memo(
         {message?.divide && (
           <div className="unread-divider" id="unread-divider-id">
             {t('core:message.generic.unread_messages', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </div>
         )}
@@ -355,7 +355,7 @@ export const MessageItem = memo(
                       >
                         {t('core:message.generic.replied_to', {
                           person: reply?.senderName || reply?.senderAddress,
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
 
@@ -471,7 +471,7 @@ export const MessageItem = memo(
                       <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
                         {t('core:message.generic.people_reaction', {
                           reaction: selectedReaction,
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
 
@@ -515,10 +515,10 @@ export const MessageItem = memo(
                           (item) => item?.sender === myAddress
                         )
                           ? t('core:action.remove_reaction', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })
                           : t('core:action.add_reaction', {
-                              postProcess: 'capitalizeFirst',
+                              postProcess: 'capitalizeFirstChar',
                             })}
                       </Button>
                     </Box>
@@ -551,10 +551,10 @@ export const MessageItem = memo(
                     >
                       {message?.status === 'failed-permanent'
                         ? t('core:message.error.update_failed', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })
                         : t('core:message.generic.updating', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                     </Typography>
                   ) : isTemp ? (
@@ -567,10 +567,10 @@ export const MessageItem = memo(
                     >
                       {message?.status === 'failed-permanent'
                         ? t('core:message.error.send_failed', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })
                         : t('core:message.generic.sending', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                     </Typography>
                   ) : (
@@ -585,7 +585,7 @@ export const MessageItem = memo(
                           }}
                         >
                           {t('core:message.generic.edited', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </Typography>
                       )}
@@ -649,7 +649,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
             }}
           >
             {t('core:message.generic.editing_message', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         ) : (
@@ -661,7 +661,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
           >
             {t('core:message.generic.replied_to', {
               person: message?.senderName || message?.senderAddress,
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}

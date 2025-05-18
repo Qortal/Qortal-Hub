@@ -108,7 +108,7 @@ export const useHandleTutorials = () => {
                 multi: [
                   {
                     title: t('tutorial:1_getting_started', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -119,7 +119,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:2_overview', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -130,7 +130,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:3_groups', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -141,7 +141,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:4_obtain_qort', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -163,7 +163,7 @@ export const useHandleTutorials = () => {
                 multi: [
                   {
                     title: t('tutorial:apps.dashboard', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -174,7 +174,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:apps.navigation', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',

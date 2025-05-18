@@ -134,7 +134,7 @@ export const ChatGroup = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -297,7 +297,7 @@ export const ChatGroup = ({
                     const message = (
                       <p>
                         {t('group:message.generic.group_key_created', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </p>
                     );
@@ -371,7 +371,7 @@ export const ChatGroup = ({
                           ) {
                             console.warn(
                               t('group:message.generic.invalid_content', {
-                                postProcess: 'capitalizeFirst',
+                                postProcess: 'capitalizeFirstChar',
                               }),
                               item
                             );
@@ -448,7 +448,7 @@ export const ChatGroup = ({
                     const message = (
                       <p>
                         {t('group:message.generic.group_key_created', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </p>
                     );
@@ -528,7 +528,7 @@ export const ChatGroup = ({
                           ) {
                             console.warn(
                               t('group:message.generic.invalid_content', {
-                                postProcess: 'capitalizeFirst',
+                                postProcess: 'capitalizeFirstChar',
                               }),
                               item
                             );
@@ -605,7 +605,7 @@ export const ChatGroup = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -737,7 +737,7 @@ export const ChatGroup = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -777,7 +777,7 @@ export const ChatGroup = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -799,7 +799,7 @@ export const ChatGroup = ({
       if (isPrivate === null)
         throw new Error(
           t('group:message.error.unable_determine_group_private', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       if (isSending) return;
@@ -808,7 +808,7 @@ export const ChatGroup = ({
         throw new Error(
           t('group:message.error.qortals_required', {
             quantity: 4,
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       pauseAllQueues();
@@ -852,7 +852,7 @@ export const ChatGroup = ({
           await show({
             publishFee: fee.fee + ' QORT',
             message: t('core:message.question.delete_chat_image', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             }),
           });
 
@@ -891,7 +891,7 @@ export const ChatGroup = ({
           if (res !== true)
             throw new Error(
               t('core:message.error.unable_publish_image', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             );
         }
@@ -1052,7 +1052,7 @@ export const ChatGroup = ({
           throw new Error(
             t('group:message.error.qortals_required', {
               quantity: 4,
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
           );
 
@@ -1133,7 +1133,7 @@ export const ChatGroup = ({
         setInfoSnack({
           type: 'error',
           message: t('core:message.generic.message_with_image', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         setOpenSnack(true);
@@ -1401,7 +1401,7 @@ export const ChatGroup = ({
                   {t('core:message.error.message_size', {
                     maximum: 4000,
                     size: messageSize,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>
@@ -1527,7 +1527,9 @@ export const ChatGroup = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('core:loading.chat', { postProcess: 'capitalizeFirst' }),
+          message: t('core:loading.chat', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         }}
       />
 

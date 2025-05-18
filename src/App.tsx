@@ -678,7 +678,7 @@ function App() {
             throw new Error(
               t('auth:message.error.field_not_found_json', {
                 field: field,
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             );
         }
@@ -977,7 +977,7 @@ function App() {
       if (!walletToBeDownloadedPassword) {
         setWalletToBeDownloadedError(
           t('core:message.generic.password_enter', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
         return;
@@ -985,7 +985,7 @@ function App() {
       if (!walletToBeDownloadedPasswordConfirm) {
         setWalletToBeDownloadedError(
           t('core:message.generic.password_confirm', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
         return;
@@ -995,7 +995,7 @@ function App() {
       ) {
         setWalletToBeDownloadedError(
           t('core:message.error.password_not_matching', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
         return;
@@ -1062,7 +1062,7 @@ function App() {
       if (extState === 'authenticated') {
         await showUnsavedChanges({
           message: t('core:message.question.logout', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
       }
@@ -1199,7 +1199,7 @@ function App() {
     } catch (error) {
       setWalletToBeDecryptedError(
         t('core:message.error.password_wrong', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })
       );
     }
@@ -1536,7 +1536,7 @@ function App() {
               }}
             >
               {t('core:action.transfer_qort', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </CustomButton>
             <AddressQRCode targetAddress={rawWallet?.address0} />
@@ -1560,7 +1560,7 @@ function App() {
             executeEvent('open-apps-mode', {});
           }}
         >
-          {t('core:action.get_qort', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.get_qort', { postProcess: 'capitalizeFirstChar' })}
         </TextP>
       </AuthenticatedContainerInnerLeft>
     );
@@ -1854,7 +1854,7 @@ function App() {
                   if (res)
                     throw new Error(
                       t('core:message.generic.no_minting_details', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })
                     );
                   setIsOpenMinting(true);
@@ -2231,7 +2231,7 @@ function App() {
                 >
                   {t('core:message.generic.fee_qort', {
                     message: messageQortalRequest?.fee,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </TextP>
 
@@ -2292,7 +2292,9 @@ function App() {
                 }}
                 onClick={() => onOkQortalRequest('accepted')}
               >
-                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.accept', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
               <CustomButton
                 sx={{
@@ -2300,7 +2302,9 @@ function App() {
                 }}
                 onClick={() => onCancelQortalRequest()}
               >
-                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.decline', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
             </Box>
 
@@ -2399,7 +2403,9 @@ function App() {
                 }}
                 onClick={() => confirmBuyOrder(false)}
               >
-                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.accept', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
 
               <CustomButton
@@ -2408,7 +2414,9 @@ function App() {
                 }}
                 onClick={() => confirmBuyOrder(true)}
               >
-                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.decline', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
             </Box>
 
@@ -2485,7 +2493,9 @@ function App() {
                 }}
                 onClick={() => confirmPayment(false)}
               >
-                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.accept', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
 
               <CustomButton
@@ -2494,7 +2504,9 @@ function App() {
                 }}
                 onClick={() => confirmPayment(true)}
               >
-                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.decline', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
             </Box>
 
@@ -2550,7 +2562,9 @@ function App() {
                   )
                 }
               >
-                {t('core:action.accept', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.accept', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
               <CustomButton
                 sx={{
@@ -2564,7 +2578,9 @@ function App() {
                   )
                 }
               >
-                {t('core:action.decline', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.decline', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
             </Box>
           </>
@@ -2612,7 +2628,7 @@ function App() {
             <CustomButton {...getRootProps()}>
               <input {...getInputProps()} />
               {t('auth:action.authenticate', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </CustomButton>
 
@@ -2624,7 +2640,7 @@ function App() {
               }}
             >
               {t('auth:action.create_account', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </CustomButton>
           </>
@@ -2729,7 +2745,7 @@ function App() {
                 }}
               >
                 {t('auth:action.authenticate', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </TextP>
             </Box>
@@ -2738,7 +2754,9 @@ function App() {
 
             <>
               <CustomLabel htmlFor="standard-adornment-password">
-                {t('auth:wallet.password', { postProcess: 'capitalizeFirst' })}
+                {t('auth:wallet.password', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomLabel>
 
               <Spacer height="10px" />
@@ -2763,8 +2781,10 @@ function App() {
                       fontSize: '12px',
                     }}
                   >
-                    {t('auth:node.using', { postProcess: 'capitalizeFirst' })}:{' '}
-                    {currentNode?.url}
+                    {t('auth:node.using', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                    : {currentNode?.url}
                   </Typography>
                 </>
               ) : (
@@ -2777,7 +2797,7 @@ function App() {
                     }}
                   >
                     {t('auth:node.using_public', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
                 </>
@@ -2787,7 +2807,7 @@ function App() {
 
               <CustomButton onClick={authenticateWallet}>
                 {t('auth:action.authenticate', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </CustomButton>
 
@@ -2864,7 +2884,7 @@ function App() {
                   }}
                 >
                   {t('auth:action.setup_qortal_account', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </TextP>
 
@@ -2921,7 +2941,7 @@ function App() {
                       }}
                     >
                       {t('auth:tips.view_seedphrase', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
 
@@ -2958,7 +2978,9 @@ function App() {
                         setCreationStep(2);
                       }}
                     >
-                      {t('core:page.next', { postProcess: 'capitalizeFirst' })}
+                      {t('core:page.next', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </CustomButton>
                   </Box>
 
@@ -2994,7 +3016,7 @@ function App() {
                           }}
                         >
                           {t('auth:seed_your', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </Typography>
 
@@ -3018,7 +3040,7 @@ function App() {
                           onClick={exportSeedphrase}
                         >
                           {t('auth:action.export_seedphrase', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </CustomButton>
                       </Box>
@@ -3030,7 +3052,7 @@ function App() {
                         onClick={() => setShowSeed(false)}
                       >
                         {t('core:action.close', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Button>
                     </DialogActions>
@@ -3048,7 +3070,7 @@ function App() {
 
                   <CustomLabel htmlFor="standard-adornment-password">
                     {t('auth:wallet.password', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </CustomLabel>
 
@@ -3066,7 +3088,7 @@ function App() {
 
                   <CustomLabel htmlFor="standard-adornment-password">
                     {t('auth:wallet.password_confirmation', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </CustomLabel>
 
@@ -3083,7 +3105,7 @@ function App() {
 
                   <Typography variant="body2">
                     {t('auth:message.generic.no_minimum_length', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
 
@@ -3091,7 +3113,7 @@ function App() {
 
                   <CustomButton onClick={createAccountFunc}>
                     {t('auth:action.create_account', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </CustomButton>
                 </Box>
@@ -3115,7 +3137,7 @@ function App() {
                   }}
                 >
                   {t('auth:message.generic.congrats_setup', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </TextP>
 
@@ -3133,7 +3155,7 @@ function App() {
 
                   <Typography>
                     {t('auth:tips.safe_place', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
                 </Box>
@@ -3146,13 +3168,13 @@ function App() {
                     returnToMain();
                     await showInfo({
                       message: t('auth:tips.wallet_secure', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       }),
                     });
                   }}
                 >
                   {t('core:action.backup_account', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </CustomButton>
               </>
@@ -3186,7 +3208,7 @@ function App() {
               }}
             >
               {t('core:message.success.transfer', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </TextP>
 
@@ -3199,7 +3221,9 @@ function App() {
               }}
             >
               <CustomButton>
-                {t('core:action.continue', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.continue', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </CustomButton>
             </ButtonBase>
           </Box>
@@ -3220,7 +3244,7 @@ function App() {
               }}
             >
               {t('core:message.success.transfer', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </TextP>
 
@@ -3231,7 +3255,9 @@ function App() {
                 window.close();
               }}
             >
-              {t('core:action.continue', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.continue', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </CustomButton>
           </>
         )}
@@ -3251,7 +3277,7 @@ function App() {
               }}
             >
               {t('core:message.success.order_submitted', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </TextP>
 
@@ -3262,7 +3288,7 @@ function App() {
                 window.close();
               }}
             >
-              {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
             </CustomButton>
           </>
         )}
@@ -3312,7 +3338,7 @@ function App() {
               {message?.paymentFee && (
                 <DialogContentText id="alert-dialog-description2">
                   {t('core:fee.payment', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                   : {message.paymentFee}
                 </DialogContentText>
@@ -3320,7 +3346,7 @@ function App() {
               {message?.publishFee && (
                 <DialogContentText id="alert-dialog-description2">
                   {t('core:fee.publish', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                   : {message.publishFee}
                 </DialogContentText>
@@ -3345,7 +3371,7 @@ function App() {
                 autoFocus
               >
                 {t('core:action.accept', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
 
@@ -3365,7 +3391,7 @@ function App() {
                 onClick={onCancel}
               >
                 {t('core:action.decline', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
             </DialogActions>
@@ -3391,7 +3417,7 @@ function App() {
             <DialogActions>
               <Button variant="contained" onClick={onOkInfo} autoFocus>
                 {t('core:action.close', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
             </DialogActions>
@@ -3417,7 +3443,7 @@ function App() {
             <DialogActions>
               <Button variant="contained" onClick={onCancelUnsavedChanges}>
                 {t('core:action.cancel', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
 
@@ -3427,7 +3453,7 @@ function App() {
                 autoFocus
               >
                 {t('core:action.continue_logout', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
             </DialogActions>
@@ -3627,7 +3653,7 @@ function App() {
                   >
                     {t('core:message.generic.fee_qort', {
                       message: messageQortalRequestExtension?.appFee,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
 
@@ -3650,7 +3676,7 @@ function App() {
                   >
                     {t('core:message.generic.foreign_fee', {
                       message: messageQortalRequestExtension?.foreignFee,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
 
@@ -3721,7 +3747,7 @@ function App() {
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '14px' }}>
                         {t('core:message.success.request_read', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
                       <PriorityHighIcon color="warning" />
@@ -3772,7 +3798,7 @@ function App() {
                   }}
                 >
                   {t('core:action.accept', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </CustomButtonAccept>
 
@@ -3785,7 +3811,7 @@ function App() {
                   onClick={() => onCancelQortalRequestExtension()}
                 >
                   {t('core:action.decline', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </CustomButtonAccept>
               </Box>

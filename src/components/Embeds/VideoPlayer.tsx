@@ -1,4 +1,12 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FC,
+  KeyboardEvent,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom';
 import { Box, IconButton, Slider } from '@mui/material';
 import { CircularProgress, Typography } from '@mui/material';
@@ -8,48 +16,43 @@ import {
   Pause,
   VolumeUp,
   Fullscreen,
-  PictureInPicture,
   VolumeOff,
-  Calculate,
 } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import { Refresh } from '@mui/icons-material';
-
-import { Menu, MenuItem } from '@mui/material';
-import { MoreVert as MoreIcon } from '@mui/icons-material';
 import { MyContext, getBaseApiReact } from '../../App';
 import { resourceKeySelector } from '../../atoms/global';
 
 import { useAtomValue } from 'jotai';
 const VideoContainer = styled(Box)`
-  position: relative;
+  align-items: center;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
   height: 100%;
+  justify-content: center;
   margin: 0px;
   padding: 0px;
+  position: relative;
+  width: 100%;
 `;
 
 const VideoElement = styled('video')`
-  width: 100%;
+  background: rgb(33, 33, 33);
   height: auto;
   max-height: calc(100vh - 150px);
-  background: rgb(33, 33, 33);
+  width: 100%;
 `;
 
 const ControlsContainer = styled(Box)`
-  position: absolute;
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 8px;
   background-color: rgba(0, 0, 0, 0.6);
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  left: 0;
+  padding: 8px;
+  position: absolute;
+  right: 0;
 `;
 
 interface VideoPlayerProps {
@@ -64,7 +67,8 @@ interface VideoPlayerProps {
   user?: string;
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+// TODO translate and theme? Is it worth?
+export const VideoPlayer: FC<VideoPlayerProps> = ({
   poster,
   name,
   identifier,
@@ -83,9 +87,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [service, name, identifier]);
 
   const download = useAtomValue(resourceKeySelector(keyIdentifier));
-
   const { downloadResource } = useContext(MyContext);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
@@ -242,7 +244,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setCanPlay(true);
   };
 
-  const getSrc = React.useCallback(async () => {
+  const getSrc = useCallback(async () => {
     if (!name || !identifier || !service) return;
     try {
       downloadResource({
@@ -317,12 +319,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const progress = (current / total) * 100;
     return Number.isNaN(progress) ? '' : progress.toFixed(0) + '%';
   };
+
   const mute = () => {
     setIsMuted(true);
     setMutedVolume(volume);
     setVolume(0);
     if (videoRef.current) videoRef.current.volume = 0;
   };
+
   const unMute = () => {
     setIsMuted(false);
     setVolume(mutedVolume);
@@ -349,6 +353,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       setVolume(newVolume);
     }
   };
+
   const setProgressRelative = (secondsChange: number) => {
     if (videoRef.current) {
       const currentTime = videoRef.current?.currentTime;
@@ -373,7 +378,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const keyboardShortcutsDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const keyboardShortcutsDown = (e: KeyboardEvent<HTMLDivElement>) => {
     e.preventDefault();
 
     switch (e.key) {
@@ -424,7 +429,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   };
 
-  const keyboardShortcutsUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const keyboardShortcutsUp = (e: KeyboardEvent<HTMLDivElement>) => {
     e.preventDefault();
 
     switch (e.key) {
@@ -569,6 +574,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           />
         </Box>
       )}
+
       <Box
         sx={{
           display: 'flex',
@@ -586,7 +592,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           autoPlay={autoplay}
           onClick={togglePlay}
           onEnded={handleEnded}
-          // onLoadedMetadata={handleLoadedMetadata}
           onCanPlay={handleCanPlay}
           preload="metadata"
           style={{
@@ -596,6 +601,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }}
         />
       </Box>
+
       <ControlsContainer
         sx={{
           position: 'relative',
@@ -623,6 +629,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             >
               <Refresh />
             </IconButton>
+
             <Slider
               value={progress}
               onChange={onProgressChange}
@@ -630,6 +637,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               max={videoRef.current?.duration || 100}
               sx={{ flexGrow: 1, mx: 2, color: 'var(--Mail-Background)' }}
             />
+
             <Typography
               sx={{
                 fontSize: '14px',
@@ -647,6 +655,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 videoRef.current?.duration &&
                 formatTime(videoRef.current?.duration)}
             </Typography>
+
             <IconButton
               sx={{
                 color: 'rgba(255, 255, 255, 0.7)',
@@ -656,6 +665,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             >
               {isMuted ? <VolumeOff /> : <VolumeUp />}
             </IconButton>
+
             <Slider
               value={volume}
               onChange={onVolumeChange}
@@ -677,6 +687,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             >
               Speed: {playbackRate}x
             </IconButton>
+
             <IconButton
               sx={{
                 color: 'rgba(255, 255, 255, 0.7)',

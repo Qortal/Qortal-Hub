@@ -380,10 +380,10 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
             primary={`${
               isSelectedAppPinned
                 ? t('core:action.unpin_app', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })
                 : t('core:action.pin_app', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })
             }}`}
           />
@@ -460,7 +460,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 },
               }}
               primary={t('core:action.copy_link', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             />
           </MenuItem>

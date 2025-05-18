@@ -19,7 +19,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'GROUP_INVITE',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -40,7 +40,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
                 type: 'success',
                 message: t('group:message.success.group_invite', {
                   value: value,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -61,7 +61,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               message:
                 error?.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);
@@ -86,7 +86,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         flexDirection: 'column',
       }}
     >
-      {t('group:action.invite_member', { postProcess: 'capitalizeFirst' })}
+      {t('group:action.invite_member', { postProcess: 'capitalizeFirstChar' })}
 
       <Spacer height="20px" />
 
@@ -99,14 +99,16 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
       <Spacer height="20px" />
 
       <Label>
-        {t('group:invitation_expiry', { postProcess: 'capitalizeFirst' })}
+        {t('group:invitation_expiry', { postProcess: 'capitalizeFirstChar' })}
       </Label>
 
       <Select
         labelId="demo-simple-select-label"
         id="demo-simple-select"
         value={expiryTime}
-        label={t('group:invitation_expiry', { postProcess: 'capitalizeFirst' })}
+        label={t('group:invitation_expiry', {
+          postProcess: 'capitalizeFirstChar',
+        })}
         onChange={handleChange}
       >
         <MenuItem value={10800}>{t('core:time.hour', { count: 3 })}</MenuItem>
@@ -129,7 +131,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         loading={isLoadingInvite}
         onClick={inviteMember}
       >
-        {t('core:action.invite', { postProcess: 'capitalizeFirst' })}
+        {t('core:action.invite', { postProcess: 'capitalizeFirstChar' })}
       </LoadingButton>
     </Box>
   );

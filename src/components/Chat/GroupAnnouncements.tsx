@@ -237,7 +237,7 @@ export const GroupAnnouncements = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -265,7 +265,7 @@ export const GroupAnnouncements = ({
           rej(
             error.message ||
               t('core:message.error.generic', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
           );
         });
@@ -304,7 +304,7 @@ export const GroupAnnouncements = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -597,7 +597,7 @@ export const GroupAnnouncements = ({
             }}
           />
           {t('group:message.generic.group_announcement', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Box>
 
@@ -618,7 +618,7 @@ export const GroupAnnouncements = ({
             }}
           >
             {t('group:message.generic.no_announcement', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>
@@ -704,7 +704,7 @@ export const GroupAnnouncements = ({
                   padding: '5px',
                 }}
               >
-                {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+                {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
               </CustomButton>
             )}
 
@@ -739,7 +739,7 @@ export const GroupAnnouncements = ({
                 />
               )}
               {t('group:action.publish_announcement', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </CustomButton>
           </Box>
@@ -757,7 +757,7 @@ export const GroupAnnouncements = ({
         open={isLoading}
         info={{
           message: t('core:loading.announcements', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         }}
       />
