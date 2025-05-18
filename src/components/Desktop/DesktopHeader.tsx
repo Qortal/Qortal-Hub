@@ -8,6 +8,7 @@ import { MembersIcon } from '../../assets/Icons/MembersIcon';
 import { AdminsIcon } from '../../assets/Icons/AdminsIcon';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
+import { useTranslation } from 'react-i18next';
 
 const IconWrapper = ({
   children,
@@ -83,6 +84,8 @@ export const DesktopHeader = ({
 }) => {
   const [value, setValue] = useState(0);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
+
   return (
     <Box
       sx={{
@@ -108,6 +111,7 @@ export const DesktopHeader = ({
             }}
           />
         )}
+
         {isPrivate === false && (
           <NoEncryptionGmailerrorredIcon
             sx={{
@@ -115,6 +119,7 @@ export const DesktopHeader = ({
             }}
           />
         )}
+
         <Typography
           sx={{
             fontSize: '16px',
@@ -122,7 +127,7 @@ export const DesktopHeader = ({
           }}
         >
           {selectedGroup?.groupId === '0'
-            ? 'General'
+            ? t('core:general', { postProcess: 'capitalizeFirst' })
             : selectedGroup?.groupName}
         </Typography>
       </Box>
@@ -146,7 +151,7 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label="ANN"
+            label={t('core:announcement', { postProcess: 'capitalizeFirst' })}
             selected={isAnnouncement}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -174,7 +179,7 @@ export const DesktopHeader = ({
             color={
               isChat ? theme.palette.text.primary : theme.palette.text.secondary
             }
-            label="Chat"
+            label={t('core:chat', { postProcess: 'capitalizeFirst' })}
             selected={isChat}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -204,7 +209,7 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label="Threads"
+            label={t('core:thread_other', { postProcess: 'capitalizeFirst' })}
             selected={isForum}
             selectColor={theme.palette.action.selected}
             customHeight="55px"
@@ -229,7 +234,7 @@ export const DesktopHeader = ({
           <IconWrapper
             color={theme.palette.text.secondary}
             customHeight="55px"
-            label="Members"
+            label={t('core:member_other', { postProcess: 'capitalizeFirst' })}
             selected={false}
           >
             <MembersIcon
@@ -251,7 +256,7 @@ export const DesktopHeader = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label="Admins"
+            label={t('core:admin_other', { postProcess: 'capitalizeFirst' })}
             selected={groupSection === 'adminSpace'}
             customHeight="55px"
             selectColor={theme.palette.action.selected}

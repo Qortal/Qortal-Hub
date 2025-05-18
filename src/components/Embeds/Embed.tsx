@@ -107,7 +107,7 @@ export const Embed = ({ embedLink }) => {
       setType('POLL');
       if (!parsedData?.name)
         throw new Error(
-          t('core:message.error.invalid_embed_link_name', {
+          t('core:message.error.invalid_poll_embed_link_name', {
             postProcess: 'capitalizeFirst',
           })
         );
@@ -237,9 +237,10 @@ export const Embed = ({ embedLink }) => {
       if (imageFinalUrl) {
         return imageFinalUrl;
       } else {
-        //TODO translate
         setErrorMsg(
-          'Unable to download IMAGE. Please try again later by clicking the refresh button'
+          t('core:message.error.unable_download_image', {
+            postProcess: 'capitalizeFirst',
+          })
         );
         return null;
       }
@@ -248,7 +249,7 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.error ||
           error?.message ||
-          'An unexpected error occurred while trying to download the image'
+          t('core:message.error.generic', { postProcess: 'capitalizeFirst' })
       );
       return null;
     }
@@ -259,7 +260,11 @@ export const Embed = ({ embedLink }) => {
       setIsLoading(true);
       setErrorMsg('');
       if (!parsedData?.name || !parsedData?.service || !parsedData?.identifier)
-        throw new Error('Invalid image embed link. Missing param.');
+        throw new Error(
+          t('core:message.error.invalid_image_embed_link_name', {
+            postProcess: 'capitalizeFirst',
+          })
+        );
       let image = await getImage(
         {
           name: parsedData.name,
@@ -272,7 +277,12 @@ export const Embed = ({ embedLink }) => {
 
       setImageUrl(image);
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirst',
+          })
+      );
     } finally {
       setIsLoading(false);
     }
@@ -309,7 +319,12 @@ export const Embed = ({ embedLink }) => {
           break;
       }
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirst',
+          })
+      );
     }
   };
 
@@ -318,7 +333,12 @@ export const Embed = ({ embedLink }) => {
       const parsedData = parseQortalLink(embedLink);
       handleImage(parsedData);
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirst',
+          })
+      );
     }
   };
 

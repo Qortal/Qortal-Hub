@@ -898,7 +898,9 @@ export const ListOfGroupPromotions = () => {
               labelId="demo-simple-select-label"
               id="demo-simple-select"
               value={selectedGroup}
-              label="Groups where you are an admin"
+              label={t('group:group.groups_admin', {
+                postProcess: 'capitalizeFirst',
+              })}
               onChange={(e) => setSelectedGroup(e.target.value)}
               variant="outlined"
             >

@@ -454,7 +454,9 @@ export const ChatOptions = ({
           >
             <Select
               id="demo-simple-select"
-              label="By member"
+              label={t('core:sort.by_member', {
+                postProcess: 'capitalizeFirst',
+              })}
               labelId="demo-simple-select-label"
               onChange={(e) => setSelectedMember(e.target.value)}
               size="small"

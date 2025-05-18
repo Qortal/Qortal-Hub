@@ -81,7 +81,10 @@
     "update_app": "update your app"
   },
   "admin": "admin",
+  "admin_other": "admins",
   "all": "all",
+  "announcement": "announcement",
+  "announcement_other": "announcements",
   "api": "API",
   "app": "app",
   "app_other": "apps",
@@ -117,6 +120,7 @@
     "publish": "publish fee"
   },
   "for": "for",
+  "general": "general",
   "general_settings": "general settings",
   "identifier": "identifier",
   "last_height": "last height",
@@ -128,12 +132,14 @@
     "member": "member list"
   },
   "loading": {
-    "announcements": "announcements",
+    "announcements": "loading announcements",
     "generic": "loading...",
     "chat": "loading chat... please wait.",
     "comments": "loading comments... please wait.",
     "posts": "loading posts... please wait."
   },
+  "member": "member",
+  "member_other": "members",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {
@@ -142,7 +148,8 @@
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
       "invalid_embed_link": "invalid embed link",
-      "invalid_embed_link_name": "invalid poll embed link. Missing name.",
+      "invalid_poll_embed_link_name": "invalid poll embed link. Missing name.",
+      "invalid_image_embed_link_name": "invalid image embed link. Missing param.",
       "invalid_signature": "invalid signature",
       "invalid_zip": "invalid zip",
       "message_loading": "error loading message.",
@@ -158,6 +165,7 @@
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
       "send_failed": "failed to send",
+      "unable_download_image": "unable to download IMAGE. Please try again later by clicking the refresh button",
       "unable_encrypt_app": "unable to encrypt app. App not published'",
       "unable_publish_app": "unable to publish app",
       "unable_publish_image": "unable to publish image",
@@ -281,6 +289,8 @@
     "dark": "dark mode",
     "light": "light mode"
   },
+  "thread": "thread",
+  "thread_other": "threads",
   "time": {
     "day_one": "{{count}} day",
     "day_other": "{{count}} days",
