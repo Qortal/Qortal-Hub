@@ -11,9 +11,11 @@ import BoundedNumericTextField from '../common/BoundedNumericTextField';
 import { PasswordField } from './PasswordField/PasswordField';
 import { ErrorText } from './ErrorText/ErrorText';
 import { getFee } from '../background';
+import { useTranslation } from 'react-i18next';
 
 export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');

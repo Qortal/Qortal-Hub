@@ -16,6 +16,7 @@ import { getFee } from '../background';
 import { fileToBase64 } from '../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
+import { useTranslation } from 'react-i18next';
 
 export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   const [hasAvatar, setHasAvatar] = useState(false);
@@ -39,6 +40,8 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   // Determine if the popover is open
   const open = Boolean(anchorEl);
   const id = open ? 'avatar-img' : undefined;
+
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const checkIfAvatarExists = async () => {
     try {
