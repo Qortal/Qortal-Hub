@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import Picker, { EmojiStyle, Theme } from 'emoji-picker-react';
-import './ReactionPicker.css';
+import '../styles/ReactionPicker.css';
 import { ButtonBase } from '@mui/material';
 
 export const ReactionPicker = ({ onReaction }) => {
