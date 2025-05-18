@@ -1,4 +1,5 @@
-import React, {
+import {
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -68,23 +69,18 @@ export const NotAuthenticated = ({
 }) => {
   const [isValidApiKey, setIsValidApiKey] = useState<boolean | null>(null);
   const [hasLocalNode, setHasLocalNode] = useState<boolean | null>(null);
-  // const [useLocalNode, setUseLocalNode] = useState(false);
-  const [openSnack, setOpenSnack] = React.useState(false);
-  const [infoSnack, setInfoSnack] = React.useState(null);
-  const [show, setShow] = React.useState(false);
-  const [mode, setMode] = React.useState('list');
-  const [customNodes, setCustomNodes] = React.useState(null);
-  // const [currentNode, setCurrentNode] = React.useState({
-  //   url: "http://127.0.0.1:12391",
-  // });
-  const [importedApiKey, setImportedApiKey] = React.useState(null);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState(null);
+  const [show, setShow] = useState(false);
+  const [mode, setMode] = useState('list');
+  const [customNodes, setCustomNodes] = useState(null);
+  const [importedApiKey, setImportedApiKey] = useState(null);
   //add and edit states
-  const [url, setUrl] = React.useState('https://');
-  const [customApikey, setCustomApiKey] = React.useState('');
+  const [url, setUrl] = useState('https://');
+  const [customApikey, setCustomApiKey] = useState('');
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
   const [enteredApiKey, setEnteredApiKey] = useState('');
-  const [customNodeToSaveIndex, setCustomNodeToSaveIndex] =
-    React.useState(null);
+  const [customNodeToSaveIndex, setCustomNodeToSaveIndex] = useState(null);
   const { showTutorial, hasSeenGettingStarted } = useContext(MyContext);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core']);
@@ -505,7 +501,7 @@ export const NotAuthenticated = ({
           disableHoverListener={hasSeenGettingStarted === true}
           placement="left"
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
@@ -514,7 +510,7 @@ export const NotAuthenticated = ({
               >
                 {t('auth:tips.digital_id', { postProcess: 'capitalizeFirst' })}
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton onClick={() => setExtstate('wallets')}>
@@ -535,7 +531,7 @@ export const NotAuthenticated = ({
           disableHoverListener={hasSeenGettingStarted === true}
           placement="right"
           title={
-            <React.Fragment>
+            <Fragment>
               <Typography
                 color="inherit"
                 sx={{
@@ -554,7 +550,7 @@ export const NotAuthenticated = ({
               >
                 {t('auth:tips.new_account', { postProcess: 'capitalizeFirst' })}
               </Typography>
-            </React.Fragment>
+            </Fragment>
           }
         >
           <CustomButton

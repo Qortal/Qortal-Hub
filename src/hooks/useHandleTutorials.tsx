@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
-import creationImg from './img/creation.webp';
-import dashboardImg from './img/dashboard.webp';
-import groupsImg from './img/groups.webp';
-import importantImg from './img/important.webp';
-import navigationImg from './img/navigation.webp';
-import overviewImg from './img/overview.webp';
-import startedImg from './img/started.webp';
-import obtainingImg from './img/obtaining-qort.jpg';
+import creationImg from '../components/Tutorials/img/creation.webp';
+import dashboardImg from '../components/Tutorials/img/dashboard.webp';
+import groupsImg from '../components/Tutorials/img/groups.webp';
+import importantImg from '../components/Tutorials/img/important.webp';
+import navigationImg from '../components/Tutorials/img/navigation.webp';
+import overviewImg from '../components/Tutorials/img/overview.webp';
+import startedImg from '../components/Tutorials/img/started.webp';
+import obtainingImg from '../components/Tutorials/img/obtaining-qort.jpg';
 import { useTranslation } from 'react-i18next';
 
 const checkIfGatewayIsOnline = async () => {

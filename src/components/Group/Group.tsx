@@ -49,7 +49,7 @@ import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
 import { AppsDevMode } from '../Apps/AppsDevMode';
-import { DesktopSideBar } from '../DesktopSideBar';
+import { DesktopSideBar } from '../Desktop/DesktopSideBar';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './QMailMessages';
