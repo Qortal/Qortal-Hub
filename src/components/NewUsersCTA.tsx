@@ -1,5 +1,5 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { Spacer } from '../../common/Spacer';
+import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
 export const NewUsersCTA = ({ balance }) => {

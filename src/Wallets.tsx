@@ -30,7 +30,7 @@ import { decryptStoredWalletFromSeedPhrase } from './utils/decryptWallet';
 import { crypto } from './constants/decryptWallet';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './components';
-import { HtmlTooltip } from './ExtStates/NotAuthenticated';
+import { HtmlTooltip } from './components/NotAuthenticated';
 import { MyContext } from './App';
 import { useTranslation } from 'react-i18next';
 

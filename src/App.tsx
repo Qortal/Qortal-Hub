@@ -116,7 +116,7 @@ import {
   timestampEnterDataAtom,
   txListAtom,
 } from './atoms/global';
-import { NotAuthenticated } from './ExtStates/NotAuthenticated';
+import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
 import { Wallets } from './Wallets';
 import { useFetchResources } from './common/useFetchResources';

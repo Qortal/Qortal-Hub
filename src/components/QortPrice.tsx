@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../App';
 import { Box, Tooltip, Typography, useTheme } from '@mui/material';
-import { BarSpinner } from '../../common/Spinners/BarSpinner/BarSpinner';
-import { formatDate } from '../../utils/time';
+import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
+import { formatDate } from '../utils/time';
 import { useTranslation } from 'react-i18next';
 
 function getAverageLtcPerQort(trades) {

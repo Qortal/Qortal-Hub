@@ -25,12 +25,12 @@ import {
 } from '@mui/material';
 import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
 import HelpIcon from '@mui/icons-material/Help';
-import { CustomizedSnackbars } from '../components/Snackbar/Snackbar';
+import { CustomizedSnackbars } from './Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
-import ThemeSelector from '../components/Theme/ThemeSelector';
+import ThemeSelector from './Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
-import LanguageSelector from '../components/Language/LanguageSelector';
+import LanguageSelector from './Language/LanguageSelector';
 import { MyContext } from '../App';
 
 export const manifestData = {

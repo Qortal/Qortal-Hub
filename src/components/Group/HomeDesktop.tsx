@@ -5,10 +5,10 @@ import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
-import { QortPrice } from '../Home/QortPrice';
+import { QortPrice } from '../QortPrice';
 import ExploreIcon from '@mui/icons-material/Explore';
 import { Explore } from '../Explore/Explore';
-import { NewUsersCTA } from '../Home/NewUsersCTA';
+import { NewUsersCTA } from '../NewUsersCTA';
 import { useTranslation } from 'react-i18next';
 
 export const HomeDesktop = ({

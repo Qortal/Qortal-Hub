@@ -6,7 +6,7 @@ import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { manifestData } from '../ExtStates/NotAuthenticated';
+import { manifestData } from './NotAuthenticated';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
