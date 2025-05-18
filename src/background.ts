@@ -8,7 +8,7 @@ import {
   publishOnQDN,
   uint8ArrayToObject,
 } from './backgroundFunctions/encryption';
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/codes';
+import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/constants';
 import Base58 from './deps/Base58';
 import axios from 'axios';
 import {
@@ -29,7 +29,7 @@ import { RequestQueueWithPromise } from './utils/queue/queue';
 import { validateAddress } from './utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from './transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/resourceTypes';
+import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
