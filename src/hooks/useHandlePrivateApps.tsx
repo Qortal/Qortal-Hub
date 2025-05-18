@@ -1,14 +1,14 @@
 import { useContext, useState } from 'react';
-import { executeEvent } from '../../utils/events';
-import { getBaseApiReact, MyContext } from '../../App';
-import { createEndpoint } from '../../background';
+import { executeEvent } from '../utils/events';
+import { getBaseApiReact, MyContext } from '../App';
+import { createEndpoint } from '../background';
 import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from '../../atoms/global';
-import { saveToLocalStorage } from './AppsNavBarDesktop';
-import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+} from '../atoms/global';
+import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
+import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
+import { uint8ArrayToObject } from '../backgroundFunctions/encryption';
 import { useSetAtom } from 'jotai';
 
 export const useHandlePrivateApps = () => {

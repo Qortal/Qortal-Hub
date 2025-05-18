@@ -91,7 +91,7 @@ export const Tutorials = () => {
         </DialogContent>
         <DialogActions>
           <Button variant="contained" onClick={handleClose}>
-            {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </DialogActions>
       </Dialog>
@@ -138,7 +138,7 @@ export const Tutorials = () => {
 
         <DialogActions>
           <Button variant="contained" onClick={handleClose}>
-            {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </DialogActions>
       </Dialog>

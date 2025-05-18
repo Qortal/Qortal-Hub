@@ -71,7 +71,7 @@ export const ManageMembers = ({
     setValue(newValue);
   };
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
 
@@ -86,7 +86,7 @@ export const ManageMembers = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'LEAVE_GROUP',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -104,11 +104,11 @@ export const ManageMembers = ({
                   type: 'leave-group',
                   label: t('group:message.success.group_leave_name', {
                     group_name: selectedGroup?.groupName,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   labelDone: t('group:message.success.group_leave_label', {
                     group_name: selectedGroup?.groupName,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   done: false,
                   groupId: selectedGroup?.groupId,
@@ -119,7 +119,7 @@ export const ManageMembers = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_leave', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -131,7 +131,7 @@ export const ManageMembers = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -210,7 +210,7 @@ export const ManageMembers = ({
           <Toolbar>
             <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
               {t('group:action.manage_members', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
 
@@ -314,18 +314,18 @@ export const ManageMembers = ({
           >
             <Box>
               <Typography>
-                {t('group:group.id', { postProcess: 'capitalizeFirst' })}:{' '}
+                {t('group:group.id', { postProcess: 'capitalizeFirstChar' })}:{' '}
                 {groupInfo?.groupId}
               </Typography>
 
               <Typography>
-                {t('group:group.name', { postProcess: 'capitalizeFirst' })}:{' '}
+                {t('group:group.name', { postProcess: 'capitalizeFirstChar' })}:{' '}
                 {groupInfo?.groupName}
               </Typography>
 
               <Typography>
                 {t('group:group.member_number', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 : {groupInfo?.memberCount}
               </Typography>
@@ -342,7 +342,7 @@ export const ManageMembers = ({
                 <InsertLinkIcon />
 
                 <Typography>
-                  {t('group:join_link', { postProcess: 'capitalizeFirst' })}
+                  {t('group:join_link', { postProcess: 'capitalizeFirstChar' })}
                 </Typography>
               </ButtonBase>
             </Box>
@@ -358,7 +358,7 @@ export const ManageMembers = ({
                 onClick={handleLeaveGroup}
               >
                 {t('group:action.leave_group', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </LoadingButton>
             )}
@@ -377,7 +377,7 @@ export const ManageMembers = ({
                 onClick={() => getMembersWithNames(selectedGroup?.groupId)}
               >
                 {t('group:action.load_members', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
 
@@ -475,7 +475,7 @@ export const ManageMembers = ({
           open={isLoadingMembers}
           info={{
             message: t('group:message.generic.loading_members', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             }),
           }}
         />

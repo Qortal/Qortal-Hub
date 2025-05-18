@@ -44,7 +44,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
 
   const setTxList = useSetAtom(txListAtom);
 
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
@@ -115,7 +115,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -131,7 +131,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.join_group', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
 
@@ -142,11 +142,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     type: 'joined-group',
                     label: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     labelDone: t('group:message.success.group_join_label', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     done: false,
                     groupId,
@@ -160,11 +160,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     type: 'joined-group-request',
                     label: t('group:message.success.group_join_request', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     labelDone: t('group:message.success.group_join_outcome', {
                       group_name: group?.groupName,
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     done: false,
                     groupId,
@@ -243,7 +243,9 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   }}
                 >
                   <Typography>
-                    {t('core:action.join', { postProcess: 'capitalizeFirst' })}{' '}
+                    {t('core:action.join', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}{' '}
                     {group?.groupName}
                   </Typography>
                   <Typography>
@@ -257,7 +259,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     onClick={() => handleJoinGroup(group, group?.isOpen)}
                   >
                     {t('group:action.join_group', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
                 </Box>

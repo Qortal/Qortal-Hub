@@ -3,7 +3,7 @@ import { Box } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
-import { useQortalMessageListener } from './useQortalMessageListener';
+import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
@@ -187,7 +187,7 @@ export const AppViewer = forwardRef(
             reject(
               new Error(
                 t('core:message.error.navigation_timeout', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
               )
             );

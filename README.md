@@ -22,6 +22,6 @@ Many additional details and a fully featured wiki will be created over time. Rea
 
 Qortal-Hub supports internationalization (i18n) using [i18next](https://www.i18next.com/), allowing seamless translation of UI text into multiple languages.
 The setup includes modularized translation files, language detection, context and runtime language switching.
-Files with translation are in `public/locales/<locale>` folder.
+Files with translation are in `src/i18n/locales/<locale>` folder.
 
 See [guidelines](./docs/i18n_languages.md).

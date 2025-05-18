@@ -84,13 +84,13 @@ export const GroupAvatar = ({
         throw new Error(
           t('core:message.generic.avatar_publish_fee', {
             fee: fee.fee,
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
       await show({
         message: t('core:message.question.publish_avatar', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -115,7 +115,7 @@ export const GroupAvatar = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -157,7 +157,9 @@ export const GroupAvatar = ({
               opacity: 0.5,
             }}
           >
-            {t('core:action.change_avatar', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.change_avatar', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </ButtonBase>
 
@@ -197,7 +199,9 @@ export const GroupAvatar = ({
               opacity: 0.5,
             }}
           >
-            {t('core:action.change_avatar', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.change_avatar', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </ButtonBase>
 
@@ -226,7 +230,7 @@ export const GroupAvatar = ({
             opacity: 0.5,
           }}
         >
-          {t('core:action.set_avatar', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.set_avatar', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
       </ButtonBase>
 
@@ -282,13 +286,15 @@ const PopoverComp = ({
         >
           {t('core:message.generic.avatar_size', {
             size: 500, // TODO magic number
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
 
         <ImageUploader onPick={(file) => setAvatarFile(file)}>
           <Button variant="contained">
-            {t('core:action.choose_image', { postProcess: 'capitalizeFirst' })}
+            {t('core:action.choose_image', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         </ImageUploader>
 
@@ -311,7 +317,7 @@ const PopoverComp = ({
             />
             <Typography>
               {t('core:message.generic.avatar_registered_name', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           </Box>
@@ -325,7 +331,9 @@ const PopoverComp = ({
           onClick={publishAvatar}
           variant="contained"
         >
-          {t('group:action.publish_avatar', { postProcess: 'capitalizeFirst' })}
+          {t('group:action.publish_avatar', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </LoadingButton>
       </Box>
     </Popover>

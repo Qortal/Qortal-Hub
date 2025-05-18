@@ -1,9 +1,9 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { Spacer } from '../../common/Spacer';
+import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
 export const NewUsersCTA = ({ balance }) => {
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   if (balance === undefined || +balance > 0) return null;
 
@@ -37,14 +37,14 @@ export const NewUsersCTA = ({ balance }) => {
           }}
         >
           {t('core:message.question.new_user', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </Typography>
 
         <Spacer height="20px" />
 
         <Typography>
-          {t('core:message_us', { postProcess: 'capitalizeFirst' })}
+          {t('core:message_us', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
 
         <Spacer height="20px" />

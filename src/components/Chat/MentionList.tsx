@@ -66,7 +66,7 @@ export default forwardRef((props, ref) => {
       ) : (
         <div className="item">
           {t('core:message.generic.no_results', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </div>
       )}

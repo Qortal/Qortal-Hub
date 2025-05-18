@@ -49,7 +49,7 @@ import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
 import { AppsDevMode } from '../Apps/AppsDevMode';
-import { DesktopSideBar } from '../DesktopSideBar';
+import { DesktopSideBar } from '../Desktop/DesktopSideBar';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './QMailMessages';
@@ -444,7 +444,7 @@ export const Group = ({
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
   const groupsOwnerNamesRef = useRef({});
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
@@ -511,7 +511,7 @@ export const Group = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -542,7 +542,7 @@ export const Group = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -576,7 +576,7 @@ export const Group = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -1101,7 +1101,7 @@ export const Group = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -1750,9 +1750,9 @@ export const Group = ({
               >
                 <Box
                   sx={{
+                    alignItems: 'center',
                     display: 'flex',
                     width: '100%',
-                    alignItems: 'center',
                   }}
                 >
                   <ListItemAvatar>
@@ -1766,12 +1766,18 @@ export const Group = ({
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>
                   </ListItemAvatar>
+
                   <ListItemText
                     primary={direct?.name || direct?.address}
                     secondary={
                       !direct?.timestamp
-                        ? 'no messages'
-                        : `last message: ${formatEmailDate(direct?.timestamp)}`
+                        ? t('core:message.generic.no_messages', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('group:last_message_date', {
+                            date: formatEmailDate(direct?.timestamp),
+                            postProcess: 'capitalizeFirstChar',
+                          })
                     }
                     primaryTypographyProps={{
                       style: {
@@ -1815,6 +1821,7 @@ export const Group = ({
             </List>
           ))}
         </div>
+
         <div
           style={{
             display: 'flex',
@@ -1835,7 +1842,9 @@ export const Group = ({
                 color: theme.palette.text.primary,
               }}
             />
-            New Chat
+            {t('core:action.new.chat', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </CustomButton>
         </div>
       </div>
@@ -1999,7 +2008,7 @@ export const Group = ({
                 }}
               >
                 {t('group:message.generic.no_selection', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -2098,7 +2107,7 @@ export const Group = ({
                     {' '}
                     <Typography>
                       {t('group:message.generic.encryption_key', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
                   </div>
@@ -2124,21 +2133,21 @@ export const Group = ({
                       {' '}
                       <Typography>
                         {t('group:message.generic.not_part_group', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
                         <strong>
                           {t('group:message.generic.only_encrypted', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </strong>
                       </Typography>
                       <Spacer height="25px" />
                       <Typography>
                         {t('group:message.generic.notify_admins', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
                       <Spacer height="25px" />
@@ -2160,7 +2169,7 @@ export const Group = ({
                               onClick={() => notifyAdmin(admin)}
                             >
                               {t('core:action.notify', {
-                                postProcess: 'capitalizeFirst',
+                                postProcess: 'capitalizeFirstChar',
                               })}
                             </LoadingButton>
                           </Box>
@@ -2385,7 +2394,7 @@ export const Group = ({
             message:
               isLoadingGroupMessage ||
               t('group:message.generic.setting_group', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           }}
         />
@@ -2394,7 +2403,7 @@ export const Group = ({
           open={isLoadingGroups}
           info={{
             message: t('group:message.generic.setting_group', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             }),
           }}
         />

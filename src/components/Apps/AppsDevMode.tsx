@@ -17,6 +17,7 @@ import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
+import { useTranslation } from 'react-i18next';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -46,6 +47,7 @@ export const AppsDevMode = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     setTimeout(() => {
@@ -108,7 +110,6 @@ export const AppsDevMode = ({
     setTabs((prev) => [...prev, newTab]);
     setSelectedTab(newTab);
     setMode('viewer');
-
     setIsNewTabWindow(false);
   };
 
@@ -215,25 +216,25 @@ export const AppsDevMode = ({
     <AppsParent
       sx={{
         flexDirection: 'row',
-        position: !show && 'fixed',
         left: !show && '-200vw',
+        position: !show && 'fixed',
       }}
     >
       <Box
         sx={{
-          width: '60px',
-          flexDirection: 'column',
-          height: '100vh',
           alignItems: 'center',
           display: 'flex',
+          flexDirection: 'column',
           gap: '25px',
+          height: '100vh',
+          width: '60px',
         }}
       >
         <ButtonBase
           sx={{
-            width: '70px',
             height: '70px',
             paddingTop: '23px',
+            width: '70px',
           }}
         >
           <CoreSyncStatus />
@@ -241,8 +242,8 @@ export const AppsDevMode = ({
 
         <ButtonBase
           sx={{
-            width: '60px',
             height: '60px',
+            width: '60px',
           }}
           onClick={() => {
             goToHome();
@@ -267,7 +268,9 @@ export const AppsDevMode = ({
             color={
               isApps ? theme.palette.text.primary : theme.palette.text.secondary
             }
-            label="Apps"
+            label={t('core:app_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             disableWidth
           >
             <AppsIcon
@@ -294,7 +297,9 @@ export const AppsDevMode = ({
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
             }
-            label="Chat"
+            label={t('core:chat', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             disableWidth
           >
             <MessagingIconFilled
@@ -323,7 +328,9 @@ export const AppsDevMode = ({
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary
             }
-            label="Dev"
+            label={t('core:dev', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             disableWidth
           >
             <AppsIcon
@@ -336,6 +343,7 @@ export const AppsDevMode = ({
             />
           </IconWrapper>
         </ButtonBase>
+
         {mode !== 'home' && <AppsDevModeNavBar />}
       </Box>
 
@@ -382,10 +390,10 @@ export const AppsDevMode = ({
           <Box
             sx={{
               display: 'flex',
-              width: '100%',
               flexDirection: 'column',
               height: '100vh',
               overflow: 'auto',
+              width: '100%',
             }}
           >
             <Spacer height="30px" />

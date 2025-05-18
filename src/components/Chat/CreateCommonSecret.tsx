@@ -85,7 +85,7 @@ export const CreateCommonSecret = ({
       if (!names.length) {
         throw new Error(
           t('core:message.error.network_generic', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       }
@@ -109,7 +109,7 @@ export const CreateCommonSecret = ({
       if (!validateSecretKey(decryptedKeyToObject))
         throw new Error(
           t('auth:message.error.invalid_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
@@ -128,7 +128,7 @@ export const CreateCommonSecret = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'ARBITRARY',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -139,14 +139,14 @@ export const CreateCommonSecret = ({
       if (!secretKey2 && secretKey2 !== false)
         throw new Error(
           t('auth:message.error.invalid_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
       if (secretKey2 && !validateSecretKey(secretKey2))
         throw new Error(
           t('auth:message.error.invalid_secret_key', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
 
@@ -162,7 +162,7 @@ export const CreateCommonSecret = ({
             setInfoSnack({
               type: 'success',
               message: t('auth:message.success.reencrypted_secret_key', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
             });
             setOpenSnack(true);
@@ -172,13 +172,13 @@ export const CreateCommonSecret = ({
                 type: 'created-common-secret',
                 label: t('group:message.success.published_secret_key', {
                   group_id: groupId,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
                 labelDone: t(
                   'group:message.success.published_secret_key_label',
                   {
                     group_id: groupId,
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }
                 ),
                 done: false,
@@ -222,14 +222,14 @@ export const CreateCommonSecret = ({
         variant="contained"
         onClick={createCommonSecret}
       >
-        {t('auth:action.reencrypt_key', { postProcess: 'capitalizeFirst' })}
+        {t('auth:action.reencrypt_key', { postProcess: 'capitalizeFirstChar' })}
       </LoadingButton>
 
       {noSecretKey ? (
         <Box>
           <Typography>
             {t('group:message.generic.group_no_secret_key', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>
@@ -240,7 +240,7 @@ export const CreateCommonSecret = ({
         <Box>
           <Typography>
             {t('group:message.generic.group_secret_key_no_owner', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>
@@ -248,7 +248,7 @@ export const CreateCommonSecret = ({
         <Box>
           <Typography>
             {t('group:message.generic.group_member_list_changed', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>
@@ -268,7 +268,7 @@ export const CreateCommonSecret = ({
           }}
           size="small"
         >
-          {t('core:action.hide', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.hide', { postProcess: 'capitalizeFirstChar' })}
         </Button>
       </Box>
 

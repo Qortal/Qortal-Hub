@@ -61,7 +61,7 @@ export const UserListOfInvites = ({
   const [invites, setInvites] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
@@ -101,7 +101,7 @@ export const UserListOfInvites = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -130,7 +130,7 @@ export const UserListOfInvites = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_join', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -150,7 +150,7 @@ export const UserListOfInvites = ({
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);
@@ -205,7 +205,7 @@ export const UserListOfInvites = ({
                 >
                   <Typography>
                     {t('core:action.join', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}{' '}
                     {invite?.groupName}
                   </Typography>
@@ -219,7 +219,7 @@ export const UserListOfInvites = ({
                     }
                   >
                     {t('group:action.join_group', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
                 </Box>
@@ -267,7 +267,7 @@ export const UserListOfInvites = ({
     >
       <p>
         {t('core:list.invite', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })}
       </p>
 

@@ -50,7 +50,7 @@ export const AppsDesktop = ({
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const { showTutorial } = useContext(MyContext);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const myApp = useMemo(() => {
     return availableQapps.find(
@@ -381,7 +381,12 @@ export const AppsDesktop = ({
             setDesktopViewMode('apps');
           }}
         >
-          <IconWrapper label="Apps" disableWidth>
+          <IconWrapper
+            label={t('core:app_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            disableWidth
+          >
             <AppsIcon height={30} color={theme.palette.text.primary} />
           </IconWrapper>
         </ButtonBase>
@@ -399,7 +404,9 @@ export const AppsDesktop = ({
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
             }
-            label="Chat"
+            label={t('core:chat', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             disableWidth
           >
             <MessagingIconFilled
@@ -428,7 +435,9 @@ export const AppsDesktop = ({
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary
               }
-              label="Dev"
+              label={t('core:dev', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               disableWidth
             >
               <AppsIcon

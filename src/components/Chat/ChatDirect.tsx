@@ -219,7 +219,7 @@ export const ChatDirect = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -392,7 +392,7 @@ export const ChatDirect = ({
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -438,7 +438,7 @@ export const ChatDirect = ({
         throw new Error(
           t('group:message.error.qortals_required', {
             quantity: 4,
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       if (isSending) return;
@@ -509,7 +509,7 @@ export const ChatDirect = ({
           errorMsg === 'invalid signature'
             ? t('group:message.error.qortals_required', {
                 quantity: 4,
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             : errorMsg,
       });
@@ -576,7 +576,7 @@ export const ChatDirect = ({
             fontSize: '14px',
           }}
         >
-          {t('core:action.close_chat', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.close_chat', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
       </Box>
 
@@ -707,7 +707,7 @@ export const ChatDirect = ({
                 {t('core:message.error.message_size', {
                   maximum: 4000,
                   size: messageSize,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -763,7 +763,9 @@ export const ChatDirect = ({
       <LoadingSnackbar
         open={isLoading}
         info={{
-          message: t('core:loading.chat', { postProcess: 'capitalizeFirst' }),
+          message: t('core:loading.chat', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         }}
       />
 

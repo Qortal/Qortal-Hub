@@ -25,7 +25,7 @@ import {
 import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
 import LockIcon from '@mui/icons-material/Lock';
-import { useHandlePrivateApps } from './useHandlePrivateApps';
+import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import { useAtom, useSetAtom } from 'jotai';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {

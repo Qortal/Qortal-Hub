@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { MyContext } from '../../App';
 import {
   Card,
@@ -21,6 +21,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { Spacer } from '../../common/Spacer';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CustomLoader } from '../../common/CustomLoader';
+import { useTranslation } from 'react-i18next';
 
 export const PollCard = ({
   poll,
@@ -39,11 +40,15 @@ export const PollCard = ({
   const { show, userInfo } = useContext(MyContext);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
+
   const handleVote = async () => {
     const fee = await getFee('VOTE_ON_POLL');
 
     await show({
-      message: `Do you accept this VOTE_ON_POLL transaction? POLLS are public!`,
+      message: t('core:question.accept_vote_on_poll', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       publishFee: fee.fee + ' QORT',
     });
     setIsLoadingSubmit(true);
@@ -62,15 +67,20 @@ export const PollCard = ({
         if (response.error) {
           setInfoSnack({
             type: 'error',
-            message: response?.error || 'Unable to vote.',
+            message:
+              response?.error ||
+              t('core:message.error.unable_vote', {
+                postProcess: 'capitalizeFirstChar',
+              }),
           });
           setOpenSnack(true);
           return;
         } else {
           setInfoSnack({
             type: 'success',
-            message:
-              'Successfully voted. Please wait a couple minutes for the network to propogate the changes.',
+            message: t('core:message.success.voted', {
+              postProcess: 'capitalizeFirstChar',
+            }),
           });
           setOpenSnack(true);
         }
@@ -79,7 +89,11 @@ export const PollCard = ({
         setIsLoadingSubmit(false);
         setInfoSnack({
           type: 'error',
-          message: error?.message || 'Unable to vote.',
+          message:
+            error?.message ||
+            t('core:message.error.unable_vote', {
+              postProcess: 'capitalizeFirstChar',
+            }),
         });
         setOpenSnack(true);
       });
@@ -111,16 +125,16 @@ export const PollCard = ({
     >
       <Box
         sx={{
-          display: 'flex',
           alignItems: 'center',
+          display: 'flex',
           justifyContent: 'space-between',
           padding: '16px 16px 0px 16px',
         }}
       >
         <Box
           sx={{
-            display: 'flex',
             alignItems: 'center',
+            display: 'flex',
             gap: '10px',
           }}
         >
@@ -129,8 +143,11 @@ export const PollCard = ({
               color: theme.palette.text.primary,
             }}
           />
-          <Typography>POLL embed</Typography>
+          <Typography>
+            {t('core:poll_embed', { postProcess: 'capitalizeFirstWord' })}
+          </Typography>
         </Box>
+
         <Box
           sx={{
             display: 'flex',
@@ -147,6 +164,7 @@ export const PollCard = ({
               }}
             />
           </ButtonBase>
+
           {external && (
             <ButtonBase>
               <OpenInNewIcon
@@ -170,16 +188,21 @@ export const PollCard = ({
             fontSize: '12px',
           }}
         >
-          Created by {ownerName || poll?.info?.owner}
+          {t('core:message.error.created_by', {
+            owner: poll?.info?.owner,
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
       </Box>
+
       <Divider sx={{ borderColor: 'rgb(255 255 255 / 10%)' }} />
+
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
-          alignItems: 'center',
         }}
       >
         {!isOpen && !errorMsg && (
@@ -192,31 +215,31 @@ export const PollCard = ({
                 setIsOpen(true);
               }}
             >
-              Show poll
+              {t('core:action.show_poll', { postProcess: 'capitalizeFirst' })}
             </Button>
           </>
         )}
+
         {isLoadingParent && isOpen && (
           <Box
             sx={{
-              width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
-            {' '}
-            <CustomLoader />{' '}
+            <CustomLoader />
           </Box>
         )}
+
         {errorMsg && (
           <Box
             sx={{
-              width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
-            {' '}
             <Typography
               sx={{
                 fontSize: '14px',
@@ -224,7 +247,7 @@ export const PollCard = ({
               }}
             >
               {errorMsg}
-            </Typography>{' '}
+            </Typography>
           </Box>
         )}
       </Box>
@@ -243,14 +266,16 @@ export const PollCard = ({
             },
           }}
         />
+
         <CardContent>
           <Typography
             sx={{
               fontSize: '18px',
             }}
           >
-            Options
+            {t('core:option_other', { postProcess: 'capitalizeFirst' })}
           </Typography>
+
           <RadioGroup
             value={selectedOption}
             onChange={(e) => setSelectedOption(e.target.value)}
@@ -269,6 +294,7 @@ export const PollCard = ({
               />
             ))}
           </RadioGroup>
+
           <Box
             sx={{
               display: 'flex',
@@ -282,8 +308,9 @@ export const PollCard = ({
               disabled={!selectedOption || isLoadingSubmit}
               onClick={handleVote}
             >
-              Vote
+              {t('core:action.vote', { postProcess: 'capitalizeFirst' })}
             </Button>
+
             <Typography
               sx={{
                 fontSize: '14px',
@@ -298,6 +325,7 @@ export const PollCard = ({
           </Box>
 
           <Spacer height="10px" />
+
           <Typography
             sx={{
               fontSize: '14px',
@@ -308,26 +336,36 @@ export const PollCard = ({
                 : 'hidden',
             }}
           >
-            You've already voted.
+            {t('core:message.generic.already_voted', {
+              postProcess: 'capitalizeFirst',
+            })}
           </Typography>
+
           <Spacer height="10px" />
+
           {isLoadingSubmit && (
             <Typography
               sx={{
                 fontSize: '12px',
               }}
             >
-              Is processing transaction, please wait...
+              {t('core:message.generic.processing_transaction', {
+                postProcess: 'capitalizeFirst',
+              })}
             </Typography>
           )}
+
           <ButtonBase
             onClick={() => {
               setShowResults((prev) => !prev);
             }}
           >
-            {showResults ? 'hide ' : 'show '} results
+            {showResults
+              ? t('core:action.hide', { postProcess: 'capitalizeFirst' })
+              : t('core:action.close', { postProcess: 'capitalizeFirst' })}
           </ButtonBase>
         </CardContent>
+
         {showResults && <PollResults votes={poll?.votes} />}
       </Box>
     </Card>
@@ -339,6 +377,8 @@ const PollResults = ({ votes }) => {
     ...votes?.voteCounts?.map((option) => option.voteCount)
   );
   const options = votes?.voteCounts;
+  const { t } = useTranslation(['auth', 'core', 'group']);
+
   return (
     <Box sx={{ width: '100%', p: 2 }}>
       {options
@@ -355,6 +395,7 @@ const PollResults = ({ votes }) => {
               >
                 {`${index + 1}. ${option.optionName}`}
               </Typography>
+
               <Typography
                 variant="body1"
                 sx={{
@@ -362,24 +403,25 @@ const PollResults = ({ votes }) => {
                   fontSize: '14px',
                 }}
               >
-                {option.voteCount} votes
+                {t('core:vote', { count: option.voteCount })}
               </Typography>
             </Box>
+
             <Box
               sx={{
-                mt: 1,
-                height: 10,
                 backgroundColor: '#e0e0e0',
                 borderRadius: 5,
+                height: 10,
+                mt: 1,
                 overflow: 'hidden',
               }}
             >
               <Box
                 sx={{
-                  width: `${(option.voteCount / maxVotes) * 100}%`,
-                  height: '100%',
                   backgroundColor: index === 0 ? '#3f51b5' : '#f50057',
+                  height: '100%',
                   transition: 'width 0.3s ease-in-out',
+                  width: `${(option.voteCount / maxVotes) * 100}%`,
                 }}
               />
             </Box>

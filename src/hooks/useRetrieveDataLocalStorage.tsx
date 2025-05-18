@@ -5,7 +5,7 @@ import {
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from './atoms/global';
+} from '../atoms/global';
 import { useSetAtom } from 'jotai';
 
 function fetchFromLocalStorage(key) {

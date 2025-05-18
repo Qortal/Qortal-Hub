@@ -340,7 +340,7 @@ export const ChatList = ({
                     >
                       <Typography>
                         {t('core:message.error.message_loading', {
-                          postProcess: 'capitalizeFirst',
+                          postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
                     </div>
@@ -370,7 +370,7 @@ export const ChatList = ({
                       fallback={
                         <Typography>
                           {t('group:message.generic.invalid_data', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </Typography>
                       }
@@ -418,7 +418,7 @@ export const ChatList = ({
             }}
           >
             {t('group:action.scroll_unread_messages', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </button>
         )}
@@ -444,7 +444,7 @@ export const ChatList = ({
             }}
           >
             {t('group:action.scroll_unread_messages', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Button>
         )}
