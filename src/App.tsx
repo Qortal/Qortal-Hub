@@ -91,8 +91,8 @@ import { DrawerComponent } from './components/Drawer/Drawer';
 import { AddressQRCode } from './components/AddressQRCode';
 import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
-import { useRetrieveDataLocalStorage } from './useRetrieveDataLocalStorage';
-import { useQortalGetSaveSettings } from './useQortalGetSaveSettings';
+import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
+import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
@@ -121,13 +121,13 @@ import { handleGetFileFromIndexedDB } from './utils/indexedDB';
 import { Wallets } from './Wallets';
 import { useFetchResources } from './common/useFetchResources';
 import { Tutorials } from './components/Tutorials/Tutorials';
-import { useHandleTutorials } from './components/Tutorials/useHandleTutorials';
-import { useHandleUserInfo } from './components/Group/useHandleUserInfo';
+import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
+import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortalRequests';
 import { QMailStatus } from './components/QMailStatus';
 import { GlobalActions } from './components/GlobalActions/GlobalActions';
-import { useBlockedAddresses } from './components/Group/useBlockUsers';
+import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
 import { WalletIcon } from './assets/Icons/WalletIcon';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';

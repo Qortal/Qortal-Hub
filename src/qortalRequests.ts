@@ -1,5 +1,5 @@
 import { gateways, getApiKeyFromStorage } from './background';
-import { listOfAllQortalRequests } from './components/Apps/useQortalMessageListener';
+import { listOfAllQortalRequests } from './hooks/useQortalMessageListener';
 import {
   addForeignServer,
   addGroupAdminRequest,

@@ -1,4 +1,4 @@
-import { openIndexedDB } from '../components/Apps/useQortalMessageListener';
+import { openIndexedDB } from '../hooks/useQortalMessageListener';
 import { fileToBase64 } from './fileReading';
 
 export async function handleGetFileFromIndexedDB(event) {

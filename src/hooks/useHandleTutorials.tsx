@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
+import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import creationImg from './img/creation.webp';
 import dashboardImg from './img/dashboard.webp';
 import groupsImg from './img/groups.webp';

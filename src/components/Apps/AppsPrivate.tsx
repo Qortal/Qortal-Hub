@@ -14,7 +14,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useDropzone } from 'react-dropzone';
-import { useHandlePrivateApps } from './useHandlePrivateApps';
+import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import {
   groupsPropertiesAtom,
   memberGroupsAtom,
