@@ -54,7 +54,7 @@ export const QMailMessages = ({ userName, userAddress }) => {
 
   const [loading, setLoading] = useState(true);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getMails = useCallback(async () => {
     try {

@@ -32,7 +32,7 @@ export const GeneralNotifications = ({ address }) => {
     setAnchorEl(event.currentTarget);
   };
 
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   return (

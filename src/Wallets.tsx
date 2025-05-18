@@ -49,7 +49,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { isShow, onCancel, onOk, show } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -453,7 +453,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     if (wallet?.name) {

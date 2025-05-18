@@ -13,7 +13,7 @@ export const CoreSyncStatus = () => {
   const [coreInfos, setCoreInfos] = useState({});
   const [isUsingGateway, setIsUsingGateway] = useState(false);
 
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   useEffect(() => {

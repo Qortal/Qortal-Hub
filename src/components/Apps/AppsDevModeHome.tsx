@@ -41,7 +41,7 @@ export const AppsDevModeHome = ({
   const [domain, setDomain] = useState('127.0.0.1');
   const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     openSnackGlobal,

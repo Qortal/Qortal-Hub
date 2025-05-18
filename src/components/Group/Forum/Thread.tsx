@@ -115,7 +115,7 @@ export const Thread = ({
   const [isLoading, setIsLoading] = useState(true);
   const [postReply, setPostReply] = useState(null);
   const [hasLastPage, setHasLastPage] = useState(false);
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
   // Update: Use a new ref for the scrollable container
   const threadContainerRef = useRef(null);

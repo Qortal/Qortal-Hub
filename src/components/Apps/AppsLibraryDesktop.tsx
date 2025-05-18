@@ -105,7 +105,7 @@ export const AppsLibraryDesktop = ({
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef(null);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const officialApps = useMemo(() => {
     return availableQapps.filter(

@@ -63,7 +63,7 @@ export const AppsPrivate = ({ myName }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
 
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const myGroupsPrivate = useMemo(() => {
     return memberGroups?.filter(
@@ -321,7 +321,9 @@ export const AppsPrivate = ({ myName }) => {
               }}
             >
               <Tab
-                label="Access app"
+                label={t('core:action.access_app', {
+                  postProcess: 'capitalizeFirst',
+                })}
                 {...a11yProps(0)}
                 sx={{
                   '&.Mui-selected': {
@@ -331,7 +333,9 @@ export const AppsPrivate = ({ myName }) => {
                 }}
               />
               <Tab
-                label="Publish app"
+                label={t('core:action.publish_app', {
+                  postProcess: 'capitalizeFirst',
+                })}
                 {...a11yProps(1)}
                 sx={{
                   '&.Mui-selected': {
@@ -367,7 +371,9 @@ export const AppsPrivate = ({ myName }) => {
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
                     value={privateAppValues?.groupId}
-                    label="Groups"
+                    label={t('group:group.group_other', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                     onChange={(e) => {
                       setPrivateAppValues((prev) => {
                         return {
@@ -552,7 +558,9 @@ export const AppsPrivate = ({ myName }) => {
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
                     value={selectedGroup}
-                    label="Groups where you are an admin"
+                    label={t('group:group.groups_admin', {
+                      postProcess: 'capitalizeFirst',
+                    })}
                     onChange={(e) => setSelectedGroup(e.target.value)}
                   >
                     <MenuItem value={0}>
@@ -560,6 +568,7 @@ export const AppsPrivate = ({ myName }) => {
                         postProcess: 'capitalizeFirst',
                       })}
                     </MenuItem>
+
                     {myGroupsWhereIAmAdmin
                       ?.filter((item) => !item?.isOpen)
                       .map((group) => {

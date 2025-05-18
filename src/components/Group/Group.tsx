@@ -444,7 +444,7 @@ export const Group = ({
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
   const groupsOwnerNamesRef = useRef({});
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);

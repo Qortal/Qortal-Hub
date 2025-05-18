@@ -141,7 +141,7 @@ export const NewThread = ({
   setPostReply,
   isPrivate,
 }: NewMessageProps) => {
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { show } = useContext(MyContext);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState('');

@@ -5,6 +5,7 @@
     "add_reaction": "add reaction",
     "accept": "accept",
     "access": "access",
+    "access_app": "access app",
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
@@ -44,7 +45,7 @@
     "login": "login",
     "logout": "logout",
     "new": {
-      "chat": "chat",
+      "chat": "new chat",
       "post": "new post",
       "thread": "new thread"
     },
@@ -83,6 +84,7 @@
   "all": "all",
   "api": "API",
   "app": "app",
+  "app_other": "apps",
   "app_name": "app name",
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
@@ -90,12 +92,14 @@
   "attachment": "attachment",
   "category": "category",
   "category_other": "categories",
+  "chat": "chat",
   "core": {
     "block_height": "block height",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
   },
+  "dev": "dev",
   "domain": "domain",
   "ui": {
     "version": "UI version"

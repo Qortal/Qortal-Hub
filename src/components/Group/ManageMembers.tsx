@@ -71,7 +71,7 @@ export const ManageMembers = ({
     setValue(newValue);
   };
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { show } = useContext(MyContext);
   const setTxList = useSetAtom(txListAtom);
 

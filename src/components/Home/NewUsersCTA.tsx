@@ -3,7 +3,7 @@ import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
 export const NewUsersCTA = ({ balance }) => {
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   if (balance === undefined || +balance > 0) return null;
 

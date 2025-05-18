@@ -20,7 +20,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasCalledRef = useRef(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getRating = useCallback(async (name, service) => {
     try {

@@ -37,7 +37,7 @@ export const AppInfo = ({ app, myName }) => {
   );
 
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service

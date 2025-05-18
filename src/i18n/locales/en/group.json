@@ -44,6 +44,7 @@
     "invites": "group invites",
     "group": "group",
     "group_other": "groups",
+    "groups_admin": "groups where you are an admin",
     "management": "group management",
     "member_number": "number of members",
     "messaging": "messaging",

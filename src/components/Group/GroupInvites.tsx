@@ -37,7 +37,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
     }
   };
 
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   useEffect(() => {

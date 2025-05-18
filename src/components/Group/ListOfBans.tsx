@@ -56,7 +56,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
   const [isLoadingUnban, setIsLoadingUnban] = useState(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getInvites = async (groupId) => {
     try {

@@ -84,7 +84,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   const { show } = useContext(MyContext);
   const theme = useTheme();
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const hasChanged = useMemo(() => {
     const newChanges = {

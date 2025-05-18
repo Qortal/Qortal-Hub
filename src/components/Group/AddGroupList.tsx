@@ -44,7 +44,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
 
   const setTxList = useSetAtom(txListAtom);
 
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open

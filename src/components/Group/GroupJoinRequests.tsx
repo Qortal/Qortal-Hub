@@ -28,7 +28,7 @@ export const GroupJoinRequests = ({
   setDesktopViewMode,
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState(
     []
   );

@@ -67,7 +67,7 @@ export const AppPublish = ({ names, categories }) => {
   const [file, setFile] = useState(null);
   const { show } = useContext(MyContext);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [tag1, setTag1] = useState('');
   const [tag2, setTag2] = useState('');
   const [tag3, setTag3] = useState('');
