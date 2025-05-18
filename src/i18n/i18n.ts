@@ -1,18 +1,7 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-
-const capitalizeAll = {
-  type: 'postProcessor',
-  name: 'capitalizeAll',
-  process: (value: string) => value.toUpperCase(),
-};
-
-const capitalizeFirst = {
-  type: 'postProcessor',
-  name: 'capitalizeFirst',
-  process: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
-};
+import { capitalizeAll, capitalizeFirst } from './processors';
 
 export const supportedLanguages = {
   de: { name: 'Deutsch', flag: '🇩🇪' },
