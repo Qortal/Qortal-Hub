@@ -367,6 +367,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
               }}
             />
           </ListItemIcon>
+
           <ListItemText
             sx={{
               '& .MuiTypography-root': {
@@ -377,7 +378,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                   : theme.palette.text.primary,
               },
             }}
-            primary={`${
+            primary={
               isSelectedAppPinned
                 ? t('core:action.unpin_app', {
                     postProcess: 'capitalizeFirstChar',
@@ -385,7 +386,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 : t('core:action.pin_app', {
                     postProcess: 'capitalizeFirstChar',
                   })
-            }}`}
+            }
           />
         </MenuItem>
 
