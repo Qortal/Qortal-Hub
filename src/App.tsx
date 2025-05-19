@@ -1697,10 +1697,11 @@ function App() {
                     style={{
                       fontSize: '14px',
                       fontWeight: 700,
-                      textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:user_lookup')}
+                    {t('core:user_lookup', {
+                      postProcess: 'capitalizeAll',
+                    })}
                   </span>
                 }
                 placement="left"

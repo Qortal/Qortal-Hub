@@ -24,13 +24,14 @@ import { useModal } from '../../common/useModal';
 import { isOpenBlockedModalAtom } from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const BlockedUsersModal = () => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [isOpenBlockedModal, setIsOpenBlockedModal] = useAtom(
     isOpenBlockedModalAtom
   );
-
   const [hasChanged, setHasChanged] = useState(false);
   const [value, setValue] = useState('');
   const [addressesWithNames, setAddressesWithNames] = useState({});
@@ -95,7 +96,12 @@ export const BlockedUsersModal = () => {
       if (!isAddress) {
         const response = await fetch(`${getBaseApiReact()}/names/${valUser}`);
         const data = await response.json();
-        if (!data?.owner) throw new Error('Name does not exist');
+        if (!data?.owner)
+          throw new Error(
+            t('auth:message.error.name_not_existing', {
+              postProcess: 'capitalizeFirst',
+            })
+          );
         if (data?.owner) {
           userAddress = data.owner;
           userName = valUser;

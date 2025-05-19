@@ -29,10 +29,10 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
   return (
     <SingleTheadMessageParent
       sx={{
-        height: 'auto',
         alignItems: 'flex-start',
-        cursor: 'default',
         borderRadius: '35px 4px 4px 4px',
+        cursor: 'default',
+        height: 'auto',
       }}
     >
       <Box
@@ -80,6 +80,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
               {formatTimestampForum(message?.created)}
             </ThreadInfoColumnTime>
           </ThreadInfoColumn>
+
           <div
             style={{
               display: 'flex',

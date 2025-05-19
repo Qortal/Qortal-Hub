@@ -249,6 +249,7 @@ export const GroupAvatar = ({
   );
 };
 
+// TODO the following part is the same as in MainAvatar.tsx
 const PopoverComp = ({
   avatarFile,
   setAvatarFile,

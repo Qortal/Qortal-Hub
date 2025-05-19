@@ -278,12 +278,14 @@ export const Thread = ({
         const urlNewer = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=1&includemetadata=false&reverse=false&prefix=true&before=${
           fullArrayMsg[0].created
         }`;
+
         const responseNewer = await fetch(urlNewer, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
         });
+
         const responseDataNewer = await responseNewer.json();
         if (responseDataNewer.length > 0) {
           setHasFirstPage(true);
@@ -296,12 +298,14 @@ export const Thread = ({
         const urlOlder = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=${threadIdentifier}&identifier=${identifier}&limit=1&includemetadata=false&reverse=false&prefix=true&after=${
           fullArrayMsg[fullArrayMsg.length - 1].created
         }`;
+
         const responseOlder = await fetch(urlOlder, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
           },
         });
+
         const responseDataOlder = await responseOlder.json();
         if (responseDataOlder.length > 0) {
           setHasLastPage(true);
@@ -321,6 +325,7 @@ export const Thread = ({
     },
     [messages, secretKey]
   );
+
   const getMessages = useCallback(async () => {
     if (
       !currentThread ||
@@ -337,6 +342,7 @@ export const Thread = ({
     groupInfo?.groupId,
     isPrivate,
   ]);
+
   const firstMount = useRef(false);
 
   const saveTimestamp = useCallback((currentThread: any, username?: string) => {
@@ -613,6 +619,7 @@ export const Thread = ({
               })}
             </ComposeP>
           </ShowMessageReturnButton>
+
           {/* Conditionally render the scroll buttons */}
           {showScrollButton &&
             (isAtBottom ? (
