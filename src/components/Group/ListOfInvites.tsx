@@ -60,7 +60,7 @@ export const ListOfInvites = ({
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const [isLoadingCancelInvite, setIsLoadingCancelInvite] = useState(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const listRef = useRef(null);
 
   const getInvites = async (groupId) => {
@@ -96,7 +96,7 @@ export const ListOfInvites = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'CANCEL_GROUP_INVITE',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -114,7 +114,7 @@ export const ListOfInvites = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.invitation_cancellation', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -136,7 +136,7 @@ export const ListOfInvites = ({
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);
@@ -196,7 +196,7 @@ export const ListOfInvites = ({
                     onClick={() => handleCancelInvitation(member?.invitee)}
                   >
                     {t('core:action.cancel_invitation', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
                 </Box>
@@ -229,7 +229,7 @@ export const ListOfInvites = ({
     <div>
       <p>
         {t('group:invitees_list', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })}
       </p>
       <div

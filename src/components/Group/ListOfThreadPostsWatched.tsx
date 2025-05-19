@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 export const ListOfThreadPostsWatched = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getPosts = async () => {
     try {
@@ -47,7 +47,7 @@ export const ListOfThreadPostsWatched = () => {
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -87,7 +87,7 @@ export const ListOfThreadPostsWatched = () => {
           }}
         >
           {t('group:thread_posts', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
           :
         </Typography>
@@ -135,7 +135,7 @@ export const ListOfThreadPostsWatched = () => {
               }}
             >
               {t('group:message.generic.no_display', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           </Box>

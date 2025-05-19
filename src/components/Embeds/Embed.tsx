@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getBaseApiReact } from '../../App';
-
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-
 import { extractComponents } from '../Chat/MessageDisplay';
 import { executeEvent } from '../../utils/events';
-
 import { base64ToBlobUrl } from '../../utils/fileReading';
 import {
   blobControllerAtom,
@@ -17,8 +14,8 @@ import { parseQortalLink } from './embed-utils';
 import { PollCard } from './PollEmbed';
 import { ImageCard } from './ImageEmbed';
 import { AttachmentCard } from './AttachmentEmbed';
-import { decodeIfEncoded } from '../../utils/decode';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const getPoll = async (name) => {
   const pollName = name;
@@ -32,6 +29,7 @@ const getPoll = async (name) => {
   });
 
   const responseData = await response.json();
+
   if (responseData?.message?.includes('POLL_NO_EXISTS')) {
     throw new Error('POLL_NO_EXISTS');
   } else if (responseData?.pollName) {
@@ -65,7 +63,7 @@ export const Embed = ({ embedLink }) => {
   const [parsedData, setParsedData] = useState(null);
   const setBlobs = useSetAtom(blobControllerAtom);
   const [selectedGroupId] = useAtom(selectedGroupIdAtom);
-
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const resourceData = useMemo(() => {
     const parsedDataOnTheFly = parseQortalLink(embedLink);
     if (
@@ -108,11 +106,20 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg('');
       setType('POLL');
       if (!parsedData?.name)
-        throw new Error('Invalid poll embed link. Missing name.');
+        throw new Error(
+          t('core:message.error.invalid_poll_embed_link_name', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const pollRes = await getPoll(parsedData.name);
       setPoll(pollRes);
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     } finally {
       setIsLoading(false);
     }
@@ -147,14 +154,15 @@ export const Embed = ({ embedLink }) => {
                 'Content-Type': 'application/json',
               },
             });
+
             const data = await responseData.text();
+
             if (data) {
               let decryptedData;
               try {
                 if (key && encryptionType === 'private') {
                   decryptedData = await window.sendMessage(
                     'DECRYPT_DATA_WITH_SHARING_KEY',
-
                     {
                       encryptedData: data,
                       key: decodeURIComponent(key),
@@ -164,7 +172,6 @@ export const Embed = ({ embedLink }) => {
                 if (encryptionType === 'group') {
                   decryptedData = await window.sendMessage(
                     'DECRYPT_QORTAL_GROUP_DATA',
-
                     {
                       data64: data,
                       groupId: selectedGroupId,
@@ -172,11 +179,19 @@ export const Embed = ({ embedLink }) => {
                   );
                 }
               } catch (error) {
-                throw new Error('Unable to decrypt');
+                throw new Error(
+                  t('auth:message.error.unable_decrypt', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                );
               }
 
               if (!decryptedData || decryptedData?.error)
-                throw new Error('Could not decrypt data');
+                throw new Error(
+                  t('auth:message.error.decrypt_data', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                );
               imageFinalUrl = base64ToBlobUrl(
                 decryptedData,
                 parsedData?.mimeType
@@ -193,11 +208,14 @@ export const Embed = ({ embedLink }) => {
                 };
               });
             } else {
-              throw new Error('No data for image');
+              throw new Error(
+                t('core:message.generic.no_data_image', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              );
             }
           } else {
             imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
-
             // If parsedData is used here, it must be defined somewhere
           }
         }
@@ -220,7 +238,9 @@ export const Embed = ({ embedLink }) => {
         return imageFinalUrl;
       } else {
         setErrorMsg(
-          'Unable to download IMAGE. Please try again later by clicking the refresh button'
+          t('core:message.error.unable_download_image', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
         return null;
       }
@@ -229,7 +249,9 @@ export const Embed = ({ embedLink }) => {
       setErrorMsg(
         error?.error ||
           error?.message ||
-          'An unexpected error occurred while trying to download the image'
+          t('core:message.error.generic', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
       return null;
     }
@@ -240,7 +262,11 @@ export const Embed = ({ embedLink }) => {
       setIsLoading(true);
       setErrorMsg('');
       if (!parsedData?.name || !parsedData?.service || !parsedData?.identifier)
-        throw new Error('Invalid image embed link. Missing param.');
+        throw new Error(
+          t('core:message.error.invalid_image_embed_link_name', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let image = await getImage(
         {
           name: parsedData.name,
@@ -253,7 +279,12 @@ export const Embed = ({ embedLink }) => {
 
       setImageUrl(image);
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     } finally {
       setIsLoading(false);
     }
@@ -290,7 +321,12 @@ export const Embed = ({ embedLink }) => {
           break;
       }
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   };
 
@@ -299,7 +335,12 @@ export const Embed = ({ embedLink }) => {
       const parsedData = parseQortalLink(embedLink);
       handleImage(parsedData);
     } catch (error) {
-      setErrorMsg(error?.message || 'Invalid embed link');
+      setErrorMsg(
+        error?.message ||
+          t('core:message.error.invalid_embed_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   };
 

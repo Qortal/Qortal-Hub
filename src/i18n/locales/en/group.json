@@ -44,6 +44,7 @@
     "invites": "group invites",
     "group": "group",
     "group_other": "groups",
+    "groups_admin": "groups where you are an admin",
     "management": "group management",
     "member_number": "number of members",
     "messaging": "messaging",
@@ -59,6 +60,7 @@
   "join_link": "join group link",
   "join_requests": "join requests",
   "last_message": "last message",
+  "last_message_date": "last message: {{date }}",
   "latest_mails": "latest Q-Mails",
   "message": {
     "generic": {
@@ -70,6 +72,7 @@
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_announcement": "group Announcements",
+      "group_encrypted": "group encrypted",
       "group_invited_you": "{{group}} has invited you",
       "group_key_created": "first group key created.",
       "group_member_list_changed": "the group member list has changed. Please re-encrypt the secret key.",

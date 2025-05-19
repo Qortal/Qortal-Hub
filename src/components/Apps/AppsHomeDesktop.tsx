@@ -28,7 +28,7 @@ export const AppsHomeDesktop = ({
 }) => {
   const [qortalUrl, setQortalUrl] = useState('');
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const openQortalUrl = () => {
     try {
@@ -57,7 +57,7 @@ export const AppsHomeDesktop = ({
             fontSize: '30px',
           }}
         >
-          {t('core:apps_dashboard', { postProcess: 'capitalizeFirst' })}
+          {t('core:apps_dashboard', { postProcess: 'capitalizeFirstChar' })}
         </AppLibrarySubTitle>
       </AppsContainer>
 
@@ -148,7 +148,7 @@ export const AppsHomeDesktop = ({
             </AppCircle>
 
             <AppCircleLabel>
-              {t('core:library', { postProcess: 'capitalizeFirst' })}
+              {t('core:library', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>

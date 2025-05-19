@@ -6,13 +6,13 @@ import {
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from './atoms/global';
-import { getArbitraryEndpointReact, getBaseApiReact } from './App';
-import { decryptResource } from './components/Group/Group';
+} from '../atoms/global';
+import { getArbitraryEndpointReact, getBaseApiReact } from '../App';
+import { decryptResource } from '../components/Group/Group';
 import {
   base64ToUint8Array,
   uint8ArrayToObject,
-} from './backgroundFunctions/encryption';
+} from '../backgroundFunctions/encryption';
 import { useAtom, useSetAtom } from 'jotai';
 
 function fetchFromLocalStorage(key) {

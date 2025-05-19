@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../App';
 import { Box, Tooltip, Typography, useTheme } from '@mui/material';
-import { BarSpinner } from '../../common/Spinners/BarSpinner/BarSpinner';
-import { formatDate } from '../../utils/time';
+import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
+import { formatDate } from '../utils/time';
 import { useTranslation } from 'react-i18next';
 
 function getAverageLtcPerQort(trades) {
@@ -152,7 +152,7 @@ export const QortPrice = () => {
               fontWeight: 'bold',
             }}
           >
-            {t('core:price', { postProcess: 'capitalizeFirst' })}
+            {t('core:price', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
 
           {!ltcPerQort ? (
@@ -184,7 +184,7 @@ export const QortPrice = () => {
             fontWeight: 'bold',
           }}
         >
-          {t('core:supply', { postProcess: 'capitalizeFirst' })}
+          {t('core:supply', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
 
         {!supply ? (
@@ -238,7 +238,7 @@ export const QortPrice = () => {
               fontWeight: 'bold',
             }}
           >
-            {t('core:last_height', { postProcess: 'capitalizeFirst' })}
+            {t('core:last_height', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
 
           {!lastBlock?.height ? (

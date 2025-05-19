@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
-import creationImg from './img/creation.webp';
-import dashboardImg from './img/dashboard.webp';
-import groupsImg from './img/groups.webp';
-import importantImg from './img/important.webp';
-import navigationImg from './img/navigation.webp';
-import overviewImg from './img/overview.webp';
-import startedImg from './img/started.webp';
-import obtainingImg from './img/obtaining-qort.jpg';
+import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
+import creationImg from '../components/Tutorials/img/creation.webp';
+import dashboardImg from '../components/Tutorials/img/dashboard.webp';
+import groupsImg from '../components/Tutorials/img/groups.webp';
+import importantImg from '../components/Tutorials/img/important.webp';
+import navigationImg from '../components/Tutorials/img/navigation.webp';
+import overviewImg from '../components/Tutorials/img/overview.webp';
+import startedImg from '../components/Tutorials/img/started.webp';
+import obtainingImg from '../components/Tutorials/img/obtaining-qort.jpg';
 import { useTranslation } from 'react-i18next';
 
 const checkIfGatewayIsOnline = async () => {
@@ -108,7 +108,7 @@ export const useHandleTutorials = () => {
                 multi: [
                   {
                     title: t('tutorial:1_getting_started', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -119,7 +119,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:2_overview', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -130,7 +130,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:3_groups', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -141,7 +141,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:4_obtain_qort', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -163,7 +163,7 @@ export const useHandleTutorials = () => {
                 multi: [
                   {
                     title: t('tutorial:apps.dashboard', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',
@@ -174,7 +174,7 @@ export const useHandleTutorials = () => {
                   },
                   {
                     title: t('tutorial:apps.navigation', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     }),
                     resource: {
                       name: 'a-test',

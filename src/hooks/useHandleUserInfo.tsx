@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../App';
 
 export const useHandleUserInfo = () => {
   const userInfoRef = useRef({});

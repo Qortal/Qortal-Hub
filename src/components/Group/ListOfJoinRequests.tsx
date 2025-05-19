@@ -64,7 +64,7 @@ export const ListOfJoinRequests = ({
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
   const [isLoadingAccept, setIsLoadingAccept] = useState(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getInvites = async (groupId) => {
     try {
@@ -99,7 +99,7 @@ export const ListOfJoinRequests = ({
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'GROUP_INVITE',
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
@@ -119,7 +119,7 @@ export const ListOfJoinRequests = ({
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success,group_join', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
               });
               setOpenSnack(true);
@@ -130,10 +130,10 @@ export const ListOfJoinRequests = ({
                   ...response,
                   type: 'join-request-accept',
                   label: t('group:message.success,invitation_request', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   labelDone: t('group:message.success,user_joined', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   }),
                   done: false,
                   groupId,
@@ -158,7 +158,7 @@ export const ListOfJoinRequests = ({
               message:
                 error?.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);
@@ -226,7 +226,7 @@ export const ListOfJoinRequests = ({
                     onClick={() => handleAcceptJoinRequest(member?.joiner)}
                   >
                     {t('core:action.accept', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </LoadingButton>
                 </Box>
@@ -256,7 +256,9 @@ export const ListOfJoinRequests = ({
 
   return (
     <div>
-      <p>{t('core:list.join_request', { postProcess: 'capitalizeFirst' })}</p>
+      <p>
+        {t('core:list.join_request', { postProcess: 'capitalizeFirstChar' })}
+      </p>
       <div
         style={{
           position: 'relative',

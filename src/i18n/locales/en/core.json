@@ -5,6 +5,7 @@
     "add_reaction": "add reaction",
     "accept": "accept",
     "access": "access",
+    "access_app": "access app",
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
@@ -30,6 +31,7 @@
     "decrypt": "decrypt",
     "disable_enter": "disable enter",
     "download": "download",
+    "download_file": "download file",
     "edit": "edit",
     "enter_name": "enter a name",
     "export": "export",
@@ -43,6 +45,7 @@
     "login": "login",
     "logout": "logout",
     "new": {
+      "chat": "new chat",
       "post": "new post",
       "thread": "new thread"
     },
@@ -61,12 +64,15 @@
     "remove_reaction": "remove reaction",
     "return_apps_dashboard": "return to Apps Dashboard",
     "save": "save",
+    "save_disk": "save to disk",
     "search": "search",
     "search_apps": "search for apps",
     "select_app_type": "select App Type",
     "select_category": "select Category",
     "select_name_app": "select Name/App",
     "set_avatar": "set avatar",
+    "show": "show",
+    "show_poll": "show poll",
     "start_minting": "start minting",
     "start_typing": "start typing here...",
     "transfer_qort": "Transfer QORT",
@@ -74,24 +80,32 @@
     "unpin_app": "unpin app",
     "unpin_from_dashboard": "unpin from dashboard",
     "update": "update",
-    "update_app": "update your app"
+    "update_app": "update your app",
+    "vote": "vote"
   },
   "admin": "admin",
+  "admin_other": "admins",
   "all": "all",
+  "announcement": "announcement",
+  "announcement_other": "announcements",
   "api": "API",
   "app": "app",
+  "app_other": "apps",
   "app_name": "app name",
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
+  "attachment": "attachment",
   "category": "category",
   "category_other": "categories",
+  "chat": "chat",
   "core": {
     "block_height": "block height",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
   },
+  "dev": "dev",
   "domain": "domain",
   "ui": {
     "version": "UI version"
@@ -109,8 +123,10 @@
     "publish": "publish fee"
   },
   "for": "for",
+  "general": "general",
   "general_settings": "general settings",
   "identifier": "identifier",
+  "image_embed": "image embed",
   "last_height": "last height",
   "level": "level",
   "library": "library",
@@ -120,12 +136,14 @@
     "member": "member list"
   },
   "loading": {
-    "announcements": "announcements",
+    "announcements": "loading announcements",
     "generic": "loading...",
     "chat": "loading chat... please wait.",
     "comments": "loading comments... please wait.",
     "posts": "loading posts... please wait."
   },
+  "member": "member",
+  "member_other": "members",
   "message_us": "please message us on Telegram or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {
@@ -133,6 +151,9 @@
       "app_need_name": "your app needs a name",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
+      "invalid_embed_link": "invalid embed link",
+      "invalid_poll_embed_link_name": "invalid poll embed link. Missing name.",
+      "invalid_image_embed_link_name": "invalid image embed link. Missing param.",
       "invalid_signature": "invalid signature",
       "invalid_zip": "invalid zip",
       "message_loading": "error loading message.",
@@ -148,19 +169,27 @@
       "rating_option": "cannot find rating option",
       "save_qdn": "unable to save to QDN",
       "send_failed": "failed to send",
+      "unable_download_image": "unable to download IMAGE. Please try again later by clicking the refresh button",
       "unable_encrypt_app": "unable to encrypt app. App not published'",
       "unable_publish_app": "unable to publish app",
       "unable_publish_image": "unable to publish image",
       "unable_rate": "unable to rate",
+      "unable_vote": "unable to vote",
       "update_failed": "failed to update"
     },
     "generic": {
+      "already_voted": "you've already voted.",
       "avatar_size": "{{ size }} KB max. for GIFS",
+      "building": "building",
+      "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
       "devmode_local_node": "please use your local node for dev mode! Logout and use Local node.",
+      "downloading": "downloading",
       "edited": "edited",
       "editing_message": "editing message",
+      "encrypted": "encrypted",
+      "encrypted_not": "not encrypted",
       "fee_qort": "fee: {{ message }} QORT",
       "foreign_fee": "foreign fee: {{ message }}",
       "mentioned": "mentioned",
@@ -173,7 +202,9 @@
       "name_rate": "you need a name to rate.",
       "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
+      "no_data_image": "no data for image",
       "no_description": "no description",
+      "no_messages": "no messages",
       "no_minting_details": "cannot view minting details on the gateway",
       "no_notifications": "no new notifications",
       "no_pinned_changes": "you currently do not have any changes to your pinned apps",
@@ -184,6 +215,7 @@
       "password_enter": "please enter a password",
       "payment_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting a payment</span>",
       "people_reaction": "people who reacted with {{ reaction }}",
+      "processing_transaction": "is processing transaction, please wait...",
       "publish_data": "publish data to Qortal: anything from apps to videos. Fully decentralized!",
       "publishing": "publishing... Please wait.",
       "qdn": "use QDN saving",
@@ -205,6 +237,7 @@
       "updating": "updating"
     },
     "question": {
+      "accept_vote_on_poll": "do you accept this VOTE_ON_POLL transaction? POLLS are public!",
       "logout": "are you sure you would like to logout?",
       "new_user": "are you a new user?",
       "delete_chat_image": "would you like to delete your previous chat image?",
@@ -231,13 +264,16 @@
       "published_qdn": "successfully published to QDN",
       "rated_app": "successfully rated. Please wait a couple minutes for the network to propogate the changes.",
       "request_read": "I have read this request",
-      "transfer": "the transfer was succesful!"
+      "transfer": "the transfer was succesful!",
+      "voted": "successfully voted. Please wait a couple minutes for the network to propogate the changes."
     }
   },
   "minting_status": "minting status",
   "name": "name",
   "name_app": "name/App",
   "none": "none",
+  "option": "option",
+  "option_other": "options",
   "page": {
     "last": "last",
     "first": "first",
@@ -245,6 +281,7 @@
     "previous": "previous"
   },
   "payment_notification": "payment notification",
+  "poll_embed": "poll embed",
   "port": "port",
   "price": "price",
   "q_apps": {
@@ -264,6 +301,8 @@
     "dark": "dark mode",
     "light": "light mode"
   },
+  "thread": "thread",
+  "thread_other": "threads",
   "time": {
     "day_one": "{{count}} day",
     "day_other": "{{count}} days",
@@ -275,6 +314,8 @@
   "title": "title",
   "tutorial": "tutorial",
   "user_lookup": "user lookup",
+  "vote": "vote",
+  "vote_other": "{{ count }} votes",
   "zip": "zip",
   "wallet": {
     "litecoin": "litecoin wallet",

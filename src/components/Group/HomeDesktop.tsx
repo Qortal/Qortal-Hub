@@ -5,10 +5,10 @@ import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
-import { QortPrice } from '../Home/QortPrice';
+import { QortPrice } from '../QortPrice';
 import ExploreIcon from '@mui/icons-material/Explore';
 import { Explore } from '../Explore/Explore';
-import { NewUsersCTA } from '../Home/NewUsersCTA';
+import { NewUsersCTA } from '../NewUsersCTA';
 import { useTranslation } from 'react-i18next';
 
 export const HomeDesktop = ({
@@ -31,7 +31,7 @@ export const HomeDesktop = ({
   const [checked1, setChecked1] = React.useState(false);
   const [checked2, setChecked2] = React.useState(false);
 
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   React.useEffect(() => {
@@ -85,7 +85,7 @@ export const HomeDesktop = ({
             padding: '10px',
           }}
         >
-          {t('core:welcome', { postProcess: 'capitalizeFirst' })}
+          {t('core:welcome', { postProcess: 'capitalizeFirstChar' })}
           {userInfo?.name ? (
             <span
               style={{
@@ -218,7 +218,7 @@ export const HomeDesktop = ({
                   }}
                 >
                   {t('tutorial:initial.explore', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>{' '}
               </Box>

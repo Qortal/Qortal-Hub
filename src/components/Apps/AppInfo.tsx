@@ -37,7 +37,7 @@ export const AppInfo = ({ app, myName }) => {
   );
 
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
@@ -174,10 +174,10 @@ export const AppInfo = ({ app, myName }) => {
               <AppDownloadButtonText>
                 {isSelectedAppPinned
                   ? t('core:action.unpin_from_dashboard', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })
                   : t('core:action.pin_from_dashboard', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
               </AppDownloadButtonText>
             </AppDownloadButton>
@@ -200,10 +200,10 @@ export const AppInfo = ({ app, myName }) => {
               <AppDownloadButtonText>
                 {isInstalled
                   ? t('core:action.open', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })
                   : t('core:action.download', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
               </AppDownloadButtonText>
             </AppDownloadButton>
@@ -229,7 +229,7 @@ export const AppInfo = ({ app, myName }) => {
             <AppsCategoryInfoSub>
               <AppsCategoryInfoLabel>
                 {t('core:category', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 :
               </AppsCategoryInfoLabel>
@@ -239,7 +239,7 @@ export const AppInfo = ({ app, myName }) => {
               <AppsCategoryInfoValue>
                 {app?.metadata?.categoryName ||
                   t('core:none', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
               </AppsCategoryInfoValue>
             </AppsCategoryInfoSub>
@@ -249,7 +249,7 @@ export const AppInfo = ({ app, myName }) => {
 
           <AppInfoAppName>
             {t('core:q_apps.about', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </AppInfoAppName>
         </AppsWidthLimiter>
@@ -259,7 +259,7 @@ export const AppInfo = ({ app, myName }) => {
         <AppsInfoDescription>
           {app?.metadata?.description ||
             t('core:message.generic.no_description', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
         </AppsInfoDescription>
       </Box>

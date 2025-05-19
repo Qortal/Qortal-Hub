@@ -19,7 +19,7 @@ export const AdminSpace = ({
   isOwner,
 }) => {
   const [isMoved, setIsMoved] = useState(false);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     if (hide) {
@@ -54,7 +54,7 @@ export const AdminSpace = ({
         >
           <Typography>
             {t('core:message.generic.space_for_admins', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         </Box>

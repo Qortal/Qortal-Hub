@@ -45,7 +45,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
@@ -228,7 +228,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
           });
@@ -239,7 +239,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         message:
           error?.message ||
           t('core:message.error.minting_account_add', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
       });
       setOpenSnack(true);
@@ -278,7 +278,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
           });
@@ -289,7 +289,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         message:
           error?.message ||
           t('core:message.error.minting_account_remove', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
       });
       setOpenSnack(true);
@@ -302,9 +302,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     const fee = await getFee('REWARD_SHARE');
     await show({
       message: t('core:message.question.perform_transaction', {
-        // TODO move from group into core namespace
         action: 'REWARD_SHARE',
-        postProcess: 'capitalizeFirst',
+        postProcess: 'capitalizeFirstChar',
       }),
       publishFee: fee.fee + ' QORT',
     });
@@ -321,10 +320,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 ...response,
                 type: 'add-rewardShare',
                 label: t('group:message.success.rewardshare_add', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
                 labelDone: t('group:message.success.rewardshare_add_label', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
                 done: false,
               },
@@ -340,7 +339,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             message:
               error.message ||
               t('core:message.error.generic', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           });
         });
@@ -365,7 +364,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             message:
               error.message ||
               t('core:message.error.generic', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           });
         });
@@ -393,7 +392,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
     throw new Error(
       t('group:message.error.timeout_reward', {
-        postProcess: 'capitalizeFirst',
+        postProcess: 'capitalizeFirstChar',
       })
     );
   };
@@ -430,7 +429,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         message:
           error?.message ||
           t('group:message.error.unable_minting', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
       });
       setOpenSnack(true);
@@ -470,10 +469,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 ...response,
                 type: 'remove-rewardShare',
                 label: t('group:message.success.rewardshare_remove', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
                 labelDone: t('group:message.success.rewardshare_remove_label', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
                 done: false,
               },
@@ -488,63 +487,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             message:
               error.message ||
               t('core:message.error.generic', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               }),
           });
         });
     });
   }, []);
-
-  // TODO unused functions. Remove??
-
-  // const handleRemoveRewardShare = async (rewardShare) => {
-  //   try {
-  //     setIsLoading(true);
-
-  //     const privateRewardShare = await removeRewardShare(rewardShare);
-  //   } catch (error) {
-  //     setInfo({
-  //       type: 'error',
-  //       message: error?.message || 'Unable to remove reward share',
-  //     });
-  //     setOpenSnack(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
-
-  // const createRewardShareForPotentialMinter = async (receiver) => {
-  //   try {
-  //     setIsLoading(true);
-  //     const confirmReceiver = await getNameOrAddress(receiver);
-  //     if (confirmReceiver.error)
-  //       throw new Error('Invalid receiver address or name');
-  //     const isInMinterGroup = await checkIfMinterGroup(confirmReceiver);
-  //     if (!isInMinterGroup) throw new Error('Account not in Minter Group');
-  //     const publicKey = await getPublicKeyFromAddress(confirmReceiver);
-  //     const findRewardShare = rewardShares?.find(
-  //       (item) =>
-  //         item?.recipient === confirmReceiver &&
-  //         item?.mintingAccount === myAddress
-  //     );
-  //     if (findRewardShare) {
-  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-  //       setRewardsharekey(privateRewardShare);
-  //     } else {
-  //       await createRewardShare(publicKey, confirmReceiver);
-  //       const privateRewardShare = await getRewardSharePrivateKey(publicKey);
-  //       setRewardsharekey(privateRewardShare);
-  //     }
-  //   } catch (error) {
-  //     setInfo({
-  //       type: 'error',
-  //       message: error?.message || 'Unable to create reward share',
-  //     });
-  //     setOpenSnack(true);
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
 
   useEffect(() => {
     getNodeInfos();
@@ -621,7 +569,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     >
       <DialogTitle id="alert-dialog-title">
         {t('group:message.generic.manage_minting', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })}
       </DialogTitle>
 
@@ -674,28 +622,28 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         >
           <Typography>
             {t('auth:account.account_one', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             : {handleNames(accountInfo?.address)}
           </Typography>
 
           <Typography>
             {t('core:level', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
             : {accountInfo?.level}
           </Typography>
 
           <Typography>
             {t('group:message.generic.next_level', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}{' '}
             {_levelUpBlocks()}
           </Typography>
 
           <Typography>
             {t('group:message.generic.node_minting', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}{' '}
             {nodeInfos?.isMintingPossible?.toString()}
           </Typography>
@@ -735,14 +683,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               variant="contained"
             >
               {t('core:action.start_minting', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
 
             {mintingAccounts?.length > 1 && (
               <Typography>
                 {t('group:message.generic.minting_keys_per_node', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             )}
@@ -754,7 +702,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         {mintingAccounts?.length > 0 && (
           <Typography>
             {t('group:message.generic.node_minting_account', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
         )}
@@ -774,7 +722,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             >
               <Typography>
                 {t('group:message.generic.node_minting_key', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -793,7 +741,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             >
               <Typography>
                 {t('group:message.generic.minting_account', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}{' '}
                 {handleNames(acct?.mintingAccount)}
               </Typography>
@@ -819,7 +767,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 variant="contained"
               >
                 {t('group:action.remove_minting_account', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
 
@@ -832,7 +780,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           {mintingAccounts?.length > 1 && (
             <Typography>
               {t('group:message.generic.minting_keys_per_node_different', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           )}
@@ -858,13 +806,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             >
               <Typography>
                 {t('group:message.generic.minter_group', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
 
               <Typography>
                 {t('group:message.generic.mintership_app', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
 
@@ -894,7 +842,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 variant="contained"
               >
                 {t('group:action.visit_q_mintership', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
             </Box>
@@ -915,14 +863,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               {!isShowNext && (
                 <Typography>
                   {t('group:message.success.rewardshare_creation', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               )}
               {isShowNext && (
                 <Typography>
                   {t('group:message.success.rewardshare_confirmed', {
-                    postProcess: 'capitalizeFirst',
+                    postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               )}
@@ -935,7 +883,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 onClick={onOk}
                 autoFocus
               >
-                {t('core:page.next', { postProcess: 'capitalizeFirst' })}
+                {t('core:page.next', { postProcess: 'capitalizeFirstChar' })}
               </Button>
             </DialogActions>
           </Dialog>
@@ -948,7 +896,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           variant="contained"
           onClick={() => setIsOpenMinting(false)}
         >
-          {t('core:action.close', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
         </Button>
       </DialogActions>
 

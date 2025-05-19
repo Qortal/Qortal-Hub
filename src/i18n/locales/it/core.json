@@ -60,7 +60,7 @@
     "remove": "remove",
     "remove_reaction": "remove reaction",
     "return_apps_dashboard": "return to Apps Dashboard",
-    "save": "save",
+    "save": "salva",
     "search": "search",
     "search_apps": "search for apps",
     "select_app_type": "select App Type",
@@ -80,18 +80,21 @@
   "all": "all",
   "api": "API",
   "app": "app",
+  "app_other": "apps",
   "app_name": "app name",
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
   "category": "category",
   "category_other": "categories",
+  "chat": "chat",
   "core": {
     "block_height": "altezza blocco",
     "information": "informazioni core",
     "peers": "peer connessi",
     "version": "versione core"
   },
+  "dev": "dev",
   "domain": "domain",
   "ui": {
     "version": "versione UI"

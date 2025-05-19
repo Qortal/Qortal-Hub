@@ -41,7 +41,7 @@ export const AppsDevModeHome = ({
   const [domain, setDomain] = useState('127.0.0.1');
   const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     openSnackGlobal,
@@ -116,7 +116,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.devmode_local_node', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -126,7 +126,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.name_preview', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -139,7 +139,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.select_file', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -196,7 +196,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.devmode_local_node', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -206,7 +206,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.name_preview', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -219,7 +219,7 @@ export const AppsDevModeHome = ({
         setInfoSnackCustom({
           type: 'error',
           message: t('core:message.generic.select_file', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
         });
         return;
@@ -240,7 +240,7 @@ export const AppsDevModeHome = ({
       if (!response?.ok)
         throw new Error(
           t('core:message.error.invalid_zip', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })
         );
       const previewPath = await response.text();
@@ -286,7 +286,7 @@ export const AppsDevModeHome = ({
             fontSize: '30px',
           }}
         >
-          {t('core:devmode_apps', { postProcess: 'capitalizeFirst' })}
+          {t('core:devmode_apps', { postProcess: 'capitalizeFirstChar' })}
         </AppLibrarySubTitle>
       </AppsContainer>
 
@@ -312,7 +312,7 @@ export const AppsDevModeHome = ({
               <Add>+</Add>
             </AppCircle>
             <AppCircleLabel>
-              {t('core:server', { postProcess: 'capitalizeFirst' })}
+              {t('core:server', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
@@ -332,7 +332,7 @@ export const AppsDevModeHome = ({
             </AppCircle>
 
             <AppCircleLabel>
-              {t('core:zip', { postProcess: 'capitalizeFirst' })}
+              {t('core:zip', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
@@ -351,7 +351,7 @@ export const AppsDevModeHome = ({
               <Add>+</Add>
             </AppCircle>
             <AppCircleLabel>
-              {t('core:directory', { postProcess: 'capitalizeFirst' })}
+              {t('core:directory', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
@@ -382,7 +382,7 @@ export const AppsDevModeHome = ({
                   },
                 }}
                 alt={t('core:q_apps.q_sandbox', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/Q-Sandbox/qortal_avatar?async=true`}
               >
@@ -398,7 +398,7 @@ export const AppsDevModeHome = ({
 
             <AppCircleLabel>
               {t('core:q_apps.q_sandbox', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </AppCircleLabel>
           </AppCircleContainer>
@@ -466,7 +466,7 @@ export const AppsDevModeHome = ({
         >
           <DialogTitle id="alert-dialog-title">
             {t('core:action.add_custom_framework', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </DialogTitle>
 
@@ -480,12 +480,12 @@ export const AppsDevModeHome = ({
             >
               <Label>
                 {t('core:domain', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Label>
               <Input
                 placeholder={t('core:domain', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
@@ -502,12 +502,12 @@ export const AppsDevModeHome = ({
             >
               <Label>
                 {t('core:port', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Label>
               <Input
                 placeholder={t('core:port', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
@@ -518,7 +518,7 @@ export const AppsDevModeHome = ({
           <DialogActions>
             <Button variant="contained" onClick={onCancel}>
               {t('core:action.close', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
 
@@ -529,7 +529,7 @@ export const AppsDevModeHome = ({
               autoFocus
             >
               {t('core:action.add', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
           </DialogActions>

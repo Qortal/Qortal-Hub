@@ -37,7 +37,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
     }
   };
 
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
             fontSize: '1rem',
           }}
         >
-          {t('group:group.invites', { postProcess: 'capitalizeFirst' })}{' '}
+          {t('group:group.invites', { postProcess: 'capitalizeFirstChar' })}{' '}
           {groupsWithJoinRequests?.length > 0 &&
             ` (${groupsWithJoinRequests?.length})`}
         </Typography>
@@ -131,7 +131,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                 }}
               >
                 {t('group:message.generic.no_display', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
             </Box>
@@ -181,7 +181,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                       }}
                       primary={t('group:message.generic.group_invited_you', {
                         group: group?.groupName,
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                     />
                   </ListItemButton>

@@ -1,10 +1,10 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { executeEvent } from '../../utils/events';
-import { navigationControllerAtom } from '../../atoms/global';
+import { executeEvent } from '../utils/events';
+import { navigationControllerAtom } from '../atoms/global';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { saveFile } from '../../qortalRequests/get';
-import { mimeToExtensionMap } from '../../utils/memeTypes';
-import { MyContext } from '../../App';
+import { saveFile } from '../qortalRequests/get';
+import { mimeToExtensionMap } from '../utils/memeTypes';
+import { MyContext } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
 

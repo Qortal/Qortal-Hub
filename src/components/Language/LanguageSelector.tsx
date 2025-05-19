@@ -40,7 +40,7 @@ const LanguageSelector = () => {
         <Tooltip
           key={currentLang}
           title={t('core:action.change_language', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         >
           <button

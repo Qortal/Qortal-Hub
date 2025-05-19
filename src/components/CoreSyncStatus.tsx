@@ -6,14 +6,14 @@ import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { manifestData } from '../ExtStates/NotAuthenticated';
+import { manifestData } from './NotAuthenticated';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos, setNodeInfos] = useState({});
   const [coreInfos, setCoreInfos] = useState({});
   const [isUsingGateway, setIsUsingGateway] = useState(false);
 
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
   useEffect(() => {
@@ -77,26 +77,26 @@ export const CoreSyncStatus = () => {
 
     let imagePath = syncingImg;
     let message = t('core:message.status.synchronizing', {
-      postProcess: 'capitalizeFirst',
+      postProcess: 'capitalizeFirstChar',
     });
 
     if (isMintingPossible && !isUsingGateway) {
       imagePath = syncedMintingImg;
-      message = `${t(`core:message.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalizeFirst' })} ${t('core:message.status.minting')}`;
+      message = `${t(`core:message.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalizeFirstChar' })} ${t('core:message.status.minting')}`;
     } else if (isSynchronizing === true && syncPercent === 99) {
       imagePath = syncingImg;
     } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
       imagePath = syncedImg;
-      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:message.status.not_minting') : ''}`;
     } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncingImg;
-      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronizing', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
       imagePath = syncedMintingImg;
-      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirst' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
+      message = `${t('core:message.status.synchronized', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:message.status.minting') : ''}`;
     }
 
     return (
@@ -122,37 +122,42 @@ export const CoreSyncStatus = () => {
           }}
         >
           <h3>
-            {t('core:core.information', { postProcess: 'capitalizeFirst' })}
+            {t('core:core.information', { postProcess: 'capitalizeFirstChar' })}
           </h3>
 
           <h4 className="lineHeight">
-            {t('core:core.version', { postProcess: 'capitalizeFirst' })}:{' '}
+            {t('core:core.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
           </h4>
 
           <h4 className="lineHeight">{message}</h4>
 
           <h4 className="lineHeight">
-            {t('core:core.block_height', { postProcess: 'capitalizeFirst' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>{height || ''}</span>
+            {t('core:core.block_height', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            : <span style={{ color: '#03a9f4' }}>{height || ''}</span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('core:core.peers', { postProcess: 'capitalizeFirst' })}:{' '}
+            {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {numberOfConnections || ''}
             </span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('auth:node.using_public', { postProcess: 'capitalizeFirst' })}:{' '}
+            {t('auth:node.using_public', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            :{' '}
             <span style={{ color: '#03a9f4' }}>
               {isUsingGateway?.toString()}
             </span>
           </h4>
 
           <h4 className="lineHeight">
-            {t('core:ui.version', { postProcess: 'capitalizeFirst' })}:{' '}
+            {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
           </h4>
         </div>

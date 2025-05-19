@@ -68,7 +68,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
   const [file, setFile] = useState(null);
   const { show } = useContext(MyContext);
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'auth', 'group']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [tag1, setTag1] = useState('');
   const [tag2, setTag2] = useState('');
   const [tag3, setTag3] = useState('');
@@ -97,7 +97,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               t('core:message.error.file_too_large', {
                 filename: file.name,
                 size: maxFileSize / (1024 * 1024),
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             );
           }
@@ -191,7 +191,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
         const missingFieldsString = missingFields.join(', ');
         const errorMsg = t('core:message.error.missing_fields', {
           fields: missingFieldsString,
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         });
         throw new Error(errorMsg);
       }
@@ -199,13 +199,13 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
       await show({
         message: t('core:message.question.publish_app', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
         publishFee: fee.fee + ' QORT',
       });
       setIsLoading(
         t('core:message.generic.publishing', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         })
       );
       await new Promise((res, rej) => {
@@ -235,7 +235,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });
@@ -243,7 +243,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
       setInfoSnack({
         type: 'success',
         message: t('core:message.success.published', {
-          postProcess: 'capitalizeFirst',
+          postProcess: 'capitalizeFirstChar',
         }),
       });
       setOpenSnack(true);
@@ -266,7 +266,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
         message:
           error?.message ||
           t('core:message.error.publish_app', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           }),
       });
       setOpenSnack(true);
@@ -290,7 +290,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
       >
         <AppLibrarySubTitle>
           {t('core:action.create_apps', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
           !
         </AppLibrarySubTitle>
@@ -299,7 +299,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <PublishQAppInfo>
           {t('core:message.generic.one_app_per_name', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </PublishQAppInfo>
 
@@ -307,7 +307,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:name_app', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -324,7 +324,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               }}
             >
               {t('core:action.select_name_app', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </em>
             {/* This is the placeholder item */}
@@ -338,7 +338,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:app_service_type', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -355,18 +355,18 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               }}
             >
               {t('core:action.select_app_type', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </em>
           </CustomMenuItem>
           <CustomMenuItem value={'APP'}>
             {t('core:app', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </CustomMenuItem>
           <CustomMenuItem value={'WEBSITE'}>
             {t('core:website', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </CustomMenuItem>
         </CustomSelect>
@@ -375,7 +375,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:title', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -402,7 +402,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:description', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -429,7 +429,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:category', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -446,7 +446,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               }}
             >
               {t('core:action.select_category', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </em>
           </CustomMenuItem>
@@ -463,7 +463,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
           {t('core:tags', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </InputLabel>
 
@@ -559,7 +559,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
         <PublishQAppInfo>
           {t('core:message.generic.select_zip', {
-            postProcess: 'capitalizeFirst',
+            postProcess: 'capitalizeFirstChar',
           })}
         </PublishQAppInfo>
 
@@ -580,7 +580,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
         <PublishQAppChoseFile {...getRootProps()}>
           {' '}
           <input {...getInputProps()} />
-          {t('core:action.choose_file', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.choose_file', { postProcess: 'capitalizeFirstChar' })}
         </PublishQAppChoseFile>
 
         <Spacer height="35px" />
@@ -591,7 +591,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
           }}
           onClick={publishApp}
         >
-          {t('core:action.publish', { postProcess: 'capitalizeFirst' })}
+          {t('core:action.publish', { postProcess: 'capitalizeFirstChar' })}
         </PublishQAppCTAButton>
       </AppsWidthLimiter>
 

@@ -5,7 +5,7 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useTranslation } from 'react-i18next';
 
 const ThemeSelector = () => {
-  const { t } = useTranslation(['core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const { themeMode, toggleTheme } = useThemeContext();
 
@@ -23,10 +23,10 @@ const ThemeSelector = () => {
         title={
           themeMode === 'dark'
             ? t('core:theme.light', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
             : t('core:theme.light', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })
         }
       >
