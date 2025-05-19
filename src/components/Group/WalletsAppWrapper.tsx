@@ -12,8 +12,10 @@ import { AppsNavBarLeft, AppsNavBarParent } from '../Apps/Apps-styles';
 import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const WalletsAppWrapper = () => {
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [navigationController, setNavigationController] = useAtom(
@@ -87,7 +89,9 @@ export const WalletsAppWrapper = () => {
                 justifyContent: 'space-between',
               }}
             >
-              <Typography>Q-Wallets</Typography>
+              <Typography>
+                {t('core:q_apps.q_wallets', { postProcess: 'capitalizeFirst' })}
+              </Typography>
 
               <ButtonBase onClick={handleClose}>
                 <CloseIcon

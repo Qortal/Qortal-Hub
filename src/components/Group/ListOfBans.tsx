@@ -87,6 +87,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const handleCancelBan = async (address) => {
     try {
       const fee = await getFee('CANCEL_GROUP_BAN');
+
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'CANCEL_GROUP_BAN',
@@ -94,6 +95,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingUnban(true);
       new Promise((res, rej) => {
         window
@@ -125,7 +127,11 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirst',
+                }),
             });
             setOpenSnack(true);
             rej(error);

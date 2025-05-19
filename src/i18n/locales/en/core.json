@@ -296,7 +296,8 @@
     "about": "about this Q-App",
     "q_mail": "q-mail",
     "q_manager": "q-manager",
-    "q_sandbox": "q-Sandbox"
+    "q_sandbox": "q-Sandbox",
+    "q_wallets": "q-Wallets"
   },
   "receiver": "receiver",
   "sender": "sender",
@@ -319,9 +320,9 @@
     "hour_one": "{{count}} hour",
     "hour_other": "{{count}} hours",
     "minute_one": "{{count}} minute",
-    "minute_other": "{{count}} minutes"
+    "minute_other": "{{count}} minutes",
+    "time": "time"
   },
-  "time": "time",
   "title": "title",
   "tutorial": "tutorial",
   "user_lookup": "user lookup",

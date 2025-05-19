@@ -513,7 +513,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       {t('core:amount', { postProcess: 'capitalizeFirst' })}
                     </TableCell>
                     <TableCell>
-                      {t('core:time', { postProcess: 'capitalizeFirst' })}
+                      {t('core:time.time', { postProcess: 'capitalizeFirst' })}
                     </TableCell>
                   </TableRow>
                 </TableHead>

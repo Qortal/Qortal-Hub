@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -88,7 +82,7 @@ export const ListOfGroupPromotions = () => {
   const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [fee, setFee] = useState(null);
@@ -101,7 +95,7 @@ export const ListOfGroupPromotions = () => {
   const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
-    getItemKey: React.useCallback(
+    getItemKey: useCallback(
       (index) => promotions[index]?.identifier,
       [promotions]
     ),
@@ -495,6 +489,7 @@ export const ListOfGroupPromotions = () => {
                 <CustomLoader />
               </Box>
             )}
+
             {!loading && promotions.length === 0 && (
               <Box
                 sx={{
@@ -518,6 +513,7 @@ export const ListOfGroupPromotions = () => {
                 </Typography>
               </Box>
             )}
+
             <div
               style={{
                 height: '600px',
@@ -776,6 +772,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   />
                                 )}
+
                                 {promotion?.isOpen === true && (
                                   <NoEncryptionGmailerrorredIcon
                                     sx={{
@@ -783,6 +780,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   />
                                 )}
+
                                 <Typography
                                   sx={{
                                     fontSize: '15px',

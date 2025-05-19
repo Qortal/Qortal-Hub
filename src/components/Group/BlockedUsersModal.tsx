@@ -138,6 +138,7 @@ export const BlockedUsersModal = () => {
     } catch (error) {
       setOpenSnackGlobal(true);
       setInfoSnackCustom({
+        //TODO translate
         type: 'error',
         message: error?.message || 'Unable to block user',
       });

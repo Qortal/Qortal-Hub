@@ -1,5 +1,5 @@
 import { Box, Divider, Typography, useTheme } from '@mui/material';
-import React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Spacer } from '../../common/Spacer';
 import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
@@ -28,28 +28,28 @@ export const HomeDesktop = ({
   setDesktopViewMode,
   desktopViewMode,
 }) => {
-  const [checked1, setChecked1] = React.useState(false);
-  const [checked2, setChecked2] = React.useState(false);
+  const [checked1, setChecked1] = useState(false);
+  const [checked2, setChecked2] = useState(false);
 
   const { t } = useTranslation(['auth', 'core', 'group']);
   const theme = useTheme();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (balance && +balance >= 6) {
       setChecked1(true);
     }
   }, [balance]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (name) setChecked2(true);
   }, [name]);
 
-  const isLoaded = React.useMemo(() => {
+  const isLoaded = useMemo(() => {
     if (userInfo !== null) return true;
     return false;
   }, [userInfo]);
 
-  const hasDoneNameAndBalanceAndIsLoaded = React.useMemo(() => {
+  const hasDoneNameAndBalanceAndIsLoaded = useMemo(() => {
     if (isLoaded && checked1 && checked2) return true;
     return false;
   }, [checked1, isLoaded, checked2]);
@@ -136,14 +136,6 @@ export const HomeDesktop = ({
 
               {desktopViewMode === 'home' && (
                 <>
-                  {/* <Box sx={{
-            width: '330px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-          <ListOfThreadPostsWatched />
-          </Box> */}
                   {hasDoneNameAndBalanceAndIsLoaded && (
                     <>
                       <Box

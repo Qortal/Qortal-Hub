@@ -149,6 +149,7 @@ export const GroupJoinRequests = ({
             ?.length > 0 &&
             ` (${filteredJoinRequests?.filter((group) => group?.data?.length > 0)?.length})`}
         </Typography>
+
         {isExpanded ? (
           <ExpandLessIcon
             sx={{
@@ -163,6 +164,7 @@ export const GroupJoinRequests = ({
           />
         )}
       </ButtonBase>
+
       <Collapse in={isExpanded} timeout="auto" unmountOnExit>
         <Box
           sx={{
@@ -186,6 +188,7 @@ export const GroupJoinRequests = ({
               <CustomLoader />
             </Box>
           )}
+
           {!loading &&
             (filteredJoinRequests.length === 0 ||
               filteredJoinRequests?.filter((group) => group?.data?.length > 0)
@@ -212,6 +215,7 @@ export const GroupJoinRequests = ({
                 </Typography>
               </Box>
             )}
+
           <List
             className="scrollable-container"
             sx={{
@@ -267,7 +271,7 @@ export const GroupJoinRequests = ({
                           fontSize: '13px',
                           fontWeight: 400,
                         },
-                      }}
+                      }} // TODO translate
                       primary={`${group?.group?.groupName} has ${group?.data?.length} pending join requests.`}
                     />
                   </ListItemButton>

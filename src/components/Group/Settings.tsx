@@ -199,6 +199,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               postProcess: 'capitalizeFirstChar',
             })}
           />
+
           {window?.electronAPI && (
             <FormControlLabel
               control={
@@ -320,6 +321,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
             autoComplete="off"
             onChange={(e) => setPassword(e.target.value)}
           />
+
           {privateKey && (
             <Button
               variant="outlined"
