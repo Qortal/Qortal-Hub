@@ -98,7 +98,9 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              {t('core:message.message', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:message.message', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
 
             {/* Option 2: Send QORT */}
@@ -209,7 +211,8 @@ const BlockUser = ({ address, name, handleClose }) => {
       )}
       {isAlreadyBlocked &&
         t('auth:action.unblock_name', { postProcess: 'capitalizeFirstChar' })}
-      {isAlreadyBlocked === false &&  t('auth:action.block_name', { postProcess: 'capitalizeFirstChar' })}}
+      {isAlreadyBlocked === false &&
+        t('auth:action.block_name', { postProcess: 'capitalizeFirstChar' })}
     </Button>
   );
 };
