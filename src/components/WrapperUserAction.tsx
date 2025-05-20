@@ -208,8 +208,8 @@ const BlockUser = ({ address, name, handleClose }) => {
         <CircularProgress color="secondary" size={24} />
       )}
       {isAlreadyBlocked &&
-        t('core:action.unblock_name', { postProcess: 'capitalizeFirstChar' })}
-      {isAlreadyBlocked === false &&  t('core:action.block_name', { postProcess: 'capitalizeFirstChar' })}}
+        t('auth:action.unblock_name', { postProcess: 'capitalizeFirstChar' })}
+      {isAlreadyBlocked === false &&  t('auth:action.block_name', { postProcess: 'capitalizeFirstChar' })}}
     </Button>
   );
 };

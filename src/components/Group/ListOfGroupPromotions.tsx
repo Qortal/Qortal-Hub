@@ -269,6 +269,7 @@ export const ListOfGroupPromotions = () => {
     try {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
+
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
@@ -276,6 +277,7 @@ export const ListOfGroupPromotions = () => {
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingJoinGroup(true);
       await new Promise((res, rej) => {
         window

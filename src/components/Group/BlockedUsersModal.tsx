@@ -200,20 +200,28 @@ export const BlockedUsersModal = () => {
             variant="contained"
             onClick={blockUser}
           >
-            Block
+            {t('auth:action.block', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </Box>
 
         {Object.entries(blockedUsers?.addresses).length > 0 && (
           <>
             <Spacer height="20px" />
+
             <DialogContentText id="alert-dialog-description">
-              Blocked addresses- blocks processing of txs
+              {t('auth:message.generic.blocked_addresses', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </DialogContentText>
+
             <Spacer height="10px" />
+
             <Button variant="contained" size="small" onClick={getNames}>
-              Fetch names
+              {t('auth:action.fetch_names', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
+
             <Spacer height="10px" />
           </>
         )}
@@ -255,19 +263,26 @@ export const BlockedUsersModal = () => {
                       }
                     }}
                   >
-                    Unblock
+                    {t('auth:action.unblock', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                   </Button>
                 </Box>
               );
             }
           )}
         </Box>
+
         {Object.entries(blockedUsers?.names).length > 0 && (
           <>
             <Spacer height="20px" />
+
             <DialogContentText id="alert-dialog-description">
-              Blocked names for QDN
+              {t('core:message.generic.blocked_names', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </DialogContentText>
+
             <Spacer height="10px" />
           </>
         )}
@@ -291,6 +306,7 @@ export const BlockedUsersModal = () => {
                 }}
               >
                 <Typography>{key}</Typography>
+
                 <Button
                   size="small"
                   sx={{
@@ -307,13 +323,16 @@ export const BlockedUsersModal = () => {
                     }
                   }}
                 >
-                  Unblock
+                  {t('auth:action.unblock', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               </Box>
             );
           })}
         </Box>
       </DialogContent>
+
       <DialogActions>
         <Button
           sx={{
@@ -335,7 +354,7 @@ export const BlockedUsersModal = () => {
             setIsOpenBlockedModal(false);
           }}
         >
-          close
+          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
         </Button>
       </DialogActions>
 
@@ -345,13 +364,19 @@ export const BlockedUsersModal = () => {
         aria-describedby="alert-dialog-description"
       >
         <DialogTitle id="alert-dialog-title">
-          {'Decide what to block'}
+          {t('auth:message.generic.decide_block', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </DialogTitle>
 
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
-            Blocking {message?.userName || message?.userAddress}
+            {t('auth:message.generic.blocking', {
+              name: message?.userName || message?.userAddress,
+              postProcess: 'capitalizeFirstChar',
+            })}
           </DialogContentText>
+
           <Box
             sx={{
               alignItems: 'center',
@@ -366,7 +391,9 @@ export const BlockedUsersModal = () => {
               }}
             />{' '}
             <Typography>
-              Choose "block txs" or "all" to block chat messages{' '}
+              {t('auth:message.generic.choose_block', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
         </DialogContent>
@@ -378,7 +405,7 @@ export const BlockedUsersModal = () => {
               onOk('address');
             }}
           >
-            Block txs
+            {t('auth:action.block_txs', { postProcess: 'capitalizeFirstChar' })}
           </Button>
           <Button
             variant="contained"
@@ -386,7 +413,9 @@ export const BlockedUsersModal = () => {
               onOk('name');
             }}
           >
-            Block QDN data
+            {t('auth:action.block_data', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
           <Button
             variant="contained"
@@ -394,7 +423,7 @@ export const BlockedUsersModal = () => {
               onOk('both');
             }}
           >
-            Block All
+            {t('auth:action.block_all', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </DialogActions>
       </Dialog>
