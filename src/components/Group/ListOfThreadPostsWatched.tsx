@@ -174,8 +174,11 @@ export const ListOfThreadPostsWatched = () => {
                   }
                 >
                   <ListItemButton disableRipple role={undefined} dense>
-                    <ListItemText //TODO translate
-                      primary={`New post in ${post?.thread?.threadData?.title}`}
+                    <ListItemText
+                      primary={t('core:new_post_in', {
+                        title: post?.thread?.threadData?.title,
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     />
                   </ListItemButton>
                 </ListItem>

@@ -1,4 +1,4 @@
-import * as React from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -27,12 +27,10 @@ export const GroupJoinRequests = ({
   setMobileViewMode,
   setDesktopViewMode,
 }) => {
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const { t } = useTranslation(['auth', 'core', 'group']);
-  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = React.useState(
-    []
-  );
-  const [loading, setLoading] = React.useState(true);
+  const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [txList] = useAtom(txListAtom);
 
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
@@ -91,7 +89,7 @@ export const GroupJoinRequests = ({
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (myAddress && groups.length > 0) {
       getJoinRequests();
     } else {
@@ -99,7 +97,7 @@ export const GroupJoinRequests = ({
     }
   }, [myAddress, groups]);
 
-  const filteredJoinRequests = React.useMemo(() => {
+  const filteredJoinRequests = useMemo(() => {
     return groupsWithJoinRequests.map((group) => {
       const filteredGroupRequests = group?.data?.filter((gd) => {
         const findJoinRequsetInTxList = txList?.find(
@@ -271,8 +269,15 @@ export const GroupJoinRequests = ({
                           fontSize: '13px',
                           fontWeight: 400,
                         },
-                      }} // TODO translate
-                      primary={`${group?.group?.groupName} has ${group?.data?.length} pending join requests.`}
+                      }}
+                      primary={t(
+                        'group:message.generic.pending_join_requests',
+                        {
+                          group: group?.group?.groupName,
+                          count: group?.data?.length,
+                          postProcess: 'capitalizeFirstChar',
+                        }
+                      )}
                     />
                   </ListItemButton>
                 </ListItem>

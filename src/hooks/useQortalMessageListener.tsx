@@ -165,7 +165,7 @@ export function openIndexedDB() {
       reject('Error opening IndexedDB');
     };
   });
-} // TODO translate
+}
 
 export const listOfAllQortalRequests = [
   'ADD_FOREIGN_SERVER',
@@ -658,7 +658,7 @@ export const useQortalMessageListener = (
         setPath(pathUrl);
         if (appName?.toLowerCase() === 'q-mail') {
           window.sendMessage('addEnteredQmailTimestamp').catch((error) => {
-            // error
+            // TODO print error
           });
         } else if (appName?.toLowerCase() === 'q-wallets') {
           executeEvent('setLastEnteredTimestampPaymentEvent', {});

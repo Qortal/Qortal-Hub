@@ -1,15 +1,7 @@
-import { Box, CircularProgress, useTheme } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 import { useState } from 'react';
-import {
-  CustomButton,
-  CustomInput,
-  CustomLabel,
-  TextP,
-} from '../styles/App-styles';
+import { TextP } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
-import BoundedNumericTextField from '../common/BoundedNumericTextField';
-import { PasswordField } from './PasswordField/PasswordField';
-import { ErrorText } from './ErrorText/ErrorText';
 import { getFee } from '../background';
 import { useTranslation } from 'react-i18next';
 
@@ -28,22 +20,37 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
       setSendPaymentError('');
       setSendPaymentSuccess('');
       if (!paymentTo) {
-        setSendPaymentError('Please enter a recipient');
+        setSendPaymentError(
+          t('auth:action.enter_recipient', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         return;
       }
       if (!paymentAmount) {
-        setSendPaymentError('Please enter an amount greater than 0');
+        setSendPaymentError(
+          t('auth:action.enter_amount', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         return;
       }
       if (!paymentPassword) {
-        setSendPaymentError('Please enter your wallet password');
+        setSendPaymentError(
+          t('auth:action.enter_wallet_password', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         return;
       }
 
-      const fee = await getFee('PAYMENT'); // TODO translate
+      const fee = await getFee('PAYMENT');
 
       await show({
-        message: `Would you like to transfer ${Number(paymentAmount)} QORT?`,
+        message: t('core:message.question.transfer_qort', {
+          amount: Number(paymentAmount),
+          postProcess: 'capitalizeFirstChar',
+        }),
         paymentFee: fee.fee + ' QORT',
       });
 
@@ -89,7 +96,9 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
             textAlign: 'start',
           }}
         >
-          Transfer QORT
+          {t('core:action.transfer_qort', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </TextP>
 
         <Spacer height="35px" />
@@ -103,7 +112,9 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
             textAlign: 'start',
           }}
         >
-          Balance:
+          {t('core:balance', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </TextP>
 
         <TextP
@@ -121,7 +132,11 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
       <Spacer height="35px" />
 
       <Box>
-        <CustomLabel htmlFor="standard-adornment-name">To</CustomLabel>
+        <CustomLabel htmlFor="standard-adornment-name">
+          {t('core:to', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </CustomLabel>
 
         <Spacer height="5px" />
 
@@ -134,7 +149,11 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
 
         <Spacer height="6px" />
 
-        <CustomLabel htmlFor="standard-adornment-amount">Amount</CustomLabel>
+        <CustomLabel htmlFor="standard-adornment-amount">
+          {t('core:amount', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </CustomLabel>
 
         <Spacer height="5px" />
 
@@ -151,7 +170,9 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
         <Spacer height="6px" />
 
         <CustomLabel htmlFor="standard-adornment-password">
-          Confirm wallet password
+          {t('auth:wallet.password_confirmation', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </CustomLabel>
 
         <Spacer height="5px" />
@@ -173,7 +194,6 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
       <Spacer height="10px" />
 
       <ErrorText>{sendPaymentError}</ErrorText>
-      {/* <Typography>{sendPaymentSuccess}</Typography> */}
 
       <Spacer height="25px" />
 
@@ -194,7 +214,7 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
             }}
           />
         )}
-        Send
+        {t('core:action.send', { postProcess: 'capitalizeFirstChar' })}
       </CustomButton>
     </>
   );
