@@ -33,6 +33,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { useNameSearch } from '../../hooks/useNameSearch';
+import { useTranslation } from 'react-i18next';
 
 function formatAddress(str) {
   if (str.length <= 12) return str;
@@ -45,6 +46,7 @@ function formatAddress(str) {
 
 export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [nameOrAddress, setNameOrAddress] = useState('');
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);
@@ -64,13 +66,27 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         const inputAddressOrName = messageAddressOrName || nameOrAddress;
 
         if (!inputAddressOrName?.trim())
-          throw new Error('Please insert a name or address');
+          throw new Error(
+            t('auth:action.insert_name_address', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
+
         const owner = await getNameOrAddress(inputAddressOrName);
-        if (!owner) throw new Error('Name does not exist');
+        if (!owner)
+          throw new Error(
+            t('auth:message.error.name_not_existing', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
 
         const addressInfoRes = await getAddressInfo(owner);
         if (!addressInfoRes?.publicKey) {
-          throw new Error('Address does not exist on blockchain');
+          throw new Error(
+            t('auth:message.error.address_not_existing', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
 
         const name = await getNameInfo(owner);
@@ -175,7 +191,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                 autoFocus
                 autoComplete="off"
                 {...params}
-                label="Address or Name"
+                label={t('auth:address_name', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && nameOrAddress) {
                     lookupFunc(inputValue);
@@ -200,6 +218,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             />
           </ButtonBase>
         </Box>
+
         <Box
           sx={{
             display: 'flex',
@@ -220,6 +239,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
               <Typography>{errorMessage}</Typography>
             </Box>
           )}
+
           {isLoadingUser && (
             <Box
               sx={{
@@ -236,6 +256,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
               />
             </Box>
           )}
+
           {!isLoadingUser && addressInfo && (
             <>
               <Spacer height="30px" />
@@ -265,7 +286,10 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       textAlign: 'center',
                     }}
                   >
-                    {addressInfo?.name ?? 'Name not registered'}
+                    {addressInfo?.name ??
+                      t('auth:message.error.name_not_registered', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                   </Typography>
 
                   <Spacer height="20px" />
@@ -307,7 +331,8 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       textAlign: 'center',
                     }}
                   >
-                    Level {addressInfo?.level}
+                    {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
+                    {addressInfo?.level}
                   </Typography>
                 </Card>
 
@@ -336,8 +361,13 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                         flexShrink: 0,
                       }}
                     >
-                      <Typography>Address</Typography>
+                      <Typography>
+                        {t('auth:address', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
                     </Box>
+
                     <Tooltip
                       title={
                         <span
@@ -347,7 +377,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                             fontWeight: 700,
                           }}
                         >
-                          copy address
+                          {t('auth:action.copy_address', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                         </span>
                       }
                       placement="bottom"
@@ -391,7 +423,12 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       width: '100%',
                     }}
                   >
-                    <Typography>Balance</Typography>
+                    <Typography>
+                      {t('core:balance', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+
                     <Typography>{addressInfo?.balance}</Typography>
                   </Box>
 
@@ -406,7 +443,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       });
                     }}
                   >
-                    Send QORT
+                    {t('core:action.send_qort', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                   </Button>
                 </Card>
               </Box>
@@ -440,7 +479,12 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                 padding: '15px',
               }}
             >
-              <Typography>20 most recent payments</Typography>
+              <Typography>
+                {t('core:message.generic.most_recent_payment', {
+                  count: 20,
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
 
               <Spacer height="20px" />
 
@@ -452,17 +496,33 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                     width: '100%',
                   }}
                 >
-                  <Typography>No payments</Typography>
+                  <Typography>
+                    {t('core:message.generic.no_payments', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
                 </Box>
               )}
 
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Sender</TableCell>
-                    <TableCell>Reciver</TableCell>
-                    <TableCell>Amount</TableCell>
-                    <TableCell>Time</TableCell>
+                    <TableCell>
+                      {t('core:sender', { postProcess: 'capitalizeFirstChar' })}
+                    </TableCell>
+                    <TableCell>
+                      {t('core:receiver', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
+                    </TableCell>
+                    <TableCell>
+                      {t('core:time.time', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </TableCell>
                   </TableRow>
                 </TableHead>
 
@@ -479,7 +539,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                                 fontWeight: 700,
                               }}
                             >
-                              copy address
+                              {t('auth:action.copy_address', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
                             </span>
                           }
                           placement="bottom"
@@ -522,7 +584,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                                 fontWeight: 700,
                               }}
                             >
-                              copy address
+                              {t('auth:action.copy_address', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
                             </span>
                           }
                           placement="bottom"
@@ -552,7 +616,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                           </ButtonBase>
                         </Tooltip>
                       </TableCell>
+
                       <TableCell>{payment?.amount}</TableCell>
+
                       <TableCell>
                         {formatTimestamp(payment?.timestamp)}
                       </TableCell>

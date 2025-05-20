@@ -10,9 +10,11 @@ import { executeEvent } from '../utils/events';
 import { MyContext } from '../App';
 import { useAtom } from 'jotai';
 import { isRunningPublicNodeAtom } from '../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const WrapperUserAction = ({ children, address, name, disabled }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   const [anchorEl, setAnchorEl] = useState(null);
@@ -96,7 +98,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              Message
+              {t('core:message.message', { postProcess: 'capitalizeFirstChar' })}
             </Button>
 
             {/* Option 2: Send QORT */}
@@ -114,8 +116,11 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              Send QORT
+              {t('core:action.send_qort', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
+
             <Button
               variant="text"
               onClick={() => {
@@ -127,8 +132,11 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              Copy address
+              {t('auth:action.copy_address', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
+
             <Button
               variant="text"
               onClick={() => {
@@ -142,7 +150,9 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              User lookup
+              {t('core:user_lookup', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
 
             {!isRunningPublicNode && (
@@ -165,6 +175,7 @@ const BlockUser = ({ address, name, handleClose }) => {
   const { isUserBlocked, addToBlockList, removeBlockFromList } =
     useContext(MyContext);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     if (!address) return;
@@ -180,12 +191,6 @@ const BlockUser = ({ address, name, handleClose }) => {
           executeEvent('blockUserFromOutside', {
             user: address,
           });
-          // if(isAlreadyBlocked === true){
-          //   await removeBlockFromList(address, name)
-          // } else if(isAlreadyBlocked === false) {
-          //   await addToBlockList(address, name)
-          // }
-          // executeEvent('updateChatMessagesWithBlocks', true)
         } catch (error) {
           console.error(error);
         } finally {
@@ -202,8 +207,9 @@ const BlockUser = ({ address, name, handleClose }) => {
       {(isAlreadyBlocked === null || isLoading) && (
         <CircularProgress color="secondary" size={24} />
       )}
-      {isAlreadyBlocked && 'Unblock name'}
-      {isAlreadyBlocked === false && 'Block name'}
+      {isAlreadyBlocked &&
+        t('auth:action.unblock_name', { postProcess: 'capitalizeFirstChar' })}
+      {isAlreadyBlocked === false &&  t('auth:action.block_name', { postProcess: 'capitalizeFirstChar' })}}
     </Button>
   );
 };

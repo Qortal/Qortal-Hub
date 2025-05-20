@@ -2388,6 +2388,7 @@ export const Group = ({
                 : 'flex',
           }}
         ></AuthenticatedContainerInnerRight>
+
         <LoadingSnackbar
           open={isLoadingGroup}
           info={{

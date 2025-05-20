@@ -367,9 +367,9 @@ export const ManageMembers = ({
           {value === 0 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
                 maxWidth: '750px',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <Button
@@ -398,9 +398,9 @@ export const ManageMembers = ({
           {value === 1 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
                 maxWidth: '750px',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <InviteMember
@@ -415,9 +415,9 @@ export const ManageMembers = ({
           {value === 2 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
                 maxWidth: '750px',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <ListOfInvites
@@ -432,8 +432,8 @@ export const ManageMembers = ({
           {value === 3 && (
             <Box
               sx={{
-                width: '100%',
                 padding: '25px',
+                width: '100%',
                 maxWidth: '750px',
               }}
             >
@@ -449,9 +449,9 @@ export const ManageMembers = ({
           {value === 4 && (
             <Box
               sx={{
-                width: '100%',
-                padding: '25px',
                 maxWidth: '750px',
+                padding: '25px',
+                width: '100%',
               }}
             >
               <ListOfJoinRequests

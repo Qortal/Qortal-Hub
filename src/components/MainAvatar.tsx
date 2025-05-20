@@ -16,6 +16,7 @@ import { getFee } from '../background';
 import { fileToBase64 } from '../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
+import { useTranslation } from 'react-i18next';
 
 export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   const [hasAvatar, setHasAvatar] = useState(false);
@@ -39,6 +40,8 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   // Determine if the popover is open
   const open = Boolean(anchorEl);
   const id = open ? 'avatar-img' : undefined;
+
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const checkIfAvatarExists = async () => {
     try {
@@ -65,16 +68,26 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
 
   const publishAvatar = async () => {
     try {
-      // TODO translate
       const fee = await getFee('ARBITRARY');
+
       if (+balance < +fee.fee)
-        throw new Error(`Publishing an Avatar requires ${fee.fee}`);
+        throw new Error(
+          t('core:message.generic.avatar_publish_fee', {
+            fee: fee.fee,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+
       await show({
-        message: 'Would you like to publish an avatar?',
+        message: t('core:message.question.publish_avatar', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoading(true);
       const avatarBase64 = await fileToBase64(avatarFile);
+
       await new Promise((res, rej) => {
         window
           .sendMessage('publishOnQDN', {
@@ -90,7 +103,12 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || 'An error occurred');
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
           });
       });
       setAvatarFile(null);
@@ -122,6 +140,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
         >
           {myName?.charAt(0)}
         </Avatar>
+
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
@@ -129,9 +148,12 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
               opacity: 0.5,
             }}
           >
-            change avatar
+            {t('core:action.change_avatar', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </ButtonBase>
+
         <PopoverComp
           myName={myName}
           avatarFile={avatarFile}
@@ -160,6 +182,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
         >
           {myName?.charAt(0)}
         </Avatar>
+
         <ButtonBase onClick={handleChildClick}>
           <Typography
             sx={{
@@ -167,9 +190,12 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
               opacity: 0.5,
             }}
           >
-            change avatar
+            {t('core:action.change_avatar', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
         </ButtonBase>
+
         <PopoverComp
           myName={myName}
           avatarFile={avatarFile}
@@ -195,9 +221,10 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
             opacity: 0.5,
           }}
         >
-          set avatar
+          {t('core:action.set_avatar', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
       </ButtonBase>
+
       <PopoverComp
         myName={myName}
         avatarFile={avatarFile}
@@ -213,6 +240,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   );
 };
 
+// TODO the following part is the same as in GroupAvatar.tsx
 const PopoverComp = ({
   avatarFile,
   setAvatarFile,
@@ -225,6 +253,8 @@ const PopoverComp = ({
   myName,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
+
   return (
     <Popover
       id={id}
@@ -246,13 +276,24 @@ const PopoverComp = ({
             fontSize: '12px',
           }}
         >
-          (500 KB max. for GIFS){' '}
+          {t('core:message.generic.avatar_size', {
+            size: 500, // TODO magic number
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
+
         <ImageUploader onPick={(file) => setAvatarFile(file)}>
-          <Button variant="contained">Choose Image</Button>
+          <Button variant="contained">
+            {t('core:action.choose_image', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
         </ImageUploader>
+
         {avatarFile?.name}
+
         <Spacer height="25px" />
+
         {!myName && (
           <Box
             sx={{
@@ -267,19 +308,24 @@ const PopoverComp = ({
               }}
             />
             <Typography>
-              A registered name is required to set an avatar
+              {t('core:message.generic.avatar_registered_name', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
         )}
 
         <Spacer height="25px" />
+
         <LoadingButton
           loading={isLoading}
           disabled={!avatarFile || !myName}
           onClick={publishAvatar}
           variant="contained"
         >
-          Publish avatar
+          {t('group:action.publish_avatar', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </LoadingButton>
       </Box>
     </Popover>

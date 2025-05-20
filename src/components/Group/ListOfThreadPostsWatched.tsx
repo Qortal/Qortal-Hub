@@ -117,6 +117,7 @@ export const ListOfThreadPostsWatched = () => {
             <CustomLoader />
           </Box>
         )}
+
         {!loading && posts.length === 0 && (
           <Box
             sx={{
@@ -140,6 +141,7 @@ export const ListOfThreadPostsWatched = () => {
             </Typography>
           </Box>
         )}
+
         {posts?.length > 0 && (
           <List
             className="scrollable-container"
@@ -173,7 +175,10 @@ export const ListOfThreadPostsWatched = () => {
                 >
                   <ListItemButton disableRipple role={undefined} dense>
                     <ListItemText
-                      primary={`New post in ${post?.thread?.threadData?.title}`}
+                      primary={t('core:new_post_in', {
+                        title: post?.thread?.threadData?.title,
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     />
                   </ListItemButton>
                 </ListItem>

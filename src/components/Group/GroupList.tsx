@@ -29,7 +29,6 @@ import {
   isRunningPublicNodeAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
-
 import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -56,23 +55,23 @@ export const GroupList = ({
   return (
     <div
       style={{
-        display: 'flex',
-        width: '380px',
-        flexDirection: 'column',
         alignItems: 'flex-start',
-        height: '100%',
         background: theme.palette.background.surface,
         borderRadius: '0px 15px 15px 0px',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
         padding: '0px 2px',
+        width: '380px',
       }}
     >
       <Box
         sx={{
-          width: '100%',
           alignItems: 'center',
-          justifyContent: 'center',
           display: 'flex',
           gap: '10px',
+          justifyContent: 'center',
+          width: '100%',
         }}
       >
         <ButtonBase
@@ -252,7 +251,7 @@ const GroupItem = React.memo(
           padding: '10px',
           width: '100%',
           '&:hover': {
-            backgroundColor: 'action.hover', // background on hover
+            backgroundColor: 'action.hover',
           },
         }}
       >
@@ -296,7 +295,7 @@ const GroupItem = React.memo(
                     theme.palette.text.primary,
                   fontSize: '16px',
                 },
-              }} // Change the color of the primary text
+              }}
               secondaryTypographyProps={{
                 style: {
                   color:

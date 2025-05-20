@@ -593,6 +593,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               </Box>
             </Box>
           )}
+
           {value === 1 && (
             <Box
               sx={{

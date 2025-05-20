@@ -67,7 +67,7 @@ interface VideoPlayerProps {
   user?: string;
 }
 
-// TODO translate and theme? Is it worth?
+// TODO translate and theme (optional)
 export const VideoPlayer: FC<VideoPlayerProps> = ({
   poster,
   name,

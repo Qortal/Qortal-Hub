@@ -210,13 +210,13 @@ export const ListOfJoinRequests = ({
               >
                 <Box
                   sx={{
-                    width: '325px',
-                    height: '250px',
+                    alignItems: 'center',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
                     gap: '10px',
+                    height: '250px',
                     padding: '10px',
+                    width: '325px',
                   }}
                 >
                   <LoadingButton
@@ -261,12 +261,12 @@ export const ListOfJoinRequests = ({
       </p>
       <div
         style={{
-          position: 'relative',
-          height: '500px',
-          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>

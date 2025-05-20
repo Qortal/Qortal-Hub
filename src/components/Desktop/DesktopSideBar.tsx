@@ -34,20 +34,20 @@ export const DesktopSideBar = ({
     <Box
       sx={{
         alignItems: 'center',
+        backgroundColor: theme.palette.background.surface,
+        borderRight: `1px solid ${theme.palette.border.subtle}`,
         display: 'flex',
         flexDirection: 'column',
         gap: '25px',
         height: '100vh',
         width: '60px',
-        backgroundColor: theme.palette.background.surface,
-        borderRight: `1px solid ${theme.palette.border.subtle}`,
       }}
     >
       <ButtonBase
         sx={{
-          width: '70px',
           height: '70px',
           paddingTop: '23px',
+          width: '70px',
         }}
       >
         <CoreSyncStatus />
@@ -55,8 +55,8 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         sx={{
-          width: '60px',
           height: '60px',
+          width: '60px',
         }}
         onClick={() => {
           goToHome();

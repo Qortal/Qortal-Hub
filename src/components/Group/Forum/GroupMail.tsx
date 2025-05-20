@@ -271,6 +271,7 @@ export const GroupMail = ({
     },
     [allThreads, isPrivate]
   );
+
   const getMailMessages = useCallback(
     async (groupId: string, members: any) => {
       try {
@@ -385,7 +386,6 @@ export const GroupMail = ({
   }, [getMailMessages, groupId, members, secretKey, isPrivate]);
 
   const interval = useRef<any>(null);
-
   const firstMount = useRef(false);
   const filterModeRef = useRef('');
 
@@ -575,6 +575,7 @@ export const GroupMail = ({
           }}
         >
           <InstanceListHeader />
+
           <InstanceListContainer>
             {filterOptions?.map((filter) => {
               return (
@@ -796,6 +797,7 @@ export const GroupMail = ({
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
+
                   <ArrowForwardIosIcon
                     sx={{
                       color: theme.palette.text.primary,
