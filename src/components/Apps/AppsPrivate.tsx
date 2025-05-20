@@ -311,7 +311,9 @@ export const AppsPrivate = ({ myName }) => {
             <Tabs
               value={valueTabPrivateApp}
               onChange={handleChange}
-              aria-label="basic tabs example"
+              aria-label={t('core:basic_tabs_example', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               variant={'fullWidth'}
               scrollButtons="auto"
               sx={{

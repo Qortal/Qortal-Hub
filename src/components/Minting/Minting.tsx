@@ -581,7 +581,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         }}
         color="inherit"
         onClick={() => setIsOpenMinting(false)}
-        aria-label="close"
+        aria-label={t('core:action.close', {
+          postProcess: 'capitalizeFirstChar',
+        })}
       >
         <CloseIcon />
       </IconButton>

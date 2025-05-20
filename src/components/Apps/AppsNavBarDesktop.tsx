@@ -183,7 +183,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         <Tabs
           orientation="vertical"
           ref={tabsRef}
-          aria-label="basic tabs example"
+          aria-label={t('core:basic_tabs_example', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           variant="scrollable" // Make tabs scrollable
           scrollButtons={true}
           sx={{

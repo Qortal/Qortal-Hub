@@ -170,7 +170,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               edge="start"
               color="inherit"
               onClick={handleClose}
-              aria-label="close"
+              aria-label={t('core:action.close', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             >
               <CloseIcon />
             </IconButton>

@@ -46,7 +46,9 @@ export const Tutorials = () => {
           }}
           value={multiNumber}
           onChange={(e, value) => setMultiNumber(value)}
-          aria-label="basic tabs example"
+          aria-label={t('core:basic_tabs_example', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         >
           {openTutorialModal?.multi?.map((item, index) => {
             return (
@@ -66,7 +68,9 @@ export const Tutorials = () => {
         <DialogTitle sx={{ m: 0, p: 2 }}>{selectedTutorial?.title}</DialogTitle>
 
         <IconButton
-          aria-label="close"
+          aria-label={t('core:action.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           onClick={handleClose}
           sx={{
             position: 'absolute',
@@ -112,7 +116,9 @@ export const Tutorials = () => {
         </DialogTitle>
 
         <IconButton
-          aria-label="close"
+          aria-label={t('core:action.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           onClick={handleClose}
           sx={{
             position: 'absolute',

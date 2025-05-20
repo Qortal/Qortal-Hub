@@ -22,9 +22,12 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const BuyQortInformation = ({ balance }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const openBuyQortInfoFunc = useCallback(
     (e) => {
@@ -32,8 +35,6 @@ export const BuyQortInformation = ({ balance }) => {
     },
     [setIsOpen]
   );
-
-  const theme = useTheme();
 
   useEffect(() => {
     subscribeToEvent('openBuyQortInfo', openBuyQortInfoFunc);
@@ -62,7 +63,7 @@ export const BuyQortInformation = ({ balance }) => {
             maxWidth: '90vw',
             padding: '10px',
             width: '400px',
-          }}
+          }} // TODO translate
         >
           <Typography>
             Get QORT using Qortal's crosschain trade portal
@@ -113,7 +114,9 @@ export const BuyQortInformation = ({ balance }) => {
               maxWidth: 360,
               width: '100%',
             }}
-            aria-label="contacts"
+            aria-label={t('core:contact_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           >
             <ListItem disablePadding>
               <ListItemIcon>

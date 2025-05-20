@@ -233,7 +233,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             </Typography>
 
             <IconButton
-              aria-label="close"
+              aria-label={t('core:action.close', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               color="inherit"
               edge="start"
               onClick={handleClose}
@@ -259,7 +261,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label="basic tabs example"
+              aria-label={t('core:basic_tabs_example', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               variant={'fullWidth'}
               scrollButtons="auto"
               allowScrollButtonsMobile

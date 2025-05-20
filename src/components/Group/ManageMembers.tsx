@@ -215,7 +215,9 @@ export const ManageMembers = ({
             </Typography>
 
             <IconButton
-              aria-label="close"
+              aria-label={t('core:action.close', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               color="inherit"
               edge="start"
               onClick={handleClose}
@@ -237,7 +239,9 @@ export const ManageMembers = ({
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label="basic tabs example"
+              aria-label={t('core:basic_tabs_example', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               variant="scrollable" // Make tabs scrollable
               scrollButtons="auto" // Show scroll buttons automatically
               allowScrollButtonsMobile // Show scroll buttons on mobile as well

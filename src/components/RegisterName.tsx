@@ -346,7 +346,9 @@ export const RegisterName = ({
 
           <List
             sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}
-            aria-label="contacts"
+            aria-label={t('core:contact_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           >
             <ListItem disablePadding>
               <ListItemIcon>

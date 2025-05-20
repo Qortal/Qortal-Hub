@@ -1648,7 +1648,9 @@ export const Group = ({
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
-              label="Groups"
+              label={t('group:group.group_other', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               selected={desktopSideView === 'groups'}
               customWidth="75px"
             >

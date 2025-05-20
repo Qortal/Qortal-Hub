@@ -101,15 +101,19 @@
   "apps_official": "official Apps",
   "attachment": "attachment",
   "balance": "balance:",
+  "basic_tabs_example": "basic tabs example",
   "category": "category",
   "category_other": "categories",
   "chat": "chat",
+  "comment_other": "comments",
+  "contact_other": "contacts",
   "core": {
     "block_height": "block height",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
   },
+  "current_language": "current language: {{ language }}",
   "dev": "dev",
   "domain": "domain",
   "ui": {

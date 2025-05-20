@@ -541,7 +541,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             setIsEdit(true);
           }}
           edge="end"
-          aria-label="edit"
+          aria-label={t('core:action.edit', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         >
           <EditIcon />
         </IconButton>
