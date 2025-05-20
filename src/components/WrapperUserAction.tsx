@@ -98,7 +98,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                 justifyContent: 'flex-start',
               }}
             >
-              {t('core:message.message', { postProcess: 'capitalizeFirst' })}
+              {t('core:message.message', { postProcess: 'capitalizeFirstChar' })}
             </Button>
 
             {/* Option 2: Send QORT */}
@@ -117,7 +117,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
               }}
             >
               {t('core:action.send_qort', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
 
@@ -133,7 +133,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
               }}
             >
               {t('auth:action.copy_address', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
 
@@ -151,7 +151,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
               }}
             >
               {t('core:user_lookup', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Button>
 
@@ -208,8 +208,8 @@ const BlockUser = ({ address, name, handleClose }) => {
         <CircularProgress color="secondary" size={24} />
       )}
       {isAlreadyBlocked &&
-        t('core:action.unblock_name', { postProcess: 'capitalizeFirst' })}
-      {isAlreadyBlocked === false &&  t('core:action.block_name', { postProcess: 'capitalizeFirst' })}}
+        t('core:action.unblock_name', { postProcess: 'capitalizeFirstChar' })}
+      {isAlreadyBlocked === false &&  t('core:action.block_name', { postProcess: 'capitalizeFirstChar' })}}
     </Button>
   );
 };

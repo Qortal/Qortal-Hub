@@ -90,7 +90,9 @@ export const WalletsAppWrapper = () => {
               }}
             >
               <Typography>
-                {t('core:q_apps.q_wallets', { postProcess: 'capitalizeFirst' })}
+                {t('core:q_apps.q_wallets', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
 
               <ButtonBase onClick={handleClose}>

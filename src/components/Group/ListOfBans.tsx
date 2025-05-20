@@ -130,7 +130,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);

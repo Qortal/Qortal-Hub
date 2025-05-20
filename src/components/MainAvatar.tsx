@@ -106,7 +106,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
             rej(
               error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })
             );
           });

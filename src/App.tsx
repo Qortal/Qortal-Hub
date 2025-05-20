@@ -2335,7 +2335,7 @@ function App() {
                   hostname: requestBuyOrder?.hostname,
                   count: requestBuyOrder?.crosschainAtInfo?.length || 0,
                 }}
-                tOptions={{ postProcess: ['capitalizeFirst'] }}
+                tOptions={{ postProcess: ['capitalizeFirstChar'] }}
               >
                 The Application <br />
                 <italic>{{ hostname }}</italic> <br />
@@ -2446,7 +2446,7 @@ function App() {
                   hostname: requestBuyOrder?.hostname,
                   count: requestBuyOrder?.crosschainAtInfo?.length || 0,
                 }}
-                tOptions={{ postProcess: ['capitalizeFirst'] }}
+                tOptions={{ postProcess: ['capitalizeFirstChar'] }}
               >
                 The Application <br />
                 <italic>{{ hostname }}</italic> <br />
@@ -2928,7 +2928,7 @@ function App() {
                             />
                           ),
                         }}
-                        tOptions={{ postProcess: ['capitalizeFirst'] }}
+                        tOptions={{ postProcess: ['capitalizeFirstChar'] }}
                       >
                         A <seed>SEEDPHRASE</seed> has been randomly generated in
                         the background.
@@ -2965,7 +2965,7 @@ function App() {
                             />
                           ),
                         }}
-                        tOptions={{ postProcess: ['capitalizeFirst'] }}
+                        tOptions={{ postProcess: ['capitalizeFirstChar'] }}
                       >
                         Create your Qortal account by clicking <next>NEXT</next>{' '}
                         below.

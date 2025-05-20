@@ -190,7 +190,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
               message:
                 error.message ||
                 t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 }),
             });
             setOpenSnack(true);

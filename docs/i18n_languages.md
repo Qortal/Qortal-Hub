@@ -25,9 +25,9 @@ Translation in GUI:
 These are the current namespaces, in which all translations are organized:
 
 - `auth`: relative to the authentication (name, addresses, keys, secrets, seedphrase, and so on...)
-- `core`: all the core translation (the most part)
+- `core`: all the core translation
 - `group`: all translations concerning group management
-- `tutorial`: this is dedicated to the tutorial pages
+- `tutorial`: dedicated to the tutorial pages
 
 Please avoid duplication of the same translation.
 In the same page the usage of translations from different namespaces is permissible.

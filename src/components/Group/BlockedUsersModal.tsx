@@ -99,7 +99,7 @@ export const BlockedUsersModal = () => {
         if (!data?.owner)
           throw new Error(
             t('auth:message.error.name_not_existing', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
           );
         if (data?.owner) {
@@ -138,9 +138,12 @@ export const BlockedUsersModal = () => {
     } catch (error) {
       setOpenSnackGlobal(true);
       setInfoSnackCustom({
-        //TODO translate
         type: 'error',
-        message: error?.message || 'Unable to block user',
+        message:
+          error?.message ||
+          t('auth:message.error.unable_block_user', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       });
     }
   };
@@ -168,7 +171,9 @@ export const BlockedUsersModal = () => {
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >
-      <DialogTitle>Blocked Users</DialogTitle>
+      <DialogTitle>
+        {t('auth:blocked_users', { postProcess: 'capitalizeFirstChar' })}
+      </DialogTitle>
       <DialogContent
         sx={{
           padding: '20px',

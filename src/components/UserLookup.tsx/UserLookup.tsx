@@ -68,7 +68,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         if (!inputAddressOrName?.trim())
           throw new Error(
             t('auth:action.insert_name_address', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
           );
 
@@ -76,7 +76,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         if (!owner)
           throw new Error(
             t('auth:message.error.name_not_existing', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
           );
 
@@ -84,7 +84,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         if (!addressInfoRes?.publicKey) {
           throw new Error(
             t('auth:message.error.address_not_existing', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })
           );
         }
@@ -192,7 +192,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                 autoComplete="off"
                 {...params}
                 label={t('auth:address_name', {
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && nameOrAddress) {
@@ -288,7 +288,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                   >
                     {addressInfo?.name ??
                       t('auth:message.error.name_not_registered', {
-                        postProcess: 'capitalizeFirst',
+                        postProcess: 'capitalizeFirstChar',
                       })}
                   </Typography>
 
@@ -331,7 +331,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       textAlign: 'center',
                     }}
                   >
-                    {t('core:level', { postProcess: 'capitalizeFirst' })}{' '}
+                    {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
                     {addressInfo?.level}
                   </Typography>
                 </Card>
@@ -362,7 +362,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                       }}
                     >
                       <Typography>
-                        {t('auth:address', { postProcess: 'capitalizeFirst' })}
+                        {t('auth:address', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
                     </Box>
 
@@ -376,7 +378,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                           }}
                         >
                           {t('auth:action.copy_address', {
-                            postProcess: 'capitalizeFirst',
+                            postProcess: 'capitalizeFirstChar',
                           })}
                         </span>
                       }
@@ -422,7 +424,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                     }}
                   >
                     <Typography>
-                      {t('core:balance', { postProcess: 'capitalizeFirst' })}
+                      {t('core:balance', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
 
                     <Typography>{addressInfo?.balance}</Typography>
@@ -440,7 +444,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                     }}
                   >
                     {t('core:action.send_qort', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Button>
                 </Card>
@@ -478,7 +482,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
               <Typography>
                 {t('core:message.generic.most_recent_payment', {
                   count: 20,
-                  postProcess: 'capitalizeFirst',
+                  postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
 
@@ -494,7 +498,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                 >
                   <Typography>
                     {t('core:message.generic.no_payments', {
-                      postProcess: 'capitalizeFirst',
+                      postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
                 </Box>
@@ -504,16 +508,20 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                 <TableHead>
                   <TableRow>
                     <TableCell>
-                      {t('core:sender', { postProcess: 'capitalizeFirst' })}
+                      {t('core:sender', { postProcess: 'capitalizeFirstChar' })}
                     </TableCell>
                     <TableCell>
-                      {t('core:receiver', { postProcess: 'capitalizeFirst' })}
+                      {t('core:receiver', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </TableCell>
                     <TableCell>
-                      {t('core:amount', { postProcess: 'capitalizeFirst' })}
+                      {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
                     </TableCell>
                     <TableCell>
-                      {t('core:time.time', { postProcess: 'capitalizeFirst' })}
+                      {t('core:time.time', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </TableCell>
                   </TableRow>
                 </TableHead>
@@ -532,7 +540,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                               }}
                             >
                               {t('auth:action.copy_address', {
-                                postProcess: 'capitalizeFirst',
+                                postProcess: 'capitalizeFirstChar',
                               })}
                             </span>
                           }
@@ -577,7 +585,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                               }}
                             >
                               {t('auth:action.copy_address', {
-                                postProcess: 'capitalizeFirst',
+                                postProcess: 'capitalizeFirstChar',
                               })}
                             </span>
                           }
