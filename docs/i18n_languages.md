@@ -22,4 +22,6 @@ Translation in GUI:
 
 ## Missing language?
 
-- Please open an issue on the project's github repository and specify the missing language
+- Please open an issue on the project's github repository and specify the missing language, by clicking [here](https://github.com/Qortal/Qortal-Hub/issues/new)
+
+- You can also open a Pull Request if you like to contribute directly to the project.
