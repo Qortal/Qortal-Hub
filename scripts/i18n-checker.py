@@ -16,34 +16,52 @@ JSX_TEXT_REGEX = re.compile(r'>\s*([A-Z][a-z].*?)\s*<')
 def is_excluded(path):
     return any(excluded in path for excluded in EXCLUDED_DIRS)
 
+def is_ignorable(text):
+    return (
+        re.fullmatch(r'[A-Z0-9_]+', text) and 'action' in text
+    )
+
+def is_console_log_line(line):
+    return any(kw in line for kw in ['console.log', 'console.error', 'console.warn'])
+
 def find_untranslated_strings(file_path):
     issues = []
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
+        lines = content.splitlines()
 
-        # Match suspicious string literals
-        for match in STRING_LITERAL_REGEX.finditer(content):
-            string = match.group(1)
-            if not any(fn + '(' in content[match.start()-10:match.start()] for fn in I18N_FUNCTIONS):
-                issues.append({
-                    'file': file_path,
-                    'position': match.start(),
-                    'type': 'StringLiteral',
-                    'text': string.strip()
-                })
+        for idx, line in enumerate(lines, start=1):
+            if is_console_log_line(line):
+                continue  # Skip entire line if it's a console log statement
 
-        # Match JSX text nodes
-        for match in JSX_TEXT_REGEX.finditer(content):
-            text = match.group(1)
-            if not text.strip().startswith('{t('):  # naive check
-                issues.append({
-                    'file': file_path,
-                    'position': match.start(),
-                    'type': 'JSXText',
-                    'text': text.strip()
-                })
+            # Match suspicious string literals
+            for match in STRING_LITERAL_REGEX.finditer(line):
+                string = match.group(1).strip()
+                if is_ignorable(string):
+                    continue
+                if not any(fn + '(' in line[:match.start()] for fn in I18N_FUNCTIONS):
+                    issues.append({
+                        'file': file_path,
+                        'line': idx,
+                        'type': 'StringLiteral',
+                        'text': string
+                    })
+
+            # Match JSX text nodes
+            for match in JSX_TEXT_REGEX.finditer(line):
+                text = match.group(1).strip()
+                if is_ignorable(text):
+                    continue
+                if not text.startswith('{t('):
+                    issues.append({
+                        'file': file_path,
+                        'line': idx,
+                        'type': 'JSXText',
+                        'text': text
+                    })
 
     return issues
+
 
 def scan_directory(directory):
     all_issues = []
@@ -64,7 +82,7 @@ def save_report(results, output_file):
             json.dump(results, f, indent=2)
     elif ext.lower() == '.csv':
         with open(output_file, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=['file', 'position', 'type', 'text'])
+            writer = csv.DictWriter(f, fieldnames=['file', 'line', 'type', 'text'])
             writer.writeheader()
             for row in results:
                 writer.writerow(row)

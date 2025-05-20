@@ -10,6 +10,7 @@ import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../backgroundFunctions/encryption';
 import { useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
@@ -20,8 +21,8 @@ export const useHandlePrivateApps = () => {
     setInfoSnackCustom,
   } = useContext(MyContext);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
-
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const openApp = async (
     privateAppProperties,
@@ -29,7 +30,7 @@ export const useHandlePrivateApps = () => {
     setLoadingStatePrivateApp
   ) => {
     try {
-      if (setLoadingStatePrivateApp) {
+      if (setLoadingStatePrivateApp) {  // TODO translate
         setLoadingStatePrivateApp(`Downloading and decrypting private app.`);
       }
       setOpenSnackGlobal(true);
@@ -173,7 +174,7 @@ export const useHandlePrivateApps = () => {
           });
           setInfoSnackCustom({
             type: 'success',
-            message: 'Opened',
+            message: {t('core:message.generic.opened', { postProcess: 'capitalizeFirstChar' })},
           });
           if (setLoadingStatePrivateApp) {
             setLoadingStatePrivateApp(``);
@@ -206,7 +207,12 @@ export const useHandlePrivateApps = () => {
       } catch (error) {
         if (setLoadingStatePrivateApp) {
           setLoadingStatePrivateApp(
-            `Error! ${error?.message || 'Unable to build private app.'}`
+            `Error! ${
+              error?.message ||
+              t('core:message.error.unable_build_app', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            }`
           );
         }
         throw error;
@@ -214,7 +220,11 @@ export const useHandlePrivateApps = () => {
     } catch (error) {
       setInfoSnackCustom({
         type: 'error',
-        message: error?.message || 'Unable to fetch app',
+        message:
+          error?.message ||
+          t('core:message.error.unable_fetch_app', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       });
     }
   };
