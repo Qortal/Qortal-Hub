@@ -18,7 +18,8 @@ def is_excluded(path):
 
 def is_ignorable(text):
     return (
-        re.fullmatch(r'[A-Z0-9_]+', text) and 'action' in text
+        re.fullmatch(r'[A-Z0-9_]+', text) and
+        any(keyword in text.lower() for keyword in ['action', 'status'])
     )
 
 def is_console_log_line(line):

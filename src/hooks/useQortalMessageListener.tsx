@@ -165,7 +165,7 @@ export function openIndexedDB() {
       reject('Error opening IndexedDB');
     };
   });
-}
+} // TODO translate
 
 export const listOfAllQortalRequests = [
   'ADD_FOREIGN_SERVER',
