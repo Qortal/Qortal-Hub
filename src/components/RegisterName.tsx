@@ -235,7 +235,9 @@ export const RegisterName = ({
             autoFocus
             onChange={(e) => setRegisterNameValue(e.target.value)}
             value={registerNameValue}
-            placeholder="Choose a name"
+            placeholder={t('core:action.choose_name', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           />
           {(!balance || (nameFee && balance && balance < nameFee)) && (
             <>

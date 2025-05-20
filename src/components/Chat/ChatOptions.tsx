@@ -422,7 +422,9 @@ export const ChatOptions = ({
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 sx={{ ml: 1, flex: 1 }}
-                placeholder="Search chat text"
+                placeholder={t('core:action.search_chat_text', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 inputProps={{
                   'aria-label': 'Search for apps',
                   fontSize: '16px',

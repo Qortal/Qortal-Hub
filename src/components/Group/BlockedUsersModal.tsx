@@ -187,7 +187,9 @@ export const BlockedUsersModal = () => {
           }}
         >
           <TextField
-            placeholder="Name or address"
+            placeholder={t('auth:message.generic.name_address', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             value={value}
             onChange={(e) => {
               setValue(e.target.value);

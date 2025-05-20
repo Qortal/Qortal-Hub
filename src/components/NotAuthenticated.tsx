@@ -925,14 +925,18 @@ export const NotAuthenticated = ({
                   }}
                 >
                   <Input
-                    placeholder="Url"
+                    placeholder={t('core:url', {
+                      postProcess: 'capitalizeAll',
+                    })}
                     value={url}
                     onChange={(e) => {
                       setUrl(e.target.value);
                     }}
                   />
                   <Input
-                    placeholder="Api key"
+                    placeholder={t('auth:apikey.key', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     value={customApikey}
                     onChange={(e) => {
                       setCustomApiKey(e.target.value);

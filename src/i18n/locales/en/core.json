@@ -17,6 +17,8 @@
     "choose": "choose",
     "choose_file": "choose file",
     "choose_image": "choose image",
+    "choose_logo": "choose a logo",
+    "choose_name": "choose a name",
     "close": "close",
     "close_chat": "close Direct Chat",
     "continue": "continue",
@@ -25,8 +27,6 @@
     "create_apps": "create apps",
     "create_file": "create file",
     "create_thread": "create thread",
-    "choose_logo": "choose a logo",
-    "choose_name": "choose a name",
     "decline": "decline",
     "decrypt": "decrypt",
     "disable_enter": "disable enter",
@@ -67,6 +67,7 @@
     "save_disk": "save to disk",
     "search": "search",
     "search_apps": "search for apps",
+    "search_chat_text": "search chat text",
     "select_app_type": "select App Type",
     "select_category": "select Category",
     "select_name_app": "select Name/App",
@@ -289,6 +290,7 @@
   "name_app": "name/App",
   "new_post_in": "new post in {{ title }}",
   "none": "none",
+  "note": "note",
   "option": "option",
   "option_other": "options",
   "page": {
@@ -311,6 +313,7 @@
   "receiver": "receiver",
   "sender": "sender",
   "server": "server",
+  "service_type": "service type",
   "settings": "settings",
   "sort": {
     "by_member": "by member"
@@ -323,6 +326,7 @@
   },
   "thread": "thread",
   "thread_other": "threads",
+  "thread_title": "thread title",
   "time": {
     "day_one": "{{count}} day",
     "day_other": "{{count}} days",
@@ -335,6 +339,7 @@
   "title": "title",
   "to": "to",
   "tutorial": "tutorial",
+  "url": "url",
   "user_lookup": "user lookup",
   "vote": "vote",
   "vote_other": "{{ count }} votes",

@@ -415,7 +415,9 @@ export const AppsPrivate = ({ myName }) => {
                     {t('core:name', { postProcess: 'capitalizeFirstChar' })}
                   </Label>
                   <Input
-                    placeholder="name"
+                    placeholder={t('core:name', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     value={privateAppValues?.name}
                     onChange={(e) =>
                       setPrivateAppValues((prev) => {
