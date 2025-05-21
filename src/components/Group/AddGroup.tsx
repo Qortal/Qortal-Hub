@@ -433,7 +433,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:approval_threshold', {
+                      {t('group:message.generic.group_approval_threshold', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -442,7 +442,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={approvalThreshold}
-                      label="Group Approval Threshold"
+                      label={t('group:group.approval_threshold', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeApprovalThreshold}
                     >
                       <MenuItem value={0}>

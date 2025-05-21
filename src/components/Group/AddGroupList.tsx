@@ -312,9 +312,15 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
         flexGrow: 1,
       }}
     >
-      <p>Groups list</p>
+      <p>
+        {t('core:list.groups', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </p>
       <TextField
-        label="Search for Groups"
+        label={t('core:action.search_groups', {
+          postProcess: 'capitalizeFirstChar',
+        })}
         variant="outlined"
         fullWidth
         value={inputValue}

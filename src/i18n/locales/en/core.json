@@ -43,6 +43,7 @@
     "import": "import",
     "import_theme": "import theme",
     "invite": "invite",
+    "invite_member": "invite new member",
     "join": "join",
     "leave_comment": "leave comment",
     "load_announcements": "load older announcements",
@@ -72,6 +73,7 @@
     "save_disk": "save to disk",
     "search": "search",
     "search_apps": "search for apps",
+    "search_groups": "search for groups",
     "search_chat_text": "search chat text",
     "select_app_type": "select App Type",
     "select_category": "select Category",
@@ -147,9 +149,13 @@
   "level": "level",
   "library": "library",
   "list": {
+    "bans": "list of bans",
+    "groups": "list of groups",
     "invite": "invite list",
+    "invites": "list of invites",
     "join_request": "join request list",
-    "member": "member list"
+    "member": "member list",
+    "members": "list of members"
   },
   "loading": {
     "announcements": "loading announcements",
@@ -264,6 +270,7 @@
       "updating": "updating"
     },
     "message": "message",
+    "promotion_text": "Promotion text",
     "question": {
       "accept_vote_on_poll": "do you accept this VOTE_ON_POLL transaction? POLLS are public!",
       "logout": "are you sure you would like to logout?",
@@ -333,8 +340,10 @@
   "supply": "supply",
   "tags": "tags",
   "theme": {
-    "dark": "dark mode",
-    "light": "light mode",
+    "dark": "dark",
+    "dark_mode": "dark mode",
+    "light": "light",
+    "light_mode": "light mode",
     "manager": "theme Manager",
     "name": "theme name"
   },

@@ -254,7 +254,9 @@ export const ManageMembers = ({
               }}
             >
               <Tab
-                label="List of members"
+                label={t('core:list.members', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 {...a11yProps(0)}
                 sx={{
                   '&.Mui-selected': {
@@ -265,7 +267,9 @@ export const ManageMembers = ({
               />
 
               <Tab
-                label="Invite new member"
+                label={t('core:action.invite_member', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 {...a11yProps(1)}
                 sx={{
                   '&.Mui-selected': {
@@ -276,7 +280,9 @@ export const ManageMembers = ({
               />
 
               <Tab
-                label="List of invites"
+                label={t('core:list.invites', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 {...a11yProps(2)}
                 sx={{
                   '&.Mui-selected': {
@@ -287,7 +293,9 @@ export const ManageMembers = ({
               />
 
               <Tab
-                label="List of bans"
+                label={t('core:list.bans', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 {...a11yProps(3)}
                 sx={{
                   '&.Mui-selected': {
@@ -298,7 +306,9 @@ export const ManageMembers = ({
               />
 
               <Tab
-                label="Join requests"
+                label={t('group:join_requests', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 {...a11yProps(4)}
                 sx={{
                   '&.Mui-selected': {

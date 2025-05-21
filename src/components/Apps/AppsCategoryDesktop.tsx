@@ -145,7 +145,9 @@ export const AppsCategoryDesktop = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
                 inputProps={{
-                  'aria-label': 'Search for apps',
+                  'aria-label': t('core:action.search_apps', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
                   fontSize: '16px',
                   fontWeight: 400,
                 }}

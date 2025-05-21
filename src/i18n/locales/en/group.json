@@ -29,13 +29,13 @@
     "visit_q_mintership": "visit Q-Mintership"
   },
   "advanced_options": "advanced options",
-  "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
   "ban_list": "ban list",
   "block_delay": {
     "minimum": "Minimum Block delay",
     "maximum": "Maximum Block delay"
   },
   "group": {
+    "approval_threshold": "group Approval Threshold",
     "avatar": "group avatar",
     "closed": "closed (private) - users need permission to join",
     "description": "description of group",
@@ -73,6 +73,7 @@
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",
       "group_announcement": "group Announcements",
+      "group_approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
       "group_encrypted": "group encrypted",
       "group_invited_you": "{{group}} has invited you",
       "group_key_created": "first group key created.",

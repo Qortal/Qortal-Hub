@@ -316,8 +316,18 @@ export default function ThemeManager() {
             onChange={(e, newValue) => setCurrentTab(newValue)}
             sx={{ mt: 2, mb: 2 }}
           >
-            <Tab label="Light" value="light" />
-            <Tab label="Dark" value="dark" />
+            <Tab
+              label={t('core:theme.light', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              value="light"
+            />
+            <Tab
+              label={t('core:theme.dark', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              value="dark"
+            />
           </Tabs>
 
           <Box>
@@ -412,6 +422,7 @@ export default function ThemeManager() {
           <Button onClick={() => setOpenEditor(false)}>
             {t('core:action.cancel', { postProcess: 'capitalizeFirstChar' })}
           </Button>
+
           <Button
             disabled={!themeDraft.name}
             onClick={handleSaveTheme}

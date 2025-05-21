@@ -921,7 +921,9 @@ export const ListOfGroupPromotions = () => {
           <Spacer height="20px" />
 
           <TextField
-            label="Promotion text"
+            label={t('core:promotion_text', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             variant="filled"
             fullWidth
             value={text}
