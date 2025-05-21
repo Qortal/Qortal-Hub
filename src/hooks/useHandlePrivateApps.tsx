@@ -69,7 +69,11 @@ export const useHandlePrivateApps = () => {
             );
           }
 
-          throw new Error('Unable to fetch app');
+          throw new Error(
+            t('core:message.error.unable_fetch_app', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
 
         data = await responseData.text();
