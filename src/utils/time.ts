@@ -44,14 +44,14 @@ export function sortArrayByTimestampAndGroupName(array) {
       // Both have timestamp, sort by timestamp descending
       return b.timestamp - a.timestamp;
     } else if (a.timestamp) {
-      // Only `a` has timestamp, it comes first
       return -1;
     } else if (b.timestamp) {
-      // Only `b` has timestamp, it comes first
       return 1;
     } else {
-      // Neither has timestamp, sort alphabetically by groupName
-      return a.groupName.localeCompare(b.groupName);
+      // Neither has timestamp, sort alphabetically by groupName (with fallback)
+      const nameA = a.groupName || '';
+      const nameB = b.groupName || '';
+      return nameA.localeCompare(nameB);
     }
   });
 }

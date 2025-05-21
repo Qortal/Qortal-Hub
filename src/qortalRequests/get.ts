@@ -1949,7 +1949,10 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       if (data.location.identifier) {
         locationUrl = locationUrl + `/${data.location.identifier}`;
       }
-      const endpoint = await createEndpoint(locationUrl);
+      const endpoint = await createEndpoint(
+        locationUrl +
+          `?attachment=true&attachmentFilename=${data?.location?.filename}`
+      );
       a.href = endpoint;
       a.download = data.location.filename;
       document.body.appendChild(a);
