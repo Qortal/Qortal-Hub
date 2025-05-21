@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -29,6 +29,8 @@ import { rgbStringToHsva, rgbaStringToHsva } from '@uiw/color-convert';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import { handleImportClick } from '../../utils/fileReading';
+import { useTranslation } from 'react-i18next';
+
 const uid = new ShortUniqueId({ length: 8 });
 
 function detectColorFormat(color) {
@@ -80,6 +82,7 @@ export default function ThemeManager() {
   });
   const [currentTab, setCurrentTab] = useState('light');
   const nameInputRef = useRef(null);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   useEffect(() => {
     if (openEditor && nameInputRef.current) {
@@ -208,7 +211,11 @@ export default function ThemeManager() {
       const fileContent = await handleImportClick('.json');
       const importedTheme = JSON.parse(fileContent);
       if (!validateTheme(importedTheme)) {
-        throw new Error('Invalid theme format');
+        throw new Error(
+          t('core:message.generic.invalid_theme_format', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       const newTheme = { ...importedTheme, id: uid.rnd() };
       const updatedThemes = [...userThemes, newTheme];
@@ -223,7 +230,7 @@ export default function ThemeManager() {
   return (
     <Box p={2}>
       <Typography variant="h5" gutterBottom>
-        Theme Manager
+        {t('core:theme.manager', { postProcess: 'capitalizeFirstChar' })}
       </Typography>
 
       <Button
@@ -231,8 +238,9 @@ export default function ThemeManager() {
         startIcon={<AddIcon />}
         onClick={handleAddTheme}
       >
-        Add Theme
+        {t('core:action.add_theme', { postProcess: 'capitalizeFirstChar' })}
       </Button>
+
       <Button
         sx={{
           marginLeft: '20px',
@@ -241,8 +249,9 @@ export default function ThemeManager() {
         startIcon={<AddIcon />}
         onClick={importTheme}
       >
-        Import theme
+        {t('core:action.import_theme', { postProcess: 'capitalizeFirstChar' })}
       </Button>
+
       <List>
         {userThemes?.map((theme, index) => (
           <ListItemButton
@@ -281,13 +290,20 @@ export default function ThemeManager() {
         maxWidth="md"
       >
         <DialogTitle>
-          {themeDraft.id ? 'Edit Theme' : 'Add New Theme'}
+          {themeDraft.id
+            ? t('core:action.edit_theme', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:action.new.theme', {
+                postProcess: 'capitalizeFirstChar',
+              })}
         </DialogTitle>
+
         <DialogContent>
           <TextField
             inputRef={nameInputRef}
             margin="dense"
-            label="Theme Name"
+            label={t('core:theme.name', { postProcess: 'capitalizeFirstChar' })}
             fullWidth
             value={themeDraft.name}
             onChange={(e) =>
@@ -391,14 +407,17 @@ export default function ThemeManager() {
             )}
           </Box>
         </DialogContent>
+
         <DialogActions>
-          <Button onClick={() => setOpenEditor(false)}>Cancel</Button>
+          <Button onClick={() => setOpenEditor(false)}>
+            {t('core:action.cancel', { postProcess: 'capitalizeFirstChar' })}
+          </Button>
           <Button
             disabled={!themeDraft.name}
             onClick={handleSaveTheme}
             variant="contained"
           >
-            Save
+            {t('core:action.save', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </DialogActions>
       </Dialog>

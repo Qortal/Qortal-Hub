@@ -6,7 +6,6 @@
     "copy_private_key": "copy private key",
     "create_group": "create group",
     "disable_push_notifications": "disable all push notifications",
-    "enable_dev_mode": "enable dev mode",
     "export_password": "export password",
     "export_private_key": "export private key",
     "find_group": "find group",
@@ -33,8 +32,8 @@
   "approval_threshold": "group Approval Threshold (number / percentage of Admins that must approve a transaction)",
   "ban_list": "ban list",
   "block_delay": {
-    "minimum": "minimum Block delay for Group Transaction Approvals",
-    "maximum": "maximum Block delay for Group Transaction Approvals"
+    "minimum": "Minimum Block delay",
+    "maximum": "Maximum Block delay"
   },
   "group": {
     "avatar": "group avatar",
@@ -68,6 +67,8 @@
       "avatar_registered_name": "a registered name is required to set an avatar",
       "admin_only": "only groups where you are an admin will be shown",
       "already_in_group": "you are already in this group!",
+      "block_delay_minimum": "minimum Block delay for Group Transaction Approvals",
+      "block_delay_maximum": "maximum Block delay for Group Transaction Approvals",
       "closed_group": "this is a closed/private group, so you will need to wait until an admin accepts your request",
       "descrypt_wallet": "decrypting wallet...",
       "encryption_key": "the group's first common encryption key is in the process of creation. Please wait a few minutes for it to be retrieved by the network. Checking every 2 minutes...",

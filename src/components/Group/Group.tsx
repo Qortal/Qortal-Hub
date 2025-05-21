@@ -1680,7 +1680,9 @@ export const Group = ({
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
-              label="Messaging"
+              label={t('group:group.messaging', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               selected={desktopSideView === 'directs'}
             >
               <MessagingIcon

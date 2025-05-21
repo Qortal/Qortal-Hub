@@ -216,7 +216,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                   }}
                 />
               }
-              label={t('group:action.enable_dev_mode', {
+              label={t('core:action.enable_dev_mode', {
                 postProcess: 'capitalizeFirstChar',
               })}
             />

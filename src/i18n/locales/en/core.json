@@ -1,11 +1,12 @@
 {
   "action": {
-    "add": "add",
-    "add_custom_framework": "add custom framework",
-    "add_reaction": "add reaction",
     "accept": "accept",
     "access": "access",
     "access_app": "access app",
+    "add": "add",
+    "add_custom_framework": "add custom framework",
+    "add_reaction": "add reaction",
+    "add_theme": "add theme",
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
@@ -33,11 +34,14 @@
     "download": "download",
     "download_file": "download file",
     "edit": "edit",
+    "edit_theme": "edit theme",
+    "enable_dev_mode": "enable dev mode",
     "enter_name": "enter a name",
     "export": "export",
     "get_qort": "get QORT at Q-Trade",
     "hide": "hide",
     "import": "import",
+    "import_theme": "import theme",
     "invite": "invite",
     "join": "join",
     "leave_comment": "leave comment",
@@ -47,6 +51,7 @@
     "new": {
       "chat": "new chat",
       "post": "new post",
+      "theme": "new theme",
       "thread": "new thread"
     },
     "notify": "notify",
@@ -115,6 +120,7 @@
   },
   "current_language": "current language: {{ language }}",
   "dev": "dev",
+  "dev_mode": "dev Mode",
   "domain": "domain",
   "ui": {
     "version": "UI version"
@@ -134,6 +140,7 @@
   "for": "for",
   "general": "general",
   "general_settings": "general settings",
+  "home": "home",
   "identifier": "identifier",
   "image_embed": "image embed",
   "last_height": "last height",
@@ -164,6 +171,7 @@
       "invalid_poll_embed_link_name": "invalid poll embed link. Missing name.",
       "invalid_image_embed_link_name": "invalid image embed link. Missing param.",
       "invalid_signature": "invalid signature",
+      "invalid_theme_format": "invalid theme format",
       "invalid_zip": "invalid zip",
       "message_loading": "error loading message.",
       "message_size": "your message size is of {{ size }} bytes out of a maximum of {{ maximum }}",
@@ -326,7 +334,9 @@
   "tags": "tags",
   "theme": {
     "dark": "dark mode",
-    "light": "light mode"
+    "light": "light mode",
+    "manager": "theme Manager",
+    "name": "theme name"
   },
   "thread": "thread",
   "thread_other": "threads",

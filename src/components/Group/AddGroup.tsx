@@ -388,7 +388,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
                     value={groupType}
-                    label="Group Type"
+                    label={t('group:group.type', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     onChange={handleChangeGroupType}
                   >
                     <MenuItem value={1}>
@@ -469,7 +471,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:block_delay.minimum', {
+                      {t('group:message.generic.block_delay_minimum', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -478,7 +480,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={minBlock}
-                      label="Minimum Block delay"
+                      label={t('group:block_delay.minimum', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeMinBlock}
                     >
                       <MenuItem value={5}>
@@ -528,7 +532,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:block_delay.maximum', {
+                      {t('group:message.generic.block_delay_maximum', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -537,7 +541,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={maxBlock}
-                      label="Maximum Block delay"
+                      label={t('group:block_delay.minimum', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeMaxBlock}
                     >
                       <MenuItem value={60}>

@@ -94,7 +94,10 @@ export const DesktopFooter = ({
             goToHome();
           }}
         >
-          <IconWrapper label="Home" selected={isHome}>
+          <IconWrapper
+            label={t('core:home', { postProcess: 'capitalizeFirstChar' })}
+            selected={isHome}
+          >
             <HomeIcon height={30} />
           </IconWrapper>
         </ButtonBase>
@@ -145,7 +148,12 @@ export const DesktopFooter = ({
             setDesktopSideView('directs');
           }}
         >
-          <IconWrapper label="Messaging" selected={isDirects}>
+          <IconWrapper
+            label={t('group:group.messaging', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            selected={isDirects}
+          >
             <MessagingIcon
               height={30}
               color={
@@ -168,7 +176,10 @@ export const DesktopFooter = ({
               setIsOpenSideViewGroups(false);
             }}
           >
-            <IconWrapper label="Dev Mode" selected={isApps}>
+            <IconWrapper
+              label={t('core:dev_mode', { postProcess: 'capitalizeFirstChar' })}
+              selected={isApps}
+            >
               <img src={AppIcon} />
             </IconWrapper>
           </ButtonBase>

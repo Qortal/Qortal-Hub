@@ -105,8 +105,6 @@ export const ReactionPicker = ({ onReaction }) => {
               height={400}
               onEmojiClick={handlePicker}
               onReactionClick={handleReaction}
-              // reactionsDefaultOpen={true}
-              // open={true}
               theme={Theme.DARK}
               width={350}
             />
