@@ -99,6 +99,7 @@
       "not_part_group": "you are not part of the encrypted group of members. Wait until an admin re-encrypts the keys.",
       "only_encrypted": "only unencrypted messages will be displayed.",
       "only_private_groups": "only private groups will be shown",
+      "pending_join_requests": "{{ group }} has {{ count }} pending join requests",
       "private_key_copied": "private key copied",
       "provide_message": "please provide a first message to the thread",
       "secure_place": "keep your private key in a secure place. Do not share!",

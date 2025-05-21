@@ -40,6 +40,7 @@ const TabComponent = ({ isSelected, app }) => {
             }}
           />
         )}
+
         {app?.isPrivate && !app?.privateAppProperties?.logo ? (
           <LockIcon
             sx={{

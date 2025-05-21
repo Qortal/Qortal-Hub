@@ -13,7 +13,6 @@ import {
   NewMessageSendButton,
   NewMessageSendP,
 } from './Mail-styles';
-
 import { ReusableModal } from './ReusableModal';
 import { Spacer } from '../../../common/Spacer';
 import { CreateThreadIcon } from '../../../assets/Icons/CreateThreadIcon';

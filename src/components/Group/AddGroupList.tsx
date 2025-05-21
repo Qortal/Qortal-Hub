@@ -41,9 +41,7 @@ const cache = new CellMeasurerCache({
 export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const { show } = useContext(MyContext);
   const [memberGroups] = useAtom(memberGroupsAtom);
-
   const setTxList = useSetAtom(txListAtom);
-
   const { t } = useTranslation(['auth', 'core', 'group']);
   const [groups, setGroups] = useState([]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
@@ -189,7 +187,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
           .catch((error) => {
             setInfoSnack({
               type: 'error',
-              message: error.message || 'An error occurred',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -248,10 +250,14 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     })}{' '}
                     {group?.groupName}
                   </Typography>
+
                   <Typography>
                     {group?.isOpen === false &&
-                      'This is a closed/private group, so you will need to wait until an admin accepts your request'}
+                      t('group:message.generic.closed_group', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                   </Typography>
+
                   <LoadingButton
                     loading={isLoading}
                     loadingPosition="start"
@@ -264,6 +270,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   </LoadingButton>
                 </Box>
               </Popover>
+
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
@@ -274,6 +281,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     }}
                   />
                 )}
+
                 {group?.isOpen === true && (
                   <NoEncryptionGmailerrorredIcon
                     sx={{
@@ -281,7 +289,9 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                     }}
                   />
                 )}
+
                 <Spacer width="15px" />
+
                 <ListItemText
                   primary={group?.groupName}
                   secondary={group?.description}

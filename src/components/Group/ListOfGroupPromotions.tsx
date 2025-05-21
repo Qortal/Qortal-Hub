@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -88,7 +82,7 @@ export const ListOfGroupPromotions = () => {
   const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
-  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [fee, setFee] = useState(null);
@@ -101,7 +95,7 @@ export const ListOfGroupPromotions = () => {
   const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
-    getItemKey: React.useCallback(
+    getItemKey: useCallback(
       (index) => promotions[index]?.identifier,
       [promotions]
     ),
@@ -276,6 +270,7 @@ export const ListOfGroupPromotions = () => {
     try {
       const groupId = group.groupId;
       const fee = await getFee('JOIN_GROUP');
+
       await show({
         message: t('core:message.question.perform_transaction', {
           action: 'JOIN_GROUP',
@@ -283,6 +278,7 @@ export const ListOfGroupPromotions = () => {
         }),
         publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingJoinGroup(true);
       await new Promise((res, rej) => {
         window
@@ -496,6 +492,7 @@ export const ListOfGroupPromotions = () => {
                 <CustomLoader />
               </Box>
             )}
+
             {!loading && promotions.length === 0 && (
               <Box
                 sx={{
@@ -519,6 +516,7 @@ export const ListOfGroupPromotions = () => {
                 </Typography>
               </Box>
             )}
+
             <div
               style={{
                 height: '600px',
@@ -777,6 +775,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   />
                                 )}
+
                                 {promotion?.isOpen === true && (
                                   <NoEncryptionGmailerrorredIcon
                                     sx={{
@@ -784,6 +783,7 @@ export const ListOfGroupPromotions = () => {
                                     }}
                                   />
                                 )}
+
                                 <Typography
                                   sx={{
                                     fontSize: '15px',

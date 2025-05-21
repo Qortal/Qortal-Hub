@@ -215,7 +215,9 @@ export const PollCard = ({
                 setIsOpen(true);
               }}
             >
-              {t('core:action.show_poll', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.show_poll', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
           </>
         )}
@@ -273,7 +275,7 @@ export const PollCard = ({
               fontSize: '18px',
             }}
           >
-            {t('core:option_other', { postProcess: 'capitalizeFirst' })}
+            {t('core:option_other', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
 
           <RadioGroup
@@ -308,7 +310,7 @@ export const PollCard = ({
               disabled={!selectedOption || isLoadingSubmit}
               onClick={handleVote}
             >
-              {t('core:action.vote', { postProcess: 'capitalizeFirst' })}
+              {t('core:action.vote', { postProcess: 'capitalizeFirstChar' })}
             </Button>
 
             <Typography
@@ -337,7 +339,7 @@ export const PollCard = ({
             }}
           >
             {t('core:message.generic.already_voted', {
-              postProcess: 'capitalizeFirst',
+              postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
 
@@ -350,7 +352,7 @@ export const PollCard = ({
               }}
             >
               {t('core:message.generic.processing_transaction', {
-                postProcess: 'capitalizeFirst',
+                postProcess: 'capitalizeFirstChar',
               })}
             </Typography>
           )}
@@ -361,8 +363,8 @@ export const PollCard = ({
             }}
           >
             {showResults
-              ? t('core:action.hide', { postProcess: 'capitalizeFirst' })
-              : t('core:action.close', { postProcess: 'capitalizeFirst' })}
+              ? t('core:action.hide', { postProcess: 'capitalizeFirstChar' })
+              : t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
           </ButtonBase>
         </CardContent>
 

@@ -10,6 +10,7 @@ import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../backgroundFunctions/encryption';
 import { useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
@@ -20,8 +21,8 @@ export const useHandlePrivateApps = () => {
     setInfoSnackCustom,
   } = useContext(MyContext);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
-
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const openApp = async (
     privateAppProperties,
@@ -30,13 +31,19 @@ export const useHandlePrivateApps = () => {
   ) => {
     try {
       if (setLoadingStatePrivateApp) {
-        setLoadingStatePrivateApp(`Downloading and decrypting private app.`);
+        setLoadingStatePrivateApp(
+          t('core:message.generic.downloading_decrypting_app', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       setOpenSnackGlobal(true);
 
       setInfoSnackCustom({
         type: 'info',
-        message: 'Fetching app data',
+        message: t('core:message.generic.fetching_data', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         duration: null,
       });
       const urlData = `${getBaseApiReact()}/arbitrary/${
@@ -55,7 +62,11 @@ export const useHandlePrivateApps = () => {
 
         if (!responseData?.ok) {
           if (setLoadingStatePrivateApp) {
-            setLoadingStatePrivateApp('Error! Unable to download private app.');
+            setLoadingStatePrivateApp(
+              t('core:message.generic.unable_download_private_app', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           }
 
           throw new Error('Unable to fetch app');
@@ -64,13 +75,25 @@ export const useHandlePrivateApps = () => {
         data = await responseData.text();
         if (data?.error) {
           if (setLoadingStatePrivateApp) {
-            setLoadingStatePrivateApp('Error! Unable to download private app.');
+            setLoadingStatePrivateApp(
+              t('core:message.generic.unable_download_private_app', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           }
-          throw new Error('Unable to fetch app');
+          throw new Error(
+            t('core:message.generic.unable_fetch_app', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
       } catch (error) {
         if (setLoadingStatePrivateApp) {
-          setLoadingStatePrivateApp('Error! Unable to download private app.');
+          setLoadingStatePrivateApp(
+            t('core:message.generic.unable_download_private_app', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
         throw error;
       }
@@ -78,23 +101,27 @@ export const useHandlePrivateApps = () => {
       let decryptedData;
       // eslint-disable-next-line no-useless-catch
       try {
-        decryptedData = await window.sendMessage(
-          'DECRYPT_QORTAL_GROUP_DATA',
-
-          {
-            base64: data,
-            groupId: privateAppProperties?.groupId,
-          }
-        );
+        decryptedData = await window.sendMessage('DECRYPT_QORTAL_GROUP_DATA', {
+          base64: data,
+          groupId: privateAppProperties?.groupId,
+        });
         if (decryptedData?.error) {
           if (setLoadingStatePrivateApp) {
-            setLoadingStatePrivateApp('Error! Unable to decrypt private app.');
+            setLoadingStatePrivateApp(
+              t('core:message.generic.unable_decrypt_app', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           }
           throw new Error(decryptedData?.error);
         }
       } catch (error) {
         if (setLoadingStatePrivateApp) {
-          setLoadingStatePrivateApp('Error! Unable to decrypt private app.');
+          setLoadingStatePrivateApp(
+            t('core:message.generic.unable_decrypt_app', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
         throw error;
       }
@@ -106,11 +133,15 @@ export const useHandlePrivateApps = () => {
         if (decryptedData) {
           setInfoSnackCustom({
             type: 'info',
-            message: 'Building app',
+            message: t('core:message.generic.building_app', {
+              postProcess: 'capitalizeFirstChar',
+            }),
           });
+
           const endpoint = await createEndpoint(
             `/arbitrary/APP/${privateAppProperties?.name}/zip?preview=true`
           );
+
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: {
@@ -118,7 +149,9 @@ export const useHandlePrivateApps = () => {
             },
             body: UintToObject?.app,
           });
+
           const previewPath = await response.text();
+
           const refreshfunc = async (tabId, privateAppProperties) => {
             const checkIfPreviewLinkStillWorksUrl = await createEndpoint(
               `/render/hash/HmtnZpcRPwisMfprUXuBp27N2xtv5cDiQjqGZo8tbZS?secret=E39WTiG4qBq3MFcMPeRZabtQuzyfHg9ZuR5SgY7nW1YH`
@@ -132,6 +165,7 @@ export const useHandlePrivateApps = () => {
               const endpoint = await createEndpoint(
                 `/arbitrary/APP/${privateAppProperties?.name}/zip?preview=true`
               );
+
               const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -139,6 +173,7 @@ export const useHandlePrivateApps = () => {
                 },
                 body: UintToObject?.app,
               });
+
               const previewPath = await response.text();
               executeEvent('updateAppUrl', {
                 tabId: tabId,
@@ -173,7 +208,9 @@ export const useHandlePrivateApps = () => {
           });
           setInfoSnackCustom({
             type: 'success',
-            message: 'Opened',
+            message: t('core:message.generic.opened', {
+              postProcess: 'capitalizeFirstChar',
+            }),
           });
           if (setLoadingStatePrivateApp) {
             setLoadingStatePrivateApp(``);
@@ -206,7 +243,12 @@ export const useHandlePrivateApps = () => {
       } catch (error) {
         if (setLoadingStatePrivateApp) {
           setLoadingStatePrivateApp(
-            `Error! ${error?.message || 'Unable to build private app.'}`
+            `Error! ${
+              error?.message ||
+              t('core:message.error.unable_build_app', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            }`
           );
         }
         throw error;
@@ -214,7 +256,11 @@ export const useHandlePrivateApps = () => {
     } catch (error) {
       setInfoSnackCustom({
         type: 'error',
-        message: error?.message || 'Unable to fetch app',
+        message:
+          error?.message ||
+          t('core:message.error.unable_fetch_app', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       });
     }
   };

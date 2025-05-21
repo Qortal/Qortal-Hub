@@ -17,8 +17,9 @@ import { useTranslation } from 'react-i18next';
 export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
-
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation(['auth', 'core', 'group']);
+  const theme = useTheme();
 
   const getJoinRequests = async () => {
     try {
@@ -36,9 +37,6 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
       setLoading(false);
     }
   };
-
-  const { t } = useTranslation(['auth', 'core', 'group']);
-  const theme = useTheme();
 
   useEffect(() => {
     if (myAddress) {
@@ -75,6 +73,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
           {groupsWithJoinRequests?.length > 0 &&
             ` (${groupsWithJoinRequests?.length})`}
         </Typography>
+
         {isExpanded ? (
           <ExpandLessIcon
             sx={{
@@ -113,6 +112,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
               <CustomLoader />
             </Box>
           )}
+
           {!loading && groupsWithJoinRequests.length === 0 && (
             <Box
               sx={{
@@ -136,6 +136,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
               </Typography>
             </Box>
           )}
+
           <List
             sx={{
               width: '100%',
