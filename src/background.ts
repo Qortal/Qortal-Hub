@@ -842,7 +842,7 @@ export async function getAddressInfo(address) {
   const data = await response.json();
 
   if (!response?.ok && data?.error !== 124)
-    throw new Error('Cannot fetch address info');
+    throw new Error('Cannot fetch address info'); // TODO translate
   if (data?.error === 124) {
     return {
       address,
@@ -3143,11 +3143,9 @@ function setupMessageListener() {
       case 'getWalletInfo':
         getWalletInfoCase(request, event);
         break;
-
       case 'validApi':
         validApiCase(request, event);
         break;
-
       case 'name':
         nameCase(request, event);
         break;
@@ -3193,11 +3191,9 @@ function setupMessageListener() {
       case 'banFromGroup':
         banFromGroupCase(request, event);
         break;
-
       case 'addDataPublishes':
         addDataPublishesCase(request, event);
         break;
-
       case 'getDataPublishes':
         getDataPublishesCase(request, event);
         break;
@@ -3225,7 +3221,6 @@ function setupMessageListener() {
       case 'notification':
         notificationCase(request, event);
         break;
-
       case 'addTimestampEnterChat':
         addTimestampEnterChatCase(request, event);
         break;
@@ -3234,6 +3229,7 @@ function setupMessageListener() {
         break;
       case 'setCustomNodes':
         setCustomNodesCase(request, event);
+        break;
       case 'getApiKey':
         getApiKeyCase(request, event);
         break;

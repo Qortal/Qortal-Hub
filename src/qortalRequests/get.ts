@@ -2194,7 +2194,7 @@ export const joinGroup = async (data, isFromExtension) => {
       throw new Error(error?.message || 'Failed to join the group.');
     }
   } else {
-    throw new Error('User declined to join group');
+    throw new Error('User declined to join group'); // TODO translate
   }
 };
 
@@ -2238,7 +2238,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         throw new Error('A mimeType could not be derived');
       }
       if (!fileExtension) {
-        const obj = {};
         throw new Error('A file extension could not be derived');
       }
       if (fileExtension && mimeType) {
@@ -2257,14 +2256,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         },
         snackMethods
       );
-      // sendToSaveFilePicker(
-      //   {
-      //     filename,
-      //     mimeType,
-      //     blob,
-      //     fileId
-      //   }
-      // );
       return true;
     } else {
       throw new Error('User declined to save file');
