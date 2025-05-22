@@ -359,7 +359,9 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              'Failed to set API key:',
+              it('auth:message.error.unable_set_apikey', {
+                postProcess: 'capitalizeFirstChar',
+              }),
               error.message ||
                 t('core:message.error.generic', {
                   postProcess: 'capitalizeFirstChar',
@@ -396,7 +398,9 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              'Failed to set API key:',
+              it('auth:message.error.unable_set_apikey', {
+                postProcess: 'capitalizeFirstChar',
+              }),
               error.message ||
                 t('core:message.error.generic', {
                   postProcess: 'capitalizeFirstChar',
@@ -678,7 +682,9 @@ export const NotAuthenticated = ({
                           })
                           .catch((error) => {
                             console.error(
-                              'Failed to set API key:',
+                              it('auth:message.error.unable_set_apikey', {
+                                postProcess: 'capitalizeFirstChar',
+                              }),
                               error.message ||
                                 t('core:message.error.generic', {
                                   postProcess: 'capitalizeFirstChar',
@@ -830,7 +836,9 @@ export const NotAuthenticated = ({
                             })
                             .catch((error) => {
                               console.error(
-                                'Failed to set API key:',
+                                it('auth:message.error.unable_set_apikey', {
+                                  postProcess: 'capitalizeFirstChar',
+                                }),
                                 error.message ||
                                   t('core:message.error.generic', {
                                     postProcess: 'capitalizeFirstChar',
@@ -894,7 +902,9 @@ export const NotAuthenticated = ({
                                 })
                                 .catch((error) => {
                                   console.error(
-                                    'Failed to set API key:',
+                                    it('auth:message.error.unable_set_apikey', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    }),
                                     error.message ||
                                       t('core:message.error.generic', {
                                         postProcess: 'capitalizeFirstChar',

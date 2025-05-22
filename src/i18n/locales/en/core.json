@@ -173,6 +173,7 @@
       "app_need_name": "your app needs a name",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
+      "invalid_base64": "invalid base64 data",
       "invalid_embed_link": "invalid embed link",
       "invalid_poll_embed_link_name": "invalid poll embed link. Missing name.",
       "invalid_image_embed_link_name": "invalid image embed link. Missing param.",

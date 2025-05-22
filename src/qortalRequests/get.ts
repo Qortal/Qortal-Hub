@@ -503,7 +503,7 @@ export const getUserAccount = async ({
     if (!skip) {
       resPermission = await getUserPermission(
         {
-          text1: i18n.t('question:authenticate', {
+          text1: i18n.t('question:permission_authenticate', {
             postProcess: 'capitalizeFirstChar',
           }),
           checkbox1: {
@@ -916,8 +916,9 @@ export const getHostedData = async (data, isFromExtension) => {
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Get a list of your hosted data?`,
+      text1: i18n.t('question:message.error.submit_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -964,8 +965,10 @@ export const deleteHostedData = async (data, isFromExtension) => {
   });
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Delete ${data?.hostedData?.length} hosted resources?`,
+      text1: i18n.t('question:permission_delete_hosts_resources', {
+        size: data?.hostedData?.length,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -1205,7 +1208,12 @@ export const deleteListItems = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
   if (!data?.item && !data?.items) {
-    throw new Error('Missing fields: items');
+    throw new Error(
+      i18n.t('question:message.error.missing_fields', {
+        fields: 'items',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const item = data?.item;
   const items = data?.items;
@@ -3488,7 +3496,12 @@ export const sendCoin = async (data, isFromExtension) => {
     throw new Error(errorMsg);
   }
   if (!data?.destinationAddress && !data?.recipient) {
-    throw new Error('Missing fields: recipient');
+    throw new Error(
+      i18n.t('question:message.error.missing_fields', {
+        fields: 'recipient',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   let checkCoin = data.coin;
   const wallet = await getSaveWallet();
@@ -4202,7 +4215,9 @@ const tradeBotCreateRequest = async (body, keyPair) => {
       body
     );
     return {
-      error: 'Failed to Create Sell Order. Try again!',
+      error: i18n.t('question:message.error.create_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: findFailedTradeBot,
     };
   }
@@ -4210,7 +4225,11 @@ const tradeBotCreateRequest = async (body, keyPair) => {
   if (res?.signature) {
     return res;
   } else {
-    throw new Error('Failed to Create Sell Order. Try again!');
+    throw new Error(
+      i18n.t('question:message.error.create_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4279,7 +4298,12 @@ export const createSellOrder = async (data, isFromExtension) => {
       );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit sell order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.submit_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -4346,7 +4370,12 @@ export const cancelSellOrder = async (data, isFromExtension) => {
       );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit sell order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.submit_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -5485,7 +5514,12 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   const requiredFields = ['encryptedData', 'iv', 'senderPublicKey'];
   requiredFields.forEach((field) => {
     if (!data[field]) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
 
@@ -5776,7 +5810,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const requiredFields = ['payments', 'assetId'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
   const resKeyPair = await getKeyPair();
@@ -5801,7 +5840,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
     for (const field of requiredFieldsPayment) {
       if (!payment[field]) {
-        throw new Error(`Missing required field: ${field}`);
+        throw new Error(
+          i18n.t('question:message.error.missing_fields', {
+            fields: field,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
     }
 
@@ -5829,7 +5873,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
         for (const field of requiredFieldsArbitraryTx) {
           if (!arbitraryTx[field]) {
-            throw new Error(`Missing required field: ${field}`);
+            throw new Error(
+              i18n.t('question:message.error.missing_fields', {
+                fields: field,
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           }
         }
 
@@ -5840,7 +5889,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         }
 
         const isValid = isValidBase64WithDecode(arbitraryTx.base64);
-        if (!isValid) throw new Error('Invalid base64 data');
+        if (!isValid)
+          throw new Error(
+            i18n.t('core:message.error.invalid_base64', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         if (!arbitraryTx?.service?.includes('_PRIVATE'))
           throw new Error('Please use a PRIVATE service');
         const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
@@ -5868,7 +5922,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
       for (const field of requiredFieldsArbitraryTx) {
         if (!arbitraryTx[field]) {
-          throw new Error(`Missing required field: ${field}`);
+          throw new Error(
+            i18n.t('question:message.error.missing_fields', {
+              fields: field,
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
       }
 
@@ -5879,7 +5938,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       }
 
       const isValid = isValidBase64WithDecode(arbitraryTx.base64);
-      if (!isValid) throw new Error('Invalid base64 data');
+      if (!isValid)
+        throw new Error(
+          i18n.t('core:message.error.invalid_base64', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       if (!arbitraryTx?.service?.includes('_PRIVATE'))
         throw new Error('Please use a PRIVATE service');
       const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
@@ -5899,17 +5963,30 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   if (!name) throw new Error('A name is needed to publish');
   const balance = await getBalanceInfo();
 
-  if (+balance < fee) throw new Error('Your QORT balance is insufficient');
+  if (+balance < fee)
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
   if (assetBalance < totalAmount)
-    throw new Error('Your asset balance is insufficient');
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   const resPermission = await getUserPermission(
     {
-      text1:
-        'Do you give this application permission to make the following payments and publishes?',
-      text2: `Asset used in payments: ${assetInfo.name}`,
+      text1: i18n.t('question:permission_pay_publish', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:assets_used_pay', {
+        asset: assetInfo.name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       html: `
       <div style="max-height: 30vh; overflow-y: auto;">
       <style>
@@ -6127,7 +6204,12 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const requiredFields = ['amount', 'assetId', 'recipient'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
   const amount = data.amount;
@@ -6137,10 +6219,19 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const { fee } = await getFee('TRANSFER_ASSET');
   const balance = await getBalanceInfo();
 
-  if (+balance < +fee) throw new Error('Your QORT balance is insufficient');
+  if (+balance < +fee)
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const assetBalance = await getAssetBalanceInfo(assetId);
   if (assetBalance < amount)
-    throw new Error('Your asset balance is insufficient');
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const confirmReceiver = await getNameOrAddress(recipient);
   if (confirmReceiver.error) {
     throw new Error('Invalid receiver address or name');
@@ -6148,9 +6239,17 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to transfer the following asset?`,
-      text2: `Asset: ${assetInfo?.name}`,
-      highlightedText: `Amount: ${amount}`,
+      text1: i18n.t('question:permission_transfer_asset', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:asset_name', {
+        asset: assetInfo?.name,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:amount_qty', {
+        quantity: amount,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee,
     },
     isFromExtension

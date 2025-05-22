@@ -102,7 +102,6 @@ import {
 } from './background-cases';
 import { getData, removeKeysAndLogout, storeData } from './utils/chromeStorage';
 import TradeBotRespondRequest from './transactions/TradeBotRespondRequest';
-// import {BackgroundFetch} from '@transistorsoft/capacitor-background-fetch';
 
 export let groupSecretkeys = {};
 
@@ -127,6 +126,7 @@ export const groupApi = 'https://ext-node.qortal.link';
 export const groupApiSocket = 'wss://ext-node.qortal.link';
 export const groupApiLocal = 'http://127.0.0.1:12391';
 export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
+
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 
@@ -3423,8 +3423,7 @@ const checkGroupList = async () => {
       directs: sortedDirects,
     });
   } catch (error) {
-    console.error(error);
-  } finally {
+    console.log(error);
   }
 };
 
@@ -3539,7 +3538,7 @@ export const checkNewMessages = async () => {
       targetOrigin
     );
   } catch (error) {
-  } finally {
+    console.log(error);
   }
 };
 
@@ -3788,34 +3787,9 @@ export const checkThreads = async (bringBack) => {
       targetOrigin
     );
   } catch (error) {
-  } finally {
+    console.log(error);
   }
 };
-
-// Configure Background Fetch
-// BackgroundFetch.configure({
-//   minimumFetchInterval: 15,    // Minimum 15-minute interval
-//   enableHeadless: true,        // Enable headless mode for Android
-// }, async (taskId) => {
-//   // This is where your background task logic goes
-//   const wallet = await getSaveWallet();
-//   const address = wallet.address0;
-//   if (!address) return;
-//    checkActiveChatsForNotifications();
-//    checkNewMessages();
-//   checkThreads();
-
-//   await new Promise((res)=> {
-//     setTimeout(() => {
-//       res()
-//     }, 55000);
-//   })
-//   // Always finish the task when complete
-//   BackgroundFetch.finish(taskId);
-// }, (taskId) => {
-//   // Optional timeout callback
-//   BackgroundFetch.finish(taskId);
-// });
 
 let notificationCheckInterval;
 let paymentsCheckInterval;
