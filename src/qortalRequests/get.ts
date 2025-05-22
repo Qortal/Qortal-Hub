@@ -402,7 +402,7 @@ const handleFileMessage = (event) => {
     } else {
       reject(
         error ||
-          i18n.t('question:message.error.failed_retrieve_file', {
+          i18n.t('question:message.error.retrieve_file', {
             postProcess: 'capitalizeFirstChar',
           })
       );
@@ -1085,7 +1085,9 @@ export const getListItems = async (data, isFromExtension) => {
         highlightedText: data.list_name,
         checkbox1: {
           value: value,
-          label: 'Always allow lists to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_list', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -1099,7 +1101,12 @@ export const getListItems = async (data, isFromExtension) => {
   if (acceptedVar || skip) {
     const url = await createEndpoint(`/lists/${data.list_name}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     const list = await response.json();
     return list;
@@ -2095,7 +2102,7 @@ export const joinGroup = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -2437,7 +2444,9 @@ export const getWalletBalance = async (
         highlightedText: `${data.coin} balance`,
         checkbox1: {
           value: true,
-          label: 'Always allow balance to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_balance', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2461,7 +2470,12 @@ export const getWalletBalance = async (
       try {
         const url = await createEndpoint(`/addresses/balance/${qortAddress}`);
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch');
+        if (!response.ok)
+          throw new Error(
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         let res;
         try {
           res = await response.clone().json();
@@ -2525,12 +2539,21 @@ export const getWalletBalance = async (
           throw new Error(res.message);
         }
         if (isNaN(Number(res))) {
-          throw new Error('Unable to fetch balance');
+          throw new Error(
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         } else {
           return (Number(res) / 1e8).toFixed(8);
         }
       } catch (error) {
-        throw new Error(error?.message || 'Unable to fetch balance');
+        throw new Error(
+          error?.message ||
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+        );
       }
     }
   } else {
@@ -4077,7 +4100,7 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     res = await processTransactionVersion2(signedBytes);
   } catch (error) {
     return {
-      error: i18n.t('question:message.error.failed_cancel_sell_order', {
+      error: i18n.t('question:message.error.cancel_sell_order', {
         postProcess: 'capitalizeFirstChar',
       }),
       failedTradeBot: {
@@ -4088,7 +4111,7 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
   }
   if (res?.error) {
     return {
-      error: i18n.t('question:message.error.failed_cancel_sell_order', {
+      error: i18n.t('question:message.error.cancel_sell_order', {
         postProcess: 'capitalizeFirstChar',
       }),
       failedTradeBot: {
@@ -4101,7 +4124,7 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.failed_cancel_sell_order', {
+      i18n.t('question:message.error.cancel_sell_order', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4468,7 +4491,7 @@ export const adminAction = async (data, isFromExtension) => {
     const response = await fetch(apiEndpoint, options);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_perform_request', {
+        i18n.t('question:message.error.perform_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4800,7 +4823,7 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4863,7 +4886,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4932,7 +4955,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5001,7 +5024,7 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5070,7 +5093,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5137,7 +5160,7 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5204,7 +5227,7 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5271,7 +5294,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -5410,7 +5433,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
     const response = await fetch(url);
     if (!response.ok)
       throw new Error(
-        i18n.t('question:message.error.failed_fetch_group', {
+        i18n.t('question:message.error.fetch_group', {
           postProcess: 'capitalizeFirstChar',
         })
       );
