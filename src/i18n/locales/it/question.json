@@ -1,0 +1,4 @@
+{
+  "always_authenticate": "always authenticate automatically",
+  "authenticate": "Concedi all'applicazione il permesso di autenticarsi?"
+}

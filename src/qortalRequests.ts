@@ -162,7 +162,7 @@ function setupMessageListenerQortalRequest() {
             {
               requestId: request.requestId,
               action: request.action,
-              error: error?.message,
+              error: 'Unable to get user account',
               type: 'backgroundMessageResponse',
             },
             event.origin

@@ -45,7 +45,7 @@ i18n
     fallbackLng: 'en',
     lng: navigator.language,
     supportedLngs: Object.keys(supportedLanguages),
-    ns: ['core', 'auth', 'group', 'tutorial'],
+    ns: ['auth', 'core', 'group', 'question', 'tutorial'],
     defaultNS: 'core',
     interpolation: { escapeValue: false },
     react: { useSuspense: false },

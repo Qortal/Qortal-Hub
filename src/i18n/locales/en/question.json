@@ -1,0 +1,19 @@
+{
+  "always_authenticate": "always authenticate automatically",
+  "authenticate": "Do you give this application permission to authenticate?",
+  "description": "description: {{ description }}",
+  "message": {
+    "error": {
+      "failed_cancel_sell_order": "failed to Cancel Sell Order. Try again!",
+      "unable_create_tradebot": "unable to create tradebot",
+      "unable_process_transaction": "unable to process transaction",
+      "user_declined_request": "user declined request"
+    },
+    "generic": {
+      "max_retry_transaction": "max retries reached. Skipping transaction."
+    }
+  },
+  "options": "options: {{ optionList }}",
+  "poll": "poll: {{ name }}",
+  "request_create_poll": "you are requesting to create the poll below:"
+}

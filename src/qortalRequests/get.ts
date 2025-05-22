@@ -85,7 +85,8 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import utils from '../utils/utils';
 import ShortUniqueId from 'short-unique-id';
 import { isValidBase64WithDecode } from '../utils/decode';
-//TODO translate
+import i18n from 'i18next';
+
 const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
@@ -131,7 +132,6 @@ export async function retryTransaction(
   throwError,
   retries = MAX_RETRIES
 ) {
-  // TODO transalte
   let attempt = 0;
   while (attempt < retries) {
     try {
@@ -140,11 +140,25 @@ export async function retryTransaction(
       console.error(`Attempt ${attempt + 1} failed: ${error.message}`);
       attempt++;
       if (attempt === retries) {
-        console.error('Max retries reached. Skipping transaction.');
+        console.error(
+          i18n.t('question:message.generic.max_retry_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         if (throwError) {
-          throw new Error(error?.message || 'Unable to process transaction');
+          throw new Error(
+            error?.message ||
+              i18n.t('question:message.error.unable_process_transaction', {
+                postProcess: 'capitalizeFirstChar',
+              })
+          );
         } else {
-          throw new Error(error?.message || 'Unable to process transaction');
+          throw new Error(
+            error?.message ||
+              i18n.t('question:message.error.unable_process_transaction', {
+                postProcess: 'capitalizeFirstChar',
+              })
+          );
         }
       }
       await new Promise((res) => setTimeout(res, 10000));
@@ -167,10 +181,21 @@ export const _createPoll = async (
   if (!skipPermission) {
     resPermission = await getUserPermission(
       {
-        text1: 'You are requesting to create the poll below:',
-        text2: `Poll: ${pollName}`,
-        text3: `Description: ${pollDescription}`,
-        text4: `Options: ${options?.join(', ')}`,
+        text1: i18n.t('question:request_create_poll', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:poll', {
+          name: pollName,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:description', {
+          description: pollDescription,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text4: i18n.t('question:options', {
+          optionList: options?.join(', '),
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
@@ -204,11 +229,18 @@ export const _createPoll = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.unable_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -260,11 +292,18 @@ const _deployAt = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.unable_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined transaction');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -313,11 +352,18 @@ export const _voteOnPoll = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.unable_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -438,10 +484,14 @@ export const getUserAccount = async ({
     if (!skip) {
       resPermission = await getUserPermission(
         {
-          text1: 'Do you give this application permission to authenticate?',
+          text1: i18n.t('question:authenticate', {
+            postProcess: 'capitalizeAll',
+          }),
           checkbox1: {
             value: false,
-            label: 'Always authenticate automatically',
+            label: i18n.t('question:always_authenticate', {
+              postProcess: 'capitalizeAll',
+            }),
           },
         },
         isFromExtension
@@ -461,7 +511,11 @@ export const getUserAccount = async ({
         publicKey,
       };
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
     throw new Error('Unable to fetch user account');
@@ -1185,7 +1239,11 @@ export const publishQDNResource = async (
       throw new Error(error?.message || 'Upload failed');
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1365,7 +1423,11 @@ export const publishMultipleQDNResources = async (
   );
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   let failedPublishesIdentifiers = [];
   for (const resource of resources) {
@@ -2131,7 +2193,11 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     }
     return userWallet;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2275,7 +2341,11 @@ export const getWalletBalance = async (
       }
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2433,7 +2503,11 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
       throw new Error(error?.message || 'Fetch Wallet Failed');
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2529,7 +2603,11 @@ export const getUserWalletTransactions = async (
       throw new Error(error?.message || 'Fetch Wallet Transactions Failed');
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2701,7 +2779,11 @@ export const updateForeignFee = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
   const valueStringified = JSON.stringify(+value);
@@ -2814,7 +2896,11 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -2885,7 +2971,11 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -2956,7 +3046,11 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -3202,7 +3296,11 @@ export const sendCoin = async (data, isFromExtension) => {
       );
       return makePayment.res?.data;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'BTC') {
     const amount = Number(data.amount);
@@ -3259,7 +3357,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'LTC') {
     const amount = Number(data.amount);
@@ -3314,7 +3416,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'DOGE') {
     const amount = Number(data.amount);
@@ -3371,7 +3477,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'DGB') {
     const amount = Number(data.amount);
@@ -3428,7 +3538,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'RVN') {
     const amount = Number(data.amount);
@@ -3485,7 +3599,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'ARRR') {
     const amount = Number(data.amount);
@@ -3542,7 +3660,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   }
 };
@@ -3676,7 +3798,11 @@ export const createBuyOrder = async (data, isFromExtension) => {
       });
       return resBuyOrder;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
     throw new Error(error?.message || 'Failed to submit trade order.');
@@ -3706,7 +3832,9 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     res = await processTransactionVersion2(signedBytes);
   } catch (error) {
     return {
-      error: 'Failed to Cancel Sell Order. Try again!',
+      error: i18n.t('question:message.error.failed_cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: {
         atAddress: body.atAddress,
         creatorAddress: body.creatorAddress,
@@ -3715,7 +3843,9 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
   }
   if (res?.error) {
     return {
-      error: 'Failed to Cancel Sell Order. Try again!',
+      error: i18n.t('question:message.error.failed_cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: {
         atAddress: body.atAddress,
         creatorAddress: body.creatorAddress,
@@ -3725,7 +3855,11 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
   if (res?.signature) {
     return res;
   } else {
-    throw new Error('Failed to Cancel Sell Order. Try again!');
+    throw new Error(
+      i18n.t('question:message.error.failed_cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 const findFailedTradebot = async (createBotCreationTimestamp, body) => {
@@ -3780,7 +3914,12 @@ const tradeBotCreateRequest = async (body, keyPair) => {
     },
     body: bodyToString,
   });
-  if (!unsignedTxnResponse.ok) throw new Error('Unable to create tradebot');
+  if (!unsignedTxnResponse.ok)
+    throw new Error(
+      i18n.t('question:message.error.unable_create_tradebot', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const createBotCreationTimestamp = Date.now();
   const unsignedTxn = await unsignedTxnResponse.text();
   const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
@@ -3862,7 +4001,11 @@ export const createSellOrder = async (data, isFromExtension) => {
 
       return response;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
     throw new Error(error?.message || 'Failed to submit sell order.');
@@ -3922,7 +4065,11 @@ export const cancelSellOrder = async (data, isFromExtension) => {
 
       return response;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.error.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
     throw new Error(error?.message || 'Failed to submit sell order.');
@@ -4059,7 +4206,11 @@ export const adminAction = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4145,11 +4296,18 @@ export const signTransaction = async (data, isFromExtension) => {
     const res = await processTransactionVersion2(signedBytesToBase58);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.unable_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4282,7 +4440,11 @@ export const registerNameRequest = async (data, isFromExtension) => {
     const response = await registerName({ name, description });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4317,7 +4479,11 @@ export const updateNameRequest = async (data, isFromExtension) => {
     const response = await updateName({ oldName, newName, description });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4361,7 +4527,11 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
     const response = await leaveGroup({ groupId });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4414,7 +4584,11 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4467,7 +4641,11 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4521,7 +4699,11 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4572,7 +4754,11 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4623,7 +4809,11 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4674,7 +4864,11 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4725,7 +4919,11 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4778,7 +4976,11 @@ export const createGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4847,7 +5049,11 @@ export const updateGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4964,7 +5170,11 @@ export const sellNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -5004,7 +5214,11 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -5049,7 +5263,11 @@ export const buyNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -5114,7 +5332,11 @@ export const signForeignFees = async (data, isFromExtension) => {
 
     return true;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
@@ -5328,7 +5550,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   );
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // const failedTxs = []
@@ -5499,7 +5725,11 @@ export const transferAssetRequest = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.error.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const res = await transferAsset({
     amount,
