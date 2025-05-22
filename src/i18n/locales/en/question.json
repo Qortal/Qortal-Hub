@@ -6,8 +6,12 @@
   "message": {
     "error": {
       "failed_cancel_sell_order": "failed to Cancel Sell Order. Try again!",
+      "failed_fetch_group": "failed to fetch group",
+      "failed_perform_request": "failed to perform request",
       "failed_retrieve_file": "failed to retrieve file",
+      "missing_fields": "missing fields: {{ fields }}",
       "no_data_encrypted_resource": "no data in the encrypted resource",
+      "no_group_found": "group not found",
       "no_group_key": "no group key found",
       "timeout_request": "request timed out",
       "unable_create_tradebot": "unable to create tradebot",

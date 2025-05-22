@@ -504,12 +504,12 @@ export const getUserAccount = async ({
       resPermission = await getUserPermission(
         {
           text1: i18n.t('question:authenticate', {
-            postProcess: 'capitalizeAll',
+            postProcess: 'capitalizeFirstChar',
           }),
           checkbox1: {
             value: false,
             label: i18n.t('question:always_authenticate', {
-              postProcess: 'capitalizeAll',
+              postProcess: 'capitalizeFirstChar',
             }),
           },
         },
@@ -1062,7 +1062,10 @@ export const getListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const value = (await getPermission('qAPPAutoLists')) || false;
@@ -1123,7 +1126,10 @@ export const addListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -1185,7 +1191,10 @@ export const deleteListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data?.item && !data?.items) {
@@ -1246,7 +1255,10 @@ export const publishQDNResource = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data.file && !data.data64 && !data.base64) {
@@ -1437,7 +1449,10 @@ export const publishMultipleQDNResources = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const resources = data.resources;
@@ -1582,7 +1597,10 @@ export const publishMultipleQDNResources = async (
       });
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
-        const errorMsg = `Missing fields: ${missingFieldsString}`;
+        const errorMsg = i18n.t('question:message.error.missing_fields', {
+          fields: missingFieldsString,
+          postProcess: 'capitalizeFirstChar',
+        });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1737,7 +1755,10 @@ export const voteOnPoll = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const pollName = data.pollName;
@@ -1790,7 +1811,10 @@ export const createPoll = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const pollName = data.pollName;
@@ -2059,18 +2083,30 @@ export const joinGroup = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${data.groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   const fee = await getFee('JOIN_GROUP');
@@ -2089,7 +2125,11 @@ export const joinGroup = async (data, isFromExtension) => {
     const groupId = data.groupId;
 
     if (!groupInfo || groupInfo.error) {
-      const errorMsg = (groupInfo && groupInfo.message) || 'Group not found';
+      const errorMsg =
+        (groupInfo && groupInfo.message) ||
+        i18n.t('question:message.error.no_group_found', {
+          postProcess: 'capitalizeFirstChar',
+        });
       throw new Error(errorMsg);
     }
     try {
@@ -2114,7 +2154,10 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     });
     if (missingFields.length > 0) {
       const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
+      const errorMsg = i18n.t('question:message.error.missing_fields', {
+        fields: missingFieldsString,
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const filename = data.filename;
@@ -2194,7 +2237,10 @@ export const deployAt = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   try {
@@ -2226,7 +2272,10 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
@@ -2357,7 +2406,10 @@ export const getWalletBalance = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2576,7 +2628,10 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (data?.coin === 'ARRR') {
@@ -2666,7 +2721,10 @@ export const getUserWalletTransactions = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2762,7 +2820,10 @@ export const getCrossChainServerInfo = async (data) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   let _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
@@ -2796,7 +2857,10 @@ export const getTxActivitySummary = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2841,7 +2905,10 @@ export const getForeignFee = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2899,7 +2966,10 @@ export const updateForeignFee = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2969,7 +3039,10 @@ export const getServerConnectionHistory = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -3027,7 +3100,10 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -3106,7 +3182,10 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -3185,7 +3264,10 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -3376,7 +3458,10 @@ export const sendCoin = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data?.destinationAddress && !data?.recipient) {
@@ -3865,7 +3950,10 @@ export const createBuyOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
@@ -4113,7 +4201,10 @@ export const createSellOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4179,7 +4270,10 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4243,7 +4337,10 @@ export const openNewTab = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4289,7 +4386,10 @@ export const adminAction = async (data, isFromExtension) => {
   }
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
@@ -4366,7 +4466,12 @@ export const adminAction = async (data, isFromExtension) => {
       options.body = data.value;
     }
     const response = await fetch(apiEndpoint, options);
-    if (!response.ok) throw new Error('Failed to perform request');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_perform_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -4394,7 +4499,10 @@ export const signTransaction = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4490,7 +4598,10 @@ const missingFieldsFunc = (data, requiredFields) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 };
@@ -4531,7 +4642,10 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4590,7 +4704,10 @@ export const registerNameRequest = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const fee = await getFee('REGISTER_NAME');
@@ -4628,7 +4745,10 @@ export const updateNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const oldName = data.oldName;
@@ -4667,7 +4787,10 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4675,11 +4798,20 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4715,7 +4847,10 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4726,11 +4861,20 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4772,7 +4916,10 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4783,11 +4930,20 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4829,7 +4985,10 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4840,11 +4999,20 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4887,7 +5055,10 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4897,11 +5068,20 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4942,7 +5122,10 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4952,11 +5135,20 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4997,7 +5189,10 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -5007,11 +5202,20 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -5052,7 +5256,10 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -5062,11 +5269,20 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -5115,7 +5331,10 @@ export const createGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupName = data.groupName;
@@ -5171,7 +5390,10 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = +data.groupId;
@@ -5186,11 +5408,20 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.failed_fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -5310,7 +5541,10 @@ export const sellNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const name = data.nameForSale;
@@ -5358,7 +5592,10 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const name = data.nameForSale;
@@ -5402,7 +5639,10 @@ export const buyNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const name = data.nameForSale;
