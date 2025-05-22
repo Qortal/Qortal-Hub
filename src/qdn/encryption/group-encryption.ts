@@ -544,7 +544,7 @@ export function decryptGroupData(
     encryptedDataEndPosition + count * 48
   );
   if (!privateKey) {
-    throw new Error('Unable to retrieve keys');
+    throw new Error('Unable to retrieve keys'); // TODO translate
   }
   const decodedPrivateKey = Base58.decode(privateKey);
   const convertedPrivateKey = ed2curve.convertSecretKey(decodedPrivateKey);

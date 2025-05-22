@@ -85,6 +85,7 @@
     "show_poll": "show poll",
     "start_minting": "start minting",
     "start_typing": "start typing here...",
+    "trade_qort": "trade QORT",
     "transfer_qort": "Transfer QORT",
     "unpin": "unpin",
     "unpin_app": "unpin app",
@@ -209,6 +210,7 @@
     "generic": {
       "already_voted": "you've already voted.",
       "avatar_size": "{{ size }} KB max. for GIFS",
+      "benefits_qort": "benefits of having QORT",
       "building": "building",
       "building_app": "building app",
       "created_by": "created by {{ owner }}",
@@ -224,6 +226,7 @@
       "fee_qort": "fee: {{ message }} QORT",
       "fetching_data": "fetching app data",
       "foreign_fee": "foreign fee: {{ message }}",
+      "get_qort_trade_portal": "get QORT using Qortal's crosschain trade portal",
       "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
       "most_recent_payment": "{{ count }} most recent payment",

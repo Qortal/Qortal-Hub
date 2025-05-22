@@ -63,11 +63,14 @@ export const BuyQortInformation = ({ balance }) => {
             maxWidth: '90vw',
             padding: '10px',
             width: '400px',
-          }} // TODO translate
+          }}
         >
           <Typography>
-            Get QORT using Qortal's crosschain trade portal
+            {t('core:message.generic.get_qort_trade_portal', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
+
           <ButtonBase
             sx={{
               '&:hover': { backgroundColor: theme.palette.secondary.main },
@@ -96,7 +99,9 @@ export const BuyQortInformation = ({ balance }) => {
                 fontSize: '1rem',
               }}
             >
-              Trade QORT
+              {t('core:action.trade_qort', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </ButtonBase>
 
@@ -107,7 +112,9 @@ export const BuyQortInformation = ({ balance }) => {
               textDecoration: 'underline',
             }}
           >
-            Benefits of having QORT
+            {t('core:message.generic.benefits_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
           <List
             sx={{
