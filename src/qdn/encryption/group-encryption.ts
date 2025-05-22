@@ -3,6 +3,7 @@
 import Base58 from '../../deps/Base58';
 import ed2curve from '../../deps/ed2curve';
 import nacl from '../../deps/nacl-fast';
+import i18n from '../../i18n/i18n';
 
 export function base64ToUint8Array(base64: string) {
   const binaryString = atob(base64);
@@ -45,7 +46,13 @@ export function objectToBase64(obj: Object) {
         );
         resolve(base64);
       } else {
-        reject(new Error('Failed to read the Blob as a base64-encoded string'));
+        reject(
+          new Error(
+            i18n.t('auth:message.error.read_blob_base64', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          )
+        );
       }
     };
     reader.onerror = () => {
@@ -73,10 +80,14 @@ export const encryptDataGroup = ({
   let combinedPublicKeys = [...publicKeys, userPublicKey];
   const decodedPrivateKey = Base58.decode(privateKey);
   const publicKeysDuplicateFree = [...new Set(combinedPublicKeys)];
-
   const Uint8ArrayData = base64ToUint8Array(data64);
+
   if (!(Uint8ArrayData instanceof Uint8Array)) {
-    throw new Error("The Uint8ArrayData you've submitted is invalid");
+    throw new Error(
+      i18n.t('auth:message.error.invalid_uint8', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   try {
     // Generate a random symmetric key for the message.
@@ -89,7 +100,12 @@ export const encryptDataGroup = ({
       crypto.getRandomValues(messageKey);
     }
 
-    if (!messageKey) throw new Error('Cannot create symmetric key');
+    if (!messageKey)
+      throw new Error(
+        i18n.t('auth:message.error.create_simmetric_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     const nonce = new Uint8Array(24);
     crypto.getRandomValues(nonce);
     // Encrypt the data with the symmetric key.
@@ -170,7 +186,11 @@ export const encryptDataGroup = ({
     return uint8ArrayToBase64(combinedData);
   } catch (error) {
     console.log('error', error);
-    throw new Error('Error in encrypting data');
+    throw new Error(
+      i18n.t('question:message.error.encryption_failed', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -192,7 +212,11 @@ export const encryptSingle = async ({
   const messageKey = base64ToUint8Array(highestKeyObject.messageKey);
 
   if (!(Uint8ArrayData instanceof Uint8Array)) {
-    throw new Error("The Uint8ArrayData you've submitted is invalid");
+    throw new Error(
+      i18n.t('auth:message.error.invalid_uint8', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let nonce, encryptedData, encryptedDataBase64, finalEncryptedData;
@@ -267,7 +291,9 @@ export const decodeBase64ForUIChatMessages = (messages) => {
         ...msg,
         ...parseDecoded,
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }
   return msgs;
 };
@@ -291,7 +317,11 @@ export const decryptSingle = async ({
 
   // Check if we have a valid secret key for the extracted highestKey
   if (!secretKeyObject[highestKey]) {
-    throw new Error('Cannot find correct secretKey');
+    throw new Error(
+      i18n.t('auth:message.error.find_secret_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   const secretKeyEntry = secretKeyObject[highestKey];
@@ -329,7 +359,11 @@ export const decryptSingle = async ({
 
         // Check if decryption was successful
         if (!decryptedBytes) {
-          throw new Error('Decryption failed');
+          throw new Error(
+            i18n.t('question:message.error.decryption_failed', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
 
         // Convert the decrypted Uint8Array back to a Base64 string
@@ -352,7 +386,11 @@ export const decryptSingle = async ({
   const messageKey = base64ToUint8Array(secretKeyEntry.messageKey);
 
   if (!(Uint8ArrayData instanceof Uint8Array)) {
-    throw new Error("The Uint8ArrayData you've submitted is invalid");
+    throw new Error(
+      i18n.t('auth:message.error.invalid_uint8', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // Decrypt the data using the nonce and messageKey
@@ -360,7 +398,11 @@ export const decryptSingle = async ({
 
   // Check if decryption was successful
   if (!decryptedData) {
-    throw new Error('Decryption failed');
+    throw new Error(
+      i18n.t('question:message.error.decryption_failed', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // Convert the decrypted Uint8Array back to a Base64 string
@@ -411,7 +453,11 @@ export const decryptGroupEncryptionWithSharingKey = async ({
 
   // Check if decryption was successful
   if (!decryptedData) {
-    throw new Error('Decryption failed');
+    throw new Error(
+      i18n.t('question:message.error.decryption_failed', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   // Convert the decrypted Uint8Array back to a Base64 string
   return uint8ArrayToBase64(decryptedData);
@@ -461,7 +507,11 @@ export function decryptGroupDataQortalRequest(data64EncryptedData, privateKey) {
     encryptedDataEndPosition + count * 48
   );
   if (!privateKey) {
-    throw new Error('Unable to retrieve keys');
+    throw new Error(
+      i18n.t('question:message.error.retrieve_keys', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const decodedPrivateKey = Base58.decode(privateKey);
   const convertedPrivateKey = ed2curve.convertSecretKey(decodedPrivateKey);
@@ -494,7 +544,11 @@ export function decryptGroupDataQortalRequest(data64EncryptedData, privateKey) {
       }
     }
   }
-  throw new Error('Unable to decrypt data');
+  throw new Error(
+    i18n.t('question:message.error.decrypt', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 }
 
 export function decryptGroupData(
@@ -544,7 +598,11 @@ export function decryptGroupData(
     encryptedDataEndPosition + count * 48
   );
   if (!privateKey) {
-    throw new Error('Unable to retrieve keys'); // TODO translate
+    throw new Error(
+      i18n.t('question:message.error.retrieve_keys', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const decodedPrivateKey = Base58.decode(privateKey);
   const convertedPrivateKey = ed2curve.convertSecretKey(decodedPrivateKey);
@@ -578,7 +636,11 @@ export function decryptGroupData(
       }
     }
   }
-  throw new Error('Unable to decrypt data');
+  throw new Error(
+    i18n.t('question:message.error.decrypt', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 }
 
 export function uint8ArrayStartsWith(uint8Array, string) {
@@ -609,7 +671,11 @@ export function decryptDeprecatedSingle(uint8Array, publicKey, privateKey) {
 
   const _publicKey = window.parent.Base58.decode(publicKey);
   if (!privateKey || !_publicKey) {
-    throw new Error('Unable to retrieve keys');
+    throw new Error(
+      i18n.t('question:message.error.retrieve_keys', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const convertedPrivateKey = ed2curve.convertSecretKey(privateKey);
   const convertedPublicKey = ed2curve.convertPublicKey(_publicKey);
@@ -628,7 +694,11 @@ export function decryptDeprecatedSingle(uint8Array, publicKey, privateKey) {
     _chatEncryptionSeed
   );
   if (!_decryptedData) {
-    throw new Error('Unable to decrypt');
+    throw new Error(
+      i18n.t('question:message.error.decrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   return uint8ArrayToBase64(_decryptedData);
 }
