@@ -538,7 +538,7 @@ export const getUserAccount = async ({
     }
   } catch (error) {
     throw new Error(
-      i18n.t('auth:message.error.unable_fetch_user_account', {
+      i18n.t('auth:message.error.fetch_user_account', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -1288,7 +1288,11 @@ export const publishQDNResource = async (
     throw new Error(errorMsg);
   }
   if (!data.file && !data.data64 && !data.base64) {
-    throw new Error('No data or file was submitted');
+    throw new Error(
+      i18n.t('question:message.error.no_data_file_submitted', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
@@ -1301,8 +1305,13 @@ export const publishQDNResource = async (
   const registeredName = await getNameInfo();
   const name = registeredName;
   if (!name) {
-    throw new Error('User has no Qortal name');
+    throw new Error(
+      i18n.t('question:message.error.user_qortal_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   let identifier = data.identifier;
   let data64 = data.data64 || data.base64;
   const filename = data.filename;
@@ -1332,7 +1341,11 @@ export const publishQDNResource = async (
     (!data.publicKeys ||
       (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
   ) {
-    throw new Error('Encrypting data requires public keys');
+    throw new Error(
+      i18n.t('question:message.error.encryption_requires_public_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   if (data.encrypt) {
@@ -1352,7 +1365,10 @@ export const publishQDNResource = async (
       }
     } catch (error) {
       throw new Error(
-        error.message || 'Upload failed due to failed encryption'
+        error.message ||
+          i18n.t('question:message.error.upload_encryption', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     }
   }
@@ -1693,7 +1709,10 @@ export const publishMultipleQDNResources = async (
           }
         } catch (error) {
           const errorMsg =
-            error?.message || 'Upload failed due to failed encryption';
+            error?.message ||
+            i18n.t('question:message.error.upload_encryption', {
+              postProcess: 'capitalizeFirstChar',
+            });
           failedPublishesIdentifiers.push({
             reason: errorMsg,
             identifier: resource.identifier,
@@ -3558,7 +3577,7 @@ export const sendCoin = async (data, isFromExtension) => {
       walletBalance = await response.text();
     }
     if (isNaN(Number(walletBalance))) {
-      let errorMsg = 'Failed to Fetch QORT Balance. Try again!';
+      const errorMsg = 'Failed to Fetch QORT Balance. Try again!';
       throw new Error(errorMsg);
     }
 
@@ -3569,21 +3588,25 @@ export const sendCoin = async (data, isFromExtension) => {
     const amountDecimals = Number(amount) * QORT_DECIMALS;
     const fee: number = await sendQortFee();
     if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     if (amount <= 0) {
-      let errorMsg = 'Invalid Amount!';
+      const errorMsg = 'Invalid Amount!';
       throw new Error(errorMsg);
     }
     if (recipient.length === 0) {
-      let errorMsg = 'Receiver cannot be empty!';
+      const errorMsg = 'Receiver cannot be empty!';
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         fee: fee,
@@ -3626,7 +3649,9 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} BTC`,
@@ -3675,18 +3700,24 @@ export const sendCoin = async (data, isFromExtension) => {
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
-      let errorMsg = 'Failed to Fetch LTC Balance. Try again!';
+      const errorMsg = 'Failed to Fetch LTC Balance. Try again!';
       throw new Error(errorMsg);
     }
     const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
     const ltcAmountDecimals = Number(amount);
     const fee = feePerByte * 1000; // default 0.00030000
     if (ltcAmountDecimals + fee > ltcWalletBalanceDecimals) {
-      throw new Error('Insufficient Funds!');
+      throw new Error(
+        i18n.t('question:message.error.insufficient_funds', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} LTC`,
@@ -3733,21 +3764,28 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dogeFeePerByte;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
-      let errorMsg = 'Failed to Fetch DOGE Balance. Try again!';
+      const errorMsg = 'Failed to Fetch DOGE Balance. Try again!';
       throw new Error(errorMsg);
     }
     const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
     const dogeAmountDecimals = Number(amount);
     const fee = feePerByte * 5000; // default 0.05000000
     if (dogeAmountDecimals + fee > dogeWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
-        text2: `To: ${recipient}`,
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} DOGE`,
       },
@@ -3794,20 +3832,24 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
-      let errorMsg = 'Failed to Fetch DGB Balance. Try again!';
+      const errorMsg = 'Failed to Fetch DGB Balance. Try again!';
       throw new Error(errorMsg);
     }
     const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
     const dgbAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00005000
     if (dgbAmountDecimals + fee > dgbWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} DGB`,
@@ -3855,20 +3897,24 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : rvnFeePerByte;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
-      let errorMsg = 'Failed to Fetch RVN Balance. Try again!';
+      const errorMsg = 'Failed to Fetch RVN Balance. Try again!';
       throw new Error(errorMsg);
     }
     const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
     const rvnAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00562500
     if (rvnAmountDecimals + fee > rvnWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} RVN`,
@@ -3916,20 +3962,24 @@ export const sendCoin = async (data, isFromExtension) => {
     const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(arrrWalletBalance))) {
-      let errorMsg = 'Failed to Fetch ARRR Balance. Try again!';
+      const errorMsg = 'Failed to Fetch ARRR Balance. Try again!';
       throw new Error(errorMsg);
     }
     const arrrWalletBalanceDecimals = Number(arrrWalletBalance);
     const arrrAmountDecimals = Number(amount);
     const fee = 0.0001;
     if (arrrAmountDecimals + fee > arrrWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission_send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} ARRR`,

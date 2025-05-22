@@ -15,14 +15,18 @@
       "create_tradebot": "unable to create tradebot",
       "decrypt": "unable to decrypt",
       "encrypt": "unable to encrypt",
+      "encryption_requires_public_key": "encrypting data requires public keys",
       "fetch_balance": "unable to fetch balance",
       "fetch_group": "failed to fetch the group",
       "fetch_list": "failed to fetch the list",
       "fetch_poll": "failed to fetch poll",
       "insufficient_balance_qort": "your QORT balance is insufficient",
       "insufficient_balance": "your asset balance is insufficient",
+      "insufficient_funds": "insufficient funds",
       "missing_fields": "missing fields: {{ fields }}",
+      "no_api_found": "no usable API found",
       "no_data_encrypted_resource": "no data in the encrypted resource",
+      "no_data_file_submitted": "no data or file was submitted",
       "no_group_found": "group not found",
       "no_group_key": "no group key found",
       "no_poll": "poll not found",
@@ -32,7 +36,9 @@
       "submit_sell_order": "failed to submit sell order",
       "timeout_request": "request timed out",
       "update_foreign_fee": "failed to update foreign fee",
-      "user_declined_request": "user declined request"
+      "upload_encryption": "upload failed due to failed encryption",
+      "user_declined_request": "user declined request",
+      "user_qortal_name": "user has no Qortal name"
     },
     "generic": {
       "include_data_decrypt": "please include data to decrypt",
@@ -52,8 +58,10 @@
   "permission_list_hosted_data": "do you give this application permission to get a list of your hosted data?",
   "permission_delete_hosts_resources": "do you give this application permission to delete {{ size }} hosted resources?",
   "permission_pay_publish": "do you give this application permission to make the following payments and publishes?",
+  "permission_send_coins": "do you give this application permission to send coins?",
   "permission_transfer_asset": "do you give this application permission to transfer the following asset?",
   "poll": "poll: {{ name }}",
   "request_create_poll": "you are requesting to create the poll below:",
-  "request_vote_poll": "you are being requested to vote on the poll below:"
+  "request_vote_poll": "you are being requested to vote on the poll below:",
+  "to_recipient": "to: {{ recipient }}"
 }

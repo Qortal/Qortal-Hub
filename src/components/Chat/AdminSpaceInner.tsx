@@ -162,7 +162,7 @@ export const AdminSpaceInner = ({
             type: 'error',
             message:
               response?.error ||
-              t('auth:message.error.unable_reencrypt_secret_key', {
+              t('auth:message.error.reencrypt_secret_key', {
                 postProcess: 'capitalizeFirstChar',
               }),
           });
@@ -173,7 +173,7 @@ export const AdminSpaceInner = ({
             type: 'error',
             message:
               error?.message ||
-              t('auth:message.error.unable_reencrypt_secret_key', {
+              t('auth:message.error.reencrypt_secret_key', {
                 postProcess: 'capitalizeFirstChar',
               }),
           });

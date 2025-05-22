@@ -359,7 +359,7 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              it('auth:message.error.unable_set_apikey', {
+              it('auth:message.error.set_apikey', {
                 postProcess: 'capitalizeFirstChar',
               }),
               error.message ||
@@ -398,7 +398,7 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              it('auth:message.error.unable_set_apikey', {
+              it('auth:message.error.set_apikey', {
                 postProcess: 'capitalizeFirstChar',
               }),
               error.message ||
@@ -682,7 +682,7 @@ export const NotAuthenticated = ({
                           })
                           .catch((error) => {
                             console.error(
-                              it('auth:message.error.unable_set_apikey', {
+                              it('auth:message.error.set_apikey', {
                                 postProcess: 'capitalizeFirstChar',
                               }),
                               error.message ||
@@ -836,7 +836,7 @@ export const NotAuthenticated = ({
                             })
                             .catch((error) => {
                               console.error(
-                                it('auth:message.error.unable_set_apikey', {
+                                it('auth:message.error.set_apikey', {
                                   postProcess: 'capitalizeFirstChar',
                                 }),
                                 error.message ||
@@ -902,7 +902,7 @@ export const NotAuthenticated = ({
                                 })
                                 .catch((error) => {
                                   console.error(
-                                    it('auth:message.error.unable_set_apikey', {
+                                    it('auth:message.error.set_apikey', {
                                       postProcess: 'capitalizeFirstChar',
                                     }),
                                     error.message ||

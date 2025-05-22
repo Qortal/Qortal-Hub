@@ -141,7 +141,7 @@ export const BlockedUsersModal = () => {
         type: 'error',
         message:
           error?.message ||
-          t('auth:message.error.unable_block_user', {
+          t('auth:message.error.block_user', {
             postProcess: 'capitalizeFirstChar',
           }),
       });
