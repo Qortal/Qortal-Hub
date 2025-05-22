@@ -1,19 +1,35 @@
 {
   "always_authenticate": "always authenticate automatically",
-  "authenticate": "Do you give this application permission to authenticate?",
+  "authenticate": "do you give this application permission to authenticate?",
   "description": "description: {{ description }}",
+  "deploy_at": "would you like to deploy this AT?",
   "message": {
     "error": {
       "failed_cancel_sell_order": "failed to Cancel Sell Order. Try again!",
+      "failed_retrieve_file": "failed to retrieve file",
+      "no_data_encrypted_resource": "no data in the encrypted resource",
+      "no_group_key": "no group key found",
+      "timeout_request": "request timed out",
       "unable_create_tradebot": "unable to create tradebot",
+      "unable_decrypt": "unable to decrypt",
+      "unable_encrypt": "unable to encrypt",
       "unable_process_transaction": "unable to process transaction",
       "user_declined_request": "user declined request"
     },
     "generic": {
-      "max_retry_transaction": "max retries reached. Skipping transaction."
+      "include_data_decrypt": "please include data to decrypt",
+      "include_data_encrypt": "please include data to encrypt",
+      "max_retry_transaction": "max retries reached. Skipping transaction.",
+      "no_action_public_node": "this action cannot be done through a public node",
+      "provide_group_id": "please provide a groupId",
+      "user_declined_delete": "user declined delete hosted resources",
+      "user_declined_list": "user declined to get list of hosted resources"
     }
   },
+  "name": "name: {{ name }}",
+  "option": "option: {{ option }}",
   "options": "options: {{ optionList }}",
   "poll": "poll: {{ name }}",
-  "request_create_poll": "you are requesting to create the poll below:"
+  "request_create_poll": "you are requesting to create the poll below:",
+  "request_vote_poll": "you are being requested to vote on the poll below:"
 }

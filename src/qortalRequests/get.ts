@@ -252,9 +252,17 @@ const _deployAt = async (
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Would you like to deploy this AT?',
-      text2: `Name: ${name}`,
-      text3: `Description: ${description}`,
+      text1: i18n.t('question:deploy_at', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:name', {
+        name: name,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:description', {
+        description: description,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -314,12 +322,21 @@ export const _voteOnPoll = async (
 ) => {
   const fee = await getFee('VOTE_ON_POLL');
   let resPermission = {};
+
   if (!skipPermission) {
     resPermission = await getUserPermission(
       {
-        text1: 'You are being requested to vote on the poll below:',
-        text2: `Poll: ${pollName}`,
-        text3: `Option: ${optionName}`,
+        text1: i18n.t('question:request_vote_poll', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:poll', {
+          name: pollName,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:option', {
+          option: optionName,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
@@ -383,7 +400,12 @@ const handleFileMessage = (event) => {
     if (result) {
       resolve(result);
     } else {
-      reject(error || 'Failed to retrieve file');
+      reject(
+        error ||
+          i18n.t('question:message.error.failed_retrieve_file', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   }
 };
@@ -406,19 +428,16 @@ function getFileFromContentScript(fileId) {
     // Timeout to handle no response scenario
     setTimeout(() => {
       if (fileRequestResolvers.has(requestId)) {
-        fileRequestResolvers.get(requestId).reject('Request timed out');
+        fileRequestResolvers.get(requestId).reject(
+          i18n.t('question:message.error.timeout_request', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         fileRequestResolvers.delete(requestId); // Clean up on timeout
       }
     }, 10000); // 10-second timeout
   });
 }
-
-// function sendToSaveFilePicker(data) {
-//   window.postMessage({
-//     action: "SHOW_SAVE_FILE_PICKER",
-//     payload: data,
-//   }, "*");
-// }
 
 const responseResolvers = new Map();
 
@@ -518,7 +537,11 @@ export const getUserAccount = async ({
       );
     }
   } catch (error) {
-    throw new Error('Unable to fetch user account');
+    throw new Error(
+      i18n.t('auth:message.error.unable_fetch_user_account', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -529,7 +552,11 @@ export const encryptData = async (data, sender) => {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -545,7 +572,11 @@ export const encryptData = async (data, sender) => {
   if (encryptDataResponse) {
     return encryptDataResponse;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.unable_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -554,13 +585,21 @@ export const encryptQortalGroupData = async (data, sender) => {
   let groupId = data?.groupId;
   let isAdmins = data?.isAdmins;
   if (!groupId) {
-    throw new Error('Please provide a groupId');
+    throw new Error(
+      i18n.t('question:message.generic.provide_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   if (data?.file || data?.blob) {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let secretKeyObject;
@@ -578,7 +617,12 @@ export const encryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdmins(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -594,7 +638,11 @@ export const encryptQortalGroupData = async (data, sender) => {
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[groupId] = {
         secretKeyObject,
@@ -615,7 +663,12 @@ export const encryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdminsAdminSpace(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -629,7 +682,11 @@ export const encryptQortalGroupData = async (data, sender) => {
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[`admins-${groupId}`] = {
         secretKeyObject,
@@ -646,7 +703,11 @@ export const encryptQortalGroupData = async (data, sender) => {
   if (resGroupEncryptedResource) {
     return resGroupEncryptedResource;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.unable_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -655,11 +716,19 @@ export const decryptQortalGroupData = async (data, sender) => {
   let groupId = data?.groupId;
   let isAdmins = data?.isAdmins;
   if (!groupId) {
-    throw new Error('Please provide a groupId');
+    throw new Error(
+      i18n.t('question:message.generic.provide_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let secretKeyObject;
@@ -676,7 +745,12 @@ export const decryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdmins(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -690,7 +764,11 @@ export const decryptQortalGroupData = async (data, sender) => {
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[groupId] = {
         secretKeyObject,
@@ -710,7 +788,12 @@ export const decryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdminsAdminSpace(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -724,7 +807,11 @@ export const decryptQortalGroupData = async (data, sender) => {
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[`admins-${groupId}`] = {
         secretKeyObject,
@@ -741,7 +828,11 @@ export const decryptQortalGroupData = async (data, sender) => {
   if (resGroupDecryptResource) {
     return resGroupDecryptResource;
   } else {
-    throw new Error('Unable to decrypt');
+    throw new Error(
+      i18n.t('question:message.error.unable_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -752,7 +843,11 @@ export const encryptDataWithSharingKey = async (data, sender) => {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const symmetricKey = createSymmetricKeyAndNonce();
   const dataObject = {
@@ -776,7 +871,11 @@ export const encryptDataWithSharingKey = async (data, sender) => {
   if (encryptDataResponse) {
     return encryptDataResponse;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.unable_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -784,22 +883,36 @@ export const decryptDataWithSharingKey = async (data, sender) => {
   const { encryptedData, key } = data;
 
   if (!encryptedData) {
-    throw new Error('Please include data to decrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_decrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   const decryptedData = await decryptGroupEncryptionWithSharingKey({
     data64EncryptedData: encryptedData,
     key,
   });
   const base64ToObject = JSON.parse(atob(decryptedData));
+
   if (!base64ToObject.data)
-    throw new Error('No data in the encrypted resource');
+    throw new Error(
+      i18n.t('question:message.error.no_data_encrypted_resource', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   return base64ToObject.data;
 };
 
 export const getHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const resPermission = await getUserPermission(
     {
@@ -825,14 +938,22 @@ export const getHostedData = async (data, isFromExtension) => {
     const dataResponse = await response.json();
     return dataResponse;
   } else {
-    throw new Error('User declined to get list of hosted resources');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const deleteHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['hostedData'];
   const missingFields: string[] = [];
@@ -865,13 +986,17 @@ export const deleteHostedData = async (data, isFromExtension) => {
           },
         });
       } catch (error) {
-        //error
+        console.log(error);
       }
     }
 
     return true;
   } else {
-    throw new Error('User declined delete hosted resources');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_delete', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 export const decryptData = async (data) => {
@@ -912,13 +1037,21 @@ export const decryptData = async (data) => {
     const decryptedDataToBase64 = uint8ArrayToBase64(decryptedData);
     return decryptedDataToBase64;
   }
-  throw new Error('Unable to decrypt');
+  throw new Error(
+    i18n.t('question:message.error.unable_encrypt', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const getListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name'];
   const missingFields: string[] = [];
@@ -975,7 +1108,11 @@ export const getListItems = async (data, isFromExtension) => {
 export const addListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name', 'items'];
   const missingFields: string[] = [];
@@ -1033,7 +1170,11 @@ export const addListItems = async (data, isFromExtension) => {
 export const deleteListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name'];
   const missingFields: string[] = [];
@@ -2741,7 +2882,11 @@ function calculateRateFromFee(totalFee, sizeInBytes) {
 export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin', 'type', 'value'];
   const missingFields: string[] = [];
@@ -2864,7 +3009,11 @@ export const getServerConnectionHistory = async (data) => {
 export const setCurrentForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -2939,7 +3088,11 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 export const addForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -3014,7 +3167,11 @@ export const addForeignServer = async (data, isFromExtension) => {
 export const removeForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -4093,12 +4250,21 @@ export const openNewTab = async (data, isFromExtension) => {
   const res = extractComponents(data.qortalLink);
   if (res) {
     const { service, name, identifier, path } = res;
-    if (!service && !name) throw new Error('Invalid qortal link');
+    if (!service && !name)
+      throw new Error(
+        i18n.t('auth:message.error.invalid_qortal_link', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     executeEvent('addTab', { data: { service, name, identifier, path } });
     executeEvent('open-apps-mode', {});
     return true;
   } else {
-    throw new Error('Invalid qortal link');
+    throw new Error(
+      i18n.t('auth:message.error.invalid_qortal_link', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4128,7 +4294,11 @@ export const adminAction = async (data, isFromExtension) => {
   }
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let apiEndpoint = '';
