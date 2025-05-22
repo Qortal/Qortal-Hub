@@ -148,14 +148,14 @@ export async function retryTransaction(
         if (throwError) {
           throw new Error(
             error?.message ||
-              i18n.t('question:message.error.unable_process_transaction', {
+              i18n.t('question:message.error.process_transaction', {
                 postProcess: 'capitalizeFirstChar',
               })
           );
         } else {
           throw new Error(
             error?.message ||
-              i18n.t('question:message.error.unable_process_transaction', {
+              i18n.t('question:message.error.process_transaction', {
                 postProcess: 'capitalizeFirstChar',
               })
           );
@@ -230,7 +230,7 @@ export const _createPoll = async (
     if (!res?.signature)
       throw new Error(
         res?.message ||
-          i18n.t('question:message.error.unable_process_transaction', {
+          i18n.t('question:message.error.process_transaction', {
             postProcess: 'capitalizeFirstChar',
           })
       );
@@ -301,7 +301,7 @@ const _deployAt = async (
     if (!res?.signature)
       throw new Error(
         res?.message ||
-          i18n.t('question:message.error.unable_process_transaction', {
+          i18n.t('question:message.error.process_transaction', {
             postProcess: 'capitalizeFirstChar',
           })
       );
@@ -370,7 +370,7 @@ export const _voteOnPoll = async (
     if (!res?.signature)
       throw new Error(
         res?.message ||
-          i18n.t('question:message.error.unable_process_transaction', {
+          i18n.t('question:message.error.process_transaction', {
             postProcess: 'capitalizeFirstChar',
           })
       );
@@ -573,7 +573,7 @@ export const encryptData = async (data, sender) => {
     return encryptDataResponse;
   } else {
     throw new Error(
-      i18n.t('question:message.error.unable_encrypt', {
+      i18n.t('question:message.error.encrypt', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -704,7 +704,7 @@ export const encryptQortalGroupData = async (data, sender) => {
     return resGroupEncryptedResource;
   } else {
     throw new Error(
-      i18n.t('question:message.error.unable_encrypt', {
+      i18n.t('question:message.error.encrypt', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -829,7 +829,7 @@ export const decryptQortalGroupData = async (data, sender) => {
     return resGroupDecryptResource;
   } else {
     throw new Error(
-      i18n.t('question:message.error.unable_encrypt', {
+      i18n.t('question:message.error.encrypt', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -872,7 +872,7 @@ export const encryptDataWithSharingKey = async (data, sender) => {
     return encryptDataResponse;
   } else {
     throw new Error(
-      i18n.t('question:message.error.unable_encrypt', {
+      i18n.t('question:message.error.encrypt', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -1041,7 +1041,7 @@ export const decryptData = async (data) => {
     return decryptedDataToBase64;
   }
   throw new Error(
-    i18n.t('question:message.error.unable_encrypt', {
+    i18n.t('question:message.error.encrypt', {
       postProcess: 'capitalizeFirstChar',
     })
   );
@@ -1083,8 +1083,7 @@ export const getListItems = async (data, isFromExtension) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to',
-        text2: 'Access the list',
+        text1: 'Do you give this application permission to access the list',
         highlightedText: data.list_name,
         checkbox1: {
           value: value,
@@ -1148,8 +1147,10 @@ export const addListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Add the following to the list ${list_name}:`,
+      text1: i18n.t('question:permission_all_item_list', {
+        name: list_name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: items.join(', '),
     },
     isFromExtension
@@ -1170,7 +1171,12 @@ export const addListItems = async (data, isFromExtension) => {
       body: bodyToString,
     });
 
-    if (!response.ok) throw new Error('Failed to add to list');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.add_to_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -1243,7 +1249,12 @@ export const deleteListItems = async (data, isFromExtension) => {
       body: bodyToString,
     });
 
-    if (!response.ok) throw new Error('Failed to add to list');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.add_to_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -1785,18 +1796,28 @@ export const voteOnPoll = async (data, isFromExtension) => {
     if (!response.ok) {
       const errorMessage = await parseErrorResponse(
         response,
-        'Failed to fetch poll'
+        i18n.t('question:message.error.fetch_poll', {
+          postProcess: 'capitalizeFirstChar',
+        })
       );
       throw new Error(errorMessage);
     }
 
     pollInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Poll not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_poll', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   if (!pollInfo || pollInfo.error) {
-    const errorMsg = (pollInfo && pollInfo.message) || 'Poll not found';
+    const errorMsg =
+      (pollInfo && pollInfo.message) ||
+      i18n.t('question:message.error.no_poll', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   try {
@@ -3044,7 +3065,12 @@ export const updateForeignFee = async (data, isFromExtension) => {
     body: valueStringified,
   });
 
-  if (!response.ok) throw new Error('Failed to update foreign fee');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.update_foreign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   let res;
   try {
     res = await response.clone().json();
@@ -4197,7 +4223,7 @@ const tradeBotCreateRequest = async (body, keyPair) => {
   });
   if (!unsignedTxnResponse.ok)
     throw new Error(
-      i18n.t('question:message.error.unable_create_tradebot', {
+      i18n.t('question:message.error.create_tradebot', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4627,7 +4653,7 @@ export const signTransaction = async (data, isFromExtension) => {
     if (!res?.signature)
       throw new Error(
         res?.message ||
-          i18n.t('question:message.error.unable_process_transaction', {
+          i18n.t('question:message.error.process_transaction', {
             postProcess: 'capitalizeFirstChar',
           })
       );
