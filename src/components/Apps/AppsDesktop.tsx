@@ -508,9 +508,9 @@ export const AppsDesktop = ({
 
       {mode === 'publish' && !selectedTab && (
         <AppPublish
-          names={myName ? [myName] : []}
           categories={categories}
           myAddress={myAddress}
+          myName={myName}
         />
       )}
 

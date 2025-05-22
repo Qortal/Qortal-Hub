@@ -43,6 +43,7 @@ import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 
@@ -92,6 +93,8 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     identifier: '',
     name: '',
   });
+
+  const mySortedNames = useSortedMyNames(names, myName);
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -271,7 +274,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     if (!myAddress) return;
     try {
       const res = await fetch(
-        `${getBaseApiReact()}/names/address/${myAddress}`
+        `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
       );
       const data = await res.json();
       setNames(data?.map((item) => item.name));
@@ -584,7 +587,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                     onChange={(e) => setName(e.target.value)}
                   >
                     <MenuItem value={0}>No name selected</MenuItem>
-                    {names.map((name) => {
+                    {mySortedNames.map((name) => {
                       return (
                         <MenuItem key={name} value={name}>
                           {name}

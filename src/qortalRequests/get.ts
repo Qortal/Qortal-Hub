@@ -1442,7 +1442,6 @@ export const publishMultipleQDNResources = async (
           if (resource?.file) {
             rawData = await fileToBase64(resource.file);
           }
-          console.log('encrypteddata', rawData);
           const resKeyPair = await getKeyPair();
           const parsedData = resKeyPair;
           const privateKey = parsedData.privateKey;

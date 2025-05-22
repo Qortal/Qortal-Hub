@@ -25,6 +25,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
 import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
+import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -148,7 +149,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
     try {
       setIsLoading('Loading names');
       const res = await fetch(
-        `${getBaseApiReact()}/names/address/${myAddress}`
+        `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
       );
       const data = await res.json();
       setNames(data?.map((item) => item.name));
@@ -161,6 +162,8 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
   useEffect(() => {
     getNames();
   }, [getNames]);
+
+  const mySortedNames = useSortedMyNames(names, myName);
 
   const publishApp = async () => {
     try {
@@ -329,7 +332,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
             </em>
             {/* This is the placeholder item */}
           </CustomMenuItem>
-          {names.map((name) => {
+          {mySortedNames.map((name) => {
             return <CustomMenuItem value={name}>{name}</CustomMenuItem>;
           })}
         </CustomSelect>
