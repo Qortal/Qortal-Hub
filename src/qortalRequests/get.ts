@@ -2926,11 +2926,16 @@ export const getCrossChainServerInfo = async (data) => {
     });
     throw new Error(errorMsg);
   }
-  let _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
+  const _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
   try {
     const url = await createEndpoint(_url);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -2977,7 +2982,12 @@ export const getTxActivitySummary = async (data) => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -3025,7 +3035,12 @@ export const getForeignFee = async (data) => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -3473,7 +3488,12 @@ export const getNodeInfo = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve node info');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.node_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3488,7 +3508,12 @@ export const getNodeInfo = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving node info');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.node_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3504,7 +3529,12 @@ export const getNodeStatus = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve node status');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.node_status', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3519,7 +3549,12 @@ export const getNodeStatus = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving node status');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.node_status', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3598,7 +3633,12 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const url = await createEndpoint(`/addresses/balance/${address}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_balance', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let walletBalance;
     try {
       walletBalance = await response.clone().json();
@@ -3706,7 +3746,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3771,7 +3816,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3839,7 +3889,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3904,7 +3959,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3969,7 +4029,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -4034,7 +4099,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
