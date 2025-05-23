@@ -308,7 +308,7 @@ const PopoverComp = ({
               }}
             />
             <Typography>
-              {t('core:message.generic.avatar_registered_name', {
+              {t('group:message.generic.avatar_registered_name', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </Typography>

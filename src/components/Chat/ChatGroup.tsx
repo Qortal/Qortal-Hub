@@ -798,7 +798,7 @@ export const ChatGroup = ({
       if (messageSize > 4000) return; // TODO magic number
       if (isPrivate === null)
         throw new Error(
-          t('group:message.error.unable_determine_group_private', {
+          t('group:message.error:determine_group_private', {
             postProcess: 'capitalizeFirstChar',
           })
         );
@@ -890,7 +890,7 @@ export const ChatGroup = ({
           );
           if (res !== true)
             throw new Error(
-              t('core:message.error.unable_publish_image', {
+              t('core:message.error.publish_image', {
                 postProcess: 'capitalizeFirstChar',
               })
             );

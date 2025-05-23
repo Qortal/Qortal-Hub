@@ -589,7 +589,9 @@ export const ChatDirect = ({
               fontSize: '18px',
               padding: '5px',
             }}
-            placeholder="Name or address"
+            placeholder={t('auth:message.generic.name_address', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             value={directToValue}
             onChange={(e) => setDirectToValue(e.target.value)}
           />

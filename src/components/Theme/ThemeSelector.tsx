@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 
 const ThemeSelector = () => {
   const { t } = useTranslation(['auth', 'core', 'group']);
-
   const { themeMode, toggleTheme } = useThemeContext();
 
   return (
@@ -22,10 +21,10 @@ const ThemeSelector = () => {
       <Tooltip
         title={
           themeMode === 'dark'
-            ? t('core:theme.light', {
+            ? t('core:theme.light_mode', {
                 postProcess: 'capitalizeFirstChar',
               })
-            : t('core:theme.light', {
+            : t('core:theme.dark_mode', {
                 postProcess: 'capitalizeFirstChar',
               })
         }

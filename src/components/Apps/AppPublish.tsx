@@ -292,7 +292,9 @@ export const AppPublish = ({ names, categories }) => {
         </InputLabel>
 
         <CustomSelect
-          placeholder="Select Name/App"
+          placeholder={t('core:action.select_name_app', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           displayEmpty
           value={name}
           onChange={(event) => setName(event?.target.value)}
@@ -323,7 +325,9 @@ export const AppPublish = ({ names, categories }) => {
         </InputLabel>
 
         <CustomSelect
-          placeholder="SERVICE TYPE"
+          placeholder={t('core:service_type', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           displayEmpty
           value={appType}
           onChange={(event) => setAppType(event?.target.value)}
@@ -339,11 +343,13 @@ export const AppPublish = ({ names, categories }) => {
               })}
             </em>
           </CustomMenuItem>
+
           <CustomMenuItem value={'APP'}>
             {t('core:app', {
               postProcess: 'capitalizeFirstChar',
             })}
           </CustomMenuItem>
+
           <CustomMenuItem value={'WEBSITE'}>
             {t('core:website', {
               postProcess: 'capitalizeFirstChar',
@@ -370,7 +376,7 @@ export const AppPublish = ({ names, categories }) => {
             width: '100%',
             maxWidth: '450px',
           }}
-          placeholder="Title"
+          placeholder={t('core:title', { postProcess: 'capitalizeFirstChar' })}
           inputProps={{
             'aria-label': 'Title',
             fontSize: '14px',
@@ -397,7 +403,9 @@ export const AppPublish = ({ names, categories }) => {
             width: '100%',
             maxWidth: '450px',
           }}
-          placeholder="Description"
+          placeholder={t('core:description', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           inputProps={{
             'aria-label': 'Description',
             fontSize: '14px',
@@ -415,7 +423,9 @@ export const AppPublish = ({ names, categories }) => {
 
         <CustomSelect
           displayEmpty
-          placeholder="Select Category"
+          placeholder={t('core:action.select_category', {
+            postProcess: 'capitalizeFirstChar',
+          })}
           value={category}
           onChange={(event) => setCategory(event?.target.value)}
         >

@@ -22,9 +22,12 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../utils/events';
+import { useTranslation } from 'react-i18next';
 
 export const BuyQortInformation = ({ balance }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const openBuyQortInfoFunc = useCallback(
     (e) => {
@@ -32,8 +35,6 @@ export const BuyQortInformation = ({ balance }) => {
     },
     [setIsOpen]
   );
-
-  const theme = useTheme();
 
   useEffect(() => {
     subscribeToEvent('openBuyQortInfo', openBuyQortInfoFunc);
@@ -49,7 +50,12 @@ export const BuyQortInformation = ({ balance }) => {
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >
-      <DialogTitle id="alert-dialog-title">{'Get QORT'}</DialogTitle>
+      <DialogTitle id="alert-dialog-title">
+        {t('core:action.get_qort', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
+
       <DialogContent>
         <Box
           sx={{
@@ -65,8 +71,11 @@ export const BuyQortInformation = ({ balance }) => {
           }}
         >
           <Typography>
-            Get QORT using Qortal's crosschain trade portal
+            {t('core:message.generic.get_qort_trade_portal', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
+
           <ButtonBase
             sx={{
               '&:hover': { backgroundColor: theme.palette.secondary.main },
@@ -95,7 +104,9 @@ export const BuyQortInformation = ({ balance }) => {
                 fontSize: '1rem',
               }}
             >
-              Trade QORT
+              {t('core:action.trade_qort', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </ButtonBase>
 
@@ -106,30 +117,46 @@ export const BuyQortInformation = ({ balance }) => {
               textDecoration: 'underline',
             }}
           >
-            Benefits of having QORT
+            {t('core:message.generic.benefits_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
+
           <List
             sx={{
               maxWidth: 360,
               width: '100%',
             }}
-            aria-label="contacts"
+            aria-label={t('core:contact_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           >
             <ListItem disablePadding>
               <ListItemIcon>
                 <RadioButtonCheckedIcon />
               </ListItemIcon>
-              <ListItemText primary="Create transactions on the Qortal Blockchain" />
+              <ListItemText
+                primary={t('core:action.create_transaction', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              />
             </ListItem>
+
             <ListItem disablePadding>
               <ListItemIcon>
                 <RadioButtonCheckedIcon />
               </ListItemIcon>
-              <ListItemText primary="Having at least 4 QORT in your balance allows you to send chat messages at near instant speed." />
+              <ListItemText
+                primary={t('core:message.generic.minimal_qort_balance', {
+                  quantity: 6,
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              />
             </ListItem>
           </List>
         </Box>
       </DialogContent>
+
       <DialogActions>
         <Button
           variant="contained"
@@ -137,7 +164,7 @@ export const BuyQortInformation = ({ balance }) => {
             setIsOpen(false);
           }}
         >
-          Close
+          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
         </Button>
       </DialogActions>
     </Dialog>

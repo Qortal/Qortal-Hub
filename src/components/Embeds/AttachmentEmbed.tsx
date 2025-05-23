@@ -85,7 +85,7 @@ export const AttachmentCard = ({
         }
       } catch (error) {
         throw new Error(
-          t('auth:message.error.unable_decrypt', {
+          t('auth:message.error.decrypt', {
             postProcess: 'capitalizeFirstChar',
           })
         );

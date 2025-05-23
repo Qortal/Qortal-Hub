@@ -48,7 +48,6 @@ import {
   registerNameRequest,
   removeForeignServer,
   removeGroupAdminRequest,
-  saveFile,
   sendChatMessage,
   sendCoin,
   setCurrentForeignServer,
@@ -1287,6 +1286,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'GET_HOSTED_DATA': {
         try {
           const res = await getHostedData(request.payload, isFromExtension);
@@ -1680,6 +1680,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'UPDATE_GROUP': {
         try {
           const res = await updateGroupRequest(
@@ -1734,6 +1735,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'SHOW_PDF_READER': {
         try {
           if (!request.payload?.blob) {
@@ -1764,6 +1766,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA': {
         try {
           const res = await multiPaymentWithPrivateData(
@@ -1792,6 +1795,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'TRANSFER_ASSET': {
         try {
           const res = await transferAssetRequest(
@@ -1846,6 +1850,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'SELL_NAME': {
         try {
           const res = await sellNameRequest(request.payload, isFromExtension);
@@ -1871,6 +1876,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'CANCEL_SELL_NAME': {
         try {
           const res = await cancelSellNameRequest(
@@ -1899,6 +1905,7 @@ function setupMessageListenerQortalRequest() {
         }
         break;
       }
+
       case 'SIGN_FOREIGN_FEES': {
         try {
           const res = await signForeignFees(request.payload, isFromExtension);

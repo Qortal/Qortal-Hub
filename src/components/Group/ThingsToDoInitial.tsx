@@ -121,7 +121,8 @@ export const ThingsToDoInitial = ({
                       fontWeight: 400,
                     },
                   }}
-                  primary={t('tutorial:initial.6_qort', {
+                  primary={t('tutorial:initial.recommended_qort_qty', {
+                    quantity: 6,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 />

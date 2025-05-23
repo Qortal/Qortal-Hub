@@ -235,7 +235,9 @@ export const RegisterName = ({
             autoFocus
             onChange={(e) => setRegisterNameValue(e.target.value)}
             value={registerNameValue}
-            placeholder="Choose a name"
+            placeholder={t('core:action.choose_name', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           />
           {(!balance || (nameFee && balance && balance < nameFee)) && (
             <>
@@ -344,7 +346,9 @@ export const RegisterName = ({
 
           <List
             sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}
-            aria-label="contacts"
+            aria-label={t('core:contact_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           >
             <ListItem disablePadding>
               <ListItemIcon>

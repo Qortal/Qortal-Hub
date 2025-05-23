@@ -164,7 +164,12 @@ export const ListOfThreadPostsWatched = () => {
                   }}
                   disablePadding
                   secondaryAction={
-                    <IconButton edge="end" aria-label="comments">
+                    <IconButton
+                      edge="end"
+                      aria-label={t('core:comment_other', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    >
                       <VisibilityIcon
                         sx={{
                           color: 'red',

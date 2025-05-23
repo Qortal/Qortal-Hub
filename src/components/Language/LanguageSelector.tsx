@@ -51,7 +51,10 @@ const LanguageSelector = () => {
               background: 'none',
               cursor: 'pointer',
             }}
-            aria-label={`Current language: ${name}`}
+            aria-label={t('core:current_language', {
+              language: name,
+              postProcess: 'capitalizeFirstChar',
+            })}
           >
             {flag}
           </button>

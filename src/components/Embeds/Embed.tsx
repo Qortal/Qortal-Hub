@@ -180,7 +180,7 @@ export const Embed = ({ embedLink }) => {
                 }
               } catch (error) {
                 throw new Error(
-                  t('auth:message.error.unable_decrypt', {
+                  t('auth:message.error.decrypt', {
                     postProcess: 'capitalizeFirstChar',
                   })
                 );
@@ -238,7 +238,7 @@ export const Embed = ({ embedLink }) => {
         return imageFinalUrl;
       } else {
         setErrorMsg(
-          t('core:message.error.unable_download_image', {
+          t('core:message.error.download_image', {
             postProcess: 'capitalizeFirstChar',
           })
         );
