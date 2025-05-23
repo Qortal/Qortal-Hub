@@ -30,7 +30,6 @@ function fetchFromLocalStorage(key) {
 }
 
 const getPublishRecord = async (myName) => {
-  // const validApi = await findUsableApi();
   const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=ext_saved_settings&exactmatchnames=true&limit=1&prefix=true&name=${myName}`;
   const response = await fetch(url);
   if (!response.ok) {

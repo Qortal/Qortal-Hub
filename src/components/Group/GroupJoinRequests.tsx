@@ -245,7 +245,12 @@ export const GroupJoinRequests = ({
                   }}
                   disablePadding
                   secondaryAction={
-                    <IconButton edge="end" aria-label="comments">
+                    <IconButton
+                      edge="end"
+                      aria-label={t('core:comment_other', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    >
                       <GroupAddIcon
                         sx={{
                           color: theme.palette.text.primary,

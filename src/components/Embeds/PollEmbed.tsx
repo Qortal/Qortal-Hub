@@ -69,7 +69,7 @@ export const PollCard = ({
             type: 'error',
             message:
               response?.error ||
-              t('core:message.error.unable_vote', {
+              t('core:message.error.vote', {
                 postProcess: 'capitalizeFirstChar',
               }),
           });
@@ -91,7 +91,7 @@ export const PollCard = ({
           type: 'error',
           message:
             error?.message ||
-            t('core:message.error.unable_vote', {
+            t('core:message.error.vote', {
               postProcess: 'capitalizeFirstChar',
             }),
         });

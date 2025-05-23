@@ -1,0 +1,21 @@
+{
+  "1_getting_started": "1。入门",
+  "2_overview": "2。概述",
+  "3_groups": "3。Qortal组",
+  "4_obtain_qort": "4。获取Qort",
+  "account_creation": "帐户创建",
+  "important_info": "重要信息！",
+  "apps": {
+    "dashboard": "1。应用仪表板",
+    "navigation": "2。应用导航"
+  },
+  "initial": {
+    "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
+    "explore": "探索",
+    "general_chat": "一般聊天",
+    "getting_started": "入门",
+    "register_name": "注册一个名称",
+    "see_apps": "请参阅应用程序",
+    "trade_qort": "贸易Qort"
+  }
+}

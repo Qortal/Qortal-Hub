@@ -15,6 +15,7 @@ import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
+import { useTranslation } from 'react-i18next';
 
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
@@ -44,6 +45,7 @@ export const AppsCategoryDesktop = ({
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef(null);
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const categoryList = useMemo(() => {
     if (category?.id === 'all') return availableQapps;
@@ -139,9 +141,13 @@ export const AppsCategoryDesktop = ({
                   ml: 1,
                   paddingLeft: '12px',
                 }}
-                placeholder="Search for apps"
+                placeholder={t('core:action.search_apps', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 inputProps={{
-                  'aria-label': 'Search for apps',
+                  'aria-label': t('core:action.search_apps', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
                   fontSize: '16px',
                   fontWeight: 400,
                 }}

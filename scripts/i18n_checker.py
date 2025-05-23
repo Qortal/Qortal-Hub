@@ -6,7 +6,7 @@ import argparse
 
 # Customize as needed
 I18N_FUNCTIONS = ['t', 'i18next.t']
-FILE_EXTENSIONS = ['.tsx']
+FILE_EXTENSIONS = ['.tsx', '.ts']
 EXCLUDED_DIRS = ['node_modules', 'build', 'dist']
 
 # Regex patterns
@@ -16,11 +16,11 @@ JSX_TEXT_REGEX = re.compile(r'>\s*([A-Z][a-z].*?)\s*<')
 def is_excluded(path):
     return any(excluded in path for excluded in EXCLUDED_DIRS)
 
-def is_ignorable(text):
-    return (
-        re.fullmatch(r'[A-Z0-9_]+', text) and
-        any(keyword in text.lower() for keyword in ['action', 'status'])
-    )
+def is_ignorable(text, line):
+    if re.fullmatch(r'[A-Z0-9_]+', text):
+        if re.search(r'\b(case|action|status)\b', line, re.IGNORECASE):
+            return True
+    return False
 
 def is_console_log_line(line):
     return any(kw in line for kw in ['console.log', 'console.error', 'console.warn'])
@@ -38,7 +38,7 @@ def find_untranslated_strings(file_path):
             # Match suspicious string literals
             for match in STRING_LITERAL_REGEX.finditer(line):
                 string = match.group(1).strip()
-                if is_ignorable(string):
+                if is_ignorable(string, line):
                     continue
                 if not any(fn + '(' in line[:match.start()] for fn in I18N_FUNCTIONS):
                     issues.append({
@@ -51,7 +51,7 @@ def find_untranslated_strings(file_path):
             # Match JSX text nodes
             for match in JSX_TEXT_REGEX.finditer(line):
                 text = match.group(1).strip()
-                if is_ignorable(text):
+                if is_ignorable(text, line):
                     continue
                 if not text.startswith('{t('):
                     issues.append({

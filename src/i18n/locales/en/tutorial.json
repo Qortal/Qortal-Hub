@@ -10,7 +10,7 @@
     "navigation": "2. Apps Navigation"
   },
   "initial": {
-    "6_qort": "have at least 6 QORT in your wallet",
+    "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
     "explore": "explore",
     "general_chat": "general chat",
     "getting_started": "getting started",
