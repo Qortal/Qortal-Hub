@@ -1,20 +1,12 @@
 // @ts-nocheck
 import './qortalRequests';
 import { isArray } from 'lodash';
-import {
-  decryptGroupEncryption,
-  encryptAndPublishSymmetricKeyGroupChat,
-  publishGroupEncryptedResource,
-  publishOnQDN,
-  uint8ArrayToObject,
-} from './backgroundFunctions/encryption';
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/constants';
+import { uint8ArrayToObject } from './backgroundFunctions/encryption';
 import Base58 from './deps/Base58';
 import axios from 'axios';
 import {
   base64ToUint8Array,
   decryptSingle,
-  encryptDataGroup,
   encryptSingle,
   objectToBase64,
 } from './qdn/encryption/group-encryption';
@@ -90,7 +82,6 @@ import {
   sendChatGroupCase,
   sendCoinCase,
   setApiKeyCase,
-  setChatHeadsCase,
   setCustomNodesCase,
   setGroupDataCase,
   setupGroupWebsocketCase,
