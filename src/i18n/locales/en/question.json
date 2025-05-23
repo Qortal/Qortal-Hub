@@ -7,6 +7,7 @@
   "assets_used_pay": "asset used in payments: {{ asset }}",
   "description": "description: {{ description }}",
   "deploy_at": "would you like to deploy this AT?",
+  "download_file": "would you like to download:",
   "message": {
     "error": {
       "add_to_list": "failed to add to list",
@@ -40,7 +41,6 @@
       "timeout_request": "request timed out",
       "update_foreign_fee": "failed to update foreign fee",
       "upload_encryption": "upload failed due to failed encryption",
-      "user_declined_request": "user declined request",
       "user_qortal_name": "user has no Qortal name"
     },
     "generic": {
@@ -50,7 +50,9 @@
       "no_action_public_node": "this action cannot be done through a public node",
       "provide_group_id": "please provide a groupId",
       "user_declined_delete": "user declined delete hosted resources",
-      "user_declined_list": "user declined to get list of hosted resources"
+      "user_declined_join": "user declined to join group",
+      "user_declined_list": "user declined to get list of hosted resources",
+      "user_declined_request": "user declined request"
     }
   },
   "name": "name: {{ name }}",

@@ -237,7 +237,7 @@ export const _createPoll = async (
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -308,7 +308,7 @@ const _deployAt = async (
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -377,7 +377,7 @@ export const _voteOnPoll = async (
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -531,7 +531,7 @@ export const getUserAccount = async ({
       };
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -1435,7 +1435,7 @@ export const publishQDNResource = async (
     }
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -1622,7 +1622,7 @@ export const publishMultipleQDNResources = async (
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -2199,7 +2199,11 @@ export const joinGroup = async (data, isFromExtension) => {
       );
     }
   } else {
-    throw new Error('User declined to join group'); // TODO translate
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_join', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2224,7 +2228,9 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     const blob = data.blob;
     const resPermission = await getUserPermission(
       {
-        text1: 'Would you like to download:',
+        text1: i18n.t('question:download_file', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${filename}`,
       },
       isFromExtension
@@ -2266,7 +2272,12 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       throw new Error('User declined to save file');
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to initiate download');
+    throw new Error(
+      error?.message ||
+        i18n.t('core:message.error.initiate_download', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2440,7 +2451,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     return userWallet;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -2607,7 +2618,7 @@ export const getWalletBalance = async (
     }
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -2772,7 +2783,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
     }
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -2875,7 +2886,7 @@ export const getUserWalletTransactions = async (
     }
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -3067,7 +3078,7 @@ export const updateForeignFee = async (data, isFromExtension) => {
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -3199,7 +3210,7 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -3281,7 +3292,7 @@ export const addForeignServer = async (data, isFromExtension) => {
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -3363,7 +3374,7 @@ export const removeForeignServer = async (data, isFromExtension) => {
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -3625,7 +3636,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return makePayment.res?.data;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -3688,7 +3699,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -3753,7 +3764,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -3821,7 +3832,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -3886,7 +3897,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -3951,7 +3962,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4016,7 +4027,7 @@ export const sendCoin = async (data, isFromExtension) => {
       return res;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4157,7 +4168,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
       return resBuyOrder;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4369,7 +4380,7 @@ export const createSellOrder = async (data, isFromExtension) => {
       return response;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4441,7 +4452,7 @@ export const cancelSellOrder = async (data, isFromExtension) => {
       return response;
     } else {
       throw new Error(
-        i18n.t('question:message.error.user_declined_request', {
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -4611,7 +4622,7 @@ export const adminAction = async (data, isFromExtension) => {
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4711,7 +4722,7 @@ export const signTransaction = async (data, isFromExtension) => {
     return res;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4857,7 +4868,7 @@ export const registerNameRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4899,7 +4910,7 @@ export const updateNameRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -4959,7 +4970,7 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5028,7 +5039,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5097,7 +5108,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5167,7 +5178,7 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5234,7 +5245,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5301,7 +5312,7 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5368,7 +5379,7 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5435,7 +5446,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5495,7 +5506,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5580,7 +5591,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5709,7 +5720,7 @@ export const sellNameRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5756,7 +5767,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5808,7 +5819,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
     return response;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -5877,7 +5888,7 @@ export const signForeignFees = async (data, isFromExtension) => {
     return true;
   } else {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -6138,7 +6149,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -6335,7 +6346,7 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const { accepted } = resPermission;
   if (!accepted) {
     throw new Error(
-      i18n.t('question:message.error.user_declined_request', {
+      i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
       })
     );

@@ -183,6 +183,7 @@
       "fetch_publish": "unable to fetch publish",
       "file_too_large": "file {{ filename }} is too large. Max size allowed is {{ size }} MB.",
       "generic": "an error occurred",
+      "initiate_download": "failed to initiate download",
       "invalid_base64": "invalid base64 data",
       "invalid_embed_link": "invalid embed link",
       "invalid_image_embed_link_name": "invalid image embed link. Missing param.",
