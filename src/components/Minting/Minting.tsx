@@ -428,7 +428,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         type: 'error',
         message:
           error?.message ||
-          t('group:message.error.unable_minting', {
+          t('group:message.error:minting', {
             postProcess: 'capitalizeFirstChar',
           }),
       });

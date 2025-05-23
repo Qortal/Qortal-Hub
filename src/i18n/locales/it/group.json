@@ -102,18 +102,18 @@
     },
     "error": {
       "access_name": "impossibile inviare un messaggio senza accesso al tuo nome",
-      "descrypt_wallet": "errore nella decrittazione del portafoglio {{ :errorMessage }}",
       "description_required": "inserisci una descrizione",
+      "descrypt_wallet": "errore nella decrittazione del portafoglio {{ :errorMessage }}",
+      "determine_group_private": "unable to determine if group is private",
       "group_info": "impossibile accedere alle informazioni del gruppo",
       "group_promotion": "error publishing the promotion. Please try again",
       "group_secret_key": "impossibile ottenere la chiave segreta del gruppo",
+      "minting": "unable to start minting",
       "name_required": "inserisci un nome",
       "notify_admins": "prova a contattare un amministratore dalla lista qui sotto:",
       "qortals_required": "you need at least {{ quantity }} QORT to send a message",
-      "timeout_reward": "timeout waiting for reward share confirmation",
       "thread_id": "impossibile trovare l'ID della discussione",
-      "unable_determine_group_private": "unable to determine if group is private",
-      "unable_minting": "unable to start minting"
+      "timeout_reward": "timeout waiting for reward share confirmation"
     },
     "success": {
       "group_ban": "membro bannato con successo dal gruppo. Potrebbero volerci alcuni minuti affinché le modifiche si propaghino",

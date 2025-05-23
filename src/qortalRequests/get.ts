@@ -996,7 +996,7 @@ export const deleteHostedData = async (data, isFromExtension) => {
     return true;
   } else {
     throw new Error(
-      i18n.t('question:message.generic.user_declined_delete', {
+      i18n.t('question:message.generic.user_declined_delete_hosted_resources', {
         postProcess: 'capitalizeFirstChar',
       })
     );
@@ -1083,7 +1083,9 @@ export const getListItems = async (data, isFromExtension) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to access the list',
+        text1: i18n.t('question:permission_access_list', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: data.list_name,
         checkbox1: {
           value: value,
@@ -1113,7 +1115,11 @@ export const getListItems = async (data, isFromExtension) => {
     const list = await response.json();
     return list;
   } else {
-    throw new Error('User declined to share list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_share_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1185,7 +1191,11 @@ export const addListItems = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined add to list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_add_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1227,8 +1237,10 @@ export const deleteListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Remove the following from the list ${list_name}:`,
+      text1: i18n.t('question:permission_remove_from_list', {
+        name: list_name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: items ? JSON.stringify(items) : item,
     },
     isFromExtension
@@ -1263,7 +1275,11 @@ export const deleteListItems = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined delete from list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_delete_from_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1390,7 +1406,9 @@ export const publishQDNResource = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to publish to QDN?',
+      text1: i18n.t('question:permission_publish_qdn', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
       fee: fee.fee,
@@ -1519,18 +1537,15 @@ export const publishMultipleQDNResources = async (
     }
   }
 
-  // if (
-  //   data.encrypt &&
-  //   (!data.publicKeys ||
-  //     (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
-  // ) {
-  //   throw new Error("Encrypting data requires public keys");
-  // }
   const fee = await getFee('ARBITRARY');
   const registeredName = await getNameInfo();
   const name = registeredName;
   if (!name) {
-    throw new Error('You need a Qortal name to publish.');
+    throw new Error(
+      i18n.t('question:message.error.registered_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const appFee = data?.appFee ? +data.appFee : undefined;
   const appFeeRecipient = data?.appFeeRecipient;
@@ -1554,7 +1569,9 @@ export const publishMultipleQDNResources = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to publish to QDN?',
+      text1: i18n.t('question:permission_publish_qdn', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
@@ -4803,7 +4820,11 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
-        throw new Error('Failed to copy to clipboard.');
+        throw new Error(
+          i18n.t('question:message.error.copy_clipboard', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       return link;
     }
@@ -4822,7 +4843,11 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
-        throw new Error('Failed to copy to clipboard.');
+        throw new Error(
+          i18n.t('question:message.error.copy_clipboard', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
 
       return link;
@@ -5748,7 +5773,12 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
 
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData?.isForSale) throw new Error('This name is not for sale');
+  if (!nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_not_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   const fee = await getFee('CANCEL_SELL_NAME');
   const resPermission = await getUserPermission(
@@ -5796,7 +5826,12 @@ export const buyNameRequest = async (data, isFromExtension) => {
 
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData?.isForSale) throw new Error('This name is not for sale');
+  if (!nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_not_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const sellerAddress = nameData.owner;
   const sellPrice = +nameData.salePrice;
 
@@ -5939,7 +5974,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
     const confirmReceiver = await getNameOrAddress(payment.recipient);
     if (confirmReceiver.error) {
-      throw new Error('Invalid receiver address or name');
+      throw new Error(
+        i18n.t('question:message.error.invalid_receiver', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
@@ -5972,7 +6011,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
         if (!name) {
           const getName = await getNameInfo();
-          if (!getName) throw new Error('Name needed to publish');
+          if (!getName)
+            throw new Error(
+              i18n.t('question:message.error.registered_name', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           name = getName;
         }
 
@@ -5984,7 +6028,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
             })
           );
         if (!arbitraryTx?.service?.includes('_PRIVATE'))
-          throw new Error('Please use a PRIVATE service');
+          throw new Error(
+            i18n.t('question:message.generic.private_service', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
         pendingTransactions.push({
           type: 'ARBITRARY',
@@ -6021,7 +6069,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
       if (!name) {
         const getName = await getNameInfo();
-        if (!getName) throw new Error('Name needed to publish');
+        if (!getName)
+          throw new Error(
+            i18n.t('question:message.error.registered_name', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         name = getName;
       }
 
@@ -6033,7 +6086,11 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
           })
         );
       if (!arbitraryTx?.service?.includes('_PRIVATE'))
-        throw new Error('Please use a PRIVATE service');
+        throw new Error(
+          i18n.t('question:message.generic.private_service', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
       pendingAdditionalArbitraryTxs.push({
         type: 'ARBITRARY',
@@ -6048,7 +6105,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
     }
   }
 
-  if (!name) throw new Error('A name is needed to publish');
+  if (!name)
+    throw new Error(
+      i18n.t('question:message.error.registered_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const balance = await getBalanceInfo();
 
   if (+balance < fee)
@@ -6322,7 +6384,11 @@ export const transferAssetRequest = async (data, isFromExtension) => {
     );
   const confirmReceiver = await getNameOrAddress(recipient);
   if (confirmReceiver.error) {
-    throw new Error('Invalid receiver address or name');
+    throw new Error(
+      i18n.t('question:message.error.invalid_receiver', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
