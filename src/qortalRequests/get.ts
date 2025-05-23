@@ -1483,7 +1483,6 @@ export const publishMultipleQDNResources = async (
               service: service,
               identifier: encodeURIComponent(identifier),
               uploadType: dataType,
-              // isBase64: true,
               filename: filename,
               title,
               description,
