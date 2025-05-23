@@ -3846,7 +3846,13 @@ export const getArrrSyncStatus = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving arrr sync status');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.retrieve_sync_status', {
+          token: 'ARRR',
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3936,7 +3942,9 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     if (recipient.length === 0) {
-      const errorMsg = 'Receiver cannot be empty!';
+      const errorMsg = i18n.t('question:message.error.empty_receiver', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
@@ -3945,7 +3953,10 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: i18n.t('question:permission_send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: `To: ${recipient}`,
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         fee: fee,
         confirmCheckbox: true,
@@ -3999,7 +4010,10 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: i18n.t('question:permission_send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: `To: ${recipient}`,
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} BTC`,
       },
@@ -4073,7 +4087,10 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: i18n.t('question:permission_send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: `To: ${recipient}`,
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} LTC`,
       },
@@ -5092,12 +5109,20 @@ export const signTransaction = async (data, isFromExtension) => {
     },
     body: _body,
   });
-  if (!response.ok) throw new Error('Failed to decode transaction');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.decode_transaction', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const decodedData = await response.json();
   const resPermission = await getUserPermission(
     {
       text1: `Do you give this application permission to ${shouldProcess ? 'SIGN and PROCESS' : 'SIGN'} a transaction?`,
-      highlightedText: 'Read the transaction carefully before accepting!',
+      highlightedText: i18n.t(
+        'question:message.generic.read_transaction_carefully',
+        { postProcess: 'capitalizeFirstChar' }
+      ),
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
     },
@@ -5249,7 +5274,9 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       missingFieldsFunc(data, ['type', 'name', 'service', 'identifier']);
       if (data?.encryptionType === 'private' && !data?.key) {
         throw new Error(
-          'For an encrypted resource, you must provide the key to create the shared link'
+          i18n.t('question:message.generic.provide_key_shared_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
       const queryParams = buildQueryParams(data);
@@ -6089,10 +6116,18 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   const ciphertext = base64ToUint8Array(encryptedData);
   // Validate IV and key lengths
   if (ivUint8Array.length !== 12) {
-    throw new Error('Invalid IV: AES-GCM requires a 12-byte IV.');
+    throw new Error(
+      i18n.t('question:message.error.invalid_encryption_iv', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   if (encryptionKey.length !== 32) {
-    throw new Error('Invalid key: AES-GCM requires a 256-bit key.');
+    throw new Error(
+      i18n.t('question:message.error.invalid_encryption_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   try {
@@ -6116,7 +6151,9 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   } catch (error) {
     console.error('Decryption failed:', error);
     throw new Error(
-      'Failed to decrypt the message. Ensure the data and keys are correct.'
+      i18n.t('question:message.error.decrypt_message', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
 };
