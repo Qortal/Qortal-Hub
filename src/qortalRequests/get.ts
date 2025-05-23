@@ -4335,7 +4335,12 @@ export const createBuyOrder = async (data, isFromExtension) => {
       );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit trade order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.buy_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -4352,7 +4357,14 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     body: bodyToString,
   });
 
-  if (!deleteTradeBotResponse.ok) throw new Error('Unable to update tradebot');
+  if (!deleteTradeBotResponse.ok) {
+    throw new Error(
+      i18n.t('question:message.error.update_tradebot', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   const unsignedTxn = await deleteTradeBotResponse.text();
   const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
   const signedBytes = Base58.encode(signedTxnBytes);
@@ -4505,11 +4517,15 @@ export const createSellOrder = async (data, isFromExtension) => {
   try {
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform a sell order?',
-        text2: `${data.qortAmount}${' '}
-      ${`QORT`}`,
-        text3: `FOR  ${parsedForeignAmount} ${data.foreignBlockchain}`,
+        text1: i18n.t('question:permission_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission_sell_order_detail', {
+          qort_amount: data.qortAmount,
+          foreign_amount: parsedForeignAmount,
+          ticker: data.foreignBlockchain,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: '0.02',
       },
       isFromExtension
@@ -4559,6 +4575,7 @@ export const createSellOrder = async (data, isFromExtension) => {
 export const cancelSellOrder = async (data, isFromExtension) => {
   const requiredFields = ['atAddress'];
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field]) {
       missingFields.push(field);
@@ -4576,7 +4593,14 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   const url = await createEndpoint(`/crosschain/trade/${data.atAddress}`);
   const resAddress = await fetch(url);
   const resData = await resAddress.json();
-  if (!resData?.qortalAtAddress) throw new Error('Cannot find AT info.');
+
+  if (!resData?.qortalAtAddress)
+    throw new Error(
+      i18n.t('question:message.error.at_info', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+
   try {
     const fee = await getFee('MESSAGE');
 
