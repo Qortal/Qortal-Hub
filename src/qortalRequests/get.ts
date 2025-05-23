@@ -6197,8 +6197,17 @@ export const sellNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to create a sell name transaction?`,
-      highlightedText: `Sell ${name} for ${sellPrice} QORT`,
+      text1: i18n.t('question:permission_sell_name_transaction', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t(
+        'question:permission_sell_name_transaction_detail',
+        {
+          name: name,
+          price: sellPrice,
+          postProcess: 'capitalizeFirstChar',
+        }
+      ),
       fee: fee.fee,
     },
     isFromExtension
@@ -6250,8 +6259,13 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the selling of a name?`,
-      highlightedText: `Name: ${name}`,
+      text1: i18n.t('question:permission_sell_name_cancel', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:name', {
+        name: name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -6287,26 +6301,33 @@ export const buyNameRequest = async (data, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+
   const name = data.nameForSale;
-
   const validApi = await getBaseApi();
-
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
+
   if (!nameData?.isForSale)
     throw new Error(
       i18n.t('question:message.error.name_not_for_sale', {
         postProcess: 'capitalizeFirstChar',
       })
     );
+
   const sellerAddress = nameData.owner;
   const sellPrice = +nameData.salePrice;
 
   const fee = await getFee('BUY_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to buy a name?`,
-      highlightedText: `Buying ${name} for ${sellPrice} QORT`,
+      text1: i18n.t('question:permission_buy_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:permission_buy_name_detail', {
+        name: name,
+        price: sellPrice,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -6331,7 +6352,9 @@ export const buyNameRequest = async (data, isFromExtension) => {
 export const signForeignFees = async (data, isFromExtension) => {
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to sign the required fees for all your trade offers?`,
+      text1: i18n.t('question:permission_sign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
