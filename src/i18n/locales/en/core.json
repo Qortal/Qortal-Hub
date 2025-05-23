@@ -229,7 +229,7 @@
       "fetching_data": "fetching app data",
       "foreign_fee": "foreign fee: {{ message }}",
       "get_qort_trade_portal": "get QORT using Qortal's crosschain trade portal",
-      "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance allows you to send chat messages at near instant speed.",
+      "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance (4 qort balance for chat, 1.25 for name, 0.75 for some transactions)",
       "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
       "most_recent_payment": "{{ count }} most recent payment",

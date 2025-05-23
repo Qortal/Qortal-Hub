@@ -148,7 +148,7 @@ export const BuyQortInformation = ({ balance }) => {
               </ListItemIcon>
               <ListItemText
                 primary={t('core:message.generic.minimal_qort_balance', {
-                  quantity: 4,
+                  quantity: 6,
                   postProcess: 'capitalizeFirstChar',
                 })}
               />
