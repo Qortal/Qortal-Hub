@@ -4229,7 +4229,9 @@ export const createBuyOrder = async (data, isFromExtension) => {
       const resData = await resAddress.json();
       if (foreignBlockchain !== resData?.foreignBlockchain) {
         throw new Error(
-          'All requested ATs need to be of the same foreign Blockchain.'
+          i18n.t('core:message.error.same_foreign_blockchain', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
       return resData;
@@ -4237,23 +4239,30 @@ export const createBuyOrder = async (data, isFromExtension) => {
   );
 
   const crosschainAtInfo = await Promise.all(atPromises);
+
   try {
     const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission_buy_order', {
           postProcess: 'capitalizeFirstChar',
-        }), // TODO translate better
-        text2: `${atAddresses?.length}${' '}
-      ${`buy order${atAddresses?.length === 1 ? '' : 's'}`}`,
-        text3: `${crosschainAtInfo?.reduce((latest, cur) => {
-          return latest + +cur?.qortAmount;
-        }, 0)} QORT FOR   ${roundUpToDecimals(
-          crosschainAtInfo?.reduce((latest, cur) => {
-            return latest + +cur?.expectedForeignAmount;
-          }, 0)
-        )}
-      ${` ${buyingFees.ticker}`}`,
+        }),
+        text2: i18n.t('question:permission_buy_order_quantity', {
+          quantity: atAddresses?.length,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:permission_buy_order_ticker', {
+          qort_amount: crosschainAtInfo?.reduce((latest, cur) => {
+            return latest + +cur?.qortAmount;
+          }, 0),
+          foreign_amount: roundUpToDecimals(
+            crosschainAtInfo?.reduce((latest, cur) => {
+              return latest + +cur?.expectedForeignAmount;
+            }, 0)
+          ),
+          ticker: buyingFees.ticker,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: i18n.t('auth:node.using_public_gateway', {
           gateway: isGateway,
           postProcess: 'capitalizeFirstChar',
@@ -4283,15 +4292,27 @@ export const createBuyOrder = async (data, isFromExtension) => {
     </style>
 
     <div class="fee-container">
-      <div class="fee-label">Total Unlocking Fee:</div>
+      <div class="fee-label">${i18n.t('question:total_unlocking_fee', {
+        postProcess: 'capitalizeFirstChar',
+      })}</div>
       <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
      <div class="fee-description">
-  This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'}, assuming a 300-byte size at a rate of ${buyingFees?.unlock?.feePerKb?.toFixed(8)} ${buyingFees.ticker} per KB.
-</div>
-
-      <div class="fee-label">Total Locking Fee:</div>
-      <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
-
+     ${i18n.t('question:permission_buy_order_fee_estimation', {
+       quantity: atAddresses?.length,
+       fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
+       ticker: buyingFees.ticker,
+       postProcess: 'capitalizeFirstChar',
+     })}
+     </div>
+     <div class="fee-label">${i18n.t('question:total_locking_fee', {
+       postProcess: 'capitalizeFirstChar',
+     })}</div>
+     <div>${i18n.t('question:permission_buy_order_per_kb', {
+       fee: +buyingFees?.lock.fee.toFixed(8),
+       ticker: buyingFees.ticker,
+       postProcess: 'capitalizeFirstChar',
+     })}
+     </div>
     </div>
   </div>
 `,
