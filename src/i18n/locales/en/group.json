@@ -112,6 +112,7 @@
       "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
       "description_required": "please provide a description",
       "group_info": "cannot access group information",
+      "group_join": "failed to join the group",
       "group_promotion": "error publishing the promotion. Please try again",
       "group_secret_key": "cannot get group secret key",
       "name_required": "please provide a name",

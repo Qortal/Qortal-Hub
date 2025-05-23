@@ -238,7 +238,7 @@ export const Embed = ({ embedLink }) => {
         return imageFinalUrl;
       } else {
         setErrorMsg(
-          t('core:message.error.unable_download_image', {
+          t('core:message.error.download_image', {
             postProcess: 'capitalizeFirstChar',
           })
         );

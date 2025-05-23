@@ -183,7 +183,7 @@ export const AppsPrivate = ({ myName }) => {
       if (decryptedData?.error) {
         throw new Error(
           decryptedData?.error ||
-            t('core:message.error.unable_encrypt_app', {
+            t('core:message.error.encrypt_app', {
               postProcess: 'capitalizeFirstChar',
             })
         );
@@ -238,7 +238,7 @@ export const AppsPrivate = ({ myName }) => {
         type: 'error',
         message:
           error?.message ||
-          t('core:message.error.unable_publish_app', {
+          t('core:message.error.publish_app', {
             postProcess: 'capitalizeFirstChar',
           }),
       });

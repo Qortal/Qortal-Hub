@@ -70,7 +70,7 @@ export const useHandlePrivateApps = () => {
           }
 
           throw new Error(
-            t('core:message.error.unable_fetch_app', {
+            t('core:message.error.fetch_app', {
               postProcess: 'capitalizeFirstChar',
             })
           );
@@ -249,7 +249,7 @@ export const useHandlePrivateApps = () => {
           setLoadingStatePrivateApp(
             `Error! ${
               error?.message ||
-              t('core:message.error.unable_build_app', {
+              t('core:message.error.build_app', {
                 postProcess: 'capitalizeFirstChar',
               })
             }`
@@ -262,7 +262,7 @@ export const useHandlePrivateApps = () => {
         type: 'error',
         message:
           error?.message ||
-          t('core:message.error.unable_fetch_app', {
+          t('core:message.error.fetch_app', {
             postProcess: 'capitalizeFirstChar',
           }),
       });

@@ -2191,7 +2191,12 @@ export const joinGroup = async (data, isFromExtension) => {
       const resJoinGroup = await joinGroupFunc({ groupId });
       return resJoinGroup;
     } catch (error) {
-      throw new Error(error?.message || 'Failed to join the group.');
+      throw new Error(
+        error?.message ||
+          i18n.t('group:message.error.group_join', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
     throw new Error('User declined to join group'); // TODO translate
@@ -2304,7 +2309,12 @@ export const deployAt = async (data, isFromExtension) => {
     );
     return resDeployAt;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to join the group.');
+    throw new Error(
+      error?.message ||
+        i18n.t('group:message.error.group_join', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
