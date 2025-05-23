@@ -503,7 +503,7 @@ export const getUserAccount = async ({
     if (!skip) {
       resPermission = await getUserPermission(
         {
-          text1: i18n.t('question:permission_authenticate', {
+          text1: i18n.t('question:permission.authenticate', {
             postProcess: 'capitalizeFirstChar',
           }),
           checkbox1: {
@@ -965,7 +965,7 @@ export const deleteHostedData = async (data, isFromExtension) => {
   });
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_delete_hosts_resources', {
+      text1: i18n.t('question:permission.delete_hosts_resources', {
         size: data?.hostedData?.length,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -1083,7 +1083,7 @@ export const getListItems = async (data, isFromExtension) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_access_list', {
+        text1: i18n.t('question:permission.access_list', {
           postProcess: 'capitalizeFirstChar',
         }),
         highlightedText: data.list_name,
@@ -1153,7 +1153,7 @@ export const addListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_all_item_list', {
+      text1: i18n.t('question:permission.all_item_list', {
         name: list_name,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -1237,7 +1237,7 @@ export const deleteListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_remove_from_list', {
+      text1: i18n.t('question:permission.remove_from_list', {
         name: list_name,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -1408,7 +1408,7 @@ export const publishQDNResource = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_publish_qdn', {
+      text1: i18n.t('question:permission.publish_qdn', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: `service: ${service}`,
@@ -1596,7 +1596,7 @@ export const publishMultipleQDNResources = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_publish_qdn', {
+      text1: i18n.t('question:permission.publish_qdn', {
         postProcess: 'capitalizeFirstChar',
       }),
       html: `
@@ -2025,7 +2025,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_chat_message', {
+        text1: i18n.t('question:permission.send_chat_message', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: isRecipient
@@ -2503,7 +2503,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_get_wallet_info', {
+        text1: i18n.t('question:permission.get_wallet_info', {
           postProcess: 'capitalizeFirstChar',
         }),
         highlightedText: `coin: ${data.coin}`,
@@ -2643,7 +2643,7 @@ export const getWalletBalance = async (
   if (!bypassPermission && !skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_fetch_balance', {
+        text1: i18n.t('question:permission.fetch_balance', {
           coin: data.coin, // TODO highlight coin in the modal
           postProcess: 'capitalizeFirstChar',
         }),
@@ -2888,7 +2888,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_get_wallet_info', {
+        text1: i18n.t('question:permission.get_wallet_info', {
           postProcess: 'capitalizeFirstChar',
         }),
         highlightedText: `coin: ${data.coin}`,
@@ -2993,7 +2993,7 @@ export const getUserWalletTransactions = async (
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_get_wallet_transactions', {
+        text1: i18n.t('question:permission.get_wallet_transactions', {
           postProcess: 'capitalizeFirstChar',
         }),
         highlightedText: `coin: ${data.coin}`,
@@ -3290,7 +3290,7 @@ export const updateForeignFee = async (data, isFromExtension) => {
       : '';
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_update_foreign_fee', {
+      text1: i18n.t('question:permission.update_foreign_fee', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
@@ -3439,7 +3439,7 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_set_current_server', {
+      text1: i18n.t('question:permission.set_current_server', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: i18n.t('question:server_type', {
@@ -3537,7 +3537,7 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_server_add', {
+      text1: i18n.t('question:permission.server_add', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: i18n.t('question:server_type', {
@@ -3635,7 +3635,7 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_server_remove', {
+      text1: i18n.t('question:permission.server_remove', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: i18n.t('question:server_type', {
@@ -3954,7 +3954,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
@@ -4011,7 +4011,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
@@ -4088,7 +4088,7 @@ export const sendCoin = async (data, isFromExtension) => {
     }
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
@@ -4163,7 +4163,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:to_recipient', {
@@ -4239,7 +4239,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: `To: ${recipient}`,
@@ -4312,7 +4312,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: `To: ${recipient}`,
@@ -4385,7 +4385,7 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_send_coins', {
+        text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: `To: ${recipient}`,
@@ -4509,14 +4509,14 @@ export const createBuyOrder = async (data, isFromExtension) => {
     const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_buy_order', {
+        text1: i18n.t('question:permission.buy_order', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: i18n.t('question:permission_buy_order_quantity', {
+        text2: i18n.t('question:permission.buy_order_quantity', {
           quantity: atAddresses?.length,
           postProcess: 'capitalizeFirstChar',
         }),
-        text3: i18n.t('question:permission_buy_order_ticker', {
+        text3: i18n.t('question:permission.buy_order_ticker', {
           qort_amount: crosschainAtInfo?.reduce((latest, cur) => {
             return latest + +cur?.qortAmount;
           }, 0),
@@ -4562,7 +4562,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
       })}</div>
       <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
      <div class="fee-description">
-     ${i18n.t('question:permission_buy_order_fee_estimation', {
+     ${i18n.t('question:permission.buy_order_fee_estimation', {
        quantity: atAddresses?.length,
        fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
        ticker: buyingFees.ticker,
@@ -4572,7 +4572,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
      <div class="fee-label">${i18n.t('question:total_locking_fee', {
        postProcess: 'capitalizeFirstChar',
      })}</div>
-     <div>${i18n.t('question:permission_buy_order_per_kb', {
+     <div>${i18n.t('question:permission.buy_order_per_kb', {
        fee: +buyingFees?.lock.fee.toFixed(8),
        ticker: buyingFees.ticker,
        postProcess: 'capitalizeFirstChar',
@@ -4782,10 +4782,10 @@ export const createSellOrder = async (data, isFromExtension) => {
   try {
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_sell_order', {
+        text1: i18n.t('question:permission.sell_order', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: i18n.t('question:permission_order_detail', {
+        text2: i18n.t('question:permission.order_detail', {
           qort_amount: data.qortAmount,
           foreign_amount: parsedForeignAmount,
           ticker: data.foreignBlockchain,
@@ -4871,10 +4871,10 @@ export const cancelSellOrder = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1: i18n.t('question:permission_cancel_sell_order', {
+        text1: i18n.t('question:permission.cancel_sell_order', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: i18n.t('question:permission_order_detail', {
+        text2: i18n.t('question:permission.order_detail', {
           qort_amount: resData.qortAmount,
           foreign_amount: resData.expectedForeignAmount,
           ticker: resData.foreignBlockchain,
@@ -5042,7 +5042,7 @@ export const adminAction = async (data, isFromExtension) => {
       );
   }
   // Prepare the permission prompt text
-  let permissionText = i18n.t('question:permission_perform_admin_action', {
+  let permissionText = i18n.t('question:permission.perform_admin_action', {
     type: data.type,
     postProcess: 'capitalizeFirstChar',
   });
@@ -5050,7 +5050,7 @@ export const adminAction = async (data, isFromExtension) => {
   if (data.value) {
     permissionText +=
       ' ' +
-      i18n.t('question:permission_perform_admin_action_with_value', {
+      i18n.t('question:permission.perform_admin_action_with_value', {
         value: data.value,
         postProcess: 'capitalizeFirstChar',
       });
@@ -5140,10 +5140,10 @@ export const signTransaction = async (data, isFromExtension) => {
   const resPermission = await getUserPermission(
     {
       text1: shouldProcess
-        ? i18n.t('question:permission_sign_process_transaction', {
+        ? i18n.t('question:permission.sign_process_transaction', {
             postProcess: 'capitalizeFirstChar',
           })
-        : i18n.t('question:permission_sign_transaction', {
+        : i18n.t('question:permission.sign_transaction', {
             postProcess: 'capitalizeFirstChar',
           }),
       highlightedText: i18n.t(
@@ -5353,7 +5353,7 @@ export const registerNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('REGISTER_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_register_name', {
+      text1: i18n.t('question:permission.register_name', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: data.name,
@@ -5399,7 +5399,7 @@ export const updateNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('UPDATE_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_register_name', {
+      text1: i18n.t('question:permission.register_name', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: data.newName,
@@ -5462,7 +5462,7 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('LEAVE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_leave_group', {
+      text1: i18n.t('question:permission.leave_group', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: `${groupInfo.groupName}`,
@@ -5529,7 +5529,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_invite', {
+      text1: i18n.t('question:permission.invite', {
         invitee: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5604,7 +5604,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_KICK');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_kick', {
+      text1: i18n.t('question:permission.kick', {
         partecipant: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5679,7 +5679,7 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_ban', {
+      text1: i18n.t('question:permission.ban', {
         partecipant: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5754,7 +5754,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_cancel_ban', {
+      text1: i18n.t('question:permission.cancel_ban', {
         partecipant: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5827,7 +5827,7 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('ADD_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_add_admin', {
+      text1: i18n.t('question:permission.add_admin', {
         invitee: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5900,7 +5900,7 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('REMOVE_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_remove_admin', {
+      text1: i18n.t('question:permission.remove_admin', {
         partecipant: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -5973,7 +5973,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_cancel_group_invite', {
+      text1: i18n.t('question:permission.cancel_group_invite', {
         invitee: displayInvitee || qortalAddress,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -6037,7 +6037,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_create_group', {
+      text1: i18n.t('question:permission.create_group', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: i18n.t('group:group.group_name', {
@@ -6125,10 +6125,10 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_update_group', {
+      text1: i18n.t('question:permission.update_group', {
         postProcess: 'capitalizeFirstChar',
       }),
-      text2: i18n.t('question:permission_update_group_detail', {
+      text2: i18n.t('question:permission.update_group_detail', {
         owner: displayInvitee || newOwner,
         postProcess: 'capitalizeFirstChar',
       }),
@@ -6288,11 +6288,11 @@ export const sellNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_sell_name_transaction', {
+      text1: i18n.t('question:permission.sell_name_transaction', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: i18n.t(
-        'question:permission_sell_name_transaction_detail',
+        'question:permission.sell_name_transaction_detail',
         {
           name: name,
           price: sellPrice,
@@ -6350,7 +6350,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_sell_name_cancel', {
+      text1: i18n.t('question:permission.sell_name_cancel', {
         postProcess: 'capitalizeFirstChar',
       }),
       highlightedText: i18n.t('question:name', {
@@ -6411,10 +6411,10 @@ export const buyNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('BUY_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_buy_name', {
+      text1: i18n.t('question:permission.buy_name', {
         postProcess: 'capitalizeFirstChar',
       }),
-      highlightedText: i18n.t('question:permission_buy_name_detail', {
+      highlightedText: i18n.t('question:permission.buy_name_detail', {
         name: name,
         price: sellPrice,
         postProcess: 'capitalizeFirstChar',
@@ -6443,7 +6443,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
 export const signForeignFees = async (data, isFromExtension) => {
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_sign_fee', {
+      text1: i18n.t('question:permission.sign_fee', {
         postProcess: 'capitalizeFirstChar',
       }),
     },
@@ -6711,7 +6711,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_pay_publish', {
+      text1: i18n.t('question:permission.pay_publish', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: i18n.t('question:assets_used_pay', {
@@ -6975,7 +6975,7 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:permission_transfer_asset', {
+      text1: i18n.t('question:permission.transfer_asset', {
         postProcess: 'capitalizeFirstChar',
       }),
       text2: i18n.t('question:asset_name', {
