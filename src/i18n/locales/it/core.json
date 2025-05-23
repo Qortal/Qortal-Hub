@@ -8,7 +8,7 @@
     "add_reaction": "aggiungi reazione",
     "add_theme": "aggiungi tema",
     "backup_account": "account di backup",
-    "backup_wallet": "portafoglio di backup",
+    "backup_wallet": "wallet di backup",
     "cancel": "cancella",
     "cancel_invitation": "annulla l'invito",
     "change": "modifica",
@@ -374,16 +374,16 @@
   "title": "titolo",
   "to": "a",
   "tutorial": "tutorial",
-  "url": "uRL",
+  "url": "URL",
   "user_lookup": "ricerca utente",
   "vote": "votare",
   "vote_other": "{{ count }} votes",
   "zip": "zip",
   "wallet": {
-    "litecoin": "portafoglio litecoin",
-    "qortal": "portafoglio Qortale",
-    "wallet": "portafoglio",
-    "wallet_other": "portafogli"
+    "litecoin": "wallet litecoin",
+    "qortal": "wallet Qortal",
+    "wallet": "wallet",
+    "wallet_other": "wallet"
   },
   "website": "sito web",
   "welcome": "benvenuto"
