@@ -10,7 +10,7 @@
     "navigation": "2. Приложения навигации"
   },
   "initial": {
-    "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
+    "recommended_qort_qty": "в вашем кошельке должно быть как минимум {{ quantity }} QORT",
     "explore": "исследовать",
     "general_chat": "Общий чат",
     "getting_started": "начиная",
