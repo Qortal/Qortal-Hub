@@ -1398,7 +1398,9 @@ export const publishQDNResource = async (
     (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
-        label: 'accept app fee',
+        label: i18n.t('question:accept_app_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
   }
   if (!!data?.encrypt) {
@@ -1490,8 +1492,13 @@ export const checkArrrSyncStatus = async (seed) => {
     }
   }
 
-  // If we exceed 6 tries, throw an error
-  throw new Error('Failed to synchronize after 36 attempts');
+  // If we exceed N tries, throw an error
+  throw new Error(
+    i18n.t('question:message.error.synchronization_attempts', {
+      quantity: 36,
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const publishMultipleQDNResources = async (
@@ -1501,12 +1508,13 @@ export const publishMultipleQDNResources = async (
 ) => {
   const requiredFields = ['resources'];
   const missingFields: string[] = [];
-  let feeAmount = null;
+
   requiredFields.forEach((field) => {
     if (!data[field]) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
     const errorMsg = i18n.t('question:message.error.missing_fields', {
@@ -1515,24 +1523,38 @@ export const publishMultipleQDNResources = async (
     });
     throw new Error(errorMsg);
   }
+
   const resources = data.resources;
   if (!Array.isArray(resources)) {
-    throw new Error('Invalid data');
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   if (resources.length === 0) {
-    throw new Error('No resources to publish');
+    throw new Error(
+      i18n.t('question:message.error.no_resources_publish', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   const encrypt = data?.encrypt;
 
   for (const resource of resources) {
     const resourceEncrypt = encrypt && resource?.disableEncrypt !== true;
+
     if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
-      const errorMsg = 'Only encrypted data can go into private services';
+      const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     } else if (resourceEncrypt && !resource?.service.endsWith('_PRIVATE')) {
-      const errorMsg =
-        'For an encrypted publish please use a service that ends with _PRIVATE';
+      const errorMsg = i18n.t('question:message.error.use_private_service', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
   }
@@ -1540,6 +1562,7 @@ export const publishMultipleQDNResources = async (
   const fee = await getFee('ARBITRARY');
   const registeredName = await getNameInfo();
   const name = registeredName;
+
   if (!name) {
     throw new Error(
       i18n.t('question:message.error.registered_name', {
@@ -1547,9 +1570,11 @@ export const publishMultipleQDNResources = async (
       })
     );
   }
+
   const appFee = data?.appFee ? +data.appFee : undefined;
   const appFeeRecipient = data?.appFeeRecipient;
   let hasAppFee = false;
+
   if (appFee && appFee > 0 && appFeeRecipient) {
     hasAppFee = true;
   }
@@ -1561,7 +1586,9 @@ export const publishMultipleQDNResources = async (
     (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
-        label: 'accept app fee',
+        label: i18n.t('question:accept_app_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
   }
   if (data?.encrypt) {
@@ -1575,8 +1602,6 @@ export const publishMultipleQDNResources = async (
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
-
-  
       .resource-container {
         display: flex;
         flex-direction: column;
@@ -1636,6 +1661,7 @@ export const publishMultipleQDNResources = async (
     },
     isFromExtension
   );
+
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
     throw new Error(
@@ -1644,7 +1670,15 @@ export const publishMultipleQDNResources = async (
       })
     );
   }
-  let failedPublishesIdentifiers = [];
+
+  type FailedPublish = {
+    reason: string;
+    identifier: any;
+    service: any;
+  };
+
+  const failedPublishesIdentifiers: FailedPublish[] = [];
+
   for (const resource of resources) {
     try {
       const requiredFields = ['service'];
@@ -1668,7 +1702,12 @@ export const publishMultipleQDNResources = async (
         continue;
       }
       if (!resource.file && !resource.data64 && !resource?.base64) {
-        const errorMsg = 'No data or file was submitted';
+        const errorMsg = i18n.t(
+          'question:message.error.no_data_file_submitted',
+          {
+            postProcess: 'capitalizeFirstChar',
+          }
+        );
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1698,7 +1737,9 @@ export const publishMultipleQDNResources = async (
         identifier = 'default';
       }
       if (!resourceEncrypt && service.endsWith('_PRIVATE')) {
-        const errorMsg = 'Only encrypted data can go into private services';
+        const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
+          postProcess: 'capitalizeFirstChar',
+        });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1771,7 +1812,11 @@ export const publishMultipleQDNResources = async (
           }, 1000);
         });
       } catch (error) {
-        const errorMsg = error.message || 'Upload failed';
+        const errorMsg =
+          error.message ||
+          i18n.t('question:message.error.upload', {
+            postProcess: 'capitalizeFirstChar',
+          });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1780,7 +1825,11 @@ export const publishMultipleQDNResources = async (
       }
     } catch (error) {
       failedPublishesIdentifiers.push({
-        reason: error?.message || 'Unknown error',
+        reason:
+          error?.message ||
+          i18n.t('question:message.error.unknown_error', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         identifier: resource.identifier,
         service: resource.service,
       });
@@ -1788,7 +1837,9 @@ export const publishMultipleQDNResources = async (
   }
   if (failedPublishesIdentifiers.length > 0) {
     const obj = {
-      message: 'Some resources have failed to publish.',
+      message: i18n.t('question:message.error.resources_publish', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     };
     obj['error'] = {
       unsuccessfulPublishes: failedPublishesIdentifiers,
@@ -1810,11 +1861,13 @@ export const publishMultipleQDNResources = async (
 export const voteOnPoll = async (data, isFromExtension) => {
   const requiredFields = ['pollName', 'optionIndex'];
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field] && data[field] !== 0) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
     const errorMsg = i18n.t('question:message.error.missing_fields', {
@@ -1823,6 +1876,7 @@ export const voteOnPoll = async (data, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+
   const pollName = data.pollName;
   const optionIndex = data.optionIndex;
   let pollInfo = null;
@@ -1864,7 +1918,12 @@ export const voteOnPoll = async (data, isFromExtension) => {
     );
     return resVoteOnPoll;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to vote on the poll.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.poll_vote', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -1881,6 +1940,7 @@ export const createPoll = async (data, isFromExtension) => {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
     const errorMsg = i18n.t('question:message.error.missing_fields', {
@@ -1889,10 +1949,10 @@ export const createPoll = async (data, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+
   const pollName = data.pollName;
   const pollDescription = data.pollDescription;
   const pollOptions = data.pollOptions;
-  const pollOwnerAddress = data.pollOwnerAddress;
   try {
     const resCreatePoll = await _createPoll(
       {
@@ -1904,7 +1964,12 @@ export const createPoll = async (data, isFromExtension) => {
     );
     return resCreatePoll;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to created poll.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.poll_create', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -1925,7 +1990,9 @@ function checkValue(value) {
     return 'object';
   } else {
     throw new Error(
-      'Field fullContent is in an invalid format. Either use a string, base64 or an object.'
+      i18n.t('question:message.error.invalid_fullcontent', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
 }
@@ -1938,7 +2005,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   const isRecipient = groupId === undefined;
   const chatReference = data?.chatReference;
   if (groupId === undefined && recipient === undefined) {
-    throw new Error('Please provide a recipient or groupId');
+    throw new Error(
+      i18n.t('question:provide_recipient_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   let fullMessageObjectType;
   if (fullMessageObject) {
@@ -1954,9 +2025,18 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to send this chat message?',
-        text2: `To: ${isRecipient ? recipient : `group ${groupId}`}`,
+        text1: i18n.t('question:permission_send_chat_message', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: isRecipient
+          ? i18n.t('question:to_recipient', {
+              recipient: recipient,
+              postProcess: 'capitalizeFirstChar',
+            })
+          : i18n.t('question:to_group', {
+              group_id: groupId,
+              postProcess: 'capitalizeFirstChar',
+            }),
         text3: fullMessageObject
           ? fullMessageObjectType === 'string'
             ? `${fullMessageObject?.slice(0, 25)}${fullMessageObject?.length > 25 ? '...' : ''}`
@@ -1964,7 +2044,9 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
           : `${message?.slice(0, 25)}${message?.length > 25 ? '...' : ''}`,
         checkbox1: {
           value: false,
-          label: 'Always allow chat messages from this app',
+          label: i18n.t('question:always_chat_messages', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2147,7 +2229,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       }
       return _response;
     } else {
-      throw new Error('Please enter a recipient or groupId');
+      throw new Error(
+        i18n.t('question:provide_recipient_group_id', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else {
     throw new Error(
@@ -2198,7 +2284,9 @@ export const joinGroup = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Confirm joining the group:',
+      text1: i18n.t('question:message.generic.confirm_join_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
@@ -2276,10 +2364,18 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       const fileExtension = mimeToExtensionMap[mimeType] || backupExention;
       let fileHandleOptions = {};
       if (!mimeType) {
-        throw new Error('A mimeType could not be derived');
+        throw new Error(
+          i18n.t('question:message.error.mime_type', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       if (!fileExtension) {
-        throw new Error('A file extension could not be derived');
+        throw new Error(
+          i18n.t('question:message.error.file_extension', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       if (fileExtension && mimeType) {
         fileHandleOptions = {
@@ -2299,7 +2395,11 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       );
       return true;
     } else {
-      throw new Error('User declined to save file');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_save_file', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
     throw new Error(
@@ -2321,12 +2421,15 @@ export const deployAt = async (data, isFromExtension) => {
     'assetId',
     'type',
   ];
+
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field] && data[field] !== 0) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
     const errorMsg = i18n.t('question:message.error.missing_fields', {
@@ -2335,6 +2438,7 @@ export const deployAt = async (data, isFromExtension) => {
     });
     throw new Error(errorMsg);
   }
+
   try {
     const resDeployAt = await _deployAt(
       {
@@ -2379,7 +2483,10 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
 
   if (data?.coin === 'ARRR' && isGateway)
     throw new Error(
-      'Cannot view ARRR wallet info through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_wallet_local_node', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
 
   const value =
@@ -2396,12 +2503,15 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to get your wallet information?',
+        text1: i18n.t('question:permission_get_wallet_info', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2514,7 +2624,10 @@ export const getWalletBalance = async (
 
   if (data?.coin === 'ARRR' && isGateway)
     throw new Error(
-      'Cannot view ARRR balance through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_balance_local_node', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
 
   const value =
@@ -2577,7 +2690,10 @@ export const getWalletBalance = async (
         return res;
       } catch (error) {
         throw new Error(
-          error?.message || 'Fetch Wallet Failed. Please try again'
+          error?.message ||
+            i18n.t('question:message.error.fetch_wallet', {
+              postProcess: 'capitalizeFirstChar',
+            })
         );
       }
     } else {
@@ -2661,7 +2777,10 @@ const getPirateWallet = async (arrrSeed58) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
-      'Retrieving PIRATECHAIN balance is not allowed through a gateway.'
+      i18n.t('question:message.error.gateway_retrieve_balance', {
+        token: 'PIRATECHAIN',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
   const bodyToString = arrrSeed58;
@@ -2750,7 +2869,12 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
     throw new Error(errorMsg);
   }
   if (data?.coin === 'ARRR') {
-    throw new Error('ARRR is not supported for this call.');
+    throw new Error(
+      i18n.t('question:message.error.token_not_supported', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const value =
     (await getPermission(`getUserWalletInfo-${appInfo?.name}-${data.coin}`)) ||
@@ -2764,12 +2888,15 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to retrieve your wallet information',
+        text1: i18n.t('question:permission_get_wallet_info', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet info to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2962,7 +3089,12 @@ export const getCrossChainServerInfo = async (data) => {
     }
     return res.servers;
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving server info');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.server_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3641,7 +3773,9 @@ export const sendCoin = async (data, isFromExtension) => {
 
   if (checkCoin !== 'QORT' && isGateway)
     throw new Error(
-      'Cannot send a non-QORT coin through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_non_qort_local_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   if (checkCoin === 'QORT') {
     // Params: data.coin, data.recipient, data.amount, data.fee
@@ -5022,7 +5156,11 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
     }
 
     default:
-      throw new Error('Invalid type');
+      throw new Error(
+        i18n.t('question:message.error.invalid_type', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
   }
 };
 
