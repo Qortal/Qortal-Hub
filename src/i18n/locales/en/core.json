@@ -42,6 +42,7 @@
     "get_qort": "get QORT",
     "get_qort_trade": "get QORT at Q-Trade",
     "hide": "hide",
+    "hide_qr_code": "hide QR code",
     "import": "import",
     "import_theme": "import theme",
     "invite": "invite",
@@ -77,6 +78,7 @@
     "search_apps": "search for apps",
     "search_groups": "search for groups",
     "search_chat_text": "search chat text",
+    "see_qr_code": "see QR code",
     "select_app_type": "select App Type",
     "select_category": "select Category",
     "select_name_app": "select Name/App",
@@ -96,6 +98,7 @@
     "update_app": "update your app",
     "vote": "vote"
   },
+  "address_your": "your address",
   "admin": "admin",
   "admin_other": "admins",
   "all": "all",

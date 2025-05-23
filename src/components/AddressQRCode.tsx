@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { TextP } from '../styles/App-styles';
 import { Box, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export const AddressQRCode = ({ targetAddress }) => {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation(['auth', 'core', 'group', 'question']);
+
   return (
     <Box
       sx={{
@@ -24,7 +27,13 @@ export const AddressQRCode = ({ targetAddress }) => {
           setOpen((prev) => !prev);
         }}
       >
-        {open ? 'Hide QR code' : 'See QR code'}
+        {open
+          ? t('core:action.hide_qr_code', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('core:action.see_qr_code', {
+              postProcess: 'capitalizeFirstChar',
+            })}
       </Typography>
 
       {open && (
@@ -55,7 +64,7 @@ export const AddressQRCode = ({ targetAddress }) => {
                 fontWeight: 500,
               }}
             >
-              Your address
+              {t('core:address_your', { postProcess: 'capitalizeFirstChar' })}
             </TextP>
             <QRCode
               value={targetAddress} // Your address here
