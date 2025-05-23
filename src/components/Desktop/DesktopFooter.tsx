@@ -7,6 +7,7 @@ import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const IconWrapper = ({
   children,
@@ -65,8 +66,8 @@ export const DesktopFooter = ({
   setIsOpenSideViewGroups,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   if (hide) return;
   return (
@@ -93,7 +94,10 @@ export const DesktopFooter = ({
             goToHome();
           }}
         >
-          <IconWrapper label="Home" selected={isHome}>
+          <IconWrapper
+            label={t('core:home', { postProcess: 'capitalizeFirstChar' })}
+            selected={isHome}
+          >
             <HomeIcon height={30} />
           </IconWrapper>
         </ButtonBase>
@@ -105,7 +109,12 @@ export const DesktopFooter = ({
             setIsOpenSideViewGroups(false);
           }}
         >
-          <IconWrapper label="Apps" selected={isApps}>
+          <IconWrapper
+            label={t('core:app_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            selected={isApps}
+          >
             <img src={AppIcon} />
           </IconWrapper>
         </ButtonBase>
@@ -115,7 +124,12 @@ export const DesktopFooter = ({
             setDesktopSideView('groups');
           }}
         >
-          <IconWrapper label="Groups" selected={isGroups}>
+          <IconWrapper
+            label={t('group:group.group_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            selected={isGroups}
+          >
             <HubsIcon
               height={30}
               color={
@@ -134,7 +148,12 @@ export const DesktopFooter = ({
             setDesktopSideView('directs');
           }}
         >
-          <IconWrapper label="Messaging" selected={isDirects}>
+          <IconWrapper
+            label={t('group:group.messaging', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            selected={isDirects}
+          >
             <MessagingIcon
               height={30}
               color={
@@ -157,7 +176,10 @@ export const DesktopFooter = ({
               setIsOpenSideViewGroups(false);
             }}
           >
-            <IconWrapper label="Dev Mode" selected={isApps}>
+            <IconWrapper
+              label={t('core:dev_mode', { postProcess: 'capitalizeFirstChar' })}
+              selected={isApps}
+            >
               <img src={AppIcon} />
             </IconWrapper>
           </ButtonBase>

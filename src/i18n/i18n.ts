@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import HttpBackend from 'i18next-http-backend';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   capitalizeAll,
@@ -14,6 +15,8 @@ export const supportedLanguages = {
   fr: { name: 'Français', flag: '🇫🇷' },
   it: { name: 'Italiano', flag: '🇮🇹' },
   ru: { name: 'Русский', flag: '🇷🇺' },
+  ja: { name: '日本語', flag: '🇯🇵' },
+  zh: { name: '中文', flag: '🇨🇳' },
 };
 
 // Load all JSON files under locales/**/*
@@ -35,6 +38,7 @@ for (const path in modules) {
 }
 
 i18n
+  .use(HttpBackend)
   .use(initReactI18next)
   .use(LanguageDetector)
   .use(capitalizeAll as any)
@@ -43,9 +47,12 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    lng: navigator.language,
+    lng: localStorage.getItem('i18nextLng') || 'en',
     supportedLngs: Object.keys(supportedLanguages),
-    ns: ['core', 'auth', 'group', 'tutorial'],
+    backend: {
+      loadPath: '/locales/{{lng}}/{{ns}}.json',
+    },
+    ns: ['auth', 'core', 'group', 'question', 'tutorial'],
     defaultNS: 'core',
     interpolation: { escapeValue: false },
     react: { useSuspense: false },

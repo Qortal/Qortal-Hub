@@ -1560,7 +1560,9 @@ function App() {
             executeEvent('open-apps-mode', {});
           }}
         >
-          {t('core:action.get_qort', { postProcess: 'capitalizeFirstChar' })}
+          {t('core:action.get_qort_trade', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </TextP>
       </AuthenticatedContainerInnerLeft>
     );

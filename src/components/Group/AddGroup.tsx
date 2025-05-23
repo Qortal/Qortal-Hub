@@ -233,7 +233,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             </Typography>
 
             <IconButton
-              aria-label="close"
+              aria-label={t('core:action.close', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               color="inherit"
               edge="start"
               onClick={handleClose}
@@ -259,7 +261,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label="basic tabs example"
+              aria-label={t('core:basic_tabs_example', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               variant={'fullWidth'}
               scrollButtons="auto"
               allowScrollButtonsMobile
@@ -384,7 +388,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     labelId="demo-simple-select-label"
                     id="demo-simple-select"
                     value={groupType}
-                    label="Group Type"
+                    label={t('group:group.type', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     onChange={handleChangeGroupType}
                   >
                     <MenuItem value={1}>
@@ -427,7 +433,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:approval_threshold', {
+                      {t('group:message.generic.group_approval_threshold', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -436,7 +442,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={approvalThreshold}
-                      label="Group Approval Threshold"
+                      label={t('group:group.approval_threshold', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeApprovalThreshold}
                     >
                       <MenuItem value={0}>
@@ -465,7 +473,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:block_delay.minimum', {
+                      {t('group:message.generic.block_delay_minimum', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -474,7 +482,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={minBlock}
-                      label="Minimum Block delay"
+                      label={t('group:block_delay.minimum', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeMinBlock}
                     >
                       <MenuItem value={5}>
@@ -524,7 +534,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     }}
                   >
                     <Label>
-                      {t('group:block_delay.maximum', {
+                      {t('group:message.generic.block_delay_maximum', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Label>
@@ -533,7 +543,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
                       labelId="demo-simple-select-label"
                       id="demo-simple-select"
                       value={maxBlock}
-                      label="Maximum Block delay"
+                      label={t('group:block_delay.minimum', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                       onChange={handleChangeMaxBlock}
                     >
                       <MenuItem value={60}>

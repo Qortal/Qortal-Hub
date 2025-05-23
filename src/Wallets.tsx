@@ -362,7 +362,9 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               })}
             </Label>
             <Input
-              placeholder="Name"
+              placeholder={t('core:name', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               value={seedName}
               onChange={(e) => setSeedName(e.target.value)}
             />
@@ -370,12 +372,14 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
             <Spacer height="7px" />
 
             <Label>
-              {t('auth:seed', {
+              {t('auth:seed_phrase', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </Label>
             <PasswordField
-              placeholder="Seed-phrase"
+              placeholder={t('auth:seed_phrase', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               id="standard-adornment-password"
               value={seedValue}
               onChange={(e) => setSeedValue(e.target.value)}
@@ -537,7 +541,9 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             setIsEdit(true);
           }}
           edge="end"
-          aria-label="edit"
+          aria-label={t('core:action.edit', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         >
           <EditIcon />
         </IconButton>
@@ -554,7 +560,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             })}
           </Label>
           <Input
-            placeholder="Name"
+            placeholder={t('core:name', { postProcess: 'capitalizeFirstChar' })}
             value={name}
             onChange={(e) => setName(e.target.value)}
             sx={{
@@ -570,7 +576,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             })}
           </Label>
           <Input
-            placeholder="Note"
+            placeholder={t('core:note', { postProcess: 'capitalizeFirstChar' })}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             inputProps={{

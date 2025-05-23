@@ -476,7 +476,9 @@ export const NewThread = ({
                   onChange={(e) => {
                     setThreadTitle(e.target.value);
                   }}
-                  placeholder="Thread Title"
+                  placeholder={t('core:thread_title', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                   disableUnderline
                   autoComplete="off"
                   autoCorrect="off"

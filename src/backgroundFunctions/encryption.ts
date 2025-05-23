@@ -1,4 +1,5 @@
 import { getBaseApi } from '../background';
+import i18n from '../i18n/i18n';
 import {
   createSymmetricKeyAndNonce,
   decryptGroupData,
@@ -40,7 +41,11 @@ async function findUsableApi() {
     }
   }
 
-  throw new Error('No usable API found');
+  throw new Error(
+    i18n.t('question:message.error.no_api_found', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 }
 
 async function getSaveWallet() {
@@ -186,7 +191,11 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
         numberOfMembers: groupmemberPublicKeys.length,
       };
     } else {
-      throw new Error('Cannot encrypt content');
+      throw new Error(
+        i18n.t('auth:message.error.encrypt_content', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error: any) {
     throw new Error(error.message);
@@ -249,7 +258,11 @@ export const encryptAndPublishSymmetricKeyGroupChatForAdmins = async ({
         numberOfMembers: groupmemberPublicKeys.length,
       };
     } else {
-      throw new Error('Cannot encrypt content');
+      throw new Error(
+        i18n.t('auth:message.error.encrypt_content', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error: any) {
     throw new Error(error.message);
@@ -263,7 +276,12 @@ export const publishGroupEncryptedResource = async ({
   try {
     if (encryptedData && identifier) {
       const registeredName = await getNameInfo();
-      if (!registeredName) throw new Error('You need a name to publish');
+      if (!registeredName)
+        throw new Error(
+          i18n.t('core:message.generic.name_publish', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const data = await publishData({
         registeredName,
         data: encryptedData,
@@ -274,7 +292,11 @@ export const publishGroupEncryptedResource = async ({
       });
       return data;
     } else {
-      throw new Error('Cannot encrypt content');
+      throw new Error(
+        i18n.t('auth:message.error.encrypt_content', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error: any) {
     throw new Error(error.message);
@@ -298,7 +320,12 @@ export const publishOnQDN = async ({
 }) => {
   if (data && service) {
     const registeredName = name || (await getNameInfo());
-    if (!registeredName) throw new Error('You need a name to publish');
+    if (!registeredName)
+      throw new Error(
+        i18n.t('core:message.generic.name_publish', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     const res = await publishData({
       registeredName,

@@ -118,7 +118,10 @@ export const NotAuthenticated = ({
             window.sendMessage('setCustomNodes', copyPrev).catch((error) => {
               console.error(
                 'Failed to set custom nodes:',
-                error.message || 'An error occurred'
+                error.message ||
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
               );
             });
             return copyPrev;
@@ -175,7 +178,10 @@ export const NotAuthenticated = ({
       .catch((error) => {
         console.error(
           'Failed to get custom nodes from storage:',
-          error.message || 'An error occurred'
+          error.message ||
+            t('core:message.error.generic', {
+              postProcess: 'capitalizeFirstChar',
+            })
         );
       });
   }, []);
@@ -238,7 +244,11 @@ export const NotAuthenticated = ({
       const stillHasLocal = await checkIfUserHasLocalNode();
 
       if (isLocalKey && !stillHasLocal && !fromStartUp) {
-        throw new Error('Please turn on your local node');
+        throw new Error(
+          t('auth:message.generic.turn_local_node', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       //check custom nodes
       // !gateways.some(gateway => apiKey?.url?.includes(gateway))
@@ -297,7 +307,10 @@ export const NotAuthenticated = ({
                   .catch((error) => {
                     console.error(
                       'Failed to set custom nodes:',
-                      error.message || 'An error occurred'
+                      error.message ||
+                        t('core:message.error.generic', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
                     );
                   });
                 return copyPrev;
@@ -346,9 +359,13 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              'Failed to set API key:',
+              it('auth:message.error.set_apikey', {
+                postProcess: 'capitalizeFirstChar',
+              }),
               error.message ||
-                t('core:error', { postProcess: 'capitalizeFirstChar' })
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
             );
           });
       } else {
@@ -381,9 +398,11 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              'Failed to set API key:',
+              it('auth:message.error.set_apikey', {
+                postProcess: 'capitalizeFirstChar',
+              }),
               error.message ||
-                t('core:error', {
+                t('core:message.error.generic', {
                   postProcess: 'capitalizeFirstChar',
                 })
             );
@@ -451,7 +470,10 @@ export const NotAuthenticated = ({
       .catch((error) => {
         console.error(
           'Failed to set custom nodes:',
-          error.message || 'An error occurred'
+          error.message ||
+            t('core:message.error.generic', {
+              postProcess: 'capitalizeFirstChar',
+            })
         );
       });
   };
@@ -547,7 +569,9 @@ export const NotAuthenticated = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
+
               <Spacer height="10px" />
+
               <Typography
                 color="inherit"
                 sx={{
@@ -624,9 +648,9 @@ export const NotAuthenticated = ({
             </Typography>
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 gap: '10px',
-                alignItems: 'center',
                 justifyContent: 'center',
                 width: '100%',
               }}
@@ -658,8 +682,13 @@ export const NotAuthenticated = ({
                           })
                           .catch((error) => {
                             console.error(
-                              'Failed to set API key:',
-                              error.message || 'An error occurred'
+                              it('auth:message.error.set_apikey', {
+                                postProcess: 'capitalizeFirstChar',
+                              }),
+                              error.message ||
+                                t('core:message.error.generic', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })
                             );
                           });
                       }
@@ -807,8 +836,13 @@ export const NotAuthenticated = ({
                             })
                             .catch((error) => {
                               console.error(
-                                'Failed to set API key:',
-                                error.message || 'An error occurred'
+                                it('auth:message.error.set_apikey', {
+                                  postProcess: 'capitalizeFirstChar',
+                                }),
+                                error.message ||
+                                  t('core:message.error.generic', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })
                               );
                             });
                         }}
@@ -868,8 +902,13 @@ export const NotAuthenticated = ({
                                 })
                                 .catch((error) => {
                                   console.error(
-                                    'Failed to set API key:',
-                                    error.message || 'An error occurred'
+                                    it('auth:message.error.set_apikey', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    }),
+                                    error.message ||
+                                      t('core:message.error.generic', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })
                                   );
                                 });
                             }}
@@ -925,14 +964,18 @@ export const NotAuthenticated = ({
                   }}
                 >
                   <Input
-                    placeholder="Url"
+                    placeholder={t('core:url', {
+                      postProcess: 'capitalizeAll',
+                    })}
                     value={url}
                     onChange={(e) => {
                       setUrl(e.target.value);
                     }}
                   />
                   <Input
-                    placeholder="Api key"
+                    placeholder={t('auth:apikey.key', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                     value={customApikey}
                     onChange={(e) => {
                       setCustomApiKey(e.target.value);
@@ -1062,7 +1105,10 @@ export const NotAuthenticated = ({
                         .catch((error) => {
                           console.error(
                             'Failed to set custom nodes:',
-                            error.message || 'An error occurred'
+                            error.message ||
+                              t('core:message.error.generic', {
+                                postProcess: 'capitalizeFirstChar',
+                              })
                           );
                         });
                       return copyPrev;

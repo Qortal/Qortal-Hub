@@ -88,6 +88,7 @@ export async function getWalletInfoCase(request, event) {
 
     try {
       const walletInfo = await getData('walletInfo').catch((error) => null);
+
       if (walletInfo) {
         event.source.postMessage(
           {
@@ -123,6 +124,7 @@ export async function getWalletInfoCase(request, event) {
   } catch (error) {
     try {
       const walletInfo = await getData('walletInfo').catch((error) => null);
+
       if (walletInfo) {
         event.source.postMessage(
           {
@@ -898,44 +900,6 @@ export async function removeAdminCase(request, event) {
   }
 }
 
-export async function notificationCase(request, event) {
-  try {
-    const notificationId = 'chat_notification_' + Date.now(); // Create a unique ID
-
-    // chrome.notifications.create(notificationId, {
-    //   type: "basic",
-    //   iconUrl: "qort.png", // Add an appropriate icon for chat notifications
-    //   title: "New Group Message!",
-    //   message: "You have received a new message from one of your groups",
-    //   priority: 2, // Use the maximum priority to ensure it's
-    // });
-    // Set a timeout to clear the notification after 'timeout' milliseconds
-    // setTimeout(() => {
-    //   chrome.notifications.clear(notificationId);
-    // }, 3000);
-
-    // event.source.postMessage(
-    //   {
-    //     requestId: request.requestId,
-    //     action: "notification",
-    //     payload: true,
-    //     type: "backgroundMessageResponse",
-    //   },
-    //   event.origin
-    // );
-  } catch (error) {
-    event.source.postMessage(
-      {
-        requestId: request.requestId,
-        action: 'notification',
-        error: 'Error displaying notifaction',
-        type: 'backgroundMessageResponse',
-      },
-      event.origin
-    );
-  }
-}
-
 export async function addTimestampEnterChatCase(request, event) {
   try {
     const { groupId, timestamp } = request.payload;
@@ -1582,6 +1546,7 @@ export async function publishOnQDNCase(request, event) {
       tag5,
       uploadType,
     } = request.payload;
+
     const response = await publishOnQDN({
       data,
       name,
@@ -1709,6 +1674,7 @@ export async function decryptGroupEncryptionCase(request, event) {
   try {
     const { data } = request.payload;
     const response = await decryptGroupEncryption({ data });
+
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -1765,11 +1731,13 @@ export async function encryptSingleCase(request, event) {
 export async function decryptSingleCase(request, event) {
   try {
     const { data, secretKeyObject, skipDecodeBase64 } = request.payload;
+
     const response = await decryptSingleFunc({
       messages: data,
       secretKeyObject,
       skipDecodeBase64,
     });
+
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -1843,9 +1811,11 @@ export async function resumeAllQueuesCase(request, event) {
     );
   }
 }
+
 export async function checkLocalCase(request, event) {
   try {
     const response = await checkLocalFunc();
+
     event.source.postMessage(
       {
         requestId: request.requestId,
@@ -1928,6 +1898,7 @@ export async function decryptDirectCase(request, event) {
     );
   }
 }
+
 export async function sendChatGroupCase(request, event) {
   try {
     const {
@@ -1964,6 +1935,7 @@ export async function sendChatGroupCase(request, event) {
     );
   }
 }
+
 export async function sendChatDirectCase(request, event) {
   try {
     const {
@@ -2101,8 +2073,8 @@ export async function removeRewardShareCase(request, event) {
     });
 
     const signedBytes = Base58.encode(tx.signedBytes);
-
     const res = await processTransactionVersion2(signedBytes);
+
     if (!res?.signature)
       throw new Error('Transaction was not able to be processed');
     event.source.postMessage(

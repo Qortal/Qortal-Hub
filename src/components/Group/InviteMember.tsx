@@ -92,7 +92,9 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
       <Input
         value={value}
-        placeholder="Name or address"
+        placeholder={t('auth:message.generic.name_address', {
+          postProcess: 'capitalizeFirstChar',
+        })}
         onChange={(e) => setValue(e.target.value)}
       />
 

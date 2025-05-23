@@ -208,7 +208,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         type: 'error',
         message:
           error?.message ||
-          t('core:message.error.unable_rate', {
+          t('core:message.error.rate', {
             postProcess: 'capitalizeFirstChar',
           }),
       });

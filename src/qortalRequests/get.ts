@@ -86,7 +86,8 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import utils from '../utils/utils';
 import ShortUniqueId from 'short-unique-id';
 import { isValidBase64WithDecode } from '../utils/decode';
-//TODO translate
+import i18n from 'i18next';
+
 const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
@@ -132,7 +133,6 @@ export async function retryTransaction(
   throwError,
   retries = MAX_RETRIES
 ) {
-  // TODO transalte
   let attempt = 0;
   while (attempt < retries) {
     try {
@@ -141,11 +141,25 @@ export async function retryTransaction(
       console.error(`Attempt ${attempt + 1} failed: ${error.message}`);
       attempt++;
       if (attempt === retries) {
-        console.error('Max retries reached. Skipping transaction.');
+        console.error(
+          i18n.t('question:message.generic.max_retry_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         if (throwError) {
-          throw new Error(error?.message || 'Unable to process transaction');
+          throw new Error(
+            error?.message ||
+              i18n.t('question:message.error.process_transaction', {
+                postProcess: 'capitalizeFirstChar',
+              })
+          );
         } else {
-          throw new Error(error?.message || 'Unable to process transaction');
+          throw new Error(
+            error?.message ||
+              i18n.t('question:message.error.process_transaction', {
+                postProcess: 'capitalizeFirstChar',
+              })
+          );
         }
       }
       await new Promise((res) => setTimeout(res, 10000));
@@ -168,10 +182,21 @@ export const _createPoll = async (
   if (!skipPermission) {
     resPermission = await getUserPermission(
       {
-        text1: 'You are requesting to create the poll below:',
-        text2: `Poll: ${pollName}`,
-        text3: `Description: ${pollDescription}`,
-        text4: `Options: ${options?.join(', ')}`,
+        text1: i18n.t('question:request_create_poll', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:poll', {
+          name: pollName,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:description', {
+          description: pollDescription,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text4: i18n.t('question:options', {
+          optionList: options?.join(', '),
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
@@ -205,11 +230,18 @@ export const _createPoll = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -221,9 +253,17 @@ const _deployAt = async (
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Would you like to deploy this AT?',
-      text2: `Name: ${name}`,
-      text3: `Description: ${description}`,
+      text1: i18n.t('question:deploy_at', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:name', {
+        name: name,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:description', {
+        description: description,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -261,11 +301,18 @@ const _deployAt = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined transaction');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -276,12 +323,21 @@ export const _voteOnPoll = async (
 ) => {
   const fee = await getFee('VOTE_ON_POLL');
   let resPermission = {};
+
   if (!skipPermission) {
     resPermission = await getUserPermission(
       {
-        text1: 'You are being requested to vote on the poll below:',
-        text2: `Poll: ${pollName}`,
-        text3: `Option: ${optionName}`,
+        text1: i18n.t('question:request_vote_poll', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:poll', {
+          name: pollName,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:option', {
+          option: optionName,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
@@ -314,11 +370,18 @@ export const _voteOnPoll = async (
     const res = await processTransactionVersion2(signedBytes);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -338,7 +401,12 @@ const handleFileMessage = (event) => {
     if (result) {
       resolve(result);
     } else {
-      reject(error || 'Failed to retrieve file');
+      reject(
+        error ||
+          i18n.t('question:message.error.retrieve_file', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   }
 };
@@ -361,19 +429,16 @@ function getFileFromContentScript(fileId) {
     // Timeout to handle no response scenario
     setTimeout(() => {
       if (fileRequestResolvers.has(requestId)) {
-        fileRequestResolvers.get(requestId).reject('Request timed out');
+        fileRequestResolvers.get(requestId).reject(
+          i18n.t('question:message.error.timeout_request', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         fileRequestResolvers.delete(requestId); // Clean up on timeout
       }
     }, 10000); // 10-second timeout
   });
 }
-
-// function sendToSaveFilePicker(data) {
-//   window.postMessage({
-//     action: "SHOW_SAVE_FILE_PICKER",
-//     payload: data,
-//   }, "*");
-// }
 
 const responseResolvers = new Map();
 
@@ -439,10 +504,14 @@ export const getUserAccount = async ({
     if (!skip) {
       resPermission = await getUserPermission(
         {
-          text1: 'Do you give this application permission to authenticate?',
+          text1: i18n.t('question:permission.authenticate', {
+            postProcess: 'capitalizeFirstChar',
+          }),
           checkbox1: {
             value: false,
-            label: 'Always authenticate automatically',
+            label: i18n.t('question:always_authenticate', {
+              postProcess: 'capitalizeFirstChar',
+            }),
           },
         },
         isFromExtension
@@ -462,10 +531,18 @@ export const getUserAccount = async ({
         publicKey,
       };
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
-    throw new Error('Unable to fetch user account');
+    throw new Error(
+      i18n.t('auth:message.error.fetch_user_account', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -476,7 +553,11 @@ export const encryptData = async (data, sender) => {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -492,7 +573,11 @@ export const encryptData = async (data, sender) => {
   if (encryptDataResponse) {
     return encryptDataResponse;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -501,13 +586,21 @@ export const encryptQortalGroupData = async (data, sender) => {
   let groupId = data?.groupId;
   let isAdmins = data?.isAdmins;
   if (!groupId) {
-    throw new Error('Please provide a groupId');
+    throw new Error(
+      i18n.t('question:message.generic.provide_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   if (data?.file || data?.blob) {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let secretKeyObject;
@@ -525,7 +618,12 @@ export const encryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdmins(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -541,7 +639,11 @@ export const encryptQortalGroupData = async (data, sender) => {
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[groupId] = {
         secretKeyObject,
@@ -562,7 +664,12 @@ export const encryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdminsAdminSpace(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -576,7 +683,11 @@ export const encryptQortalGroupData = async (data, sender) => {
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[`admins-${groupId}`] = {
         secretKeyObject,
@@ -593,7 +704,11 @@ export const encryptQortalGroupData = async (data, sender) => {
   if (resGroupEncryptedResource) {
     return resGroupEncryptedResource;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -602,11 +717,19 @@ export const decryptQortalGroupData = async (data, sender) => {
   let groupId = data?.groupId;
   let isAdmins = data?.isAdmins;
   if (!groupId) {
-    throw new Error('Please provide a groupId');
+    throw new Error(
+      i18n.t('question:message.generic.provide_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let secretKeyObject;
@@ -623,7 +746,12 @@ export const decryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdmins(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -637,7 +765,11 @@ export const decryptQortalGroupData = async (data, sender) => {
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[groupId] = {
         secretKeyObject,
@@ -657,7 +789,12 @@ export const decryptQortalGroupData = async (data, sender) => {
       const { names } = await getGroupAdmins(groupId);
 
       const publish = await getPublishesFromAdminsAdminSpace(names, groupId);
-      if (publish === false) throw new Error('No group key found.');
+      if (publish === false)
+        throw new Error(
+          i18n.t('question:message.error.no_group_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const url = await createEndpoint(
         `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
           publish.identifier
@@ -671,7 +808,11 @@ export const decryptQortalGroupData = async (data, sender) => {
       const dataint8Array = base64ToUint8Array(decryptedKey.data);
       const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
       if (!validateSecretKey(decryptedKeyToObject))
-        throw new Error('SecretKey is not valid');
+        throw new Error(
+          i18n.t('auth:message.error.invalid_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       secretKeyObject = decryptedKeyToObject;
       groupSecretkeys[`admins-${groupId}`] = {
         secretKeyObject,
@@ -688,7 +829,11 @@ export const decryptQortalGroupData = async (data, sender) => {
   if (resGroupDecryptResource) {
     return resGroupDecryptResource;
   } else {
-    throw new Error('Unable to decrypt');
+    throw new Error(
+      i18n.t('question:message.error.encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -699,7 +844,11 @@ export const encryptDataWithSharingKey = async (data, sender) => {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
   if (!data64) {
-    throw new Error('Please include data to encrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const symmetricKey = createSymmetricKeyAndNonce();
   const dataObject = {
@@ -723,7 +872,11 @@ export const encryptDataWithSharingKey = async (data, sender) => {
   if (encryptDataResponse) {
     return encryptDataResponse;
   } else {
-    throw new Error('Unable to encrypt');
+    throw new Error(
+      i18n.t('question:message.error.encrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -731,27 +884,42 @@ export const decryptDataWithSharingKey = async (data, sender) => {
   const { encryptedData, key } = data;
 
   if (!encryptedData) {
-    throw new Error('Please include data to decrypt');
+    throw new Error(
+      i18n.t('question:message.generic.include_data_decrypt', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   const decryptedData = await decryptGroupEncryptionWithSharingKey({
     data64EncryptedData: encryptedData,
     key,
   });
   const base64ToObject = JSON.parse(atob(decryptedData));
+
   if (!base64ToObject.data)
-    throw new Error('No data in the encrypted resource');
+    throw new Error(
+      i18n.t('question:message.error.no_data_encrypted_resource', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   return base64ToObject.data;
 };
 
 export const getHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Get a list of your hosted data?`,
+      text1: i18n.t('question:message.error.submit_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -772,14 +940,22 @@ export const getHostedData = async (data, isFromExtension) => {
     const dataResponse = await response.json();
     return dataResponse;
   } else {
-    throw new Error('User declined to get list of hosted resources');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const deleteHostedData = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['hostedData'];
   const missingFields: string[] = [];
@@ -790,8 +966,10 @@ export const deleteHostedData = async (data, isFromExtension) => {
   });
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Delete ${data?.hostedData?.length} hosted resources?`,
+      text1: i18n.t('question:permission.delete_hosts_resources', {
+        size: data?.hostedData?.length,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -812,13 +990,17 @@ export const deleteHostedData = async (data, isFromExtension) => {
           },
         });
       } catch (error) {
-        //error
+        console.log(error);
       }
     }
 
     return true;
   } else {
-    throw new Error('User declined delete hosted resources');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_delete_hosted_resources', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 export const decryptData = async (data) => {
@@ -859,13 +1041,21 @@ export const decryptData = async (data) => {
     const decryptedDataToBase64 = uint8ArrayToBase64(decryptedData);
     return decryptedDataToBase64;
   }
-  throw new Error('Unable to decrypt');
+  throw new Error(
+    i18n.t('question:message.error.encrypt', {
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const getListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name'];
   const missingFields: string[] = [];
@@ -876,7 +1066,10 @@ export const getListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const value = (await getPermission('qAPPAutoLists')) || false;
@@ -891,12 +1084,15 @@ export const getListItems = async (data, isFromExtension) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to',
-        text2: 'Access the list',
+        text1: i18n.t('question:permission.access_list', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: data.list_name,
         checkbox1: {
           value: value,
-          label: 'Always allow lists to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_list', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -910,19 +1106,32 @@ export const getListItems = async (data, isFromExtension) => {
   if (acceptedVar || skip) {
     const url = await createEndpoint(`/lists/${data.list_name}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     const list = await response.json();
     return list;
   } else {
-    throw new Error('User declined to share list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_share_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const addListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name', 'items'];
   const missingFields: string[] = [];
@@ -933,7 +1142,10 @@ export const addListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -942,8 +1154,10 @@ export const addListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Add the following to the list ${list_name}:`,
+      text1: i18n.t('question:permission.all_item_list', {
+        name: list_name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: items.join(', '),
     },
     isFromExtension
@@ -964,7 +1178,12 @@ export const addListItems = async (data, isFromExtension) => {
       body: bodyToString,
     });
 
-    if (!response.ok) throw new Error('Failed to add to list');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.add_to_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -973,14 +1192,22 @@ export const addListItems = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined add to list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_add_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const deleteListItems = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['list_name'];
   const missingFields: string[] = [];
@@ -991,11 +1218,19 @@ export const deleteListItems = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data?.item && !data?.items) {
-    throw new Error('Missing fields: items');
+    throw new Error(
+      i18n.t('question:message.error.missing_fields', {
+        fields: 'items',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const item = data?.item;
   const items = data?.items;
@@ -1003,8 +1238,10 @@ export const deleteListItems = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to',
-      text2: `Remove the following from the list ${list_name}:`,
+      text1: i18n.t('question:permission.remove_from_list', {
+        name: list_name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: items ? JSON.stringify(items) : item,
     },
     isFromExtension
@@ -1025,7 +1262,12 @@ export const deleteListItems = async (data, isFromExtension) => {
       body: bodyToString,
     });
 
-    if (!response.ok) throw new Error('Failed to add to list');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.add_to_list', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -1034,7 +1276,11 @@ export const deleteListItems = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined delete from list');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_delete_from_list', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1052,11 +1298,18 @@ export const publishQDNResource = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data.file && !data.data64 && !data.base64) {
-    throw new Error('No data or file was submitted');
+    throw new Error(
+      i18n.t('question:message.error.no_data_file_submitted', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
@@ -1070,8 +1323,13 @@ export const publishQDNResource = async (
   const registeredName = data?.name || (await getNameInfo());
   const name = registeredName;
   if (!name) {
-    throw new Error('User has no Qortal name');
+    throw new Error(
+      i18n.t('question:message.error.user_qortal_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   let identifier = data.identifier;
   let data64 = data.data64 || data.base64;
   const filename = data.filename;
@@ -1099,7 +1357,11 @@ export const publishQDNResource = async (
     (!data.publicKeys ||
       (Array.isArray(data.publicKeys) && data.publicKeys.length === 0))
   ) {
-    throw new Error('Encrypting data requires public keys');
+    throw new Error(
+      i18n.t('question:message.error.encryption_requires_public_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   if (data.encrypt) {
@@ -1122,7 +1384,10 @@ export const publishQDNResource = async (
       }
     } catch (error) {
       throw new Error(
-        error.message || 'Upload failed due to failed encryption'
+        error.message ||
+          i18n.t('question:message.error.upload_encryption', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     }
   }
@@ -1136,7 +1401,9 @@ export const publishQDNResource = async (
     (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
-        label: 'accept app fee',
+        label: i18n.t('question:accept_app_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
   }
   if (!!data?.encrypt) {
@@ -1144,7 +1411,9 @@ export const publishQDNResource = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to publish to QDN?',
+      text1: i18n.t('question:permission.publish_qdn', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
       text4: `name: ${registeredName}`,
@@ -1188,7 +1457,11 @@ export const publishQDNResource = async (
       throw new Error(error?.message || 'Upload failed');
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1222,8 +1495,13 @@ export const checkArrrSyncStatus = async (seed) => {
     }
   }
 
-  // If we exceed 6 tries, throw an error
-  throw new Error('Failed to synchronize after 36 attempts');
+  // If we exceed N tries, throw an error
+  throw new Error(
+    i18n.t('question:message.error.synchronization_attempts', {
+      quantity: 36,
+      postProcess: 'capitalizeFirstChar',
+    })
+  );
 };
 
 export const publishMultipleQDNResources = async (
@@ -1233,35 +1511,53 @@ export const publishMultipleQDNResources = async (
 ) => {
   const requiredFields = ['resources'];
   const missingFields: string[] = [];
-  let feeAmount = null;
+
   requiredFields.forEach((field) => {
     if (!data[field]) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
+
   const resources = data.resources;
   if (!Array.isArray(resources)) {
-    throw new Error('Invalid data');
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   if (resources.length === 0) {
-    throw new Error('No resources to publish');
+    throw new Error(
+      i18n.t('question:message.error.no_resources_publish', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   const encrypt = data?.encrypt;
 
   for (const resource of resources) {
     const resourceEncrypt = encrypt && resource?.disableEncrypt !== true;
+
     if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
-      const errorMsg = 'Only encrypted data can go into private services';
+      const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     } else if (resourceEncrypt && !resource?.service.endsWith('_PRIVATE')) {
-      const errorMsg =
-        'For an encrypted publish please use a service that ends with _PRIVATE';
+      const errorMsg = i18n.t('question:message.error.use_private_service', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
   }
@@ -1270,9 +1566,15 @@ export const publishMultipleQDNResources = async (
   const registeredName = await getNameInfo();
 
   const name = registeredName;
+
   if (!name) {
-    throw new Error('You need a Qortal name to publish.');
+    throw new Error(
+      i18n.t('question:message.error.registered_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
+
   const userNames = await getAllUserNames();
   data.resources?.forEach((item) => {
     if (item?.name && !userNames?.includes(item.name))
@@ -1284,6 +1586,7 @@ export const publishMultipleQDNResources = async (
   const appFee = data?.appFee ? +data.appFee : undefined;
   const appFeeRecipient = data?.appFeeRecipient;
   let hasAppFee = false;
+
   if (appFee && appFee > 0 && appFeeRecipient) {
     hasAppFee = true;
   }
@@ -1295,7 +1598,9 @@ export const publishMultipleQDNResources = async (
     (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
-        label: 'accept app fee',
+        label: i18n.t('question:accept_app_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
   }
   if (data?.encrypt) {
@@ -1303,12 +1608,12 @@ export const publishMultipleQDNResources = async (
   }
   const resPermission = await getUserPermission(
     {
-      text1: 'Do you give this application permission to publish to QDN?',
+      text1: i18n.t('question:permission.publish_qdn', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
-
-  
       .resource-container {
         display: flex;
         flex-direction: column;
@@ -1368,11 +1673,24 @@ export const publishMultipleQDNResources = async (
     },
     isFromExtension
   );
+
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
-  let failedPublishesIdentifiers = [];
+
+  type FailedPublish = {
+    reason: string;
+    identifier: any;
+    service: any;
+  };
+
+  const failedPublishesIdentifiers: FailedPublish[] = [];
+
   for (const resource of resources) {
     try {
       const requiredFields = ['service'];
@@ -1384,7 +1702,10 @@ export const publishMultipleQDNResources = async (
       });
       if (missingFields.length > 0) {
         const missingFieldsString = missingFields.join(', ');
-        const errorMsg = `Missing fields: ${missingFieldsString}`;
+        const errorMsg = i18n.t('question:message.error.missing_fields', {
+          fields: missingFieldsString,
+          postProcess: 'capitalizeFirstChar',
+        });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1394,7 +1715,12 @@ export const publishMultipleQDNResources = async (
         continue;
       }
       if (!resource.file && !resource.data64 && !resource?.base64) {
-        const errorMsg = 'No data or file was submitted';
+        const errorMsg = i18n.t(
+          'question:message.error.no_data_file_submitted',
+          {
+            postProcess: 'capitalizeFirstChar',
+          }
+        );
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1424,7 +1750,9 @@ export const publishMultipleQDNResources = async (
         identifier = 'default';
       }
       if (!resourceEncrypt && service.endsWith('_PRIVATE')) {
-        const errorMsg = 'Only encrypted data can go into private services';
+        const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
+          postProcess: 'capitalizeFirstChar',
+        });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1457,7 +1785,10 @@ export const publishMultipleQDNResources = async (
           }
         } catch (error) {
           const errorMsg =
-            error?.message || 'Upload failed due to failed encryption';
+            error?.message ||
+            i18n.t('question:message.error.upload_encryption', {
+              postProcess: 'capitalizeFirstChar',
+            });
           failedPublishesIdentifiers.push({
             reason: errorMsg,
             identifier: resource.identifier,
@@ -1504,7 +1835,11 @@ export const publishMultipleQDNResources = async (
           }, 1000);
         });
       } catch (error) {
-        const errorMsg = error.message || 'Upload failed';
+        const errorMsg =
+          error.message ||
+          i18n.t('question:message.error.upload', {
+            postProcess: 'capitalizeFirstChar',
+          });
         failedPublishesIdentifiers.push({
           reason: errorMsg,
           identifier: resource.identifier,
@@ -1514,7 +1849,11 @@ export const publishMultipleQDNResources = async (
       }
     } catch (error) {
       failedPublishesIdentifiers.push({
-        reason: error?.message || 'Unknown error',
+        reason:
+          error?.message ||
+          i18n.t('question:message.error.unknown_error', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         identifier: resource.identifier,
         service: resource.service,
         name: resource?.name || name,
@@ -1523,7 +1862,9 @@ export const publishMultipleQDNResources = async (
   }
   if (failedPublishesIdentifiers.length > 0) {
     const obj = {
-      message: 'Some resources have failed to publish.',
+      message: i18n.t('question:message.error.resources_publish', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     };
     obj['error'] = {
       unsuccessfulPublishes: failedPublishesIdentifiers,
@@ -1545,16 +1886,22 @@ export const publishMultipleQDNResources = async (
 export const voteOnPoll = async (data, isFromExtension) => {
   const requiredFields = ['pollName', 'optionIndex'];
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field] && data[field] !== 0) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
+
   const pollName = data.pollName;
   const optionIndex = data.optionIndex;
   let pollInfo = null;
@@ -1564,18 +1911,28 @@ export const voteOnPoll = async (data, isFromExtension) => {
     if (!response.ok) {
       const errorMessage = await parseErrorResponse(
         response,
-        'Failed to fetch poll'
+        i18n.t('question:message.error.fetch_poll', {
+          postProcess: 'capitalizeFirstChar',
+        })
       );
       throw new Error(errorMessage);
     }
 
     pollInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Poll not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_poll', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   if (!pollInfo || pollInfo.error) {
-    const errorMsg = (pollInfo && pollInfo.message) || 'Poll not found';
+    const errorMsg =
+      (pollInfo && pollInfo.message) ||
+      i18n.t('question:message.error.no_poll', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   try {
@@ -1586,7 +1943,12 @@ export const voteOnPoll = async (data, isFromExtension) => {
     );
     return resVoteOnPoll;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to vote on the poll.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.poll_vote', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -1603,15 +1965,19 @@ export const createPoll = async (data, isFromExtension) => {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
+
   const pollName = data.pollName;
   const pollDescription = data.pollDescription;
   const pollOptions = data.pollOptions;
-  const pollOwnerAddress = data.pollOwnerAddress;
   try {
     const resCreatePoll = await _createPoll(
       {
@@ -1623,7 +1989,12 @@ export const createPoll = async (data, isFromExtension) => {
     );
     return resCreatePoll;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to created poll.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.poll_create', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -1644,7 +2015,9 @@ function checkValue(value) {
     return 'object';
   } else {
     throw new Error(
-      'Field fullContent is in an invalid format. Either use a string, base64 or an object.'
+      i18n.t('question:message.error.invalid_fullcontent', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
 }
@@ -1657,7 +2030,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   const isRecipient = groupId === undefined;
   const chatReference = data?.chatReference;
   if (groupId === undefined && recipient === undefined) {
-    throw new Error('Please provide a recipient or groupId');
+    throw new Error(
+      i18n.t('question:provide_recipient_group_id', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   let fullMessageObjectType;
   if (fullMessageObject) {
@@ -1673,9 +2050,18 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to send this chat message?',
-        text2: `To: ${isRecipient ? recipient : `group ${groupId}`}`,
+        text1: i18n.t('question:permission.send_chat_message', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: isRecipient
+          ? i18n.t('question:to_recipient', {
+              recipient: recipient,
+              postProcess: 'capitalizeFirstChar',
+            })
+          : i18n.t('question:to_group', {
+              group_id: groupId,
+              postProcess: 'capitalizeFirstChar',
+            }),
         text3: fullMessageObject
           ? fullMessageObjectType === 'string'
             ? `${fullMessageObject?.slice(0, 25)}${fullMessageObject?.length > 25 ? '...' : ''}`
@@ -1683,7 +2069,9 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
           : `${message?.slice(0, 25)}${message?.length > 25 ? '...' : ''}`,
         checkbox1: {
           value: false,
-          label: 'Always allow chat messages from this app',
+          label: i18n.t('question:always_chat_messages', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -1725,13 +2113,22 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
     const balance = await getBalanceInfo();
     const hasEnoughBalance = +balance < 4 ? false : true;
     if (!hasEnoughBalance) {
-      throw new Error('You need at least 4 QORT to send a message');
+      throw new Error(
+        i18n.t('group:message.error.qortals_required', {
+          quantity: 4,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     if (isRecipient && recipient) {
       const url = await createEndpoint(`/addresses/publickey/${recipient}`);
       const response = await fetch(url);
       if (!response.ok)
-        throw new Error("Failed to fetch recipient's public key");
+        throw new Error(
+          i18n.t('question:message.error.fetch_recipient_public_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
 
       let key;
       let hasPublicKey;
@@ -1857,10 +2254,18 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       }
       return _response;
     } else {
-      throw new Error('Please enter a recipient or groupId');
+      throw new Error(
+        i18n.t('question:provide_recipient_group_id', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else {
-    throw new Error('User declined to send message');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_send_message', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1874,25 +2279,39 @@ export const joinGroup = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${data.groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
   const fee = await getFee('JOIN_GROUP');
 
   const resPermission = await getUserPermission(
     {
-      text1: 'Confirm joining the group:',
+      text1: i18n.t('question:message.generic.confirm_join_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
@@ -1904,17 +2323,30 @@ export const joinGroup = async (data, isFromExtension) => {
     const groupId = data.groupId;
 
     if (!groupInfo || groupInfo.error) {
-      const errorMsg = (groupInfo && groupInfo.message) || 'Group not found';
+      const errorMsg =
+        (groupInfo && groupInfo.message) ||
+        i18n.t('question:message.error.no_group_found', {
+          postProcess: 'capitalizeFirstChar',
+        });
       throw new Error(errorMsg);
     }
     try {
       const resJoinGroup = await joinGroupFunc({ groupId });
       return resJoinGroup;
     } catch (error) {
-      throw new Error(error?.message || 'Failed to join the group.');
+      throw new Error(
+        error?.message ||
+          i18n.t('group:message.error.group_join', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
-    throw new Error('User declined to join group');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_join', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -1967,7 +2399,10 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     });
     if (missingFields.length > 0) {
       const missingFieldsString = missingFields.join(', ');
-      const errorMsg = `Missing fields: ${missingFieldsString}`;
+      const errorMsg = i18n.t('question:message.error.missing_fields', {
+        fields: missingFieldsString,
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const filename = data.filename;
@@ -1976,7 +2411,9 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     const mimeType = blob.type || data.mimeType;
     const resPermission = await getUserPermission(
       {
-        text1: 'Would you like to download:',
+        text1: i18n.t('question:download_file', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${filename}`,
       },
       isFromExtension
@@ -1993,8 +2430,60 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     );
 
     return true;
+
+    if (accepted) {
+      const mimeType = blob.type || data.mimeType;
+      let backupExention = filename.split('.').pop();
+      if (backupExention) {
+        backupExention = '.' + backupExention;
+      }
+      const fileExtension = mimeToExtensionMap[mimeType] || backupExention;
+      let fileHandleOptions = {};
+      if (!mimeType) {
+        throw new Error(
+          i18n.t('question:message.error.mime_type', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      if (!fileExtension) {
+        throw new Error(
+          i18n.t('question:message.error.file_extension', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      if (fileExtension && mimeType) {
+        fileHandleOptions = {
+          accept: {
+            [mimeType]: [fileExtension],
+          },
+        };
+      }
+
+      showSaveFilePicker(
+        {
+          filename,
+          mimeType,
+          blob,
+        },
+        snackMethods
+      );
+      return true;
+    } else {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_save_file', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to initiate download');
+    throw new Error(
+      error?.message ||
+        i18n.t('core:message.error.initiate_download', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2008,17 +2497,24 @@ export const deployAt = async (data, isFromExtension) => {
     'assetId',
     'type',
   ];
+
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field] && data[field] !== 0) {
       missingFields.push(field);
     }
   });
+
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
+
   try {
     const resDeployAt = await _deployAt(
       {
@@ -2034,7 +2530,12 @@ export const deployAt = async (data, isFromExtension) => {
     );
     return resDeployAt;
   } catch (error) {
-    throw new Error(error?.message || 'Failed to join the group.');
+    throw new Error(
+      error?.message ||
+        i18n.t('group:message.error.group_join', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2048,14 +2549,20 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
 
   if (data?.coin === 'ARRR' && isGateway)
     throw new Error(
-      'Cannot view ARRR wallet info through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_wallet_local_node', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
 
   const value =
@@ -2072,12 +2579,15 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to get your wallet information?',
+        text1: i18n.t('question:permission.get_wallet_info', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2156,7 +2666,11 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     }
     return userWallet;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2175,7 +2689,10 @@ export const getWalletBalance = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2183,7 +2700,10 @@ export const getWalletBalance = async (
 
   if (data?.coin === 'ARRR' && isGateway)
     throw new Error(
-      'Cannot view ARRR balance through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_balance_local_node', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
 
   const value =
@@ -2199,11 +2719,15 @@ export const getWalletBalance = async (
   if (!bypassPermission && !skip) {
     resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to fetch your',
-        highlightedText: `${data.coin} balance`,
+        text1: i18n.t('question:permission.fetch_balance', {
+          coin: data.coin, // TODO highlight coin in the modal
+          postProcess: 'capitalizeFirstChar',
+        }),
         checkbox1: {
           value: true,
-          label: 'Always allow balance to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_balance', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2227,7 +2751,12 @@ export const getWalletBalance = async (
       try {
         const url = await createEndpoint(`/addresses/balance/${qortAddress}`);
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch');
+        if (!response.ok)
+          throw new Error(
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         let res;
         try {
           res = await response.clone().json();
@@ -2237,7 +2766,10 @@ export const getWalletBalance = async (
         return res;
       } catch (error) {
         throw new Error(
-          error?.message || 'Fetch Wallet Failed. Please try again'
+          error?.message ||
+            i18n.t('question:message.error.fetch_wallet', {
+              postProcess: 'capitalizeFirstChar',
+            })
         );
       }
     } else {
@@ -2291,16 +2823,29 @@ export const getWalletBalance = async (
           throw new Error(res.message);
         }
         if (isNaN(Number(res))) {
-          throw new Error('Unable to fetch balance');
+          throw new Error(
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         } else {
           return (Number(res) / 1e8).toFixed(8);
         }
       } catch (error) {
-        throw new Error(error?.message || 'Unable to fetch balance');
+        throw new Error(
+          error?.message ||
+            i18n.t('question:message.error.fetch_balance', {
+              postProcess: 'capitalizeFirstChar',
+            })
+        );
       }
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2308,7 +2853,10 @@ const getPirateWallet = async (arrrSeed58) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
-      'Retrieving PIRATECHAIN balance is not allowed through a gateway.'
+      i18n.t('question:message.error.gateway_retrieve_balance', {
+        token: 'PIRATECHAIN',
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
   const bodyToString = arrrSeed58;
@@ -2390,11 +2938,19 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (data?.coin === 'ARRR') {
-    throw new Error('ARRR is not supported for this call.');
+    throw new Error(
+      i18n.t('question:message.error.token_not_supported', {
+        token: 'ARRR',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const value =
     (await getPermission(`getUserWalletInfo-${appInfo?.name}-${data.coin}`)) ||
@@ -2408,12 +2964,15 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to retrieve your wallet information',
+        text1: i18n.t('question:permission.get_wallet_info', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet info to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2442,7 +3001,12 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         },
         body: JSON.stringify(_body),
       });
-      if (!response?.ok) throw new Error('Unable to fetch wallet information');
+      if (!response?.ok)
+        throw new Error(
+          i18n.t('question:message.error.fetch_wallet_info', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -2455,10 +3019,19 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
 
       return res;
     } catch (error) {
-      throw new Error(error?.message || 'Fetch Wallet Failed');
+      throw new Error(
+        error?.message ||
+          i18n.t('question:message.error.fetch_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2476,7 +3049,10 @@ export const getUserWalletTransactions = async (
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2493,12 +3069,15 @@ export const getUserWalletTransactions = async (
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to retrieve your wallet transactions',
+        text1: i18n.t('question:permission.get_wallet_transactions', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet txs to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -2538,7 +3117,12 @@ export const getUserWalletTransactions = async (
         },
         body: _body,
       });
-      if (!response?.ok) throw new Error('Unable to fetch wallet transactions');
+      if (!response?.ok)
+        throw new Error(
+          i18n.t('question:message.error.fetch_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -2551,10 +3135,19 @@ export const getUserWalletTransactions = async (
 
       return res;
     } catch (error) {
-      throw new Error(error?.message || 'Fetch Wallet Transactions Failed');
+      throw new Error(
+        error?.message ||
+          i18n.t('question:message.error.fetch_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2568,14 +3161,22 @@ export const getCrossChainServerInfo = async (data) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
-  let _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
+  const _url = `/crosschain/` + data.coin.toLowerCase() + `/serverinfos`;
   try {
     const url = await createEndpoint(_url);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -2587,7 +3188,12 @@ export const getCrossChainServerInfo = async (data) => {
     }
     return res.servers;
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving server info');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.server_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2602,7 +3208,10 @@ export const getTxActivitySummary = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2619,7 +3228,12 @@ export const getTxActivitySummary = async (data) => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -2631,7 +3245,12 @@ export const getTxActivitySummary = async (data) => {
     }
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in tx activity summary');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.transaction_activity_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2647,7 +3266,10 @@ export const getForeignFee = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2664,7 +3286,12 @@ export const getForeignFee = async (data) => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let res;
     try {
       res = await response.clone().json();
@@ -2676,7 +3303,12 @@ export const getForeignFee = async (data) => {
     }
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in get foreign fee');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.get_foreign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -2688,7 +3320,11 @@ function calculateRateFromFee(totalFee, sizeInBytes) {
 export const updateForeignFee = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin', 'type', 'value'];
   const missingFields: string[] = [];
@@ -2701,32 +3337,58 @@ export const updateForeignFee = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
   const { coin, type, value } = data;
 
   const text3 =
-    type === 'feerequired' ? `${value} sats` : `${value} sats per kb`;
+    type === 'feerequired'
+      ? i18n.t('question:sats', {
+          amount: value,
+          postProcess: 'capitalizeFirstChar',
+        })
+      : i18n.t('question:sats_per_kb', {
+          amount: value,
+          postProcess: 'capitalizeFirstChar',
+        });
   const text4 =
     type === 'feerequired'
-      ? `*The ${value} sats fee is derived from ${calculateRateFromFee(value, 300)} sats per kb, for a transaction that is approximately 300 bytes in size.`
+      ? i18n.t('question:message.generic.calculate_fee', {
+          amount: value,
+          rate: calculateRateFromFee(value, 300),
+          postProcess: 'capitalizeFirstChar',
+        })
       : '';
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to update foreign fees on your node?`,
+      text1: i18n.t('question:permission.update_foreign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
-      text3: `value: ${text3}`,
-      text4,
-      highlightedText: `Coin: ${coin}`,
+      text3: i18n.t('question:value', {
+        value: text3,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const url = `/crosschain/${coin.toLowerCase()}/update${type}`;
   const valueStringified = JSON.stringify(+value);
@@ -2741,7 +3403,12 @@ export const updateForeignFee = async (data, isFromExtension) => {
     body: valueStringified,
   });
 
-  if (!response.ok) throw new Error('Failed to update foreign fee');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.update_foreign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   let res;
   try {
     res = await response.clone().json();
@@ -2767,7 +3434,10 @@ export const getServerConnectionHistory = async (data) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2785,7 +3455,11 @@ export const getServerConnectionHistory = async (data) => {
     });
 
     if (!response.ok)
-      throw new Error('Failed to fetch server connection history');
+      throw new Error(
+        i18n.t('question:message.error.fetch_connection_history', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -2800,14 +3474,23 @@ export const getServerConnectionHistory = async (data) => {
 
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in get server connection history');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.fetch_connection_history', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
 export const setCurrentForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -2821,7 +3504,10 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2829,17 +3515,32 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to set the current server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission.set_current_server', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -2859,7 +3560,12 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to set current server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_current_set', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -2878,7 +3584,11 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 export const addForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -2892,7 +3602,10 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2900,17 +3613,32 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to add a server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission.server_add', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -2930,7 +3658,12 @@ export const addForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to add server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_current_add', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -2949,7 +3682,11 @@ export const addForeignServer = async (data, isFromExtension) => {
 export const removeForeignServer = async (data, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
@@ -2963,7 +3700,10 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -2971,17 +3711,32 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to remove a server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission.server_remove', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const body = {
     hostName: host,
@@ -3001,7 +3756,12 @@ export const removeForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to remove server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_remove', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -3029,7 +3789,12 @@ export const getDaySummary = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve summary');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.retrieve_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3044,7 +3809,12 @@ export const getDaySummary = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving summary');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.retrieve_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3060,7 +3830,12 @@ export const getNodeInfo = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve node info');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.node_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3075,7 +3850,12 @@ export const getNodeInfo = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving node info');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.node_info', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3091,7 +3871,12 @@ export const getNodeStatus = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve node status');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.node_status', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3106,7 +3891,12 @@ export const getNodeStatus = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving node status');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.node_status', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3136,7 +3926,13 @@ export const getArrrSyncStatus = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving arrr sync status');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.retrieve_sync_status', {
+          token: 'ARRR',
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3150,11 +3946,19 @@ export const sendCoin = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   if (!data?.destinationAddress && !data?.recipient) {
-    throw new Error('Missing fields: recipient');
+    throw new Error(
+      i18n.t('question:message.error.missing_fields', {
+        fields: 'recipient',
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   let checkCoin = data.coin;
   const wallet = await getSaveWallet();
@@ -3165,7 +3969,9 @@ export const sendCoin = async (data, isFromExtension) => {
 
   if (checkCoin !== 'QORT' && isGateway)
     throw new Error(
-      'Cannot send a non-QORT coin through the gateway. Please use your local node.'
+      i18n.t('question:message.error.gateway_non_qort_local_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   if (checkCoin === 'QORT') {
     // Params: data.coin, data.recipient, data.amount, data.fee
@@ -3177,7 +3983,12 @@ export const sendCoin = async (data, isFromExtension) => {
 
     const url = await createEndpoint(`/addresses/balance/${address}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_balance', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     let walletBalance;
     try {
       walletBalance = await response.clone().json();
@@ -3185,7 +3996,10 @@ export const sendCoin = async (data, isFromExtension) => {
       walletBalance = await response.text();
     }
     if (isNaN(Number(walletBalance))) {
-      let errorMsg = 'Failed to Fetch QORT Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'QORT',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
@@ -3196,22 +4010,33 @@ export const sendCoin = async (data, isFromExtension) => {
     const amountDecimals = Number(amount) * QORT_DECIMALS;
     const fee: number = await sendQortFee();
     if (amountDecimals + fee * QORT_DECIMALS > walletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     if (amount <= 0) {
-      let errorMsg = 'Invalid Amount!';
+      const errorMsg = i18n.t('core:message.error.invalid_amount', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     if (recipient.length === 0) {
-      let errorMsg = 'Receiver cannot be empty!';
+      const errorMsg = i18n.t('question:message.error.empty_receiver', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
-        text2: `To: ${recipient}`,
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         fee: fee,
         confirmCheckbox: true,
@@ -3227,7 +4052,11 @@ export const sendCoin = async (data, isFromExtension) => {
       );
       return makePayment.res?.data;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'BTC') {
     const amount = Number(data.amount);
@@ -3238,19 +4067,33 @@ export const sendCoin = async (data, isFromExtension) => {
     const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(btcWalletBalance))) {
-      throw new Error('Unable to fetch BTC balance');
+      throw new Error(
+        i18n.t('question:message.error.fetch_balance_token', {
+          token: 'BTC',
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const btcWalletBalanceDecimals = Number(btcWalletBalance);
     const btcAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00050000
     if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
-      throw new Error('INSUFFICIENT_FUNDS');
+      throw new Error(
+        i18n.t('question:message.error.insufficient_funds', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
-        text2: `To: ${recipient}`,
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} BTC`,
       },
@@ -3275,7 +4118,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3284,7 +4132,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'LTC') {
     const amount = Number(data.amount);
@@ -3294,19 +4146,31 @@ export const sendCoin = async (data, isFromExtension) => {
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
-      let errorMsg = 'Failed to Fetch LTC Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'LTC',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
     const ltcAmountDecimals = Number(amount);
     const fee = feePerByte * 1000; // default 0.00030000
     if (ltcAmountDecimals + fee > ltcWalletBalanceDecimals) {
-      throw new Error('Insufficient Funds!');
+      throw new Error(
+        i18n.t('question:message.error.insufficient_funds', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
-        text2: `To: ${recipient}`,
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} LTC`,
       },
@@ -3330,7 +4194,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3339,7 +4208,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'DOGE') {
     const amount = Number(data.amount);
@@ -3348,21 +4221,31 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dogeFeePerByte;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
-      let errorMsg = 'Failed to Fetch DOGE Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'DOGE',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
     const dogeAmountDecimals = Number(amount);
     const fee = feePerByte * 5000; // default 0.05000000
     if (dogeAmountDecimals + fee > dogeWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
-        text2: `To: ${recipient}`,
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:to_recipient', {
+          recipient: recipient,
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} DOGE`,
       },
@@ -3387,7 +4270,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3396,7 +4284,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'DGB') {
     const amount = Number(data.amount);
@@ -3405,20 +4297,27 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
-      let errorMsg = 'Failed to Fetch DGB Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'DGB',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
     const dgbAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00005000
     if (dgbAmountDecimals + fee > dgbWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} DGB`,
@@ -3444,7 +4343,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3453,7 +4357,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'RVN') {
     const amount = Number(data.amount);
@@ -3462,20 +4370,27 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : rvnFeePerByte;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
-      let errorMsg = 'Failed to Fetch RVN Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'RVN',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
     const rvnAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00562500
     if (rvnAmountDecimals + fee > rvnWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} RVN`,
@@ -3501,7 +4416,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3510,7 +4430,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } else if (checkCoin === 'ARRR') {
     const amount = Number(data.amount);
@@ -3519,20 +4443,27 @@ export const sendCoin = async (data, isFromExtension) => {
     const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(arrrWalletBalance))) {
-      let errorMsg = 'Failed to Fetch ARRR Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'ARR',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const arrrWalletBalanceDecimals = Number(arrrWalletBalance);
     const arrrAmountDecimals = Number(amount);
     const fee = 0.0001;
     if (arrrAmountDecimals + fee > arrrWalletBalanceDecimals) {
-      let errorMsg = 'Insufficient Funds!';
+      const errorMsg = i18n.t('question:message.error.insufficient_funds', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
     const resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to send coins?',
+        text1: i18n.t('question:permission.send_coins', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         text2: `To: ${recipient}`,
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} ARRR`,
@@ -3558,7 +4489,12 @@ export const sendCoin = async (data, isFromExtension) => {
         },
         body: JSON.stringify(opts),
       });
-      if (!response.ok) throw new Error('Failed to send');
+      if (!response.ok)
+        throw new Error(
+          i18n.t('question:message.error.send', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3567,7 +4503,11 @@ export const sendCoin = async (data, isFromExtension) => {
       }
       return res;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   }
 };
@@ -3611,7 +4551,10 @@ export const createBuyOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
@@ -3627,7 +4570,9 @@ export const createBuyOrder = async (data, isFromExtension) => {
       const resData = await resAddress.json();
       if (foreignBlockchain !== resData?.foreignBlockchain) {
         throw new Error(
-          'All requested ATs need to be of the same foreign Blockchain.'
+          i18n.t('core:message.error.same_foreign_blockchain', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
       return resData;
@@ -3635,23 +4580,34 @@ export const createBuyOrder = async (data, isFromExtension) => {
   );
 
   const crosschainAtInfo = await Promise.all(atPromises);
+
   try {
     const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform a buy order?',
-        text2: `${atAddresses?.length}${' '}
-      ${`buy order${atAddresses?.length === 1 ? '' : 's'}`}`,
-        text3: `${crosschainAtInfo?.reduce((latest, cur) => {
-          return latest + +cur?.qortAmount;
-        }, 0)} QORT FOR   ${roundUpToDecimals(
-          crosschainAtInfo?.reduce((latest, cur) => {
-            return latest + +cur?.expectedForeignAmount;
-          }, 0)
-        )}
-      ${` ${buyingFees.ticker}`}`,
-        highlightedText: `Is using public node: ${isGateway}`,
+        text1: i18n.t('question:permission.buy_order', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission.buy_order_quantity', {
+          quantity: atAddresses?.length,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:permission.buy_order_ticker', {
+          qort_amount: crosschainAtInfo?.reduce((latest, cur) => {
+            return latest + +cur?.qortAmount;
+          }, 0),
+          foreign_amount: roundUpToDecimals(
+            crosschainAtInfo?.reduce((latest, cur) => {
+              return latest + +cur?.expectedForeignAmount;
+            }, 0)
+          ),
+          ticker: buyingFees.ticker,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('auth:node.using_public_gateway', {
+          gateway: isGateway,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: '',
         html: `
   <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
@@ -3677,15 +4633,27 @@ export const createBuyOrder = async (data, isFromExtension) => {
     </style>
 
     <div class="fee-container">
-      <div class="fee-label">Total Unlocking Fee:</div>
+      <div class="fee-label">${i18n.t('question:total_unlocking_fee', {
+        postProcess: 'capitalizeFirstChar',
+      })}</div>
       <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
      <div class="fee-description">
-  This fee is an estimate based on ${atAddresses?.length} ${atAddresses?.length > 1 ? 'orders' : 'order'}, assuming a 300-byte size at a rate of ${buyingFees?.unlock?.feePerKb?.toFixed(8)} ${buyingFees.ticker} per KB.
-</div>
-
-      <div class="fee-label">Total Locking Fee:</div>
-      <div>${+buyingFees?.lock.fee.toFixed(8)} ${buyingFees.ticker} per kb</div>
-
+     ${i18n.t('question:permission.buy_order_fee_estimation', {
+       quantity: atAddresses?.length,
+       fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
+       ticker: buyingFees.ticker,
+       postProcess: 'capitalizeFirstChar',
+     })}
+     </div>
+     <div class="fee-label">${i18n.t('question:total_locking_fee', {
+       postProcess: 'capitalizeFirstChar',
+     })}</div>
+     <div>${i18n.t('question:permission.buy_order_per_kb', {
+       fee: +buyingFees?.lock.fee.toFixed(8),
+       ticker: buyingFees.ticker,
+       postProcess: 'capitalizeFirstChar',
+     })}
+     </div>
     </div>
   </div>
 `,
@@ -3701,10 +4669,19 @@ export const createBuyOrder = async (data, isFromExtension) => {
       });
       return resBuyOrder;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit trade order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.buy_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3721,7 +4698,14 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     body: bodyToString,
   });
 
-  if (!deleteTradeBotResponse.ok) throw new Error('Unable to update tradebot');
+  if (!deleteTradeBotResponse.ok) {
+    throw new Error(
+      i18n.t('question:message.error.update_tradebot', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   const unsignedTxn = await deleteTradeBotResponse.text();
   const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
   const signedBytes = Base58.encode(signedTxnBytes);
@@ -3731,7 +4715,9 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
     res = await processTransactionVersion2(signedBytes);
   } catch (error) {
     return {
-      error: 'Failed to Cancel Sell Order. Try again!',
+      error: i18n.t('question:message.error.cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: {
         atAddress: body.atAddress,
         creatorAddress: body.creatorAddress,
@@ -3740,7 +4726,9 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
   }
   if (res?.error) {
     return {
-      error: 'Failed to Cancel Sell Order. Try again!',
+      error: i18n.t('question:message.error.cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: {
         atAddress: body.atAddress,
         creatorAddress: body.creatorAddress,
@@ -3750,7 +4738,11 @@ const cancelTradeOfferTradeBot = async (body, keyPair) => {
   if (res?.signature) {
     return res;
   } else {
-    throw new Error('Failed to Cancel Sell Order. Try again!');
+    throw new Error(
+      i18n.t('question:message.error.cancel_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 const findFailedTradebot = async (createBotCreationTimestamp, body) => {
@@ -3805,7 +4797,12 @@ const tradeBotCreateRequest = async (body, keyPair) => {
     },
     body: bodyToString,
   });
-  if (!unsignedTxnResponse.ok) throw new Error('Unable to create tradebot');
+  if (!unsignedTxnResponse.ok)
+    throw new Error(
+      i18n.t('question:message.error.create_tradebot', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const createBotCreationTimestamp = Date.now();
   const unsignedTxn = await unsignedTxnResponse.text();
   const signedTxnBytes = await signTradeBotTransaction(unsignedTxn, keyPair);
@@ -3820,7 +4817,9 @@ const tradeBotCreateRequest = async (body, keyPair) => {
       body
     );
     return {
-      error: 'Failed to Create Sell Order. Try again!',
+      error: i18n.t('question:message.error.create_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       failedTradeBot: findFailedTradeBot,
     };
   }
@@ -3828,7 +4827,11 @@ const tradeBotCreateRequest = async (body, keyPair) => {
   if (res?.signature) {
     return res;
   } else {
-    throw new Error('Failed to Create Sell Order. Try again!');
+    throw new Error(
+      i18n.t('question:message.error.create_sell_order', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -3842,7 +4845,10 @@ export const createSellOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -3852,11 +4858,15 @@ export const createSellOrder = async (data, isFromExtension) => {
   try {
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform a sell order?',
-        text2: `${data.qortAmount}${' '}
-      ${`QORT`}`,
-        text3: `FOR  ${parsedForeignAmount} ${data.foreignBlockchain}`,
+        text1: i18n.t('question:permission.sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission.order_detail', {
+          qort_amount: data.qortAmount,
+          foreign_amount: parsedForeignAmount,
+          ticker: data.foreignBlockchain,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: '0.02',
       },
       isFromExtension
@@ -3887,16 +4897,26 @@ export const createSellOrder = async (data, isFromExtension) => {
 
       return response;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit sell order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.submit_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
 export const cancelSellOrder = async (data, isFromExtension) => {
   const requiredFields = ['atAddress'];
   const missingFields: string[] = [];
+
   requiredFields.forEach((field) => {
     if (!data[field]) {
       missingFields.push(field);
@@ -3904,24 +4924,38 @@ export const cancelSellOrder = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
   const url = await createEndpoint(`/crosschain/trade/${data.atAddress}`);
   const resAddress = await fetch(url);
   const resData = await resAddress.json();
-  if (!resData?.qortalAtAddress) throw new Error('Cannot find AT info.');
+
+  if (!resData?.qortalAtAddress)
+    throw new Error(
+      i18n.t('question:message.error.at_info', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+
   try {
     const fee = await getFee('MESSAGE');
 
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform: cancel a sell order?',
-        text2: `${resData.qortAmount}${' '}
-      ${`QORT`}`,
-        text3: `FOR  ${resData.expectedForeignAmount} ${resData.foreignBlockchain}`,
+        text1: i18n.t('question:permission.cancel_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission.order_detail', {
+          qort_amount: resData.qortAmount,
+          foreign_amount: resData.expectedForeignAmount,
+          ticker: resData.foreignBlockchain,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
@@ -3947,10 +4981,19 @@ export const cancelSellOrder = async (data, isFromExtension) => {
 
       return response;
     } else {
-      throw new Error('User declined request');
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   } catch (error) {
-    throw new Error(error?.message || 'Failed to submit sell order.');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.submit_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3964,19 +5007,31 @@ export const openNewTab = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
   const res = extractComponents(data.qortalLink);
   if (res) {
     const { service, name, identifier, path } = res;
-    if (!service && !name) throw new Error('Invalid qortal link');
+    if (!service && !name)
+      throw new Error(
+        i18n.t('auth:message.error.invalid_qortal_link', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     executeEvent('addTab', { data: { service, name, identifier, path } });
     executeEvent('open-apps-mode', {});
     return true;
   } else {
-    throw new Error('Invalid qortal link');
+    throw new Error(
+      i18n.t('auth:message.error.invalid_qortal_link', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4001,12 +5056,19 @@ export const adminAction = async (data, isFromExtension) => {
   }
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const isGateway = await isRunningGateway();
   if (isGateway) {
-    throw new Error('This action cannot be done through a public node');
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   let apiEndpoint = '';
@@ -4048,12 +5110,26 @@ export const adminAction = async (data, isFromExtension) => {
       includeValueInBody = true;
       break;
     default:
-      throw new Error(`Unknown admin action type: ${data.type}`);
+      throw new Error(
+        i18n.t('question:message.error.unknown_admin_action_type', {
+          type: data.type,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
   }
   // Prepare the permission prompt text
-  let permissionText = `Do you give this application permission to perform the admin action: ${data.type}`;
+  let permissionText = i18n.t('question:permission.perform_admin_action', {
+    type: data.type,
+    postProcess: 'capitalizeFirstChar',
+  });
+
   if (data.value) {
-    permissionText += ` with value: ${data.value}`;
+    permissionText +=
+      ' ' +
+      i18n.t('question:permission.perform_admin_action_with_value', {
+        value: data.value,
+        postProcess: 'capitalizeFirstChar',
+      });
   }
 
   const resPermission = await getUserPermission(
@@ -4062,7 +5138,9 @@ export const adminAction = async (data, isFromExtension) => {
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
+
   if (accepted) {
     // Set up options for the API call
     const options: RequestInit = {
@@ -4074,7 +5152,12 @@ export const adminAction = async (data, isFromExtension) => {
       options.body = data.value;
     }
     const response = await fetch(apiEndpoint, options);
-    if (!response.ok) throw new Error('Failed to perform request');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.perform_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -4084,7 +5167,11 @@ export const adminAction = async (data, isFromExtension) => {
     }
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4098,16 +5185,19 @@ export const signTransaction = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
   const shouldProcess = data?.process || false;
-  let _url = await createEndpoint(
+  const _url = await createEndpoint(
     '/transactions/decode?ignoreValidityChecks=false'
   );
 
-  let _body = data.unsignedBytes;
+  const _body = data.unsignedBytes;
   const response = await fetch(_url, {
     method: 'POST',
     headers: {
@@ -4115,17 +5205,33 @@ export const signTransaction = async (data, isFromExtension) => {
     },
     body: _body,
   });
-  if (!response.ok) throw new Error('Failed to decode transaction');
+
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.decode_transaction', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const decodedData = await response.json();
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to ${shouldProcess ? 'SIGN and PROCESS' : 'SIGN'} a transaction?`,
-      highlightedText: 'Read the transaction carefully before accepting!',
+      text1: shouldProcess
+        ? i18n.t('question:permission.sign_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : i18n.t('question:permission.sign_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      highlightedText: i18n.t(
+        'question:message.generic.read_transaction_carefully',
+        { postProcess: 'capitalizeFirstChar' }
+      ),
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
   if (accepted) {
     let urlConverted = await createEndpoint('/transactions/convert');
@@ -4170,11 +5276,18 @@ export const signTransaction = async (data, isFromExtension) => {
     const res = await processTransactionVersion2(signedBytesToBase58);
     if (!res?.signature)
       throw new Error(
-        res?.message || 'Transaction was not able to be processed'
+        res?.message ||
+          i18n.t('question:message.error.process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
       );
     return res;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4187,7 +5300,10 @@ const missingFieldsFunc = (data, requiredFields) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 };
@@ -4228,7 +5344,10 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
 
@@ -4246,7 +5365,11 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
-        throw new Error('Failed to copy to clipboard.');
+        throw new Error(
+          i18n.t('question:message.error.copy_clipboard', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
       return link;
     }
@@ -4255,7 +5378,9 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       missingFieldsFunc(data, ['type', 'name', 'service', 'identifier']);
       if (data?.encryptionType === 'private' && !data?.key) {
         throw new Error(
-          'For an encrypted resource, you must provide the key to create the shared link'
+          i18n.t('question:message.generic.provide_key_shared_link', {
+            postProcess: 'capitalizeFirstChar',
+          })
         );
       }
       const queryParams = buildQueryParams(data);
@@ -4265,14 +5390,22 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
-        throw new Error('Failed to copy to clipboard.');
+        throw new Error(
+          i18n.t('question:message.error.copy_clipboard', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
 
       return link;
     }
 
     default:
-      throw new Error('Invalid type');
+      throw new Error(
+        i18n.t('question:message.error.invalid_type', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
   }
 };
 
@@ -4287,13 +5420,18 @@ export const registerNameRequest = async (data, isFromExtension) => {
 
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const fee = await getFee('REGISTER_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to register this name?`,
+      text1: i18n.t('question:permission.register_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: data.name,
       text2: data?.description,
       fee: fee.fee,
@@ -4307,7 +5445,11 @@ export const registerNameRequest = async (data, isFromExtension) => {
     const response = await registerName({ name, description });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4321,7 +5463,10 @@ export const updateNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const oldName = data.oldName;
@@ -4343,7 +5488,11 @@ export const updateNameRequest = async (data, isFromExtension) => {
     const response = await updateName({ oldName, newName, description });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4357,7 +5506,10 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4365,18 +5517,29 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
   const fee = await getFee('LEAVE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to leave the following group?`,
+      text1: i18n.t('question:permission.leave_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
@@ -4387,7 +5550,11 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
     const response = await leaveGroup({ groupId });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4401,7 +5568,10 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4412,11 +5582,20 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4425,8 +5604,14 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to invite ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.invite', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4440,7 +5625,11 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4454,7 +5643,10 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4465,11 +5657,20 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4478,8 +5679,14 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_KICK');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to kick ${displayInvitee || qortalAddress} from the group?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.kick', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4493,7 +5700,11 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4507,7 +5718,10 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4518,11 +5732,20 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4531,8 +5754,14 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to ban ${displayInvitee || qortalAddress} from the group?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.ban', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4547,7 +5776,11 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4561,7 +5794,10 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4571,11 +5807,20 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4584,8 +5829,14 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the group ban for user ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.cancel_ban', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4598,7 +5849,11 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4612,7 +5867,10 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4622,11 +5880,20 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4635,8 +5902,14 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('ADD_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to add user ${displayInvitee || qortalAddress} as an admin?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.add_admin', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4649,7 +5922,11 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4663,7 +5940,10 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4673,11 +5953,20 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4686,8 +5975,14 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('REMOVE_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to remove user ${displayInvitee || qortalAddress} as admin?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.remove_admin', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4700,7 +5995,11 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4714,7 +6013,10 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = data.groupId;
@@ -4724,11 +6026,20 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4737,13 +6048,21 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the group invite for ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.cancel_group_invite', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
+
   if (accepted) {
     const response = await cancelInvitationToGroup({
       groupId,
@@ -4751,19 +6070,23 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const createGroupRequest = async (data, isFromExtension) => {
   const requiredFields = [
-    'groupId',
-    'qortalAddress',
-    'groupName',
-    'type',
     'approvalThreshold',
-    'minBlock',
+    'groupId',
+    'groupName',
     'maxBlock',
+    'minBlock',
+    'qortalAddress',
+    'type',
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -4773,7 +6096,10 @@ export const createGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupName = data.groupName;
@@ -4786,8 +6112,13 @@ export const createGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to create a group?`,
-      highlightedText: `Group name: ${groupName}`,
+      text1: i18n.t('question:permission.create_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4804,7 +6135,11 @@ export const createGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4825,7 +6160,10 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const groupId = +data.groupId;
@@ -4840,11 +6178,20 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
     const response = await fetch(url);
-    if (!response.ok) throw new Error('Failed to fetch group');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_group', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     groupInfo = await response.json();
   } catch (error) {
-    const errorMsg = (error && error.message) || 'Group not found';
+    const errorMsg =
+      (error && error.message) ||
+      i18n.t('question:message.error.no_group_found', {
+        postProcess: 'capitalizeFirstChar',
+      });
     throw new Error(errorMsg);
   }
 
@@ -4853,9 +6200,17 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to update this group?`,
-      text2: `New owner: ${displayInvitee || newOwner}`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission.update_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:permission.update_group_detail', {
+        owner: displayInvitee || newOwner,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -4873,7 +6228,11 @@ export const updateGroupRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -4881,7 +6240,12 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   const requiredFields = ['encryptedData', 'iv', 'senderPublicKey'];
   requiredFields.forEach((field) => {
     if (!data[field]) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
 
@@ -4918,10 +6282,18 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   const ciphertext = base64ToUint8Array(encryptedData);
   // Validate IV and key lengths
   if (ivUint8Array.length !== 12) {
-    throw new Error('Invalid IV: AES-GCM requires a 12-byte IV.');
+    throw new Error(
+      i18n.t('question:message.error.invalid_encryption_iv', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   if (encryptionKey.length !== 32) {
-    throw new Error('Invalid key: AES-GCM requires a 256-bit key.');
+    throw new Error(
+      i18n.t('question:message.error.invalid_encryption_key', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   try {
@@ -4945,7 +6317,9 @@ export const decryptAESGCMRequest = async (data, isFromExtension) => {
   } catch (error) {
     console.error('Decryption failed:', error);
     throw new Error(
-      'Failed to decrypt the message. Ensure the data and keys are correct.'
+      i18n.t('question:message.error.decrypt_message', {
+        postProcess: 'capitalizeFirstChar',
+      })
     );
   }
 };
@@ -4960,7 +6334,10 @@ export const sellNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const name = data.nameForSale;
@@ -4970,14 +6347,33 @@ export const sellNameRequest = async (data, isFromExtension) => {
 
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData) throw new Error('This name does not exist');
+  if (!nameData)
+    throw new Error(
+      i18n.t('auth:message.error.name_not_existing', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
-  if (nameData?.isForSale) throw new Error('This name is already for sale');
+  if (nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_already_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const fee = await getFee('SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to create a sell name transaction?`,
-      highlightedText: `Sell ${name} for ${sellPrice} QORT`,
+      text1: i18n.t('question:permission.sell_name_transaction', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t(
+        'question:permission.sell_name_transaction_detail',
+        {
+          name: name,
+          price: sellPrice,
+          postProcess: 'capitalizeFirstChar',
+        }
+      ),
       fee: fee.fee,
     },
     isFromExtension
@@ -4990,7 +6386,11 @@ export const sellNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -5004,7 +6404,10 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
   const name = data.nameForSale;
@@ -5012,13 +6415,23 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
 
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData?.isForSale) throw new Error('This name is not for sale');
+  if (!nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_not_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   const fee = await getFee('CANCEL_SELL_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the selling of a name?`,
-      highlightedText: `Name: ${name}`,
+      text1: i18n.t('question:permission.sell_name_cancel', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:name', {
+        name: name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5030,7 +6443,11 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -5044,24 +6461,39 @@ export const buyNameRequest = async (data, isFromExtension) => {
   });
   if (missingFields.length > 0) {
     const missingFieldsString = missingFields.join(', ');
-    const errorMsg = `Missing fields: ${missingFieldsString}`;
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
     throw new Error(errorMsg);
   }
+
   const name = data.nameForSale;
-
   const validApi = await getBaseApi();
-
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData?.isForSale) throw new Error('This name is not for sale');
+
+  if (!nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_not_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+
   const sellerAddress = nameData.owner;
   const sellPrice = +nameData.salePrice;
 
   const fee = await getFee('BUY_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to buy a name?`,
-      highlightedText: `Buying ${name} for ${sellPrice} QORT`,
+      text1: i18n.t('question:permission.buy_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:permission.buy_name_detail', {
+        name: name,
+        price: sellPrice,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5075,14 +6507,20 @@ export const buyNameRequest = async (data, isFromExtension) => {
     });
     return response;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
 export const signForeignFees = async (data, isFromExtension) => {
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to sign the required fees for all your trade offers?`,
+      text1: i18n.t('question:permission.sign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -5140,14 +6578,23 @@ export const signForeignFees = async (data, isFromExtension) => {
 
     return true;
   } else {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
   const requiredFields = ['payments', 'assetId'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
   const resKeyPair = await getKeyPair();
@@ -5172,13 +6619,22 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
     for (const field of requiredFieldsPayment) {
       if (!payment[field]) {
-        throw new Error(`Missing required field: ${field}`);
+        throw new Error(
+          i18n.t('question:message.error.missing_fields', {
+            fields: field,
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
     }
 
     const confirmReceiver = await getNameOrAddress(payment.recipient);
     if (confirmReceiver.error) {
-      throw new Error('Invalid receiver address or name');
+      throw new Error(
+        i18n.t('question:message.error.invalid_receiver', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const receiverPublicKey = await getPublicKey(confirmReceiver);
 
@@ -5200,20 +6656,39 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
         for (const field of requiredFieldsArbitraryTx) {
           if (!arbitraryTx[field]) {
-            throw new Error(`Missing required field: ${field}`);
+            throw new Error(
+              i18n.t('question:message.error.missing_fields', {
+                fields: field,
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           }
         }
 
         if (!name) {
           const getName = await getNameInfo();
-          if (!getName) throw new Error('Name needed to publish');
+          if (!getName)
+            throw new Error(
+              i18n.t('question:message.error.registered_name', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
           name = getName;
         }
 
         const isValid = isValidBase64WithDecode(arbitraryTx.base64);
-        if (!isValid) throw new Error('Invalid base64 data');
+        if (!isValid)
+          throw new Error(
+            i18n.t('core:message.error.invalid_base64', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         if (!arbitraryTx?.service?.includes('_PRIVATE'))
-          throw new Error('Please use a PRIVATE service');
+          throw new Error(
+            i18n.t('question:message.generic.private_service', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
         pendingTransactions.push({
           type: 'ARBITRARY',
@@ -5239,20 +6714,39 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
 
       for (const field of requiredFieldsArbitraryTx) {
         if (!arbitraryTx[field]) {
-          throw new Error(`Missing required field: ${field}`);
+          throw new Error(
+            i18n.t('question:message.error.missing_fields', {
+              fields: field,
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         }
       }
 
       if (!name) {
         const getName = await getNameInfo();
-        if (!getName) throw new Error('Name needed to publish');
+        if (!getName)
+          throw new Error(
+            i18n.t('question:message.error.registered_name', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
         name = getName;
       }
 
       const isValid = isValidBase64WithDecode(arbitraryTx.base64);
-      if (!isValid) throw new Error('Invalid base64 data');
+      if (!isValid)
+        throw new Error(
+          i18n.t('core:message.error.invalid_base64', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       if (!arbitraryTx?.service?.includes('_PRIVATE'))
-        throw new Error('Please use a PRIVATE service');
+        throw new Error(
+          i18n.t('question:message.generic.private_service', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       const additionalPublicKeys = arbitraryTx?.additionalPublicKeys || [];
       pendingAdditionalArbitraryTxs.push({
         type: 'ARBITRARY',
@@ -5267,20 +6761,38 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
     }
   }
 
-  if (!name) throw new Error('A name is needed to publish');
+  if (!name)
+    throw new Error(
+      i18n.t('question:message.error.registered_name', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const balance = await getBalanceInfo();
 
-  if (+balance < fee) throw new Error('Your QORT balance is insufficient');
+  if (+balance < fee)
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const assetBalance = await getAssetBalanceInfo(assetId);
   const assetInfo = await getAssetInfo(assetId);
   if (assetBalance < totalAmount)
-    throw new Error('Your asset balance is insufficient');
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   const resPermission = await getUserPermission(
     {
-      text1:
-        'Do you give this application permission to make the following payments and publishes?',
-      text2: `Asset used in payments: ${assetInfo.name}`,
+      text1: i18n.t('question:permission.pay_publish', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:assets_used_pay', {
+        asset: assetInfo.name,
+        postProcess: 'capitalizeFirstChar',
+      }),
       html: `
       <div style="max-height: 30vh; overflow-y: auto;">
       <style>
@@ -5352,9 +6864,14 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
     },
     isFromExtension
   );
+
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // const failedTxs = []
@@ -5492,7 +7009,12 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const requiredFields = ['amount', 'assetId', 'recipient'];
   requiredFields.forEach((field) => {
     if (data[field] === undefined || data[field] === null) {
-      throw new Error(`Missing required field: ${field}`);
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
   });
   const amount = data.amount;
@@ -5502,20 +7024,41 @@ export const transferAssetRequest = async (data, isFromExtension) => {
   const { fee } = await getFee('TRANSFER_ASSET');
   const balance = await getBalanceInfo();
 
-  if (+balance < +fee) throw new Error('Your QORT balance is insufficient');
+  if (+balance < +fee)
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const assetBalance = await getAssetBalanceInfo(assetId);
   if (assetBalance < amount)
-    throw new Error('Your asset balance is insufficient');
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const confirmReceiver = await getNameOrAddress(recipient);
   if (confirmReceiver.error) {
-    throw new Error('Invalid receiver address or name');
+    throw new Error(
+      i18n.t('question:message.error.invalid_receiver', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const assetInfo = await getAssetInfo(assetId);
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to transfer the following asset?`,
-      text2: `Asset: ${assetInfo?.name}`,
-      highlightedText: `Amount: ${amount}`,
+      text1: i18n.t('question:permission.transfer_asset', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:asset_name', {
+        asset: assetInfo?.name,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:amount_qty', {
+        quantity: amount,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee,
     },
     isFromExtension
@@ -5523,7 +7066,11 @@ export const transferAssetRequest = async (data, isFromExtension) => {
 
   const { accepted } = resPermission;
   if (!accepted) {
-    throw new Error('User declined request');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
   const res = await transferAsset({
     amount,
