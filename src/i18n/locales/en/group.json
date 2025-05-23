@@ -42,6 +42,7 @@
     "id": "group id",
     "invites": "group invites",
     "group": "group",
+    "group_name": "group: {{ name }}",
     "group_other": "groups",
     "groups_admin": "groups where you are an admin",
     "management": "group management",

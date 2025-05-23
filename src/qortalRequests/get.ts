@@ -3290,10 +3290,14 @@ export const updateForeignFee = async (data, isFromExtension) => {
       : '';
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to update foreign fees on your node?`,
+      text1: i18n.t('question:permission_update_foreign_fee', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
-      text3: `value: ${text3}`,
-      text4,
+      text3: i18n.t('question:value', {
+        value: text3,
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: i18n.t('question:coin', {
         coin: coin,
         postProcess: 'capitalizeFirstChar',
@@ -5030,12 +5034,26 @@ export const adminAction = async (data, isFromExtension) => {
       includeValueInBody = true;
       break;
     default:
-      throw new Error(`Unknown admin action type: ${data.type}`);
+      throw new Error(
+        i18n.t('question:message.error.unknown_admin_action_type', {
+          type: data.type,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
   }
   // Prepare the permission prompt text
-  let permissionText = `Do you give this application permission to perform the admin action: ${data.type}`;
+  let permissionText = i18n.t('question:permission_perform_admin_action', {
+    type: data.type,
+    postProcess: 'capitalizeFirstChar',
+  });
+
   if (data.value) {
-    permissionText += ` with value: ${data.value}`;
+    permissionText +=
+      ' ' +
+      i18n.t('question:permission_perform_admin_action_with_value', {
+        value: data.value,
+        postProcess: 'capitalizeFirstChar',
+      });
   }
 
   const resPermission = await getUserPermission(
@@ -5044,7 +5062,9 @@ export const adminAction = async (data, isFromExtension) => {
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
+
   if (accepted) {
     // Set up options for the API call
     const options: RequestInit = {
@@ -5097,11 +5117,11 @@ export const signTransaction = async (data, isFromExtension) => {
   }
 
   const shouldProcess = data?.process || false;
-  let _url = await createEndpoint(
+  const _url = await createEndpoint(
     '/transactions/decode?ignoreValidityChecks=false'
   );
 
-  let _body = data.unsignedBytes;
+  const _body = data.unsignedBytes;
   const response = await fetch(_url, {
     method: 'POST',
     headers: {
@@ -5109,6 +5129,7 @@ export const signTransaction = async (data, isFromExtension) => {
     },
     body: _body,
   });
+
   if (!response.ok)
     throw new Error(
       i18n.t('question:message.error.decode_transaction', {
@@ -5118,7 +5139,13 @@ export const signTransaction = async (data, isFromExtension) => {
   const decodedData = await response.json();
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to ${shouldProcess ? 'SIGN and PROCESS' : 'SIGN'} a transaction?`,
+      text1: shouldProcess
+        ? i18n.t('question:permission_sign_process_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : i18n.t('question:permission_sign_transaction', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       highlightedText: i18n.t(
         'question:message.generic.read_transaction_carefully',
         { postProcess: 'capitalizeFirstChar' }
@@ -5128,6 +5155,7 @@ export const signTransaction = async (data, isFromExtension) => {
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
   if (accepted) {
     let urlConverted = await createEndpoint('/transactions/convert');
@@ -5325,7 +5353,9 @@ export const registerNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('REGISTER_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to register this name?`,
+      text1: i18n.t('question:permission_register_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: data.name,
       text2: data?.description,
       fee: fee.fee,
@@ -5369,7 +5399,9 @@ export const updateNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('UPDATE_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to register this name?`,
+      text1: i18n.t('question:permission_register_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: data.newName,
       text2: data?.description,
       fee: fee.fee,
@@ -5430,7 +5462,9 @@ export const leaveGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('LEAVE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to leave the following group?`,
+      text1: i18n.t('question:permission_leave_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
       highlightedText: `${groupInfo.groupName}`,
       fee: fee.fee,
     },
@@ -5495,8 +5529,14 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to invite ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_invite', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5564,8 +5604,14 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_KICK');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to kick ${displayInvitee || qortalAddress} from the group?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_kick', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5633,8 +5679,14 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to ban ${displayInvitee || qortalAddress} from the group?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_ban', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5702,8 +5754,14 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_BAN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the group ban for user ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_cancel_ban', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5769,8 +5827,14 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('ADD_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to add user ${displayInvitee || qortalAddress} as an admin?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_add_admin', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5836,8 +5900,14 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   const fee = await getFee('REMOVE_GROUP_ADMIN');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to remove user ${displayInvitee || qortalAddress} as admin?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_remove_admin', {
+        partecipant: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -5903,13 +5973,21 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   const fee = await getFee('CANCEL_GROUP_INVITE');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to cancel the group invite for ${displayInvitee || qortalAddress}?`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_cancel_group_invite', {
+        invitee: displayInvitee || qortalAddress,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
   );
+
   const { accepted } = resPermission;
+
   if (accepted) {
     const response = await cancelInvitationToGroup({
       groupId,
@@ -5927,13 +6005,13 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
 
 export const createGroupRequest = async (data, isFromExtension) => {
   const requiredFields = [
-    'groupId',
-    'qortalAddress',
-    'groupName',
-    'type',
     'approvalThreshold',
-    'minBlock',
+    'groupId',
+    'groupName',
     'maxBlock',
+    'minBlock',
+    'qortalAddress',
+    'type',
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -5959,8 +6037,13 @@ export const createGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to create a group?`,
-      highlightedText: `Group name: ${groupName}`,
+      text1: i18n.t('question:permission_create_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
@@ -6042,9 +6125,17 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   const fee = await getFee('CREATE_GROUP');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to update this group?`,
-      text2: `New owner: ${displayInvitee || newOwner}`,
-      highlightedText: `Group: ${groupInfo.groupName}`,
+      text1: i18n.t('question:permission_update_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:permission_update_group_detail', {
+        owner: displayInvitee || newOwner,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('group:group.group_name', {
+        name: groupInfo?.groupName,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension
