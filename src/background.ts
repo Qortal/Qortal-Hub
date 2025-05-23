@@ -3209,9 +3209,6 @@ function setupMessageListener() {
       case 'removeAdmin':
         removeAdminCase(request, event);
         break;
-      case 'notification':
-        notificationCase(request, event);
-        break;
       case 'addTimestampEnterChat':
         addTimestampEnterChatCase(request, event);
         break;
