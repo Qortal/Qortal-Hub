@@ -2925,7 +2925,12 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         },
         body: JSON.stringify(_body),
       });
-      if (!response?.ok) throw new Error('Unable to fetch wallet information');
+      if (!response?.ok)
+        throw new Error(
+          i18n.t('question:message.error.fetch_wallet_info', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -2938,7 +2943,12 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
 
       return res;
     } catch (error) {
-      throw new Error(error?.message || 'Fetch Wallet Failed');
+      throw new Error(
+        error?.message ||
+          i18n.t('question:message.error.fetch_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
     throw new Error(
@@ -2983,12 +2993,15 @@ export const getUserWalletTransactions = async (
   if (!skip) {
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to retrieve your wallet transactions',
+        text1: i18n.t('question:permission_get_wallet_transactions', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: true,
-          label: 'Always allow wallet txs to be retrieved automatically',
+          label: i18n.t('question:always_retrieve_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         },
       },
       isFromExtension
@@ -3028,7 +3041,12 @@ export const getUserWalletTransactions = async (
         },
         body: _body,
       });
-      if (!response?.ok) throw new Error('Unable to fetch wallet transactions');
+      if (!response?.ok)
+        throw new Error(
+          i18n.t('question:message.error.fetch_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       let res;
       try {
         res = await response.clone().json();
@@ -3041,7 +3059,12 @@ export const getUserWalletTransactions = async (
 
       return res;
     } catch (error) {
-      throw new Error(error?.message || 'Fetch Wallet Transactions Failed');
+      throw new Error(
+        error?.message ||
+          i18n.t('question:message.error.fetch_wallet_transactions', {
+            postProcess: 'capitalizeFirstChar',
+          })
+      );
     }
   } else {
     throw new Error(
@@ -3146,7 +3169,12 @@ export const getTxActivitySummary = async (data) => {
     }
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in tx activity summary');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.transaction_activity_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3243,10 +3271,22 @@ export const updateForeignFee = async (data, isFromExtension) => {
   const { coin, type, value } = data;
 
   const text3 =
-    type === 'feerequired' ? `${value} sats` : `${value} sats per kb`;
+    type === 'feerequired'
+      ? i18n.t('question:sats', {
+          amount: value,
+          postProcess: 'capitalizeFirstChar',
+        })
+      : i18n.t('question:sats_per_kb', {
+          amount: value,
+          postProcess: 'capitalizeFirstChar',
+        });
   const text4 =
     type === 'feerequired'
-      ? `*The ${value} sats fee is derived from ${calculateRateFromFee(value, 300)} sats per kb, for a transaction that is approximately 300 bytes in size.`
+      ? i18n.t('question:message.generic.calculate_fee', {
+          amount: value,
+          rate: calculateRateFromFee(value, 300),
+          postProcess: 'capitalizeFirstChar',
+        })
       : '';
   const resPermission = await getUserPermission(
     {
