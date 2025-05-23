@@ -3294,7 +3294,10 @@ export const updateForeignFee = async (data, isFromExtension) => {
       text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
       text3: `value: ${text3}`,
       text4,
-      highlightedText: `Coin: ${coin}`,
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -3372,7 +3375,11 @@ export const getServerConnectionHistory = async (data) => {
     });
 
     if (!response.ok)
-      throw new Error('Failed to fetch server connection history');
+      throw new Error(
+        i18n.t('question:message.error.fetch_connection_history', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3387,7 +3394,12 @@ export const getServerConnectionHistory = async (data) => {
 
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in get server connection history');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.fetch_connection_history', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3423,10 +3435,21 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to set the current server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission_set_current_server', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -3457,7 +3480,12 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to set current server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_current_set', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -3505,10 +3533,21 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to add a server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission_server_add', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -3539,7 +3578,12 @@ export const addForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to add server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_current_add', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -3587,10 +3631,21 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to remove a server?`,
-      text2: `type: ${type}`,
-      text3: `host: ${host}`,
-      highlightedText: `Coin: ${coin}`,
+      text1: i18n.t('question:permission_server_remove', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text2: i18n.t('question:server_type', {
+        type: type,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      text3: i18n.t('question:server_host', {
+        host: host,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('question:coin', {
+        coin: coin,
+        postProcess: 'capitalizeFirstChar',
+      }),
     },
     isFromExtension
   );
@@ -3621,7 +3676,12 @@ export const removeForeignServer = async (data, isFromExtension) => {
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) throw new Error('Failed to remove server');
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.server_remove', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
   let res;
   try {
@@ -3649,7 +3709,12 @@ export const getDaySummary = async () => {
       },
     });
 
-    if (!response.ok) throw new Error('Failed to retrieve summary');
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.retrieve_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
 
     let res;
     try {
@@ -3664,7 +3729,12 @@ export const getDaySummary = async () => {
 
     return res; // Return the full response
   } catch (error) {
-    throw new Error(error?.message || 'Error in retrieving summary');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.retrieve_summary', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -4694,7 +4764,7 @@ export const createSellOrder = async (data, isFromExtension) => {
         text1: i18n.t('question:permission_sell_order', {
           postProcess: 'capitalizeFirstChar',
         }),
-        text2: i18n.t('question:permission_sell_order_detail', {
+        text2: i18n.t('question:permission_order_detail', {
           qort_amount: data.qortAmount,
           foreign_amount: parsedForeignAmount,
           ticker: data.foreignBlockchain,
@@ -4780,11 +4850,15 @@ export const cancelSellOrder = async (data, isFromExtension) => {
 
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform: cancel a sell order?',
-        text2: `${resData.qortAmount}${' '}
-      ${`QORT`}`,
-        text3: `FOR  ${resData.expectedForeignAmount} ${resData.foreignBlockchain}`,
+        text1: i18n.t('question:permission_cancel_sell_order', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission_order_detail', {
+          qort_amount: resData.qortAmount,
+          foreign_amount: resData.expectedForeignAmount,
+          ticker: resData.foreignBlockchain,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: fee.fee,
       },
       isFromExtension
