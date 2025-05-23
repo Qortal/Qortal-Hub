@@ -2006,13 +2006,22 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
     const balance = await getBalanceInfo();
     const hasEnoughBalance = +balance < 4 ? false : true;
     if (!hasEnoughBalance) {
-      throw new Error('You need at least 4 QORT to send a message');
+      throw new Error(
+        i18n.t('group:message.error.qortals_required', {
+          quantity: 4,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     if (isRecipient && recipient) {
       const url = await createEndpoint(`/addresses/publickey/${recipient}`);
       const response = await fetch(url);
       if (!response.ok)
-        throw new Error("Failed to fetch recipient's public key");
+        throw new Error(
+          i18n.t('question:message.error.fetch_recipient_public_key', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
 
       let key;
       let hasPublicKey;
@@ -2141,7 +2150,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
       throw new Error('Please enter a recipient or groupId');
     }
   } else {
-    throw new Error('User declined to send message');
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_send_message', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 };
 
@@ -2517,8 +2530,10 @@ export const getWalletBalance = async (
   if (!bypassPermission && !skip) {
     resPermission = await getUserPermission(
       {
-        text1: 'Do you give this application permission to fetch your',
-        highlightedText: `${data.coin} balance`,
+        text1: i18n.t('question:permission_fetch_balance', {
+          coin: data.coin, // TODO highlight coin in the modal
+          postProcess: 'capitalizeFirstChar',
+        }),
         checkbox1: {
           value: true,
           label: i18n.t('question:always_retrieve_balance', {
@@ -3052,7 +3067,12 @@ export const getForeignFee = async (data) => {
     }
     return res; // Return full response here
   } catch (error) {
-    throw new Error(error?.message || 'Error in get foreign fee');
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.get_foreign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
   }
 };
 
@@ -3646,7 +3666,10 @@ export const sendCoin = async (data, isFromExtension) => {
       walletBalance = await response.text();
     }
     if (isNaN(Number(walletBalance))) {
-      const errorMsg = 'Failed to Fetch QORT Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'QORT',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
 
@@ -3663,7 +3686,9 @@ export const sendCoin = async (data, isFromExtension) => {
       throw new Error(errorMsg);
     }
     if (amount <= 0) {
-      const errorMsg = 'Invalid Amount!';
+      const errorMsg = i18n.t('core:message.error.invalid_amount', {
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     if (recipient.length === 0) {
@@ -3707,13 +3732,22 @@ export const sendCoin = async (data, isFromExtension) => {
     const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(btcWalletBalance))) {
-      throw new Error('Unable to fetch BTC balance');
+      throw new Error(
+        i18n.t('question:message.error.fetch_balance_token', {
+          token: 'BTC',
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
     const btcWalletBalanceDecimals = Number(btcWalletBalance);
     const btcAmountDecimals = Number(amount);
     const fee = feePerByte * 500; // default 0.00050000
     if (btcAmountDecimals + fee > btcWalletBalanceDecimals) {
-      throw new Error('INSUFFICIENT_FUNDS');
+      throw new Error(
+        i18n.t('question:message.error.insufficient_funds', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
 
     const resPermission = await getUserPermission(
@@ -3774,7 +3808,10 @@ export const sendCoin = async (data, isFromExtension) => {
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
-      const errorMsg = 'Failed to Fetch LTC Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'LTC',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const ltcWalletBalanceDecimals = Number(ltcWalletBalance);
@@ -3843,7 +3880,10 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dogeFeePerByte;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
-      const errorMsg = 'Failed to Fetch DOGE Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'DOGE',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const dogeWalletBalanceDecimals = Number(dogeWalletBalance);
@@ -3916,7 +3956,10 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
-      const errorMsg = 'Failed to Fetch DGB Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'DGB',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const dgbWalletBalanceDecimals = Number(dgbWalletBalance);
@@ -3986,7 +4029,10 @@ export const sendCoin = async (data, isFromExtension) => {
     const feePerByte = data.fee ? data.fee : rvnFeePerByte;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
-      const errorMsg = 'Failed to Fetch RVN Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'RVN',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const rvnWalletBalanceDecimals = Number(rvnWalletBalance);
@@ -4056,7 +4102,10 @@ export const sendCoin = async (data, isFromExtension) => {
     const arrrWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(arrrWalletBalance))) {
-      const errorMsg = 'Failed to Fetch ARRR Balance. Try again!';
+      const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
+        token: 'ARR',
+        postProcess: 'capitalizeFirstChar',
+      });
       throw new Error(errorMsg);
     }
     const arrrWalletBalanceDecimals = Number(arrrWalletBalance);
@@ -4192,8 +4241,9 @@ export const createBuyOrder = async (data, isFromExtension) => {
     const buyingFees = await getBuyingFees(foreignBlockchain);
     const resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to perform a buy order?',
+        text1: i18n.t('question:permission_buy_order', {
+          postProcess: 'capitalizeFirstChar',
+        }), // TODO translate better
         text2: `${atAddresses?.length}${' '}
       ${`buy order${atAddresses?.length === 1 ? '' : 's'}`}`,
         text3: `${crosschainAtInfo?.reduce((latest, cur) => {
@@ -4204,7 +4254,10 @@ export const createBuyOrder = async (data, isFromExtension) => {
           }, 0)
         )}
       ${` ${buyingFees.ticker}`}`,
-        highlightedText: `Is using public node: ${isGateway}`,
+        highlightedText: i18n.t('auth:node.using_public_gateway', {
+          gateway: isGateway,
+          postProcess: 'capitalizeFirstChar',
+        }),
         fee: '',
         html: `
   <div style="max-height: 30vh; overflow-y: auto; font-family: sans-serif;">
@@ -5794,9 +5847,19 @@ export const sellNameRequest = async (data, isFromExtension) => {
 
   const response = await fetch(validApi + '/names/' + name);
   const nameData = await response.json();
-  if (!nameData) throw new Error('This name does not exist');
+  if (!nameData)
+    throw new Error(
+      i18n.t('auth:message.error.name_not_existing', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
 
-  if (nameData?.isForSale) throw new Error('This name is already for sale');
+  if (nameData?.isForSale)
+    throw new Error(
+      i18n.t('question:message.error.name_already_for_sale', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   const fee = await getFee('SELL_NAME');
   const resPermission = await getUserPermission(
     {
@@ -6278,6 +6341,7 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
     },
     isFromExtension
   );
+
   const { accepted, checkbox1 = false } = resPermission;
   if (!accepted) {
     throw new Error(
