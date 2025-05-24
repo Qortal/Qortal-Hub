@@ -88,7 +88,6 @@ export const publishData = async ({
   feeAmount,
   filename,
   identifier,
-  isBase64,
   registeredName,
   service,
   tag1,

@@ -37,7 +37,7 @@ import {
 } from './Apps-styles';
 import AddIcon from '@mui/icons-material/Add';
 import ImageUploader from '../../common/ImageUploader';
-import { QORTAL_APP_CONTEXT } from '../../App';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background/background.ts';
