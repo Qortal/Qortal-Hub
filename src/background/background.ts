@@ -1,5 +1,5 @@
 // @ts-nocheck
-import '../qortalRequests/qortalRequests';
+import '../qortal/qortal-requests.ts';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';

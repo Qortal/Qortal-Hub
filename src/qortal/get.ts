@@ -70,7 +70,7 @@ import {
   getPermission,
   isRunningGateway,
   setPermission,
-} from './qortalRequests.ts';
+} from './qortal-requests.ts';
 import TradeBotCreateRequest from '../transactions/TradeBotCreateRequest.ts';
 import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest.ts';
 import signTradeBotTransaction from '../transactions/signTradeBotTransaction.ts';
@@ -1315,8 +1315,7 @@ export const publishQDNResource = async (
   if (appFee && appFee > 0 && appFeeRecipient) {
     hasAppFee = true;
   }
-
-  const registeredName = data?.name || (await getNameInfo());
+  const registeredName = await getNameInfo();
   const name = registeredName;
   if (!name) {
     throw new Error(
@@ -1332,7 +1331,7 @@ export const publishQDNResource = async (
   const title = data.title;
   const description = data.description;
   const category = data.category;
-  const file = data?.file || data?.blob;
+
   const tags = data?.tags || [];
   const result = {};
 
@@ -1347,7 +1346,9 @@ export const publishQDNResource = async (
   if (data.identifier == null) {
     identifier = 'default';
   }
-
+  if (data?.file || data?.blob) {
+    data64 = await fileToBase64(data?.file || data?.blob);
+  }
   if (
     data.encrypt &&
     (!data.publicKeys ||
@@ -1366,9 +1367,6 @@ export const publishQDNResource = async (
       const parsedData = resKeyPair;
       const privateKey = parsedData.privateKey;
       const userPublicKey = parsedData.publicKey;
-      if (data?.file || data?.blob) {
-        data64 = await fileToBase64(data?.file || data?.blob);
-      }
       const encryptDataResponse = encryptDataGroup({
         data64,
         publicKeys: data.publicKeys,
@@ -1412,7 +1410,6 @@ export const publishQDNResource = async (
       }),
       text2: `service: ${service}`,
       text3: `identifier: ${identifier || null}`,
-      text4: `name: ${registeredName}`,
       fee: fee.fee,
       ...handleDynamicValues,
     },
@@ -1423,10 +1420,11 @@ export const publishQDNResource = async (
     try {
       const resPublish = await publishData({
         registeredName: encodeURIComponent(name),
-        data: data64 ? data64 : file,
+        file: data64,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: data64 ? 'base64' : 'file',
+        uploadType: 'file',
+        isBase64: true,
         filename: filename,
         title,
         description,
@@ -1560,7 +1558,6 @@ export const publishMultipleQDNResources = async (
 
   const fee = await getFee('ARBITRARY');
   const registeredName = await getNameInfo();
-
   const name = registeredName;
 
   if (!name) {
@@ -1570,14 +1567,6 @@ export const publishMultipleQDNResources = async (
       })
     );
   }
-
-  const userNames = await getAllUserNames();
-  data.resources?.forEach((item) => {
-    if (item?.name && !userNames?.includes(item.name))
-      throw new Error(
-        `The name ${item.name}, does not belong to the publisher.`
-      );
-  });
 
   const appFee = data?.appFee ? +data.appFee : undefined;
   const appFeeRecipient = data?.appFeeRecipient;
@@ -1649,7 +1638,7 @@ export const publishMultipleQDNResources = async (
           <div class="resource-detail"><span>Service:</span> ${
             resource.service
           }</div>
-          <div class="resource-detail"><span>Name:</span> ${resource?.name || name}</div>
+          <div class="resource-detail"><span>Name:</span> ${name}</div>
           <div class="resource-detail"><span>Identifier:</span> ${
             resource.identifier
           }</div>
@@ -1706,7 +1695,6 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
-          name: resource?.name || name,
         });
         continue;
       }
@@ -1721,19 +1709,19 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
-          name: resource?.name || name,
         });
         continue;
       }
       const service = resource.service;
       let identifier = resource.identifier;
-      let rawData = resource?.data64 || resource?.base64;
+      let data64 = resource?.data64 || resource?.base64;
       const filename = resource.filename;
       const title = resource.title;
       const description = resource.description;
       const category = resource.category;
       const tags = resource?.tags || [];
       const result = {};
+
       // Fill tags dynamically while maintaining backward compatibility
       for (let i = 0; i < 5; i++) {
         result[`tag${i + 1}`] = tags[i] || resource[`tag${i + 1}`] || undefined;
@@ -1753,31 +1741,26 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
-          name: resource?.name || name,
         });
         continue;
       }
       if (resource.file) {
-        rawData = resource.file;
+        data64 = await fileToBase64(resource.file);
       }
-
       if (resourceEncrypt) {
         try {
-          if (resource?.file) {
-            rawData = await fileToBase64(resource.file);
-          }
           const resKeyPair = await getKeyPair();
           const parsedData = resKeyPair;
           const privateKey = parsedData.privateKey;
           const userPublicKey = parsedData.publicKey;
           const encryptDataResponse = encryptDataGroup({
-            data64: rawData,
+            data64,
             publicKeys: data.publicKeys,
             privateKey,
             userPublicKey,
           });
           if (encryptDataResponse) {
-            rawData = encryptDataResponse;
+            data64 = encryptDataResponse;
           }
         } catch (error) {
           const errorMsg =
@@ -1789,27 +1772,22 @@ export const publishMultipleQDNResources = async (
             reason: errorMsg,
             identifier: resource.identifier,
             service: resource.service,
-            name: resource?.name || name,
           });
           continue;
         }
       }
 
       try {
-        const dataType =
-          resource?.base64 || resource?.data64 || resourceEncrypt
-            ? 'base64'
-            : 'file';
-        console.log('dataType', dataType);
         await retryTransaction(
           publishData,
           [
             {
-              data: rawData,
-              registeredName: encodeURIComponent(resource?.name || name),
+              registeredName: encodeURIComponent(name),
+              file: data64,
               service: service,
               identifier: encodeURIComponent(identifier),
-              uploadType: dataType,
+              uploadType: 'file',
+              isBase64: true,
               filename: filename,
               title,
               description,
@@ -1840,7 +1818,6 @@ export const publishMultipleQDNResources = async (
           reason: errorMsg,
           identifier: resource.identifier,
           service: resource.service,
-          name: resource?.name || name,
         });
       }
     } catch (error) {
@@ -1852,7 +1829,6 @@ export const publishMultipleQDNResources = async (
           }),
         identifier: resource.identifier,
         service: resource.service,
-        name: resource?.name || name,
       });
     }
   }
@@ -2348,44 +2324,6 @@ export const joinGroup = async (data, isFromExtension) => {
 
 export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   try {
-    if (!data?.filename) throw new Error('Missing filename');
-    if (data?.location) {
-      const requiredFieldsLocation = ['service', 'name'];
-      const missingFieldsLocation: string[] = [];
-      requiredFieldsLocation.forEach((field) => {
-        if (!data?.location[field]) {
-          missingFieldsLocation.push(field);
-        }
-      });
-      if (missingFieldsLocation.length > 0) {
-        const missingFieldsString = missingFieldsLocation.join(', ');
-        const errorMsg = `Missing fields: ${missingFieldsString}`;
-        throw new Error(errorMsg);
-      }
-      const resPermission = await getUserPermission(
-        {
-          text1: 'Would you like to download:',
-          highlightedText: `${data?.filename}`,
-        },
-        isFromExtension
-      );
-      const { accepted } = resPermission;
-      if (!accepted) throw new Error('User declined to save file');
-      const a = document.createElement('a');
-      let locationUrl = `/arbitrary/${data.location.service}/${data.location.name}`;
-      if (data.location.identifier) {
-        locationUrl = locationUrl + `/${data.location.identifier}`;
-      }
-      const endpoint = await createEndpoint(
-        locationUrl + `?attachment=true&attachmentFilename=${data?.filename}`
-      );
-      a.href = endpoint;
-      a.download = data.filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return true;
-    }
     const requiredFields = ['filename', 'blob'];
     const missingFields: string[] = [];
     requiredFields.forEach((field) => {
@@ -2403,8 +2341,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     }
     const filename = data.filename;
     const blob = data.blob;
-
-    const mimeType = blob.type || data.mimeType;
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:download_file', {
@@ -2415,17 +2351,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       isFromExtension
     );
     const { accepted } = resPermission;
-    if (!accepted) throw new Error('User declined to save file');
-    showSaveFilePicker(
-      {
-        filename,
-        mimeType,
-        blob,
-      },
-      snackMethods
-    );
-
-    return true;
 
     if (accepted) {
       const mimeType = blob.type || data.mimeType;
@@ -5471,10 +5396,11 @@ export const updateNameRequest = async (data, isFromExtension) => {
   const fee = await getFee('UPDATE_NAME');
   const resPermission = await getUserPermission(
     {
-      text1: `Do you give this application permission to update this name?`,
-      text2: `previous name: ${oldName}`,
-      text3: `new name: ${newName}`,
-      text4: data?.description,
+      text1: i18n.t('question:permission.register_name', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: data.newName,
+      text2: data?.description,
       fee: fee.fee,
     },
     isFromExtension
@@ -6086,7 +6012,7 @@ export const createGroupRequest = async (data, isFromExtension) => {
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] === undefined || data[field] === null) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
@@ -6150,7 +6076,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   ];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] === undefined || data[field] === null) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
@@ -6324,7 +6250,7 @@ export const sellNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['salePrice', 'nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] === undefined || data[field] === null) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
@@ -6394,7 +6320,7 @@ export const cancelSellNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] === undefined || data[field] === null) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
@@ -6451,7 +6377,7 @@ export const buyNameRequest = async (data, isFromExtension) => {
   const requiredFields = ['nameForSale'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
-    if (data[field] === undefined || data[field] === null) {
+    if (data[field] !== undefined && data[field] !== null) {
       missingFields.push(field);
     }
   });
@@ -6930,11 +6856,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
         [
           {
             registeredName: encodeURIComponent(name),
-            data: encryptDataResponse,
+            file: encryptDataResponse,
             service: transaction.service,
             identifier: encodeURIComponent(transaction.identifier),
-            uploadType: 'base64',
+            uploadType: 'file',
             description: transaction?.description,
+            isBase64: true,
             apiVersion: 2,
             withFee: true,
           },
@@ -6981,11 +6908,12 @@ export const multiPaymentWithPrivateData = async (data, isFromExtension) => {
       [
         {
           registeredName: encodeURIComponent(name),
-          data: encryptDataResponse,
+          file: encryptDataResponse,
           service: transaction.service,
           identifier: encodeURIComponent(transaction.identifier),
-          uploadType: 'base64',
+          uploadType: 'file',
           description: transaction?.description,
+          isBase64: true,
           apiVersion: 2,
           withFee: true,
         },

@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import { executeEvent } from '../utils/events';
 import { navigationControllerAtom } from '../atoms/global';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { saveFile } from '../qortalRequests/get';
+import { saveFile } from '../qortal/get';
 import { mimeToExtensionMap } from '../utils/memeTypes';
 import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
