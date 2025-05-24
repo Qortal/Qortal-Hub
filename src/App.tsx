@@ -3422,8 +3422,15 @@ function App() {
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
           >
-            <DialogTitle id="alert-dialog-title">
-              {'Important Info'}
+            <DialogTitle
+              id="alert-dialog-title"
+              sx={{
+                textAlign: 'center',
+              }}
+            >
+              {t('tutorial:important_info', {
+                postProcess: 'capitalizeAll',
+              })}
             </DialogTitle>
 
             <DialogContent>
@@ -3448,18 +3455,45 @@ function App() {
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
           >
-            <DialogTitle id="alert-dialog-title">
+            <DialogTitle
+              id="alert-dialog-title"
+              sx={{
+                textAlign: 'center',
+                color: theme.palette.text.primary,
+                fontWeight: 'bold',
+                opacity: 1,
+              }}
+            >
               {t('core:action.logout', { postProcess: 'capitalizeAll' })}
             </DialogTitle>
 
             <DialogContent>
-              <DialogContentText id="alert-dialog-description">
+              <DialogContentText
+                id="alert-dialog-description"
+                sx={{
+                  textAlign: 'center',
+                }}
+              >
                 {messageUnsavedChanges.message}
               </DialogContentText>
             </DialogContent>
 
             <DialogActions>
-              <Button variant="contained" onClick={onCancelUnsavedChanges}>
+              <Button
+                variant="contained"
+                onClick={onCancelUnsavedChanges}
+                sx={{
+                  backgroundColor: theme.palette.other.danger,
+                  color: theme.palette.text.primary,
+                  fontWeight: 'bold',
+                  opacity: 0.7,
+                  '&:hover': {
+                    backgroundColor: theme.palette.other.danger,
+                    color: 'black',
+                    opacity: 1,
+                  },
+                }}
+              >
                 {t('core:action.cancel', {
                   postProcess: 'capitalizeFirstChar',
                 })}
@@ -3469,6 +3503,17 @@ function App() {
                 variant="contained"
                 onClick={onOkUnsavedChanges}
                 autoFocus
+                sx={{
+                  backgroundColor: theme.palette.other.positive,
+                  color: theme.palette.text.primary,
+                  fontWeight: 'bold',
+                  opacity: 0.7,
+                  '&:hover': {
+                    backgroundColor: theme.palette.other.positive,
+                    color: 'black',
+                    opacity: 1,
+                  },
+                }}
               >
                 {t('core:action.continue_logout', {
                   postProcess: 'capitalizeFirstChar',
