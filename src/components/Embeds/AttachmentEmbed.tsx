@@ -226,8 +226,7 @@ export const AttachmentCard = ({
               width: '100%',
             }}
           >
-            {' '}
-            <CustomLoader />{' '}
+            <CustomLoader />
           </Box>
         )}
         {errorMsg && (
