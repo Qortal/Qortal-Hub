@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption';
 import { AddGroup } from './AddGroup';
 import CreateIcon from '@mui/icons-material/Create';
 import {

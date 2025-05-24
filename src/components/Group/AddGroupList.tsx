@@ -25,7 +25,7 @@ import {
 import _ from 'lodash';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { Spacer } from '../../common/Spacer';

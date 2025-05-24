@@ -8,7 +8,7 @@ import { Box, CircularProgress, useTheme } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import ShortUniqueId from 'short-unique-id';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import {
   decryptPublishes,
   getTempPublish,

@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getBaseApiReact } from '../App';
 import { getData, storeData } from '../utils/chromeStorage';
-import { checkDifference, getNameInfoForOthers } from '../background';
+import {
+  checkDifference,
+  getNameInfoForOthers,
+} from '../background/background.ts';
 import { lastPaymentSeenTimestampAtom } from '../atoms/global';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { useAtom } from 'jotai';

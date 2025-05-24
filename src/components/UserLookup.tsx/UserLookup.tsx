@@ -19,7 +19,10 @@ import {
   useTheme,
   Autocomplete,
 } from '@mui/material';
-import { getAddressInfo, getNameOrAddress } from '../../background';
+import {
+  getAddressInfo,
+  getNameOrAddress,
+} from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { getNameInfo } from '../Group/Group';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';

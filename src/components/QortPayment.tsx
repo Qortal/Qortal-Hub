@@ -2,7 +2,7 @@ import { Box, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { TextP } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
-import { getFee } from '../background';
+import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 
 export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {

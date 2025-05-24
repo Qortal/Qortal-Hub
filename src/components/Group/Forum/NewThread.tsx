@@ -22,7 +22,7 @@ import {
   pauseAllQueues,
   resumeAllQueues,
 } from '../../../App';
-import { getFee } from '../../../background';
+import { getFee } from '../../../background/background';
 import TipTap from '../../Chat/TipTap';
 import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';

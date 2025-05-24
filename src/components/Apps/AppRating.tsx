@@ -1,6 +1,6 @@
 import { Box, Rating } from '@mui/material';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { StarFilledIcon } from '../../assets/Icons/StarFilled';

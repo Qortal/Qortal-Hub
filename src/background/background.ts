@@ -1,27 +1,27 @@
 // @ts-nocheck
-import './qortalRequests';
+import '../qortalRequests/qortalRequests';
 import { isArray } from 'lodash';
-import { uint8ArrayToObject } from './backgroundFunctions/encryption';
-import Base58 from './deps/Base58';
+import { uint8ArrayToObject } from '../encryption/encryption.ts';
+import Base58 from '../encryption/Base58';
 import axios from 'axios';
 import {
   base64ToUint8Array,
   decryptSingle,
   encryptSingle,
   objectToBase64,
-} from './qdn/encryption/group-encryption';
-import ChatComputePowWorker from './chatComputePow.worker.js?worker';
-import { reusableGet } from './qdn/publish/pubish';
-import { signChat } from './transactions/signChat';
-import { createTransaction } from './transactions/transactions';
-import { decryptChatMessage } from './utils/decryptChatMessage';
-import { decryptStoredWallet } from './utils/decryptWallet';
-import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import { RequestQueueWithPromise } from './utils/queue/queue';
-import { validateAddress } from './utils/validateAddress';
+} from '../qdn/encryption/group-encryption';
+import ChatComputePowWorker from '../chatComputePow.worker.js?worker';
+import { reusableGet } from '../qdn/publish/pubish';
+import { signChat } from '../transactions/signChat';
+import { createTransaction } from '../transactions/transactions';
+import { decryptChatMessage } from '../utils/decryptChatMessage';
+import { decryptStoredWallet } from '../utils/decryptWallet';
+import PhraseWallet from '../utils/generateWallet/phrase-wallet';
+import { RequestQueueWithPromise } from '../utils/queue/queue';
+import { validateAddress } from '../utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
-import { TradeBotRespondMultipleRequest } from './transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/constants';
+import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
+import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -68,7 +68,6 @@ import {
   ltcBalanceCase,
   makeAdminCase,
   nameCase,
-  notificationCase,
   notifyAdminRegenerateSecretKeyCase,
   pauseAllQueuesCase,
   publishGroupEncryptedResourceCase,
@@ -90,9 +89,13 @@ import {
   validApiCase,
   versionCase,
   voteOnPollCase,
-} from './background-cases';
-import { getData, removeKeysAndLogout, storeData } from './utils/chromeStorage';
-import TradeBotRespondRequest from './transactions/TradeBotRespondRequest';
+} from '../background/background-cases';
+import {
+  getData,
+  removeKeysAndLogout,
+  storeData,
+} from '../utils/chromeStorage';
+import TradeBotRespondRequest from '../transactions/TradeBotRespondRequest';
 
 export let groupSecretkeys = {};
 

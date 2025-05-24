@@ -37,11 +37,8 @@ import {
   getAssetInfo,
   getPublicKey,
   transferAsset,
-} from '../background';
-import {
-  getNameInfo,
-  uint8ArrayToObject,
-} from '../backgroundFunctions/encryption';
+} from '../background/background.ts';
+import { getNameInfo, uint8ArrayToObject } from '../encryption/encryption.ts';
 import { showSaveFilePicker } from '../hooks/useQortalMessageListener';
 import { getPublishesFromAdminsAdminSpace } from '../components/Chat/AdminSpaceInner';
 import { extractComponents } from '../components/Chat/MessageDisplay';
@@ -52,9 +49,9 @@ import {
   validateSecretKey,
 } from '../components/Group/Group';
 import { QORT_DECIMALS } from '../constants/constants';
-import Base58 from '../deps/Base58';
-import ed2curve from '../deps/ed2curve';
-import nacl from '../deps/nacl-fast';
+import Base58 from '../encryption/Base58.ts';
+import ed2curve from '../encryption/ed2curve.ts';
+import nacl from '../encryption/nacl-fast.ts';
 import {
   base64ToUint8Array,
   createSymmetricKeyAndNonce,
@@ -73,7 +70,7 @@ import {
   getPermission,
   isRunningGateway,
   setPermission,
-} from '../qortalRequests';
+} from './qortalRequests.ts';
 import TradeBotCreateRequest from '../transactions/TradeBotCreateRequest';
 import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest';
 import signTradeBotTransaction from '../transactions/signTradeBotTransaction';

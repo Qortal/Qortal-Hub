@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { getNameInfo } from '../Group/Group';
 import PollIcon from '@mui/icons-material/Poll';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Spacer } from '../../common/Spacer';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';

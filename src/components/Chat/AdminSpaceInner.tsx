@@ -10,9 +10,9 @@ import {
   getPublishesFromAdmins,
   validateSecretKey,
 } from '../Group/Group';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
 import { GroupAvatar } from './GroupAvatar';

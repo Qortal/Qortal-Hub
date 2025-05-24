@@ -34,7 +34,7 @@ import ImageUploader from '../../common/ImageUploader';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 

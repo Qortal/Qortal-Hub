@@ -42,7 +42,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 

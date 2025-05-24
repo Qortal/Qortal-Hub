@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { QORTAL_APP_CONTEXT } from '../../App';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { SaveIcon } from '../../assets/Icons/SaveIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
@@ -31,7 +31,7 @@ import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet
 import {
   base64ToUint8Array,
   uint8ArrayToObject,
-} from '../../backgroundFunctions/encryption';
+} from '../../encryption/encryption.ts';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
 

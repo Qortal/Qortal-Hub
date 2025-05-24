@@ -17,7 +17,7 @@ import {
 import { Label } from './Group/AddGroup';
 import { Spacer } from '../common/Spacer';
 import { getBaseApiReact } from '../App';
-import { getFee } from '../background';
+import { getFee } from '../background/background.ts';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';

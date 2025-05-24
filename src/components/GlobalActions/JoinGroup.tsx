@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { CustomButtonAccept } from '../../styles/App-styles';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useAtom, useSetAtom } from 'jotai';

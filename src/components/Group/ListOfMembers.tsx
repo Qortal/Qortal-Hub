@@ -17,7 +17,7 @@ import {
   List,
 } from 'react-virtualized';
 import { LoadingButton } from '@mui/lab';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
 

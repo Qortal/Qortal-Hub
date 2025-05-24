@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import ImageUploader from '../../common/ImageUploader';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { fileToBase64 } from '../../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
