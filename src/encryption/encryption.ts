@@ -146,7 +146,6 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
         data: encryptedData,
         file: encryptedData,
         identifier: `symmetric-qchat-group-${groupId}`,
-        isBase64: true,
         registeredName,
         service: 'DOCUMENT_PRIVATE',
         uploadType: 'base64',
@@ -212,14 +211,12 @@ export const encryptAndPublishSymmetricKeyGroupChatForAdmins = async ({
     if (encryptedData) {
       const registeredName = await getNameInfo();
       const data = await publishData({
-        registeredName,
         data: encryptedData,
-        service: 'DOCUMENT_PRIVATE',
-        identifier: `admins-symmetric-qchat-group-${groupId}`,
-        uploadType: 'base64',
         file: encryptedData,
-        uploadType: 'file',
-        isBase64: true,
+        identifier: `admins-symmetric-qchat-group-${groupId}`,
+        registeredName,
+        service: 'DOCUMENT_PRIVATE',
+        uploadType: 'base64',
         withFee: true,
       });
       return {
@@ -252,13 +249,12 @@ export const publishGroupEncryptedResource = async ({
           })
         );
       const data = await publishData({
-        registeredName,
         data: encryptedData,
-        uploadType: 'base64',
         file: encryptedData,
-        service: 'DOCUMENT',
         identifier,
-        isBase64: true,
+        registeredName,
+        service: 'DOCUMENT',
+        uploadType: 'base64',
         withFee: true,
       });
       return data;
@@ -275,19 +271,19 @@ export const publishGroupEncryptedResource = async ({
 };
 
 export const publishOnQDN = async ({
-  data,
-  identifier,
-  service,
-  title,
-  description,
   category,
+  data,
+  description,
+  identifier,
+  name,
+  service,
   tag1,
   tag2,
   tag3,
   tag4,
   tag5,
-  uploadType = 'file',
-  name,
+  title,
+  uploadType = 'base64',
 }) => {
   if (data && service) {
     const registeredName = name || (await getNameInfo());
@@ -305,7 +301,6 @@ export const publishOnQDN = async ({
       service,
       identifier,
       uploadType,
-      isBase64: true,
       withFee: true,
       title,
       description,

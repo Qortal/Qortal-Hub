@@ -70,7 +70,6 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
       await new Promise((res) => setTimeout(res, 10_000));
     }
   }
-  return data;
 }
 
 async function getKeyPair() {
@@ -248,79 +247,120 @@ export const publishData = async ({
     return signAndProcessRes;
   };
 
-  const uploadData = async (registeredName: string, file: any, fee: number) => {
+  const uploadData = async (registeredName: string, data: any, fee: number) => {
+    console.log('data', uploadType, data);
     let postBody = '';
     let urlSuffix = '';
 
-    if (file != null) {
-      // If we're sending zipped data, make sure to use the /zip version of the POST /arbitrary/* API
-      if (uploadType === 'zip') {
-        urlSuffix = '/zip';
-      }
-
-      // If we're sending file data, use the /base64 version of the POST /arbitrary/* API
-      else if (uploadType === 'file') {
+    if (data != null) {
+      if (uploadType === 'base64') {
         urlSuffix = '/base64';
       }
 
-      // Base64 encode the file to work around compatibility issues between javascript and java byte arrays
-      if (isBase64) {
-        postBody = file;
+      if (uploadType === 'base64') {
+        postBody = data;
       }
-
-      if (!isBase64) {
-        let fileBuffer = new Uint8Array(await file.arrayBuffer());
-        postBody = Buffer.from(fileBuffer).toString('base64');
-      }
+    } else {
+      throw new Error('No data provided');
     }
 
-    let uploadDataUrl = `/arbitrary/${service}/${registeredName}${urlSuffix}`;
+    let uploadDataUrl = `/arbitrary/${service}/${registeredName}`;
+    let paramQueries = '';
     if (identifier?.trim().length > 0) {
-      uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}${urlSuffix}`;
+      uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}`;
     }
 
-    uploadDataUrl = uploadDataUrl + `?fee=${fee}`;
+    paramQueries = paramQueries + `?fee=${fee}`;
 
     if (filename != null && filename != 'undefined') {
-      uploadDataUrl =
-        uploadDataUrl + '&filename=' + encodeURIComponent(filename);
+      paramQueries = paramQueries + '&filename=' + encodeURIComponent(filename);
     }
 
     if (title != null && title != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&title=' + encodeURIComponent(title);
+      paramQueries = paramQueries + '&title=' + encodeURIComponent(title);
     }
 
     if (description != null && description != 'undefined') {
-      uploadDataUrl =
-        uploadDataUrl + '&description=' + encodeURIComponent(description);
+      paramQueries =
+        paramQueries + '&description=' + encodeURIComponent(description);
     }
 
     if (category != null && category != 'undefined') {
-      uploadDataUrl =
-        uploadDataUrl + '&category=' + encodeURIComponent(category);
+      paramQueries = paramQueries + '&category=' + encodeURIComponent(category);
     }
 
     if (tag1 != null && tag1 != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag1);
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag1);
     }
 
     if (tag2 != null && tag2 != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag2);
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag2);
     }
 
     if (tag3 != null && tag3 != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag3);
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag3);
     }
 
     if (tag4 != null && tag4 != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag4);
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag4);
     }
 
     if (tag5 != null && tag5 != 'undefined') {
-      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag5);
+      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag5);
+    }
+    if (uploadType === 'zip') {
+      paramQueries = paramQueries + '&isZip=' + true;
     }
 
-    return await reusablePost(uploadDataUrl, postBody);
+    if (uploadType === 'base64') {
+      if (urlSuffix) {
+        uploadDataUrl = uploadDataUrl + urlSuffix;
+      }
+      uploadDataUrl = uploadDataUrl + paramQueries;
+      return await reusablePost(uploadDataUrl, postBody);
+    }
+
+    const file = data;
+    const urlCheck = `/arbitrary/check-tmp-space?totalSize=${file.size}`;
+
+    const checkEndpoint = await createEndpoint(urlCheck);
+    const checkRes = await fetch(checkEndpoint);
+    if (!checkRes.ok) {
+      throw new Error('Not enough space on your hard drive');
+    }
+
+    const chunkUrl = uploadDataUrl + `/chunk`;
+    const chunkSize = 5 * 1024 * 1024; // 5MB
+
+    const totalChunks = Math.ceil(file.size / chunkSize);
+
+    for (let index = 0; index < totalChunks; index++) {
+      const start = index * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end);
+
+      const formData = new FormData();
+      formData.append('chunk', chunk, file.name); // Optional: include filename
+      formData.append('index', index);
+
+      await uploadChunkWithRetry(chunkUrl, formData, index);
+    }
+    const finalizeUrl = uploadDataUrl + `/finalize` + paramQueries;
+
+    const finalizeEndpoint = await createEndpoint(finalizeUrl);
+
+    const response = await fetch(finalizeEndpoint, {
+      method: 'POST',
+      headers: {},
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Finalize failed: ${errorText}`);
+    }
+
+    const result = await response.text(); // Base58-encoded unsigned transaction
+    return result;
   };
 
   try {
