@@ -70,7 +70,7 @@ import {
   getPermission,
   isRunningGateway,
   setPermission,
-} from './qortalRequests.ts';
+} from './qortal-requests.ts';
 import TradeBotCreateRequest from '../transactions/TradeBotCreateRequest.ts';
 import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest.ts';
 import signTradeBotTransaction from '../transactions/signTradeBotTransaction.ts';

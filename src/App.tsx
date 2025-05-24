@@ -124,7 +124,7 @@ import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
-import { isRunningGateway } from './qortalRequests/qortalRequests.ts';
+import { isRunningGateway } from './qortal/qortal-requests.ts';
 import { QMailStatus } from './components/QMailStatus';
 import { GlobalActions } from './components/GlobalActions/GlobalActions';
 import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
