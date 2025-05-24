@@ -2754,7 +2754,7 @@ function App() {
                   fontWeight: 600,
                 }}
               >
-                {t('auth:action.authenticate', {
+                {t('auth:authentication', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </TextP>
