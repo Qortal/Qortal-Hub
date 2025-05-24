@@ -99,7 +99,6 @@ export const publishData = async ({
   uploadType,
   withFee,
 }: any) => {
-  console.log('data', data);
   const validateName = async (receiverName: string) => {
     return await reusableGet(`/names/${receiverName}`);
   };
@@ -225,7 +224,6 @@ export const publishData = async ({
     }
 
     let transactionBytes = await uploadData(registeredName, data, fee);
-    console.log('transactionBytes length', transactionBytes?.length);
 
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
@@ -247,7 +245,6 @@ export const publishData = async ({
   };
 
   const uploadData = async (registeredName: string, data: any, fee: number) => {
-    console.log('data', uploadType, data);
     let postBody = '';
     let urlSuffix = '';
 

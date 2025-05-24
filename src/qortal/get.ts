@@ -1804,7 +1804,6 @@ export const publishMultipleQDNResources = async (
           resource?.base64 || resource?.data64 || resourceEncrypt
             ? 'base64'
             : 'file';
-        console.log('dataType', dataType);
         await retryTransaction(
           publishData,
           [
