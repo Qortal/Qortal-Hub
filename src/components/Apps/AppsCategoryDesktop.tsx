@@ -45,7 +45,13 @@ export const AppsCategoryDesktop = ({
   const [searchValue, setSearchValue] = useState('');
   const virtuosoRef = useRef(null);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const categoryList = useMemo(() => {
     if (category?.id === 'all') return availableQapps;

@@ -49,7 +49,13 @@ export const GroupList = ({
   myAddress,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   return (

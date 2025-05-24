@@ -21,7 +21,7 @@ import { LoadingButton } from '@mui/lab';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
 } from '../../App';
@@ -42,7 +42,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
@@ -88,10 +88,16 @@ export const ListOfGroupPromotions = () => {
   const [fee, setFee] = useState(null);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,

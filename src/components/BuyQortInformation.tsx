@@ -27,7 +27,13 @@ import { useTranslation } from 'react-i18next';
 export const BuyQortInformation = ({ balance }) => {
   const [isOpen, setIsOpen] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const openBuyQortInfoFunc = useCallback(
     (e) => {

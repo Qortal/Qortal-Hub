@@ -1,9 +1,9 @@
 // @ts-nocheck
 
 import { crypto } from '../constants/decryptWallet';
-import Base58 from '../deps/Base58';
+import Base58 from '../encryption/Base58';
 import { AES_CBC, HmacSha512 } from 'asmcrypto.js';
-import { doInitWorkers, kdf } from '../deps/kdf';
+import { doInitWorkers, kdf } from '../encryption/kdf';
 import i18n from 'i18next';
 
 export const decryptStoredWallet = async (password, wallet) => {

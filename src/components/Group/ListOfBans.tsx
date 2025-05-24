@@ -15,7 +15,7 @@ import {
   List,
 } from 'react-virtualized';
 import { getNameInfo } from './Group';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
@@ -56,7 +56,13 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
   const [isLoadingUnban, setIsLoadingUnban] = useState(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getInvites = async (groupId) => {
     try {

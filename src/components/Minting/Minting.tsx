@@ -21,10 +21,10 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
-import { useModal } from '../../common/useModal';
+import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
@@ -45,7 +45,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});

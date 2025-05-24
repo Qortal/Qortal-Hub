@@ -1,8 +1,8 @@
 // @ts-nocheck
 
 import { QORT_DECIMALS, TX_TYPES } from '../constants/constants';
-import nacl from '../deps/nacl-fast';
-import Base58 from '../deps/Base58';
+import nacl from '../encryption/nacl-fast';
+import Base58 from '../encryption/Base58';
 import utils from '../utils/utils';
 export default class ChatBase {
   static get utils() {

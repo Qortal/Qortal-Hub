@@ -8,7 +8,7 @@ import { Box, CircularProgress, useTheme } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import ShortUniqueId from 'short-unique-id';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import {
   decryptPublishes,
   getTempPublish,
@@ -40,7 +40,13 @@ export const AnnouncementDiscussion = ({
   isPrivate,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);

@@ -3,19 +3,19 @@ import { Box, Button, Typography, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import {
   decryptResource,
   getGroupAdmins,
   validateSecretKey,
 } from '../Group/Group';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
@@ -32,7 +32,7 @@ export const CreateCommonSecret = ({
   setIsForceShowCreationKeyPopup,
   isForceShowCreationKeyPopup,
 }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const [openSnack, setOpenSnack] = useState(false);
@@ -40,7 +40,13 @@ export const CreateCommonSecret = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getPublishesFromAdmins = async (admins: string[]) => {
     const queryString = admins.map((name) => `name=${name}`).join('&');

@@ -19,7 +19,13 @@ export const AdminSpace = ({
   isOwner,
 }) => {
   const [isMoved, setIsMoved] = useState(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   useEffect(() => {
     if (hide) {

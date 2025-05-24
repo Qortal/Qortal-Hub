@@ -1,5 +1,5 @@
 import { useContext, useState } from 'react';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import {
   Button,
   Dialog,
@@ -16,7 +16,8 @@ import { VideoPlayer } from '../Embeds/VideoPlayer';
 import { useTranslation } from 'react-i18next';
 
 export const Tutorials = () => {
-  const { openTutorialModal, setOpenTutorialModal } = useContext(MyContext);
+  const { openTutorialModal, setOpenTutorialModal } =
+    useContext(QORTAL_APP_CONTEXT);
   const [multiNumber, setMultiNumber] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core', 'tutorial']);

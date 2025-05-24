@@ -19,13 +19,13 @@ import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import {
   getBaseApiReact,
   getBaseApiReactSocket,
-  MyContext,
+  QORTAL_APP_CONTEXT,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/constants';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
   executeEvent,
   subscribeToEvent,
@@ -44,7 +44,7 @@ import ShortUniqueId from 'short-unique-id';
 import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
-import { getFee, isExtMsg } from '../../background';
+import { getFee, isExtMsg } from '../../background/background.ts';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
@@ -71,7 +71,7 @@ export const ChatGroup = ({
   hideView,
   isPrivate,
 }) => {
-  const { isUserBlocked, show } = useContext(MyContext);
+  const { isUserBlocked, show } = useContext(QORTAL_APP_CONTEXT);
   const [messages, setMessages] = useState([]);
   const [chatReferences, setChatReferences] = useState({});
   const [isSending, setIsSending] = useState(false);
@@ -96,7 +96,13 @@ export const ChatGroup = ({
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const lastReadTimestamp = useRef(null);
   const handleUpdateRef = useRef(null);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getTimestampEnterChat = async (selectedGroup) => {
     try {

@@ -15,7 +15,7 @@ import {
   List,
 } from 'react-virtualized';
 import { getNameInfo } from './Group';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +60,13 @@ export const ListOfInvites = ({
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const [isLoadingCancelInvite, setIsLoadingCancelInvite] = useState(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const listRef = useRef(null);
 
   const getInvites = async (groupId) => {

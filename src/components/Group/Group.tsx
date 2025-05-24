@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption';
 import { AddGroup } from './AddGroup';
 import CreateIcon from '@mui/icons-material/Create';
 import {
@@ -43,7 +43,7 @@ import {
 } from '../../utils/events';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
@@ -444,7 +444,13 @@ export const Group = ({
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
   const groupsOwnerNamesRef = useRef({});
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);

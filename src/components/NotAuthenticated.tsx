@@ -27,12 +27,12 @@ import {
 import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
 import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from './Snackbar/Snackbar';
-import { cleanUrl, gateways } from '../background';
+import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from './Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './Language/LanguageSelector';
-import { MyContext } from '../App';
+import { QORTAL_APP_CONTEXT } from '../App';
 
 export const manifestData = {
   version: '0.5.4',
@@ -81,7 +81,8 @@ export const NotAuthenticated = ({
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
   const [enteredApiKey, setEnteredApiKey] = useState('');
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] = useState(null);
-  const { showTutorial, hasSeenGettingStarted } = useContext(MyContext);
+  const { showTutorial, hasSeenGettingStarted } =
+    useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core']);
 

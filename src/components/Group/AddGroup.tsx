@@ -34,8 +34,8 @@ import {
 import { AddGroupList } from './AddGroupList';
 import { UserListOfInvites } from './UserListOfInvites';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { getFee } from '../../background';
-import { MyContext } from '../../App';
+import { getFee } from '../../background/background.ts';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
@@ -59,7 +59,7 @@ const Transition = forwardRef(function Transition(
 });
 
 export const AddGroup = ({ address, open, setOpen }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const [openAdvance, setOpenAdvance] = useState(false);
@@ -97,7 +97,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setMaxBlock(event.target.value as string);
   };
 
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const handleCreateGroup = async () => {

@@ -19,7 +19,10 @@ import {
   useTheme,
   Autocomplete,
 } from '@mui/material';
-import { getAddressInfo, getNameOrAddress } from '../../background';
+import {
+  getAddressInfo,
+  getNameOrAddress,
+} from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { getNameInfo } from '../Group/Group';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -46,7 +49,13 @@ function formatAddress(str) {
 
 export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [nameOrAddress, setNameOrAddress] = useState('');
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);

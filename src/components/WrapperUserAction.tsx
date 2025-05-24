@@ -7,14 +7,20 @@ import {
   useTheme,
 } from '@mui/material';
 import { executeEvent } from '../utils/events';
-import { MyContext } from '../App';
+import { QORTAL_APP_CONTEXT } from '../App';
 import { useAtom } from 'jotai';
 import { isRunningPublicNodeAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 export const WrapperUserAction = ({ children, address, name, disabled }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   const [anchorEl, setAnchorEl] = useState(null);
@@ -175,9 +181,15 @@ const BlockUser = ({ address, name, handleClose }) => {
   const [isAlreadyBlocked, setIsAlreadyBlocked] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { isUserBlocked, addToBlockList, removeBlockFromList } =
-    useContext(MyContext);
+    useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   useEffect(() => {
     if (!address) return;

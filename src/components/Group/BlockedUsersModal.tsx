@@ -11,7 +11,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
-import { getBaseApiReact, MyContext } from '../../App';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import {
   executeEvent,
@@ -20,7 +20,7 @@ import {
 } from '../../utils/events';
 import { validateAddress } from '../../utils/validateAddress';
 import { getNameInfo, requestQueueMemberNames } from './Group';
-import { useModal } from '../../common/useModal';
+import { useModal } from '../../hooks/useModal';
 import { isOpenBlockedModalAtom } from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
 import { useAtom } from 'jotai';
@@ -28,7 +28,13 @@ import { useTranslation } from 'react-i18next';
 
 export const BlockedUsersModal = () => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isOpenBlockedModal, setIsOpenBlockedModal] = useAtom(
     isOpenBlockedModalAtom
   );
@@ -42,7 +48,7 @@ export const BlockedUsersModal = () => {
     addToBlockList,
     setOpenSnackGlobal,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
 
   const [blockedUsers, setBlockedUsers] = useState({
     addresses: {},

@@ -1,14 +1,14 @@
 import { useContext, useState } from 'react';
 import { executeEvent } from '../utils/events';
-import { getBaseApiReact, MyContext } from '../App';
-import { createEndpoint } from '../background';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../App';
+import { createEndpoint } from '../background/background.ts';
 import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
@@ -19,10 +19,16 @@ export const useHandlePrivateApps = () => {
     setOpenSnackGlobal,
     infoSnackCustom,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const openApp = async (
     privateAppProperties,

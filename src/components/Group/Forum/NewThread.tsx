@@ -17,8 +17,12 @@ import { ReusableModal } from './ReusableModal';
 import { Spacer } from '../../../common/Spacer';
 import { CreateThreadIcon } from '../../../assets/Icons/CreateThreadIcon';
 import { SendNewMessage } from '../../../assets/Icons/SendNewMessage';
-import { MyContext, pauseAllQueues, resumeAllQueues } from '../../../App';
-import { getFee } from '../../../background';
+import {
+  QORTAL_APP_CONTEXT,
+  pauseAllQueues,
+  resumeAllQueues,
+} from '../../../App';
+import { getFee } from '../../../background/background';
 import TipTap from '../../Chat/TipTap';
 import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
@@ -140,8 +144,14 @@ export const NewThread = ({
   setPostReply,
   isPrivate,
 }: NewMessageProps) => {
-  const { t } = useTranslation(['auth', 'core', 'group']);
-  const { show } = useContext(MyContext);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [value, setValue] = useState('');
   const [isSending, setIsSending] = useState(false);

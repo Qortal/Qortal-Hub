@@ -1,5 +1,5 @@
 import { useContext, useState } from 'react';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import {
   Card,
   CardContent,
@@ -36,9 +36,15 @@ export const AttachmentCard = ({
   selectedGroupId,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
-  const { downloadResource } = useContext(MyContext);
+  const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const saveToDisk = async () => {
     const { name, service, identifier } = resourceData;
@@ -226,8 +232,7 @@ export const AttachmentCard = ({
               width: '100%',
             }}
           >
-            {' '}
-            <CustomLoader />{' '}
+            <CustomLoader />
           </Box>
         )}
         {errorMsg && (

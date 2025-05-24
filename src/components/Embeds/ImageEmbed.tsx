@@ -30,7 +30,13 @@ export const ImageCard = ({
   encryptionType,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isOpen, setIsOpen] = useState(true);
   const [height, setHeight] = useState('400px');
 

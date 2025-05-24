@@ -1,5 +1,5 @@
-import { gateways, getApiKeyFromStorage } from './background';
-import { listOfAllQortalRequests } from './hooks/useQortalMessageListener';
+import { gateways, getApiKeyFromStorage } from '../background/background.ts';
+import { listOfAllQortalRequests } from '../hooks/useQortalMessageListener.tsx';
 import {
   addForeignServer,
   addGroupAdminRequest,
@@ -63,9 +63,9 @@ import {
   signForeignFees,
   multiPaymentWithPrivateData,
   transferAssetRequest,
-} from './qortalRequests/get';
-import { getData, storeData } from './utils/chromeStorage';
-import { executeEvent } from './utils/events';
+} from './get.ts';
+import { getData, storeData } from '../utils/chromeStorage.ts';
+import { executeEvent } from '../utils/events.ts';
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {

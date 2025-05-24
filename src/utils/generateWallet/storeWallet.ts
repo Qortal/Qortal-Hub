@@ -1,8 +1,8 @@
 // @ts-nocheck
 
 import { AES_CBC, HmacSha512 } from 'asmcrypto.js';
-import Base58 from '../../deps/Base58';
-import { doInitWorkers, kdf } from '../../deps/kdf.js';
+import Base58 from '../../encryption/Base58.js';
+import { doInitWorkers, kdf } from '../../encryption/kdf.js';
 import { crypto as cryptoVals } from '../../constants/decryptWallet.js';
 
 const getRandomValues = crypto

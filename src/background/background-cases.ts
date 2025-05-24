@@ -11,7 +11,6 @@ import {
   checkLocalFunc,
   checkNewMessages,
   checkThreads,
-  clearAllNotifications,
   createEndpoint,
   createGroup,
   decryptDirectFunc,
@@ -55,20 +54,20 @@ import {
   setGroupData,
   updateThreadActivity,
   walletVersion,
-} from './background';
+} from '../background/background.ts';
 import {
   decryptGroupEncryption,
   encryptAndPublishSymmetricKeyGroupChat,
   encryptAndPublishSymmetricKeyGroupChatForAdmins,
   publishGroupEncryptedResource,
   publishOnQDN,
-} from './backgroundFunctions/encryption';
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/constants';
-import Base58 from './deps/Base58';
-import { encryptSingle } from './qdn/encryption/group-encryption';
-import { _createPoll, _voteOnPoll } from './qortalRequests/get';
-import { createTransaction } from './transactions/transactions';
-import { getData, storeData } from './utils/chromeStorage';
+} from '../encryption/encryption.ts';
+import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../constants/constants';
+import Base58 from '../encryption/Base58.ts';
+import { encryptSingle } from '../qdn/encryption/group-encryption';
+import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
+import { createTransaction } from '../transactions/transactions';
+import { getData, storeData } from '../utils/chromeStorage';
 
 export function versionCase(request, event) {
   event.source.postMessage(
@@ -1134,32 +1133,6 @@ export async function getEnteredQmailTimestampCase(request, event) {
       {
         requestId: request.requestId,
         action: 'getEnteredQmailTimestamp',
-        error: error?.message,
-        type: 'backgroundMessageResponse',
-      },
-      event.origin
-    );
-  }
-}
-
-export async function clearAllNotificationsCase(request, event) {
-  try {
-    await clearAllNotifications();
-
-    event.source.postMessage(
-      {
-        requestId: request.requestId,
-        action: 'clearAllNotifications',
-        payload: true,
-        type: 'backgroundMessageResponse',
-      },
-      event.origin
-    );
-  } catch (error) {
-    event.source.postMessage(
-      {
-        requestId: request.requestId,
-        action: 'clearAllNotifications',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

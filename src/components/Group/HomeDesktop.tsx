@@ -31,7 +31,13 @@ export const HomeDesktop = ({
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
 
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   useEffect(() => {

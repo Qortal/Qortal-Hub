@@ -35,7 +35,7 @@ import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
-import './utils/seedPhrase/RandomSentenceGenerator';
+import './utils/seedPhrase/randomSentenceGenerator.ts';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
@@ -64,7 +64,7 @@ import { Loader } from './components/Loader';
 import { PasswordField, ErrorText } from './components';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
 import { TaskManager } from './components/TaskManager/TaskManager.tsx';
-import { useModal } from './common/useModal';
+import { useModal } from './hooks/useModal.tsx';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -76,7 +76,7 @@ import {
   groupApi,
   groupApiSocket,
   storeWallets,
-} from './background';
+} from './background/background.ts';
 import {
   executeEvent,
   subscribeToEvent,
@@ -118,13 +118,13 @@ import {
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
-import { Wallets } from './Wallets';
-import { useFetchResources } from './common/useFetchResources';
+import { Wallets } from './components/Wallets.tsx';
+import { useFetchResources } from './hooks/useFetchResources.tsx';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
-import { isRunningGateway } from './qortalRequests';
+import { isRunningGateway } from './qortal/qortal-requests.ts';
 import { QMailStatus } from './components/QMailStatus';
 import { GlobalActions } from './components/GlobalActions/GlobalActions';
 import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
@@ -236,7 +236,8 @@ const defaultValuesGlobal = {
   setOpenTutorialModal: () => {},
 };
 
-export const MyContext = createContext<MyContextInterface>(defaultValues);
+export const QORTAL_APP_CONTEXT =
+  createContext<MyContextInterface>(defaultValues);
 
 export let globalApiKey: string | null = null;
 
@@ -307,7 +308,13 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
 
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const [
@@ -2016,7 +2023,7 @@ function App() {
     >
       <PdfViewer />
 
-      <MyContext.Provider value={contextValue}>
+      <QORTAL_APP_CONTEXT.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
@@ -3858,7 +3865,7 @@ function App() {
           setInfoSnack={setInfoSnack}
         />
         <BuyQortInformation balance={balance} />
-      </MyContext.Provider>
+      </QORTAL_APP_CONTEXT.Provider>
 
       {extState === 'create-wallet' && walletToBeDownloaded && (
         <ButtonBase

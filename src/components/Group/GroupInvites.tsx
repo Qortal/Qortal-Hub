@@ -18,7 +18,13 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const getJoinRequests = async () => {
