@@ -143,16 +143,13 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
     if (encryptedData) {
       const registeredName = await getNameInfo();
       const data = await publishData({
-        registeredName,
         data: encryptedData,
-        service: 'DOCUMENT_PRIVATE',
-        identifier: `symmetric-qchat-group-${groupId}`,
-        uploadType: 'base64',
         file: encryptedData,
-        service: 'DOCUMENT_PRIVATE',
         identifier: `symmetric-qchat-group-${groupId}`,
-        uploadType: 'file',
         isBase64: true,
+        registeredName,
+        service: 'DOCUMENT_PRIVATE',
+        uploadType: 'base64',
         withFee: true,
       });
       return {
