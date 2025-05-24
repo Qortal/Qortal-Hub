@@ -18,24 +18,24 @@ import {
   Input,
   useTheme,
 } from '@mui/material';
-import { CustomButton } from './styles/App-styles';
+import { CustomButton } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
-import { Label } from './components/Group/AddGroup';
-import { Spacer } from './common/Spacer';
+import { Label } from './Group/AddGroup.tsx';
+import { Spacer } from '../common/Spacer.tsx';
 import {
   getWallets,
   storeWallets,
   walletVersion,
-} from './background/background.ts';
-import { useModal } from './common/useModal';
-import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import { decryptStoredWalletFromSeedPhrase } from './utils/decryptWallet';
-import { crypto } from './constants/decryptWallet';
+} from '../background/background.ts';
+import { useModal } from '../common/useModal.tsx';
+import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
+import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
+import { crypto } from '../constants/decryptWallet.ts';
 import { LoadingButton } from '@mui/lab';
-import { PasswordField } from './components';
-import { HtmlTooltip } from './components/NotAuthenticated';
-import { QORTAL_APP_CONTEXT } from './App';
+import { PasswordField } from './index.ts';
+import { HtmlTooltip } from './NotAuthenticated.tsx';
+import { QORTAL_APP_CONTEXT } from '../App.tsx';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
