@@ -25,7 +25,7 @@ import {
 } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/constants';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
   executeEvent,
   subscribeToEvent,

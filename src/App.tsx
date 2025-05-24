@@ -35,7 +35,7 @@ import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 import qortLogo from './assets/qort.png';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
-import './utils/seedPhrase/RandomSentenceGenerator';
+import './utils/seedPhrase/randomSentenceGenerator.ts';
 import EngineeringIcon from '@mui/icons-material/Engineering';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import PriorityHighIcon from '@mui/icons-material/PriorityHigh';

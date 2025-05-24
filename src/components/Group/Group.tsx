@@ -43,7 +43,7 @@ import {
 } from '../../utils/events';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';

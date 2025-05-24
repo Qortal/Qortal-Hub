@@ -15,7 +15,7 @@ import {
   resumeAllQueues,
 } from '../../App';
 import { getPublicKey } from '../../background/background.ts';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
   executeEvent,
   subscribeToEvent,

@@ -75,7 +75,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           const fileContents = await new Promise((resolve, reject) => {
             const reader = new FileReader();
 
-            reader.onabort = () => reject('File reading was aborted');
+            reader.onabort = () => reject('File reading was aborted'); // TODO translate
             reader.onerror = () => reject('File reading has failed');
             reader.onload = () => {
               // Resolve the promise with the reader result when reading completes
