@@ -28,7 +28,13 @@ export const GroupJoinRequests = ({
   setDesktopViewMode,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [txList] = useAtom(txListAtom);

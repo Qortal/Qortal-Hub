@@ -153,7 +153,13 @@ export const GroupAnnouncements = ({
     editorRef.current = editorInstance;
   };
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state

@@ -51,7 +51,13 @@ export const RegisterName = ({
   );
   const [nameFee, setNameFee] = useState(null);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const checkIfNameExisits = async (name) => {
     if (!name?.trim()) {
       setIsNameAvailable(Availability.NULL);

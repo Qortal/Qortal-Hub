@@ -87,7 +87,13 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
@@ -235,7 +241,13 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     useContext(QORTAL_APP_CONTEXT);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const exportPrivateKeyFunc = async () => {
     try {

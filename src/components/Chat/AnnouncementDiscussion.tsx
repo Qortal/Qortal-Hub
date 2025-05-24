@@ -40,7 +40,13 @@ export const AnnouncementDiscussion = ({
   isPrivate,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isFocusedParent, setIsFocusedParent] = useState(false);

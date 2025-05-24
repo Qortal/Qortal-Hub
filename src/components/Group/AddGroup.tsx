@@ -97,7 +97,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setMaxBlock(event.target.value as string);
   };
 
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const handleCreateGroup = async () => {

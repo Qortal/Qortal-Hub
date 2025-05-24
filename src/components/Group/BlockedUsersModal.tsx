@@ -28,7 +28,13 @@ import { useTranslation } from 'react-i18next';
 
 export const BlockedUsersModal = () => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isOpenBlockedModal, setIsOpenBlockedModal] = useAtom(
     isOpenBlockedModalAtom
   );

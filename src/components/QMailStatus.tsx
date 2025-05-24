@@ -8,7 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { useAtom } from 'jotai';
 
 export const QMailStatus = () => {
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const [lastEnteredTimestamp, setLastEnteredTimestamp] = useAtom(

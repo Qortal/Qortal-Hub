@@ -5,7 +5,13 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useTranslation } from 'react-i18next';
 
 const ThemeSelector = () => {
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const { themeMode, toggleTheme } = useThemeContext();
 
   return (

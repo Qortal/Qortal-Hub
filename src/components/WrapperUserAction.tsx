@@ -14,7 +14,13 @@ import { useTranslation } from 'react-i18next';
 
 export const WrapperUserAction = ({ children, address, name, disabled }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   const [anchorEl, setAnchorEl] = useState(null);
@@ -177,7 +183,13 @@ const BlockUser = ({ address, name, handleClose }) => {
   const { isUserBlocked, addToBlockList, removeBlockFromList } =
     useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   useEffect(() => {
     if (!address) return;

@@ -91,7 +91,13 @@ export const ListOfGroupPromotions = () => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
