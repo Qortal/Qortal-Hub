@@ -771,7 +771,15 @@ export const NotAuthenticated = ({
           aria-describedby="alert-dialog-description"
           fullWidth
         >
-          <DialogTitle id="alert-dialog-title">
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
             {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
             :
           </DialogTitle>
@@ -1048,7 +1056,15 @@ export const NotAuthenticated = ({
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
             {t('auth:apikey.enter', { postProcess: 'capitalizeFirstChar' })}
           </DialogTitle>
           <DialogContent>

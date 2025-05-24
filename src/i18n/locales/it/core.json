@@ -356,6 +356,7 @@
   "theme": {
     "dark": "scuro",
     "dark_mode": "modalità scura",
+    "default": "tema di default",
     "light": "chiara",
     "light_mode": "modalità chiara",
     "manager": "manager tema",

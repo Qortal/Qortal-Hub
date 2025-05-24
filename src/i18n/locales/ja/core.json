@@ -353,6 +353,7 @@
   "theme": {
     "dark": "暗い",
     "dark_mode": "ダークモード",
+    "default": "デフォルトのテーマ",
     "light": "ライト",
     "light_mode": "ライトモード",
     "manager": "テーママネージャー",

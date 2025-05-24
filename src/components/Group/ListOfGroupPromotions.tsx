@@ -864,7 +864,15 @@ export const ListOfGroupPromotions = () => {
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
-        <DialogTitle id="alert-dialog-title">
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {t('group:action.promote_group', {
             postProcess: 'capitalizeFirstChar',
           })}

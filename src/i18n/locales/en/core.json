@@ -356,6 +356,7 @@
   "theme": {
     "dark": "dark",
     "dark_mode": "dark mode",
+    "default": "default theme",
     "light": "light",
     "light_mode": "light mode",
     "manager": "theme Manager",

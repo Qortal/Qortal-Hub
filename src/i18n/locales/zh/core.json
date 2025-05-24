@@ -353,6 +353,7 @@
   "theme": {
     "dark": "黑暗的",
     "dark_mode": "黑暗模式",
+    "default": "默认主题",
     "light": "光",
     "light_mode": "光模式",
     "manager": "主题经理",

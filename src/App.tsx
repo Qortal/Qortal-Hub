@@ -1512,6 +1512,7 @@ function App() {
             )}
 
             <Spacer height="35px" />
+
             {userInfo && !userInfo?.name && (
               <TextP
                 sx={{
@@ -3337,7 +3338,15 @@ function App() {
               zIndex: 10001,
             }}
           >
-            <DialogTitle id="alert-dialog-title">
+            <DialogTitle
+              id="alert-dialog-title"
+              sx={{
+                textAlign: 'center',
+                color: theme.palette.text.primary,
+                fontWeight: 'bold',
+                opacity: 1,
+              }}
+            >
               {message.paymentFee
                 ? t('core:payment', {
                     postProcess: 'capitalizeFirstChar',
@@ -3426,6 +3435,9 @@ function App() {
               id="alert-dialog-title"
               sx={{
                 textAlign: 'center',
+                color: theme.palette.text.primary,
+                fontWeight: 'bold',
+                opacity: 1,
               }}
             >
               {t('tutorial:important_info', {

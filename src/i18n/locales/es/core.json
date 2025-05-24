@@ -353,8 +353,9 @@
   "theme": {
     "dark": "oscuro",
     "dark_mode": "modo oscuro",
+    "default": "tema predeterminado",
     "light": "luz",
-    "light_mode": "modo de luz",
+    "light_mode": "modo claro",
     "manager": "gerente de tema",
     "name": "nombre del tema"
   },

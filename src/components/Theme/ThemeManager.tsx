@@ -15,6 +15,7 @@ import {
   Tabs,
   Tab,
   ListItemButton,
+  useTheme,
 } from '@mui/material';
 import { Sketch } from '@uiw/react-color';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -71,6 +72,7 @@ const validateTheme = (theme) => {
 };
 
 export default function ThemeManager() {
+  const theme = useTheme();
   const { userThemes, addUserTheme, setUserTheme, currentThemeId } =
     useThemeContext();
   const [openEditor, setOpenEditor] = useState(false);
@@ -295,7 +297,14 @@ export default function ThemeManager() {
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>
+        <DialogTitle
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {themeDraft.id
             ? t('core:action.edit_theme', {
                 postProcess: 'capitalizeFirstChar',

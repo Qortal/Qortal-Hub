@@ -354,8 +354,9 @@
   "theme": {
     "dark": "sombre",
     "dark_mode": "mode sombre",
+    "default": "thème par défaut",
     "light": "lumière",
-    "light_mode": "mode léger",
+    "light_mode": "mode clair",
     "manager": "directeur de thème",
     "name": "nom de thème"
   },
