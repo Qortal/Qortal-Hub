@@ -11,7 +11,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { CustomButtonAccept } from '../../styles/App-styles';
-import { getBaseApiReact, MyContext } from '../../App';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { FidgetSpinner } from 'react-loader-spinner';
@@ -20,7 +20,7 @@ import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 export const JoinGroup = () => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const [memberGroups] = useAtom(memberGroupsAtom);
   const [openSnack, setOpenSnack] = useState(false);

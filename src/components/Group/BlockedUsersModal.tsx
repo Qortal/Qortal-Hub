@@ -11,7 +11,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useContext, useEffect, useState } from 'react';
-import { getBaseApiReact, MyContext } from '../../App';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import {
   executeEvent,
@@ -42,7 +42,7 @@ export const BlockedUsersModal = () => {
     addToBlockList,
     setOpenSnackGlobal,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
 
   const [blockedUsers, setBlockedUsers] = useState({
     addresses: {},

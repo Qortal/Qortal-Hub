@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import {
   Card,
   CardContent,
@@ -37,7 +37,7 @@ export const PollCard = ({
   const [ownerName, setOwnerName] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const { show, userInfo } = useContext(MyContext);
+  const { show, userInfo } = useContext(QORTAL_APP_CONTEXT);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);

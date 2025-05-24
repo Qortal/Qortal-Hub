@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { AppInfo } from './AppInfo';
 import {
   executeEvent,
@@ -49,7 +49,7 @@ export const AppsDesktop = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-  const { showTutorial } = useContext(MyContext);
+  const { showTutorial } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);
 

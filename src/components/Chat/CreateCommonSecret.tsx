@@ -3,7 +3,7 @@ import { Box, Button, Typography, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { LoadingButton } from '@mui/lab';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
@@ -32,7 +32,7 @@ export const CreateCommonSecret = ({
   setIsForceShowCreationKeyPopup,
   isForceShowCreationKeyPopup,
 }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const [openSnack, setOpenSnack] = useState(false);

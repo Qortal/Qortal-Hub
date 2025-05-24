@@ -21,7 +21,7 @@ import { LoadingButton } from '@mui/lab';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
 } from '../../App';
@@ -88,7 +88,7 @@ export const ListOfGroupPromotions = () => {
   const [fee, setFee] = useState(null);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);

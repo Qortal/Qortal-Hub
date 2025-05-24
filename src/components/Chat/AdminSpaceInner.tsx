@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
 } from '../../App';
@@ -73,7 +73,7 @@ export const AdminSpaceInner = ({
     useState(null);
   const [isLoadingPublishKey, setIsLoadingPublishKey] = useState(false);
   const { show, setInfoSnackCustom, setOpenSnackGlobal } =
-    useContext(MyContext);
+    useContext(QORTAL_APP_CONTEXT);
   const { t } = useTranslation(['auth', 'core', 'group']);
 
   const getAdminGroupSecretKey = useCallback(async () => {
