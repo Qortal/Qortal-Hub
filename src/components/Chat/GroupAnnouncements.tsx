@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -15,7 +15,7 @@ import {
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { Box, Typography, useTheme } from '@mui/material';
 import { Spacer } from '../../common/Spacer';

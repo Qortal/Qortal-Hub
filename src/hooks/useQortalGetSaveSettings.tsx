@@ -12,7 +12,7 @@ import { decryptResource } from '../components/Group/Group';
 import {
   base64ToUint8Array,
   uint8ArrayToObject,
-} from '../backgroundFunctions/encryption';
+} from '../encryption/encryption';
 import { useAtom, useSetAtom } from 'jotai';
 
 function fetchFromLocalStorage(key) {

@@ -34,7 +34,7 @@ import {
 import { AddGroupList } from './AddGroupList';
 import { UserListOfInvites } from './UserListOfInvites';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';

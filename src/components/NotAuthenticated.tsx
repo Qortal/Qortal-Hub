@@ -27,7 +27,7 @@ import {
 import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
 import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from './Snackbar/Snackbar';
-import { cleanUrl, gateways } from '../background';
+import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import ThemeSelector from './Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';

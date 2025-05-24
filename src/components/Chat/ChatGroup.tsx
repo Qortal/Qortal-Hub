@@ -44,7 +44,7 @@ import ShortUniqueId from 'short-unique-id';
 import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
-import { getFee, isExtMsg } from '../../background';
+import { getFee, isExtMsg } from '../../background/background.ts';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';

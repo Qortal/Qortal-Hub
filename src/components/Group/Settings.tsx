@@ -36,8 +36,8 @@ import { useAtom } from 'jotai';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
 import { Spacer } from '../../common/Spacer';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
-import { walletVersion } from '../../background';
-import Base58 from '../../deps/Base58';
+import { walletVersion } from '../../background/background.ts';
+import Base58 from '../../encryption/Base58.ts';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { useTranslation } from 'react-i18next';
 

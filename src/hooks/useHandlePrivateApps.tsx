@@ -1,14 +1,14 @@
 import { useContext, useState } from 'react';
 import { executeEvent } from '../utils/events';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../App';
-import { createEndpoint } from '../background';
+import { createEndpoint } from '../background/background.ts';
 import {
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 

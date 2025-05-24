@@ -15,7 +15,7 @@ import {
   List,
 } from 'react-virtualized';
 import { getNameInfo } from './Group';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';

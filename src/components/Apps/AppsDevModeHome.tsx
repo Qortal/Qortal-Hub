@@ -23,7 +23,7 @@ import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../common/useModal';
-import { createEndpoint, isUsingLocal } from '../../background';
+import { createEndpoint, isUsingLocal } from '../../background/background.ts';
 import { Label } from '../Group/AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';

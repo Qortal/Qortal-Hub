@@ -1,10 +1,10 @@
 // @ts-nocheck
 
 import { Buffer } from 'buffer';
-import Base58 from '../../deps/Base58';
-import nacl from '../../deps/nacl-fast';
+import Base58 from '../../encryption/Base58';
+import nacl from '../../encryption/nacl-fast';
 import utils from '../../utils/utils';
-import { createEndpoint, getBaseApi } from '../../background';
+import { createEndpoint, getBaseApi } from '../../background/background';
 import { getData } from '../../utils/chromeStorage';
 
 export async function reusableGet(endpoint) {
@@ -30,6 +30,7 @@ async function reusablePost(endpoint, _body) {
     data = await response.clone().json();
   } catch (e) {
     data = await response.text();
+<<<<<<< HEAD
   }
   return data;
 }
@@ -70,6 +71,7 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
       await new Promise((res) => setTimeout(res, 10_000));
     }
   }
+  return data;
 }
 
 async function getKeyPair() {
@@ -87,6 +89,11 @@ export const publishData = async ({
   service,
   identifier,
   uploadType,
+  file,
+  service,
+  identifier,
+  uploadType,
+  isBase64,
   filename,
   withFee,
   title,
@@ -245,6 +252,7 @@ export const publishData = async ({
     return signAndProcessRes;
   };
 
+<<<<<<< HEAD
   const uploadData = async (registeredName: string, data: any, fee: number) => {
     console.log('data', uploadType, data);
     let postBody = '';
@@ -359,6 +367,82 @@ export const publishData = async ({
 
     const result = await response.text(); // Base58-encoded unsigned transaction
     return result;
+}
+
+  const uploadData = async (registeredName: string, file: any, fee: number) => {
+    let postBody = '';
+    let urlSuffix = '';
+
+    if (file != null) {
+      // If we're sending zipped data, make sure to use the /zip version of the POST /arbitrary/* API
+      if (uploadType === 'zip') {
+        urlSuffix = '/zip';
+      }
+
+      // If we're sending file data, use the /base64 version of the POST /arbitrary/* API
+      else if (uploadType === 'file') {
+        urlSuffix = '/base64';
+      }
+
+      // Base64 encode the file to work around compatibility issues between javascript and java byte arrays
+      if (isBase64) {
+        postBody = file;
+      }
+
+      if (!isBase64) {
+        let fileBuffer = new Uint8Array(await file.arrayBuffer());
+        postBody = Buffer.from(fileBuffer).toString('base64');
+      }
+    }
+
+    let uploadDataUrl = `/arbitrary/${service}/${registeredName}${urlSuffix}`;
+    if (identifier?.trim().length > 0) {
+      uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}${urlSuffix}`;
+    }
+
+    uploadDataUrl = uploadDataUrl + `?fee=${fee}`;
+
+    if (filename != null && filename != 'undefined') {
+      uploadDataUrl =
+        uploadDataUrl + '&filename=' + encodeURIComponent(filename);
+    }
+
+    if (title != null && title != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&title=' + encodeURIComponent(title);
+    }
+
+    if (description != null && description != 'undefined') {
+      uploadDataUrl =
+        uploadDataUrl + '&description=' + encodeURIComponent(description);
+    }
+
+    if (category != null && category != 'undefined') {
+      uploadDataUrl =
+        uploadDataUrl + '&category=' + encodeURIComponent(category);
+    }
+
+    if (tag1 != null && tag1 != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag1);
+    }
+
+    if (tag2 != null && tag2 != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag2);
+    }
+
+    if (tag3 != null && tag3 != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag3);
+    }
+
+    if (tag4 != null && tag4 != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag4);
+    }
+
+    if (tag5 != null && tag5 != 'undefined') {
+      uploadDataUrl = uploadDataUrl + '&tags=' + encodeURIComponent(tag5);
+    }
+
+    return await reusablePost(uploadDataUrl, postBody);
+>>>>>>> 2d01b3e (Create encryption folder and move files)
   };
 
   try {

@@ -3,7 +3,7 @@ import { Box, Input, MenuItem, Select, SelectChangeEvent } from '@mui/material';
 import { useState } from 'react';
 import { Spacer } from '../../common/Spacer';
 import { Label } from './AddGroup';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { useTranslation } from 'react-i18next';
 
 export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {

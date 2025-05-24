@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import Base58 from '../deps/Base58';
+import Base58 from '../encryption/Base58';
 
 export const validateAddress = (address) => {
   let isAddress = false;

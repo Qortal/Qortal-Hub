@@ -23,7 +23,11 @@ import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
 import { Label } from './components/Group/AddGroup';
 import { Spacer } from './common/Spacer';
-import { getWallets, storeWallets, walletVersion } from './background';
+import {
+  getWallets,
+  storeWallets,
+  walletVersion,
+} from './background/background.ts';
 import { useModal } from './common/useModal';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
 import { decryptStoredWalletFromSeedPhrase } from './utils/decryptWallet';

@@ -1,14 +1,14 @@
-import { getBaseApi } from '../background';
-import i18n from '../i18n/i18n';
+import { getBaseApi } from '../background/background.ts';
+import i18n from '../i18n/i18n.ts';
 import {
   createSymmetricKeyAndNonce,
   decryptGroupData,
   encryptDataGroup,
   objectToBase64,
-} from '../qdn/encryption/group-encryption';
-import { publishData } from '../qdn/publish/pubish';
-import { getData } from '../utils/chromeStorage';
-import { RequestQueueWithPromise } from '../utils/queue/queue';
+} from '../qdn/encryption/group-encryption.ts';
+import { publishData } from '../qdn/publish/pubish.ts';
+import { getData } from '../utils/chromeStorage.ts';
+import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 
 export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
 

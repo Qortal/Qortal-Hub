@@ -28,7 +28,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { getGroupMembers, getNames } from './Group';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';

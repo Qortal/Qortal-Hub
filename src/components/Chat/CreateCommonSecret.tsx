@@ -8,14 +8,14 @@ import {
   getBaseApiReact,
   pauseAllQueues,
 } from '../../App';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import {
   decryptResource,
   getGroupAdmins,
   validateSecretKey,
 } from '../Group/Group';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';

@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { crypto, walletVersion } from '../../constants/decryptWallet';
-import { doInitWorkers, kdf } from '../../deps/kdf';
+import { doInitWorkers, kdf } from '../../encryption/kdf';
 import PhraseWallet from './phrase-wallet';
 import * as WORDLISTS from './wordlists';
 import FileSaver from 'file-saver';

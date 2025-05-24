@@ -55,20 +55,20 @@ import {
   setGroupData,
   updateThreadActivity,
   walletVersion,
-} from './background';
+} from '../background/background.ts';
 import {
   decryptGroupEncryption,
   encryptAndPublishSymmetricKeyGroupChat,
   encryptAndPublishSymmetricKeyGroupChatForAdmins,
   publishGroupEncryptedResource,
   publishOnQDN,
-} from './backgroundFunctions/encryption';
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from './constants/constants';
-import Base58 from './deps/Base58';
-import { encryptSingle } from './qdn/encryption/group-encryption';
-import { _createPoll, _voteOnPoll } from './qortalRequests/get';
-import { createTransaction } from './transactions/transactions';
-import { getData, storeData } from './utils/chromeStorage';
+} from '../encryption/encryption.ts';
+import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../constants/constants';
+import Base58 from '../encryption/Base58.ts';
+import { encryptSingle } from '../qdn/encryption/group-encryption';
+import { _createPoll, _voteOnPoll } from '../qortalRequests/get';
+import { createTransaction } from '../transactions/transactions';
+import { getData, storeData } from '../utils/chromeStorage';
 
 export function versionCase(request, event) {
   event.source.postMessage(

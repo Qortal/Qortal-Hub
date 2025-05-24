@@ -1,8 +1,8 @@
 // @ts-nocheck
 
 import ChatBase from './ChatBase';
-import nacl from '../deps/nacl-fast';
-import ed2curve from '../deps/ed2curve';
+import nacl from '../encryption/nacl-fast';
+import ed2curve from '../encryption/ed2curve';
 import { Sha256 } from 'asmcrypto.js';
 import { CHAT_REFERENCE_FEATURE_TRIGGER_TIMESTAMP } from '../constants/constants';
 export default class ChatTransaction extends ChatBase {

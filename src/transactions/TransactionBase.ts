@@ -1,7 +1,7 @@
 // @ts-nocheck
 
-import nacl from '../deps/nacl-fast';
-import Base58 from '../deps/Base58';
+import nacl from '../encryption/nacl-fast.js';
+import Base58 from '../encryption/Base58.js';
 import utils from '../utils/utils';
 import { QORT_DECIMALS, TX_TYPES } from '../constants/constants.js';
 export default class TransactionBase {

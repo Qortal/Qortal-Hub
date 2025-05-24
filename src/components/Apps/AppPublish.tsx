@@ -22,7 +22,7 @@ import { executeEvent } from '../../utils/events';
 import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
