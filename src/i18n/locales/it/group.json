@@ -106,7 +106,7 @@
       "private_key_copied": "copiata a chiave privata",
       "provide_message": "si prega di fornire un primo messaggio al thread",
       "secure_place": "mantieni la chiave privata in un luogo sicuro. Non condividerla!",
-      "setting_group": "impostazione del gruppo ... per favore aspetta."
+      "setting_group": "impostazione gruppo. Attendere, per favore."
     },
     "error": {
       "access_name": "impossibile inviare un messaggio senza accesso al tuo nome",
