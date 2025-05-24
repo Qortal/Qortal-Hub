@@ -64,7 +64,7 @@ import { Loader } from './components/Loader';
 import { PasswordField, ErrorText } from './components';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
 import { TaskManager } from './components/TaskManager/TaskManager.tsx';
-import { useModal } from './common/useModal';
+import { useModal } from './hooks/useModal.tsx';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -119,7 +119,7 @@ import {
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
 import { Wallets } from './components/Wallets.tsx';
-import { useFetchResources } from './common/useFetchResources';
+import { useFetchResources } from './hooks/useFetchResources.tsx';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
