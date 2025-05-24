@@ -34,7 +34,6 @@ import {
   cancelBanCase,
   cancelInvitationToGroupCase,
   checkLocalCase,
-  clearAllNotificationsCase,
   createGroupCase,
   createPollCase,
   createRewardShareCase,
@@ -303,6 +302,7 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 };
 
 export const walletVersion = 2;
+
 // List of your API endpoints
 const apiEndpoints = [
   'https://api.qortal.org',
@@ -434,10 +434,6 @@ export async function performPowTask(chatBytes, difficulty) {
       difficulty,
     });
   });
-}
-
-function playNotificationSound() {
-  // chrome.runtime.sendMessage({ action: "PLAY_NOTIFICATION_SOUND" });
 }
 
 const handleNotificationDirect = async (directs) => {
@@ -603,7 +599,7 @@ export function updateThreadActivity({
       threads = JSON.parse(storedData);
     }
 
-    let lastResetTime = threads.lastResetTime || 0;
+    const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
     if (currentTime - lastResetTime > ONE_WEEK_IN_MS) {
@@ -653,7 +649,7 @@ export function updateThreadActivity({
 const handleNotification = async (groups) => {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  let isDisableNotifications =
+  const isDisableNotifications =
     (await getUserSettings({ key: 'disable-push-notifications' })) || false;
 
   let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
@@ -678,7 +674,6 @@ const handleNotification = async (groups) => {
     const newActiveChats = data;
     const oldActiveChats = await getChatHeads();
 
-    let results = [];
     let newestLatestTimestamp = null;
     let oldestLatestTimestamp = null;
     // Find the latest timestamp from newActiveChats
@@ -876,13 +871,6 @@ export async function storeWallets(wallets) {
   storeData('wallets', wallets).catch((error) => {
     console.error(error);
   });
-}
-
-export async function clearAllNotifications() {
-  // const notifications = await chrome.notifications.getAll();
-  // for (const notificationId of Object.keys(notifications)) {
-  //   await chrome.notifications.clear(notificationId);
-  // }
 }
 
 export async function getUserInfo() {
@@ -3232,9 +3220,6 @@ function setupMessageListener() {
         break;
       case 'addGroupNotificationTimestamp':
         addGroupNotificationTimestampCase(request, event);
-        break;
-      case 'clearAllNotifications':
-        clearAllNotificationsCase(request, event);
         break;
       case 'setGroupData':
         setGroupDataCase(request, event);

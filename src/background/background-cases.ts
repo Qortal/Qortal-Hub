@@ -11,7 +11,6 @@ import {
   checkLocalFunc,
   checkNewMessages,
   checkThreads,
-  clearAllNotifications,
   createEndpoint,
   createGroup,
   decryptDirectFunc,
@@ -1134,32 +1133,6 @@ export async function getEnteredQmailTimestampCase(request, event) {
       {
         requestId: request.requestId,
         action: 'getEnteredQmailTimestamp',
-        error: error?.message,
-        type: 'backgroundMessageResponse',
-      },
-      event.origin
-    );
-  }
-}
-
-export async function clearAllNotificationsCase(request, event) {
-  try {
-    await clearAllNotifications();
-
-    event.source.postMessage(
-      {
-        requestId: request.requestId,
-        action: 'clearAllNotifications',
-        payload: true,
-        type: 'backgroundMessageResponse',
-      },
-      event.origin
-    );
-  } catch (error) {
-    event.source.postMessage(
-      {
-        requestId: request.requestId,
-        action: 'clearAllNotifications',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

@@ -12,49 +12,13 @@ import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 
 export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
 
-const apiEndpoints = [
-  'https://api.qortal.org',
-  'https://api2.qortal.org',
-  'https://appnode.qortal.org',
-  'https://apinode.qortalnodes.live',
-  'https://apinode1.qortalnodes.live',
-  'https://apinode2.qortalnodes.live',
-  'https://apinode3.qortalnodes.live',
-  'https://apinode4.qortalnodes.live',
-];
-
-async function findUsableApi() {
-  for (const endpoint of apiEndpoints) {
-    try {
-      const response = await fetch(`${endpoint}/admin/status`);
-      if (!response.ok) throw new Error('Failed to fetch');
-
-      const data = await response.json();
-      if (data.isSynchronizing === false && data.syncPercent === 100) {
-        console.log(`Usable API found: ${endpoint}`);
-        return endpoint;
-      } else {
-        console.log(`API not ready: ${endpoint}`);
-      }
-    } catch (error) {
-      console.error(`Error checking API ${endpoint}:`, error);
-    }
-  }
-
-  throw new Error(
-    i18n.t('question:message.error.no_api_found', {
-      postProcess: 'capitalizeFirstChar',
-    })
-  );
-}
-
 async function getSaveWallet() {
   const res = await getData<any>('walletInfo').catch(() => null);
 
   if (res) {
     return res;
   } else {
-    throw new Error('No wallet saved');
+    throw new Error('No wallet saved'); // TODO translate
   }
 }
 
