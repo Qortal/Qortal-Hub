@@ -83,25 +83,29 @@ async function getKeyPair() {
 }
 
 export const publishData = async ({
-  category,
   data,
-  description,
   feeAmount,
   filename,
   identifier,
   isBase64,
   registeredName,
+  file,
   service,
+  identifier,
+  uploadType,
+  withFee,
+  title,
+  description,
+  category,
   tag1,
   tag2,
   tag3,
   tag4,
   tag5,
-  title,
-  uploadType,
-  withFee,
 }: any) => {
   console.log('data', data);
+  feeAmount,
+}: any) => {
   const validateName = async (receiverName: string) => {
     return await reusableGet(`/names/${receiverName}`);
   };
@@ -228,6 +232,7 @@ export const publishData = async ({
 
     let transactionBytes = await uploadData(registeredName, data, fee);
     console.log('transactionBytes length', transactionBytes?.length);
+    
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
     } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
