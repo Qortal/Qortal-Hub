@@ -12,13 +12,11 @@ import {
 } from '@mui/material/styles';
 import { lightThemeOptions } from '../../styles/theme-light';
 import { darkThemeOptions } from '../../styles/theme-dark';
-import { useTranslation } from 'react-i18next';
-
-const { t } = useTranslation(['auth', 'core', 'group', 'question', 'tutorial']);
+import i18n from '../../i18n/i18n';
 
 const defaultTheme = {
   id: 'default',
-  name: t('core:theme.default', {
+  name: i18n.t('core:theme.default', {
     postProcess: 'capitalizeFirstChar',
   }),
   light: lightThemeOptions.palette,

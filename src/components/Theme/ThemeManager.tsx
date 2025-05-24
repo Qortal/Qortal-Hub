@@ -264,7 +264,7 @@ export default function ThemeManager() {
         {userThemes?.map((theme, index) => (
           <ListItemButton
             key={theme?.id || index}
-            selected={theme?.id === currentThemeId}
+            selected={theme?.id === currentThemeId} // TODO translate (current theme)
           >
             <ListItemText
               primary={`${theme?.name || `Theme ${index + 1}`} ${theme?.id === currentThemeId ? '(Current)' : ''}`}

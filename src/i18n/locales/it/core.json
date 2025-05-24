@@ -288,7 +288,7 @@
       "logout": "sei sicuro di voler fare logout?",
       "new_user": "sei un nuovo utente?",
       "delete_chat_image": "vorresti eliminare la tua immagine di chat precedente?",
-      "perform_transaction": "would you like to perform a {{action}} transaction?",
+      "perform_transaction": "vuoi eseguire una transazione {{action}}?",
       "provide_thread": "si prega di fornire un titolo al thread",
       "publish_app": "vorresti pubblicare questa app?",
       "publish_avatar": "vorresti pubblicare un avatar?",
