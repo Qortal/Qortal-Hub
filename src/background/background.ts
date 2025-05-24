@@ -11,7 +11,7 @@ import {
   objectToBase64,
 } from '../qdn/encryption/group-encryption';
 import ChatComputePowWorker from '../chatComputePow.worker.js?worker';
-import { reusableGet } from '../qdn/publish/pubish';
+import { reusableGet } from '../qdn/publish/publish.ts';
 import { signChat } from '../transactions/signChat';
 import { createTransaction } from '../transactions/transactions';
 import { decryptChatMessage } from '../utils/decryptChatMessage';
