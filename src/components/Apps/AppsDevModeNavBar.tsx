@@ -25,11 +25,12 @@ export const AppsDevModeNavBar = () => {
     navigationControllerAtom
   );
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core', 'group', 'question', 'tutorial']);
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
-  const { t } = useTranslation();
+  
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
