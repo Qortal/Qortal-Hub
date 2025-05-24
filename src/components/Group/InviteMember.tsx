@@ -45,7 +45,7 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
               setInfoSnack({
                 type: 'success',
                 message: t('group:message.success.group_invite', {
-                  value: value,
+                  invitee: value,
                   postProcess: 'capitalizeFirstChar',
                 }),
               });

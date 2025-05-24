@@ -110,7 +110,7 @@
     },
     "error": {
       "access_name": "Eine Nachricht kann nicht ohne Zugriff auf Ihren Namen gesendet werden",
-      "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
+      "descrypt_wallet": "error decrypting wallet {{ message }}",
       "description_required": "Bitte geben Sie eine Beschreibung an",
       "group_info": "kann nicht auf Gruppeninformationen zugreifen",
       "group_join": "versäumte es, sich der Gruppe anzuschließen",
@@ -129,7 +129,7 @@
       "group_creation": "erfolgreich erstellte Gruppe. Es kann ein paar Minuten dauern, bis sich die Änderungen der Verbreitung verbreiten",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
-      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
+      "group_invite": "successfully invited {{ invitee }}. It may take a couple of minutes for the changes to propagate",
       "group_join": "erfolgreich gebeten, sich der Gruppe anzuschließen. Es kann ein paar Minuten dauern, bis sich die Änderungen der Verbreitung verbreiten",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",

@@ -277,7 +277,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
         type: 'error',
         message: error?.message
           ? t('group:message.error.decrypt_wallet', {
-              errorMessage: error?.message,
+              message: error?.message,
               postProcess: 'capitalizeFirstChar',
             })
           : t('group:message.error.descrypt_wallet', {
