@@ -294,9 +294,6 @@ export const publishOnQDN = async ({
 }) => {
   if (data && service) {
     const registeredName = name || (await getNameInfo());
-}) => {
-  if (data && service) {
-    const registeredName = await getNameInfo();
     if (!registeredName)
       throw new Error(
         i18n.t('core:message.generic.name_publish', {
