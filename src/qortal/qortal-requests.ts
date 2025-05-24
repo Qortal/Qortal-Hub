@@ -1,4 +1,8 @@
-import { gateways, getApiKeyFromStorage } from '../background/background.ts';
+import {
+  gateways,
+  getApiKeyFromStorage,
+  getNameInfoForOthers,
+} from '../background/background.ts';
 import { listOfAllQortalRequests } from '../hooks/useQortalMessageListener.tsx';
 import {
   addForeignServer,
@@ -1914,6 +1918,33 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'GET_PRIMARY_NAME': {
+        try {
+          const res = await getNameInfoForOthers(request.payload?.address);
+          const resData = res ? res : null;
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: resData,
               type: 'backgroundMessageResponse',
             },
             event.origin

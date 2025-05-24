@@ -805,9 +805,9 @@ export async function getNameInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + '/names/address/' + address);
+  const response = await fetch(validApi + '/names/primary/' + address);
   const nameData = await response.json();
-  if (nameData?.length > 0) {
+  if (nameData?.name) {
     return nameData[0].name;
   } else {
     return '';
@@ -815,11 +815,12 @@ export async function getNameInfo() {
 }
 
 export async function getNameInfoForOthers(address) {
+  if (!address) return '';
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + '/names/address/' + address);
+  const response = await fetch(validApi + '/names/primary/' + address);
   const nameData = await response.json();
-  if (nameData?.length > 0) {
-    return nameData[0].name;
+  if (nameData?.name) {
+    return nameData?.name;
   } else {
     return '';
   }
