@@ -74,7 +74,7 @@ import {
   uint8ArrayStartsWith,
   uint8ArrayToBase64,
 } from '../qdn/encryption/group-encryption';
-import { publishData } from '../qdn/publish/pubish';
+import { publishData } from '../qdn/publish/publish.ts';
 import {
   getPermission,
   isRunningGateway,

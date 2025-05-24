@@ -135,7 +135,7 @@ export const publishData = async ({
     keyPair
   ) => {
     if (!arbitraryBytesBase58) {
-      throw new Error('ArbitraryBytesBase58 not defined');
+      throw new Error('ArbitraryBytesBase58 not defined'); // TODO translate
     }
 
     if (!keyPair) {

@@ -6,7 +6,7 @@ import {
   encryptDataGroup,
   objectToBase64,
 } from '../qdn/encryption/group-encryption.ts';
-import { publishData } from '../qdn/publish/pubish.ts';
+import { publishData } from '../qdn/publish/publish.ts';
 import { getData } from '../utils/chromeStorage.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 
