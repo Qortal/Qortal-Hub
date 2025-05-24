@@ -71,7 +71,7 @@
       "block_delay_minimum": "ritardo minimo del blocco per le approvazioni delle transazioni di gruppo",
       "block_delay_maximum": "ritardo massimo del blocco per le approvazioni delle transazioni di gruppo",
       "closed_group": "questo è un gruppo chiuso/privato, quindi dovrai attendere fino a quando un amministratore accetta la tua richiesta",
-      "descrypt_wallet": "portafoglio decrypting ...",
+      "descrypt_wallet": "wallet decrypting ...",
       "encryption_key": "la prima chiave di crittografia comune del gruppo è in procinto di creare. Si prega di attendere qualche minuto per essere recuperato dalla rete. Controllo ogni 2 minuti ...",
       "group_announcement": "annunci di gruppo",
       "group_approval_threshold": "soglia di approvazione del gruppo (numero / percentuale di amministratori che devono approvare una transazione)",
