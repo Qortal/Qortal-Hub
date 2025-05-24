@@ -18,20 +18,24 @@ import {
   Input,
   useTheme,
 } from '@mui/material';
-import { CustomButton } from './styles/App-styles';
+import { CustomButton } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
-import { Label } from './components/Group/AddGroup';
-import { Spacer } from './common/Spacer';
-import { getWallets, storeWallets, walletVersion } from './background';
-import { useModal } from './common/useModal';
-import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import { decryptStoredWalletFromSeedPhrase } from './utils/decryptWallet';
-import { crypto } from './constants/decryptWallet';
+import { Label } from './Group/AddGroup.tsx';
+import { Spacer } from '../common/Spacer.tsx';
+import {
+  getWallets,
+  storeWallets,
+  walletVersion,
+} from '../background/background.ts';
+import { useModal } from '../hooks/useModal.tsx';
+import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
+import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
+import { crypto } from '../constants/decryptWallet.ts';
 import { LoadingButton } from '@mui/lab';
-import { PasswordField } from './components';
-import { HtmlTooltip } from './components/NotAuthenticated';
-import { MyContext } from './App';
+import { PasswordField } from './index.ts';
+import { HtmlTooltip } from './NotAuthenticated.tsx';
+import { QORTAL_APP_CONTEXT } from '../App.tsx';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
@@ -44,12 +48,18 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(MyContext);
+  const { hasSeenGettingStarted } = useContext(QORTAL_APP_CONTEXT);
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const { isShow, onCancel, onOk, show } = useModal();
 
   const { getRootProps, getInputProps } = useDropzone({
@@ -65,7 +75,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           const fileContents = await new Promise((resolve, reject) => {
             const reader = new FileReader();
 
-            reader.onabort = () => reject('File reading was aborted');
+            reader.onabort = () => reject('File reading was aborted'); // TODO translate
             reader.onerror = () => reject('File reading has failed');
             reader.onload = () => {
               // Resolve the promise with the reader result when reading completes
@@ -457,7 +467,13 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   useEffect(() => {
     if (wallet?.name) {

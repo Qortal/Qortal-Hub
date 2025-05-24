@@ -2,12 +2,18 @@ import { Box, useTheme } from '@mui/material';
 import { useState } from 'react';
 import { TextP } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
-import { getFee } from '../background';
+import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 
 export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');

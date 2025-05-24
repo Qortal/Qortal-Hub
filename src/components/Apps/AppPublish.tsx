@@ -16,13 +16,13 @@ import {
   useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
 
@@ -65,9 +65,15 @@ export const AppPublish = ({ names, categories }) => {
   const [category, setCategory] = useState('');
   const [appType, setAppType] = useState('APP');
   const [file, setFile] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [tag1, setTag1] = useState('');
   const [tag2, setTag2] = useState('');
   const [tag3, setTag3] = useState('');

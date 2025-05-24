@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import {
   base64ToUint8Array,
   objectToBase64,
@@ -15,7 +15,7 @@ import {
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { Box, Typography, useTheme } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
@@ -24,7 +24,7 @@ import { AnnouncementList } from './AnnouncementList';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import { AnnouncementDiscussion } from './AnnouncementDiscussion';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
@@ -142,7 +142,7 @@ export const GroupAnnouncements = ({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasInitialized = useRef(false);
@@ -153,7 +153,13 @@ export const GroupAnnouncements = ({
     editorRef.current = editorInstance;
   };
   const [, forceUpdate] = useReducer((x) => x + 1, 0);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const triggerRerender = () => {
     forceUpdate(); // Trigger re-render by updating the state

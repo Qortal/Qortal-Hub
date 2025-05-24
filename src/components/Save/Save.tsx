@@ -18,20 +18,20 @@ import {
   useTheme,
 } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
-import { MyContext } from '../../App';
-import { getFee } from '../../background';
+import { QORTAL_APP_CONTEXT } from '../../App';
+import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { SaveIcon } from '../../assets/Icons/SaveIcon';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { Spacer } from '../../common/Spacer';
 import { LoadingButton } from '@mui/lab';
 import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
-import { decryptData, encryptData } from '../../qortalRequests/get';
+import { decryptData, encryptData } from '../../qortal/get.ts';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import {
   base64ToUint8Array,
   uint8ArrayToObject,
-} from '../../backgroundFunctions/encryption';
+} from '../../encryption/encryption.ts';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
 
@@ -82,9 +82,15 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
 
   const [anchorEl, setAnchorEl] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const hasChanged = useMemo(() => {
     const newChanges = {

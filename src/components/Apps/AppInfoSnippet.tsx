@@ -42,7 +42,13 @@ export const AppInfoSnippet = ({
   );
 
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <AppInfoSnippetContainer

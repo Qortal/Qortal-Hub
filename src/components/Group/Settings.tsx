@@ -36,9 +36,9 @@ import { useAtom } from 'jotai';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
 import { Spacer } from '../../common/Spacer';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
-import { walletVersion } from '../../background';
-import Base58 from '../../deps/Base58';
-import { MyContext } from '../../App';
+import { walletVersion } from '../../background/background.ts';
+import Base58 from '../../encryption/Base58.ts';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { useTranslation } from 'react-i18next';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
@@ -87,7 +87,13 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     setChecked(event.target.checked);
@@ -233,8 +239,15 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const { setOpenSnackGlobal, setInfoSnackCustom } = useContext(MyContext);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { setOpenSnackGlobal, setInfoSnackCustom } =
+    useContext(QORTAL_APP_CONTEXT);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const exportPrivateKeyFunc = async () => {
     try {

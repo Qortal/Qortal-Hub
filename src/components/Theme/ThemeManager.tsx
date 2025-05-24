@@ -82,7 +82,13 @@ export default function ThemeManager() {
   });
   const [currentTab, setCurrentTab] = useState('light');
   const nameInputRef = useRef(null);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   useEffect(() => {
     if (openEditor && nameInputRef.current) {

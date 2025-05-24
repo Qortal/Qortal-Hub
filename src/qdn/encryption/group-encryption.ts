@@ -1,8 +1,8 @@
 // @ts-nocheck
 
-import Base58 from '../../deps/Base58';
-import ed2curve from '../../deps/ed2curve';
-import nacl from '../../deps/nacl-fast';
+import Base58 from '../../encryption/Base58';
+import ed2curve from '../../encryption/ed2curve';
+import nacl from '../../encryption/nacl-fast';
 import i18n from '../../i18n/i18n';
 
 export function base64ToUint8Array(base64: string) {

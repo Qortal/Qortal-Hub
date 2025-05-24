@@ -2,7 +2,13 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export default forwardRef((props, ref) => {
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const [selectedIndex, setSelectedIndex] = useState(0);
 

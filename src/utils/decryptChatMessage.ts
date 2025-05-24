@@ -1,8 +1,8 @@
 // @ts-nocheck
 
-import Base58 from '../deps/Base58';
-import ed2curve from '../deps/ed2curve';
-import nacl from '../deps/nacl-fast';
+import Base58 from '../encryption/Base58';
+import ed2curve from '../encryption/ed2curve';
+import nacl from '../encryption/nacl-fast';
 import { Sha256 } from 'asmcrypto.js';
 
 export const decryptChatMessage = (

@@ -1,52 +1,16 @@
-import { getBaseApi } from '../background';
-import i18n from '../i18n/i18n';
+import { getBaseApi } from '../background/background.ts';
+import i18n from '../i18n/i18n.ts';
 import {
   createSymmetricKeyAndNonce,
   decryptGroupData,
   encryptDataGroup,
   objectToBase64,
-} from '../qdn/encryption/group-encryption';
-import { publishData } from '../qdn/publish/pubish';
-import { getData } from '../utils/chromeStorage';
-import { RequestQueueWithPromise } from '../utils/queue/queue';
+} from '../qdn/encryption/group-encryption.ts';
+import { publishData } from '../qdn/publish/publish.ts';
+import { getData } from '../utils/chromeStorage.ts';
+import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 
 export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
-
-const apiEndpoints = [
-  'https://api.qortal.org',
-  'https://api2.qortal.org',
-  'https://appnode.qortal.org',
-  'https://apinode.qortalnodes.live',
-  'https://apinode1.qortalnodes.live',
-  'https://apinode2.qortalnodes.live',
-  'https://apinode3.qortalnodes.live',
-  'https://apinode4.qortalnodes.live',
-];
-
-async function findUsableApi() {
-  for (const endpoint of apiEndpoints) {
-    try {
-      const response = await fetch(`${endpoint}/admin/status`);
-      if (!response.ok) throw new Error('Failed to fetch');
-
-      const data = await response.json();
-      if (data.isSynchronizing === false && data.syncPercent === 100) {
-        console.log(`Usable API found: ${endpoint}`);
-        return endpoint;
-      } else {
-        console.log(`API not ready: ${endpoint}`);
-      }
-    } catch (error) {
-      console.error(`Error checking API ${endpoint}:`, error);
-    }
-  }
-
-  throw new Error(
-    i18n.t('question:message.error.no_api_found', {
-      postProcess: 'capitalizeFirstChar',
-    })
-  );
-}
 
 async function getSaveWallet() {
   const res = await getData<any>('walletInfo').catch(() => null);
@@ -54,7 +18,7 @@ async function getSaveWallet() {
   if (res) {
     return res;
   } else {
-    throw new Error('No wallet saved');
+    throw new Error('No wallet saved'); // TODO translate
   }
 }
 

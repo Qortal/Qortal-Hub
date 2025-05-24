@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import Logo2 from '../../assets/svgs/Logo2.svg';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
 } from '../../App';
@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import ImageUploader from '../../common/ImageUploader';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { fileToBase64 } from '../../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -32,8 +32,14 @@ export const GroupAvatar = ({
   const [hasAvatar, setHasAvatar] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [tempAvatar, setTempAvatar] = useState(null);
-  const { show } = useContext(MyContext);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   // Handle child element click to open Popover
@@ -262,7 +268,13 @@ const PopoverComp = ({
   myName,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <Popover

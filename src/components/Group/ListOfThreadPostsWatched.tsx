@@ -14,7 +14,13 @@ import { useTranslation } from 'react-i18next';
 export const ListOfThreadPostsWatched = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getPosts = async () => {
     try {

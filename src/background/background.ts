@@ -1,27 +1,27 @@
 // @ts-nocheck
-import './qortalRequests';
+import '../qortal/qortal-requests.ts';
 import { isArray } from 'lodash';
-import { uint8ArrayToObject } from './backgroundFunctions/encryption';
-import Base58 from './deps/Base58';
+import { uint8ArrayToObject } from '../encryption/encryption.ts';
+import Base58 from '../encryption/Base58';
 import axios from 'axios';
 import {
   base64ToUint8Array,
   decryptSingle,
   encryptSingle,
   objectToBase64,
-} from './qdn/encryption/group-encryption';
-import ChatComputePowWorker from './chatComputePow.worker.js?worker';
-import { reusableGet } from './qdn/publish/pubish';
-import { signChat } from './transactions/signChat';
-import { createTransaction } from './transactions/transactions';
-import { decryptChatMessage } from './utils/decryptChatMessage';
-import { decryptStoredWallet } from './utils/decryptWallet';
-import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import { RequestQueueWithPromise } from './utils/queue/queue';
-import { validateAddress } from './utils/validateAddress';
+} from '../qdn/encryption/group-encryption';
+import ChatComputePowWorker from '../chatComputePow.worker.js?worker';
+import { reusableGet } from '../qdn/publish/publish.ts';
+import { signChat } from '../transactions/signChat';
+import { createTransaction } from '../transactions/transactions';
+import { decryptChatMessage } from '../utils/decryptChatMessage';
+import { decryptStoredWallet } from '../utils/decryptWallet';
+import PhraseWallet from '../utils/generateWallet/phrase-wallet';
+import { RequestQueueWithPromise } from '../utils/queue/queue';
+import { validateAddress } from '../utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
-import { TradeBotRespondMultipleRequest } from './transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from './constants/constants';
+import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
+import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -34,7 +34,6 @@ import {
   cancelBanCase,
   cancelInvitationToGroupCase,
   checkLocalCase,
-  clearAllNotificationsCase,
   createGroupCase,
   createPollCase,
   createRewardShareCase,
@@ -68,7 +67,6 @@ import {
   ltcBalanceCase,
   makeAdminCase,
   nameCase,
-  notificationCase,
   notifyAdminRegenerateSecretKeyCase,
   pauseAllQueuesCase,
   publishGroupEncryptedResourceCase,
@@ -90,9 +88,13 @@ import {
   validApiCase,
   versionCase,
   voteOnPollCase,
-} from './background-cases';
-import { getData, removeKeysAndLogout, storeData } from './utils/chromeStorage';
-import TradeBotRespondRequest from './transactions/TradeBotRespondRequest';
+} from '../background/background-cases';
+import {
+  getData,
+  removeKeysAndLogout,
+  storeData,
+} from '../utils/chromeStorage';
+import TradeBotRespondRequest from '../transactions/TradeBotRespondRequest';
 
 export let groupSecretkeys = {};
 
@@ -300,6 +302,7 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 };
 
 export const walletVersion = 2;
+
 // List of your API endpoints
 const apiEndpoints = [
   'https://api.qortal.org',
@@ -431,10 +434,6 @@ export async function performPowTask(chatBytes, difficulty) {
       difficulty,
     });
   });
-}
-
-function playNotificationSound() {
-  // chrome.runtime.sendMessage({ action: "PLAY_NOTIFICATION_SOUND" });
 }
 
 const handleNotificationDirect = async (directs) => {
@@ -600,7 +599,7 @@ export function updateThreadActivity({
       threads = JSON.parse(storedData);
     }
 
-    let lastResetTime = threads.lastResetTime || 0;
+    const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
     if (currentTime - lastResetTime > ONE_WEEK_IN_MS) {
@@ -650,7 +649,7 @@ export function updateThreadActivity({
 const handleNotification = async (groups) => {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  let isDisableNotifications =
+  const isDisableNotifications =
     (await getUserSettings({ key: 'disable-push-notifications' })) || false;
 
   let mutedGroups = (await getUserSettings({ key: 'mutedGroups' })) || [];
@@ -675,7 +674,6 @@ const handleNotification = async (groups) => {
     const newActiveChats = data;
     const oldActiveChats = await getChatHeads();
 
-    let results = [];
     let newestLatestTimestamp = null;
     let oldestLatestTimestamp = null;
     // Find the latest timestamp from newActiveChats
@@ -873,13 +871,6 @@ export async function storeWallets(wallets) {
   storeData('wallets', wallets).catch((error) => {
     console.error(error);
   });
-}
-
-export async function clearAllNotifications() {
-  // const notifications = await chrome.notifications.getAll();
-  // for (const notificationId of Object.keys(notifications)) {
-  //   await chrome.notifications.clear(notificationId);
-  // }
 }
 
 export async function getUserInfo() {
@@ -3229,9 +3220,6 @@ function setupMessageListener() {
         break;
       case 'addGroupNotificationTimestamp':
         addGroupNotificationTimestampCase(request, event);
-        break;
-      case 'clearAllNotifications':
-        clearAllNotificationsCase(request, event);
         break;
       case 'setGroupData':
         setGroupDataCase(request, event);

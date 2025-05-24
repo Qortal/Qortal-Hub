@@ -25,10 +25,10 @@ import { ListOfBans } from './ListOfBans';
 import { ListOfJoinRequests } from './ListOfJoinRequests';
 import { Box, ButtonBase, Card, Tab, Tabs, useTheme } from '@mui/material';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { getGroupMembers, getNames } from './Group';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { LoadingButton } from '@mui/lab';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
@@ -71,8 +71,14 @@ export const ManageMembers = ({
     setValue(newValue);
   };
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
-  const { show } = useContext(MyContext);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const handleClose = () => {

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import {
   Card,
   CardContent,
@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import { getNameInfo } from '../Group/Group';
 import PollIcon from '@mui/icons-material/Poll';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { Spacer } from '../../common/Spacer';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -37,10 +37,16 @@ export const PollCard = ({
   const [ownerName, setOwnerName] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const { show, userInfo } = useContext(MyContext);
+  const { show, userInfo } = useContext(QORTAL_APP_CONTEXT);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const handleVote = async () => {
     const fee = await getFee('VOTE_ON_POLL');
@@ -379,7 +385,13 @@ const PollResults = ({ votes }) => {
     ...votes?.voteCounts?.map((option) => option.voteCount)
   );
   const options = votes?.voteCounts;
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <Box sx={{ width: '100%', p: 2 }}>

@@ -14,8 +14,8 @@ import {
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
-import { getPublicKey } from '../../background';
-import { useMessageQueue } from '../../MessageQueueContext';
+import { getPublicKey } from '../../background/background.ts';
+import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
   executeEvent,
   subscribeToEvent,
@@ -42,7 +42,13 @@ export const ChatDirect = ({
   setMobileViewModeKeepOpen,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const { queueChats, addToQueue, processWithNewMessages } = useMessageQueue();
   const [isFocusedParent, setIsFocusedParent] = useState(false);
   const [onEditMessage, setOnEditMessage] = useState(null);

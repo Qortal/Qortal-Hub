@@ -19,11 +19,11 @@ import {
   Input,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
-import { useModal } from '../../common/useModal';
-import { createEndpoint, isUsingLocal } from '../../background';
+import { useModal } from '../../hooks/useModal.tsx';
+import { createEndpoint, isUsingLocal } from '../../background/background.ts';
 import { Label } from '../Group/AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
@@ -41,14 +41,20 @@ export const AppsDevModeHome = ({
   const [domain, setDomain] = useState('127.0.0.1');
   const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const { isShow, onCancel, onOk, show, message } = useModal();
   const {
     openSnackGlobal,
     setOpenSnackGlobal,
     infoSnackCustom,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
 
   const handleSelectFile = async (existingFilePath) => {
     const filePath = existingFilePath || (await window.electron.selectFile());

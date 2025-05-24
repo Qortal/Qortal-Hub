@@ -14,9 +14,9 @@ import {
   CellMeasurerCache,
   List,
 } from 'react-virtualized';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import { Spacer } from '../../common/Spacer';
@@ -55,13 +55,19 @@ export const UserListOfInvites = ({
   setInfoSnack,
   setOpenSnack,
 }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const [invites, setInvites] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);

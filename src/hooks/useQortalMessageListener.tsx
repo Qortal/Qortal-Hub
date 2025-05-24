@@ -2,9 +2,9 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import { executeEvent } from '../utils/events';
 import { navigationControllerAtom } from '../atoms/global';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { saveFile } from '../qortalRequests/get';
+import { saveFile } from '../qortal/get';
 import { mimeToExtensionMap } from '../utils/memeTypes';
-import { MyContext } from '../App';
+import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
 
@@ -526,7 +526,7 @@ export const useQortalMessageListener = (
     setOpenSnackGlobal,
     infoSnackCustom,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
 
   useEffect(() => {
     if (tabId && !isNaN(history?.currentIndex)) {

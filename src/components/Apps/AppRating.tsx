@@ -1,7 +1,7 @@
 import { Box, Rating } from '@mui/material';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { getFee } from '../../background';
-import { MyContext, getBaseApiReact } from '../../App';
+import { getFee } from '../../background/background.ts';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { StarFilledIcon } from '../../assets/Icons/StarFilled';
 import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [value, setValue] = useState(0);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const [hasPublishedRating, setHasPublishedRating] = useState<null | boolean>(
     null
   );
@@ -20,7 +20,13 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasCalledRef = useRef(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getRating = useCallback(async (name, service) => {
     try {

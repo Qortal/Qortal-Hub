@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { DYNAMIC_FEE_TIMESTAMP } from '../constants/constants';
-import Base58 from '../deps/Base58';
+import Base58 from '../encryption/Base58';
 import publicKeyToAddress from '../utils/generateWallet/publicKeyToAddress';
 import TransactionBase from './TransactionBase';
 export default class RemoveRewardShareTransaction extends TransactionBase {

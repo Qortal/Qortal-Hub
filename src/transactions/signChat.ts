@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import nacl from '../deps/nacl-fast';
+import nacl from '../encryption/nacl-fast';
 import utils from '../utils/utils';
 
 export const signChat = (chatBytes, nonce, keyPair) => {

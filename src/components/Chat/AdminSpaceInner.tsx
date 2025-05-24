@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
 } from '../../App';
@@ -10,9 +10,9 @@ import {
   getPublishesFromAdmins,
   validateSecretKey,
 } from '../Group/Group';
-import { getFee } from '../../background';
+import { getFee } from '../../background/background.ts';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
-import { uint8ArrayToObject } from '../../backgroundFunctions/encryption';
+import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import { formatTimestampForum } from '../../utils/time';
 import { Spacer } from '../../common/Spacer';
 import { GroupAvatar } from './GroupAvatar';
@@ -73,8 +73,14 @@ export const AdminSpaceInner = ({
     useState(null);
   const [isLoadingPublishKey, setIsLoadingPublishKey] = useState(false);
   const { show, setInfoSnackCustom, setOpenSnackGlobal } =
-    useContext(MyContext);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+    useContext(QORTAL_APP_CONTEXT);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getAdminGroupSecretKey = useCallback(async () => {
     try {
