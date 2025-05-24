@@ -20,7 +20,7 @@ import {
 } from '../../utils/events';
 import { validateAddress } from '../../utils/validateAddress';
 import { getNameInfo, requestQueueMemberNames } from './Group';
-import { useModal } from '../../common/useModal';
+import { useModal } from '../../hooks/useModal';
 import { isOpenBlockedModalAtom } from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
 import { useAtom } from 'jotai';

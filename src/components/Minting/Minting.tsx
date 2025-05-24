@@ -24,7 +24,7 @@ import {
 import { getFee } from '../../background/background.ts';
 import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
-import { useModal } from '../../common/useModal';
+import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';

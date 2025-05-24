@@ -28,7 +28,7 @@ import {
   storeWallets,
   walletVersion,
 } from '../background/background.ts';
-import { useModal } from '../common/useModal.tsx';
+import { useModal } from '../hooks/useModal.tsx';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
 import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
 import { crypto } from '../constants/decryptWallet.ts';
