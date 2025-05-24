@@ -84,7 +84,13 @@ export const DesktopHeader = ({
 }) => {
   const [value, setValue] = useState(0);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <Box

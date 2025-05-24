@@ -49,7 +49,13 @@ function formatAddress(str) {
 
 export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [nameOrAddress, setNameOrAddress] = useState('');
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);

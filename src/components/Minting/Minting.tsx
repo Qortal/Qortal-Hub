@@ -45,7 +45,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});

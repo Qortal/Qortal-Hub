@@ -40,7 +40,13 @@ export const PollCard = ({
   const { show, userInfo } = useContext(QORTAL_APP_CONTEXT);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const handleVote = async () => {
     const fee = await getFee('VOTE_ON_POLL');
@@ -379,7 +385,13 @@ const PollResults = ({ votes }) => {
     ...votes?.voteCounts?.map((option) => option.voteCount)
   );
   const options = votes?.voteCounts;
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <Box sx={{ width: '100%', p: 2 }}>

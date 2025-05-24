@@ -10,7 +10,13 @@ export const InviteMember = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
   const [value, setValue] = useState('');
   const [expiryTime, setExpiryTime] = useState<string>('259200');
   const [isLoadingInvite, setIsLoadingInvite] = useState(false);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const inviteMember = async () => {
     try {

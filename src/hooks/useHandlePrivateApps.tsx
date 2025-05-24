@@ -22,7 +22,13 @@ export const useHandlePrivateApps = () => {
   } = useContext(QORTAL_APP_CONTEXT);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const openApp = async (
     privateAppProperties,

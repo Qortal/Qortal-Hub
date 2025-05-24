@@ -15,7 +15,13 @@ import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 export const WalletsAppWrapper = () => {
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [navigationController, setNavigationController] = useAtom(

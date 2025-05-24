@@ -170,7 +170,13 @@ export const MessageItem = memo(
     }, [message?.id]);
 
     const theme = useTheme();
-    const { t } = useTranslation(['auth', 'core', 'group']);
+    const { t } = useTranslation([
+      'auth',
+      'core',
+      'group',
+      'question',
+      'tutorial',
+    ]);
 
     return (
       <>
@@ -612,7 +618,13 @@ export const MessageItem = memo(
 
 export const ReplyPreview = ({ message, isEdit = false }) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <Box

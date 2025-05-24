@@ -308,7 +308,13 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
 
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
 
   const [

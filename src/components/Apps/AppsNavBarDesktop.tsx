@@ -76,7 +76,13 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
   );
 
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);

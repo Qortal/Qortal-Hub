@@ -38,7 +38,13 @@ export const AttachmentCard = ({
   const [isOpen, setIsOpen] = useState(true);
   const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const saveToDisk = async () => {
     const { name, service, identifier } = resourceData;
