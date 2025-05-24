@@ -118,7 +118,7 @@ import {
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
-import { Wallets } from './Wallets';
+import { Wallets } from './components/Wallets.tsx';
 import { useFetchResources } from './common/useFetchResources';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
