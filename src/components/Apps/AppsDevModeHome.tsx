@@ -19,7 +19,7 @@ import {
   Input,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../common/useModal';
@@ -48,7 +48,7 @@ export const AppsDevModeHome = ({
     setOpenSnackGlobal,
     infoSnackCustom,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
 
   const handleSelectFile = async (existingFilePath) => {
     const filePath = existingFilePath || (await window.electron.selectFile());

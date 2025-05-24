@@ -22,7 +22,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { formatTimestamp } from '../../utils/time';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { generateHTML } from '@tiptap/react';
 import Highlight from '@tiptap/extension-highlight';
 import Mention from '@tiptap/extension-mention';
@@ -113,7 +113,7 @@ export const MessageItem = memo(
     onEdit,
     isPrivate,
   }) => {
-    const { getIndividualUserInfo } = useContext(MyContext);
+    const { getIndividualUserInfo } = useContext(QORTAL_APP_CONTEXT);
     const [anchorEl, setAnchorEl] = useState(null);
     const [selectedReaction, setSelectedReaction] = useState(null);
     const [userInfo, setUserInfo] = useState(null);

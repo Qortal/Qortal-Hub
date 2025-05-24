@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react';
 import { executeEvent } from '../utils/events';
-import { getBaseApiReact, MyContext } from '../App';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../App';
 import { createEndpoint } from '../background';
 import {
   settingsLocalLastUpdatedAtom,
@@ -19,7 +19,7 @@ export const useHandlePrivateApps = () => {
     setOpenSnackGlobal,
     infoSnackCustom,
     setInfoSnackCustom,
-  } = useContext(MyContext);
+  } = useContext(QORTAL_APP_CONTEXT);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const { t } = useTranslation(['auth', 'core', 'group']);

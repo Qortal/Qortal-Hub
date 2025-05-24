@@ -31,7 +31,7 @@ import { crypto } from './constants/decryptWallet';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './components';
 import { HtmlTooltip } from './components/NotAuthenticated';
-import { MyContext } from './App';
+import { QORTAL_APP_CONTEXT } from './App';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
@@ -44,7 +44,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(MyContext);
+  const { hasSeenGettingStarted } = useContext(QORTAL_APP_CONTEXT);
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);

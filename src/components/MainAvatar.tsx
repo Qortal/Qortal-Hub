@@ -1,6 +1,10 @@
 import { useContext, useEffect, useState } from 'react';
 import Logo2 from '../assets/svgs/Logo2.svg';
-import { MyContext, getArbitraryEndpointReact, getBaseApiReact } from '../App';
+import {
+  QORTAL_APP_CONTEXT,
+  getArbitraryEndpointReact,
+  getBaseApiReact,
+} from '../App';
 import {
   Avatar,
   Box,
@@ -22,7 +26,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   const [hasAvatar, setHasAvatar] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [tempAvatar, setTempAvatar] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);

@@ -31,7 +31,7 @@ import {
 } from './Apps-styles';
 import AddIcon from '@mui/icons-material/Add';
 import ImageUploader from '../../common/ImageUploader';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background';
@@ -59,7 +59,7 @@ export const AppsPrivate = ({ myName }) => {
 
   const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
   const { show, setInfoSnackCustom, setOpenSnackGlobal } =
-    useContext(MyContext);
+    useContext(QORTAL_APP_CONTEXT);
   const [memberGroups] = useAtom(memberGroupsAtom);
 
   const theme = useTheme();

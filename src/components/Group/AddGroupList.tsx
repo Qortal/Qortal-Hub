@@ -23,7 +23,7 @@ import {
   List,
 } from 'react-virtualized';
 import _ from 'lodash';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background';
 import LockIcon from '@mui/icons-material/Lock';
@@ -39,7 +39,7 @@ const cache = new CellMeasurerCache({
 });
 
 export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const [memberGroups] = useAtom(memberGroupsAtom);
   const setTxList = useSetAtom(txListAtom);
   const { t } = useTranslation(['auth', 'core', 'group']);

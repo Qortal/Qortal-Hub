@@ -24,7 +24,7 @@ import { AnnouncementList } from './AnnouncementList';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import { AnnouncementDiscussion } from './AnnouncementDiscussion';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
@@ -142,7 +142,7 @@ export const GroupAnnouncements = ({
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [isFocusedParent, setIsFocusedParent] = useState(false);
 
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const hasInitialized = useRef(false);

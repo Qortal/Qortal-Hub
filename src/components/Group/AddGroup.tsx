@@ -35,7 +35,7 @@ import { AddGroupList } from './AddGroupList';
 import { UserListOfInvites } from './UserListOfInvites';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
@@ -59,7 +59,7 @@ const Transition = forwardRef(function Transition(
 });
 
 export const AddGroup = ({ address, open, setOpen }) => {
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
   const [openAdvance, setOpenAdvance] = useState(false);

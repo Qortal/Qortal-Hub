@@ -16,7 +16,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { styled } from '@mui/system';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { useDropzone } from 'react-dropzone';
@@ -65,7 +65,7 @@ export const AppPublish = ({ names, categories }) => {
   const [category, setCategory] = useState('');
   const [appType, setAppType] = useState('APP');
   const [file, setFile] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);
   const [tag1, setTag1] = useState('');

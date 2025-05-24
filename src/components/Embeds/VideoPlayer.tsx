@@ -21,7 +21,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/system';
 import { Refresh } from '@mui/icons-material';
-import { MyContext, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { resourceKeySelector } from '../../atoms/global';
 
 import { useAtomValue } from 'jotai';
@@ -88,7 +88,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
   }, [service, name, identifier]);
 
   const download = useAtomValue(resourceKeySelector(keyIdentifier));
-  const { downloadResource } = useContext(MyContext);
+  const { downloadResource } = useContext(QORTAL_APP_CONTEXT);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(1);

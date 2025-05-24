@@ -18,7 +18,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
-import { MyContext } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { SaveIcon } from '../../assets/Icons/SaveIcon';
@@ -82,7 +82,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
 
   const [anchorEl, setAnchorEl] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);
 

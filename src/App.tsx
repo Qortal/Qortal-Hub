@@ -236,7 +236,8 @@ const defaultValuesGlobal = {
   setOpenTutorialModal: () => {},
 };
 
-export const MyContext = createContext<MyContextInterface>(defaultValues);
+export const QORTAL_APP_CONTEXT =
+  createContext<MyContextInterface>(defaultValues);
 
 export let globalApiKey: string | null = null;
 
@@ -2016,7 +2017,7 @@ function App() {
     >
       <PdfViewer />
 
-      <MyContext.Provider value={contextValue}>
+      <QORTAL_APP_CONTEXT.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
@@ -3858,7 +3859,7 @@ function App() {
           setInfoSnack={setInfoSnack}
         />
         <BuyQortInformation balance={balance} />
-      </MyContext.Provider>
+      </QORTAL_APP_CONTEXT.Provider>
 
       {extState === 'create-wallet' && walletToBeDownloaded && (
         <ButtonBase

@@ -19,7 +19,7 @@ import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import {
   getBaseApiReact,
   getBaseApiReactSocket,
-  MyContext,
+  QORTAL_APP_CONTEXT,
   pauseAllQueues,
   resumeAllQueues,
 } from '../../App';
@@ -71,7 +71,7 @@ export const ChatGroup = ({
   hideView,
   isPrivate,
 }) => {
-  const { isUserBlocked, show } = useContext(MyContext);
+  const { isUserBlocked, show } = useContext(QORTAL_APP_CONTEXT);
   const [messages, setMessages] = useState([]);
   const [chatReferences, setChatReferences] = useState({});
   const [isSending, setIsSending] = useState(false);
