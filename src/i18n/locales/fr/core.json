@@ -329,9 +329,11 @@
     "previous": "précédent"
   },
   "payment_notification": "Notification de paiement",
+  "payment": "paiement",
   "poll_embed": "sondage",
   "port": "port",
   "price": "prix",
+  "publish": "publication",
   "q_apps": {
     "about": "À propos de ce Q-App",
     "q_mail": "Q-mail",

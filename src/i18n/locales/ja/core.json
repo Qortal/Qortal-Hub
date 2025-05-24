@@ -328,9 +328,11 @@
     "previous": "前の"
   },
   "payment_notification": "支払い通知",
+  "payment": "お支払い",
   "poll_embed": "投票埋め込み",
   "port": "ポート",
   "price": "価格",
+  "publish": "出版物",
   "q_apps": {
     "about": "このq-appについて",
     "q_mail": "Qメール",

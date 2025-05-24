@@ -3338,13 +3338,20 @@ function App() {
             }}
           >
             <DialogTitle id="alert-dialog-title">
-              {message.paymentFee ? 'Payment' : 'Publish'}
+              {message.paymentFee
+                ? t('core:payment', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:publish', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
             </DialogTitle>
 
             <DialogContent>
               <DialogContentText id="alert-dialog-description">
                 {message.message}
               </DialogContentText>
+
               {message?.paymentFee && (
                 <DialogContentText id="alert-dialog-description2">
                   {t('core:fee.payment', {
@@ -3353,6 +3360,7 @@ function App() {
                   : {message.paymentFee}
                 </DialogContentText>
               )}
+
               {message?.publishFee && (
                 <DialogContentText id="alert-dialog-description2">
                   {t('core:fee.publish', {

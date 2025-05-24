@@ -331,9 +331,11 @@
     "previous": "previous"
   },
   "payment_notification": "payment notification",
+  "payment": "payment",
   "poll_embed": "poll embed",
   "port": "port",
   "price": "price",
+  "publish": "publish",
   "q_apps": {
     "about": "about this Q-App",
     "q_mail": "q-mail",

@@ -143,7 +143,7 @@
   "downloading_qdn": "download da QDN",
   "fee": {
     "payment": "commissione di pagamento",
-    "publish": "commissione per pubblicare"
+    "publish": "commissione di pubblicazione"
   },
   "for": "per",
   "general": "generale",
@@ -330,10 +330,12 @@
     "next": "prossimo",
     "previous": "precedente"
   },
+  "payment": "pagamento",
   "payment_notification": "notifica di pagamento",
   "poll_embed": "sondaggio incorporato",
   "port": "porta",
   "price": "prezzo",
+  "publish": "pubblicazione",
   "q_apps": {
     "about": "su questo Q-app",
     "q_mail": "Q-mail",
