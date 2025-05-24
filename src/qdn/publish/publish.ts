@@ -30,7 +30,6 @@ async function reusablePost(endpoint, _body) {
     data = await response.clone().json();
   } catch (e) {
     data = await response.text();
-<<<<<<< HEAD
   }
   return data;
 }
@@ -84,27 +83,23 @@ async function getKeyPair() {
 }
 
 export const publishData = async ({
-  registeredName,
-  data,
-  service,
-  identifier,
-  uploadType,
-  file,
-  service,
-  identifier,
-  uploadType,
-  isBase64,
-  filename,
-  withFee,
-  title,
-  description,
   category,
+  data,
+  description,
+  feeAmount,
+  filename,
+  identifier,
+  isBase64,
+  registeredName,
+  service,
   tag1,
   tag2,
   tag3,
   tag4,
   tag5,
-  feeAmount,
+  title,
+  uploadType,
+  withFee,
 }: any) => {
   console.log('data', data);
   const validateName = async (receiverName: string) => {
@@ -252,123 +247,6 @@ export const publishData = async ({
     return signAndProcessRes;
   };
 
-<<<<<<< HEAD
-  const uploadData = async (registeredName: string, data: any, fee: number) => {
-    console.log('data', uploadType, data);
-    let postBody = '';
-    let urlSuffix = '';
-
-    if (data != null) {
-      if (uploadType === 'base64') {
-        urlSuffix = '/base64';
-      }
-
-      if (uploadType === 'base64') {
-        postBody = data;
-      }
-    } else {
-      throw new Error('No data provided');
-    }
-
-    let uploadDataUrl = `/arbitrary/${service}/${registeredName}`;
-    let paramQueries = '';
-    if (identifier?.trim().length > 0) {
-      uploadDataUrl = `/arbitrary/${service}/${registeredName}/${identifier}`;
-    }
-
-    paramQueries = paramQueries + `?fee=${fee}`;
-
-    if (filename != null && filename != 'undefined') {
-      paramQueries = paramQueries + '&filename=' + encodeURIComponent(filename);
-    }
-
-    if (title != null && title != 'undefined') {
-      paramQueries = paramQueries + '&title=' + encodeURIComponent(title);
-    }
-
-    if (description != null && description != 'undefined') {
-      paramQueries =
-        paramQueries + '&description=' + encodeURIComponent(description);
-    }
-
-    if (category != null && category != 'undefined') {
-      paramQueries = paramQueries + '&category=' + encodeURIComponent(category);
-    }
-
-    if (tag1 != null && tag1 != 'undefined') {
-      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag1);
-    }
-
-    if (tag2 != null && tag2 != 'undefined') {
-      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag2);
-    }
-
-    if (tag3 != null && tag3 != 'undefined') {
-      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag3);
-    }
-
-    if (tag4 != null && tag4 != 'undefined') {
-      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag4);
-    }
-
-    if (tag5 != null && tag5 != 'undefined') {
-      paramQueries = paramQueries + '&tags=' + encodeURIComponent(tag5);
-    }
-    if (uploadType === 'zip') {
-      paramQueries = paramQueries + '&isZip=' + true;
-    }
-
-    if (uploadType === 'base64') {
-      if (urlSuffix) {
-        uploadDataUrl = uploadDataUrl + urlSuffix;
-      }
-      uploadDataUrl = uploadDataUrl + paramQueries;
-      return await reusablePost(uploadDataUrl, postBody);
-    }
-
-    const file = data;
-    const urlCheck = `/arbitrary/check-tmp-space?totalSize=${file.size}`;
-
-    const checkEndpoint = await createEndpoint(urlCheck);
-    const checkRes = await fetch(checkEndpoint);
-    if (!checkRes.ok) {
-      throw new Error('Not enough space on your hard drive');
-    }
-
-    const chunkUrl = uploadDataUrl + `/chunk`;
-    const chunkSize = 5 * 1024 * 1024; // 5MB
-
-    const totalChunks = Math.ceil(file.size / chunkSize);
-
-    for (let index = 0; index < totalChunks; index++) {
-      const start = index * chunkSize;
-      const end = Math.min(start + chunkSize, file.size);
-      const chunk = file.slice(start, end);
-
-      const formData = new FormData();
-      formData.append('chunk', chunk, file.name); // Optional: include filename
-      formData.append('index', index);
-
-      await uploadChunkWithRetry(chunkUrl, formData, index);
-    }
-    const finalizeUrl = uploadDataUrl + `/finalize` + paramQueries;
-
-    const finalizeEndpoint = await createEndpoint(finalizeUrl);
-
-    const response = await fetch(finalizeEndpoint, {
-      method: 'POST',
-      headers: {},
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Finalize failed: ${errorText}`);
-    }
-
-    const result = await response.text(); // Base58-encoded unsigned transaction
-    return result;
-}
-
   const uploadData = async (registeredName: string, file: any, fee: number) => {
     let postBody = '';
     let urlSuffix = '';
@@ -442,7 +320,6 @@ export const publishData = async ({
     }
 
     return await reusablePost(uploadDataUrl, postBody);
->>>>>>> 2d01b3e (Create encryption folder and move files)
   };
 
   try {
