@@ -1580,7 +1580,7 @@ function App() {
     return (
       <AuthenticatedContainer
         sx={{
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.paper,
           display: 'flex',
           justifyContent: 'flex-end',
           width: 'auto',

@@ -152,6 +152,7 @@ export const DesktopSideBar = ({
       )}
 
       <LanguageSelector />
+
       <ThemeSelector />
     </Box>
   );
