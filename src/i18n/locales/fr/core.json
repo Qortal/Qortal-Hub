@@ -329,9 +329,11 @@
     "previous": "précédent"
   },
   "payment_notification": "Notification de paiement",
+  "payment": "paiement",
   "poll_embed": "sondage",
   "port": "port",
   "price": "prix",
+  "publish": "publication",
   "q_apps": {
     "about": "À propos de ce Q-App",
     "q_mail": "Q-mail",
@@ -352,8 +354,9 @@
   "theme": {
     "dark": "sombre",
     "dark_mode": "mode sombre",
+    "default": "thème par défaut",
     "light": "lumière",
-    "light_mode": "mode léger",
+    "light_mode": "mode clair",
     "manager": "directeur de thème",
     "name": "nom de thème"
   },

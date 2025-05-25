@@ -299,7 +299,20 @@ const PopoverComp = ({
         </Typography>
 
         <ImageUploader onPick={(file) => setAvatarFile(file)}>
-          <Button variant="contained">
+          <Button
+            variant="contained"
+            sx={{
+              backgroundColor: theme.palette.other.positive,
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 0.7,
+              '&:hover': {
+                backgroundColor: theme.palette.other.positive,
+                color: 'black',
+                opacity: 1,
+              },
+            }}
+          >
             {t('core:action.choose_image', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -338,6 +351,17 @@ const PopoverComp = ({
           disabled={!avatarFile || !myName}
           onClick={publishAvatar}
           variant="contained"
+          sx={{
+            backgroundColor: theme.palette.other.positive,
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 0.7,
+            '&:hover': {
+              backgroundColor: theme.palette.other.positive,
+              color: 'black',
+              opacity: 1,
+            },
+          }}
         >
           {t('group:action.publish_avatar', {
             postProcess: 'capitalizeFirstChar',

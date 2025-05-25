@@ -328,9 +328,11 @@
     "previous": "предыдущий"
   },
   "payment_notification": "уведомление о платеже",
+  "payment": "плата",
   "poll_embed": "Опрос встроен",
   "port": "порт",
   "price": "цена",
+  "publish": "публикация",
   "q_apps": {
     "about": "об этом Q-App",
     "q_mail": "Q-Mail",
@@ -351,6 +353,7 @@
   "theme": {
     "dark": "темный",
     "dark_mode": "темный режим",
+    "default": "тема по умолчанию",
     "light": "свет",
     "light_mode": "легкий режим",
     "manager": "Менеджер темы",

@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogTitle,
   Input,
+  useTheme,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
@@ -41,6 +42,7 @@ export const AppsDevModeHome = ({
   const [domain, setDomain] = useState('127.0.0.1');
   const [port, setPort] = useState('');
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
+  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
@@ -470,7 +472,15 @@ export const AppsDevModeHome = ({
             }
           }}
         >
-          <DialogTitle id="alert-dialog-title">
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
             {t('core:action.add_custom_framework', {
               postProcess: 'capitalizeFirstChar',
             })}

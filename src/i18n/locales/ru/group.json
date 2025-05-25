@@ -110,7 +110,7 @@
     },
     "error": {
       "access_name": "Не могу отправить сообщение без доступа к вашему имени",
-      "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
+      "descrypt_wallet": "error decrypting wallet {{ message }}",
       "description_required": "Пожалуйста, предоставьте описание",
       "group_info": "Невозможно получить доступ к группе информации",
       "group_join": "Не удалось присоединиться к группе",
@@ -129,7 +129,7 @@
       "group_creation": "успешно созданная группа. Это может занять пару минут для изменений в распространении",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
-      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
+      "group_invite": "successfully invited {{invitee}}. It may take a couple of minutes for the changes to propagate",
       "group_join": "успешно попросил присоединиться к группе. Это может занять пару минут для изменений в распространении",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",

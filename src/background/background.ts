@@ -430,7 +430,7 @@ export async function performPowTask(chatBytes, difficulty) {
     // Send the task to the worker
     worker.postMessage({
       chatBytes,
-      path: `${import.meta.env.BASE_URL}memory-pow.wasm.full`,
+      path: `${import.meta.env.BASE_URL}memory-pow.wasm.full`, // TODO move into ./wasm/ folder
       difficulty,
     });
   });

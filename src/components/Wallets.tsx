@@ -353,7 +353,15 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           }
         }}
       >
-        <DialogTitle id="alert-dialog-title">
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {t('auth:message.generic.type_seed', {
             postProcess: 'capitalizeFirstChar',
           })}

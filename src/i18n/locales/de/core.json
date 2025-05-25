@@ -351,6 +351,7 @@
   "theme": {
     "dark": "dunkel",
     "dark_mode": "Dunkler Modus",
+    "default": "default theme",
     "light": "Licht",
     "light_mode": "Lichtmodus",
     "manager": "Themenmanager",

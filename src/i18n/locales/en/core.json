@@ -331,9 +331,11 @@
     "previous": "previous"
   },
   "payment_notification": "payment notification",
+  "payment": "payment",
   "poll_embed": "poll embed",
   "port": "port",
   "price": "price",
+  "publish": "publish",
   "q_apps": {
     "about": "about this Q-App",
     "q_mail": "q-mail",
@@ -354,6 +356,7 @@
   "theme": {
     "dark": "dark",
     "dark_mode": "dark mode",
+    "default": "default theme",
     "light": "light",
     "light_mode": "light mode",
     "manager": "theme Manager",

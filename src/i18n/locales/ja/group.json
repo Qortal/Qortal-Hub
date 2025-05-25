@@ -110,7 +110,7 @@
     },
     "error": {
       "access_name": "あなたの名前にアクセスせずにメッセージを送信できません",
-      "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
+      "descrypt_wallet": "error decrypting wallet {{ message }}",
       "description_required": "説明を提供してください",
       "group_info": "グループ情報にアクセスできません",
       "group_join": "グループに参加できませんでした",
@@ -129,7 +129,7 @@
       "group_creation": "GROUPを正常に作成しました。変更が伝播するまでに数分かかる場合があります",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
-      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
+      "group_invite": "successfully invited {{invitee}}. It may take a couple of minutes for the changes to propagate",
       "group_join": "グループへの参加を正常にリクエストしました。変更が伝播するまでに数分かかる場合があります",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",

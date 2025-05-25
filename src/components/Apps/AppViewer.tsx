@@ -9,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 
 export const AppViewer = forwardRef(
   ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
-    // const iframeRef = useRef(null);
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
@@ -21,9 +20,16 @@ export const AppViewer = forwardRef(
         app?.service,
         skipAuth
       );
+
     const [url, setUrl] = useState('');
     const { themeMode } = useThemeContext();
-    const { i18n, t } = useTranslation(['core']);
+    const { i18n, t } = useTranslation([
+      'auth',
+      'core',
+      'group',
+      'question',
+      'tutorial',
+    ]);
     const currentLang = i18n.language;
 
     useEffect(() => {

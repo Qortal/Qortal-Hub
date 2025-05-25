@@ -110,7 +110,7 @@
     },
     "error": {
       "access_name": "如果没有访问您的名字，就无法发送消息",
-      "descrypt_wallet": "error decrypting wallet {{ :errorMessage }}",
+      "descrypt_wallet": "error decrypting wallet {{ message }}",
       "description_required": "请提供描述",
       "group_info": "无法访问组信息",
       "group_join": "未能加入小组",
@@ -129,7 +129,7 @@
       "group_creation": "成功创建了组。更改可能需要几分钟才能传播",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
-      "group_invite": "successfully invited {{value}}. It may take a couple of minutes for the changes to propagate",
+      "group_invite": "successfully invited {{invitee}}. It may take a couple of minutes for the changes to propagate",
       "group_join": "成功要求加入组。更改可能需要几分钟才能传播",
       "group_join_name": "joined group {{group_name}}: awaiting confirmation",
       "group_join_label": "joined group {{name}}: success!",

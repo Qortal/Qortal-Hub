@@ -666,7 +666,11 @@ export const Group = ({
   const getSecretKey = useCallback(
     async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
       try {
-        setIsLoadingGroupMessage('Locating encryption keys');
+        setIsLoadingGroupMessage(
+          t('auth:message.generic.locating_encryption_keys', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
         pauseAllQueues();
 
         let dataFromStorage;
@@ -727,7 +731,11 @@ export const Group = ({
         if (dataFromStorage) {
           data = dataFromStorage;
         } else {
-          setIsLoadingGroupMessage('Downloading encryption keys');
+          setIsLoadingGroupMessage(
+            t('auth:message.generic.downloading_encryption_keys', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
           const res = await fetch(
             `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64&rebuild=true`
           );
