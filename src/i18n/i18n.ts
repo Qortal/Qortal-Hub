@@ -56,6 +56,8 @@ i18n
     defaultNS: 'core',
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
+    returnEmptyString: false, // return fallback instead of empty string
+    returnNull: false, // return fallback instead of null
     debug: import.meta.env.MODE === 'development',
   });
 
