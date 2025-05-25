@@ -378,7 +378,7 @@ export const ChatOptions = ({
     return (
       <Box
         sx={{
-          backgroundColor: theme.palette.background.surface,
+          backgroundColor: theme.palette.background.paper,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',

@@ -226,7 +226,7 @@ export const ListOfBans = ({ groupId, setInfoSnack, setOpenSnack, show }) => {
 
   return (
     <div>
-      <p>{t('group:ban_list', { postProcess: 'capitalizeFirstChar' })}</p>
+      <p>{t('core:list.bans', { postProcess: 'capitalizeFirstChar' })}</p>
       <div
         style={{
           display: 'flex',

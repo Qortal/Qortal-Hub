@@ -434,7 +434,7 @@ export const ChatList = ({
             onClick={() => scrollToBottom()}
             variant="contained"
             style={{
-              backgroundColor: theme.palette.background.surface,
+              backgroundColor: theme.palette.background.paper,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,

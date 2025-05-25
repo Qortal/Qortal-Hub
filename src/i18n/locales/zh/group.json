@@ -29,7 +29,6 @@
     "visit_q_mintership": "访问Q-Mintership"
   },
   "advanced_options": "高级选项",
-  "ban_list": "禁令列表",
   "block_delay": {
     "minimum": "最小块延迟",
     "maximum": "最大块延迟"

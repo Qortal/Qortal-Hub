@@ -157,7 +157,6 @@
   "list": {
     "bans": "list of bans",
     "groups": "list of groups",
-    "invite": "invite list",
     "invites": "list of invites",
     "join_request": "join request list",
     "member": "member list",

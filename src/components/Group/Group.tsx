@@ -1631,7 +1631,7 @@ export const Group = ({
       <div
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.surface,
+          background: theme.palette.background.default,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
@@ -1680,6 +1680,7 @@ export const Group = ({
               />
             </IconWrapper>
           </ButtonBase>
+
           <ButtonBase
             onClick={() => {
               setDesktopSideView('directs');

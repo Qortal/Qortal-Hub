@@ -16,7 +16,7 @@ export const darkThemeOptions: ThemeOptions = {
     background: {
       default: 'rgba(6, 10, 30, 1)',
       paper: 'rgb(62, 64, 68)',
-      surface: 'rgb(58, 60, 65)',
+      surface: 'rgb(113, 113, 114)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',

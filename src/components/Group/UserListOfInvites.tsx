@@ -272,7 +272,7 @@ export const UserListOfInvites = ({
       }}
     >
       <p>
-        {t('core:list.invite', {
+        {t('core:list.invites', {
           postProcess: 'capitalizeFirstChar',
         })}
       </p>

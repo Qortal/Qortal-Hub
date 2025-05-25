@@ -46,6 +46,12 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
   '& .MuiInput-underline:after': {
     borderBottom: 'none',
   },
+  '&:hover': {
+    backgroundColor: theme.palette.background.surface,
+    'svg path': {
+      fill: theme.palette.secondary,
+    },
+  },
 }));
 
 export const PasswordField = forwardRef<HTMLInputElement, TextFieldProps>(

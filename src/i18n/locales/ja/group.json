@@ -29,7 +29,6 @@
     "visit_q_mintership": "Q-Mintershipにアクセスしてください"
   },
   "advanced_options": "高度なオプション",
-  "ban_list": "禁止リスト",
   "block_delay": {
     "minimum": "最小ブロック遅延",
     "maximum": "最大ブロック遅延"

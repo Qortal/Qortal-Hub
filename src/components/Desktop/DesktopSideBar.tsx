@@ -40,7 +40,7 @@ export const DesktopSideBar = ({
     <Box
       sx={{
         alignItems: 'center',
-        backgroundColor: theme.palette.background.surface,
+        backgroundColor: theme.palette.background.paper,
         borderRight: `1px solid ${theme.palette.border.subtle}`,
         display: 'flex',
         flexDirection: 'column',
