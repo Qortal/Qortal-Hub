@@ -90,7 +90,7 @@
     "start_minting": "start minting",
     "start_typing": "start typing here...",
     "trade_qort": "trade QORT",
-    "transfer_qort": "Transfer QORT",
+    "transfer_qort": "transfer QORT",
     "unpin": "unpin",
     "unpin_app": "unpin app",
     "unpin_from_dashboard": "unpin from dashboard",
@@ -131,7 +131,7 @@
   "dev_mode": "dev Mode",
   "domain": "domain",
   "ui": {
-    "version": "UI version"
+    "version": "uI version"
   },
   "count": {
     "none": "none",
@@ -281,7 +281,7 @@
       "updating": "updating"
     },
     "message": "message",
-    "promotion_text": "Promotion text",
+    "promotion_text": "promotion text",
     "question": {
       "accept_vote_on_poll": "do you accept this VOTE_ON_POLL transaction? POLLS are public!",
       "logout": "are you sure you would like to logout?",
@@ -310,7 +310,7 @@
       "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
       "published_qdn": "successfully published to QDN",
       "rated_app": "successfully rated. Please wait a couple minutes for the network to propogate the changes.",
-      "request_read": "I have read this request",
+      "request_read": "i have read this request",
       "transfer": "the transfer was succesful!",
       "voted": "successfully voted. Please wait a couple minutes for the network to propogate the changes."
     }

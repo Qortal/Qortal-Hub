@@ -128,7 +128,7 @@
   "dev_mode": "开发模式",
   "domain": "领域",
   "ui": {
-    "version": "UI版本"
+    "version": "uI版本"
   },
   "count": {
     "none": "没有任何",
@@ -373,7 +373,7 @@
   "title": "标题",
   "to": "到",
   "tutorial": "教程",
-  "url": "URL",
+  "url": "uRL",
   "user_lookup": "用户查找",
   "vote": "投票",
   "vote_other": "{{ count }} 投票",

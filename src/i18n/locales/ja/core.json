@@ -31,12 +31,12 @@
     "create_thread": "スレッドを作成します",
     "decline": "衰退",
     "decrypt": "復号化",
-    "disable_enter": "Enterを無効にします",
+    "disable_enter": "enterを無効にします",
     "download": "ダウンロード",
     "download_file": "ファイルをダウンロードします",
     "edit": "編集",
     "edit_theme": "テーマを編集します",
-    "enable_dev_mode": "DEVモードを有効にします",
+    "enable_dev_mode": "dEVモードを有効にします",
     "enter_name": "名前を入力します",
     "export": "輸出",
     "get_qort": "QORTを取得します",
@@ -90,7 +90,7 @@
     "trade_qort": "取引Qort",
     "transfer_qort": "QORTを転送します",
     "unpin": "unepin",
-    "unpin_app": "UNPINアプリ",
+    "unpin_app": "uNPINアプリ",
     "unpin_from_dashboard": "ダッシュボードからリプリッド",
     "update": "アップデート",
     "update_app": "アプリを更新します",
@@ -128,7 +128,7 @@
   "dev_mode": "開発モード",
   "domain": "ドメイン",
   "ui": {
-    "version": "UIバージョン"
+    "version": "uIバージョン"
   },
   "count": {
     "none": "なし",
@@ -218,7 +218,7 @@
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
-      "devmode_local_node": "DEVモードにローカルノードを使用してください！ログアウトしてローカルノードを使用します。",
+      "devmode_local_node": "dEVモードにローカルノードを使用してください！ログアウトしてローカルノードを使用します。",
       "downloading": "ダウンロード",
       "downloading_decrypting_app": "プライベートアプリのダウンロードと復号化。",
       "edited": "編集",
@@ -373,7 +373,7 @@
   "title": "タイトル",
   "to": "に",
   "tutorial": "チュートリアル",
-  "url": "URL",
+  "url": "uRL",
   "user_lookup": "ユーザールックアップ",
   "vote": "投票する",
   "vote_other": "{{ count }} votes",
@@ -384,6 +384,6 @@
     "wallet": "財布",
     "wallet_other": "財布"
   },
-  "website": "Webサイト",
+  "website": "webサイト",
   "welcome": "いらっしゃいませ"
 }
