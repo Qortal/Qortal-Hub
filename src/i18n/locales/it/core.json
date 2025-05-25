@@ -264,7 +264,7 @@
       "publishing": "publishing. Attendere, per favore.",
       "qdn": "usa il salvataggio QDN",
       "rating": "rating for {{ service }} {{ name }}",
-      "register_name": "hai bisogno di un nome Qortal registrato per salvare le app bloccate a QDN.",
+      "register_name": "hai bisogno di un nome Qortal registrato per salvare in QDN le app bloccate.",
       "replied_to": "replied to {{ person }}",
       "revert_default": "ritorna a predefinito",
       "revert_qdn": "ritorna a QDN",
