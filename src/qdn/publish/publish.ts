@@ -317,7 +317,7 @@ export const publishData = async ({
     }
 
     const file = data;
-    const urlCheck = `/arbitrary/check-tmp-space?totalSize=${file.size}`;
+    const urlCheck = `/arbitrary/check/tmp?totalSize=${file.size}`;
 
     const checkEndpoint = await createEndpoint(urlCheck);
     const checkRes = await fetch(checkEndpoint);
