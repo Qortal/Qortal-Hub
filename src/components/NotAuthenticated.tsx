@@ -636,7 +636,7 @@ export const NotAuthenticated = ({
                 ? 'rgba(255, 255, 255, 0.5)'
                 : 'rgba(0, 0, 0, 0.3)',
             padding: '20px 30px',
-            borderRadius: '5px',
+            borderRadius: '8px',
           }}
         >
           <>

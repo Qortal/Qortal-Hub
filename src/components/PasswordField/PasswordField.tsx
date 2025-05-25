@@ -11,7 +11,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 
 export const CustomInput = styled(TextField)(({ theme }) => ({
   width: '183px',
-  borderRadius: '5px',
+  borderRadius: '8px',
   backgroundColor: theme.palette.background.paper,
   outline: 'none',
   input: {

@@ -3034,7 +3034,7 @@ function App() {
                         <Box
                           sx={{
                             background: theme.palette.background.paper,
-                            borderRadius: '5px',
+                            borderRadius: '8px',
                             padding: '10px',
                             textAlign: 'center',
                             width: '100%',

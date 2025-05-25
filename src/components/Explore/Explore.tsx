@@ -21,7 +21,7 @@ export const Explore = ({ setDesktopViewMode }) => {
       <ButtonBase
         sx={{
           '&:hover': { backgroundColor: theme.palette.background.paper },
-          borderRadius: '5px',
+          borderRadius: '8px',
           gap: '5px',
           padding: '5px',
           transition: 'all 0.1s ease-in-out',
@@ -55,7 +55,7 @@ export const Explore = ({ setDesktopViewMode }) => {
       <ButtonBase
         sx={{
           '&:hover': { backgroundColor: theme.palette.background.paper },
-          borderRadius: '5px',
+          borderRadius: '8px',
           gap: '5px',
           padding: '5px',
           transition: 'all 0.1s ease-in-out',
@@ -84,7 +84,7 @@ export const Explore = ({ setDesktopViewMode }) => {
       <ButtonBase
         sx={{
           '&:hover': { backgroundColor: theme.palette.background.paper },
-          borderRadius: '5px',
+          borderRadius: '8px',
           gap: '5px',
           padding: '5px',
           transition: 'all 0.1s ease-in-out',
@@ -117,7 +117,7 @@ export const Explore = ({ setDesktopViewMode }) => {
           '&:hover': { backgroundColor: theme.palette.background.paper },
           transition: 'all 0.1s ease-in-out',
           padding: '5px',
-          borderRadius: '5px',
+          borderRadius: '8px',
           gap: '5px',
         }}
         onClick={async () => {

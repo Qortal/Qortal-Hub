@@ -327,7 +327,7 @@ export const MessageItem = memo(
                   <Box
                     sx={{
                       backgroundColor: theme.palette.background.surface,
-                      borderRadius: '5px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       gap: '20px',
@@ -630,7 +630,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
     <Box
       sx={{
         backgroundColor: theme.palette.background.surface,
-        borderRadius: '5px',
+        borderRadius: '8px',
         cursor: 'pointer',
         display: 'flex',
         gap: '20px',

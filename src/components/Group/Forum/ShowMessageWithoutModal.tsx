@@ -163,7 +163,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
               sx={{
                 width: '100%',
                 opacity: 0.7,
-                borderRadius: '5px',
+                borderRadius: '8px',
                 border: '1px solid gray',
                 boxSizing: 'border-box',
                 padding: '5px',

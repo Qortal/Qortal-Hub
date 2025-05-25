@@ -61,7 +61,7 @@ const commonThemeOptions = {
     MuiButton: {
       styleOverrides: {
         root: {
-          backgroundColor: 'inherit',
+          backgroundColor: '--background-paper',
           transition: 'filter 0.3s ease-in-out',
           '&:hover': {
             filter: 'brightness(1.1)',

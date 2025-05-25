@@ -342,7 +342,7 @@ export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
 export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.paper,
-  borderRadius: '5px',
+  borderRadius: '8px',
   color: theme.palette.text.primary,
   display: 'flex',
   fontSize: '16px',
