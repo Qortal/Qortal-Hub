@@ -76,7 +76,7 @@ export const AppsHomeDesktop = ({
         <Box
           sx={{
             alignItems: 'center',
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor: theme.palette.background.default,
             borderRadius: '20px',
             display: 'flex',
             gap: '20px',
