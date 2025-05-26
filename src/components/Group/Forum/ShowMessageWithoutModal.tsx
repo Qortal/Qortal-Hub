@@ -100,30 +100,30 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
                   return (
                     <Box
                       sx={{
+                        alignItems: 'center',
                         display: expandAttachments
                           ? 'flex'
                           : !expandAttachments && isFirst
                             ? 'flex'
                             : 'none',
-                        alignItems: 'center',
                         justifyContent: 'flex-start',
                         width: '100%',
                       }}
                     >
                       <Box
                         sx={{
-                          display: 'flex',
                           alignItems: 'center',
-                          gap: '5px',
                           cursor: 'pointer',
+                          display: 'flex',
+                          gap: '5px',
                           width: 'auto',
                         }}
                       >
                         {message?.attachments?.length > 1 && isFirst && (
                           <Box
                             sx={{
-                              display: 'flex',
                               alignItems: 'center',
+                              display: 'flex',
                               gap: '5px',
                             }}
                             onClick={() => {
@@ -161,18 +161,18 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
           <>
             <Box
               sx={{
-                width: '100%',
-                opacity: 0.7,
-                borderRadius: '8px',
                 border: '1px solid gray',
+                borderRadius: '8px',
                 boxSizing: 'border-box',
+                opacity: 0.7,
                 padding: '5px',
+                width: '100%',
               }}
             >
               <Box
                 sx={{
-                  display: 'flex',
                   alignItems: 'flex-start',
+                  display: 'flex',
                   gap: '10px',
                 }}
               >
@@ -200,6 +200,7 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
 
               <MessageDisplay htmlContent={message?.reply?.textContentV2} />
             </Box>
+
             <Spacer height="20px" />
           </>
         )}
@@ -215,9 +216,9 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
         )}
         <Box
           sx={{
-            width: '100%',
             display: 'flex',
             justifyContent: 'flex-end',
+            width: '100%',
           }}
         >
           <IconButton onClick={() => openNewPostWithQuote(message)}>
