@@ -21,26 +21,26 @@ const IconWrapper = ({
   return (
     <Box
       sx={{
-        display: 'flex',
-        justifyContent: 'center',
         alignItems: 'center',
-        gap: '5px',
-        flexDirection: 'column',
-        height: customHeight ? customHeight : '65px',
-        width: customHeight ? customHeight : '65px',
-        borderRadius: '50%',
         backgroundColor: selected
           ? selectColor || 'rgba(28, 29, 32, 1)'
           : 'transparent',
+        borderRadius: '50%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '5px',
+        height: customHeight ? customHeight : '65px',
+        justifyContent: 'center',
+        width: customHeight ? customHeight : '65px',
       }}
     >
       {children}
       <Typography
         sx={{
+          color: color,
           fontFamily: 'Inter',
           fontSize: '10px',
           fontWeight: 500,
-          color: color,
         }}
       >
         {label}

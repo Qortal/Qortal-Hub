@@ -783,7 +783,7 @@ export const GroupMail = ({
                   }}
                   sx={{
                     alignItems: 'center',
-                    borderRadius: '5px',
+                    borderRadius: '8px',
                     bottom: '2px',
                     cursor: 'pointer',
                     display: 'flex',

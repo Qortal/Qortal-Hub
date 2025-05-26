@@ -50,7 +50,7 @@
       "insufficient_balance_qort": "saldo QORT insufficiente",
       "insufficient_balance": "saldo asset insufficiente",
       "insufficient_funds": "fondi insufficienti",
-      "invalid_encryption_iv": "IV non valido: AES-GCM richiede un IV di 12 byte",
+      "invalid_encryption_iv": "iV non valido: AES-GCM richiede un IV di 12 byte",
       "invalid_encryption_key": "chiave non valida: AES-GCM richiede una chiave di 256 bit",
       "invalid_fullcontent": "campo fullContent in formato non valido. Usa stringa, base64 o oggetto",
       "invalid_receiver": "indirizzo o nome destinatario non valido",

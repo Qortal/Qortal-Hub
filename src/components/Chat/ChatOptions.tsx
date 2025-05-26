@@ -280,7 +280,7 @@ export const ChatOptions = ({
           {mentionList?.length === 0 && (
             <Typography
               sx={{
-                fontSize: '11px',
+                fontSize: '14px',
                 fontWeight: 400,
                 color: theme.palette.text.primary,
               }}
@@ -378,7 +378,7 @@ export const ChatOptions = ({
     return (
       <Box
         sx={{
-          backgroundColor: theme.palette.background.surface,
+          backgroundColor: theme.palette.background.paper,
           borderBottomLeftRadius: '20px',
           borderTopLeftRadius: '20px',
           display: 'flex',

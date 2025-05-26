@@ -95,7 +95,7 @@ export const BuyQortInformation = ({ balance }) => {
               '&:hover': { backgroundColor: theme.palette.secondary.main },
               transition: 'all 0.1s ease-in-out',
               padding: '5px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               gap: '5px',
             }}
             onClick={async () => {

@@ -29,7 +29,7 @@ import { useTranslation } from 'react-i18next';
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
   padding: '0px 15px',
-  borderRadius: '5px',
+  borderRadius: '8px',
   height: '36px',
   width: '100%',
   maxWidth: '450px',
@@ -377,7 +377,7 @@ export const AppPublish = ({ names, categories }) => {
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
-            borderRadius: '5px',
+            borderRadius: '8px',
             height: '36px',
             width: '100%',
             maxWidth: '450px',
@@ -404,7 +404,7 @@ export const AppPublish = ({ names, categories }) => {
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
-            borderRadius: '5px',
+            borderRadius: '8px',
             height: '36px',
             width: '100%',
             maxWidth: '450px',
@@ -470,7 +470,7 @@ export const AppPublish = ({ names, categories }) => {
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               height: '36px',
               width: '100px',
             }}
@@ -487,7 +487,7 @@ export const AppPublish = ({ names, categories }) => {
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               height: '36px',
               width: '100px',
             }}
@@ -504,7 +504,7 @@ export const AppPublish = ({ names, categories }) => {
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               height: '36px',
               width: '100px',
             }}
@@ -521,7 +521,7 @@ export const AppPublish = ({ names, categories }) => {
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               height: '36px',
               width: '100px',
             }}
@@ -538,7 +538,7 @@ export const AppPublish = ({ names, categories }) => {
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               height: '36px',
               width: '100px',
             }}

@@ -4,7 +4,7 @@
   "3_groups": "3. Grupos de Qortal",
   "4_obtain_qort": "4. Obtener Qort",
   "account_creation": "creación de cuenta",
-  "important_info": "Información importante!",
+  "important_info": "información importante!",
   "apps": {
     "dashboard": "1. Panel de aplicaciones",
     "navigation": "2. Navegación de aplicaciones"
@@ -15,7 +15,7 @@
     "general_chat": "chat general",
     "getting_started": "empezando",
     "register_name": "registrar un nombre",
-    "see_apps": "Ver aplicaciones",
+    "see_apps": "ver aplicaciones",
     "trade_qort": "comercio Qort"
   }
 }

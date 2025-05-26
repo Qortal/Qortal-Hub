@@ -593,12 +593,13 @@ export const NotAuthenticated = ({
             sx={{
               backgroundColor:
                 hasSeenGettingStarted === false && theme.palette.other.positive,
-              color: hasSeenGettingStarted === false && 'black',
+              color:
+                hasSeenGettingStarted === false && theme.palette.text.primary,
               '&:hover': {
                 backgroundColor:
-                  hasSeenGettingStarted === false &&
-                  theme.palette.other.positive,
-                color: hasSeenGettingStarted === false && 'black',
+                  hasSeenGettingStarted === false && theme.palette.other.unread,
+                color:
+                  hasSeenGettingStarted === false && theme.palette.text.primary,
               },
             }}
           >
@@ -636,7 +637,7 @@ export const NotAuthenticated = ({
                 ? 'rgba(255, 255, 255, 0.5)'
                 : 'rgba(0, 0, 0, 0.3)',
             padding: '20px 30px',
-            borderRadius: '5px',
+            borderRadius: '8px',
           }}
         >
           <>

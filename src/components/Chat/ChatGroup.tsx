@@ -1185,7 +1185,7 @@ export const ChatGroup = ({
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
-            backgroundColor: theme.palette.background.surface,
+            backgroundColor: theme.palette.background.paper,
             border: `1px solid ${theme.palette.border.subtle}`,
             borderRadius: '10px',
             bottom: isFocusedParent ? '0px' : 'unset',

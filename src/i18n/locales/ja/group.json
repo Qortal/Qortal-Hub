@@ -29,7 +29,6 @@
     "visit_q_mintership": "Q-Mintershipにアクセスしてください"
   },
   "advanced_options": "高度なオプション",
-  "ban_list": "禁止リスト",
   "block_delay": {
     "minimum": "最小ブロック遅延",
     "maximum": "最大ブロック遅延"
@@ -126,7 +125,7 @@
     },
     "success": {
       "group_ban": "グループからメンバーを首尾よく禁止しました。変更が伝播するまでに数分かかる場合があります",
-      "group_creation": "GROUPを正常に作成しました。変更が伝播するまでに数分かかる場合があります",
+      "group_creation": "gROUPを正常に作成しました。変更が伝播するまでに数分かかる場合があります",
       "group_creation_name": "created group {{group_name}}: awaiting confirmation",
       "group_creation_label": "created group {{name}}: success!",
       "group_invite": "successfully invited {{invitee}}. It may take a couple of minutes for the changes to propagate",
@@ -154,8 +153,8 @@
       "rewardshare_add": "報酬を追加：確認を待っています",
       "rewardshare_add_label": "報酬を追加：成功！",
       "rewardshare_creation": "チェーン上の報酬の作成を確認します。我慢してください、これには最大90秒かかる可能性があります。",
-      "rewardshare_confirmed": "RewardShareが確認されました。 [次へ]をクリックしてください。",
-      "rewardshare_remove": "RewardShareを削除：確認を待っています",
+      "rewardshare_confirmed": "rewardShareが確認されました。 [次へ]をクリックしてください。",
+      "rewardshare_remove": "rewardShareを削除：確認を待っています",
       "rewardshare_remove_label": "報酬を削除：成功！",
       "thread_creation": "正常に作成されたスレッド。パブリッシュが伝播するまでに時間がかかる場合があります",
       "unbanned_user": "バーンなしのユーザーに成功しました。変更が伝播するまでに数分かかる場合があります",

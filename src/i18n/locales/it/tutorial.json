@@ -6,11 +6,11 @@
   "account_creation": "creazione dell'account",
   "important_info": "informazioni importanti",
   "apps": {
-    "dashboard": "1. Dashboard di app",
+    "dashboard": "1. Dashboard delle app",
     "navigation": "2. Navigazione delle app"
   },
   "initial": {
-    "recommended_qort_qty": "avere almeno {{ quantity }} QORT nel tuo wallet",
+    "recommended_qort_qty": "avere almeno {{ quantity }} QORT nel proprio wallet",
     "explore": "esplora",
     "general_chat": "chat generale",
     "getting_started": "come iniziare",

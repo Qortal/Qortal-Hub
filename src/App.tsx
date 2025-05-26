@@ -1580,7 +1580,7 @@ function App() {
     return (
       <AuthenticatedContainer
         sx={{
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme.palette.background.paper,
           display: 'flex',
           justifyContent: 'flex-end',
           width: 'auto',
@@ -3034,7 +3034,7 @@ function App() {
                         <Box
                           sx={{
                             background: theme.palette.background.paper,
-                            borderRadius: '5px',
+                            borderRadius: '8px',
                             padding: '10px',
                             textAlign: 'center',
                             width: '100%',
@@ -3095,7 +3095,7 @@ function App() {
                     }
                   />
 
-                  <Spacer height="6px" />
+                  <Spacer height="5px" />
 
                   <CustomLabel htmlFor="standard-adornment-password">
                     {t('auth:wallet.password_confirmation', {

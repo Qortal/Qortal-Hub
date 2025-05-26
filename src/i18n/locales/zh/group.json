@@ -29,7 +29,6 @@
     "visit_q_mintership": "访问Q-Mintership"
   },
   "advanced_options": "高级选项",
-  "ban_list": "禁令列表",
   "block_delay": {
     "minimum": "最小块延迟",
     "maximum": "最大块延迟"
@@ -56,7 +55,7 @@
     "type": "组类型"
   },
   "invitation_expiry": "邀请到期时间",
-  "invitees_list": "Invitees列表",
+  "invitees_list": "invitees列表",
   "join_link": "加入组链接",
   "join_requests": "加入请求",
   "last_message": "最后一条消息",

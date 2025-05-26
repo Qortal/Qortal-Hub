@@ -6,12 +6,12 @@ export const lightThemeOptions: ThemeOptions = {
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgb(162, 162, 221)',
+      main: 'rgba(0, 133, 255, 1)',
       dark: 'rgb(113, 198, 212)',
       light: 'rgb(180, 200, 235)',
     },
     secondary: {
-      main: 'rgba(194, 222, 236, 1)',
+      main: 'rgb(69, 173, 255)',
     },
     background: {
       default: 'rgba(250, 250, 250, 1)',

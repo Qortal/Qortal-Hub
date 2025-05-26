@@ -34,8 +34,8 @@ const TabComponent = ({ isSelected, app }) => {
           <NavCloseTab
             style={{
               position: 'absolute',
-              top: '-5px',
               right: '-5px',
+              top: '-5px',
               zIndex: 1,
             }}
           />
