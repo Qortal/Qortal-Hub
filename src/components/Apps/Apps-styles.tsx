@@ -3,25 +3,20 @@ import { styled } from '@mui/system';
 
 export const AppsParent = styled(Box)(({ theme }) => ({
   alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
   display: 'flex',
   flexDirection: 'column',
   height: '100%',
+  msOverflowStyle: 'none', // Hides scrollbar in IE and Edge
   overflow: 'auto',
+  scrollbarWidth: 'none', // Hides the scrollbar in Firefox
   width: '100%',
   // For WebKit-based browsers (Chrome, Safari, etc.)
   '::-webkit-scrollbar': {
     width: '0px', // Set the width to 0 to hide the scrollbar
     height: '0px', // Set the height to 0 for horizontal scrollbar
   },
-
-  // For Firefox
-  scrollbarWidth: 'none', // Hides the scrollbar in Firefox
-
-  // Optional for better cross-browser consistency
-  msOverflowStyle: 'none', // Hides scrollbar in IE and Edge
-
-  backgroundColor: theme.palette.background.default,
-  color: theme.palette.text.primary,
 }));
 
 export const AppsContainer = styled(Box)(({ theme }) => ({

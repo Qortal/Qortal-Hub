@@ -107,6 +107,7 @@
   "app": "appliquer",
   "app_other": "applications",
   "app_name": "nom de l'application",
+  "app_private": "privé",
   "app_service_type": "type de service d'application",
   "apps_dashboard": "tableau de bord Apps",
   "apps_official": "applications officielles",
@@ -320,6 +321,7 @@
   "none": "aucun",
   "note": "note",
   "option": "option",
+  "option_no": "aucune option",
   "option_other": "options",
   "page": {
     "last": "dernier",

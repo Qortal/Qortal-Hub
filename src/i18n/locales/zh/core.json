@@ -106,6 +106,7 @@
   "app": "应用程序",
   "app_other": "应用",
   "app_name": "应用名称",
+  "app_private": "私人应用程序",
   "app_service_type": "应用服务类型",
   "apps_dashboard": "应用仪表板",
   "apps_official": "官方应用程序",
@@ -319,6 +320,7 @@
   "none": "没有任何",
   "note": "笔记",
   "option": "选项",
+  "option_no": "没有选择",
   "option_other": "选项",
   "page": {
     "last": "最后的",

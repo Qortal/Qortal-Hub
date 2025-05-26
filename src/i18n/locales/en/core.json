@@ -109,6 +109,7 @@
   "app": "app",
   "app_other": "apps",
   "app_name": "app name",
+  "app_private": "private",
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
@@ -322,6 +323,7 @@
   "none": "none",
   "note": "note",
   "option": "option",
+  "option_no": "no options",
   "option_other": "options",
   "page": {
     "last": "last",
