@@ -3095,7 +3095,7 @@ function App() {
                     }
                   />
 
-                  <Spacer height="6px" />
+                  <Spacer height="5px" />
 
                   <CustomLabel htmlFor="standard-adornment-password">
                     {t('auth:wallet.password_confirmation', {
