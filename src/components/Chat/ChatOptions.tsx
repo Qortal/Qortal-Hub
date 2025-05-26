@@ -280,7 +280,7 @@ export const ChatOptions = ({
           {mentionList?.length === 0 && (
             <Typography
               sx={{
-                fontSize: '11px',
+                fontSize: '14px',
                 fontWeight: 400,
                 color: theme.palette.text.primary,
               }}
