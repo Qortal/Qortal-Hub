@@ -76,16 +76,16 @@
 }
 
 :is(.messageBar > div)::before {
+  -webkit-mask-image: var(--message-bar-icon);
+  -webkit-mask-size: cover;
+  background-color: var(--message-bar-icon-color);
   content: '';
   display: inline-block;
-  width: 16px;
-  height: 16px;
-  -webkit-mask-image: var(--message-bar-icon);
-  mask-image: var(--message-bar-icon);
-  -webkit-mask-size: cover;
-  mask-size: cover;
-  background-color: var(--message-bar-icon-color);
   flex-shrink: 0;
+  height: 16px;
+  mask-image: var(--message-bar-icon);
+  mask-size: cover;
+  width: 16px;
 }
 
 .messageBar button {
