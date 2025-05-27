@@ -223,7 +223,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
         fullScreen
         open={open}
         onClose={handleClose}
-        TransitionComponent={Transition}
+        slots={{
+          transition: Transition,
+        }}
       >
         <AppBar
           sx={{
