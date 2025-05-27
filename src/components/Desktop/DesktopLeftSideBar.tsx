@@ -1,7 +1,7 @@
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-import { IconWrapper } from '../Desktop/DesktopFooter';
+import { IconWrapper } from './DesktopFooter';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
