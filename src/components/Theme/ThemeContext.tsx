@@ -12,10 +12,13 @@ import {
 } from '@mui/material/styles';
 import { lightThemeOptions } from '../../styles/theme-light';
 import { darkThemeOptions } from '../../styles/theme-dark';
+import i18n from '../../i18n/i18n';
 
 const defaultTheme = {
   id: 'default',
-  name: 'Default Theme',
+  name: i18n.t('core:theme.default', {
+    postProcess: 'capitalizeFirstChar',
+  }),
   light: lightThemeOptions.palette,
   dark: darkThemeOptions.palette,
 };

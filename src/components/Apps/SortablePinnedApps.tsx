@@ -27,6 +27,7 @@ import { ContextMenuPinnedApps } from '../ContextMenuPinnedApps';
 import LockIcon from '@mui/icons-material/Lock';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
 import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {
   const { openApp } = useHandlePrivateApps();
@@ -45,6 +46,14 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   return (
     <ContextMenuPinnedApps app={app} isMine={!!app?.isMine}>
@@ -112,7 +121,6 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                     width: '31px',
                     height: 'auto',
                   }}
-                  //   src={LogoSelected}
                   alt="center-icon"
                 />
               </Avatar>
@@ -120,7 +128,12 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
           </AppCircle>
           {app?.isPrivate ? (
             <AppCircleLabel>
-              {`${app?.privateAppProperties?.appName || 'Private'}`}
+              {`${
+                app?.privateAppProperties?.appName ||
+                t('core:app_private', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+              }`}
             </AppCircleLabel>
           ) : (
             <AppCircleLabel>{app?.metadata?.title || app?.name}</AppCircleLabel>

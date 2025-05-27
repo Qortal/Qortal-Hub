@@ -284,7 +284,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
           paper: {
             sx: {
               backgroundColor: theme.palette.background.default,
-              borderRadius: '5px',
+              borderRadius: '8px',
               color: theme.palette.text.primary,
               width: '148px',
             },

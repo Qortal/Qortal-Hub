@@ -56,7 +56,15 @@ export const BuyQortInformation = ({ balance }) => {
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >
-      <DialogTitle id="alert-dialog-title">
+      <DialogTitle
+        id="alert-dialog-title"
+        sx={{
+          textAlign: 'center',
+          color: theme.palette.text.primary,
+          fontWeight: 'bold',
+          opacity: 1,
+        }}
+      >
         {t('core:action.get_qort', {
           postProcess: 'capitalizeFirstChar',
         })}
@@ -87,7 +95,7 @@ export const BuyQortInformation = ({ balance }) => {
               '&:hover': { backgroundColor: theme.palette.secondary.main },
               transition: 'all 0.1s ease-in-out',
               padding: '5px',
-              borderRadius: '5px',
+              borderRadius: '8px',
               gap: '5px',
             }}
             onClick={async () => {

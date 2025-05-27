@@ -1,9 +1,17 @@
-import { Box, useTheme } from '@mui/material';
+import { Box, CircularProgress, useTheme } from '@mui/material';
 import { useState } from 'react';
-import { TextP } from '../styles/App-styles';
+import {
+  CustomButton,
+  CustomInput,
+  CustomLabel,
+  TextP,
+} from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
 import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
+import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
+import { PasswordField } from './PasswordField/PasswordField.tsx';
+import { ErrorText } from './ErrorText/ErrorText.tsx';
 
 export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
   const theme = useTheme();

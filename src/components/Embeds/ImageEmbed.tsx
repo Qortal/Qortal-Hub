@@ -120,7 +120,7 @@ export const ImageCard = ({
             fontSize: '12px',
           }}
         >
-          {t('core:message.error.created_by', {
+          {t('core:message.generic.created_by', {
             owner: decodeIfEncoded(owner),
             postProcess: 'capitalizeFirstChar',
           })}

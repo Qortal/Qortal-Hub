@@ -4,7 +4,7 @@
   "3_groups": "3. Qortalgruppen",
   "4_obtain_qort": "4. Qort erhalten",
   "account_creation": "Kontoerstellung",
-  "important_info": "Wichtige Informationen!",
+  "important_info": "wichtige Informationen",
   "apps": {
     "dashboard": "1. Apps Dashboard",
     "navigation": "2. Apps Navigation"
@@ -12,10 +12,10 @@
   "initial": {
     "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
     "explore": "erkunden",
-    "general_chat": "Allgemeiner Chat",
-    "getting_started": "Erste Schritte",
-    "register_name": "Registrieren Sie einen Namen",
-    "see_apps": "Siehe Apps",
-    "trade_qort": "Handel Qort"
+    "general_chat": "allgemeiner Chat",
+    "getting_started": "erste Schritte",
+    "register_name": "registrieren Sie einen Namen",
+    "see_apps": "siehe Apps",
+    "trade_qort": "handel Qort"
   }
 }

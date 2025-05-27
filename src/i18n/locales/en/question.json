@@ -111,7 +111,7 @@
       "provide_group_id": "please provide a groupId",
       "read_transaction_carefully": "read the transaction carefully before accepting!",
       "user_declined_add_list": "user declined add to list",
-      "user_declined_delete_from_list": "User declined delete from list",
+      "user_declined_delete_from_list": "user declined delete from list",
       "user_declined_delete_hosted_resources": "user declined delete hosted resources",
       "user_declined_join": "user declined to join group",
       "user_declined_list": "user declined to get list of hosted resources",

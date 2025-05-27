@@ -32,7 +32,7 @@ import { Box, Checkbox, Typography, useTheme } from '@mui/material';
 import { useAtom } from 'jotai';
 import { fileToBase64 } from '../../utils/fileReading/index.js';
 import { useTranslation } from 'react-i18next';
-import i18next from 'i18next';
+import i18n from 'i18next';
 
 function textMatcher(doc, from) {
   const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
@@ -374,7 +374,9 @@ const extensions = [
     },
   }),
   Placeholder.configure({
-    placeholder: 'Start typing here...', // doesn't work i18next.t('core:action.start_typing'),
+    placeholder: i18n.t('core:action.start_typing', {
+      postProcess: 'capitalizeFirstChar',
+    }),
   }),
   ImageResize,
 ];

@@ -215,7 +215,19 @@ export const RegisterName = ({
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >
-      <DialogTitle id="alert-dialog-title">{'Register name'}</DialogTitle>
+      <DialogTitle
+        id="alert-dialog-title"
+        sx={{
+          textAlign: 'center',
+          color: theme.palette.text.primary,
+          fontWeight: 'bold',
+          opacity: 1,
+        }}
+      >
+        {t('core:action.register_name', {
+          postProcess: 'capitalizeAll',
+        })}
+      </DialogTitle>
 
       <DialogContent>
         <Box
@@ -236,6 +248,7 @@ export const RegisterName = ({
               postProcess: 'capitalizeFirstChar',
             })}
           </Label>
+
           <TextField
             autoComplete="off"
             autoFocus
@@ -261,6 +274,7 @@ export const RegisterName = ({
                     color: theme.palette.text.primary,
                   }}
                 />
+
                 <Typography>
                   {t('core:message.generic.name_registration', {
                     balance: balance ?? 0,

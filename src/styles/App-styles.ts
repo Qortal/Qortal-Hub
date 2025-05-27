@@ -107,16 +107,15 @@ export const AddressBox = styled(Box)(({ theme }) => ({
 
 export const CustomButton = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor: theme.palette.background.paper,
   borderColor: theme.palette.background.paper,
-  borderRadius: '5px',
+  borderRadius: '8px',
   borderStyle: 'solid',
   borderWidth: '0.5px',
   boxSizing: 'border-box',
   color: theme.palette.text.primary,
   cursor: 'pointer',
   display: 'inline-flex',
-  filter: 'drop-shadow(1px 4px 10.5px rgba(0, 0, 0, 0.3))',
   fontFamily: 'Inter',
   fontWeight: 600,
   gap: '10px',
@@ -124,12 +123,12 @@ export const CustomButton = styled(Box)(({ theme }) => ({
   minWidth: '160px',
   padding: '15px 20px',
   textAlign: 'center',
-  transition: 'all 0.2s',
+  transition: 'all 0.3s',
   width: 'fit-content',
   '&:hover': {
-    backgroundColor: theme.palette.background.paper,
+    backgroundColor: theme.palette.background.surface,
     'svg path': {
-      fill: theme.palette.background.secondary,
+      fill: theme.palette.secondary,
     },
   },
 }));
@@ -178,7 +177,7 @@ export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
 export const CustomInput = styled(TextField)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   borderColor: theme.palette.background.paper,
-  borderRadius: '5px',
+  borderRadius: '8px',
   color: theme.palette.text.primary,
   outline: 'none',
   width: '183px', // Adjust the width as needed

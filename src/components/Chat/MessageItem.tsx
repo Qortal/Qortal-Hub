@@ -324,10 +324,11 @@ export const MessageItem = memo(
               {reply && (
                 <>
                   <Spacer height="20px" />
+
                   <Box
                     sx={{
                       backgroundColor: theme.palette.background.surface,
-                      borderRadius: '5px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       display: 'flex',
                       gap: '20px',
@@ -339,15 +340,6 @@ export const MessageItem = memo(
                       scrollToItem(replyIndex);
                     }}
                   >
-                    <Box
-                      sx={{
-                        background: theme.palette.text.primary,
-                        height: '100%',
-                        width: '5px',
-                        flexShrink: 0,
-                      }}
-                    />
-
                     <Box
                       sx={{
                         padding: '5px',
@@ -410,7 +402,6 @@ export const MessageItem = memo(
                   {reactions &&
                     Object.keys(reactions).map((reaction) => {
                       const numberOfReactions = reactions[reaction]?.length;
-                      // const myReaction = reactions
                       if (numberOfReactions === 0) return null;
                       return (
                         <ButtonBase
@@ -440,7 +431,6 @@ export const MessageItem = memo(
                                 marginLeft: '4px',
                               }}
                             >
-                              {' '}
                               {numberOfReactions}
                             </Typography>
                           )}
@@ -630,7 +620,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
     <Box
       sx={{
         backgroundColor: theme.palette.background.surface,
-        borderRadius: '5px',
+        borderRadius: '8px',
         cursor: 'pointer',
         display: 'flex',
         gap: '20px',
@@ -640,14 +630,6 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
         width: '100%',
       }}
     >
-      <Box
-        sx={{
-          background: theme.palette.text.primary,
-          height: '100%',
-          width: '5px',
-          flexShrink: 0,
-        }}
-      />
       <Box
         sx={{
           padding: '5px',

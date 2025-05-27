@@ -2,7 +2,7 @@
   "action": {
     "accept": "принимать",
     "access": "доступ",
-    "access_app": "Access App",
+    "access_app": "access App",
     "add": "добавлять",
     "add_custom_framework": "Добавьте пользовательскую структуру",
     "add_reaction": "Добавить реакцию",
@@ -61,7 +61,7 @@
     "open": "открыть",
     "pin": "приколоть",
     "pin_app": "приложение приложения",
-    "pin_from_dashboard": "PIN -штифт от приборной панели",
+    "pin_from_dashboard": "pIN -штифт от приборной панели",
     "post": "почта",
     "post_message": "опубликовать сообщение",
     "publish": "публиковать",
@@ -90,8 +90,8 @@
     "trade_qort": "Торговый Qort",
     "transfer_qort": "Передача qort",
     "unpin": "не",
-    "unpin_app": "Upin App",
-    "unpin_from_dashboard": "Unlin с приборной панели",
+    "unpin_app": "upin App",
+    "unpin_from_dashboard": "unlin с приборной панели",
     "update": "обновлять",
     "update_app": "Обновите свое приложение",
     "vote": "голосование"
@@ -106,6 +106,7 @@
   "app": "приложение",
   "app_other": "приложения",
   "app_name": "Название приложения",
+  "app_private": "частное",
   "app_service_type": "Тип службы приложений",
   "apps_dashboard": "приложения панель панели",
   "apps_official": "официальные приложения",
@@ -135,7 +136,7 @@
     "one": "один"
   },
   "description": "описание",
-  "devmode_apps": "Dev Mode Apps",
+  "devmode_apps": "dev Mode Apps",
   "directory": "каталог",
   "downloading_qdn": "Загрузка с QDN",
   "fee": {
@@ -320,6 +321,7 @@
   "none": "никто",
   "note": "примечание",
   "option": "вариант",
+  "option_no": "выбора нет",
   "option_other": "параметры",
   "page": {
     "last": "последний",
@@ -328,9 +330,11 @@
     "previous": "предыдущий"
   },
   "payment_notification": "уведомление о платеже",
+  "payment": "плата",
   "poll_embed": "Опрос встроен",
   "port": "порт",
   "price": "цена",
+  "publish": "публикация",
   "q_apps": {
     "about": "об этом Q-App",
     "q_mail": "Q-Mail",
@@ -351,6 +355,7 @@
   "theme": {
     "dark": "темный",
     "dark_mode": "темный режим",
+    "default": "тема по умолчанию",
     "light": "свет",
     "light_mode": "легкий режим",
     "manager": "Менеджер темы",
@@ -371,7 +376,7 @@
   "title": "заголовок",
   "to": "к",
   "tutorial": "Учебник",
-  "url": "URL",
+  "url": "uRL",
   "user_lookup": "Посмотреть пользователя",
   "vote": "голосование",
   "vote_other": "{{ count }} votes",

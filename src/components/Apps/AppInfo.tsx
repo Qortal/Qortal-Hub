@@ -127,12 +127,13 @@ export const AppInfo = ({ app, myName }) => {
           </AppInfoSnippetContainer>
 
           <Spacer height="11px" />
+
           <Box
             sx={{
-              width: '100%',
-              display: 'flex',
               alignItems: 'center',
+              display: 'flex',
               gap: '20px',
+              width: '100%',
             }}
           >
             <AppDownloadButton

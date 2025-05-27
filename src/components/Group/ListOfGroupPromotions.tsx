@@ -467,7 +467,7 @@ export const ListOfGroupPromotions = () => {
                   fontSize: '12px',
                 }}
               >
-                {t('group.action.add_promotion', {
+                {t('group:action.add_promotion', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
@@ -475,6 +475,7 @@ export const ListOfGroupPromotions = () => {
 
             <Spacer height="10px" />
           </Box>
+
           <Box
             sx={{
               bgcolor: 'background.paper',
@@ -516,7 +517,7 @@ export const ListOfGroupPromotions = () => {
                     color: 'rgba(255, 255, 255, 0.2)',
                   }}
                 >
-                  {t('group.message.generic.no_display', {
+                  {t('group:message.generic.no_display', {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
@@ -864,7 +865,15 @@ export const ListOfGroupPromotions = () => {
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
-        <DialogTitle id="alert-dialog-title">
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {t('group:action.promote_group', {
             postProcess: 'capitalizeFirstChar',
           })}
@@ -928,7 +937,7 @@ export const ListOfGroupPromotions = () => {
           <Spacer height="20px" />
 
           <TextField
-            label={t('core:promotion_text', {
+            label={t('core:message.promotion_text', {
               postProcess: 'capitalizeFirstChar',
             })}
             variant="filled"

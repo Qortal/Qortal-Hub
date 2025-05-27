@@ -77,7 +77,7 @@ export const AppsHomeDesktop = ({
         <Box
           sx={{
             alignItems: 'center',
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor: theme.palette.background.default,
             borderRadius: '20px',
             display: 'flex',
             gap: '20px',
@@ -98,6 +98,8 @@ export const AppsHomeDesktop = ({
             placeholder="qortal://"
             sx={{
               width: '100%',
+              backgroundColor: theme.palette.background.surface,
+              borderRadius: '7px',
               color: theme.palette.text.primary,
               '& .MuiInput-input::placeholder': {
                 color: theme.palette.text.secondary,
@@ -111,7 +113,6 @@ export const AppsHomeDesktop = ({
               '&:focus': {
                 outline: 'none',
               },
-              // Add any additional styles for the input here
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && qortalUrl) {

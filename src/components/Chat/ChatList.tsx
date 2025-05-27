@@ -407,7 +407,7 @@ export const ChatList = ({
         </div>
 
         {showScrollButton && (
-          <button
+          <Button
             onClick={() => scrollToBottom()}
             style={{
               backgroundColor: theme.palette.other.unread,
@@ -426,15 +426,14 @@ export const ChatList = ({
             {t('group:action.scroll_unread_messages', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </button>
+          </Button>
         )}
 
         {showScrollDownButton && !showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
-            variant="contained"
             style={{
-              backgroundColor: theme.palette.background.surface,
+              backgroundColor: theme.palette.other.positive,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
@@ -445,11 +444,11 @@ export const ChatList = ({
               padding: '10px 20px',
               position: 'absolute',
               right: 20,
-              zIndex: 10,
               textTransform: 'none',
+              zIndex: 10,
             }}
           >
-            {t('group:action.scroll_unread_messages', {
+            {t('group:action.scroll_bottom', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>

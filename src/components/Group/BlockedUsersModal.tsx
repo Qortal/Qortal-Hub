@@ -177,7 +177,14 @@ export const BlockedUsersModal = () => {
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
     >
-      <DialogTitle>
+      <DialogTitle
+        sx={{
+          textAlign: 'center',
+          color: theme.palette.text.primary,
+          fontWeight: 'bold',
+          opacity: 1,
+        }}
+      >
         {t('auth:blocked_users', { postProcess: 'capitalizeFirstChar' })}
       </DialogTitle>
       <DialogContent
@@ -371,7 +378,15 @@ export const BlockedUsersModal = () => {
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
-        <DialogTitle id="alert-dialog-title">
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {t('auth:message.generic.decide_block', {
             postProcess: 'capitalizeFirstChar',
           })}
