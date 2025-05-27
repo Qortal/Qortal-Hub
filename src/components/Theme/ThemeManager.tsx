@@ -10,7 +10,6 @@ import {
   DialogActions,
   List,
   ListItemText,
-  ListItemSecondaryAction,
   TextField,
   Tabs,
   Tab,
@@ -190,6 +189,7 @@ export default function ThemeManager() {
         <Typography variant="body2" mb={1}>
           {label}
         </Typography>
+
         <Sketch
           key={`${mode}-${fieldPath}`}
           color={color}
