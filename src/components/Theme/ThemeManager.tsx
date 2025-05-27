@@ -31,6 +31,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import { handleImportClick } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
+import '../../styles/themeManager.css';
 
 const uid = new ShortUniqueId({ length: 8 });
 
