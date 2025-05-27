@@ -6,7 +6,7 @@ export const darkThemeOptions: ThemeOptions = {
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgba(0, 133, 255, 1)',
+      main: 'rgb(100, 155, 240)',
       dark: 'rgb(45, 92, 201)',
       light: 'rgb(130, 185, 255)',
     },
@@ -14,9 +14,9 @@ export const darkThemeOptions: ThemeOptions = {
       main: 'rgb(69, 173, 255)',
     },
     background: {
-      default: 'rgba(6, 10, 30, 1)',
+      default: 'rgb(49, 51, 56)',
+      surface: 'rgb(58, 60, 65)',
       paper: 'rgb(62, 64, 68)',
-      surface: 'rgb(113, 113, 114)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',

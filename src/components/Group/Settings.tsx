@@ -229,6 +229,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               })}
             />
           )}
+
           {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
           <ThemeManager />
         </Box>
