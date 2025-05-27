@@ -16,6 +16,7 @@ import {
   Tab,
   ListItemButton,
   useTheme,
+  ListItem,
 } from '@mui/material';
 import { Sketch } from '@uiw/react-color';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -269,24 +270,28 @@ export default function ThemeManager() {
             <ListItemText
               primary={`${theme?.name || `Theme ${index + 1}`} ${theme?.id === currentThemeId ? '(Current)' : ''}`}
             />
-            <ListItemSecondaryAction>
-              {theme.id !== 'default' && (
-                <>
-                  <IconButton onClick={() => exportTheme(theme)}>
-                    <FileDownloadIcon />
+            <ListItem
+              secondaryAction={
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {theme.id !== 'default' && (
+                    <>
+                      <IconButton onClick={() => exportTheme(theme)}>
+                        <FileDownloadIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleEditTheme(theme.id)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDeleteTheme(theme.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </>
+                  )}
+                  <IconButton onClick={() => handleApplyTheme(theme)}>
+                    <CheckIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleEditTheme(theme.id)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDeleteTheme(theme.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </>
-              )}
-              <IconButton onClick={() => handleApplyTheme(theme)}>
-                <CheckIcon />
-              </IconButton>
-            </ListItemSecondaryAction>
+                </Box>
+              }
+            ></ListItem>
           </ListItemButton>
         ))}
       </List>
