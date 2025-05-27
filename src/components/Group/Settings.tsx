@@ -154,7 +154,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
 
   useEffect(() => {
     getUserSettings();
-  }, []);
+  });
 
   return (
     <Fragment>
@@ -243,6 +243,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     useContext(QORTAL_APP_CONTEXT);
+  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
