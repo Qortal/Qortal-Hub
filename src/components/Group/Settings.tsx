@@ -175,8 +175,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             </Typography>
 
             <IconButton
-              edge="start"
               color="inherit"
+              edge="start"
               onClick={handleClose}
               aria-label={t('core:action.close', {
                 postProcess: 'capitalizeFirstChar',
