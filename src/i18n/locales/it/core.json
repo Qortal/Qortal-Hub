@@ -316,7 +316,7 @@
       "voted": "votato con successo. Si prega di attendere un paio di minuti affinché la rete propaghi le modifiche."
     }
   },
-  "minting_status": "stato di minting",
+  "minting_status": "stato minting",
   "name": "nome",
   "name_app": "nome/app",
   "new_post_in": "nuovo post in {{ title }}",
