@@ -465,11 +465,12 @@ export const MessageItem = memo(
                       vertical: 'bottom',
                       horizontal: 'center',
                     }}
-                    PaperProps={{
-                      // TODO: deprecated
-                      style: {
-                        backgroundColor: theme.palette.background.default,
-                        color: theme.palette.text.primary,
+                    slotProps={{
+                      paper: {
+                        style: {
+                          backgroundColor: theme.palette.background.default,
+                          color: theme.palette.text.primary,
+                        },
                       },
                     }}
                   >
@@ -595,6 +596,7 @@ export const MessageItem = memo(
                           })}
                         </Typography>
                       )}
+
                       <Typography
                         sx={{
                           fontSize: '14px',
