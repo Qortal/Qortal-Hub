@@ -277,7 +277,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
         type: 'error',
         message: error?.message
           ? t('group:message.error.decrypt_wallet', {
-              errorMessage: error?.message,
+              message: error?.message,
               postProcess: 'capitalizeFirstChar',
             })
           : t('group:message.error.descrypt_wallet', {
@@ -308,7 +308,15 @@ const ExportPrivateKey = ({ rawWallet }) => {
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
-        <DialogTitle id="alert-dialog-title">
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        >
           {t('group:action.export_password', {
             postProcess: 'capitalizeFirstChar',
           })}

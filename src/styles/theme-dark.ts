@@ -6,7 +6,7 @@ export const darkThemeOptions: ThemeOptions = {
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgb(100, 155, 240)',
+      main: 'rgba(0, 133, 255, 1)',
       dark: 'rgb(45, 92, 201)',
       light: 'rgb(130, 185, 255)',
     },
@@ -14,9 +14,9 @@ export const darkThemeOptions: ThemeOptions = {
       main: 'rgb(69, 173, 255)',
     },
     background: {
-      default: 'rgb(49, 51, 56)',
+      default: 'rgba(6, 10, 30, 1)',
       paper: 'rgb(62, 64, 68)',
-      surface: 'rgb(58, 60, 65)',
+      surface: 'rgb(113, 113, 114)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
@@ -52,8 +52,8 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
-          '--Mail-Background': 'rgb(43, 43, 43)',
-          '--bg-primary': 'rgba(31, 32, 35, 1)',
+          '--Mail-Background': 'rgba(6, 10, 30, 1)',
+          '--bg-primary': 'rgba(6, 10, 30, 1)',
           '--bg-2': 'rgb(39, 40, 44)',
           '--primary-main': theme.palette.primary.main,
           '--text-primary': theme.palette.text.primary,

@@ -126,7 +126,7 @@ export async function getPermission(key) {
   }
 }
 
-// TODO: GET_FRIENDS_LIST
+// TODO: feature: add call to GET_FRIENDS_LIST
 // NOT SURE IF TO IMPLEMENT: LINK_TO_QDN_RESOURCE, QDN_RESOURCE_DISPLAYED, SET_TAB_NOTIFICATIONS
 
 function setupMessageListenerQortalRequest() {

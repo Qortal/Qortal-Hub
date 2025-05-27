@@ -193,6 +193,9 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             }}
             id="controllable-states-demo"
             loading={isLoading}
+            noOptionsText={t('core:option_no', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             options={options}
             sx={{ width: 300 }}
             renderInput={(params) => (

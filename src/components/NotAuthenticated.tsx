@@ -360,7 +360,7 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              it('auth:message.error.set_apikey', {
+              t('auth:message.error.set_apikey', {
                 postProcess: 'capitalizeFirstChar',
               }),
               error.message ||
@@ -399,7 +399,7 @@ export const NotAuthenticated = ({
           })
           .catch((error) => {
             console.error(
-              it('auth:message.error.set_apikey', {
+              t('auth:message.error.set_apikey', {
                 postProcess: 'capitalizeFirstChar',
               }),
               error.message ||
@@ -593,12 +593,13 @@ export const NotAuthenticated = ({
             sx={{
               backgroundColor:
                 hasSeenGettingStarted === false && theme.palette.other.positive,
-              color: hasSeenGettingStarted === false && 'black',
+              color:
+                hasSeenGettingStarted === false && theme.palette.text.primary,
               '&:hover': {
                 backgroundColor:
-                  hasSeenGettingStarted === false &&
-                  theme.palette.other.positive,
-                color: hasSeenGettingStarted === false && 'black',
+                  hasSeenGettingStarted === false && theme.palette.other.unread,
+                color:
+                  hasSeenGettingStarted === false && theme.palette.text.primary,
               },
             }}
           >
@@ -636,7 +637,7 @@ export const NotAuthenticated = ({
                 ? 'rgba(255, 255, 255, 0.5)'
                 : 'rgba(0, 0, 0, 0.3)',
             padding: '20px 30px',
-            borderRadius: '5px',
+            borderRadius: '8px',
           }}
         >
           <>
@@ -683,7 +684,7 @@ export const NotAuthenticated = ({
                           })
                           .catch((error) => {
                             console.error(
-                              it('auth:message.error.set_apikey', {
+                              t('auth:message.error.set_apikey', {
                                 postProcess: 'capitalizeFirstChar',
                               }),
                               error.message ||
@@ -771,8 +772,15 @@ export const NotAuthenticated = ({
           aria-describedby="alert-dialog-description"
           fullWidth
         >
-          <DialogTitle id="alert-dialog-title">
-            {' '}
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
             {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
             :
           </DialogTitle>
@@ -837,7 +845,7 @@ export const NotAuthenticated = ({
                             })
                             .catch((error) => {
                               console.error(
-                                it('auth:message.error.set_apikey', {
+                                t('auth:message.error.set_apikey', {
                                   postProcess: 'capitalizeFirstChar',
                                 }),
                                 error.message ||
@@ -873,6 +881,7 @@ export const NotAuthenticated = ({
                         >
                           {node?.url}
                         </Typography>
+
                         <Box
                           sx={{
                             display: 'flex',
@@ -903,7 +912,7 @@ export const NotAuthenticated = ({
                                 })
                                 .catch((error) => {
                                   console.error(
-                                    it('auth:message.error.set_apikey', {
+                                    t('auth:message.error.set_apikey', {
                                       postProcess: 'capitalizeFirstChar',
                                     }),
                                     error.message ||
@@ -945,7 +954,7 @@ export const NotAuthenticated = ({
                             }}
                             variant="contained"
                           >
-                            {t('core:remove', {
+                            {t('core:action.remove', {
                               postProcess: 'capitalizeFirstChar',
                             })}
                           </Button>
@@ -955,6 +964,7 @@ export const NotAuthenticated = ({
                   })}
                 </Box>
               )}
+
               {mode === 'add-node' && (
                 <Box
                   sx={{
@@ -973,6 +983,7 @@ export const NotAuthenticated = ({
                       setUrl(e.target.value);
                     }}
                   />
+
                   <Input
                     placeholder={t('auth:apikey.key', {
                       postProcess: 'capitalizeFirstChar',
@@ -1030,7 +1041,9 @@ export const NotAuthenticated = ({
                   onClick={() => saveCustomNodes(customNodes)}
                   autoFocus
                 >
-                  {t('core:save', { postProcess: 'capitalizeFirstChar' })}
+                  {t('core:action.save', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               </>
             )}
@@ -1044,7 +1057,15 @@ export const NotAuthenticated = ({
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">
+          <DialogTitle
+            id="alert-dialog-title"
+            sx={{
+              textAlign: 'center',
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 1,
+            }}
+          >
             {t('auth:apikey.enter', { postProcess: 'capitalizeFirstChar' })}
           </DialogTitle>
           <DialogContent>
@@ -1124,7 +1145,7 @@ export const NotAuthenticated = ({
               }}
               autoFocus
             >
-              {t('core:save', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:action.save', { postProcess: 'capitalizeFirstChar' })}
             </Button>
 
             <Button
@@ -1139,6 +1160,7 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
+
       <ButtonBase
         onClick={() => {
           showTutorial('create-account', true);
@@ -1157,6 +1179,7 @@ export const NotAuthenticated = ({
       </ButtonBase>
 
       <LanguageSelector />
+
       <ThemeSelector />
     </>
   );

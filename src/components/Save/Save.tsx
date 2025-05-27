@@ -1,7 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import isEqual from 'lodash/isEqual'; // TODO Import deep comparison utility
 import {
-  canSaveSettingToQdnAtom,
   hasSettingsChangedAtom,
   isUsingImportExportSettingsAtom,
   oldPinnedAppsAtom,
@@ -230,15 +229,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
 
   return (
     <>
-      <ButtonBase
-        onClick={handlePopupClick}
-        disabled={
-          // !hasChanged ||
-          // !canSave ||
-          isLoading
-          // settingsQdnLastUpdated === -100
-        }
-      >
+      <ButtonBase onClick={handlePopupClick} disabled={isLoading}>
         {isDesktop ? (
           <IconWrapper
             disableWidth={disableWidth}
