@@ -14,7 +14,7 @@
     "change": "modifica",
     "change_avatar": "cambia Avatar",
     "change_file": "modifica file",
-    "change_language": "cambia il linguaggio",
+    "change_language": "cambia la lingua",
     "choose": "scegli",
     "choose_file": "scegli il file",
     "choose_image": "scegli l'immagine",
@@ -339,10 +339,10 @@
   "publish": "pubblicazione",
   "q_apps": {
     "about": "su questo Q-app",
-    "q_mail": "Q-mail",
-    "q_manager": "Q-manager",
-    "q_sandbox": "Q-sandbox",
-    "q_wallets": "Q-wallet"
+    "q_mail": "Q-Mail",
+    "q_manager": "Q-Manager",
+    "q_sandbox": "Q-Sandbox",
+    "q_wallets": "Q-Wallets"
   },
   "receiver": "ricevitore",
   "sender": "mittente",
@@ -358,7 +358,7 @@
     "dark": "scuro",
     "dark_mode": "modalità scura",
     "default": "tema di default",
-    "light": "chiara",
+    "light": "chiaro",
     "light_mode": "modalità chiara",
     "manager": "manager tema",
     "name": "nome tema"

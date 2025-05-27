@@ -336,8 +336,8 @@
     "about": "über diese Q-App",
     "q_mail": "Q-Mail",
     "q_manager": "Q-Manager",
-    "q_sandbox": "q-sandbox",
-    "q_wallets": "q-wallets"
+    "q_sandbox": "Q-Sandbox",
+    "q_wallets": "Q-Wallets"
   },
   "receiver": "empfänger",
   "sender": "absender",
