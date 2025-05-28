@@ -808,7 +808,7 @@ export async function getNameInfo() {
   const response = await fetch(validApi + '/names/primary/' + address);
   const nameData = await response.json();
   if (nameData?.name) {
-    return nameData[0].name;
+    return nameData.name;
   } else {
     return '';
   }
