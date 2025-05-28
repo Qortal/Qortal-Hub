@@ -358,6 +358,7 @@ export const AppsDevModeHome = ({
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
+
             <AppCircleLabel>
               {t('core:directory', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
@@ -499,6 +500,7 @@ export const AppsDevModeHome = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Label>
+
               <Input
                 placeholder={t('core:domain', {
                   postProcess: 'capitalizeFirstChar',
@@ -521,6 +523,7 @@ export const AppsDevModeHome = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Label>
+
               <Input
                 placeholder={t('core:port', {
                   postProcess: 'capitalizeFirstChar',

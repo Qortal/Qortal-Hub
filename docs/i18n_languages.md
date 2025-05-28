@@ -20,7 +20,7 @@ Translation in GUI:
 - For all translation in uppercase `{ postProcess: 'capitalizeAll' }`
 - See `.src/i18n/i18n.ts` for processor definition
 
-## Namespace
+## Namespaces
 
 These are the current namespaces, in which all translations are organized:
 
