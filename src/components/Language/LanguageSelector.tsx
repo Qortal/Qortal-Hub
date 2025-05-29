@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../../i18n/i18n';
 import {
+  Box,
+  Button,
   FormControl,
   MenuItem,
   Select,
@@ -26,16 +28,7 @@ const LanguageSelector = () => {
     supportedLanguages[currentLang] || supportedLanguages['en'];
 
   return (
-    <div
-      ref={selectorRef}
-      style={{
-        bottom: '5%',
-        display: 'flex',
-        gap: '12px',
-        left: '1.5vh',
-        position: 'absolute',
-      }}
-    >
+    <Box ref={selectorRef}>
       {!showSelect && (
         <Tooltip
           key={currentLang}
@@ -43,13 +36,10 @@ const LanguageSelector = () => {
             postProcess: 'capitalizeFirstChar',
           })}
         >
-          <button
+          <Button
             onClick={() => setShowSelect(true)}
             style={{
-              fontSize: '1.5rem',
-              border: 'none',
-              background: 'none',
-              cursor: 'pointer',
+              fontSize: '1.3rem',
             }}
             aria-label={t('core:current_language', {
               language: name,
@@ -57,7 +47,7 @@ const LanguageSelector = () => {
             })}
           >
             {flag}
-          </button>
+          </Button>
         </Tooltip>
       )}
 
@@ -70,13 +60,13 @@ const LanguageSelector = () => {
           }}
         >
           <Select
-            open
-            labelId="language-select-label"
-            id="language-select"
-            value={currentLang}
-            onChange={handleChange}
             autoFocus
+            id="language-select"
+            labelId="language-select-label"
+            onChange={handleChange}
             onClose={() => setShowSelect(false)}
+            open
+            value={currentLang}
           >
             {Object.entries(supportedLanguages).map(([code, { name }]) => (
               <MenuItem key={code} value={code}>
@@ -86,7 +76,7 @@ const LanguageSelector = () => {
           </Select>
         </FormControl>
       )}
-    </div>
+    </Box>
   );
 };
 
