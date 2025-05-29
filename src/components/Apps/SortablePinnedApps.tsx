@@ -249,11 +249,11 @@ export const SortablePinnedApps = ({
       >
         {transformPinnedApps.map((app) => (
           <SortableItem
+            app={app}
+            id={`${app?.service}-${app?.name}`}
             isDesktop={isDesktop}
             key={`${app?.service}-${app?.name}`}
-            id={`${app?.service}-${app?.name}`}
             name={app?.name}
-            app={app}
           />
         ))}
       </SortableContext>
