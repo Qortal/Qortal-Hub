@@ -307,7 +307,7 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
-
+  const isAuthenticated = extState === 'authenticated';
   const { t } = useTranslation([
     'auth',
     'core',
@@ -3959,8 +3959,27 @@ function App() {
         />
       )}
 
-      <LanguageSelector />
-      <ThemeSelector />
+      {!isAuthenticated && (
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            bottom: '1%',
+            display: 'flex',
+            flexDirection: 'column',
+            left: '1%',
+            position: 'absolute',
+            width: 'auto',
+          }}
+        >
+          <Box sx={{ alignSelf: 'left' }}>
+            <LanguageSelector />
+          </Box>
+
+          <Box sx={{ alignSelf: 'center' }}>
+            <ThemeSelector />
+          </Box>
+        </Box>
+      )}
     </AppContainer>
   );
 }

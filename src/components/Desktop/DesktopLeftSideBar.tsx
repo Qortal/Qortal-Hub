@@ -151,9 +151,24 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <LanguageSelector />
+      <Box
+        sx={{
+          alignItems: 'flex-start',
+          bottom: '1%',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'absolute',
+          width: 'auto',
+        }}
+      >
+        <Box sx={{ alignSelf: 'left' }}>
+          <LanguageSelector />
+        </Box>
 
-      <ThemeSelector />
+        <Box sx={{ alignSelf: 'center' }}>
+          <ThemeSelector />
+        </Box>
+      </Box>
     </Box>
   );
 };
