@@ -876,6 +876,7 @@ export const NotAuthenticated = ({
                   {customNodes?.map((node, index) => {
                     return (
                       <Box
+                        key={index}
                         sx={{
                           display: 'flex',
                           gap: '10px',
