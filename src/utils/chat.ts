@@ -20,3 +20,7 @@ export const messageHasImage = (message) => {
     message.images[0]?.service
   );
 };
+
+export function isHtmlString(value) {
+  return typeof value === 'string' && /<[^>]+>/.test(value.trim());
+}

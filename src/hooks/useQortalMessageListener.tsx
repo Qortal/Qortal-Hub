@@ -256,6 +256,7 @@ export const listOfAllQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
+  'GET_PRIMARY_NAME',
 ];
 
 export const UIQortalRequests = [
@@ -319,6 +320,7 @@ export const UIQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
+  'GET_PRIMARY_NAME',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
