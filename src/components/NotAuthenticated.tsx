@@ -29,9 +29,7 @@ import HelpIcon from '@mui/icons-material/Help';
 import { CustomizedSnackbars } from './Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
-import ThemeSelector from './Theme/ThemeSelector';
 import { useTranslation } from 'react-i18next';
-import LanguageSelector from './Language/LanguageSelector';
 import { QORTAL_APP_CONTEXT } from '../App';
 
 export const manifestData = {
@@ -482,7 +480,8 @@ export const NotAuthenticated = ({
   return (
     <>
       <Spacer height="35px" />
-      <div
+
+      <Box
         className="image-container"
         style={{
           width: '136px',
@@ -490,7 +489,7 @@ export const NotAuthenticated = ({
         }}
       >
         <img src={Logo1Dark} className="base-image" />
-      </div>
+      </Box>
 
       <Spacer height="30px" />
 
@@ -513,6 +512,7 @@ export const NotAuthenticated = ({
       </TextP>
 
       <Spacer height="30px" />
+
       <Box
         sx={{
           display: 'flex',
@@ -547,6 +547,7 @@ export const NotAuthenticated = ({
       </Box>
 
       <Spacer height="6px" />
+
       <Box
         sx={{
           display: 'flex',
@@ -624,6 +625,7 @@ export const NotAuthenticated = ({
 
       <>
         <Spacer height="15px" />
+
         <Box
           sx={{
             display: 'flex',
@@ -648,6 +650,7 @@ export const NotAuthenticated = ({
             >
               {t('auth:advanced_users', { postProcess: 'capitalizeFirstChar' })}
             </Typography>
+
             <Box
               sx={{
                 alignItems: 'center',
@@ -725,6 +728,7 @@ export const NotAuthenticated = ({
                         postProcess: 'capitalizeFirstChar',
                       })}
                 </Button>
+
                 <Typography
                   sx={{
                     fontSize: '12px',
@@ -736,6 +740,7 @@ export const NotAuthenticated = ({
                 </Typography>
               </>
             )}
+
             <Button
               size="small"
               onClick={() => {
@@ -747,6 +752,7 @@ export const NotAuthenticated = ({
               {t('auth:node.choose', { postProcess: 'capitalizeFirstChar' })}
             </Button>
           </>
+
           <Typography
             sx={{
               color: theme.palette.text.primary,
@@ -765,6 +771,7 @@ export const NotAuthenticated = ({
         info={infoSnack}
         setInfo={setInfoSnack}
       />
+
       {show && (
         <Dialog
           open={show}
@@ -784,6 +791,7 @@ export const NotAuthenticated = ({
             {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
             :
           </DialogTitle>
+
           <DialogContent>
             <Box
               sx={{
@@ -817,6 +825,7 @@ export const NotAuthenticated = ({
                     >
                       http://127.0.0.1:12391
                     </Typography>
+
                     <Box
                       sx={{
                         display: 'flex',
@@ -1068,6 +1077,7 @@ export const NotAuthenticated = ({
           >
             {t('auth:apikey.enter', { postProcess: 'capitalizeFirstChar' })}
           </DialogTitle>
+
           <DialogContent>
             <Box
               sx={{
@@ -1177,10 +1187,6 @@ export const NotAuthenticated = ({
           }}
         />
       </ButtonBase>
-
-      <LanguageSelector />
-
-      <ThemeSelector />
     </>
   );
 };
