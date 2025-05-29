@@ -3966,7 +3966,7 @@ function App() {
             bottom: '1%',
             display: 'flex',
             flexDirection: 'column',
-            left: '1%',
+            left: '3px',
             position: 'absolute',
             width: 'auto',
           }}

@@ -14,8 +14,6 @@ import { SortablePinnedApps } from './SortablePinnedApps';
 import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
-import ThemeSelector from '../Theme/ThemeSelector';
-import LanguageSelector from '../Language/LanguageSelector';
 import { useTranslation } from 'react-i18next';
 
 export const AppsHomeDesktop = ({
@@ -169,26 +167,6 @@ export const AppsHomeDesktop = ({
           myApp={myApp}
         />
       </AppsContainer>
-
-      <Box
-        sx={{
-          alignItems: 'flex-start',
-          bottom: '1%',
-          display: 'flex',
-          flexDirection: 'column',
-          left: '4px',
-          position: 'absolute',
-          width: 'auto',
-        }}
-      >
-        <Box sx={{ alignSelf: 'left' }}>
-          <LanguageSelector />
-        </Box>
-
-        <Box sx={{ alignSelf: 'center' }}>
-          <ThemeSelector />
-        </Box>
-      </Box>
     </>
   );
 };
