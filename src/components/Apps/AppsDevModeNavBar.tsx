@@ -16,6 +16,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import { navigationControllerAtom } from '../../atoms/global';
 import { AppsDevModeTabComponent } from './AppsDevModeTabComponent';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 export const AppsDevModeNavBar = () => {
   const [tabs, setTabs] = useState([]);
@@ -23,6 +24,13 @@ export const AppsDevModeNavBar = () => {
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
