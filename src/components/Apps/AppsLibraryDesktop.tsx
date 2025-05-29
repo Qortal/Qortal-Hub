@@ -347,6 +347,7 @@ export const AppsLibraryDesktop = ({
                 {officialApps?.map((qapp) => {
                   return (
                     <ButtonBase
+                      key={`${qapp?.service}-${qapp?.name}`}
                       sx={{
                         width: '80px',
                       }}

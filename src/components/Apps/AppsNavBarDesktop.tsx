@@ -186,6 +186,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         >
           <NavBack />
         </ButtonBase>
+
         <Tabs
           orientation="vertical"
           ref={tabsRef}
@@ -269,9 +270,6 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
-        MenuListProps={{
-          'aria-labelledby': 'basic-button',
-        }}
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'center',
@@ -281,6 +279,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
           horizontal: 'center',
         }}
         slotProps={{
+          list: {
+            'aria-labelledby': 'basic-button',
+          },
           paper: {
             sx: {
               backgroundColor: theme.palette.background.default,

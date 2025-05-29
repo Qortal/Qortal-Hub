@@ -10,12 +10,12 @@ import {
   DialogActions,
   List,
   ListItemText,
-  ListItemSecondaryAction,
   TextField,
   Tabs,
   Tab,
   ListItemButton,
   useTheme,
+  ListItem,
 } from '@mui/material';
 import { Sketch } from '@uiw/react-color';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -31,6 +31,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import { handleImportClick } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
+import '../../styles/themeManager.css';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -189,6 +190,7 @@ export default function ThemeManager() {
         <Typography variant="body2" mb={1}>
           {label}
         </Typography>
+
         <Sketch
           key={`${mode}-${fieldPath}`}
           color={color}
@@ -269,24 +271,28 @@ export default function ThemeManager() {
             <ListItemText
               primary={`${theme?.name || `Theme ${index + 1}`} ${theme?.id === currentThemeId ? '(Current)' : ''}`}
             />
-            <ListItemSecondaryAction>
-              {theme.id !== 'default' && (
-                <>
-                  <IconButton onClick={() => exportTheme(theme)}>
-                    <FileDownloadIcon />
+            <ListItem
+              secondaryAction={
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {theme.id !== 'default' && (
+                    <>
+                      <IconButton onClick={() => exportTheme(theme)}>
+                        <FileDownloadIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleEditTheme(theme.id)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => handleDeleteTheme(theme.id)}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </>
+                  )}
+                  <IconButton onClick={() => handleApplyTheme(theme)}>
+                    <CheckIcon />
                   </IconButton>
-                  <IconButton onClick={() => handleEditTheme(theme.id)}>
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton onClick={() => handleDeleteTheme(theme.id)}>
-                    <DeleteIcon />
-                  </IconButton>
-                </>
-              )}
-              <IconButton onClick={() => handleApplyTheme(theme)}>
-                <CheckIcon />
-              </IconButton>
-            </ListItemSecondaryAction>
+                </Box>
+              }
+            ></ListItem>
           </ListItemButton>
         ))}
       </List>

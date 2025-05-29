@@ -1,7 +1,7 @@
 import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-import { IconWrapper } from '../Desktop/DesktopFooter';
+import { IconWrapper } from './DesktopFooter';
 import { enabledDevModeAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
@@ -26,7 +26,6 @@ export const DesktopSideBar = ({
   myName,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -46,7 +45,7 @@ export const DesktopSideBar = ({
         flexDirection: 'column',
         gap: '25px',
         height: '100vh',
-        width: '60px',
+        width: 'auto', // must adapt to the choosen language
       }}
     >
       <ButtonBase
@@ -151,9 +150,24 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <LanguageSelector />
+      <Box
+        sx={{
+          alignItems: 'flex-start',
+          bottom: '1%',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'absolute',
+          width: 'auto',
+        }}
+      >
+        <Box sx={{ alignSelf: 'left' }}>
+          <LanguageSelector />
+        </Box>
 
-      <ThemeSelector />
+        <Box sx={{ alignSelf: 'center' }}>
+          <ThemeSelector />
+        </Box>
+      </Box>
     </Box>
   );
 };

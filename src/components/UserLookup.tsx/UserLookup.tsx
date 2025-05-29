@@ -29,7 +29,6 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Spacer } from '../../common/Spacer';
 import { formatTimestamp } from '../../utils/time';
 import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen';
-import SearchIcon from '@mui/icons-material/Search';
 import {
   executeEvent,
   subscribeToEvent,
@@ -65,6 +64,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [payments, setPayments] = useState([]);
+
   const lookupFunc = useCallback(
     async (messageAddressOrName) => {
       try {
@@ -481,6 +481,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
               />
             </Box>
           )}
+
           {!isLoadingPayments && addressInfo && (
             <Card
               sx={{

@@ -154,7 +154,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
 
   useEffect(() => {
     getUserSettings();
-  }, []);
+  });
 
   return (
     <Fragment>
@@ -162,7 +162,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         fullScreen
         open={open}
         onClose={handleClose}
-        TransitionComponent={Transition}
+        slots={{
+          transition: Transition,
+        }}
       >
         <AppBar sx={{ position: 'relative' }}>
           <Toolbar>
@@ -173,8 +175,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             </Typography>
 
             <IconButton
-              edge="start"
               color="inherit"
+              edge="start"
               onClick={handleClose}
               aria-label={t('core:action.close', {
                 postProcess: 'capitalizeFirstChar',
@@ -227,6 +229,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               })}
             />
           )}
+
           {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
           <ThemeManager />
         </Box>
@@ -241,6 +244,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     useContext(QORTAL_APP_CONTEXT);
+  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
@@ -377,13 +381,13 @@ const ExportPrivateKey = ({ rawWallet }) => {
               setPrivateKey('');
             }}
           >
-            {t('group:action.cancel', {
+            {t('core:action.cancel', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>
 
           <Button variant="contained" onClick={exportPrivateKeyFunc}>
-            {t('group:action.decrypt', {
+            {t('core:action.decrypt', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>

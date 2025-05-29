@@ -54,6 +54,7 @@ export const Tutorials = () => {
           {openTutorialModal?.multi?.map((item, index) => {
             return (
               <Tab
+                key={index}
                 sx={{
                   '&.Mui-selected': {
                     color: theme.palette.text.primary,

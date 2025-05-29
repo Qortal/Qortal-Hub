@@ -1,8 +1,9 @@
 import { useThemeContext } from './ThemeContext';
-import { IconButton, Tooltip } from '@mui/material';
+import { Box, IconButton, Tooltip } from '@mui/material';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import { useTranslation } from 'react-i18next';
+import { useRef } from 'react';
 
 const ThemeSelector = () => {
   const { t } = useTranslation([
@@ -13,17 +14,10 @@ const ThemeSelector = () => {
     'tutorial',
   ]);
   const { themeMode, toggleTheme } = useThemeContext();
+  const selectorRef = useRef(null);
 
   return (
-    <div
-      style={{
-        bottom: '1%',
-        display: 'flex',
-        gap: '12px',
-        left: '1.2vh',
-        position: 'absolute',
-      }}
-    >
+    <Box ref={selectorRef}>
       <Tooltip
         title={
           themeMode === 'dark'
@@ -39,7 +33,7 @@ const ThemeSelector = () => {
           {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
         </IconButton>
       </Tooltip>
-    </div>
+    </Box>
   );
 };
 
