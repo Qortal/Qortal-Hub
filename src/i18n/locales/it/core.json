@@ -266,7 +266,7 @@
       "qdn": "usa il salvataggio QDN",
       "rating": "valutazione di {{ service }} {{ name }}",
       "register_name": "hai bisogno di un nome Qortal registrato per salvare in QDN le app bloccate.",
-      "replied_to": "risposto a {{ person }}",
+      "replied_to": "risposta a {{ person }}",
       "revert_default": "ritorna a predefinito",
       "revert_qdn": "ritorna a QDN",
       "save_qdn": "salva su QDN",
