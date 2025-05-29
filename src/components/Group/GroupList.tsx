@@ -62,7 +62,7 @@ export const GroupList = ({
     <div
       style={{
         alignItems: 'flex-start',
-        background: theme.palette.background.default,
+        background: theme.palette.background.surface,
         borderRadius: '0px 15px 15px 0px',
         display: 'flex',
         flexDirection: 'column',

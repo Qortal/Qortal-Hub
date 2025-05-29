@@ -74,7 +74,7 @@ export const AppsHomeDesktop = ({
         <Box
           sx={{
             alignItems: 'center',
-            backgroundColor: theme.palette.background.default,
+            backgroundColor: theme.palette.background.paper,
             borderRadius: '20px',
             display: 'flex',
             gap: '20px',
@@ -94,7 +94,6 @@ export const AppsHomeDesktop = ({
             autoCorrect="off"
             placeholder="qortal://"
             sx={{
-              backgroundColor: theme.palette.background.surface,
               borderRadius: '7px',
               color: theme.palette.text.primary,
               height: '35px',
