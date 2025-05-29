@@ -2131,6 +2131,7 @@ export const Group = ({
                     </Typography>
                   </div>
                 )}
+
               {isPrivate &&
               !admins.includes(myAddress) &&
               !secretKey &&
@@ -2149,13 +2150,14 @@ export const Group = ({
                         width: '100%',
                       }}
                     >
-                      {' '}
                       <Typography>
                         {t('group:message.generic.not_part_group', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
+
                       <Spacer height="25px" />
+
                       <Typography>
                         <strong>
                           {t('group:message.generic.only_encrypted', {
@@ -2163,13 +2165,17 @@ export const Group = ({
                           })}
                         </strong>
                       </Typography>
+
                       <Spacer height="25px" />
+
                       <Typography>
                         {t('group:message.generic.notify_admins', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
+
                       <Spacer height="25px" />
+
                       {adminsWithNames.map((admin) => {
                         return (
                           <Box
@@ -2284,6 +2290,7 @@ export const Group = ({
                 )}
               </Box>
             </Box>
+
             {openManageMembers && (
               <ManageMembers
                 selectedGroup={selectedGroup}
