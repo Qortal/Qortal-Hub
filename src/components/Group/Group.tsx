@@ -1913,7 +1913,7 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
 
-      <div
+      <div // TODO use Box
         style={{
           alignItems: 'flex-start',
           display: 'flex',

@@ -231,11 +231,12 @@ export const AppsDevMode = ({
       <Box
         sx={{
           alignItems: 'center',
+          borderRight: `1px solid ${theme.palette.border.subtle}`,
           display: 'flex',
           flexDirection: 'column',
           gap: '25px',
           height: '100vh',
-          width: '60px',
+          width: 'auto', // must adapt to the choosen language
         }}
       >
         <ButtonBase
@@ -380,7 +381,7 @@ export const AppsDevMode = ({
             flexDirection: 'column',
             height: '100vh',
             overflow: 'auto',
-            width: '100%',
+            width: 'auto',
           }}
         >
           <Spacer height="30px" />
@@ -419,7 +420,7 @@ export const AppsDevMode = ({
               flexDirection: 'column',
               height: '100vh',
               overflow: 'auto',
-              width: '100%',
+              width: 'auto',
             }}
           >
             <Spacer height="30px" />

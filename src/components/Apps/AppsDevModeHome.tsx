@@ -319,6 +319,7 @@ export const AppsDevModeHome = ({
             <AppCircle>
               <Add>+</Add>
             </AppCircle>
+
             <AppCircleLabel>
               {t('core:server', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>

@@ -381,13 +381,13 @@ const ExportPrivateKey = ({ rawWallet }) => {
               setPrivateKey('');
             }}
           >
-            {t('group:action.cancel', {
+            {t('core:action.cancel', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>
 
           <Button variant="contained" onClick={exportPrivateKeyFunc}>
-            {t('group:action.decrypt', {
+            {t('core:action.decrypt', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>

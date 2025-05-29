@@ -26,7 +26,6 @@ export const DesktopSideBar = ({
   myName,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
