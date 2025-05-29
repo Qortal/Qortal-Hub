@@ -15,8 +15,8 @@ export const lightThemeOptions: ThemeOptions = {
     },
     background: {
       default: 'rgba(250, 250, 250, 1)',
-      paper: 'rgb(220, 220, 220)', // darker card background
       surface: 'rgb(240, 240, 240)', // optional middle gray for replies, side panels
+      paper: 'rgb(220, 220, 220)', // darker card background
     },
     text: {
       primary: 'rgba(0, 0, 0, 0.87)', // 87% black (slightly softened)

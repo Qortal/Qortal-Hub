@@ -350,6 +350,15 @@ export const MessageItem = memo(
                   >
                     <Box
                       sx={{
+                        background: theme.palette.text.primary,
+                        height: '100%',
+                        width: '5px',
+                        flexShrink: 0,
+                      }} // This is the little bar at left of replied messages
+                    />
+
+                    <Box
+                      sx={{
                         padding: '5px',
                       }}
                     >
@@ -393,6 +402,7 @@ export const MessageItem = memo(
               {message?.images && messageHasImage(message) && (
                 <Embed embedLink={buildImageEmbedLink(message.images[0])} />
               )}
+
               <Box
                 sx={{
                   display: 'flex',
@@ -463,11 +473,12 @@ export const MessageItem = memo(
                       vertical: 'bottom',
                       horizontal: 'center',
                     }}
-                    PaperProps={{
-                      // TODO: deprecated
-                      style: {
-                        backgroundColor: theme.palette.background.default,
-                        color: theme.palette.text.primary,
+                    slotProps={{
+                      paper: {
+                        style: {
+                          backgroundColor: theme.palette.background.default,
+                          color: theme.palette.text.primary,
+                        },
                       },
                     }}
                   >
@@ -593,6 +604,7 @@ export const MessageItem = memo(
                           })}
                         </Typography>
                       )}
+
                       <Typography
                         sx={{
                           fontSize: '14px',

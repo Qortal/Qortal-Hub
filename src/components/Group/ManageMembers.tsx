@@ -205,7 +205,9 @@ export const ManageMembers = ({
         fullScreen
         open={open}
         onClose={handleClose}
-        TransitionComponent={Transition}
+        slots={{
+          transition: Transition,
+        }}
       >
         <AppBar
           sx={{

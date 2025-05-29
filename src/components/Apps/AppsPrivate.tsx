@@ -311,7 +311,11 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             <AddIcon />
           </AppCircle>
 
-          <AppCircleLabel>Private</AppCircleLabel>
+          <AppCircleLabel>
+            {t('core:app_private', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </AppCircleLabel>
         </AppCircleContainer>
       </ButtonBase>
 
@@ -336,10 +340,12 @@ export const AppsPrivate = ({ myName, myAddress }) => {
           }}
           maxWidth="md"
           fullWidth={true}
-          PaperProps={{
-            style: {
-              backgroundColor: theme.palette.background.paper,
-              boxShadow: 'none',
+          slotProps={{
+            paper: {
+              style: {
+                backgroundColor: theme.palette.background.paper,
+                boxShadow: 'none',
+              },
             },
           }}
         >
@@ -384,6 +390,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
               />
             </Tabs>
           </Box>
+
           {valueTabPrivateApp === 0 && (
             <>
               <DialogContent>
@@ -399,6 +406,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
+
                   <Label>
                     {t('group:message.generic.only_private_groups', {
                       postProcess: 'capitalizeFirstChar',
@@ -452,6 +460,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                   <Label>
                     {t('core:name', { postProcess: 'capitalizeFirstChar' })}
                   </Label>
+
                   <Input
                     placeholder={t('core:name', {
                       postProcess: 'capitalizeFirstChar',
@@ -510,6 +519,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Button>
+
                 <Button
                   disabled={
                     !privateAppValues.name ||
@@ -528,6 +538,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
               </DialogActions>
             </>
           )}
+
           {valueTabPrivateApp === 1 && (
             <>
               <DialogContent>
@@ -549,8 +560,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                     backgroundColor: theme.palette.background.paper,
                     fontSize: '14px',
                   }}
-                >{`
-                       50mb MB max`}</PublishQAppInfo>
+                >{` 50mb MB max`}</PublishQAppInfo>
                 {file && (
                   <>
                     <Spacer height="5px" />
@@ -669,6 +679,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
+
                   <Input
                     placeholder={t('core:identifier', {
                       postProcess: 'capitalizeFirstChar',

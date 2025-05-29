@@ -24,20 +24,23 @@ export const AppsDevModeNavBar = () => {
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core', 'group', 'question', 'tutorial']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
-  
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
 
   useEffect(() => {
     // Scroll to the last tab whenever the tabs array changes (e.g., when a new tab is added)

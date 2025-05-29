@@ -1,5 +1,6 @@
 import {
   Alert,
+  AppBar,
   Box,
   Button,
   Card,
@@ -10,6 +11,7 @@ import {
   Divider,
   IconButton,
   Snackbar,
+  Toolbar,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -573,34 +575,26 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         },
       }}
     >
-      <DialogTitle
-        id="alert-dialog-title"
-        sx={{
-          textAlign: 'center',
-          color: theme.palette.text.primary,
-          fontWeight: 'bold',
-          opacity: 1,
-        }}
-      >
-        {t('group:message.generic.manage_minting', {
-          postProcess: 'capitalizeAll',
-        })}
-      </DialogTitle>
+      <AppBar sx={{ position: 'relative' }}>
+        <Toolbar>
+          <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
+            {t('group:message.generic.manage_minting', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
 
-      <IconButton
-        sx={{
-          position: 'absolute',
-          right: 8,
-          top: 8,
-        }}
-        color="inherit"
-        onClick={() => setIsOpenMinting(false)}
-        aria-label={t('core:action.close', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      >
-        <CloseIcon />
-      </IconButton>
+          <IconButton
+            color="inherit"
+            edge="start"
+            onClick={() => setIsOpenMinting(false)}
+            aria-label={t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
 
       <DialogContent
         sx={{
@@ -913,16 +907,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           </Dialog>
         )}
       </DialogContent>
-
-      <DialogActions>
-        <Button
-          //   disabled={isLoadingPublish}
-          variant="contained"
-          onClick={() => setIsOpenMinting(false)}
-        >
-          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
-        </Button>
-      </DialogActions>
 
       <Snackbar
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}

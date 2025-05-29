@@ -43,6 +43,9 @@ export const IconWrapper = ({
           fontFamily: 'Inter',
           fontSize: '12px',
           fontWeight: 500,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}
       >
         {label}

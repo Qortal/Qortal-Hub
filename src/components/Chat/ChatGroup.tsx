@@ -58,7 +58,6 @@ const uidImages = new ShortUniqueId({ length: 12 });
 export const ChatGroup = ({
   selectedGroup,
   secretKey,
-  setSecretKey,
   getSecretKey,
   myAddress,
   handleNewEncryptionNotification,
@@ -1186,7 +1185,7 @@ export const ChatGroup = ({
       {(!!secretKey || isPrivate === false) && (
         <div
           style={{
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor: theme.palette.background.surface,
             border: `1px solid ${theme.palette.border.subtle}`,
             borderRadius: '10px',
             bottom: isFocusedParent ? '0px' : 'unset',

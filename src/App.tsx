@@ -307,7 +307,7 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
-
+  const isAuthenticated = extState === 'authenticated';
   const { t } = useTranslation([
     'auth',
     'core',
@@ -1353,6 +1353,7 @@ function App() {
               />
             </Tooltip>
           )}
+
           {authenticatedMode === 'ltc' && (
             <Tooltip
               title={
@@ -2059,6 +2060,7 @@ function App() {
             useLocalNode={useLocalNode}
           />
         )}
+
         {extState === 'authenticated' && isMainWindow && (
           <Box
             sx={{
@@ -2136,6 +2138,7 @@ function App() {
         {isShowQortalRequest && !isMainWindow && (
           <>
             <Spacer height="120px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2231,6 +2234,7 @@ function App() {
                 dangerouslySetInnerHTML={{ __html: messageQortalRequest?.html }}
               />
             )}
+
             <Spacer height="15px" />
 
             <TextP
@@ -2308,6 +2312,7 @@ function App() {
             )}
 
             <Spacer height="29px" />
+
             <Box
               sx={{
                 display: 'flex',
@@ -2325,6 +2330,7 @@ function App() {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </CustomButton>
+
               <CustomButton
                 sx={{
                   minWidth: '102px',
@@ -2595,6 +2601,7 @@ function App() {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </CustomButton>
+
               <CustomButton
                 sx={{
                   minWidth: '102px',
@@ -3977,8 +3984,27 @@ function App() {
         />
       )}
 
-      <LanguageSelector />
-      <ThemeSelector />
+      {!isAuthenticated && (
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            bottom: '1%',
+            display: 'flex',
+            flexDirection: 'column',
+            left: '3px',
+            position: 'absolute',
+            width: 'auto',
+          }}
+        >
+          <Box sx={{ alignSelf: 'left' }}>
+            <LanguageSelector />
+          </Box>
+
+          <Box sx={{ alignSelf: 'center' }}>
+            <ThemeSelector />
+          </Box>
+        </Box>
+      )}
     </AppContainer>
   );
 }

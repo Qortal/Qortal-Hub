@@ -25,6 +25,8 @@ import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import LanguageSelector from '../Language/LanguageSelector';
+import ThemeSelector from '../Theme/ThemeSelector';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -358,7 +360,7 @@ export const AppsDesktop = ({
           flexDirection: 'column',
           gap: '25px',
           height: '100vh',
-          width: '60px',
+          width: 'auto', // must adapt to the choosen language
         }}
       >
         <ButtonBase
@@ -458,6 +460,7 @@ export const AppsDesktop = ({
             </IconWrapper>
           </ButtonBase>
         )}
+
         {mode !== 'home' && (
           <AppsNavBarDesktop
             disableBack={isNewTabWindow && mode === 'viewer'}
@@ -501,6 +504,7 @@ export const AppsDesktop = ({
       {mode === 'appInfo' && !selectedTab && (
         <AppInfo app={selectedAppInfo} myName={myName} />
       )}
+
       {mode === 'appInfo-from-category' && !selectedTab && (
         <AppInfo app={selectedAppInfo} myName={myName} />
       )}
@@ -560,6 +564,26 @@ export const AppsDesktop = ({
           </Box>
         </>
       )}
+
+      <Box
+        sx={{
+          alignItems: 'flex-start',
+          bottom: '1%',
+          display: 'flex',
+          flexDirection: 'column',
+          left: '3px',
+          position: 'absolute',
+          width: 'auto',
+        }}
+      >
+        <Box sx={{ alignSelf: 'left' }}>
+          <LanguageSelector />
+        </Box>
+
+        <Box sx={{ alignSelf: 'center' }}>
+          <ThemeSelector />
+        </Box>
+      </Box>
     </AppsParent>
   );
 };

@@ -40,6 +40,7 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { ErrorRounded } from '@mui/icons-material';
 
 export const Label = styled('label')`
   display: block;
@@ -123,13 +124,17 @@ export const AddGroup = ({ address, open, setOpen }) => {
 
       const fee = await getFee('CREATE_GROUP');
 
-      await show({
-        message: t('core:message.question.perform_transaction', {
-          action: 'CREATE_GROUP',
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
+      try {
+        await show({
+          message: t('core:message.question.perform_transaction', {
+            action: 'CREATE_GROUP',
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
+        });
+      } catch (error) {
+        console.log(error);
+      }
 
       await new Promise((res, rej) => {
         window
@@ -223,7 +228,9 @@ export const AddGroup = ({ address, open, setOpen }) => {
         fullScreen
         open={open}
         onClose={handleClose}
-        TransitionComponent={Transition}
+        slots={{
+          transition: Transition,
+        }}
       >
         <AppBar
           sx={{

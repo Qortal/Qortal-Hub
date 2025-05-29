@@ -14,8 +14,6 @@ import { SortablePinnedApps } from './SortablePinnedApps';
 import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
-import ThemeSelector from '../Theme/ThemeSelector';
-import LanguageSelector from '../Language/LanguageSelector';
 import { useTranslation } from 'react-i18next';
 
 export const AppsHomeDesktop = ({
@@ -77,7 +75,7 @@ export const AppsHomeDesktop = ({
         <Box
           sx={{
             alignItems: 'center',
-            backgroundColor: theme.palette.background.default,
+            backgroundColor: theme.palette.background.paper,
             borderRadius: '20px',
             display: 'flex',
             gap: '20px',
@@ -97,10 +95,10 @@ export const AppsHomeDesktop = ({
             autoCorrect="off"
             placeholder="qortal://"
             sx={{
-              width: '100%',
-              backgroundColor: theme.palette.background.surface,
               borderRadius: '7px',
               color: theme.palette.text.primary,
+              height: '35px',
+              width: '100%',
               '& .MuiInput-input::placeholder': {
                 color: theme.palette.text.secondary,
                 fontSize: '20px',
@@ -169,9 +167,6 @@ export const AppsHomeDesktop = ({
           myApp={myApp}
         />
       </AppsContainer>
-
-      <LanguageSelector />
-      <ThemeSelector />
     </>
   );
 };

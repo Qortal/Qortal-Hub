@@ -337,9 +337,9 @@
   "q_apps": {
     "about": "关于这个Q-App",
     "q_mail": "Q邮件",
-    "q_manager": "Q-Manager",
-    "q_sandbox": "Q-Sandbox",
-    "q_wallets": "Q-Wallet"
+    "q_manager": "Q-经理",
+    "q_sandbox": "Q-沙箱",
+    "q_wallets": "Q-钱包"
   },
   "receiver": "接收者",
   "sender": "发件人",

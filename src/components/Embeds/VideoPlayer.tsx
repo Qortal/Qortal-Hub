@@ -127,7 +127,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     if (name && identifier && service) {
       return `${node || getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
     }
-    return '';
+    return null;
   }, [service, name, identifier]);
 
   useEffect(() => {
