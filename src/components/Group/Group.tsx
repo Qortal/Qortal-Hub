@@ -1726,6 +1726,7 @@ export const Group = ({
         >
           {directs.map((direct: any) => (
             <List
+              key={direct?.timestamp + direct?.sender}
               sx={{
                 width: '100%',
               }}
@@ -1756,15 +1757,15 @@ export const Group = ({
                   }, 200);
                 }}
                 sx={{
-                  display: 'flex',
-                  width: '100%',
-                  flexDirection: 'column',
-                  cursor: 'pointer',
-                  padding: '2px',
-                  borderRadius: '2px',
                   background:
                     direct?.address === selectedDirect?.address &&
                     theme.palette.background.default,
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '2px',
+                  width: '100%',
                 }}
               >
                 <Box

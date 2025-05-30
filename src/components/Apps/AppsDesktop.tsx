@@ -530,12 +530,12 @@ export const AppsDesktop = ({
         }
         return (
           <AppViewerContainer
-            key={tab?.tabId}
-            hide={isNewTabWindow}
-            isSelected={tab?.tabId === selectedTab?.tabId}
             app={tab}
-            ref={iframeRefs.current[tab.tabId]}
+            hide={isNewTabWindow}
             isDevMode={tab?.service ? false : true}
+            isSelected={tab?.tabId === selectedTab?.tabId}
+            key={tab?.tabId}
+            ref={iframeRefs.current[tab.tabId]}
           />
         );
       })}
@@ -545,21 +545,21 @@ export const AppsDesktop = ({
           <Box
             sx={{
               display: 'flex',
-              width: '100%',
               flexDirection: 'column',
               height: '100vh',
               overflow: 'auto',
+              width: '100%',
             }}
           >
             <Spacer height="30px" />
 
             <AppsHomeDesktop
-              myName={myName}
               availableQapps={availableQapps}
-              setMode={setMode}
               myApp={myApp}
+              myName={myName}
               myWebsite={myWebsite}
               myAddress={myAddress}
+              setMode={setMode}
             />
           </Box>
         </>

@@ -3866,8 +3866,8 @@ function App() {
                 }}
               >
                 <CustomButtonAccept
-                  color="black"
-                  bgColor={theme.palette.other.positive}
+                  customColor="black"
+                  customBgColor={theme.palette.other.positive}
                   sx={{
                     minWidth: '102px',
                     opacity:
@@ -3903,8 +3903,8 @@ function App() {
                 </CustomButtonAccept>
 
                 <CustomButtonAccept
-                  color="black"
-                  bgColor={theme.palette.other.danger}
+                  customColor="black"
+                  customBgColor={theme.palette.other.danger}
                   sx={{
                     minWidth: '102px',
                   }}
