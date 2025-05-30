@@ -236,7 +236,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         >
           <ButtonBase
             onClick={() => {
-              setSelectedTab(0);
+              setSelectedTab(null);
               executeEvent('newTabWindow', {});
             }}
           >
