@@ -72,7 +72,7 @@
     "register_name": "registra nome",
     "remove": "rimuovi",
     "remove_reaction": "rimuovi la reazione",
-    "return_apps_dashboard": "torna alla dashboard di app",
+    "return_apps_dashboard": "torna alla dashboard delle app",
     "save": "salva",
     "save_disk": "salva su disco",
     "search": "ricerca",
@@ -133,7 +133,7 @@
   "dev_mode": "modalità Dev",
   "domain": "dominio",
   "ui": {
-    "version": "versione dell'interfaccia utente"
+    "version": "versione UI"
   },
   "count": {
     "none": "nessuno",
