@@ -68,6 +68,7 @@
     "publish": "publish",
     "publish_app": "publish your app",
     "publish_comment": "publish comment",
+    "refresh": "refresh",
     "register_name": "register name",
     "remove": "remove",
     "remove_reaction": "remove reaction",

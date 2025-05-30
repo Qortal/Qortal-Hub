@@ -276,8 +276,8 @@ export const JoinGroup = () => {
             disabled={isInGroup}
           >
             <CustomButtonAccept
-              color="black"
-              bgColor={theme.palette.other.positive}
+              customColor="black"
+              customBgColor={theme.palette.other.positive}
               sx={{
                 minWidth: '102px',
                 height: '45px',
@@ -292,8 +292,8 @@ export const JoinGroup = () => {
           </ButtonBase>
 
           <CustomButtonAccept
-            color="black"
-            bgColor={theme.palette.other.danger}
+            customColor="black"
+            customBgColor={theme.palette.other.danger}
             sx={{
               minWidth: '102px',
               height: '45px',
