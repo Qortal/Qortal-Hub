@@ -575,7 +575,7 @@ export const AppsPrivate = ({ myName }) => {
                   </Label>
 
                   <Label>
-                    {t('group:amessage.generic.admin_only', {
+                    {t('group:message.generic.admin_only', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Label>
