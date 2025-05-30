@@ -67,7 +67,7 @@ export function saveToLocalStorage(key, subKey, newValue) {
 
 export const AppsNavBarDesktop = ({ disableBack }) => {
   const [tabs, setTabs] = useState([]);
-  const [selectedTab, setSelectedTab] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(0);
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
@@ -125,7 +125,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
     setTabs([...tabs]);
-    setSelectedTab(!selectedTab ? null : { ...selectedTab });
+    setSelectedTab(!selectedTab ? 0 : { ...selectedTab });
     setIsNewTabWindow(isNewTabWindow);
   };
 
@@ -190,9 +190,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         <Tabs
           orientation="vertical"
           ref={tabsRef}
-          aria-label={t('core:basic_tabs_example', {
-            postProcess: 'capitalizeFirstChar',
-          })}
+          aria-label={t('core:basic_tabs_example')}
           variant="scrollable" // Make tabs scrollable
           scrollButtons={true}
           sx={{
@@ -202,6 +200,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
             maxHeight: `275px`, // Ensure the tabs container fits within the available space
             overflow: 'hidden', // Prevents overflow on small screens
           }}
+          value={false}
         >
           {tabs?.map((tab) => (
             <Tab
@@ -237,7 +236,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         >
           <ButtonBase
             onClick={() => {
-              setSelectedTab(null);
+              setSelectedTab(0);
               executeEvent('newTabWindow', {});
             }}
           >
