@@ -407,7 +407,6 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 tabId: selectedTab?.tabId,
               });
             }
-
             handleClose();
           }}
         >
@@ -433,7 +432,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                 color: theme.palette.text.primary,
               },
             }}
-            primary="Refresh"
+            primary={t('core:action.refresh', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           />
         </MenuItem>
 
