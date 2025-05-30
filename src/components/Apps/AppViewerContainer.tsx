@@ -3,7 +3,7 @@ import { AppViewer } from './AppViewer';
 import Frame from 'react-frame-component';
 
 type AppViewerContainerProps = {
-  app: any; // Replace `any` with the correct type of `tab` if available
+  app: any;
   isSelected: boolean;
   hide: boolean;
   isDevMode: boolean;
