@@ -67,7 +67,7 @@ export function saveToLocalStorage(key, subKey, newValue) {
 
 export const AppsNavBarDesktop = ({ disableBack }) => {
   const [tabs, setTabs] = useState([]);
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] = useAtom(
     navigationControllerAtom
   );
@@ -125,7 +125,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
     setTabs([...tabs]);
-    setSelectedTab(!selectedTab ? 0 : { ...selectedTab });
+    setSelectedTab(!selectedTab ? null : { ...selectedTab });
     setIsNewTabWindow(isNewTabWindow);
   };
 
