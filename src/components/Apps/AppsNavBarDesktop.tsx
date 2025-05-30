@@ -204,7 +204,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         >
           {tabs?.map((tab) => (
             <Tab
-              key={tab.tabId}
+              key={tab?.tabId}
               label={
                 <TabComponent
                   isSelected={
