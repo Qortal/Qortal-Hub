@@ -134,20 +134,21 @@ export const CustomButton = styled(Box)(({ theme }) => ({
 }));
 
 interface CustomButtonProps {
-  bgColor?: string;
-  color?: string;
+  customBgColor?: string;
+  customColor?: string;
 }
 
-export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
-  ({ bgColor, color, theme }) => ({
+export const CustomButtonAccept = styled(Box)<CustomButtonProps>((props) => {
+  const { customBgColor, customColor, theme } = props;
+  return {
     alignItems: 'center',
-    backgroundColor: bgColor || theme.palette.background.default,
+    backgroundColor: customBgColor || theme.palette.background.default,
     borderColor: theme.palette.background.paper,
     borderRadius: 5,
     borderStyle: 'solid',
     borderWidth: '0.5px',
     boxSizing: 'border-box',
-    color: color || theme.palette.background.default,
+    color: customColor || theme.palette.background.default,
     cursor: 'pointer',
     display: 'inline-flex',
     filter: 'drop-shadow(1px 4px 10.5px rgba(0,0,0,0.3))',
@@ -163,16 +164,16 @@ export const CustomButtonAccept = styled(Box)<CustomButtonProps>(
     width: 'fit-content',
     '&:hover': {
       opacity: 1,
-      backgroundColor: bgColor || theme.palette.background.default,
-      color: color || '#fff',
+      backgroundColor: customBgColor || theme.palette.background.default,
+      color: customColor || '#fff',
       svg: {
         path: {
-          fill: color || '#fff',
+          fill: customColor || '#fff',
         },
       },
     },
-  })
-);
+  };
+});
 
 export const CustomInput = styled(TextField)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
