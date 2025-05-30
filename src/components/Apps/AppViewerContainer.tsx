@@ -40,11 +40,11 @@ const AppViewerContainer = forwardRef(
         }}
       >
         <AppViewer
-          skipAuth={skipAuth}
           app={app}
-          ref={ref}
           hide={!isSelected || hide}
           isDevMode={isDevMode}
+          ref={ref}
+          skipAuth={skipAuth}
         />
       </Frame>
     );
