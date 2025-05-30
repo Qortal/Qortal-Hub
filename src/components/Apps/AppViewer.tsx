@@ -7,7 +7,14 @@ import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
-export const AppViewer = forwardRef(
+type AppViewerProps = {
+  app: any;
+  hide: boolean;
+  isDevMode: boolean;
+  skipAuth?: boolean;
+};
+
+export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
   ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
