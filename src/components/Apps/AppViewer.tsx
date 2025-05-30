@@ -86,7 +86,7 @@ export const AppViewer = forwardRef(
 
     useEffect(() => {
       const iframe = iframeRef?.current;
-      if (!iframe) return;
+      if (!iframe || !iframe?.src) return;
 
       try {
         const targetOrigin = new URL(iframe.src).origin;
@@ -101,7 +101,7 @@ export const AppViewer = forwardRef(
 
     useEffect(() => {
       const iframe = iframeRef?.current;
-      if (!iframe) return;
+      if (!iframe || !iframe?.src) return;
 
       try {
         const targetOrigin = new URL(iframe.src).origin;

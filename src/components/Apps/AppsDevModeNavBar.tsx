@@ -32,13 +32,7 @@ export const AppsDevModeNavBar = () => {
     'tutorial',
   ]);
   const theme = useTheme();
-  const { t } = useTranslation([
-    'auth',
-    'core',
-    'group',
-    'question',
-    'tutorial',
-  ]);
+
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
 
