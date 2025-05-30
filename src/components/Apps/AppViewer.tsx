@@ -36,6 +36,11 @@ export const AppViewer = forwardRef(
       if (app?.isPreview) return;
       if (isDevMode) {
         setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
+        console.log(
+          'AAAAAAAAAAA---->' +
+            app.url +
+            `&theme=${themeMode}&lang=${currentLang}`
+        ); // TODO remove comment
         return;
       }
       let hasQueryParam = false;
@@ -52,8 +57,14 @@ export const AppViewer = forwardRef(
       if (app?.isPreview && app?.url) {
         resetHistory();
         setUrl(app.url + `&theme=${themeMode}&lang=${currentLang}`);
+        console.log(
+          'AAAAAAAAAAA---->' +
+            app.url +
+            `&theme=${themeMode}&lang=${currentLang}`
+        ); // TODO remove comment
       }
     }, [app?.url, app?.isPreview]);
+
     const defaultUrl = useMemo(() => {
       return url;
     }, [url, isDevMode]);
@@ -68,6 +79,12 @@ export const AppViewer = forwardRef(
               app?.url +
                 `?time=${Date.now()}&theme=${themeMode}&lang=${currentLang}`
             );
+
+            console.log(
+              'AAAAAAAAAAA---->' +
+                app?.url +
+                `?time=${Date.now()}&theme=${themeMode}&lang=${currentLang}`
+            ); // TODO remove comment
           }
           return;
         }
@@ -89,6 +106,7 @@ export const AppViewer = forwardRef(
       if (!iframe) return;
 
       try {
+        console.log('THEME_CHANGED---->' + iframe.src); // TODO remove comment
         const targetOrigin = new URL(iframe.src).origin;
         iframe.contentWindow?.postMessage(
           { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
@@ -104,6 +122,7 @@ export const AppViewer = forwardRef(
       if (!iframe) return;
 
       try {
+        console.log('LANGUAGE_CHANGED---->' + iframe.src); // TODO remove comment
         const targetOrigin = new URL(iframe.src).origin;
         iframe.contentWindow?.postMessage(
           {
