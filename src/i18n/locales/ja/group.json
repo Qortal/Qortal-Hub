@@ -57,7 +57,7 @@
   "invitation_expiry": "招待状の有効期限",
   "invitees_list": "招待リスト",
   "join_link": "グループリンクに参加します",
-  "join_requests": "リクエストに参加します",
+  "join_requests": "参加リクエスト",
   "last_message": "最後のメッセージ",
   "last_message_date": "last message: {{date }}",
   "latest_mails": "最新のQメール",

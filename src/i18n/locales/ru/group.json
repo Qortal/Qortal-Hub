@@ -57,7 +57,7 @@
   "invitation_expiry": "Приглашение время истечения",
   "invitees_list": "Список приглашений",
   "join_link": "Присоединяйтесь к групповой ссылке",
-  "join_requests": "присоединиться к запросам",
+  "join_requests": "запросы на присоединение",
   "last_message": "Последнее сообщение",
   "last_message_date": "last message: {{date }}",
   "latest_mails": "Последние Q-Mails",
