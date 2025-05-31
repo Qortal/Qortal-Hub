@@ -87,14 +87,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const getName = async (address) => {
     try {
       const response = await fetch(
-        `${getBaseApiReact()}/names/address/${address}`
+        `${getBaseApiReact()}/names/primary/${address}`
       );
       const nameData = await response.json();
-      if (nameData?.length > 0) {
+      if (nameData?.name) {
         setNames((prev) => {
           return {
             ...prev,
-            [address]: nameData[0].name,
+            [address]: nameData?.name,
           };
         });
       } else {

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
@@ -25,6 +25,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
 import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
+import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -58,7 +59,8 @@ const CustomMenuItem = styled(MenuItem)({
   // },
 });
 
-export const AppPublish = ({ names, categories }) => {
+export const AppPublish = ({ categories, myAddress, myName }) => {
+  const [names, setNames] = useState([]);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -148,6 +150,27 @@ export const AppPublish = ({ names, categories }) => {
     getQapp(name, appType);
   }, [name, appType]);
 
+  const getNames = useCallback(async () => {
+    if (!myAddress) return;
+    try {
+      setIsLoading('Loading names');
+      const res = await fetch(
+        `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
+      );
+      const data = await res.json();
+      setNames(data?.map((item) => item.name));
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading('');
+    }
+  }, [myAddress]);
+  useEffect(() => {
+    getNames();
+  }, [getNames]);
+
+  const mySortedNames = useSortedMyNames(names, myName);
+
   const publishApp = async () => {
     try {
       const data = {
@@ -194,13 +217,13 @@ export const AppPublish = ({ names, categories }) => {
           postProcess: 'capitalizeFirstChar',
         })
       );
-      const fileBase64 = await fileToBase64(file);
       await new Promise((res, rej) => {
         window
           .sendMessage('publishOnQDN', {
-            data: fileBase64,
+            data: file,
             service: appType,
             title,
+            name,
             description,
             category,
             tag1,
@@ -317,7 +340,7 @@ export const AppPublish = ({ names, categories }) => {
             </em>
             {/* This is the placeholder item */}
           </CustomMenuItem>
-          {names.map((name) => {
+          {mySortedNames.map((name) => {
             return <CustomMenuItem value={name}>{name}</CustomMenuItem>;
           })}
         </CustomSelect>

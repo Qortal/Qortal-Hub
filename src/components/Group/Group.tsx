@@ -265,11 +265,11 @@ export const getDataPublishesFunc = async (groupId, type) => {
 };
 
 export async function getNameInfo(address: string) {
-  const response = await fetch(`${getBaseApiReact()}/names/address/` + address);
+  const response = await fetch(`${getBaseApiReact()}/names/primary/` + address);
   const nameData = await response.json();
 
-  if (nameData?.length > 0) {
-    return nameData[0]?.name;
+  if (nameData?.name) {
+    return nameData?.name;
   } else {
     return '';
   }
@@ -523,7 +523,7 @@ export const Group = ({
           });
       });
     } catch (error) {
-      console.log('error', error);
+      console.error(error);
     }
   }, [setMutedGroups]);
 
@@ -2357,6 +2357,7 @@ export const Group = ({
             hasUnreadDirects={directChatHasUnread}
             show={desktopViewMode === 'apps'}
             myName={userInfo?.name}
+            myAddress={userInfo?.address}
             isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}
             hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}

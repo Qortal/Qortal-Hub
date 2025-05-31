@@ -1506,6 +1506,7 @@ export async function publishOnQDNCase(request, event) {
   try {
     const {
       data,
+      name = '',
       identifier,
       service,
       title,
@@ -1521,6 +1522,7 @@ export async function publishOnQDNCase(request, event) {
 
     const response = await publishOnQDN({
       data,
+      name,
       identifier,
       service,
       title,

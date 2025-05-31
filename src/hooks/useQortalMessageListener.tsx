@@ -256,6 +256,7 @@ export const listOfAllQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
+  'GET_PRIMARY_NAME',
 ];
 
 export const UIQortalRequests = [
@@ -319,6 +320,7 @@ export const UIQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
+  'GET_PRIMARY_NAME',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
@@ -615,13 +617,22 @@ export const useQortalMessageListener = (
         );
       } else if (event?.data?.action === 'SAVE_FILE') {
         try {
-          const res = await saveFile(event.data, null, true, {
+          await saveFile(event.data, null, true, {
             openSnackGlobal,
             setOpenSnackGlobal,
             infoSnackCustom,
             setInfoSnackCustom,
           });
-        } catch (error) {}
+          event.ports[0].postMessage({
+            result: true,
+            error: null,
+          });
+        } catch (error) {
+          event.ports[0].postMessage({
+            result: null,
+            error: error?.message || 'Failed to save file',
+          });
+        }
       } else if (
         event?.data?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' ||
         event?.data?.action === 'PUBLISH_QDN_RESOURCE' ||

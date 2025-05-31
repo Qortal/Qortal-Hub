@@ -32,17 +32,9 @@ export const AppsDevModeNavBar = () => {
     'tutorial',
   ]);
   const theme = useTheme();
+
   const [isNewTabWindow, setIsNewTabWindow] = useState(false);
   const tabsRef = useRef(null);
-  const [anchorEl, setAnchorEl] = useState(null);
-
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
 
   useEffect(() => {
     // Scroll to the last tab whenever the tabs array changes (e.g., when a new tab is added)

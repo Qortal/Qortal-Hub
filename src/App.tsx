@@ -766,6 +766,24 @@ function App() {
         balanceSetInterval();
       });
   };
+
+  const refetchUserInfo = () => {
+    window
+      .sendMessage('userInfo')
+      .then((response) => {
+        if (response && !response.error) {
+          setUserInfo(response);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to get user info:', error);
+      });
+  };
+
+  const getBalanceAndUserInfoFunc = () => {
+    getBalanceFunc();
+    refetchUserInfo();
+  };
   const getLtcBalanceFunc = () => {
     setLtcBalanceLoading(true);
     window
@@ -1503,7 +1521,7 @@ function App() {
                 </TextP>
 
                 <RefreshIcon
-                  onClick={getBalanceFunc}
+                  onClick={getBalanceAndUserInfoFunc}
                   sx={{
                     fontSize: '16px',
                     cursor: 'pointer',

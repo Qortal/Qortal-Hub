@@ -26,13 +26,22 @@ export async function getNameInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
   const validApi = await getBaseApi();
-  const response = await fetch(validApi + '/names/address/' + address);
+  const response = await fetch(validApi + '/names/primary/' + address);
   const nameData = await response.json();
-  if (nameData?.length > 0) {
-    return nameData[0].name;
+  if (nameData?.name) {
+    return nameData?.name;
   } else {
     return '';
   }
+}
+
+export async function getAllUserNames() {
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + '/names/address/' + address);
+  const nameData = await response.json();
+  return nameData.map((item) => item.name);
 }
 
 async function getKeyPair() {
@@ -134,12 +143,12 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
     if (encryptedData) {
       const registeredName = await getNameInfo();
       const data = await publishData({
-        registeredName,
+        data: encryptedData,
         file: encryptedData,
-        service: 'DOCUMENT_PRIVATE',
         identifier: `symmetric-qchat-group-${groupId}`,
-        uploadType: 'file',
-        isBase64: true,
+        registeredName,
+        service: 'DOCUMENT_PRIVATE',
+        uploadType: 'base64',
         withFee: true,
       });
       return {
@@ -202,12 +211,12 @@ export const encryptAndPublishSymmetricKeyGroupChatForAdmins = async ({
     if (encryptedData) {
       const registeredName = await getNameInfo();
       const data = await publishData({
-        registeredName,
+        data: encryptedData,
         file: encryptedData,
-        service: 'DOCUMENT_PRIVATE',
         identifier: `admins-symmetric-qchat-group-${groupId}`,
-        uploadType: 'file',
-        isBase64: true,
+        registeredName,
+        service: 'DOCUMENT_PRIVATE',
+        uploadType: 'base64',
         withFee: true,
       });
       return {
@@ -240,12 +249,12 @@ export const publishGroupEncryptedResource = async ({
           })
         );
       const data = await publishData({
-        registeredName,
+        data: encryptedData,
         file: encryptedData,
-        service: 'DOCUMENT',
         identifier,
-        uploadType: 'file',
-        isBase64: true,
+        registeredName,
+        service: 'DOCUMENT',
+        uploadType: 'base64',
         withFee: true,
       });
       return data;
@@ -262,21 +271,22 @@ export const publishGroupEncryptedResource = async ({
 };
 
 export const publishOnQDN = async ({
-  data,
-  identifier,
-  service,
-  title,
-  description,
   category,
+  data,
+  description,
+  identifier,
+  name,
+  service,
   tag1,
   tag2,
   tag3,
   tag4,
   tag5,
-  uploadType = 'file',
+  title,
+  uploadType = 'base64',
 }) => {
   if (data && service) {
-    const registeredName = await getNameInfo();
+    const registeredName = name || (await getNameInfo());
     if (!registeredName)
       throw new Error(
         i18n.t('core:message.generic.name_publish', {
@@ -286,11 +296,11 @@ export const publishOnQDN = async ({
 
     const res = await publishData({
       registeredName,
+      data,
       file: data,
       service,
       identifier,
       uploadType,
-      isBase64: true,
       withFee: true,
       title,
       description,

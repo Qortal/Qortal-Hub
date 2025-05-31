@@ -866,6 +866,7 @@ export const ChatGroup = ({
             data: 'RA==',
             identifier: onEditMessage?.images[0]?.identifier,
             service: onEditMessage?.images[0]?.service,
+            uploadType: 'base64',
           });
         }
 

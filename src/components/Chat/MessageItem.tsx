@@ -47,7 +47,11 @@ import level8Img from '../../assets/badges/level-8.png';
 import level9Img from '../../assets/badges/level-9.png';
 import level10Img from '../../assets/badges/level-10.png';
 import { Embed } from '../Embeds/Embed';
-import { buildImageEmbedLink, messageHasImage } from '../../utils/chat';
+import {
+  buildImageEmbedLink,
+  isHtmlString,
+  messageHasImage,
+} from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
 
 const getBadgeImg = (level) => {
@@ -135,6 +139,8 @@ export const MessageItem = memo(
 
     const htmlText = useMemo(() => {
       if (message?.messageText) {
+        const isHtml = isHtmlString(message?.messageText);
+        if (isHtml) return message?.messageText;
         return generateHTML(message?.messageText, [
           StarterKit,
           Underline,
@@ -147,6 +153,8 @@ export const MessageItem = memo(
 
     const htmlReply = useMemo(() => {
       if (reply?.messageText) {
+        const isHtml = isHtmlString(reply?.messageText);
+        if (isHtml) return reply?.messageText;
         return generateHTML(reply?.messageText, [
           StarterKit,
           Underline,
@@ -628,6 +636,18 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
     'tutorial',
   ]);
 
+  const replyMessageText = useMemo(() => {
+    const isHtml = isHtmlString(message?.messageText);
+    if (isHtml) return message?.messageText;
+    return generateHTML(message?.messageText, [
+      StarterKit,
+      Underline,
+      Highlight,
+      Mention,
+      TextStyle,
+    ]);
+  }, [message?.messageText]);
+
   return (
     <Box
       sx={{
@@ -673,15 +693,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
         )}
 
         {message?.messageText && (
-          <MessageDisplay
-            htmlContent={generateHTML(message?.messageText, [
-              StarterKit,
-              Underline,
-              Highlight,
-              Mention,
-              TextStyle,
-            ])}
-          />
+          <MessageDisplay htmlContent={replyMessageText} />
         )}
 
         {message?.decryptedData?.type === 'notification' ? (
