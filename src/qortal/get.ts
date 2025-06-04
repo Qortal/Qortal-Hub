@@ -52,7 +52,11 @@ import {
   getPublishesFromAdmins,
   validateSecretKey,
 } from '../components/Group/Group.tsx';
-import { QORT_DECIMALS } from '../constants/constants.ts';
+import {
+  MAX_SIZE_PUBLIC_NODE,
+  MAX_SIZE_PUBLISH,
+  QORT_DECIMALS,
+} from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
 import nacl from '../encryption/nacl-fast.ts';
@@ -1339,6 +1343,27 @@ export const publishQDNResource = async (
   const tags = data?.tags || [];
   const result = {};
 
+  if (file && file.size > MAX_SIZE_PUBLISH) {
+    throw new Error(
+      i18n.t('question:message.error.max_size_publish', {
+        size: 2,
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
+  if (file && file.size > MAX_SIZE_PUBLIC_NODE) {
+    const isPublicNode = await isRunningGateway();
+    if (isPublicNode) {
+      throw new Error(
+        i18n.t('question:message.error.max_size_publish_public', {
+          size: 500,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  }
+
   // Fill tags dynamically while maintaining backward compatibility
   for (let i = 0; i < 5; i++) {
     result[`tag${i + 1}`] = tags[i] || data[`tag${i + 1}`] || undefined;
@@ -1538,6 +1563,36 @@ export const publishMultipleQDNResources = async (
   if (resources.length === 0) {
     throw new Error(
       i18n.t('question:message.error.no_resources_publish', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  const isPublicNode = await isRunningGateway();
+  if (isPublicNode) {
+    const hasOversizedFilePublicNode = resources.some((resource) => {
+      const file = resource?.file;
+      return file instanceof File && file.size > MAX_SIZE_PUBLIC_NODE;
+    });
+
+    if (hasOversizedFilePublicNode) {
+      throw new Error(
+        i18n.t('question:message.error.max_size_publish_public', {
+          size: 500,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  }
+
+  const hasOversizedFile = resources.some((resource) => {
+    const file = resource?.file;
+    return file instanceof File && file.size > MAX_SIZE_PUBLISH;
+  });
+
+  if (hasOversizedFile) {
+    throw new Error(
+      i18n.t('question:message.error.max_size_publish', {
+        size: 2,
         postProcess: 'capitalizeFirstChar',
       })
     );

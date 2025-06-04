@@ -98,7 +98,9 @@
       "upload_encryption": "der Upload ist aufgrund fehlgeschlagener Verschlüsselung fehlgeschlagen",
       "upload": "upload fehlgeschlagen",
       "use_private_service": "für eine verschlüsselte Veröffentlichung verwenden Sie bitte einen Dienst, der mit _Private endet",
-      "user_qortal_name": "der Benutzer hat keinen Qortalnamen"
+      "user_qortal_name": "der Benutzer hat keinen Qortalnamen",
+      "max_size_publish": "maximale Dateigröße pro Datei: {{size}} GB.",
+      "max_size_publish_public": "maximale Dateigröße auf dem öffentlichen Knoten: {{size}} MB. Bitte verwenden Sie Ihren lokalen Knoten für größere Dateien."
     },
     "generic": {
       "calculate_fee": "*the {{ amount }} sats fee is derived from {{ rate }} sats per kb, for a transaction that is approximately 300 bytes in size.",

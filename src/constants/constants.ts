@@ -188,3 +188,6 @@ export {
 export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS = 102;
 
 export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY = '4001'; // Q for Qortal
+
+export const MAX_SIZE_PUBLIC_NODE = 500 * 1024 * 1024; // 500mb
+export const MAX_SIZE_PUBLISH = 2000 * 1024 * 1024; // 2GB
