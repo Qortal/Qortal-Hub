@@ -47,6 +47,7 @@ import level8Img from '../../assets/badges/level-8.png';
 import level9Img from '../../assets/badges/level-9.png';
 import level10Img from '../../assets/badges/level-10.png';
 import { Embed } from '../Embeds/Embed';
+import CommentsDisabledIcon from '@mui/icons-material/CommentsDisabled';
 import {
   buildImageEmbedLink,
   isHtmlString,
@@ -185,6 +186,13 @@ export const MessageItem = memo(
       'question',
       'tutorial',
     ]);
+
+    const hasNoMessage =
+      (!message.decryptedData?.data?.message ||
+        message.decryptedData?.data?.message === '<p></p>') &&
+      (message?.images || [])?.length === 0 &&
+      (!message?.messageText || message?.messageText === '<p></p>') &&
+      (!message?.text || message?.text === '<p></p>');
 
     return (
       <>
@@ -390,14 +398,32 @@ export const MessageItem = memo(
                 </>
               )}
 
-              {htmlText && <MessageDisplay htmlContent={htmlText} />}
+              {htmlText && !hasNoMessage && (
+                <MessageDisplay htmlContent={htmlText} />
+              )}
 
               {message?.decryptedData?.type === 'notification' ? (
                 <MessageDisplay
                   htmlContent={message.decryptedData?.data?.message}
                 />
-              ) : (
+              ) : hasNoMessage ? null : (
                 <MessageDisplay htmlContent={message.text} />
+              )}
+              {hasNoMessage && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <CommentsDisabledIcon color="primary" />
+                  <Typography color="primary">
+                    {t('core:message.generic.no_message', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                </Box>
               )}
               {message?.images && messageHasImage(message) && (
                 <Embed embedLink={buildImageEmbedLink(message.images[0])} />
@@ -637,6 +663,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
   ]);
 
   const replyMessageText = useMemo(() => {
+    if (!message?.messageText) return null;
     const isHtml = isHtmlString(message?.messageText);
     if (isHtml) return message?.messageText;
     return generateHTML(message?.messageText, [
@@ -692,7 +719,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
           </Typography>
         )}
 
-        {message?.messageText && (
+        {message?.replyMessageText && (
           <MessageDisplay htmlContent={replyMessageText} />
         )}
 

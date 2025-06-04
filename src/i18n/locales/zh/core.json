@@ -246,6 +246,7 @@
       "no_data_image": "没有图像数据",
       "no_description": "没有描述",
       "no_messages": "没有消息",
+      "no_message": "没有消息",
       "no_minting_details": "无法在网关上查看薄荷细节",
       "no_notifications": "没有新的通知",
       "no_payments": "无付款",
