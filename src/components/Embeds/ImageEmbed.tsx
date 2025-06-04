@@ -52,6 +52,8 @@ export const ImageCard = ({
         backgroundColor: theme.palette.background.default,
         height: height,
         transition: 'height 0.6s ease-in-out',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       <Box
@@ -188,8 +190,18 @@ export const ImageCard = ({
         )}
       </Box>
 
-      <Box>
-        <CardContent>
+      <Box
+        sx={{
+          maxHeight: '100%',
+          flexGrow: 1,
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent
+          sx={{
+            height: '100%',
+          }}
+        >
           <ImageViewer src={image} />
         </CardContent>
       </Box>
@@ -211,6 +223,7 @@ export function ImageViewer({ src = null, alt = '' }) {
           display: 'flex',
           justifyContent: 'center',
           maxWidth: '100%', // Prevent horizontal overflow
+          height: '100%',
         }}
         onClick={handleOpenFullscreen}
       >

@@ -47,6 +47,7 @@ import level8Img from '../../assets/badges/level-8.png';
 import level9Img from '../../assets/badges/level-9.png';
 import level10Img from '../../assets/badges/level-10.png';
 import { Embed } from '../Embeds/Embed';
+import CommentsDisabledIcon from '@mui/icons-material/CommentsDisabled';
 import {
   buildImageEmbedLink,
   isHtmlString,
@@ -660,6 +661,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
   ]);
 
   const replyMessageText = useMemo(() => {
+    if (!message?.messageText) return null;
     const isHtml = isHtmlString(message?.messageText);
     if (isHtml) return message?.messageText;
     return generateHTML(message?.messageText, [
@@ -715,7 +717,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
           </Typography>
         )}
 
-        {message?.messageText && (
+        {message?.replyMessageText && (
           <MessageDisplay htmlContent={replyMessageText} />
         )}
 
