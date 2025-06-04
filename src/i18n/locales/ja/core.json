@@ -170,7 +170,7 @@
   },
   "member": "メンバー",
   "member_other": "メンバー",
-  "message_us": "制限なしにチャットを開始するために4 Qortが必要な場合は、電報または不一致で私たちにメッセージを送ってください",
+  "message_us": "制限なしにチャットを開始するために4 QORTが必要な場合は、Nextcloud（登録不要）またはDiscordで私たちにメッセージを送ってください",
   "message": {
     "error": {
       "address_not_found": "あなたの住所は見つかりませんでした",

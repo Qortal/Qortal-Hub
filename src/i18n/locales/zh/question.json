@@ -98,7 +98,9 @@
       "upload_encryption": "upload failed due to failed encryption",
       "upload": "upload failed",
       "use_private_service": "for an encrypted publish please use a service that ends with _PRIVATE",
-      "user_qortal_name": "user has no Qortal name"
+      "user_qortal_name": "user has no Qortal name",
+      "max_size_publish": "每个文件的最大允许大小：{{size}} GB。",
+      "max_size_publish_public": "公共节点上允许的最大文件大小：{{size}} MB。请使用本地节点上传更大的文件。"
     },
     "generic": {
       "calculate_fee": "*the {{ amount }} sats fee is derived from {{ rate }} sats per kb, for a transaction that is approximately 300 bytes in size.",

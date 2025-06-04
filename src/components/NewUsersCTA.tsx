@@ -70,17 +70,14 @@ export const NewUsersCTA = ({ balance }) => {
             onClick={() => {
               if (window?.electronAPI?.openExternal) {
                 window.electronAPI.openExternal(
-                  'https://link.qortal.dev/telegram-invite'
+                  'https://link.qortal.dev/support'
                 );
               } else {
-                window.open(
-                  'https://link.qortal.dev/telegram-invite',
-                  '_blank'
-                );
+                window.open('https://link.qortal.dev/support', '_blank');
               }
             }}
           >
-            Telegram
+            Nextcloud
           </ButtonBase>
 
           <ButtonBase
