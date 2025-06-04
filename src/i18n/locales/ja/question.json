@@ -98,7 +98,9 @@
       "upload_encryption": "upload failed due to failed encryption",
       "upload": "upload failed",
       "use_private_service": "for an encrypted publish please use a service that ends with _PRIVATE",
-      "user_qortal_name": "user has no Qortal name"
+      "user_qortal_name": "user has no Qortal name",
+      "max_size_publish": "ファイルごとの最大許容サイズ：{{size}} GB。",
+      "max_size_publish_public": "パブリックノードでの最大許容サイズ：{{size}} MB。ローカルノードをご利用ください。"
     },
     "generic": {
       "calculate_fee": "*the {{ amount }} sats fee is derived from {{ rate }} sats per kb, for a transaction that is approximately 300 bytes in size.",

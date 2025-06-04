@@ -169,7 +169,7 @@
   },
   "member": "mitglied",
   "member_other": "mitglieder",
-  "message_us": "bitte senden Sie uns eine Nachricht in Telegramm oder Discord, wenn Sie 4 Qort benötigen, um ohne Einschränkungen zu chatten",
+  "message_us": "bitte senden Sie uns eine Nachricht in Nextcloud (keine Anmeldung erforderlich) oder Discord, wenn Sie 4 QORT benötigen, um ohne Einschränkungen zu chatten",
   "message": {
     "error": {
       "address_not_found": "ihre Adresse wurde nicht gefunden",

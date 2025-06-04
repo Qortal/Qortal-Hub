@@ -98,7 +98,9 @@
       "upload_encryption": "carga fallida debido al cifrado fallido",
       "upload": "carga falló",
       "use_private_service": "para una publicación encriptada, utilice un servicio que termine con _Private",
-      "user_qortal_name": "el usuario no tiene nombre Qortal"
+      "user_qortal_name": "el usuario no tiene nombre Qortal",
+      "max_size_publish": "tamaño máximo permitido por archivo: {{size}} GB.",
+      "max_size_publish_public": "tamaño máximo permitido en el nodo público: {{size}} MB. Por favor, utilice su nodo local para archivos más grandes."
     },
     "generic": {
       "calculate_fee": "*the {{ amount }} sats fee is derived from {{ rate }} sats per kb, for a transaction that is approximately 300 bytes in size.",

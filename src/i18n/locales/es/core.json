@@ -170,7 +170,7 @@
   },
   "member": "miembro",
   "member_other": "miembros",
-  "message_us": "envíenos un mensaje en Telegram o Discord si necesita 4 Qort para comenzar a chatear sin limitaciones",
+  "message_us": "envíenos un mensaje en Nextcloud (no requiere registro) o Discord si necesita 4 QORT para comenzar a chatear sin limitaciones",
   "message": {
     "error": {
       "address_not_found": "no se encontró su dirección",

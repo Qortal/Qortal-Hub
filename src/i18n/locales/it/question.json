@@ -98,7 +98,9 @@
       "upload_encryption": "caricamento fallito a causa della criptazione",
       "upload": "caricamento fallito",
       "use_private_service": "per pubblicare criptato, usa un servizio che termina con _PRIVATE",
-      "user_qortal_name": "l'utente non ha un nome Qortal"
+      "user_qortal_name": "l'utente non ha un nome Qortal",
+      "max_size_publish": "dimensione massima consentita per file: {{size}} GB.",
+      "max_size_publish_public": "dimensione massima consentita sul nodo pubblico: {{size}} MB. Si prega di utilizzare il proprio nodo locale per file più grandi."
     },
     "generic": {
       "calculate_fee": "*la commissione di {{ amount }} sats è calcolata su una tariffa di {{ rate }} sats per kb, per una transazione di circa 300 byte.",

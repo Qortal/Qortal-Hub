@@ -98,7 +98,9 @@
       "upload_encryption": "Загрузка не удалась из -за неудачного шифрования",
       "upload": "Загрузка не удалась",
       "use_private_service": "Для зашифрованной публикации, пожалуйста, используйте услугу, которая заканчивается _private",
-      "user_qortal_name": "У пользователя нет имени Qortal"
+      "user_qortal_name": "У пользователя нет имени Qortal",
+      "max_size_publish": "максимально допустимый размер файла: {{size}} ГБ.",
+      "max_size_publish_public": "максимально допустимый размер на публичном узле: {{size}} МБ. Пожалуйста, используйте локальный узел для более крупных файлов."
     },
     "generic": {
       "calculate_fee": "*the {{ amount }} sats fee is derived from {{ rate }} sats per kb, for a transaction that is approximately 300 bytes in size.",

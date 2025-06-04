@@ -171,7 +171,7 @@
   },
   "member": "membre",
   "member_other": "membres",
-  "message_us": "veuillez nous envoyer un message sur Telegram ou Discord si vous avez besoin de 4 Qort pour commencer à discuter sans aucune limitation",
+  "message_us": "veuillez nous envoyer un message sur Nextcloud (aucune inscription requise) ou Discord si vous avez besoin de 4 QORT pour commencer à discuter sans aucune limitation",
   "message": {
     "error": {
       "address_not_found": "votre adresse n'a pas été trouvée",
