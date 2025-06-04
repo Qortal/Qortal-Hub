@@ -77,7 +77,7 @@ export const encryptDataGroup = ({
   userPublicKey,
   customSymmetricKey,
 }: any) => {
-  let combinedPublicKeys = [...publicKeys, userPublicKey];
+  const combinedPublicKeys = [...publicKeys, userPublicKey];
   const decodedPrivateKey = Base58.decode(privateKey);
   const publicKeysDuplicateFree = [...new Set(combinedPublicKeys)];
   const Uint8ArrayData = base64ToUint8Array(data64);
@@ -114,7 +114,7 @@ export const encryptDataGroup = ({
     const keyNonce = new Uint8Array(24);
     crypto.getRandomValues(keyNonce);
     // Encrypt the symmetric key for each recipient.
-    let encryptedKeys = [];
+    const encryptedKeys = [];
     publicKeysDuplicateFree.forEach((recipientPublicKey) => {
       const publicKeyUnit8Array = Base58.decode(recipientPublicKey);
       const convertedPrivateKey = ed2curve.convertSecretKey(decodedPrivateKey);
@@ -153,7 +153,7 @@ export const encryptDataGroup = ({
       encryptedKeysSize += key.length;
     });
     combinedDataSize += encryptedKeysSize;
-    let combinedData = new Uint8Array(combinedDataSize);
+    const combinedData = new Uint8Array(combinedDataSize);
     combinedData.set(strUint8Array);
     combinedData.set(nonce, strUint8Array.length);
     combinedData.set(keyNonce, strUint8Array.length + nonce.length);
@@ -244,9 +244,6 @@ export const encryptSingle = async ({
     encryptedData = nacl.secretbox(Uint8ArrayData, nonce, messageKey);
     encryptedDataBase64 = uint8ArrayToBase64(encryptedData);
 
-    // Convert the nonce to base64
-    const nonceBase64 = uint8ArrayToBase64(nonce);
-
     // Concatenate the highest key, type number, nonce, and encrypted data (new format)
     const highestKeyStr = highestKey.toString().padStart(10, '0'); // Fixed length of 10 digits
 
@@ -281,7 +278,7 @@ export const encryptSingle = async ({
 };
 
 export const decodeBase64ForUIChatMessages = (messages) => {
-  let msgs = [];
+  const msgs = [];
   for (const msg of messages) {
     try {
       const decoded = atob(msg?.data);
@@ -326,7 +323,7 @@ export const decryptSingle = async ({
 
   const secretKeyEntry = secretKeyObject[highestKey];
 
-  let typeNumberStr, nonceBase64, encryptedDataBase64;
+  let nonceBase64, encryptedDataBase64;
 
   // Determine if typeNumber exists by checking if the next 3 characters after keyStr are digits
   const possibleTypeNumberStr = decodeForNumber.slice(10, 13);
@@ -370,7 +367,6 @@ export const decryptSingle = async ({
         return uint8ArrayToBase64(decryptedBytes);
       }
       // New format: Extract type number and nonce
-      typeNumberStr = possibleTypeNumberStr; // Extract type number
       nonceBase64 = decodeForNumber.slice(13, 45); // Extract nonce (next 32 characters after type number)
       encryptedDataBase64 = decodeForNumber.slice(45); // The remaining part is the encrypted data
     } else {
@@ -424,14 +420,9 @@ export const decryptGroupEncryptionWithSharingKey = async ({
   // Extract the shared keyNonce
   const keyNonceStartPosition = nonceEndPosition;
   const keyNonceEndPosition = keyNonceStartPosition + 24; // Nonce is 24 bytes
-  const keyNonce = allCombined.slice(
-    keyNonceStartPosition,
-    keyNonceEndPosition
-  );
   // Extract the sender's public key
   const senderPublicKeyStartPosition = keyNonceEndPosition;
   const senderPublicKeyEndPosition = senderPublicKeyStartPosition + 32; // Public keys are 32 bytes
-
   // Calculate count first
   const countStartPosition = allCombined.length - 4; // 4 bytes before the end, since count is stored in Uint32 (4 bytes)
   const countArray = allCombined.slice(
@@ -662,7 +653,6 @@ export function decryptDeprecatedSingle(uint8Array, publicKey, privateKey) {
   const str = 'qortalEncryptedData';
   const strEncoder = new TextEncoder();
   const strUint8Array = strEncoder.encode(str);
-  const strData = combinedData.slice(0, strUint8Array.length);
   const nonce = combinedData.slice(
     strUint8Array.length,
     strUint8Array.length + 24
