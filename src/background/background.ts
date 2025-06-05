@@ -440,7 +440,7 @@ const handleNotificationDirect = async (directs) => {
   let isFocused;
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  let isDisableNotifications =
+  const isDisableNotifications =
     (await getUserSettings({ key: 'disable-push-notifications' })) || false;
   const dataDirects = directs.filter((direct) => direct?.sender !== address);
   try {
@@ -1734,7 +1734,7 @@ export async function decryptSingleFunc({
   secretKeyObject,
   skipDecodeBase64,
 }) {
-  let holdMessages = [];
+  const holdMessages = [];
 
   for (const message of messages) {
     try {
@@ -1744,9 +1744,11 @@ export async function decryptSingleFunc({
         skipDecodeBase64,
       });
 
-      const decryptToUnit8Array = base64ToUint8Array(res);
-      const responseData = uint8ArrayToObject(decryptToUnit8Array);
-      holdMessages.push({ ...message, decryptedData: responseData });
+      if (res) {
+        const decryptToUnit8Array = base64ToUint8Array(res);
+        const responseData = uint8ArrayToObject(decryptToUnit8Array);
+        holdMessages.push({ ...message, decryptedData: responseData });
+      }
     } catch (error) {
       console.error(error);
     }
@@ -1758,7 +1760,7 @@ export async function decryptSingleForPublishes({
   secretKeyObject,
   skipDecodeBase64,
 }) {
-  let holdMessages = [];
+  const holdMessages = [];
 
   for (const message of messages) {
     try {
@@ -2888,6 +2890,7 @@ export async function getTimestampEnterChat() {
     return {};
   }
 }
+
 export async function getTimestampMention() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -2900,6 +2903,7 @@ export async function getTimestampMention() {
     return {};
   }
 }
+
 export async function getTimestampGroupAnnouncement() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -2996,6 +3000,7 @@ async function getGroupData() {
     return {};
   }
 }
+
 export async function getGroupDataSingle(groupId) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -3266,6 +3271,7 @@ function setupMessageListener() {
         break;
       case 'updateThreadActivity':
         updateThreadActivityCase(request, event);
+        break;
       case 'decryptGroupEncryption':
         decryptGroupEncryptionCase(request, event);
         break;
@@ -3411,7 +3417,7 @@ export const checkNewMessages = async () => {
       myName = userData.name;
     }
 
-    let newAnnouncements = [];
+    const newAnnouncements = [];
     const activeData = (await getStoredData('active-groups-directs')) || {
       groups: [],
       directs: [],
@@ -3463,7 +3469,8 @@ export const checkNewMessages = async () => {
         }
       })
     );
-    let isDisableNotifications =
+
+    const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
 
     if (
@@ -3611,8 +3618,8 @@ export const checkThreads = async (bringBack) => {
     if (userData?.name) {
       myName = userData.name;
     }
-    let newAnnouncements = [];
-    let dataToBringBack = [];
+    const newAnnouncements = [];
+    const dataToBringBack = [];
     const threadActivity = await getThreadActivity();
     if (!threadActivity) return null;
 
@@ -3627,7 +3634,6 @@ export const checkThreads = async (bringBack) => {
     for (const thread of selectedThreads) {
       try {
         const identifier = `thmsg-${thread?.threadId}`;
-        const name = thread?.qortalName;
         const endpoint = await getArbitraryEndpoint();
         const url = await createEndpoint(
           `${endpoint}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=1&includemetadata=false&offset=${0}&reverse=true&prefix=true`
@@ -3643,7 +3649,6 @@ export const checkThreads = async (bringBack) => {
         const latestMessage = responseData.filter(
           (pub) => pub?.name !== myName
         )[0];
-        // const latestMessage = responseData[0]
 
         if (!latestMessage) {
           continue;
@@ -3717,7 +3722,7 @@ export const checkThreads = async (bringBack) => {
           '_type=thread-post' +
           `_data=${JSON.stringify(newAnnouncements[0])}`
       );
-      let isDisableNotifications =
+      const isDisableNotifications =
         (await getUserSettings({ key: 'disable-push-notifications' })) || false;
       if (!isDisableNotifications) {
         // Check user settings to see if notifications are disabled

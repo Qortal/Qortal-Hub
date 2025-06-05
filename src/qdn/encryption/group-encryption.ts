@@ -303,106 +303,114 @@ export const decryptSingle = async ({
   // First, decode the base64-encoded input (if skipDecodeBase64 is not set)
   const decodedData = skipDecodeBase64 ? data64 : atob(data64);
 
-  // Then, decode it again for the specific format (if double encoding is used)
-  const decodeForNumber = atob(decodedData);
+  if (secretKeyObject) {
+    // Then, decode it again for the specific format (if double encoding is used)
+    const decodeForNumber = atob(decodedData);
 
-  // Extract the key (assuming it's always the first 10 characters)
-  const keyStr = decodeForNumber.slice(0, 10);
+    // Extract the key (assuming it's always the first 10 characters)
+    const keyStr = decodeForNumber.slice(0, 10);
 
-  // Convert the key string back to a number
-  const highestKey = parseInt(keyStr, 10);
+    // Convert the key string back to a number
+    const highestKey = parseInt(keyStr, 10);
 
-  // Check if we have a valid secret key for the extracted highestKey
-  if (!secretKeyObject[highestKey]) {
-    throw new Error(
-      i18n.t('auth:message.error.find_secret_key', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
-  }
-
-  const secretKeyEntry = secretKeyObject[highestKey];
-
-  let nonceBase64, encryptedDataBase64;
-
-  // Determine if typeNumber exists by checking if the next 3 characters after keyStr are digits
-  const possibleTypeNumberStr = decodeForNumber.slice(10, 13);
-  const hasTypeNumber = /^\d{3}$/.test(possibleTypeNumberStr); // Check if next 3 characters are digits
-
-  if (secretKeyEntry.nonce) {
-    // Old format: nonce is present in the secretKeyObject, so no type number exists
-    nonceBase64 = secretKeyEntry.nonce;
-    encryptedDataBase64 = decodeForNumber.slice(10); // The remaining part is the encrypted data
-  } else {
-    if (hasTypeNumber) {
-      // const typeNumberStr = new TextDecoder().decode(typeNumberBytes);
-      if (decodeForNumber.slice(10, 13) !== '001') {
-        const decodedBinary = base64ToUint8Array(decodedData);
-        const highestKeyBytes = decodedBinary.slice(0, 10); // if ASCII digits only
-        const highestKeyStr = new TextDecoder().decode(highestKeyBytes);
-
-        const nonce = decodedBinary.slice(13, 13 + 24);
-        const encryptedData = decodedBinary.slice(13 + 24);
-        const highestKey = parseInt(highestKeyStr, 10);
-
-        const messageKey = base64ToUint8Array(
-          secretKeyObject[+highestKey].messageKey
-        );
-        const decryptedBytes = nacl.secretbox.open(
-          encryptedData,
-          nonce,
-          messageKey
-        );
-
-        // Check if decryption was successful
-        if (!decryptedBytes) {
-          throw new Error(
-            i18n.t('question:message.error.decryption_failed', {
-              postProcess: 'capitalizeFirstChar',
-            })
-          );
-        }
-
-        // Convert the decrypted Uint8Array back to a Base64 string
-        return uint8ArrayToBase64(decryptedBytes);
-      }
-      // New format: Extract type number and nonce
-      nonceBase64 = decodeForNumber.slice(13, 45); // Extract nonce (next 32 characters after type number)
-      encryptedDataBase64 = decodeForNumber.slice(45); // The remaining part is the encrypted data
-    } else {
-      // Old format without type number (nonce is embedded in the message, first 32 characters after keyStr)
-      nonceBase64 = decodeForNumber.slice(10, 42); // First 32 characters for the nonce
-      encryptedDataBase64 = decodeForNumber.slice(42); // The remaining part is the encrypted data
+    // Check if we have a valid secret key for the extracted highestKey
+    if (!secretKeyObject[highestKey]) {
+      throw new Error(
+        i18n.t('auth:message.error.find_secret_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
     }
-  }
 
-  // Convert Base64 strings to Uint8Array
-  const Uint8ArrayData = base64ToUint8Array(encryptedDataBase64);
-  const nonce = base64ToUint8Array(nonceBase64);
-  const messageKey = base64ToUint8Array(secretKeyEntry.messageKey);
+    const secretKeyEntry = secretKeyObject[highestKey];
 
-  if (!(Uint8ArrayData instanceof Uint8Array)) {
-    throw new Error(
-      i18n.t('auth:message.error.invalid_uint8', {
-        postProcess: 'capitalizeFirstChar',
-      })
+    let nonceBase64, encryptedDataBase64;
+
+    // Determine if typeNumber exists by checking if the next 3 characters after keyStr are digits
+    const possibleTypeNumberStr = decodeForNumber.slice(10, 13);
+    const hasTypeNumber = /^\d{3}$/.test(possibleTypeNumberStr); // Check if next 3 characters are digits
+
+    if (secretKeyEntry.nonce) {
+      // Old format: nonce is present in the secretKeyObject, so no type number exists
+      nonceBase64 = secretKeyEntry.nonce;
+      encryptedDataBase64 = decodeForNumber.slice(10); // The remaining part is the encrypted data
+    } else {
+      if (hasTypeNumber) {
+        // const typeNumberStr = new TextDecoder().decode(typeNumberBytes);
+        if (decodeForNumber.slice(10, 13) !== '001') {
+          const decodedBinary = base64ToUint8Array(decodedData);
+          const highestKeyBytes = decodedBinary.slice(0, 10); // if ASCII digits only
+          const highestKeyStr = new TextDecoder().decode(highestKeyBytes);
+
+          const nonce = decodedBinary.slice(13, 13 + 24);
+          const encryptedData = decodedBinary.slice(13 + 24);
+          const highestKey = parseInt(highestKeyStr, 10);
+
+          const messageKey = base64ToUint8Array(
+            secretKeyObject[+highestKey].messageKey
+          );
+          const decryptedBytes = nacl.secretbox.open(
+            encryptedData,
+            nonce,
+            messageKey
+          );
+
+          // Check if decryption was successful
+          if (!decryptedBytes) {
+            throw new Error(
+              i18n.t('question:message.error.decryption_failed', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
+          }
+
+          // Convert the decrypted Uint8Array back to a Base64 string
+          return uint8ArrayToBase64(decryptedBytes);
+        }
+        // New format: Extract type number and nonce
+        nonceBase64 = decodeForNumber.slice(13, 45); // Extract nonce (next 32 characters after type number)
+        encryptedDataBase64 = decodeForNumber.slice(45); // The remaining part is the encrypted data
+      } else {
+        // Old format without type number (nonce is embedded in the message, first 32 characters after keyStr)
+        nonceBase64 = decodeForNumber.slice(10, 42); // First 32 characters for the nonce
+        encryptedDataBase64 = decodeForNumber.slice(42); // The remaining part is the encrypted data
+      }
+    }
+
+    // Convert Base64 strings to Uint8Array
+    const Uint8ArrayData = base64ToUint8Array(encryptedDataBase64);
+    const nonce = base64ToUint8Array(nonceBase64);
+    const messageKey = base64ToUint8Array(secretKeyEntry.messageKey);
+
+    if (!(Uint8ArrayData instanceof Uint8Array)) {
+      throw new Error(
+        i18n.t('auth:message.error.invalid_uint8', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+
+    // Decrypt the data using the nonce and messageKey
+    const decryptedData = nacl.secretbox.open(
+      Uint8ArrayData,
+      nonce,
+      messageKey
     );
+
+    // Check if decryption was successful
+    if (!decryptedData) {
+      throw new Error(
+        i18n.t('question:message.error.decryption_failed', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+
+    // Convert the decrypted Uint8Array back to a Base64 string
+    return uint8ArrayToBase64(decryptedData);
   }
 
-  // Decrypt the data using the nonce and messageKey
-  const decryptedData = nacl.secretbox.open(Uint8ArrayData, nonce, messageKey);
-
-  // Check if decryption was successful
-  if (!decryptedData) {
-    throw new Error(
-      i18n.t('question:message.error.decryption_failed', {
-        postProcess: 'capitalizeFirstChar',
-      })
-    );
-  }
-
-  // Convert the decrypted Uint8Array back to a Base64 string
-  return uint8ArrayToBase64(decryptedData);
+  return;
 };
 
 export const decryptGroupEncryptionWithSharingKey = async ({
