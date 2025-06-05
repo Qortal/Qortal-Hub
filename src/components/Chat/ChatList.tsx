@@ -420,14 +420,14 @@ export const ChatList = ({
           <Button
             onClick={() => scrollToBottom()}
             style={{
-              backgroundColor: theme.palette.other.positive,
+              backgroundColor: theme.palette.background.paper,
+              outline: `1px solid ${theme.palette.primary.light}`,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
               color: theme.palette.text.primary,
               cursor: 'pointer',
               fontSize: '16px',
-              outline: 'none',
               padding: '10px 20px',
               position: 'absolute',
               right: 20,
