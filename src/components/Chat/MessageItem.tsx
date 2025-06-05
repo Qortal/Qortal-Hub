@@ -719,9 +719,7 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
           </Typography>
         )}
 
-        {message?.replyMessageText && (
-          <MessageDisplay htmlContent={replyMessageText} />
-        )}
+        {replyMessageText && <MessageDisplay htmlContent={replyMessageText} />}
 
         {message?.decryptedData?.type === 'notification' ? (
           <MessageDisplay htmlContent={message.decryptedData?.data?.message} />
