@@ -246,6 +246,7 @@
       "no_data_image": "画像のデータはありません",
       "no_description": "説明なし",
       "no_messages": "メッセージはありません",
+      "no_message": "メッセージなし",
       "no_minting_details": "ゲートウェイでミントの詳細を表示できません",
       "no_notifications": "新しい通知はありません",
       "no_payments": "支払いなし",

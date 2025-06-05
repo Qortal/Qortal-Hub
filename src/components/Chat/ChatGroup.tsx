@@ -299,17 +299,15 @@ export const ChatGroup = ({
                 const formatted = combineUIAndExtensionMsgs
                   .filter((rawItem) => !rawItem?.chatReference)
                   .map((item) => {
-                    const message = (
-                      <p>
-                        {t('group:message.generic.group_key_created', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </p>
-                    );
                     const additionalFields =
                       item?.data === 'NDAwMQ==' // TODO put magic string somewhere in a file
                         ? {
-                            text: message,
+                            text: `<p>${t(
+                              'group:message.generic.group_key_created',
+                              {
+                                postProcess: 'capitalizeFirstChar',
+                              }
+                            )}</p>`,
                           }
                         : {};
                     return {
@@ -450,17 +448,15 @@ export const ChatGroup = ({
                 const formatted = combineUIAndExtensionMsgs
                   .filter((rawItem) => !rawItem?.chatReference)
                   .map((item) => {
-                    const message = (
-                      <p>
-                        {t('group:message.generic.group_key_created', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </p>
-                    );
                     const additionalFields =
                       item?.data === 'NDAwMQ=='
                         ? {
-                            text: message,
+                            text: `<p>${t(
+                              'group:message.generic.group_key_created',
+                              {
+                                postProcess: 'capitalizeFirstChar',
+                              }
+                            )}</p>`,
                           }
                         : {};
                     const divide =
@@ -818,13 +814,28 @@ export const ChatGroup = ({
         );
       pauseAllQueues();
       if (editorRef.current) {
-        const htmlContent = editorRef.current.getHTML();
+        let htmlContent = editorRef.current.getHTML();
+        const deleteImage =
+          onEditMessage && isDeleteImage && messageHasImage(onEditMessage);
 
-        if (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') return;
-
+        const hasImage =
+          chatImagesToSave?.length > 0 || onEditMessage?.images?.length > 0;
+        if (
+          (!htmlContent?.trim() || htmlContent?.trim() === '<p></p>') &&
+          !hasImage &&
+          !deleteImage
+        )
+          return;
+        if (htmlContent?.trim() === '<p></p>') {
+          htmlContent = null;
+        }
         setIsSending(true);
         const message =
-          isPrivate === false ? editorRef.current.getJSON() : htmlContent;
+          isPrivate === false
+            ? !htmlContent
+              ? '<p></p>'
+              : editorRef.current.getJSON()
+            : htmlContent;
         const secretKeyObject = await getSecretKey(false, true);
 
         let repliedTo = replyMessage?.signature;
@@ -849,8 +860,6 @@ export const ChatGroup = ({
         }
 
         const imagesToPublish: ImageToPublish[] = [];
-        const deleteImage =
-          onEditMessage && isDeleteImage && messageHasImage(onEditMessage);
 
         if (deleteImage) {
           const fee = await getFee('ARBITRARY');
@@ -931,7 +940,6 @@ export const ChatGroup = ({
           [isPrivate ? 'message' : 'messageText']: message,
           version: 3,
         };
-
         const message64: any = await objectToBase64(objectMessage);
 
         const encryptSingle =
@@ -1042,11 +1050,15 @@ export const ChatGroup = ({
   const onEdit = useCallback((message) => {
     setOnEditMessage(message);
     setReplyMessage(null);
-    editorRef.current
-      .chain()
-      .focus()
-      .setContent(message?.messageText || message?.text)
-      .run();
+    try {
+      editorRef.current
+        .chain()
+        .focus()
+        .setContent(message?.messageText || message?.text || '<p></p>')
+        .run();
+    } catch (error) {
+      console.error(error);
+    }
   }, []);
 
   const handleReaction = useCallback(
