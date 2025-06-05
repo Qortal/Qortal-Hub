@@ -100,22 +100,22 @@ const UserBadge = memo(({ userInfo }) => {
 
 export const MessageItem = memo(
   ({
-    message,
-    onSeen,
+    handleReaction,
     isLast,
-    isTemp,
-    myAddress,
-    onReply,
+    isPrivate,
     isShowingAsReply,
+    isTemp,
+    isUpdating,
+    lastSignature,
+    message,
+    myAddress,
+    onEdit,
+    onReply,
+    onSeen,
+    reactions,
     reply,
     replyIndex,
     scrollToItem,
-    handleReaction,
-    reactions,
-    isUpdating,
-    lastSignature,
-    onEdit,
-    isPrivate,
   }) => {
     const { getIndividualUserInfo } = useContext(QORTAL_APP_CONTEXT);
     const [anchorEl, setAnchorEl] = useState(null);
