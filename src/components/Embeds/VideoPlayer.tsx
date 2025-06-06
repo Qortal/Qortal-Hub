@@ -57,27 +57,27 @@ const ControlsContainer = styled(Box)`
 `;
 
 interface VideoPlayerProps {
-  src?: string;
-  poster?: string;
-  name?: string;
-  identifier?: string;
-  service?: string;
   autoplay?: boolean;
-  from?: string | null;
   customStyle?: any;
+  from?: string | null;
+  identifier?: string;
+  name?: string;
+  poster?: string;
+  service?: string;
+  src?: string | null;
   user?: string;
 }
 
 // TODO translate and theme (optional)
 export const VideoPlayer: FC<VideoPlayerProps> = ({
-  poster,
-  name,
-  identifier,
-  service,
   autoplay = true,
-  from = null,
   customStyle = {},
+  from = null,
+  identifier,
+  name,
   node,
+  poster,
+  service,
 }) => {
   const keyIdentifier = useMemo(() => {
     if (name && identifier && service) {
@@ -549,22 +549,22 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
       )}
       {((!src && !isLoading) || !startPlay) && (
         <Box
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
+          alignItems="center"
+          bgcolor="rgba(0, 0, 0, 0.6)"
           bottom={0}
           display="flex"
           justifyContent="center"
-          alignItems="center"
-          zIndex={500}
-          bgcolor="rgba(0, 0, 0, 0.6)"
+          left={0}
           onClick={() => {
             togglePlay();
           }}
+          position="absolute"
+          right={0}
           sx={{
             cursor: 'pointer',
           }}
+          top={0}
+          zIndex={500}
         >
           <PlayArrow
             sx={{
@@ -587,7 +587,9 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
         <VideoElement
           id={identifier}
           ref={videoRef}
-          src={!startPlay ? '' : resourceStatus?.status === 'READY' ? src : ''}
+          src={
+            !startPlay ? null : resourceStatus?.status === 'READY' ? src : null
+          }
           poster={!startPlay ? poster : ''}
           onTimeUpdate={updateProgress}
           autoPlay={autoplay}
