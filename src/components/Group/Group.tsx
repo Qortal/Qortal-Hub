@@ -598,9 +598,8 @@ export const Group = ({
   }, [myAddress]);
 
   const getGroupOwner = async (groupId) => {
+    if (groupId == '0') return; // general group has id=0
     try {
-      if (groupId == 0) return;
-
       const url = `${getBaseApiReact()}/groups/${groupId}`;
       const response = await fetch(url);
       const data = await response.json();
@@ -877,8 +876,7 @@ export const Group = ({
   };
 
   const getOwnerNameForGroup = async (owner: string, groupId: string) => {
-    if (groupId == '0') return;
-
+    if (groupId == '0') return; // general group has id=0
     try {
       if (!owner) return;
       if (groupsOwnerNamesRef.current[groupId]) return;
