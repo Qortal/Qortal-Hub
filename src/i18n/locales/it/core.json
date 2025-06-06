@@ -153,7 +153,7 @@
   "home": "casa",
   "identifier": "identificativo",
   "image_embed": "immagine incorporata",
-  "last_height": "ultima altezza",
+  "last_height": "ultimo blocco",
   "level": "livello",
   "library": "libreria",
   "list": {
@@ -353,7 +353,7 @@
   "sort": {
     "by_member": "per membro"
   },
-  "supply": "fornitura",
+  "supply": "offerta monetaria",
   "tags": "tag",
   "theme": {
     "dark": "scuro",
