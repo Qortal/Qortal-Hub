@@ -223,16 +223,6 @@ export const MessageItemComponent = ({
         </div>
       )}
 
-  return (
-    <>
-      {message?.divide && (
-        <div className="unread-divider" id="unread-divider-id">
-          {t('core:message.generic.unread_messages', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </div>
-      )}
-
       <MessageWragger
         lastMessage={lastSignature === message?.signature}
         isLast={isLast}
