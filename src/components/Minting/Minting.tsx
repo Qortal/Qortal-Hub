@@ -4,17 +4,20 @@ import {
   Box,
   Button,
   Card,
+  Container,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
   IconButton,
+  Paper,
   Snackbar,
   Toolbar,
   Typography,
   useTheme,
 } from '@mui/material';
+import Grid from '@mui/material/Grid';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
 import { getBaseApiReact } from '../../App';
@@ -37,14 +40,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const [mintingAccounts, setMintingAccounts] = useState([]);
   const [accountInfo, setAccountInfo] = useState(null);
-  const [rewardSharePublicKey, setRewardSharePublicKey] = useState('');
   const [mintingKey, setMintingKey] = useState('');
-  const [rewardsharekey, setRewardsharekey] = useState('');
   const [rewardShares, setRewardShares] = useState([]);
   const [nodeInfos, setNodeInfos] = useState({});
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { show: showKey, message } = useModal();
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
   const { t } = useTranslation([
@@ -161,13 +161,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     return address;
   };
 
-  const handleAccountInfos = (address, field) => {
-    if (!address) return undefined;
-    if (accountInfos[address]) return accountInfos[address]?.[field];
-    if (accountInfos[address] === null) return undefined;
-    getAccountInfo(address, true);
-    return undefined;
-  };
+  // const handleAccountInfos = (address, field) => {
+  //   if (!address) return undefined;
+  //   if (accountInfos[address]) return accountInfos[address]?.[field];
+  //   if (accountInfos[address] === null) return undefined;
+  //   getAccountInfo(address, true);
+  //   return undefined;
+  // };
 
   const calculateBlocksRemainingToLevel1 = (address) => {
     if (!address) return undefined;
@@ -308,6 +308,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const createRewardShare = useCallback(async (publicKey, recipient) => {
     const fee = await getFee('REWARD_SHARE');
+
     await show({
       message: t('core:message.question.perform_transaction', {
         action: 'REWARD_SHARE',
@@ -315,6 +316,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       }),
       publishFee: fee.fee + ' QORT',
     });
+
     return await new Promise((res, rej) => {
       window
         .sendMessage('createRewardShare', {
@@ -382,7 +384,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const waitUntilRewardShareIsConfirmed = async (timeoutMs = 600000) => {
     const pollingInterval = 30000;
     const startTime = Date.now();
-
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
     while (Date.now() - startTime < timeoutMs) {
@@ -424,9 +425,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         await showNext({
           message: '',
         });
+
         const privateRewardShare = await getRewardSharePrivateKey(
           accountInfo?.publicKey
         );
+
         setShowWaitDialog(false);
         addMintingAccount(privateRewardShare);
       }
@@ -446,61 +449,61 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     }
   };
 
-  const getPublicKeyFromAddress = async (address) => {
-    const url = `${getBaseApiReact()}/addresses/publickey/${address}`;
-    const response = await fetch(url);
-    const data = await response.text();
-    return data;
-  };
+  // const getPublicKeyFromAddress = async (address) => {
+  //   const url = `${getBaseApiReact()}/addresses/publickey/${address}`;
+  //   const response = await fetch(url);
+  //   const data = await response.text();
+  //   return data;
+  // };
 
-  const checkIfMinterGroup = async (address) => {
-    const url = `${getBaseApiReact()}/groups/member/${address}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    return !!data?.find((grp) => grp?.groupId?.toString() === '694');
-  };
+  // const checkIfMinterGroup = async (address) => {
+  //   const url = `${getBaseApiReact()}/groups/member/${address}`;
+  //   const response = await fetch(url);
+  //   const data = await response.json();
+  //   return !!data?.find((grp) => grp?.groupId?.toString() === '694');
+  // };
 
-  const removeRewardShare = useCallback(async (rewardShare) => {
-    return await new Promise((res, rej) => {
-      window
-        .sendMessage('removeRewardShare', {
-          rewardShareKeyPairPublicKey: rewardShare.rewardSharePublicKey,
-          recipient: rewardShare.recipient,
-          percentageShare: -1,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            setTxList((prev) => [
-              {
-                ...rewardShare,
-                ...response,
-                type: 'remove-rewardShare',
-                label: t('group:message.success.rewardshare_remove', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                labelDone: t('group:message.success.rewardshare_remove_label', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                done: false,
-              },
-              ...prev,
-            ]);
-            return;
-          }
-          rej({ message: response.error });
-        })
-        .catch((error) => {
-          rej({
-            message:
-              error.message ||
-              t('core:message.error.generic', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          });
-        });
-    });
-  }, []);
+  // const removeRewardShare = useCallback(async (rewardShare) => {
+  //   return await new Promise((res, rej) => {
+  //     window
+  //       .sendMessage('removeRewardShare', {
+  //         rewardShareKeyPairPublicKey: rewardShare.rewardSharePublicKey,
+  //         recipient: rewardShare.recipient,
+  //         percentageShare: -1,
+  //       })
+  //       .then((response) => {
+  //         if (!response?.error) {
+  //           res(response);
+  //           setTxList((prev) => [
+  //             {
+  //               ...rewardShare,
+  //               ...response,
+  //               type: 'remove-rewardShare',
+  //               label: t('group:message.success.rewardshare_remove', {
+  //                 postProcess: 'capitalizeFirstChar',
+  //               }),
+  //               labelDone: t('group:message.success.rewardshare_remove_label', {
+  //                 postProcess: 'capitalizeFirstChar',
+  //               }),
+  //               done: false,
+  //             },
+  //             ...prev,
+  //           ]);
+  //           return;
+  //         }
+  //         rej({ message: response.error });
+  //       })
+  //       .catch((error) => {
+  //         rej({
+  //           message:
+  //             error.message ||
+  //             t('core:message.error.generic', {
+  //               postProcess: 'capitalizeFirstChar',
+  //             }),
+  //         });
+  //       });
+  //   });
+  // }, []);
 
   useEffect(() => {
     getNodeInfos();
@@ -558,6 +561,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     let countBlocksString = countBlocks.toString();
     return '' + countBlocksString;
   };
+
+  const StatCard = ({ label, value }: { label: string; value: string }) => (
+    <Grid size={{ xs: 12, sm: 6 }}>
+      <Box textAlign="center">
+        <Typography variant="subtitle1" fontWeight="bold">
+          {label}
+        </Typography>
+        <Typography>{value}</Typography>
+      </Box>
+    </Grid>
+  );
 
   return (
     <Dialog
@@ -624,6 +638,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             />
           </Box>
         )}
+
         <Card
           sx={{
             backgroundColor: theme.palette.background.default,
@@ -859,6 +874,60 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           </Card>
         )}
 
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Typography variant="h4" fontWeight="bold" gutterBottom>
+            General Minting Details
+          </Typography>
+
+          <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+            <Typography variant="h6" gutterBottom>
+              Blockchain Statistics
+            </Typography>
+
+            <Grid container spacing={2}>
+              <StatCard label="Avg. Qortal Blocktime" value="72.84 Seconds" />
+              <StatCard label="Avg. Blocks Per Day" value="1186.16 Blocks" />
+              <StatCard
+                label="Avg. Created QORT Per Day"
+                value="3558.48 QORT"
+              />
+            </Grid>
+          </Paper>
+
+          <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+            <Typography variant="h6" gutterBottom>
+              Minting Account Details
+            </Typography>
+
+            <Grid container spacing={2}>
+              <StatCard label="Current Status" value="(Minting)" />
+              <StatCard label="Current Level" value="Level 4" />
+              <StatCard label="Blocks To Next Level" value="139467 Blocks" />
+            </Grid>
+
+            <Box mt={2} textAlign="center">
+              <Typography>
+                With a 24/7 Minting you will reach level 5 in{' '}
+                <strong>117.58 days</strong>!
+              </Typography>
+            </Box>
+          </Paper>
+
+          <Paper elevation={3} sx={{ p: 3, borderRadius: '10px' }}>
+            <Typography variant="h6" gutterBottom>
+              Minting Rewards Info
+            </Typography>
+
+            <Grid container spacing={2}>
+              <StatCard label="Current Tier" value="Tier 2 (Level 3 + 4)" />
+              <StatCard label="Total Minters in The Tier" value="77 Minters" />
+              <StatCard label="Tier Share Per Block" value="13%" />
+              <StatCard label="Est. Reward Per Block" value="0.00506494 QORT" />
+              <StatCard label="Est. Reward Per Day" value="6.00782338 QORT" />
+            </Grid>
+          </Paper>
+        </Container>
+
         {showWaitDialog && (
           <Dialog
             open={showWaitDialog}
@@ -871,10 +940,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 textAlign: 'center',
                 color: theme.palette.text.primary,
                 fontWeight: 'bold',
-                opacity: 1, // TODO translate
+                opacity: 1,
               }}
             >
-              {isShowNext ? 'Confirmed' : 'Please Wait'}
+              {isShowNext
+                ? t('core:message.generic.confirmed', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:message.generic.wait', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
             </DialogTitle>
 
             <DialogContent>
@@ -885,6 +960,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   })}
                 </Typography>
               )}
+
               {isShowNext && (
                 <Typography>
                   {t('group:message.success.rewardshare_confirmed', {

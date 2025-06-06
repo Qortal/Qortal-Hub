@@ -3978,13 +3978,11 @@ function App() {
       )}
 
       {isOpenMinting && (
-        // <Minting
-        //   setIsOpenMinting={setIsOpenMinting}
-        //   myAddress={address}
-        //   show={show}
-        // />
-
-        <MintingDetailsPage />
+        <Minting
+          setIsOpenMinting={setIsOpenMinting}
+          myAddress={address}
+          show={show}
+        />
       )}
 
       {!isAuthenticated && (
