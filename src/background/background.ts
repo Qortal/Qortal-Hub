@@ -1281,7 +1281,6 @@ export async function addUserSettings({ keyValue }) {
     getData<any>(`${address}-userSettings`)
       .then((storedData) => {
         storedData = storedData || {}; // Initialize if no data found
-
         storedData[key] = value; // Update the key-value pair within stored data
 
         // Save updated structure back to localStorage
@@ -3393,7 +3392,7 @@ const checkGroupList = async () => {
       .filter(
         (item) =>
           item?.name !== 'extension-proxy' &&
-          item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH'
+          item?.address !== 'QSMMGSgysEuqDCuLw3S4cHrQkBrh3vP3VH' // TODO put address in a specific file
       )
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
@@ -3447,6 +3446,7 @@ export const checkNewMessages = async () => {
           const latestMessage = responseData.filter(
             (pub) => pub?.name !== myName
           )[0];
+
           if (!latestMessage) {
             return; // continue to the next group
           }
