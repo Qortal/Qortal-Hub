@@ -34,16 +34,6 @@ import { fileToBase64 } from '../../utils/fileReading/index.js';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
 
-function textMatcher(doc, from) {
-  const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
-  const match = textBeforeCursor.match(/@[\w]*$/); // Match '@' followed by valid characters
-  if (!match) return null;
-
-  const start = from - match[0].length;
-  const query = match[0];
-  return { start, query };
-}
-
 const MenuBar = memo(
   ({
     setEditorRef,
