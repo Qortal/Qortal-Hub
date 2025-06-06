@@ -412,7 +412,7 @@ export const BlockedUsersModal = () => {
               sx={{
                 color: theme.palette.text.primary,
               }}
-            />{' '}
+            />
             <Typography>
               {t('auth:message.generic.choose_block', {
                 postProcess: 'capitalizeFirstChar',

@@ -2571,7 +2571,7 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The Application <br></br>{' '}
+              The Application <br></br>
               <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
               <TextSpan>is requestion a connection</TextSpan>
             </TextP>
@@ -2580,8 +2580,8 @@ function App() {
 
             <Box
               sx={{
-                display: 'flex',
                 alignItems: 'center',
+                display: 'flex',
                 gap: '14px',
               }}
             >
@@ -2644,7 +2644,7 @@ function App() {
                 lineHeight: '15px',
               }}
             >
-              The Application <br></br>{' '}
+              The Application <br></br>
               <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
               <TextSpan>requests authentication</TextSpan>
             </TextP>

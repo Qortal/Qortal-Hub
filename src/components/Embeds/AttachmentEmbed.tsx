@@ -243,7 +243,6 @@ export const AttachmentCard = ({
               width: '100%',
             }}
           >
-            {' '}
             <Typography
               sx={{
                 fontSize: '14px',
@@ -251,7 +250,7 @@ export const AttachmentCard = ({
               }}
             >
               {errorMsg}
-            </Typography>{' '}
+            </Typography>
           </Box>
         )}
       </Box>

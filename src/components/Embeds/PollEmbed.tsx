@@ -325,10 +325,8 @@ export const PollCard = ({
                 fontStyle: 'italic',
               }}
             >
-              {' '}
-              {`${poll?.votes?.totalVotes} ${
-                poll?.votes?.totalVotes === 1 ? ' vote' : ' votes'
-              }`}
+              {poll?.votes?.totalVotes}{' '}
+              {poll?.votes?.totalVotes === 1 ? ' vote' : ' votes'}
             </Typography>
           </Box>
 

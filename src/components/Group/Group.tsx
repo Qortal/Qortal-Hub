@@ -2124,7 +2124,6 @@ export const Group = ({
                       width: '100%',
                     }}
                   >
-                    {' '}
                     <Typography>
                       {t('group:message.generic.encryption_key', {
                         postProcess: 'capitalizeFirstChar',

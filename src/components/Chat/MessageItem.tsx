@@ -468,7 +468,7 @@ export const MessageItem = memo(
                             }}
                           >
                             {reaction}
-                          </div>{' '}
+                          </div>
                           {numberOfReactions > 1 && (
                             <Typography
                               sx={{

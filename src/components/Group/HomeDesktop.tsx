@@ -209,7 +209,7 @@ export const HomeDesktop = ({
                   sx={{
                     ccolor: theme.palette.text.primary,
                   }}
-                />{' '}
+                />
                 <Typography
                   sx={{
                     fontSize: '1rem',
@@ -218,7 +218,7 @@ export const HomeDesktop = ({
                   {t('tutorial:initial.explore', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                </Typography>{' '}
+                </Typography>
               </Box>
             </Divider>
 
