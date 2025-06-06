@@ -280,30 +280,17 @@ export const ChatList = ({
                       reactions =
                         chatReferences[message.signature]?.reactions || null;
 
-                      if (
-                        chatReferences[message.signature]?.edit?.message &&
-                        message?.text
-                      ) {
+                      if (chatReferences[message.signature]?.edit) {
                         message.text =
                           chatReferences[message.signature]?.edit?.message;
-                        message.isEdit = true;
-                        message.editTimestamp =
-                          chatReferences[message.signature]?.edit?.timestamp;
-                      }
-                      if (
-                        chatReferences[message.signature]?.edit?.messageText &&
-                        message?.messageText
-                      ) {
                         message.messageText =
                           chatReferences[message.signature]?.edit?.messageText;
+                        message.images =
+                          chatReferences[message.signature]?.edit?.images;
+
                         message.isEdit = true;
                         message.editTimestamp =
                           chatReferences[message.signature]?.edit?.timestamp;
-                      }
-                      if (chatReferences[message.signature]?.edit?.images) {
-                        message.images =
-                          chatReferences[message.signature]?.edit?.images;
-                        message.isEdit = true;
                       }
                     }
 
@@ -433,14 +420,14 @@ export const ChatList = ({
           <Button
             onClick={() => scrollToBottom()}
             style={{
-              backgroundColor: theme.palette.other.positive,
+              backgroundColor: theme.palette.background.paper,
+              outline: `1px solid ${theme.palette.primary.light}`,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
               color: theme.palette.text.primary,
               cursor: 'pointer',
               fontSize: '16px',
-              outline: 'none',
               padding: '10px 20px',
               position: 'absolute',
               right: 20,
