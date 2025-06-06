@@ -209,9 +209,8 @@ export const ImageCard = ({
   );
 };
 
-export function ImageViewer({ src, alt = '' }) {
+export function ImageViewer({ src = null, alt = '' }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
-
   const handleOpenFullscreen = () => setIsFullscreen(true);
   const handleCloseFullscreen = () => setIsFullscreen(false);
   const theme = useTheme();

@@ -552,7 +552,7 @@ export const getUserAccount = async ({
 
 export const encryptData = async (data, sender) => {
   let data64 = data.data64 || data.base64;
-  let publicKeys = data.publicKeys || [];
+  const publicKeys = data.publicKeys || [];
   if (data?.file || data?.blob) {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
@@ -587,8 +587,8 @@ export const encryptData = async (data, sender) => {
 
 export const encryptQortalGroupData = async (data, sender) => {
   let data64 = data?.data64 || data?.base64;
-  let groupId = data?.groupId;
-  let isAdmins = data?.isAdmins;
+  const groupId = data?.groupId;
+  const isAdmins = data?.isAdmins;
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -613,7 +613,7 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000
+      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -659,7 +659,7 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic number
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -717,9 +717,9 @@ export const encryptQortalGroupData = async (data, sender) => {
 };
 
 export const decryptQortalGroupData = async (data, sender) => {
-  let data64 = data?.data64 || data?.base64;
-  let groupId = data?.groupId;
-  let isAdmins = data?.isAdmins;
+  const data64 = data?.data64 || data?.base64;
+  const groupId = data?.groupId;
+  const isAdmins = data?.isAdmins;
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -742,7 +742,7 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000
+      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -785,7 +785,7 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic nummber
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -843,7 +843,7 @@ export const decryptQortalGroupData = async (data, sender) => {
 
 export const encryptDataWithSharingKey = async (data, sender) => {
   let data64 = data?.data64 || data?.base64;
-  let publicKeys = data.publicKeys || [];
+  const publicKeys = data.publicKeys || [];
   if (data?.file || data?.blob) {
     data64 = await fileToBase64(data?.file || data?.blob);
   }
@@ -899,6 +899,7 @@ export const decryptDataWithSharingKey = async (data, sender) => {
     data64EncryptedData: encryptedData,
     key,
   });
+
   const base64ToObject = JSON.parse(atob(decryptedData));
 
   if (!base64ToObject.data)

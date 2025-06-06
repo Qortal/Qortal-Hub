@@ -276,15 +276,13 @@ export async function getNameInfo(address: string) {
 }
 
 export const getGroupAdmins = async (groupNumber: number) => {
-  // const validApi = await findUsableApi();
-
   const response = await fetch(
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  let members: any = [];
-  let membersAddresses = [];
-  let both = [];
+  const members: any = [];
+  const membersAddresses = [];
+  const both = [];
 
   const getMemNames = groupData?.members?.map(async (member) => {
     if (member?.member) {
@@ -600,10 +598,11 @@ export const Group = ({
   }, [myAddress]);
 
   const getGroupOwner = async (groupId) => {
+    if (groupId == '0') return; // general group has id=0
     try {
       const url = `${getBaseApiReact()}/groups/${groupId}`;
       const response = await fetch(url);
-      let data = await response.json();
+      const data = await response.json();
 
       const name = await getNameInfo(data?.owner);
       if (name) {
@@ -742,7 +741,7 @@ export const Group = ({
           data = await res.text();
         }
 
-        const decryptedKey: any = await decryptResource(data);
+        const decryptedKey: any = await decryptResource(data, null);
         const dataint8Array = base64ToUint8Array(decryptedKey.data);
         const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
 
@@ -877,6 +876,7 @@ export const Group = ({
   };
 
   const getOwnerNameForGroup = async (owner: string, groupId: string) => {
+    if (groupId == '0') return; // general group has id=0
     try {
       if (!owner) return;
       if (groupsOwnerNamesRef.current[groupId]) return;
@@ -899,7 +899,7 @@ export const Group = ({
       const url = `${getBaseApiReact()}/groups/member/${address}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error('Cannot get group properties');
-      let data = await response.json();
+      const data = await response.json();
       const transformToObject = data.reduce((result, item) => {
         result[item.groupId] = item;
         return result;

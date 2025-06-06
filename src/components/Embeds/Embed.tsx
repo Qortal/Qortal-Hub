@@ -59,7 +59,7 @@ export const Embed = ({ embedLink }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [external, setExternal] = useState(null);
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState(null);
   const [parsedData, setParsedData] = useState(null);
   const setBlobs = useSetAtom(blobControllerAtom);
   const [selectedGroupId] = useAtom(selectedGroupIdAtom);
