@@ -51,8 +51,8 @@ export const ShowMessage = ({ message, openNewPostWithQuote, myName }: any) => {
           }}
         >
           <WrapperUserAction
-            disabled={myName === message?.name}
             address={undefined}
+            disabled={myName === message?.name}
             name={message?.name}
           >
             <Avatar

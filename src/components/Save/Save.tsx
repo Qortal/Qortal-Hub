@@ -307,8 +307,10 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 {t('core:message.generic.settings', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-              </Typography>{' '}
+              </Typography>
+
               <Spacer height="40px" />
+
               <Button
                 size="small"
                 onClick={() => {
@@ -353,10 +355,10 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             {!myName ? (
               <Box
                 sx={{
-                  width: '100%',
+                  alignItems: 'center',
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center',
+                  width: '100%',
                 }}
               >
                 <Typography
@@ -458,7 +460,6 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                               fontSize: '14px',
                             }}
                           >
-                            {' '}
                             {t('core:message.question.reset_pinned', {
                               postProcess: 'capitalizeFirstChar',
                             })}

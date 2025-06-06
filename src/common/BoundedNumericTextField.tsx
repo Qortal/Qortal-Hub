@@ -140,7 +140,7 @@ export const BoundedNumericTextField = ({
                 sx={{
                   color: theme.palette.text.primary,
                 }}
-              />{' '}
+              />
             </IconButton>
             <IconButton
               size="small"
@@ -150,7 +150,7 @@ export const BoundedNumericTextField = ({
                 sx={{
                   color: theme.palette.text.primary,
                 }}
-              />{' '}
+              />
             </IconButton>
           </InputAdornment>
         ) : (

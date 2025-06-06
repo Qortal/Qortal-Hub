@@ -24,7 +24,7 @@ export const ReusableModal: FC<MyModalProps> = ({
       onClose={onClose}
       aria-labelledby="modal-title"
       aria-describedby="modal-description"
-      componentsProps={{
+      slotProps={{
         backdrop: {
           style: {
             backdropFilter: 'blur(3px)',

@@ -35,7 +35,7 @@ export const useModal = () => {
   const onCancel = useCallback(() => {
     const { reject } = promiseConfig.current || {};
     hide();
-    reject?.('Declined');
+    reject?.({ isCanceled: true });
   }, [hide]);
 
   return useMemo(

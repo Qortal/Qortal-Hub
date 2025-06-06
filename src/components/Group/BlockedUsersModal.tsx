@@ -65,7 +65,6 @@ export const BlockedUsersModal = () => {
   }, [isOpenBlockedModal]);
 
   const getNames = async () => {
-    // const validApi = await findUsableApi();
     const addresses = Object.keys(blockedUsers?.addresses);
     const addressNames = {};
 
@@ -142,6 +141,10 @@ export const BlockedUsersModal = () => {
         executeEvent('updateChatMessagesWithBlocks', true);
       }
     } catch (error) {
+      if (error?.isCanceled) {
+        // user pressed Escape or canceled — do nothing
+        return;
+      }
       setOpenSnackGlobal(true);
       setInfoSnackCustom({
         type: 'error',
@@ -173,20 +176,22 @@ export const BlockedUsersModal = () => {
 
   return (
     <Dialog
-      open={isOpenBlockedModal}
-      aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      aria-labelledby="alert-dialog-title"
+      onClose={onCancel}
+      open={isOpenBlockedModal}
     >
       <DialogTitle
         sx={{
-          textAlign: 'center',
           color: theme.palette.text.primary,
           fontWeight: 'bold',
           opacity: 1,
+          textAlign: 'center',
         }}
       >
-        {t('auth:blocked_users', { postProcess: 'capitalizeFirstChar' })}
+        {t('auth:blocked_users', { postProcess: 'capitalizeAll' })}
       </DialogTitle>
+
       <DialogContent
         sx={{
           padding: '20px',
@@ -293,7 +298,7 @@ export const BlockedUsersModal = () => {
             <Spacer height="20px" />
 
             <DialogContentText id="alert-dialog-description">
-              {t('core:message.generic.blocked_names', {
+              {t('auth:message.generic.blocked_names', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </DialogContentText>
@@ -375,6 +380,7 @@ export const BlockedUsersModal = () => {
 
       <Dialog
         open={isShow}
+        onClose={onCancel}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
       >
@@ -388,7 +394,7 @@ export const BlockedUsersModal = () => {
           }}
         >
           {t('auth:message.generic.decide_block', {
-            postProcess: 'capitalizeFirstChar',
+            postProcess: 'capitalizeAll',
           })}
         </DialogTitle>
 
@@ -412,7 +418,7 @@ export const BlockedUsersModal = () => {
               sx={{
                 color: theme.palette.text.primary,
               }}
-            />{' '}
+            />
             <Typography>
               {t('auth:message.generic.choose_block', {
                 postProcess: 'capitalizeFirstChar',

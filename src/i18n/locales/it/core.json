@@ -84,7 +84,7 @@
     "select_category": "seleziona categoria",
     "select_name_app": "seleziona nome/app",
     "send": "invia",
-    "send_qort": "i QORT",
+    "send_qort": "invia QORT",
     "set_avatar": "imposta Avatar",
     "show": "mostra",
     "show_poll": "mostra il sondaggio",
@@ -153,7 +153,7 @@
   "home": "casa",
   "identifier": "identificativo",
   "image_embed": "immagine incorporata",
-  "last_height": "ultima altezza",
+  "last_height": "ultimo blocco",
   "level": "livello",
   "library": "libreria",
   "list": {
@@ -249,8 +249,7 @@
       "no_data_image": "nessun dato per l'immagine",
       "no_description": "nessuna descrizione",
       "no_messages": "nessun messaggio",
-      "no_message": "nessun messaggio",
-      "no_minting_details": "impossibile visualizzare i dettagli di minire sul gateway",
+      "no_minting_details": "impossibile visualizzare i dettagli di minting sul gateway",
       "no_notifications": "nessuna nuova notifica",
       "no_payments": "nessun pagamento",
       "no_pinned_changes": "per ora non ci sono modifiche alle app bloccate",
@@ -354,7 +353,7 @@
   "sort": {
     "by_member": "per membro"
   },
-  "supply": "fornitura",
+  "supply": "offerta monetaria",
   "tags": "tag",
   "theme": {
     "dark": "scuro",

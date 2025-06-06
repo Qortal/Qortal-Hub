@@ -157,7 +157,7 @@ export const GeneralNotifications = ({ address }) => {
                     sx={{
                       color: theme.palette.text.primary,
                     }}
-                  />{' '}
+                  />
                   {formatDate(latestTx?.timestamp)}
                 </Box>
 

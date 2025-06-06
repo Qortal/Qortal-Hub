@@ -177,7 +177,6 @@ export const ImageCard = ({
               justifyContent: 'center',
             }}
           >
-            {' '}
             <Typography
               sx={{
                 fontSize: '14px',
