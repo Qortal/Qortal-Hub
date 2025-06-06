@@ -218,6 +218,7 @@
       "benefits_qort": "Преимущества наличия qort",
       "building": "здание",
       "building_app": "строительство приложения",
+      "confirmed": "подтвержденный",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -279,7 +280,8 @@
       "space_for_admins": "Извините, это пространство только для администраторов.",
       "unread_messages": "Непрочитанные сообщения ниже",
       "unsaved_changes": "У вас есть неспасенные изменения в ваши приложения. Сохраните их в QDN.",
-      "updating": "обновление"
+      "updating": "обновление",
+      "wait": "пожалуйста, подождите"
     },
     "message": "сообщение",
     "promotion_text": "Текст продвижения",

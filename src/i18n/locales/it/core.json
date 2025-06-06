@@ -220,6 +220,7 @@
       "benefits_qort": "vantaggi di avere QORT",
       "building": "creazione",
       "building_app": "creazione app",
+      "confirmed": "confermato",
       "created_by": "creato da {{ owner }}",
       "buy_order_request": "l'applicazione <br/><italic>{{hostname}}</italic> <br/><span>sta effettuando {{count}} ordine d'acquisto</span>.",
       "buy_order_request_other": "l'applicazione <br/><italic>{{hostname}}</italic> <br/><span>sta effettuando {{count}} ordini d'acquisto</span>.",
@@ -280,7 +281,8 @@
       "space_for_admins": "mi dispiace, questo spazio è solo per gli amministratori.",
       "unread_messages": "messaggi non letti qua sotto",
       "unsaved_changes": "hai cambiato modifiche alle app bloccate. Salvali su QDN.",
-      "updating": "aggiornamento"
+      "updating": "aggiornamento",
+      "wait": "attendere per favore"
     },
     "message": "messaggio",
     "promotion_text": "testo di promozione",

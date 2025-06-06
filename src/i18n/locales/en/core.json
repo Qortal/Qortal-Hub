@@ -220,6 +220,7 @@
       "benefits_qort": "benefits of having QORT",
       "building": "building",
       "building_app": "building app",
+      "confirmed": "confirmed",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -281,7 +282,8 @@
       "space_for_admins": "sorry, this space is only for Admins.",
       "unread_messages": "unread messages below",
       "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN.",
-      "updating": "updating"
+      "updating": "updating",
+      "wait": "please wait"
     },
     "message": "message",
     "promotion_text": "promotion text",

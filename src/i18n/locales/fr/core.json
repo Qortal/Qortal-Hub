@@ -218,6 +218,7 @@
       "benefits_qort": "avantages d'avoir QORT",
       "building": "bâtiment",
       "building_app": "application de construction",
+      "confirmed": "confirmé",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -279,7 +280,8 @@
       "space_for_admins": "désolé, cet espace est uniquement pour les administrateurs.",
       "unread_messages": "messages non lus ci-dessous",
       "unsaved_changes": "vous avez des modifications non enregistrées à vos applications épinglées. Enregistrez-les sur QDN.",
-      "updating": "mise à jour"
+      "updating": "mise à jour",
+      "wait": "attendez s'il vous plaît"
     },
     "message": "message",
     "promotion_text": "texte de promotion",

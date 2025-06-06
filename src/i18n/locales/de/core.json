@@ -216,6 +216,7 @@
       "benefits_qort": "vorteile von Qort",
       "building": "gebäude",
       "building_app": "app -App",
+      "confirmed": "bestätigen",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -226,7 +227,7 @@
       "editing_message": "bearbeitungsnachricht",
       "encrypted": "verschlüsselt",
       "encrypted_not": "nicht verschlüsselt",
-      "fee_qort": "fee: {{ message }} QORT",
+      "fee_qort": "Gebühr: {{ message }} QORT",
       "fetching_data": "app -Daten abrufen",
       "foreign_fee": "foreign fee: {{ message }}",
       "get_qort_trade_portal": "holen Sie sich QORT mit dem CrossChain -Handelsportal von Qortal",
@@ -277,7 +278,8 @@
       "space_for_admins": "entschuldigung, dieser Raum gilt nur für Administratoren.",
       "unread_messages": "ungelesene Nachrichten unten",
       "unsaved_changes": "sie haben nicht gespeicherte Änderungen an Ihren angestellten Apps. Speichern Sie sie bei QDN.",
-      "updating": "aktualisierung"
+      "updating": "aktualisierung",
+      "wait": "bitte warten"
     },
     "message": "nachricht",
     "promotion_text": "promotionstext",

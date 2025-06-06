@@ -217,7 +217,8 @@
       "benefits_qort": "QORT的好处",
       "building": "建筑",
       "building_app": "建筑应用",
-      "created_by": "created by {{ owner }}",
+      "confirmed": "已确认",
+      "created_by": "创建人 {{ owner }}",
       "buy_order_request": "应用程序<br/><italic>{{hostname}}</italic><br/><span>正在请求{{count}}购买订单</span>",
       "buy_order_request_other": "应用程序<br/><italic>{{hostname}}</italic><br/><span>正在请求{{count}}购买订单</span>",
       "devmode_local_node": "请使用您的本地节点进行开发模式！注销并使用本地节点。",
@@ -278,7 +279,8 @@
       "space_for_admins": "抱歉，这个空间仅适用于管理员。",
       "unread_messages": "下面未读消息",
       "unsaved_changes": "您对固定应用程序有未保存的更改。将它们保存到QDN。",
-      "updating": "更新"
+      "updating": "更新",
+      "wait": "请稍等"
     },
     "message": "信息",
     "promotion_text": "促销文本",
