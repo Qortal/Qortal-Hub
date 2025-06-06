@@ -53,6 +53,7 @@ import {
   messageHasImage,
 } from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
+import { ReactionsMap } from './ChatList';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -105,14 +106,14 @@ type MessageItemProps = {
   isShowingAsReply?: boolean;
   isTemp: boolean;
   isUpdating: boolean;
-  lastSignature: any;
-  message: any;
-  myAddress: any;
+  lastSignature: string;
+  message: string;
+  myAddress: string;
   onEdit: (messageId: string) => void;
   onReply: (messageId: string) => void;
   onSeen: () => void;
-  reactions: any; // could be null, or type it more strictly
-  reply: any; // same here
+  reactions: ReactionsMap | null;
+  reply: string | null;
   replyIndex: number;
   scrollToItem: (index: number) => void;
 };

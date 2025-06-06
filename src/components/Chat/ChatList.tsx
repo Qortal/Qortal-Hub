@@ -7,6 +7,15 @@ import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
 
+type ReactionItem = {
+  sender: string;
+  senderName?: string;
+};
+
+export type ReactionsMap = {
+  [reactionType: string]: ReactionItem[];
+};
+
 export const ChatList = ({
   initialMessages,
   myAddress,
@@ -236,7 +245,7 @@ export const ChatList = ({
                 let message = messages[index] || null; // Safeguard against undefined
                 let replyIndex = -1;
                 let reply = null;
-                let reactions = null;
+                let reactions: ReactionsMap | null = null;
                 let isUpdating = false;
 
                 try {
