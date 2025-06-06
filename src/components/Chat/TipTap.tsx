@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { EditorProvider, useCurrentEditor } from '@tiptap/react';
+import { Editor, EditorProvider, useCurrentEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import ListItem from '@tiptap/extension-list-item';
@@ -33,16 +33,6 @@ import { useAtom } from 'jotai';
 import { fileToBase64 } from '../../utils/fileReading/index.js';
 import { useTranslation } from 'react-i18next';
 import i18n from 'i18next';
-
-function textMatcher(doc, from) {
-  const textBeforeCursor = doc.textBetween(0, from, ' ', ' ');
-  const match = textBeforeCursor.match(/@[\w]*$/); // Match '@' followed by valid characters
-  if (!match) return null;
-
-  const start = from - match[0].length;
-  const query = match[0];
-  return { start, query };
-}
 
 const MenuBar = memo(
   ({
@@ -361,8 +351,8 @@ const MenuBar = memo(
 );
 
 const extensions = [
+  TextStyle,
   Color.configure({ types: [TextStyle.name, ListItem.name] }),
-  TextStyle.configure({ types: [ListItem.name] }),
   StarterKit.configure({
     bulletList: {
       keepMarks: true,
@@ -383,11 +373,26 @@ const extensions = [
 
 const content = ``;
 
-export default ({
+type TiptapProps = {
+  setEditorRef: (editorInstance: Editor | null) => void;
+  onEnter: () => void | Promise<void>;
+  disableEnter?: boolean;
+  isChat?: boolean;
+  maxHeightOffset?: number;
+  overrideMobile?: boolean;
+  customEditorHeight?: number | null;
+  setIsFocusedParent: React.Dispatch<React.SetStateAction<boolean>>;
+  isFocusedParent: boolean;
+  membersWithNames: unknown[];
+  enableMentions?: boolean;
+  insertImage: (image: any) => void;
+};
+
+const Tiptap = ({
   setEditorRef,
   onEnter,
-  disableEnter,
-  isChat,
+  disableEnter = false,
+  isChat = false,
   maxHeightOffset,
   setIsFocusedParent,
   isFocusedParent,
@@ -396,7 +401,7 @@ export default ({
   membersWithNames,
   enableMentions,
   insertImage,
-}) => {
+}: TiptapProps) => {
   const theme = useTheme();
   const [isDisabledEditorEnter, setIsDisabledEditorEnter] = useAtom(
     isDisabledEditorEnterAtom
@@ -623,3 +628,5 @@ export default ({
     </Box>
   );
 };
+
+export default Tiptap;

@@ -25,7 +25,6 @@ import {
   AppsSearchRight,
 } from '../Apps/Apps-styles';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import { CellMeasurerCache } from 'react-virtualized';
 import { getBaseApiReact } from '../../App';
 import { MessageDisplay } from './MessageDisplay';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -36,17 +35,13 @@ import { generateHTML } from '@tiptap/react';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
 import { isHtmlString } from '../../utils/chat';
+import TextStyle from '@tiptap/extension-text-style';
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
     wordwrap: false, // Disable word wrapping
   })?.toLowerCase();
 };
-
-const cache = new CellMeasurerCache({
-  fixedWidth: true,
-  defaultHeight: 50,
-});
 
 export const ChatOptions = ({
   messages: untransformedMessages,
@@ -86,6 +81,7 @@ export const ChatOptions = ({
                 Underline,
                 Highlight,
                 Mention,
+                TextStyle,
               ]);
           return {
             ...item,

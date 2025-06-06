@@ -152,7 +152,7 @@ function setupMessageListenerQortalRequest() {
             appInfo,
             skipAuth,
           });
-          event.source.postMessage(
+          event.source!.postMessage(
             {
               requestId: request.requestId,
               action: request.action,
@@ -162,7 +162,7 @@ function setupMessageListenerQortalRequest() {
             event.origin
           );
         } catch (error) {
-          event.source.postMessage(
+          event.source!.postMessage(
             {
               requestId: request.requestId,
               action: request.action,
@@ -236,7 +236,7 @@ function setupMessageListenerQortalRequest() {
             request.payload,
             event.source
           );
-          event.source.postMessage(
+          event.source!.postMessage(
             {
               requestId: request.requestId,
               action: request.action,
@@ -246,7 +246,7 @@ function setupMessageListenerQortalRequest() {
             event.origin
           );
         } catch (error) {
-          event.source.postMessage(
+          event.source!.postMessage(
             {
               requestId: request.requestId,
               action: request.action,

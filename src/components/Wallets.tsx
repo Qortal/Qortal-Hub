@@ -244,6 +244,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           )}
         </Box>
       )}
+
       {wallets?.length > 0 && (
         <List
           sx={{
@@ -442,20 +443,22 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>
+
           <LoadingButton
-            loading={isLoadingEncryptSeed}
+            autoFocus
             disabled={!seedValue || !seedName || !password}
-            variant="contained"
+            loading={isLoadingEncryptSeed}
             onClick={() => {
               if (!seedValue || !seedName || !password) return;
               onOk({ seedValue, seedName, password });
             }}
-            autoFocus
+            variant="contained"
           >
             {t('core:action.add', {
               postProcess: 'capitalizeFirstChar',
             })}
           </LoadingButton>
+
           <Typography
             sx={{
               fontSize: '14px',

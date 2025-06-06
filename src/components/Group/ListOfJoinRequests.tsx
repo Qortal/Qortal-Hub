@@ -124,7 +124,7 @@ export const ListOfJoinRequests = ({
               setIsLoadingAccept(false);
               setInfoSnack({
                 type: 'success',
-                message: t('group:message.success,group_join', {
+                message: t('group:message.success.group_join', {
                   postProcess: 'capitalizeFirstChar',
                 }),
               });
