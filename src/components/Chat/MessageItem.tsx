@@ -206,6 +206,23 @@ export const MessageItemComponent = ({
     'tutorial',
   ]);
 
+  const hasNoMessage =
+    (!message.decryptedData?.data?.message ||
+      message.decryptedData?.data?.message === '<p></p>') &&
+    (message?.images || [])?.length === 0 &&
+    (!message?.messageText || message?.messageText === '<p></p>') &&
+    (!message?.text || message?.text === '<p></p>');
+
+  return (
+    <>
+      {message?.divide && (
+        <div className="unread-divider" id="unread-divider-id">
+          {t('core:message.generic.unread_messages', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </div>
+      )}
+
   return (
     <>
       {message?.divide && (
@@ -410,14 +427,32 @@ export const MessageItemComponent = ({
               </>
             )}
 
-            {htmlText && <MessageDisplay htmlContent={htmlText} />}
+            {htmlText && !hasNoMessage && (
+              <MessageDisplay htmlContent={htmlText} />
+            )}
 
             {message?.decryptedData?.type === 'notification' ? (
               <MessageDisplay
                 htmlContent={message.decryptedData?.data?.message}
               />
-            ) : (
+            ) : hasNoMessage ? null : (
               <MessageDisplay htmlContent={message.text} />
+            )}
+            {hasNoMessage && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}
+              >
+                <CommentsDisabledIcon color="primary" />
+                <Typography color="primary">
+                  {t('core:message.generic.no_message', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </Box>
             )}
             {message?.images && messageHasImage(message) && (
               <Embed embedLink={buildImageEmbedLink(message.images[0])} />
