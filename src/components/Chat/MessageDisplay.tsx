@@ -75,7 +75,7 @@ const linkify = (text) => {
   return processText(textFormatted);
 };
 
-export const MessageDisplay = ({ htmlContent, isReply }) => {
+export const MessageDisplay = ({ htmlContent, isReply = false }) => {
   const theme = useTheme();
 
   const sanitizedContent = useMemo(() => {

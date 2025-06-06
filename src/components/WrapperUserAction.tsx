@@ -80,7 +80,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
             vertical: 'top',
             horizontal: 'center',
           }}
-          componentsProps={{
+          slotProps={{
             paper: {
               onClick: (event) => event.stopPropagation(), // Stop propagation inside popover
             },
