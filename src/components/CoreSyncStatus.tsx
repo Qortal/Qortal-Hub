@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import syncedImg from '../assets/syncStatus/synced.png';
-import syncedMintingImg from '../assets/syncStatus/synced_minting.png';
-import syncingImg from '../assets/syncStatus/syncing.png';
+import syncedImg from '../assets/syncStatus/synced.webp';
+import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
+import syncingImg from '../assets/syncStatus/syncing.webp';
 import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
 import { useTheme } from '@mui/material';
