@@ -361,8 +361,8 @@ const MenuBar = memo(
 );
 
 const extensions = [
+  TextStyle,
   Color.configure({ types: [TextStyle.name, ListItem.name] }),
-  TextStyle.configure({ types: [ListItem.name] }),
   StarterKit.configure({
     bulletList: {
       keepMarks: true,

@@ -466,13 +466,13 @@ export const ChatList = ({
 
       {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
-          openQManager={openQManager}
-          messages={messages}
           goToMessage={goToMessage}
-          members={members}
-          myName={myName}
-          selectedGroup={selectedGroup}
           isPrivate={isPrivate}
+          members={members}
+          messages={messages}
+          myName={myName}
+          openQManager={openQManager}
+          selectedGroup={selectedGroup}
         />
       )}
     </Box>
