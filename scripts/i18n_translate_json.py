@@ -2,6 +2,7 @@ import os
 import json
 import time
 from deep_translator import GoogleTranslator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # === CONFIGURATION ===
 base_folder = "./src/i18n/locales"
