@@ -2,11 +2,13 @@ import os
 import json
 import time
 from deep_translator import GoogleTranslator
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # === CONFIGURATION ===
 base_folder = "./src/i18n/locales"
 source_lang = "en"
 filenames = ["auth.json", "core.json", "group.json", "question.json", "tutorial.json"]
+all_target_langs = ["de", "es", "fr", "it", "ja", "ru", "zh"]
 
 
 # === SAFE TRANSLATION ===
@@ -35,16 +37,8 @@ def translate_json(obj, translator):
     return obj
 
 
-# === FILE TRANSLATION ===
-def translate_file(filename, target_lang):
-    source_path = os.path.join(base_folder, source_lang, filename)
-    if not os.path.isfile(source_path):
-        print(f"❌ File not found: {source_path}")
-        return
-
-    with open(source_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
+# === WORKER FUNCTION ===
+def translate_for_language(filename, data, target_lang):
     print(f"🔁 Translating {filename} → {target_lang}")
     translator = GoogleTranslator(source=source_lang, target=target_lang)
     translated = translate_json(data, translator)
@@ -57,6 +51,7 @@ def translate_file(filename, target_lang):
         json.dump(translated, f, ensure_ascii=False, indent=2)
 
     print(f"✅ Saved: {target_path}")
+    return target_path
 
 
 # === MAIN FUNCTION ===
@@ -69,12 +64,27 @@ def main():
         print(f"❌ Invalid filename: {filename}")
         return
 
-    target_lang = input("Enter the target language code (e.g., de, fr, ja): ").strip()
-    if not target_lang:
-        print("❌ No target language provided.")
+    exclude_input = input("Enter languages to exclude (comma-separated, e.g., 'fr,ja'): ").strip()
+    excluded_langs = [lang.strip() for lang in exclude_input.split(",") if lang.strip()]
+    target_langs = [lang for lang in all_target_langs if lang not in excluded_langs]
+
+    if not target_langs:
+        print("❌ All target languages excluded. Nothing to do.")
         return
 
-    translate_file(filename, target_lang)
+    source_path = os.path.join(base_folder, source_lang, filename)
+    if not os.path.isfile(source_path):
+        print(f"❌ File not found: {source_path}")
+        return
+
+    with open(source_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Parallel execution per language
+    with ThreadPoolExecutor(max_workers=len(target_langs)) as executor:
+        futures = [executor.submit(translate_for_language, filename, data, lang) for lang in target_langs]
+        for future in as_completed(futures):
+            _ = future.result()
 
 
 if __name__ == "__main__":
