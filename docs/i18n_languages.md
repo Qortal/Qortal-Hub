@@ -7,12 +7,7 @@
 Locales are in folder `./src/i18n/locales`, one folder per language.
 
 A single JSON file represents a namespace (group of translation).
-It's a key/value structure.
-
-Please:
-
-- Keep the file sorted
-- First letter of each value is lowercase
+It's a sorted key/value structure.
 
 Translation in GUI:
 
