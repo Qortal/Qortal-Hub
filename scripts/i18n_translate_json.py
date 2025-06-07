@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 base_folder = "./src/i18n/locales"
 source_lang = "en"
 filenames = ["auth.json", "core.json", "group.json", "question.json", "tutorial.json"]
-all_target_langs = ["de", "es", "fr", "it", "ja", "ru", "zh"]
+all_target_langs = ["de", "es", "fr", "it", "ja", "ru", "zh-CN"]
 
 
 # === SAFE TRANSLATION ===
