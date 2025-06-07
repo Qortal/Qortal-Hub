@@ -31,17 +31,18 @@
     "create_thread": "スレッドを作成します",
     "decline": "衰退",
     "decrypt": "復号化",
-    "disable_enter": "enterを無効にします",
+    "disable_enter": "Enterを無効にします",
     "download": "ダウンロード",
     "download_file": "ファイルをダウンロードします",
     "edit": "編集",
     "edit_theme": "テーマを編集します",
-    "enable_dev_mode": "dEVモードを有効にします",
+    "enable_dev_mode": "DEVモードを有効にします",
     "enter_name": "名前を入力します",
     "export": "輸出",
     "get_qort": "QORTを取得します",
     "get_qort_trade": "QトレードでQORTを取得します",
     "hide": "隠れる",
+    "hide_qr_code": "QRコードを非表示にします",
     "import": "輸入",
     "import_theme": "テーマをインポートします",
     "invite": "招待する",
@@ -67,7 +68,7 @@
     "publish": "公開",
     "publish_app": "アプリを公開します",
     "publish_comment": "コメントを公開します",
-    "refresh": "リフレッシュ",
+    "refresh": "リフレッシュします",
     "register_name": "登録名",
     "remove": "取り除く",
     "remove_reaction": "反応を取り除きます",
@@ -78,6 +79,7 @@
     "search_apps": "アプリを検索します",
     "search_groups": "グループを検索します",
     "search_chat_text": "チャットテキストを検索します",
+    "see_qr_code": "QRコードを参照してください",
     "select_app_type": "[アプリタイプ]を選択します",
     "select_category": "カテゴリを選択します",
     "select_name_app": "名前/アプリを選択します",
@@ -90,13 +92,14 @@
     "start_typing": "ここで入力を開始します...",
     "trade_qort": "取引Qort",
     "transfer_qort": "QORTを転送します",
-    "unpin": "unepin",
-    "unpin_app": "uNPINアプリ",
+    "unpin": "unpin",
+    "unpin_app": "UNPINアプリ",
     "unpin_from_dashboard": "ダッシュボードからリプリッド",
     "update": "アップデート",
     "update_app": "アプリを更新します",
     "vote": "投票する"
   },
+  "address_your": "あなたの住所",
   "admin": "管理者",
   "admin_other": "管理者",
   "all": "全て",
@@ -130,7 +133,7 @@
   "dev_mode": "開発モード",
   "domain": "ドメイン",
   "ui": {
-    "version": "uIバージョン"
+    "version": "UIバージョン"
   },
   "count": {
     "none": "なし",
@@ -170,7 +173,7 @@
   },
   "member": "メンバー",
   "member_other": "メンバー",
-  "message_us": "制限なしにチャットを開始するために4 QORTが必要な場合は、Nextcloud（登録不要）またはDiscordで私たちにメッセージを送ってください",
+  "message_us": "制限なしにチャットを開始するために4 QORTが必要な場合は、NextCloud（サインアップは不要）または不一致で私たちにメッセージを送ってください",
   "message": {
     "error": {
       "address_not_found": "あなたの住所は見つかりませんでした",
@@ -221,7 +224,7 @@
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
-      "devmode_local_node": "dEVモードにローカルノードを使用してください！ログアウトしてローカルノードを使用します。",
+      "devmode_local_node": "DEVモードにローカルノードを使用してください！ログアウトしてローカルノードを使用します。",
       "downloading": "ダウンロード",
       "downloading_decrypting_app": "プライベートアプリのダウンロードと復号化。",
       "edited": "編集",
@@ -247,13 +250,13 @@
       "no_data_image": "画像のデータはありません",
       "no_description": "説明なし",
       "no_messages": "メッセージはありません",
-      "no_message": "メッセージなし",
+      "no_message": "メッセージはありません",
       "no_minting_details": "ゲートウェイでミントの詳細を表示できません",
       "no_notifications": "新しい通知はありません",
       "no_payments": "支払いなし",
       "no_pinned_changes": "現在、ピン留めアプリに変更がありません",
       "no_results": "結果はありません",
-      "one_app_per_name": "注：現在、名前ごとに許可されているアプリとWebサイトは1つだけです。",
+      "one_app_per_name": "注：現在、名前ごとに1つのアプリとWebサイトのみが許可されています。",
       "opened": "オープン",
       "overwrite_qdn": "QDNに上書きします",
       "password_confirm": "パスワードを確認してください",
@@ -314,7 +317,7 @@
       "rated_app": "正常に評価されています。ネットワークが変更を提案するまで数分待ってください。",
       "request_read": "このリクエストを読みました",
       "transfer": "転送は成功しました！",
-      "voted": "首尾よく投票しました。ネットワークが変更を提案するまで数分待ってください。"
+      "voted": "正常に投票しました。ネットワークが変更を提案するまで数分待ってください。"
     }
   },
   "minting_status": "ミントステータス",
@@ -324,7 +327,7 @@
   "none": "なし",
   "note": "注記",
   "option": "オプション",
-  "option_no": "オプションなし",
+  "option_no": "オプションはありません",
   "option_other": "オプション",
   "page": {
     "last": "最後",
@@ -333,11 +336,11 @@
     "previous": "前の"
   },
   "payment_notification": "支払い通知",
-  "payment": "お支払い",
+  "payment": "支払い",
   "poll_embed": "投票埋め込み",
   "port": "ポート",
   "price": "価格",
-  "publish": "出版物",
+  "publish": "公開",
   "q_apps": {
     "about": "このq-appについて",
     "q_mail": "Qメール",
@@ -379,7 +382,7 @@
   "title": "タイトル",
   "to": "に",
   "tutorial": "チュートリアル",
-  "url": "uRL",
+  "url": "URL",
   "user_lookup": "ユーザールックアップ",
   "vote": "投票する",
   "vote_other": "{{ count }} votes",
@@ -390,6 +393,6 @@
     "wallet": "財布",
     "wallet_other": "財布"
   },
-  "website": "webサイト",
+  "website": "Webサイト",
   "welcome": "いらっしゃいませ"
 }
