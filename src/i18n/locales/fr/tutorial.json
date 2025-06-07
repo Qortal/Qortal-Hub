@@ -1,21 +1,21 @@
 {
-  "1_getting_started": "1. Pour commencer",
-  "2_overview": "2. Présentation",
+  "1_getting_started": "1. Premiers pas",
+  "2_overview": "2. Vue d'ensemble",
   "3_groups": "3. Groupes Qortal",
-  "4_obtain_qort": "4. Obtention de Qort",
+  "4_obtain_qort": "4. Obtenir du QORT",
   "account_creation": "création de compte",
   "important_info": "informations importantes",
   "apps": {
-    "dashboard": "1. Tableau de bord Apps",
+    "dashboard": "1. Tableau de bord des applications",
     "navigation": "2. Navigation des applications"
   },
   "initial": {
-    "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
+    "recommended_qort_qty": "avoir au moins {{ quantity }} QORT dans votre portefeuille",
     "explore": "explorer",
-    "general_chat": "chat général",
-    "getting_started": "commencer",
+    "general_chat": "discussion générale",
+    "getting_started": "démarrer",
     "register_name": "enregistrer un nom",
     "see_apps": "voir les applications",
-    "trade_qort": "commercer Qort"
+    "trade_qort": "échanger du QORT"
   }
 }
