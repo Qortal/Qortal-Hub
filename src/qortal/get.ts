@@ -1523,7 +1523,7 @@ export const checkArrrSyncStatus = async (seed) => {
   // If we exceed N tries, throw an error
   throw new Error(
     i18n.t('question:message.error.synchronization_attempts', {
-      quantity: 36,
+      count: 36,
       postProcess: 'capitalizeFirstChar',
     })
   );
@@ -4694,7 +4694,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
       <div>${(+buyingFees?.unlock?.fee * atAddresses?.length)?.toFixed(8)} ${buyingFees.ticker}</div>
      <div class="fee-description">
      ${i18n.t('question:permission.buy_order_fee_estimation', {
-       quantity: atAddresses?.length,
+       count: atAddresses?.length,
        fee: buyingFees?.unlock?.feePerKb?.toFixed(8),
        ticker: buyingFees.ticker,
        postProcess: 'capitalizeFirstChar',
