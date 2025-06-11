@@ -209,7 +209,7 @@ export const AdminSpaceInner = ({
           fontSize: '14px',
         }}
       >
-        {t('auth:message.error.publishing_key', {
+        {t('auth:message.generic.publishing_key', {
           postProcess: 'capitalizeFirstChar',
         })}
       </Typography>
