@@ -45,6 +45,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [nodeInfos, setNodeInfos] = useState({});
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [adminInfo, setAdminInfo] = useState({});
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
   const { t } = useTranslation([
@@ -86,9 +87,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const getName = async (address) => {
     try {
-      const response = await fetch(
-        `${getBaseApiReact()}/names/primary/${address}`
-      );
+      const url = `${getBaseApiReact()}/names/primary/${address}`;
+      const response = await fetch(url);
       const nameData = await response.json();
       if (nameData?.name) {
         setNames((prev) => {
@@ -161,20 +161,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     return address;
   };
 
-  // const handleAccountInfos = (address, field) => {
-  //   if (!address) return undefined;
-  //   if (accountInfos[address]) return accountInfos[address]?.[field];
-  //   if (accountInfos[address] === null) return undefined;
-  //   getAccountInfo(address, true);
-  //   return undefined;
-  // };
-
-  const calculateBlocksRemainingToLevel1 = (address) => {
-    if (!address) return undefined;
-    if (!accountInfos[address]) return undefined;
-    return 7200 - accountInfos[address]?.blocksMinted || 0;
-  };
-
   const getNodeInfos = async () => {
     try {
       const url = `${getBaseApiReact()}/admin/status`;
@@ -205,6 +191,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       console.log(error);
     }
   }, []);
+
+  const getAdminInfo = async () => {
+    try {
+      const url = `${getBaseApiReact()}/admin/info`;
+      const response = await fetch(url);
+      const data = await response.json();
+      setAdminInfo(data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   const addMintingAccount = useCallback(async (val) => {
     try {
@@ -448,62 +445,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       setIsLoading(false);
     }
   };
-
-  // const getPublicKeyFromAddress = async (address) => {
-  //   const url = `${getBaseApiReact()}/addresses/publickey/${address}`;
-  //   const response = await fetch(url);
-  //   const data = await response.text();
-  //   return data;
-  // };
-
-  // const checkIfMinterGroup = async (address) => {
-  //   const url = `${getBaseApiReact()}/groups/member/${address}`;
-  //   const response = await fetch(url);
-  //   const data = await response.json();
-  //   return !!data?.find((grp) => grp?.groupId?.toString() === '694');
-  // };
-
-  // const removeRewardShare = useCallback(async (rewardShare) => {
-  //   return await new Promise((res, rej) => {
-  //     window
-  //       .sendMessage('removeRewardShare', {
-  //         rewardShareKeyPairPublicKey: rewardShare.rewardSharePublicKey,
-  //         recipient: rewardShare.recipient,
-  //         percentageShare: -1,
-  //       })
-  //       .then((response) => {
-  //         if (!response?.error) {
-  //           res(response);
-  //           setTxList((prev) => [
-  //             {
-  //               ...rewardShare,
-  //               ...response,
-  //               type: 'remove-rewardShare',
-  //               label: t('group:message.success.rewardshare_remove', {
-  //                 postProcess: 'capitalizeFirstChar',
-  //               }),
-  //               labelDone: t('group:message.success.rewardshare_remove_label', {
-  //                 postProcess: 'capitalizeFirstChar',
-  //               }),
-  //               done: false,
-  //             },
-  //             ...prev,
-  //           ]);
-  //           return;
-  //         }
-  //         rej({ message: response.error });
-  //       })
-  //       .catch((error) => {
-  //         rej({
-  //           message:
-  //             error.message ||
-  //             t('core:message.error.generic', {
-  //               postProcess: 'capitalizeFirstChar',
-  //             }),
-  //         });
-  //       });
-  //   });
-  // }, []);
 
   useEffect(() => {
     getNodeInfos();
@@ -924,6 +865,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               <StatCard label="Tier Share Per Block" value="13%" />
               <StatCard label="Est. Reward Per Block" value="0.00506494 QORT" />
               <StatCard label="Est. Reward Per Day" value="6.00782338 QORT" />
+              {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
             </Grid>
           </Paper>
         </Container>

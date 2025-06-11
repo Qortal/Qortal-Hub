@@ -274,9 +274,6 @@ export const AddGroup = ({ address, open, setOpen }) => {
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label={t('core:basic_tabs_example', {
-                postProcess: 'capitalizeFirstChar',
-              })}
               variant={'fullWidth'}
               scrollButtons="auto"
               allowScrollButtonsMobile

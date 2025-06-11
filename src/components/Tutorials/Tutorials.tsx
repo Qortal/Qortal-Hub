@@ -47,9 +47,6 @@ export const Tutorials = () => {
           }}
           value={multiNumber}
           onChange={(e, value) => setMultiNumber(value)}
-          aria-label={t('core:basic_tabs_example', {
-            postProcess: 'capitalizeFirstChar',
-          })}
         >
           {openTutorialModal?.multi?.map((item, index) => {
             return (
