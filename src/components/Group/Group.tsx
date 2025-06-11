@@ -1635,7 +1635,7 @@ export const Group = ({
       <div
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.default,
+          background: theme.palette.background.paper,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
