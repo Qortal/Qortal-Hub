@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  IconButton,
   TextField,
   Typography,
   useTheme,
@@ -13,6 +14,8 @@ import {
 import { useContext, useEffect, useState } from 'react';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { Spacer } from '../../common/Spacer';
+import CloseIcon from '@mui/icons-material/Close';
+
 import {
   executeEvent,
   subscribeToEvent,
@@ -397,7 +400,20 @@ export const BlockedUsersModal = () => {
             postProcess: 'capitalizeAll',
           })}
         </DialogTitle>
-
+        <IconButton
+          aria-label={t('core:action.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          onClick={onCancel}
+          sx={{
+            position: 'absolute',
+            right: 8,
+            top: 8,
+            color: theme.palette.text.primary,
+          }}
+        >
+          <CloseIcon />
+        </IconButton>
         <DialogContent>
           <DialogContentText id="alert-dialog-description">
             {t('auth:message.generic.blocking', {

@@ -16,6 +16,8 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption';
 import { AddGroup } from './AddGroup';
 import CreateIcon from '@mui/icons-material/Create';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
+
 import {
   AuthenticatedContainerInnerRight,
   CustomButton,
@@ -61,6 +63,7 @@ import {
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   isOpenBlockedModalAtom,
+  isRunningPublicNodeAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   selectedGroupIdAtom,
@@ -434,6 +437,7 @@ export const Group = ({
   const [groupChatTimestamps, setGroupChatTimestamps] = useAtom(
     groupChatTimestampsAtom
   );
+  const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
@@ -1846,6 +1850,7 @@ export const Group = ({
           style={{
             display: 'flex',
             width: '100%',
+            gap: '10px',
             justifyContent: 'center',
             padding: '10px',
           }}
@@ -1866,6 +1871,23 @@ export const Group = ({
               postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
+          {!isRunningPublicNode && (
+            <CustomButton
+              onClick={() => {
+                setIsOpenBlockedUserModal(true);
+              }}
+              sx={{
+                minWidth: 'unset',
+                padding: '10px',
+              }}
+            >
+              <PersonOffIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
+            </CustomButton>
+          )}
         </div>
       </div>
     );
