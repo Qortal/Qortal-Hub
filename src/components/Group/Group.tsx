@@ -1632,7 +1632,7 @@ export const Group = ({
 
   const renderDirects = () => {
     return (
-      <div
+      <Box
         style={{
           alignItems: 'flex-start',
           background: theme.palette.background.paper,
@@ -1718,8 +1718,8 @@ export const Group = ({
           </ButtonBase>
         </Box>
 
-        <div
-          style={{
+        <Box
+          sx={{
             alignItems: 'flex-start',
             display: 'flex',
             flexDirection: 'column',
@@ -1803,22 +1803,24 @@ export const Group = ({
                             postProcess: 'capitalizeFirstChar',
                           })
                     }
-                    primaryTypographyProps={{
-                      style: {
-                        color:
-                          direct?.address === selectedDirect?.address &&
-                          theme.palette.text.primary,
-                        textWrap: 'wrap',
-                        overflow: 'hidden',
-                        fontSize: '16px',
+                    slotProps={{
+                      primary: {
+                        style: {
+                          color:
+                            direct?.address === selectedDirect?.address &&
+                            theme.palette.text.primary,
+                          textWrap: 'wrap',
+                          overflow: 'hidden',
+                          fontSize: '16px',
+                        },
                       },
-                    }} // Change the color of the primary text
-                    secondaryTypographyProps={{
-                      style: {
-                        color:
-                          direct?.address === selectedDirect?.address &&
-                          theme.palette.text.primary,
-                        fontSize: '12px',
+                      secondary: {
+                        style: {
+                          color:
+                            direct?.address === selectedDirect?.address &&
+                            theme.palette.text.primary,
+                          fontSize: '12px',
+                        },
                       },
                     }}
                     sx={{
@@ -1844,10 +1846,10 @@ export const Group = ({
               </ListItem>
             </List>
           ))}
-        </div>
+        </Box>
 
-        <div
-          style={{
+        <Box
+          sx={{
             display: 'flex',
             width: '100%',
             gap: '10px',
@@ -1871,6 +1873,7 @@ export const Group = ({
               postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
+
           {!isRunningPublicNode && (
             <CustomButton
               onClick={() => {
@@ -1888,8 +1891,8 @@ export const Group = ({
               />
             </CustomButton>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   };
 
