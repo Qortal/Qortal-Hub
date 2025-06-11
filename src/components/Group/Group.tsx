@@ -1763,7 +1763,7 @@ export const Group = ({
                 sx={{
                   background:
                     direct?.address === selectedDirect?.address &&
-                    theme.palette.background.default,
+                    theme.palette.background.paper,
                   borderRadius: '2px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -1782,7 +1782,7 @@ export const Group = ({
                   <ListItemAvatar>
                     <Avatar
                       sx={{
-                        background: theme.palette.background.default,
+                        background: theme.palette.background.paper,
                         color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
@@ -1829,6 +1829,7 @@ export const Group = ({
                       fontSize: '16px',
                     }}
                   />
+
                   {direct?.sender !== myAddress &&
                     direct?.timestamp &&
                     ((!timestampEnterData[direct?.address] &&
@@ -1939,7 +1940,7 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
 
-      <div // TODO use Box
+      <Box
         style={{
           alignItems: 'flex-start',
           display: 'flex',
@@ -2007,7 +2008,7 @@ export const Group = ({
             <>
               <Box
                 sx={{
-                  background: theme.palette.background.default,
+                  background: theme.palette.background.paper,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                   opacity: !(desktopViewMode === 'chat') ? 0 : 1,
@@ -2461,7 +2462,7 @@ export const Group = ({
           }}
         />
         <WalletsAppWrapper />
-      </div>
+      </Box>
     </>
   );
 };
