@@ -40,6 +40,7 @@ import { walletVersion } from '../../background/background.ts';
 import Base58 from '../../encryption/Base58.ts';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { useTranslation } from 'react-i18next';
+import { TransitionUp } from '../../common/Transitions.tsx';
 
 const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -73,15 +74,6 @@ const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
     margin: 2,
   },
 }));
-
-const Transition = forwardRef(function Transition(
-  props: TransitionProps & {
-    children: ReactElement;
-  },
-  ref: Ref<unknown>
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
 
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
@@ -163,7 +155,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         open={open}
         onClose={handleClose}
         slots={{
-          transition: Transition,
+          transition: TransitionUp,
         }}
       >
         <AppBar sx={{ position: 'relative' }}>

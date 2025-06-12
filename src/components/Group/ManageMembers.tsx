@@ -255,7 +255,7 @@ export const ManageMembers = ({
               scrollButtons="auto" // Show scroll buttons automatically
               allowScrollButtonsMobile // Show scroll buttons on mobile as well
               sx={{
-                '& .MuiTabs-indicator': {
+                '&.MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
                 },
                 maxWidth: '100%', // Ensure the tabs container fits within the available space

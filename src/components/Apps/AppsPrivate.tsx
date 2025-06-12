@@ -357,7 +357,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
               variant={'fullWidth'}
               scrollButtons="auto"
               sx={{
-                '& .MuiTabs-indicator': {
+                '&.MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
                 },
               }}

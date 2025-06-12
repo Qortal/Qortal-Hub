@@ -111,7 +111,7 @@ export const AppsDevModeNavBar = () => {
           variant="scrollable" // Make tabs scrollable
           scrollButtons={true}
           sx={{
-            '& .MuiTabs-indicator': {
+            '&.MuiTabs-indicator': {
               backgroundColor: theme.palette.text.primary,
             },
             maxHeight: `275px`, // Ensure the tabs container fits within the available space

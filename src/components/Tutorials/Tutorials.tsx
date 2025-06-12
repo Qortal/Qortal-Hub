@@ -41,7 +41,7 @@ export const Tutorials = () => {
       >
         <Tabs
           sx={{
-            '& .MuiTabs-indicator': {
+            '&.MuiTabs-indicator': {
               backgroundColor: theme.palette.background.default,
             },
           }}

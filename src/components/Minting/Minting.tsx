@@ -41,6 +41,7 @@ import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { TransitionUp } from '../../common/Transitions.tsx';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
@@ -540,14 +541,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       maxWidth="lg"
       fullWidth
       fullScreen
-      sx={{
-        '& .MuiDialog-paper': {
-          height: '100vh',
-          margin: 0,
-          maxWidth: '100%',
-          overflow: 'hidden', // Prevent scrollbars
-          width: '100%',
-        },
+      slots={{
+        transition: TransitionUp,
       }}
     >
       <AppBar sx={{ position: 'relative' }}>
@@ -575,418 +570,465 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={setValueMintingTab} onChange={handleChange}>
-          <Tab label="Minting Details" {...a11yProps(0)} />
-          <Tab label="Item Two" {...a11yProps(1)} />
-          <Tab label="Item Three" {...a11yProps(2)} />
-        </Tabs>
-      </Box>
-
-      {valueMintingTab === 0 && (
-        <>
-          <DialogContent
+      <Box
+        sx={{
+          bgcolor: theme.palette.background.default,
+          color: theme.palette.text.primary,
+          display: 'flex',
+          flexDirection: 'column',
+          flexGrow: 1,
+          overflowY: 'auto',
+        }}
+      >
+        <Box
+          sx={{ borderBottom: 1, borderColor: theme.palette.text.secondary }}
+        >
+          <Tabs
+            value={setValueMintingTab}
+            onChange={handleChange}
+            variant={'fullWidth'}
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
-              position: 'relative',
+              '&.MuiTabs-indicator': {
+                backgroundColor: theme.palette.background.default,
+              },
             }}
           >
-            <Container maxWidth="md" sx={{ py: 4 }}>
-              <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
-                <Typography variant="h6" gutterBottom>
-                  Blockchain Statistics
-                </Typography>
-
-                <Grid container spacing={2}>
-                  <StatCard
-                    label="Avg. Qortal Blocktime"
-                    value="72.84 Seconds"
-                  />
-                  <StatCard
-                    label="Avg. Blocks Per Day"
-                    value="1186.16 Blocks"
-                  />
-                  <StatCard
-                    label="Avg. Created QORT Per Day"
-                    value="3558.48 QORT"
-                  />
-                </Grid>
-              </Paper>
-
-              <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
-                <Typography variant="h6" gutterBottom>
-                  Minting Account Details
-                </Typography>
-
-                <Grid container spacing={2}>
-                  <StatCard label="Current Status" value="(Minting)" />
-                  <StatCard label="Current Level" value="Level 4" />
-                  <StatCard
-                    label="Blocks To Next Level"
-                    value="139467 Blocks"
-                  />
-                </Grid>
-
-                <Box mt={2} textAlign="center">
-                  <Typography>
-                    With a 24/7 Minting you will reach level 5 in{' '}
-                    <strong>117.58 days</strong>!
-                  </Typography>
-                </Box>
-              </Paper>
-
-              <Paper elevation={3} sx={{ p: 3, borderRadius: '10px' }}>
-                <Typography variant="h6" gutterBottom>
-                  Minting Rewards Info
-                </Typography>
-
-                <Grid container spacing={2}>
-                  <StatCard label="Current Tier" value="Tier 2 (Level 3 + 4)" />
-                  <StatCard
-                    label="Total Minters in The Tier"
-                    value="77 Minters"
-                  />
-                  <StatCard label="Tier Share Per Block" value="13%" />
-                  <StatCard
-                    label="Est. Reward Per Block"
-                    value="0.00506494 QORT"
-                  />
-                  <StatCard
-                    label="Est. Reward Per Day"
-                    value="6.00782338 QORT"
-                  />
-                  {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
-                </Grid>
-              </Paper>
-            </Container>
-          </DialogContent>
-        </>
-      )}
-
-      {valueMintingTab === 1 && (
-        <>
-          <DialogContent
-            sx={{
-              position: 'relative',
-            }}
-          >
-            {isLoading && (
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  bottom: 0,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  left: 0,
-                  position: 'absolute',
-                  right: 0,
-                  top: 0,
-                }}
-              >
-                <FidgetSpinner
-                  ariaLabel="fidget-spinner-loading"
-                  height="80"
-                  visible={true}
-                  width="80"
-                  wrapperClass="fidget-spinner-wrapper"
-                  wrapperStyle={{}}
-                />
-              </Box>
-            )}
-
-            <Card
+            <Tab
+              label="Minting Details"
               sx={{
-                backgroundColor: theme.palette.background.default,
-                padding: '10px',
+                '&.Mui-selected': {
+                  color: theme.palette.text.primary,
+                },
+                fontSize: '1rem',
+              }}
+              {...a11yProps(0)}
+            />
+            <Tab
+              label="Minting Actions"
+              sx={{
+                '&.Mui-selected': {
+                  color: theme.palette.text.primary,
+                },
+                fontSize: '1rem',
+              }}
+              {...a11yProps(1)}
+            />
+          </Tabs>
+        </Box>
+
+        {valueMintingTab === 0 && (
+          <>
+            <DialogContent
+              sx={{
+                position: 'relative',
               }}
             >
-              <Typography>
-                {t('auth:account.account_one', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                : {handleNames(accountInfo?.address)}
-              </Typography>
-
-              <Typography>
-                {t('core:level', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                : {accountInfo?.level}
-              </Typography>
-
-              <Typography>
-                {t('group:message.generic.next_level', {
-                  postProcess: 'capitalizeFirstChar',
-                })}{' '}
-                {_levelUpBlocks()}
-              </Typography>
-
-              <Typography>
-                {t('group:message.generic.node_minting', {
-                  postProcess: 'capitalizeFirstChar',
-                })}{' '}
-                {nodeInfos?.isMintingPossible?.toString()}
-              </Typography>
-            </Card>
-
-            <Spacer height="10px" />
-
-            {isPartOfMintingGroup && !accountIsMinting && (
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '5px',
-                  width: '100%',
-                }}
-              >
-                <Button
-                  size="small"
-                  onClick={() => {
-                    startMinting();
-                  }}
-                  disabled={mintingAccounts?.length > 1}
-                  sx={{
-                    backgroundColor: theme.palette.other.positive,
-                    color: 'black',
-                    fontWeight: 'bold',
-                    opacity: 0.7,
-                    maxWidth: '90%',
-                    width: '200px',
-                    '&:hover': {
-                      backgroundColor: theme.palette.other.positive,
-                      color: 'black',
-                      opacity: 1,
-                    },
-                  }}
-                  variant="contained"
-                >
-                  {t('core:action.start_minting', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-
-                {mintingAccounts?.length > 1 && (
-                  <Typography>
-                    {t('group:message.generic.minting_keys_per_node', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
+              <Container maxWidth="md" sx={{ py: 4 }}>
+                <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Blockchain Statistics
                   </Typography>
-                )}
-              </Box>
-            )}
 
-            <Spacer height="10px" />
+                  <Grid container spacing={2}>
+                    <StatCard
+                      label="Avg. Qortal Blocktime"
+                      value="72.84 Seconds"
+                    />
+                    <StatCard
+                      label="Avg. Blocks Per Day"
+                      value="1186.16 Blocks"
+                    />
+                    <StatCard
+                      label="Avg. Created QORT Per Day"
+                      value="3558.48 QORT"
+                    />
+                  </Grid>
+                </Paper>
 
-            {mintingAccounts?.length > 0 && (
-              <Typography>
-                {t('group:message.generic.node_minting_account', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-            )}
-            <Card
+                <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Minting Account Details
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <StatCard label="Current Status" value="(Minting)" />
+                    <StatCard label="Current Level" value="Level 4" />
+                    <StatCard
+                      label="Blocks To Next Level"
+                      value="139467 Blocks"
+                    />
+                  </Grid>
+
+                  <Box mt={2} textAlign="center">
+                    <Typography>
+                      With a 24/7 Minting you will reach level 5 in{' '}
+                      <strong>117.58 days</strong>!
+                    </Typography>
+                  </Box>
+                </Paper>
+
+                <Paper elevation={3} sx={{ p: 3, borderRadius: '10px' }}>
+                  <Typography variant="h6" gutterBottom>
+                    Minting Rewards Info
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <StatCard
+                      label="Current Tier"
+                      value="Tier 2 (Level 3 + 4)"
+                    />
+                    <StatCard
+                      label="Total Minters in The Tier"
+                      value="77 Minters"
+                    />
+                    <StatCard label="Tier Share Per Block" value="13%" />
+                    <StatCard
+                      label="Est. Reward Per Block"
+                      value="0.00506494 QORT"
+                    />
+                    <StatCard
+                      label="Est. Reward Per Day"
+                      value="6.00782338 QORT"
+                    />
+                    {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
+                  </Grid>
+                </Paper>
+              </Container>
+            </DialogContent>
+          </>
+        )}
+
+        {valueMintingTab === 1 && (
+          <>
+            <DialogContent
               sx={{
-                backgroundColor: theme.palette.background.default,
-                padding: '10px',
+                position: 'relative',
               }}
             >
-              {accountIsMinting && (
+              {isLoading && (
                 <Box
                   sx={{
+                    alignItems: 'center',
+                    bottom: 0,
                     display: 'flex',
-                    gap: '5px',
-                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    left: 0,
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
                   }}
                 >
-                  <Typography>
-                    {t('group:message.generic.node_minting_key', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
+                  <FidgetSpinner
+                    ariaLabel="fidget-spinner-loading"
+                    height="80"
+                    visible={true}
+                    width="80"
+                    wrapperClass="fidget-spinner-wrapper"
+                    wrapperStyle={{}}
+                  />
                 </Box>
               )}
 
-              <Spacer height="10px" />
-
-              {mintingAccounts?.map((acct) => (
-                <Box
-                  key={acct?.mintingAccount}
-                  sx={{
-                    display: 'flex',
-                    gap: '10px',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <Typography>
-                    {t('group:message.generic.minting_account', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}{' '}
-                    {handleNames(acct?.mintingAccount)}
-                  </Typography>
-
-                  <Button
-                    size="small"
-                    sx={{
-                      backgroundColor: theme.palette.other.danger,
-                      color: theme.palette.text.primary,
-                      fontWeight: 'bold',
-                      maxWidth: '90%',
-                      opacity: 0.7,
-                      width: '200px',
-                      '&:hover': {
-                        backgroundColor: theme.palette.other.danger,
-                        color: theme.palette.text.primary,
-                        opacity: 1,
-                      },
-                    }}
-                    onClick={() => {
-                      removeMintingAccount(acct.publicKey, acct);
-                    }}
-                    variant="contained"
-                  >
-                    {t('group:action.remove_minting_account', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-
-                  <Divider />
-
-                  <Spacer height="10px" />
-                </Box>
-              ))}
-
-              {mintingAccounts?.length > 1 && (
-                <Typography>
-                  {t('group:message.generic.minting_keys_per_node_different', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              )}
-            </Card>
-
-            <Spacer height="20px" />
-
-            {!isPartOfMintingGroup && (
               <Card
                 sx={{
                   backgroundColor: theme.palette.background.default,
                   padding: '10px',
                 }}
               >
+                <Typography>
+                  {t('auth:account.account_one', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  : {handleNames(accountInfo?.address)}
+                </Typography>
+
+                <Typography>
+                  {t('core:level', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  : {accountInfo?.level}
+                </Typography>
+
+                <Typography>
+                  {t('group:message.generic.next_level', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}{' '}
+                  {_levelUpBlocks()}
+                </Typography>
+
+                <Typography>
+                  {t('group:message.generic.node_minting', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}{' '}
+                  {nodeInfos?.isMintingPossible?.toString()}
+                </Typography>
+              </Card>
+
+              <Spacer height="10px" />
+
+              {isPartOfMintingGroup && !accountIsMinting && (
                 <Box
                   sx={{
-                    display: 'flex',
-                    gap: '5px',
-                    flexDirection: 'column',
-                    width: '100%',
                     alignItems: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                    width: '100%',
                   }}
                 >
-                  <Typography>
-                    {t('group:message.generic.minter_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-
-                  <Typography>
-                    {t('group:message.generic.mintership_app', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-
-                  <Spacer height="10px" />
-
                   <Button
                     size="small"
+                    onClick={() => {
+                      startMinting();
+                    }}
+                    disabled={mintingAccounts?.length > 1}
                     sx={{
                       backgroundColor: theme.palette.other.positive,
-                      color: theme.palette.text.primary,
+                      color: 'black',
                       fontWeight: 'bold',
                       opacity: 0.7,
-
+                      maxWidth: '90%',
+                      width: '200px',
                       '&:hover': {
                         backgroundColor: theme.palette.other.positive,
                         color: 'black',
                         opacity: 1,
                       },
                     }}
-                    onClick={() => {
-                      executeEvent('addTab', {
-                        data: { service: 'APP', name: 'q-mintership' },
-                      });
-                      executeEvent('open-apps-mode', {});
-                      setIsOpenMinting(false);
-                    }}
                     variant="contained"
                   >
-                    {t('group:action.visit_q_mintership', {
+                    {t('core:action.start_minting', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Button>
-                </Box>
-              </Card>
-            )}
 
-            {showWaitDialog && (
-              <Dialog
-                open={showWaitDialog}
-                aria-labelledby="alert-dialog-title"
-                aria-describedby="alert-dialog-description"
+                  {mintingAccounts?.length > 1 && (
+                    <Typography>
+                      {t('group:message.generic.minting_keys_per_node', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              <Spacer height="10px" />
+
+              {mintingAccounts?.length > 0 && (
+                <Typography>
+                  {t('group:message.generic.node_minting_account', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              )}
+              <Card
+                sx={{
+                  backgroundColor: theme.palette.background.default,
+                  padding: '10px',
+                }}
               >
-                <DialogTitle
-                  id="alert-dialog-title"
+                {accountIsMinting && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: '5px',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <Typography>
+                      {t('group:message.generic.node_minting_key', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Spacer height="10px" />
+
+                {mintingAccounts?.map((acct) => (
+                  <Box
+                    key={acct?.mintingAccount}
+                    sx={{
+                      display: 'flex',
+                      gap: '10px',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <Typography>
+                      {t('group:message.generic.minting_account', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}{' '}
+                      {handleNames(acct?.mintingAccount)}
+                    </Typography>
+
+                    <Button
+                      size="small"
+                      sx={{
+                        backgroundColor: theme.palette.other.danger,
+                        color: theme.palette.text.primary,
+                        fontWeight: 'bold',
+                        maxWidth: '90%',
+                        opacity: 0.7,
+                        width: '200px',
+                        '&:hover': {
+                          backgroundColor: theme.palette.other.danger,
+                          color: theme.palette.text.primary,
+                          opacity: 1,
+                        },
+                      }}
+                      onClick={() => {
+                        removeMintingAccount(acct.publicKey, acct);
+                      }}
+                      variant="contained"
+                    >
+                      {t('group:action.remove_minting_account', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+
+                    <Divider />
+
+                    <Spacer height="10px" />
+                  </Box>
+                ))}
+
+                {mintingAccounts?.length > 1 && (
+                  <Typography>
+                    {t(
+                      'group:message.generic.minting_keys_per_node_different',
+                      {
+                        postProcess: 'capitalizeFirstChar',
+                      }
+                    )}
+                  </Typography>
+                )}
+              </Card>
+
+              <Spacer height="20px" />
+
+              {!isPartOfMintingGroup && (
+                <Card
                   sx={{
-                    textAlign: 'center',
-                    color: theme.palette.text.primary,
-                    fontWeight: 'bold',
-                    opacity: 1,
+                    backgroundColor: theme.palette.background.default,
+                    padding: '10px',
                   }}
                 >
-                  {isShowNext
-                    ? t('core:message.generic.confirmed', {
-                        postProcess: 'capitalizeFirstChar',
-                      })
-                    : t('core:message.generic.wait', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                </DialogTitle>
-
-                <DialogContent>
-                  {!isShowNext && (
-                    <Typography>
-                      {t('group:message.success.rewardshare_creation', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  )}
-
-                  {isShowNext && (
-                    <Typography>
-                      {t('group:message.success.rewardshare_confirmed', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  )}
-                </DialogContent>
-
-                <DialogActions>
-                  <Button
-                    disabled={!isShowNext}
-                    variant="contained"
-                    onClick={onOk}
-                    autoFocus
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: '5px',
+                      flexDirection: 'column',
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
                   >
-                    {t('core:page.next', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                </DialogActions>
-              </Dialog>
-            )}
-          </DialogContent>
-        </>
-      )}
+                    <Typography>
+                      {t('group:message.generic.minter_group', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+
+                    <Typography>
+                      {t('group:message.generic.mintership_app', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+
+                    <Spacer height="10px" />
+
+                    <Button
+                      size="small"
+                      sx={{
+                        backgroundColor: theme.palette.other.positive,
+                        color: theme.palette.text.primary,
+                        fontWeight: 'bold',
+                        opacity: 0.7,
+
+                        '&:hover': {
+                          backgroundColor: theme.palette.other.positive,
+                          color: 'black',
+                          opacity: 1,
+                        },
+                      }}
+                      onClick={() => {
+                        executeEvent('addTab', {
+                          data: { service: 'APP', name: 'q-mintership' },
+                        });
+                        executeEvent('open-apps-mode', {});
+                        setIsOpenMinting(false);
+                      }}
+                      variant="contained"
+                    >
+                      {t('group:action.visit_q_mintership', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  </Box>
+                </Card>
+              )}
+
+              {showWaitDialog && (
+                <Dialog
+                  open={showWaitDialog}
+                  aria-labelledby="alert-dialog-title"
+                  aria-describedby="alert-dialog-description"
+                >
+                  <DialogTitle
+                    id="alert-dialog-title"
+                    sx={{
+                      textAlign: 'center',
+                      color: theme.palette.text.primary,
+                      fontWeight: 'bold',
+                      opacity: 1,
+                    }}
+                  >
+                    {isShowNext
+                      ? t('core:message.generic.confirmed', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('core:message.generic.wait', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                  </DialogTitle>
+
+                  <DialogContent>
+                    {!isShowNext && (
+                      <Typography>
+                        {t('group:message.success.rewardshare_creation', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    )}
+
+                    {isShowNext && (
+                      <Typography>
+                        {t('group:message.success.rewardshare_confirmed', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    )}
+                  </DialogContent>
+
+                  <DialogActions>
+                    <Button
+                      disabled={!isShowNext}
+                      variant="contained"
+                      onClick={onOk}
+                      autoFocus
+                    >
+                      {t('core:page.next', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  </DialogActions>
+                </Dialog>
+              )}
+            </DialogContent>
+          </>
+        )}
+      </Box>
 
       <Snackbar
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}

@@ -1,8 +1,5 @@
 import {
-  forwardRef,
   Fragment,
-  ReactElement,
-  Ref,
   SyntheticEvent,
   useContext,
   useEffect,
@@ -17,8 +14,6 @@ import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
-import Slide from '@mui/material/Slide';
-import { TransitionProps } from '@mui/material/transitions';
 import {
   Box,
   Collapse,
@@ -40,6 +35,7 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
+import { TransitionUp } from '../../common/Transitions.tsx';
 
 export const Label = styled('label')`
   display: block;
@@ -48,15 +44,6 @@ export const Label = styled('label')`
   font-weight: 400;
   margin-bottom: 4px;
 `;
-
-const Transition = forwardRef(function Transition(
-  props: TransitionProps & {
-    children: ReactElement;
-  },
-  ref: Ref<unknown>
-) {
-  return <Slide direction="up" ref={ref} {...props} />;
-});
 
 export const AddGroup = ({ address, open, setOpen }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -228,13 +215,12 @@ export const AddGroup = ({ address, open, setOpen }) => {
         open={open}
         onClose={handleClose}
         slots={{
-          transition: Transition,
+          transition: TransitionUp,
         }}
       >
         <AppBar
           sx={{
             position: 'relative',
-            bgcolor: theme.palette.background.default,
           }}
         >
           <Toolbar>
@@ -281,7 +267,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
               scrollButtons="auto"
               allowScrollButtonsMobile
               sx={{
-                '& .MuiTabs-indicator': {
+                '&.MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
                 },
               }}
@@ -421,10 +407,10 @@ export const AddGroup = ({ address, open, setOpen }) => {
 
                 <Box
                   sx={{
-                    display: 'flex',
-                    gap: '15px',
                     alignItems: 'center',
                     cursor: 'pointer',
+                    display: 'flex',
+                    gap: '15px',
                   }}
                   onClick={() => setOpenAdvance((prev) => !prev)}
                 >
