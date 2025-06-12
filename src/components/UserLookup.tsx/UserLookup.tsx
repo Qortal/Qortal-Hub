@@ -18,6 +18,8 @@ import {
   CircularProgress,
   useTheme,
   Autocomplete,
+  IconButton,
+  ClickAwayListener,
 } from '@mui/material';
 import {
   getAddressInfo,
@@ -28,7 +30,7 @@ import { getNameInfo } from '../Group/Group';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Spacer } from '../../common/Spacer';
 import { formatTimestamp } from '../../utils/time';
-import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen';
+import CloseIcon from '@mui/icons-material/Close';
 import {
   executeEvent,
   subscribeToEvent,
@@ -160,489 +162,481 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
 
   return (
     <DrawerUserLookup open={isOpenDrawerLookup} setOpen={setIsOpenDrawerLookup}>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100vh',
-          overflow: 'hidden',
-          padding: '15px',
-        }}
-      >
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            flexShrink: 0,
-            gap: '5px',
-          }}
-        >
-          <Autocomplete
-            value={nameOrAddress}
-            onChange={(event: any, newValue: string | null) => {
-              if (!newValue) {
-                setNameOrAddress('');
-                return;
-              }
-              setNameOrAddress(newValue);
-              lookupFunc(newValue);
-            }}
-            inputValue={inputValue}
-            onInputChange={(event, newInputValue) => {
-              setInputValue(newInputValue);
-            }}
-            id="controllable-states-demo"
-            loading={isLoading}
-            noOptionsText={t('core:option_no', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            options={options}
-            sx={{ width: 300 }}
-            renderInput={(params) => (
-              <TextField
-                autoFocus
-                autoComplete="off"
-                {...params}
-                label={t('auth:address_name', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && nameOrAddress) {
-                    lookupFunc(inputValue);
-                  }
-                }}
-              />
-            )}
-          />
-
-          <ButtonBase
-            sx={{
-              marginLeft: 'auto',
-            }}
-            onClick={() => {
-              onClose();
-            }}
-          >
-            <CloseFullscreenIcon
-              sx={{
-                color: theme.palette.text.primary,
-              }}
-            />
-          </ButtonBase>
-        </Box>
-
+      <ClickAwayListener onClickAway={onClose}>
         <Box
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: 1,
-            overflow: 'auto',
+            height: '100vh',
+            overflow: 'hidden',
+            padding: '15px',
           }}
         >
-          {!isLoadingUser && errorMessage && (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                marginTop: '40px',
-                width: '100%',
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              gap: '5px',
+            }}
+          >
+            <Autocomplete
+              value={nameOrAddress}
+              onChange={(event: any, newValue: string | null) => {
+                if (!newValue) {
+                  setNameOrAddress('');
+                  return;
+                }
+                setNameOrAddress(newValue);
+                lookupFunc(newValue);
               }}
-            >
-              <Typography>{errorMessage}</Typography>
-            </Box>
-          )}
-
-          {isLoadingUser && (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                marginTop: '40px',
-                width: '100%',
+              inputValue={inputValue}
+              onInputChange={(event, newInputValue) => {
+                setInputValue(newInputValue);
               }}
-            >
-              <CircularProgress
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
-              />
-            </Box>
-          )}
+              id="controllable-states-demo"
+              loading={isLoading}
+              noOptionsText={t('core:option_no', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              options={options}
+              sx={{ flexGrow: 1 }}
+              renderInput={(params) => (
+                <TextField
+                  autoFocus
+                  autoComplete="off"
+                  {...params}
+                  label={t('auth:address_name', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && nameOrAddress) {
+                      lookupFunc(inputValue);
+                    }
+                  }}
+                />
+              )}
+            />
+          </Box>
 
-          {!isLoadingUser && addressInfo && (
-            <>
-              <Spacer height="30px" />
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              flexGrow: 1,
+              overflow: 'auto',
+            }}
+          >
+            {!isLoadingUser && errorMessage && (
               <Box
                 sx={{
                   display: 'flex',
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: '20px',
                   justifyContent: 'center',
+                  marginTop: '40px',
                   width: '100%',
                 }}
               >
-                <Card
+                <Typography>{errorMessage}</Typography>
+              </Box>
+            )}
+
+            {isLoadingUser && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  marginTop: '40px',
+                  width: '100%',
+                }}
+              >
+                <CircularProgress
                   sx={{
-                    alignItems: 'center',
-                    background: theme.palette.background.default,
+                    color: theme.palette.text.primary,
+                  }}
+                />
+              </Box>
+            )}
+
+            {!isLoadingUser && addressInfo && (
+              <>
+                <Spacer height="30px" />
+                <Box
+                  sx={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: '200px',
-                    minWidth: '320px',
-                    padding: '15px',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: '20px',
+                    justifyContent: 'center',
+                    width: '100%',
                   }}
                 >
-                  <Typography
+                  <Card
                     sx={{
-                      textAlign: 'center',
+                      alignItems: 'center',
+                      background: theme.palette.background.default,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minHeight: '200px',
+                      minWidth: '320px',
+                      padding: '15px',
                     }}
                   >
-                    {addressInfo?.name ??
-                      t('auth:message.error.name_not_registered', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                  </Typography>
+                    <Typography
+                      sx={{
+                        textAlign: 'center',
+                      }}
+                    >
+                      {addressInfo?.name ??
+                        t('auth:message.error.name_not_registered', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                    </Typography>
 
-                  <Spacer height="20px" />
+                    <Spacer height="20px" />
 
-                  <Divider>
-                    {addressInfo?.name ? (
-                      <Avatar
-                        sx={{
-                          height: '50px',
-                          width: '50px',
-                          '& img': {
-                            objectFit: 'fill',
-                          },
-                        }}
-                        alt={addressInfo?.name}
-                        src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                          addressInfo?.name
-                        }/qortal_avatar?async=true`}
-                      >
+                    <Divider>
+                      {addressInfo?.name ? (
+                        <Avatar
+                          sx={{
+                            height: '50px',
+                            width: '50px',
+                            '& img': {
+                              objectFit: 'fill',
+                            },
+                          }}
+                          alt={addressInfo?.name}
+                          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                            addressInfo?.name
+                          }/qortal_avatar?async=true`}
+                        >
+                          <AccountCircleIcon
+                            sx={{
+                              fontSize: '50px',
+                            }}
+                          />
+                        </Avatar>
+                      ) : (
                         <AccountCircleIcon
                           sx={{
                             fontSize: '50px',
                           }}
                         />
-                      </Avatar>
-                    ) : (
-                      <AccountCircleIcon
-                        sx={{
-                          fontSize: '50px',
-                        }}
-                      />
-                    )}
-                  </Divider>
+                      )}
+                    </Divider>
 
-                  <Spacer height="20px" />
+                    <Spacer height="20px" />
 
-                  <Typography
+                    <Typography
+                      sx={{
+                        textAlign: 'center',
+                      }}
+                    >
+                      {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
+                      {addressInfo?.level}
+                    </Typography>
+                  </Card>
+
+                  <Card
                     sx={{
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
-                    {addressInfo?.level}
-                  </Typography>
-                </Card>
-
-                <Card
-                  sx={{
-                    background: theme.palette.background.default,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '20px',
-                    minHeight: '200px',
-                    minWidth: '320px',
-                    padding: '15px',
-                  }}
-                >
-                  <Box
-                    sx={{
+                      background: theme.palette.background.default,
                       display: 'flex',
+                      flexDirection: 'column',
                       gap: '20px',
-                      justifyContent: 'space-between',
-                      width: '100%',
+                      minHeight: '200px',
+                      minWidth: '320px',
+                      padding: '15px',
                     }}
                   >
                     <Box
                       sx={{
                         display: 'flex',
-                        flexShrink: 0,
+                        gap: '20px',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Typography>
+                          {t('auth:address', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+
+                      <Tooltip
+                        title={
+                          <span
+                            style={{
+                              color: theme.palette.text.primary,
+                              fontSize: '14px',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {t('auth:action.copy_address', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </span>
+                        }
+                        placement="bottom"
+                        arrow
+                        sx={{ fontSize: '24' }}
+                        slotProps={{
+                          tooltip: {
+                            sx: {
+                              color: theme.palette.text.primary,
+                              backgroundColor: theme.palette.background.default,
+                            },
+                          },
+                          arrow: {
+                            sx: {
+                              color: theme.palette.text.primary,
+                            },
+                          },
+                        }}
+                      >
+                        <ButtonBase
+                          onClick={() => {
+                            navigator.clipboard.writeText(addressInfo?.address);
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              textAlign: 'end',
+                            }}
+                          >
+                            {addressInfo?.address}
+                          </Typography>
+                        </ButtonBase>
+                      </Tooltip>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: '20px',
+                        justifyContent: 'space-between',
+                        width: '100%',
                       }}
                     >
                       <Typography>
-                        {t('auth:address', {
+                        {t('core:balance', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
+
+                      <Typography>{addressInfo?.balance}</Typography>
                     </Box>
 
-                    <Tooltip
-                      title={
-                        <span
-                          style={{
-                            color: theme.palette.text.primary,
-                            fontSize: '14px',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {t('auth:action.copy_address', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </span>
-                      }
-                      placement="bottom"
-                      arrow
-                      sx={{ fontSize: '24' }}
-                      slotProps={{
-                        tooltip: {
-                          sx: {
-                            color: theme.palette.text.primary,
-                            backgroundColor: theme.palette.background.default,
-                          },
-                        },
-                        arrow: {
-                          sx: {
-                            color: theme.palette.text.primary,
-                          },
-                        },
+                    <Spacer height="20px" />
+
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        executeEvent('openPaymentInternal', {
+                          address: addressInfo?.address,
+                          name: addressInfo?.name,
+                        });
                       }}
                     >
-                      <ButtonBase
-                        onClick={() => {
-                          navigator.clipboard.writeText(addressInfo?.address);
-                        }}
-                      >
-                        <Typography
-                          sx={{
-                            textAlign: 'end',
-                          }}
-                        >
-                          {addressInfo?.address}
-                        </Typography>
-                      </ButtonBase>
-                    </Tooltip>
-                  </Box>
+                      {t('core:action.send_qort', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  </Card>
+                </Box>
+              </>
+            )}
 
+            <Spacer height="40px" />
+
+            {isLoadingPayments && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  width: '100%',
+                }}
+              >
+                <CircularProgress
+                  sx={{
+                    color: theme.palette.text.primary,
+                  }}
+                />
+              </Box>
+            )}
+
+            {!isLoadingPayments && addressInfo && (
+              <Card
+                sx={{
+                  background: theme.palette.background.default,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'auto',
+                  padding: '15px',
+                }}
+              >
+                <Typography>
+                  {t('core:message.generic.most_recent_payment', {
+                    count: 20,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+
+                <Spacer height="20px" />
+
+                {!isLoadingPayments && payments?.length === 0 && (
                   <Box
                     sx={{
                       display: 'flex',
-                      gap: '20px',
-                      justifyContent: 'space-between',
+                      justifyContent: 'center',
                       width: '100%',
                     }}
                   >
                     <Typography>
-                      {t('core:balance', {
+                      {t('core:message.generic.no_payments', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
-
-                    <Typography>{addressInfo?.balance}</Typography>
                   </Box>
+                )}
 
-                  <Spacer height="20px" />
-
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      executeEvent('openPaymentInternal', {
-                        address: addressInfo?.address,
-                        name: addressInfo?.name,
-                      });
-                    }}
-                  >
-                    {t('core:action.send_qort', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                </Card>
-              </Box>
-            </>
-          )}
-
-          <Spacer height="40px" />
-
-          {isLoadingPayments && (
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                width: '100%',
-              }}
-            >
-              <CircularProgress
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
-              />
-            </Box>
-          )}
-
-          {!isLoadingPayments && addressInfo && (
-            <Card
-              sx={{
-                background: theme.palette.background.default,
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'auto',
-                padding: '15px',
-              }}
-            >
-              <Typography>
-                {t('core:message.generic.most_recent_payment', {
-                  count: 20,
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Typography>
-
-              <Spacer height="20px" />
-
-              {!isLoadingPayments && payments?.length === 0 && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    width: '100%',
-                  }}
-                >
-                  <Typography>
-                    {t('core:message.generic.no_payments', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </Box>
-              )}
-
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      {t('core:sender', { postProcess: 'capitalizeFirstChar' })}
-                    </TableCell>
-                    <TableCell>
-                      {t('core:receiver', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
-                    </TableCell>
-                    <TableCell>
-                      {t('core:time.time', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {payments.map((payment, index) => (
-                    <TableRow key={payment?.signature}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
                       <TableCell>
-                        <Tooltip
-                          title={
-                            <span
-                              style={{
-                                color: theme.palette.text.primary,
-                                fontSize: '14px',
-                                fontWeight: 700,
-                              }}
-                            >
-                              {t('auth:action.copy_address', {
-                                postProcess: 'capitalizeFirstChar',
-                              })}
-                            </span>
-                          }
-                          placement="bottom"
-                          arrow
-                          sx={{ fontSize: '24' }}
-                          slotProps={{
-                            tooltip: {
-                              sx: {
-                                color: theme.palette.text.primary,
-                                backgroundColor:
-                                  theme.palette.background.default,
-                              },
-                            },
-                            arrow: {
-                              sx: {
-                                color: theme.palette.text.primary,
-                              },
-                            },
-                          }}
-                        >
-                          <ButtonBase
-                            onClick={() => {
-                              navigator.clipboard.writeText(
-                                payment?.creatorAddress
-                              );
-                            }}
-                          >
-                            {formatAddress(payment?.creatorAddress)}
-                          </ButtonBase>
-                        </Tooltip>
+                        {t('core:sender', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </TableCell>
-
                       <TableCell>
-                        <Tooltip
-                          title={
-                            <span
-                              style={{
-                                color: theme.palette.text.primary,
-                                fontSize: '14px',
-                                fontWeight: 700,
-                              }}
-                            >
-                              {t('auth:action.copy_address', {
-                                postProcess: 'capitalizeFirstChar',
-                              })}
-                            </span>
-                          }
-                          placement="bottom"
-                          arrow
-                          sx={{ fontSize: '24' }}
-                          slotProps={{
-                            tooltip: {
-                              sx: {
-                                color: theme.palette.text.primary,
-                                backgroundColor:
-                                  theme.palette.background.default,
-                              },
-                            },
-                            arrow: {
-                              sx: {
-                                color: theme.palette.text.primary,
-                              },
-                            },
-                          }}
-                        >
-                          <ButtonBase
-                            onClick={() => {
-                              navigator.clipboard.writeText(payment?.recipient);
-                            }}
-                          >
-                            {formatAddress(payment?.recipient)}
-                          </ButtonBase>
-                        </Tooltip>
+                        {t('core:receiver', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </TableCell>
-
-                      <TableCell>{payment?.amount}</TableCell>
-
                       <TableCell>
-                        {formatTimestamp(payment?.timestamp)}
+                        {t('core:amount', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        {t('core:time.time', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Card>
-          )}
+                  </TableHead>
+
+                  <TableBody>
+                    {payments.map((payment, index) => (
+                      <TableRow key={payment?.signature}>
+                        <TableCell>
+                          <Tooltip
+                            title={
+                              <span
+                                style={{
+                                  color: theme.palette.text.primary,
+                                  fontSize: '14px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {t('auth:action.copy_address', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </span>
+                            }
+                            placement="bottom"
+                            arrow
+                            sx={{ fontSize: '24' }}
+                            slotProps={{
+                              tooltip: {
+                                sx: {
+                                  color: theme.palette.text.primary,
+                                  backgroundColor:
+                                    theme.palette.background.default,
+                                },
+                              },
+                              arrow: {
+                                sx: {
+                                  color: theme.palette.text.primary,
+                                },
+                              },
+                            }}
+                          >
+                            <ButtonBase
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  payment?.creatorAddress
+                                );
+                              }}
+                            >
+                              {formatAddress(payment?.creatorAddress)}
+                            </ButtonBase>
+                          </Tooltip>
+                        </TableCell>
+
+                        <TableCell>
+                          <Tooltip
+                            title={
+                              <span
+                                style={{
+                                  color: theme.palette.text.primary,
+                                  fontSize: '14px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {t('auth:action.copy_address', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </span>
+                            }
+                            placement="bottom"
+                            arrow
+                            sx={{ fontSize: '24' }}
+                            slotProps={{
+                              tooltip: {
+                                sx: {
+                                  color: theme.palette.text.primary,
+                                  backgroundColor:
+                                    theme.palette.background.default,
+                                },
+                              },
+                              arrow: {
+                                sx: {
+                                  color: theme.palette.text.primary,
+                                },
+                              },
+                            }}
+                          >
+                            <ButtonBase
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  payment?.recipient
+                                );
+                              }}
+                            >
+                              {formatAddress(payment?.recipient)}
+                            </ButtonBase>
+                          </Tooltip>
+                        </TableCell>
+
+                        <TableCell>{payment?.amount}</TableCell>
+
+                        <TableCell>
+                          {formatTimestamp(payment?.timestamp)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            )}
+          </Box>
         </Box>
-      </Box>
+      </ClickAwayListener>
     </DrawerUserLookup>
   );
 };
