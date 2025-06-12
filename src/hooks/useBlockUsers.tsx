@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-export const useBlockedAddresses = () => {
+export const useBlockedAddresses = (isAuthenticated?: boolean) => {
   const userBlockedRef = useRef({});
   const userNamesBlockedRef = useRef({});
 
@@ -22,6 +22,9 @@ export const useBlockedAddresses = () => {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+    userBlockedRef.current = {};
+    userNamesBlockedRef.current = {};
     const fetchBlockedList = async () => {
       try {
         const response = await new Promise((res, rej) => {
@@ -82,7 +85,7 @@ export const useBlockedAddresses = () => {
       }
     };
     fetchBlockedList();
-  }, []);
+  }, [isAuthenticated]);
 
   const removeBlockFromList = useCallback(async (address, name) => {
     if (name) {
