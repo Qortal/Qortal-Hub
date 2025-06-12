@@ -565,6 +565,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             aria-label={t('core:action.close', {
               postProcess: 'capitalizeFirstChar',
             })}
+            sx={{
+              bgcolor: theme.palette.background.default,
+              color: theme.palette.text.primary,
+            }}
           >
             <CloseIcon />
           </IconButton>

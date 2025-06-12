@@ -256,6 +256,10 @@ export const GroupJoinRequests = ({
                       aria-label={t('core:comment_other', {
                         postProcess: 'capitalizeFirstChar',
                       })}
+                      sx={{
+                        bgcolor: theme.palette.background.default,
+                        color: theme.palette.text.primary,
+                      }}
                     >
                       <GroupAddIcon
                         sx={{

@@ -22,7 +22,8 @@ const ThemeSelector = () => {
       <IconButton
         onClick={toggleTheme}
         sx={{
-          color: theme.palette.text.secondary,
+          bgcolor: theme.palette.background.default,
+          color: theme.palette.text.primary,
         }}
       >
         {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}

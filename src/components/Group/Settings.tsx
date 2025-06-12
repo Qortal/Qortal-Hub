@@ -181,6 +181,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
               aria-label={t('core:action.close', {
                 postProcess: 'capitalizeFirstChar',
               })}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
             >
               <CloseIcon />
             </IconButton>

@@ -229,6 +229,10 @@ export const ManageMembers = ({
               color="inherit"
               edge="start"
               onClick={handleClose}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
             >
               <CloseIcon />
             </IconButton>
