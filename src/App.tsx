@@ -143,7 +143,6 @@ import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
-import MintingDetailsPage from './components/Minting/Minting-new.tsx';
 
 type extStates =
   | 'authenticated'
@@ -3978,13 +3977,11 @@ function App() {
       )}
 
       {isOpenMinting && (
-        // <Minting
-        //   setIsOpenMinting={setIsOpenMinting}
-        //   myAddress={address}
-        //   show={show}
-        // />
-
-        <MintingDetailsPage />
+        <Minting
+          setIsOpenMinting={setIsOpenMinting}
+          myAddress={address}
+          show={show}
+        />
       )}
 
       {!isAuthenticated && (

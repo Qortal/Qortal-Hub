@@ -145,7 +145,7 @@ export const GroupList = ({
         </ButtonBase>
       </Box>
 
-      <div
+      <Box
         style={{
           alignItems: 'flex-start',
           display: 'flex',
@@ -176,7 +176,7 @@ export const GroupList = ({
             />
           ))}
         </List>
-      </div>
+      </Box>
 
       <Box
         sx={{

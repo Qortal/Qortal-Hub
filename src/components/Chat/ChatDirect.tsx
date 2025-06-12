@@ -546,7 +546,7 @@ export const ChatDirect = ({
   }, []);
 
   return (
-    <div
+    <Box
       style={{
         background: theme.palette.background.default,
         display: 'flex',
@@ -615,7 +615,7 @@ export const ChatDirect = ({
         tempChatReferences={tempChatReferences}
       />
 
-      <div
+      <Box
         style={{
           backgroundColor: theme.palette.background.default,
           bottom: isFocusedParent ? '0px' : 'unset',
@@ -632,7 +632,7 @@ export const ChatDirect = ({
           zIndex: isFocusedParent ? 5 : 'unset',
         }}
       >
-        <div
+        <Box
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -720,7 +720,7 @@ export const ChatDirect = ({
               </Typography>
             </Box>
           )}
-        </div>
+        </Box>
 
         <Box
           sx={{
@@ -766,7 +766,7 @@ export const ChatDirect = ({
             {` Send`}
           </CustomButton>
         </Box>
-      </div>
+      </Box>
 
       <LoadingSnackbar
         open={isLoading}
@@ -783,6 +783,6 @@ export const ChatDirect = ({
         info={infoSnack}
         setInfo={setInfoSnack}
       />
-    </div>
+    </Box>
   );
 };

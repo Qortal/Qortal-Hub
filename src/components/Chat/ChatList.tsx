@@ -206,7 +206,7 @@ export const ChatList = ({
         width: '100%',
       }}
     >
-      <div
+      <Box
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -215,7 +215,7 @@ export const ChatList = ({
           width: '100%',
         }}
       >
-        <div
+        <Box
           ref={parentRef}
           className="List"
           style={{
@@ -226,13 +226,13 @@ export const ChatList = ({
             position: 'relative',
           }}
         >
-          <div
+          <Box
             style={{
               height: rowVirtualizer.getTotalSize(),
               width: '100%',
             }}
           >
-            <div
+            <Box
               style={{
                 left: 0,
                 position: 'absolute',
@@ -325,7 +325,7 @@ export const ChatList = ({
                 // Render fallback if message is null
                 if (!message) {
                   return (
-                    <div
+                    <Box
                       key={virtualRow.index}
                       style={{
                         alignItems: 'center',
@@ -345,12 +345,12 @@ export const ChatList = ({
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
-                    </div>
+                    </Box>
                   );
                 }
 
                 return (
-                  <div
+                  <Box
                     data-index={virtualRow.index} //needed for dynamic row height measurement
                     ref={rowVirtualizer.measureElement} //measure dynamic row height
                     key={message.signature}
@@ -395,12 +395,12 @@ export const ChatList = ({
                         scrollToItem={goToMessage}
                       />
                     </ErrorBoundary>
-                  </div>
+                  </Box>
                 );
               })}
-            </div>
-          </div>
-        </div>
+            </Box>
+          </Box>
+        </Box>
 
         {showScrollButton && (
           <Button
@@ -449,7 +449,7 @@ export const ChatList = ({
             })}
           </Button>
         )}
-      </div>
+      </Box>
 
       {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
