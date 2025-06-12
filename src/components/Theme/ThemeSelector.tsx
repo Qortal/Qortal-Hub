@@ -19,26 +19,14 @@ const ThemeSelector = () => {
 
   return (
     <Box ref={selectorRef}>
-      <Tooltip
-        title={
-          themeMode === 'dark'
-            ? t('core:theme.light_mode', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            : t('core:theme.dark_mode', {
-                postProcess: 'capitalizeFirstChar',
-              })
-        }
+      <IconButton
+        onClick={toggleTheme}
+        sx={{
+          color: theme.palette.text.secondary,
+        }}
       >
-        <IconButton
-          onClick={toggleTheme}
-          sx={{
-            color: theme.palette.text.secondary,
-          }}
-        >
-          {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
-        </IconButton>
-      </Tooltip>
+        {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+      </IconButton>
     </Box>
   );
 };
