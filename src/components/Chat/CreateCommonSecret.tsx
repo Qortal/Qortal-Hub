@@ -213,7 +213,7 @@ export const CreateCommonSecret = ({
   return (
     <Box
       sx={{
-        background: theme.palette.background.default,
+        background: theme.palette.background.paper,
         display: 'flex',
         flexDirection: 'column',
         gap: '25px',

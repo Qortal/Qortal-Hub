@@ -515,9 +515,9 @@ export const NotAuthenticated = ({
 
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
         }}
       >
         <HtmlTooltip
@@ -550,9 +550,9 @@ export const NotAuthenticated = ({
 
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
         }}
       >
         <HtmlTooltip
@@ -628,18 +628,18 @@ export const NotAuthenticated = ({
 
         <Box
           sx={{
-            display: 'flex',
-            gap: '10px',
             alignItems: 'center',
+            borderRadius: '8px',
+            display: 'flex',
             flexDirection: 'column',
-            outlineWidth: '0.5px',
+            gap: '10px',
             outlineStyle: 'solid',
+            outlineWidth: '0.5px',
             outlineColor:
               theme.palette.mode === 'dark'
                 ? 'rgba(255, 255, 255, 0.5)'
                 : 'rgba(0, 0, 0, 0.3)',
             padding: '20px 30px',
-            borderRadius: '8px',
           }}
         >
           <>
@@ -795,11 +795,11 @@ export const NotAuthenticated = ({
           <DialogContent>
             <Box
               sx={{
-                width: '100% !important',
-                overflow: 'auto',
-                height: '60vh',
                 display: 'flex',
                 flexDirection: 'column',
+                height: '60vh',
+                overflow: 'auto',
+                width: '100% !important',
               }}
             >
               {mode === 'list' && (
@@ -894,10 +894,10 @@ export const NotAuthenticated = ({
 
                         <Box
                           sx={{
+                            alignItems: 'center',
                             display: 'flex',
                             gap: '10px',
                             justifyContent: 'space-between',
-                            alignItems: 'center',
                           }}
                         >
                           <Button

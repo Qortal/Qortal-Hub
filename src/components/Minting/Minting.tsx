@@ -584,7 +584,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           sx={{ borderBottom: 1, borderColor: theme.palette.text.secondary }}
         >
           <Tabs
-            value={setValueMintingTab}
+            value={valueMintingTab}
             onChange={handleChange}
             variant={'fullWidth'}
             scrollButtons="auto"
@@ -596,7 +596,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             }}
           >
             <Tab
-              label="Minting Details"
+              label="Minting Details" // TODO translate
               sx={{
                 '&.Mui-selected': {
                   color: theme.palette.text.primary,
