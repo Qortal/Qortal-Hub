@@ -1635,7 +1635,7 @@ export const Group = ({
       <Box
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.paper,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
@@ -1763,7 +1763,7 @@ export const Group = ({
                 sx={{
                   background:
                     direct?.address === selectedDirect?.address &&
-                    theme.palette.background.paper,
+                    theme.palette.background.surface,
                   borderRadius: '2px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -1782,7 +1782,7 @@ export const Group = ({
                   <ListItemAvatar>
                     <Avatar
                       sx={{
-                        background: theme.palette.background.paper,
+                        background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
@@ -2008,7 +2008,7 @@ export const Group = ({
             <>
               <Box
                 sx={{
-                  background: theme.palette.background.paper,
+                  background: theme.palette.background.surface,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                   opacity: !(desktopViewMode === 'chat') ? 0 : 1,

@@ -228,8 +228,8 @@ export const MessageItemComponent = ({
         isLast={isLast}
         onSeen={onSeenFunc}
       >
-        <div
-          style={{
+        <Box
+          sx={{
             backgroundColor: theme.palette.background.paper,
             borderRadius: '7px',
             display: 'flex',
@@ -664,7 +664,7 @@ export const MessageItemComponent = ({
               </Box>
             </Box>
           </Box>
-        </div>
+        </Box>
       </MessageWragger>
     </>
   );

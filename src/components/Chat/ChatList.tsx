@@ -217,7 +217,6 @@ export const ChatList = ({
       >
         <Box
           ref={parentRef}
-          className="List"
           style={{
             display: 'flex',
             flexGrow: 1,
@@ -227,13 +226,13 @@ export const ChatList = ({
           }}
         >
           <Box
-            style={{
+            sx={{
               height: rowVirtualizer.getTotalSize(),
               width: '100%',
             }}
           >
             <Box
-              style={{
+              sx={{
                 left: 0,
                 position: 'absolute',
                 top: 0,
@@ -327,7 +326,7 @@ export const ChatList = ({
                   return (
                     <Box
                       key={virtualRow.index}
-                      style={{
+                      sx={{
                         alignItems: 'center',
                         display: 'flex',
                         flexDirection: 'column',
@@ -354,7 +353,7 @@ export const ChatList = ({
                     data-index={virtualRow.index} //needed for dynamic row height measurement
                     ref={rowVirtualizer.measureElement} //measure dynamic row height
                     key={message.signature}
-                    style={{
+                    sx={{
                       alignItems: 'center',
                       display: 'flex',
                       flexDirection: 'column',
@@ -405,7 +404,7 @@ export const ChatList = ({
         {showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
-            style={{
+            sx={{
               backgroundColor: theme.palette.other.unread,
               border: 'none',
               borderRadius: '20px',
@@ -428,15 +427,15 @@ export const ChatList = ({
         {showScrollDownButton && !showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
-            style={{
+            sx={{
               backgroundColor: theme.palette.background.paper,
-              outline: `1px solid ${theme.palette.primary.light}`,
               border: 'none',
               borderRadius: '20px',
               bottom: 20,
               color: theme.palette.text.primary,
               cursor: 'pointer',
               fontSize: '16px',
+              outline: `1px solid ${theme.palette.primary.light}`,
               padding: '10px 20px',
               position: 'absolute',
               right: 20,

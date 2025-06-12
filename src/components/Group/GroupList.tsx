@@ -60,7 +60,7 @@ export const GroupList = ({
 
   return (
     <Box
-      style={{
+      sx={{
         alignItems: 'flex-start',
         background: theme.palette.background.surface,
         borderRadius: '0px 15px 15px 0px',
@@ -146,7 +146,7 @@ export const GroupList = ({
       </Box>
 
       <Box
-        style={{
+        sx={{
           alignItems: 'flex-start',
           display: 'flex',
           flexDirection: 'column',
