@@ -71,7 +71,7 @@
       "block_delay_maximum": "ritardo massimo del blocco per le approvazioni delle transazioni di gruppo",
       "closed_group": "questo è un gruppo chiuso/privato, quindi occorre attendere fino a quando un amministratore accetta la richiesta",
       "descrypt_wallet": "decrittazione del wallet ...",
-      "encryption_key": "la prima chiave di crittografia comune del gruppo è in fase di creazione. Si prega di attendere qualche minuto per essere recuperato dalla rete. Controllo ogni 2 minuti ...",
+      "encryption_key": "la prima chiave di crittografia comune del gruppo è in fase di creazione. Si prega di attendere qualche minuto per il suo recupero dalla rete. Controllo ogni 2 minuti ...",
       "group_announcement": "annunci di gruppo",
       "group_approval_threshold": "soglia di approvazione del gruppo (numero / percentuale di amministratori che devono approvare una transazione)",
       "group_encrypted": "gruppo crittografato",
