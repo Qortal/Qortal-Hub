@@ -40,7 +40,6 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
-import { ErrorRounded } from '@mui/icons-material';
 
 export const Label = styled('label')`
   display: block;
