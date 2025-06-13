@@ -397,7 +397,7 @@ function App() {
     addToBlockList,
     removeBlockFromList,
     getAllBlockedUsers,
-  } = useBlockedAddresses();
+  } = useBlockedAddresses(extState === 'authenticated');
 
   const [currentNode, setCurrentNode] = useState({
     url: 'http://127.0.0.1:12391',
