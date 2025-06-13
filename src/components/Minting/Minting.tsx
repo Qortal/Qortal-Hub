@@ -51,10 +51,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [accountInfo, setAccountInfo] = useState(null);
   const [mintingKey, setMintingKey] = useState('');
   const [rewardShares, setRewardShares] = useState([]);
-  const [nodeInfos, setNodeInfos] = useState({});
+  const [nodeStatus, setNodeStatus] = useState({});
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [adminInfo, setAdminInfo] = useState({});
+  const [nodeHeightBlock, setNodeHeightBlock] = useState(null);
   const [valueMintingTab, setValueMintingTab] = useState(0);
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
@@ -178,21 +179,51 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     return address;
   };
 
-  const getNodeInfos = async () => {
+  const getAdminInfo = useCallback(async () => {
+    try {
+      const url = `${getBaseApiReact()}/admin/info`;
+      const response = await fetch(url);
+      const data = await response.json();
+      setAdminInfo(data);
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
+
+  const getNodeStatus = useCallback(async () => {
     try {
       const url = `${getBaseApiReact()}/admin/status`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(url);
       const data = await response.json();
-      setNodeInfos(data);
+      setNodeStatus(data);
     } catch (error) {
       console.error('Request failed', error);
     }
-  };
+  }, []);
+
+  const getNodeHeightBlock = useCallback(async () => {
+    try {
+      const nodeBlock = parseFloat(nodeStatus?.height) - 1440;
+      const url = `${getBaseApiReact()}/blocks/byheight/${nodeBlock}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      setNodeHeightBlock(data);
+    } catch (error) {
+      console.error('Request failed', error);
+    }
+  }, []);
+
+  const getAddressLevel = useCallback(async () => {
+    try {
+      const url = `${getBaseApiReact()}/addresses/online/levels`;
+      const response = await fetch(url);
+      const data = await response.json();
+      // this.tier4Online = parseFloat(this.addressLevel[7].count) + parseFloat(this.addressLevel[8].count)
+      // setNodeStatus(data);
+    } catch (error) {
+      console.error('Request failed', error);
+    }
+  }, []);
 
   const getRewardShares = useCallback(async (address) => {
     try {
@@ -208,17 +239,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       console.log(error);
     }
   }, []);
-
-  const getAdminInfo = async () => {
-    try {
-      const url = `${getBaseApiReact()}/admin/info`;
-      const response = await fetch(url);
-      const data = await response.json();
-      setAdminInfo(data);
-    } catch (error) {
-      console.log(error);
-    }
-  };
 
   const addMintingAccount = useCallback(async (val) => {
     try {
@@ -464,14 +484,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   };
 
   useEffect(() => {
-    getNodeInfos();
+    getAddressLevel();
+    getAdminInfo();
     getMintingAccounts();
+    getNodeHeightBlock();
+    getNodeStatus();
   }, []);
 
   useEffect(() => {
     if (!myAddress) return;
     getRewardShares(myAddress);
-
     getAccountInfo(myAddress);
   }, [myAddress]);
 
@@ -509,7 +531,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const _levelUpBlocks = () => {
     if (
       accountInfo?.blocksMinted === undefined ||
-      nodeInfos?.height === undefined
+      nodeStatus?.height === undefined
     )
       return null;
     let countBlocks =
@@ -521,13 +543,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   };
 
   const StatCard = ({ label, value }: { label: string; value: string }) => (
-    <Grid size={{ xs: 12, sm: 6 }}>
-      <Box textAlign="center">
-        <Typography variant="subtitle1" fontWeight="bold">
-          {label}
-        </Typography>
-        <Typography>{value}</Typography>
-      </Box>
+    <Grid size={{ xs: 4, sm: 6 }}>
+      <Paper elevation={5}>
+        <Box textAlign="center">
+          <Typography variant="subtitle1" fontWeight="bold">
+            {label}
+          </Typography>
+          <Typography>{value}</Typography>
+        </Box>
+      </Paper>
     </Grid>
   );
 
@@ -626,8 +650,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Container maxWidth="md" sx={{ py: 4 }}>
-                <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
-                  <Typography variant="h6" gutterBottom>
+                <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                  <Typography
+                    variant="h3"
+                    gutterBottom
+                    sx={{ textAlign: 'center' }}
+                  >
                     Blockchain Statistics
                   </Typography>
 
@@ -636,19 +664,30 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       label="Avg. Qortal Blocktime"
                       value="72.84 Seconds"
                     />
+
                     <StatCard
                       label="Avg. Blocks Per Day"
                       value="1186.16 Blocks"
                     />
+
                     <StatCard
                       label="Avg. Created QORT Per Day"
                       value="3558.48 QORT"
                     />
+
+                    <StatCard
+                      label="Nicola: nodeInfo"
+                      value={nodeStatus?.height}
+                    />
                   </Grid>
                 </Paper>
 
-                <Paper elevation={3} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
-                  <Typography variant="h6" gutterBottom>
+                <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                  <Typography
+                    variant="h3"
+                    gutterBottom
+                    sx={{ textAlign: 'center' }}
+                  >
                     Minting Account Details
                   </Typography>
 
@@ -656,21 +695,25 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     <StatCard label="Current Status" value="(Minting)" />
                     <StatCard label="Current Level" value="Level 4" />
                     <StatCard
-                      label="Blocks To Next Level"
-                      value="139467 Blocks"
+                      label="NICO: Blocks To Next Level"
+                      value={nodeHeightBlock}
                     />
                   </Grid>
 
                   <Box mt={2} textAlign="center">
-                    <Typography>
+                    <Typography sx={{ textAlign: 'center' }}>
                       With a 24/7 Minting you will reach level 5 in{' '}
                       <strong>117.58 days</strong>!
                     </Typography>
                   </Box>
                 </Paper>
 
-                <Paper elevation={3} sx={{ p: 3, borderRadius: '10px' }}>
-                  <Typography variant="h6" gutterBottom>
+                <Paper elevation={2} sx={{ p: 3, borderRadius: '10px' }}>
+                  <Typography
+                    variant="h3"
+                    gutterBottom
+                    sx={{ textAlign: 'center' }}
+                  >
                     Minting Rewards Info
                   </Typography>
 
@@ -762,7 +805,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   {t('group:message.generic.node_minting', {
                     postProcess: 'capitalizeFirstChar',
                   })}{' '}
-                  {nodeInfos?.isMintingPossible?.toString()}
+                  {nodeStatus?.isMintingPossible?.toString()}
                 </Typography>
               </Card>
 
