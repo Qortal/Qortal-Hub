@@ -1,5 +1,10 @@
 # Qortal Hub - Desktop Interface for Qortal
 
+![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/Qortal/Qortal-Hub?label=latest%20version)
+[![GitHub Releases](https://img.shields.io/github/downloads/Qortal/Qortal-Hub/latest/total)](https://github.com/Qortal/Qortal-Hub/releases/latest)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](https://opensource.org/licenses/GPL-3.0)
+[![Qortal Discord Invite](https://img.shields.io/discord/745037351163527189?color=%237289DA&label=Chat&logo=discord&logoColor=white)](https://discord.com/invite/54UyhB7)
+
 Qortal Hub is the newest interface for Qortal, part of the 'Qortal Trifecta' series of new User Interfaces for the platform/network.
 
 It is likely that Qortal Hub will become the new 'primary interface' for Qortal, and that the primary development focus surrounding Qortal Interface development, will be focused here instead of the previous 'qortal-ui' repo.
