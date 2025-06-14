@@ -9,6 +9,10 @@ Qortal Hub is the newest interface for Qortal, part of the 'Qortal Trifecta' ser
 
 It is likely that Qortal Hub will become the new 'primary interface' for Qortal, and that the primary development focus surrounding Qortal Interface development, will be focused here instead of the previous 'qortal-ui' repo.
 
+## Hosted access links
+
+You can use the hosted-access [Qortal Hub](https://hub.qortal.link/) or [Qortal Go, the mobile version](https://go.qortal.link)
+
 ## Qortal Hub - Next-Level Secure Communications and More
 
 Qortal Hub came along with the new Group Encryption methodologies applied, which provide **encrypted chat in Q-Chat for private groups.** Qortal Hub was the first to implement the new method of group encryption, which allows new users to see previously published data, unlike the previous group encryption methodology of things like 'threads' in Q-Mail.
