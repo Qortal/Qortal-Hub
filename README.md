@@ -11,7 +11,7 @@ It is likely that Qortal Hub will become the new 'primary interface' for Qortal,
 
 ## Hosted access links
 
-You can use the hosted-access [Qortal Hub](https://hub.qortal.link/) or [Qortal Go, the mobile version](https://go.qortal.link)
+Without installing any application on you computer or mobile phone, you can use the hosted-access [Qortal Hub](https://hub.qortal.link/) or [Qortal Go, the mobile version](https://go.qortal.link)
 
 ## Qortal Hub - Next-Level Secure Communications and More
 
