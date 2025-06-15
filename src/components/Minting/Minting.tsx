@@ -42,6 +42,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { TransitionUp } from '../../common/Transitions.tsx';
+import { averageBlockDay, averageBlockTime, levelUpBlocks } from './Stats.tsx';
+import { node } from 'slate';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
@@ -55,7 +57,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [adminInfo, setAdminInfo] = useState({});
-  const [nodeHeightBlock, setNodeHeightBlock] = useState(null);
+  const [nodeHeightBlock, setNodeHeightBlock] = useState({});
   const [valueMintingTab, setValueMintingTab] = useState(0);
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const theme = useTheme();
@@ -201,17 +203,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     }
   }, []);
 
-  const getNodeHeightBlock = useCallback(async () => {
-    try {
-      const nodeBlock = parseFloat(nodeStatus?.height) - 1440;
-      const url = `${getBaseApiReact()}/blocks/byheight/${nodeBlock}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      setNodeHeightBlock(data);
-    } catch (error) {
-      console.error('Request failed', error);
+  useEffect(() => {
+    if (nodeStatus?.height) {
+      const getNodeHeightBlock = async () => {
+        try {
+          const nodeBlock = nodeStatus.height - 1440;
+          const url = `${getBaseApiReact()}/blocks/byheight/${nodeBlock}`;
+          const response = await fetch(url);
+          const data = await response.json();
+          setNodeHeightBlock(data);
+        } catch (error) {
+          console.error('Request failed', error);
+        }
+      };
+
+      getNodeHeightBlock();
     }
-  }, []);
+  }, [nodeStatus]);
 
   const getAddressLevel = useCallback(async () => {
     try {
@@ -487,7 +495,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     getAddressLevel();
     getAdminInfo();
     getMintingAccounts();
-    getNodeHeightBlock();
     getNodeStatus();
   }, []);
 
@@ -497,49 +504,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     getAccountInfo(myAddress);
   }, [myAddress]);
 
-  const _blocksNeed = () => {
-    if (accountInfo?.level === 0) {
-      return 7200; // TODO manage these magic numbers in a proper location
-    } else if (accountInfo?.level === 1) {
-      return 72000;
-    } else if (accountInfo?.level === 2) {
-      return 201600;
-    } else if (accountInfo?.level === 3) {
-      return 374400;
-    } else if (accountInfo?.level === 4) {
-      return 618400;
-    } else if (accountInfo?.level === 5) {
-      return 964000;
-    } else if (accountInfo?.level === 6) {
-      return 1482400;
-    } else if (accountInfo?.level === 7) {
-      return 2173600;
-    } else if (accountInfo?.level === 8) {
-      return 3037600;
-    } else if (accountInfo?.level === 9) {
-      return 4074400;
-    }
-  };
-
   const handleClose = () => {
     setOpenSnack(false);
     setTimeout(() => {
       setInfo(null);
     }, 250);
-  };
-
-  const _levelUpBlocks = () => {
-    if (
-      accountInfo?.blocksMinted === undefined ||
-      nodeStatus?.height === undefined
-    )
-      return null;
-    let countBlocks =
-      _blocksNeed() -
-      (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
-
-    let countBlocksString = countBlocks.toString();
-    return '' + countBlocksString;
   };
 
   const StatCard = ({ label, value }: { label: string; value: string }) => (
@@ -654,30 +623,31 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   <Typography
                     variant="h3"
                     gutterBottom
-                    sx={{ textAlign: 'center' }}
+                    sx={{ textAlign: 'center' }} // TODO translate
                   >
                     Blockchain Statistics
                   </Typography>
 
                   <Grid container spacing={2}>
                     <StatCard
-                      label="Avg. Qortal Blocktime"
-                      value="72.84 Seconds"
+                      label="Avg. Qortal Blocktime (seconds)"
+                      value={averageBlockTime(
+                        adminInfo,
+                        nodeHeightBlock
+                      ).toFixed(2)}
                     />
 
                     <StatCard
                       label="Avg. Blocks Per Day"
-                      value="1186.16 Blocks"
+                      value={averageBlockDay(
+                        adminInfo,
+                        nodeHeightBlock
+                      ).toFixed(2)}
                     />
 
                     <StatCard
                       label="Avg. Created QORT Per Day"
                       value="3558.48 QORT"
-                    />
-
-                    <StatCard
-                      label="Nicola: nodeInfo"
-                      value={nodeStatus?.height}
                     />
                   </Grid>
                 </Paper>
@@ -695,8 +665,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     <StatCard label="Current Status" value="(Minting)" />
                     <StatCard label="Current Level" value="Level 4" />
                     <StatCard
-                      label="NICO: Blocks To Next Level"
-                      value={nodeHeightBlock}
+                      label="Blocks To Next Level"
+                      value={levelUpBlocks(accountInfo, nodeStatus) || ''}
                     />
                   </Grid>
 
@@ -798,7 +768,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   {t('group:message.generic.next_level', {
                     postProcess: 'capitalizeFirstChar',
                   })}{' '}
-                  {_levelUpBlocks()}
+                  {levelUpBlocks(accountInfo, nodeStatus)}
                 </Typography>
 
                 <Typography>
