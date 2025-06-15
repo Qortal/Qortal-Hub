@@ -42,8 +42,12 @@ import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { TransitionUp } from '../../common/Transitions.tsx';
-import { averageBlockDay, averageBlockTime, levelUpBlocks } from './Stats.tsx';
-import { node } from 'slate';
+import {
+  averageBlockDay,
+  averageBlockTime,
+  dayReward,
+  levelUpBlocks,
+} from './MintingStats.tsx';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
@@ -187,6 +191,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const response = await fetch(url);
       const data = await response.json();
       setAdminInfo(data);
+      setTimeout(getAdminInfo, 30000);
     } catch (error) {
       console.log(error);
     }
@@ -198,6 +203,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const response = await fetch(url);
       const data = await response.json();
       setNodeStatus(data);
+      setTimeout(getNodeStatus, 30000);
     } catch (error) {
       console.error('Request failed', error);
     }
@@ -703,7 +709,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label="Est. Reward Per Day"
-                      value="6.00782338 QORT"
+                      value={dayReward(
+                        adminInfo,
+                        nodeHeightBlock,
+                        nodeStatus
+                      ).toFixed(2)}
                     />
                     {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
                   </Grid>
