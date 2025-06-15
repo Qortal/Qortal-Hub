@@ -1,4 +1,4 @@
-const accountTargetBlocks = (level: number) => {
+const accountTargetBlocks = (level: number): number | undefined => {
   if (level === 0) {
     return 7200;
   } else if (level === 1) {
@@ -20,11 +20,11 @@ const accountTargetBlocks = (level: number) => {
   } else if (level === 9) {
     return 4074400;
   } else {
-    return 0; // fallback: should never reach this point
+    return undefined; // fallback: should never reach this point
   }
 };
 
-export const accountLevel = (level: number): number => {
+export const accountLevel = (level: number): number | undefined => {
   if (level === 0) {
     return 1;
   } else if (level === 1) {
@@ -46,7 +46,7 @@ export const accountLevel = (level: number): number => {
   } else if (level === 9) {
     return 10;
   } else {
-    return 0; // fallback: should never reach this point
+    return undefined; // fallback: should never reach this point
   }
 };
 
@@ -80,28 +80,108 @@ export const blockReward = (nodeStatus): number => {
   }
 };
 
-export const averageBlockDay = (adminInfo, nodeHeightBlock) => {
-  const time = adminInfo.currentTimestamp - nodeHeightBlock.timestamp;
-  const average: number = time / 1000 / 1440;
-  const averageBlockDay = 86400 / average;
-  return averageBlockDay;
+export const currentTier = (addressInfo): string => {
+  if (addressInfo.level === 0) {
+    return html`${translate('mintingpage.mchange28')} 0
+    (${translate('mintingpage.mchange27')} 0)`;
+  } else if (addressInfo.level === 1) {
+    return html`${translate('mintingpage.mchange28')} 1
+    (${translate('mintingpage.mchange27')} 1 + 2)`;
+  } else if (addressInfo.level === 2) {
+    return html`${translate('mintingpage.mchange28')} 1
+    (${translate('mintingpage.mchange27')} 1 + 2)`;
+  } else if (addressInfo.level === 3) {
+    return html`${translate('mintingpage.mchange28')} 2
+    (${translate('mintingpage.mchange27')} 3 + 4)`;
+  } else if (addressInfo.level === 4) {
+    return html`${translate('mintingpage.mchange28')} 2
+    (${translate('mintingpage.mchange27')} 3 + 4)`;
+  } else if (addressInfo.level === 5) {
+    return html`${translate('mintingpage.mchange28')} 3
+    (${translate('mintingpage.mchange27')} 5 + 6)`;
+  } else if (addressInfo.level === 6) {
+    return html`${translate('mintingpage.mchange28')} 3
+    (${translate('mintingpage.mchange27')} 5 + 6)`;
+  } else if (addressInfo.level === 7) {
+    return html`${translate('mintingpage.mchange28')} 4
+    (${translate('mintingpage.mchange27')} 7 + 8)`;
+  } else if (addressInfo.level === 8) {
+    return html`${translate('mintingpage.mchange28')} 4
+    (${translate('mintingpage.mchange27')} 7 + 8)`;
+  } else if (addressInfo.level === 9) {
+    return html`${translate('mintingpage.mchange28')} 5
+    (${translate('mintingpage.mchange27')} 9 + 10)`;
+  } else if (addressInfo.level === 10) {
+    return html`${translate('mintingpage.mchange28')} 5
+    (${translate('mintingpage.mchange27')} 9 + 10)`;
+  }
+};
+
+export const tierPercent = (addressInfo, tier4Online): number | undefined => {
+  if (addressInfo.level === 0) {
+    return 0;
+  } else if (addressInfo.level === 1) {
+    return 6;
+  } else if (addressInfo.level === 2) {
+    return 6;
+  } else if (addressInfo.level === 3) {
+    return 13;
+  } else if (addressInfo.level === 4) {
+    return 1;
+  } else if (addressInfo.level === 5) {
+    if (tier4Online < 30) {
+      return 45;
+    } else {
+      return 19;
+    }
+  } else if (addressInfo.level === 6) {
+    if (tier4Online < 30) {
+      return 45;
+    } else {
+      return 19;
+    }
+  } else if (addressInfo.level === 7) {
+    if (tier4Online < 30) {
+      return 45;
+    } else {
+      return 26;
+    }
+  } else if (addressInfo.level === 8) {
+    if (tier4Online < 30) {
+      return 45;
+    } else {
+      return 26;
+    }
+  } else if (addressInfo.level === 9) {
+    return 32;
+  } else if (addressInfo.level === 10) {
+    return 32;
+  } else {
+    return undefined;
+  }
 };
 
 export const averageBlockTime = (adminInfo, nodeHeightBlock) => {
-  const avgBlockString = adminInfo.currentTimestamp - nodeHeightBlock.timestamp;
-  const averageTimeString = avgBlockString / 1000 / 1440;
-  return averageTimeString;
+  const avgBlock = adminInfo.currentTimestamp - nodeHeightBlock.timestamp;
+  const averageTime = avgBlock / 1000 / 1440;
+  return averageTime;
+};
+
+export const averageBlockDay = (adminInfo, nodeHeightBlock) => {
+  const averageBlockDay = 86400 / averageBlockTime(adminInfo, nodeHeightBlock);
+  return averageBlockDay;
 };
 
 export const levelUpBlocks = (accountInfo, nodeStatus) => {
   if (
     accountInfo?.blocksMinted === undefined ||
-    nodeStatus?.height === undefined
+    nodeStatus?.height === undefined ||
+    accountTargetBlocks(accountInfo?.level) == undefined
   )
     return null;
 
   const countBlocks =
-    accountTargetBlocks(accountInfo?.level) -
+    accountTargetBlocks(accountInfo?.level)! -
     (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
 
   const countBlocksString = countBlocks.toString();
@@ -116,12 +196,13 @@ export const levelUpDays = (
 ) => {
   if (
     accountInfo?.blocksMinted === undefined ||
-    nodeStatus?.height === undefined
+    nodeStatus?.height === undefined ||
+    accountTargetBlocks(accountInfo?.level) == undefined
   )
     return null;
 
   const countBlocks =
-    accountTargetBlocks(accountInfo?.level) -
+    accountTargetBlocks(accountInfo?.level)! -
     (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
 
   const countDays = countBlocks / averageBlockDay(adminInfo, nodeHeightBlock);

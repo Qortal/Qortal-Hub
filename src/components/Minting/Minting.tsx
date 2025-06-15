@@ -57,10 +57,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [accountInfo, setAccountInfo] = useState(null);
   const [mintingKey, setMintingKey] = useState('');
   const [rewardShares, setRewardShares] = useState([]);
+  const [adminInfo, setAdminInfo] = useState({});
   const [nodeStatus, setNodeStatus] = useState({});
+  const [addressLevel, setAddressLevel] = useState({});
+  const [tier4Online, setTier4Online] = useState(0);
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [adminInfo, setAdminInfo] = useState({});
   const [nodeHeightBlock, setNodeHeightBlock] = useState({});
   const [valueMintingTab, setValueMintingTab] = useState(0);
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
@@ -232,8 +234,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const url = `${getBaseApiReact()}/addresses/online/levels`;
       const response = await fetch(url);
       const data = await response.json();
-      // this.tier4Online = parseFloat(this.addressLevel[7].count) + parseFloat(this.addressLevel[8].count)
-      // setNodeStatus(data);
+      setAddressLevel(data);
+      setTier4Online(
+        parseFloat(data.addressLevel[7].count) +
+          parseFloat(data.addressLevel[8].count)
+      );
     } catch (error) {
       console.error('Request failed', error);
     }
