@@ -10,13 +10,10 @@
     "build/**/*",
     "capacitor.config.*",
     "app/**/*",
-    "scripts/**/*"  
+    "scripts/**/*"
   ],
   "linux": {
-    "target": [
-      "AppImage",
-      "deb"
-    ],
+    "target": ["AppImage", "deb"],
     "category": "Network",
     "packageCategory": "Network",
     "desktop": {
@@ -26,11 +23,11 @@
     "icon": "assets/png"
   },
   "appImage": {
-    "artifactName": "Qortal-Hub-arm64_${version}.${ext}"
+    "artifactName": "Qortal-Hub-arm64.${ext}"
   },
   "deb": {
-    "artifactName": "Qortal-Hub-Setup-arm64_${version}.${ext}",
-    "synopsis": "Qortal Hub for Linux",
+    "artifactName": "Qortal-Hub-Setup-arm64.${ext}",
+    "synopsis": "Qortal Hub for Linux"
   },
   "directories": {
     "output": "dist",

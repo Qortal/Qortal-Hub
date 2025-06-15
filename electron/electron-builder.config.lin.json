@@ -10,15 +10,10 @@
     "build/**/*",
     "capacitor.config.*",
     "app/**/*",
-    "scripts/**/*"  
+    "scripts/**/*"
   ],
   "linux": {
-    "target": [
-      "AppImage",
-      "deb",
-      "snap",
-      "rpm"
-    ],
+    "target": ["AppImage", "deb", "snap", "rpm"],
     "category": "Network",
     "packageCategory": "Network",
     "desktop": {
@@ -28,19 +23,19 @@
     "icon": "assets/png"
   },
   "appImage": {
-    "artifactName": "Qortal-Hub_${version}.${ext}"
+    "artifactName": "Qortal-Hub.${ext}"
   },
   "deb": {
-    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "artifactName": "Qortal-Hub-Setup.${ext}",
     "synopsis": "Qortal Hub for Linux",
-    "afterInstall": "scripts/add-debian-apt-repo.sh"  
+    "afterInstall": "scripts/add-debian-apt-repo.sh"
   },
   "snap": {
-    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "artifactName": "Qortal-Hub-Setup.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "rpm": {
-    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "artifactName": "Qortal-Hub-Setup.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "directories": {
