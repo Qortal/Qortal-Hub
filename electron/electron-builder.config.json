@@ -20,7 +20,7 @@
   "win": {
     "target": ["nsis", "portable"],
     "icon": "assets/appIcon.ico",
-    "artifactName": "Qortal-Hub-Setup_${version}.exe",
+    "artifactName": "Qortal-Hub-Setup.exe"
   },
   "linux": {
     "target": ["AppImage"],
@@ -34,15 +34,15 @@
     "asar": true
   },
   "deb": {
-    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "artifactName": "Qortal-Hub-Setup.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "appImage": {
     "artifactName": "Qortal-Hub.${ext}"
   },
-  
+
   "snap": {
-    "artifactName": "Qortal-Hub-Setup_${version}.${ext}",
+    "artifactName": "Qortal-Hub-Setup.${ext}",
     "synopsis": "Qortal Hub for Linux"
   },
   "mac": {
