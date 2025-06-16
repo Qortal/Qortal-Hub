@@ -630,7 +630,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               }}
             >
               <Container maxWidth="md" sx={{ py: 4 }}>
-                <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
                   <Typography
                     variant="h3"
                     gutterBottom
@@ -663,7 +663,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Grid>
                 </Paper>
 
-                <Paper elevation={2} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
                   <Typography
                     variant="h3"
                     gutterBottom
@@ -689,7 +689,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Box>
                 </Paper>
 
-                <Paper elevation={2} sx={{ p: 3, borderRadius: '10px' }}>
+                <Paper elevation={0} sx={{ p: 3, borderRadius: '10px' }}>
                   <Typography
                     variant="h3"
                     gutterBottom
