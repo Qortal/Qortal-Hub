@@ -82,7 +82,7 @@ export const blockReward = (nodeStatus): number => {
 
 export const currentTier = (addressInfo): string | undefined => {
   if (addressInfo.level === 0) {
-    return '`Tier 0 (Level 0)';
+    return 'Tier 0 (Level 0)';
   } else if (addressInfo.level === 1 || addressInfo.level === 2) {
     return 'Tier 1 (Level 1 + 2)';
   } else if (addressInfo.level === 3 || addressInfo.level === 4) {
@@ -338,6 +338,39 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 			return '' + countRewardDay101
 // 		}
 // 	}
+
+export const mintingStatus = () => {
+  if (
+    this.nodeInfo.isMintingPossible === true &&
+    this.nodeInfo.isSynchronizing === true
+  ) {
+    this.cssMinting = 'blue';
+    return html`${translate('appinfo.minting')}`;
+  } else if (
+    this.nodeInfo.isMintingPossible === true &&
+    this.nodeInfo.isSynchronizing === false
+  ) {
+    this.cssMinting = 'blue';
+    return html`${translate('appinfo.minting')}`;
+  } else if (
+    this.nodeInfo.isMintingPossible === false &&
+    this.nodeInfo.isSynchronizing === true
+  ) {
+    this.cssMinting = 'red';
+    return html`(${translate('appinfo.synchronizing')}...
+    ${this.nodeStatus.syncPercent !== undefined
+      ? this.nodeStatus.syncPercent + '%'
+      : ''})`;
+  } else if (
+    this.nodeInfo.isMintingPossible === false &&
+    this.nodeInfo.isSynchronizing === false
+  ) {
+    this.cssMinting = 'red';
+    return html`${translate('mintingpage.mchange9')}`;
+  } else {
+    return 'No Status';
+  }
+};
 
 export const averageBlockTime = (adminInfo, nodeHeightBlock) => {
   const avgBlock = adminInfo.currentTimestamp - nodeHeightBlock.timestamp;

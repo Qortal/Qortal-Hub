@@ -246,7 +246,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
   const getRewardShares = useCallback(async (address) => {
     try {
-      const url = `${getBaseApiReact()}/addresses/rewardshares?involving=${address}`;
+      const url = `${getBaseApiReact()}/addresses/rewardshares?involving=${address}`; // TODO check API (still useful?)
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error('network error');
@@ -674,7 +674,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
                   <Grid container spacing={2}>
                     <StatCard label="Current Status" value="(Minting)" />
-                    <StatCard label="Current Level" value="Level 4" />
+                    <StatCard
+                      label="Current Level"
+                      value={accountInfo?.level}
+                    />
                     <StatCard
                       label="Blocks To Next Level"
                       value={levelUpBlocks(accountInfo, nodeStatus) || ''}
