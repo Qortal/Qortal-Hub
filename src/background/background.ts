@@ -2069,7 +2069,11 @@ export async function joinGroup({ groupId }) {
   return res;
 }
 
-export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
+export async function cancelInvitationToGroup({
+  groupId,
+  qortalAddress,
+  txGroupId = 0,
+}) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2086,6 +2090,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
     recipient: qortalAddress,
     rGroupId: groupId,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2096,7 +2101,7 @@ export async function cancelInvitationToGroup({ groupId, qortalAddress }) {
   return res;
 }
 
-export async function cancelBan({ groupId, qortalAddress }) {
+export async function cancelBan({ groupId, qortalAddress, txGroupId = 0 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2113,6 +2118,7 @@ export async function cancelBan({ groupId, qortalAddress }) {
     recipient: qortalAddress,
     rGroupId: groupId,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2175,7 +2181,7 @@ export async function updateName({ newName, oldName, description }) {
     throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
-export async function makeAdmin({ groupId, qortalAddress }) {
+export async function makeAdmin({ groupId, qortalAddress, txGroupId = 0 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2192,6 +2198,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
     recipient: qortalAddress,
     rGroupId: groupId,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2202,7 +2209,7 @@ export async function makeAdmin({ groupId, qortalAddress }) {
   return res;
 }
 
-export async function removeAdmin({ groupId, qortalAddress }) {
+export async function removeAdmin({ groupId, qortalAddress, txGroupId = 0 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
   const parsedData = resKeyPair;
@@ -2219,6 +2226,7 @@ export async function removeAdmin({ groupId, qortalAddress }) {
     recipient: qortalAddress,
     rGroupId: groupId,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2234,6 +2242,7 @@ export async function banFromGroup({
   qortalAddress,
   rBanReason = '',
   rBanTime,
+  txGroupId = 0,
 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
@@ -2253,6 +2262,7 @@ export async function banFromGroup({
     rBanReason: rBanReason,
     rBanTime,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2267,6 +2277,7 @@ export async function kickFromGroup({
   groupId,
   qortalAddress,
   rBanReason = '',
+  txGroupId = 0,
 }) {
   const lastReference = await getLastRef();
   const resKeyPair = await getKeyPair();
@@ -2285,6 +2296,7 @@ export async function kickFromGroup({
     rGroupId: groupId,
     rBanReason: rBanReason,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2461,6 +2473,7 @@ export async function updateGroup({
   newApprovalThreshold,
   newMinimumBlockDelay,
   newMaximumBlockDelay,
+  txGroupId = 0,
 }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -2486,6 +2499,7 @@ export async function updateGroup({
     newMinimumBlockDelay,
     newMaximumBlockDelay,
     lastReference: lastReference,
+    groupID: txGroupId,
   });
 
   const signedBytes = Base58.encode(tx.signedBytes);
@@ -2495,7 +2509,12 @@ export async function updateGroup({
     throw new Error(res?.message || 'Transaction was not able to be processed');
   return res;
 }
-export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
+export async function inviteToGroup({
+  groupId,
+  qortalAddress,
+  inviteTime,
+  txGroupId = 0,
+}) {
   const address = await getNameOrAddress(qortalAddress);
   if (!address) throw new Error('Cannot find user');
   const lastReference = await getLastRef();
@@ -2510,6 +2529,7 @@ export async function inviteToGroup({ groupId, qortalAddress, inviteTime }) {
   };
 
   const tx = await createTransaction(29, keyPair, {
+    groupID: txGroupId,
     fee: feeres.fee,
     recipient: address,
     rGroupId: groupId,
