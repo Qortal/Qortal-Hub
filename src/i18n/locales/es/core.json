@@ -307,8 +307,9 @@
     "status": {
       "minting": "(acuñado)",
       "not_minting": "(no acuñar)",
+      "no_status": "sin estado",
       "synchronized": "sincronizado",
-      "synchronizing": "sincronización"
+      "synchronizing": "sincronización..."
     },
     "success": {
       "order_submitted": "Su pedido de compra fue enviado",

@@ -307,8 +307,9 @@
     "status": {
       "minting": "（鋳造）",
       "not_minting": "（造りではありません）",
+      "no_status": "ステータスなし",
       "synchronized": "同期",
-      "synchronizing": "同期"
+      "synchronizing": "同期..."
     },
     "success": {
       "order_submitted": "購入注文が提出されました",

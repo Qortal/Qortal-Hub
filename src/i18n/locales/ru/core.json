@@ -307,8 +307,9 @@
     "status": {
       "minting": "(добыча)",
       "not_minting": "(не шахта)",
+      "no_status": "нет статуса",
       "synchronized": "синхронизированный",
-      "synchronizing": "синхронизация"
+      "synchronizing": "синхронизация..."
     },
     "success": {
       "order_submitted": "Ваш заказ на покупку был отправлен",

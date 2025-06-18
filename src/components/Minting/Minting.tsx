@@ -40,13 +40,16 @@ import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { TransitionUp } from '../../common/Transitions.tsx';
 import {
+  nextLevel,
   averageBlockDay,
   averageBlockTime,
   dayReward,
   levelUpBlocks,
+  levelUpDays,
+  mintingStatus,
 } from './MintingStats.tsx';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
@@ -165,6 +168,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       }
     }
   };
+
+  const daysToNextLevel = levelUpDays(
+    accountInfo,
+    adminInfo,
+    nodeHeightBlock,
+    nodeStatus
+  );
 
   const refreshRewardShare = () => {
     if (!myAddress) return;
@@ -673,7 +683,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Typography>
 
                   <Grid container spacing={2}>
-                    <StatCard label="Current Status" value="(Minting)" />
+                    <StatCard
+                      label="Current Status"
+                      value={mintingStatus(nodeStatus)}
+                    />
                     <StatCard
                       label="Current Level"
                       value={accountInfo?.level}
@@ -685,10 +698,22 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Grid>
 
                   <Box mt={2} textAlign="center">
-                    <Typography sx={{ textAlign: 'center' }}>
-                      With a 24/7 Minting you will reach level 5 in{' '}
-                      <strong>117.58 days</strong>!
-                    </Typography>
+                    <Paper elevation={5}>
+                      <Typography sx={{ textAlign: 'center' }}>
+                        <Trans
+                          i18nKey="message.generic.minting_next_level"
+                          ns="core"
+                          components={{
+                            strong: <strong />,
+                          }}
+                          values={{
+                            level: nextLevel(accountInfo?.level),
+                            count: daysToNextLevel?.toFixed(2),
+                          }}
+                          tOptions={{ postProcess: ['capitalizeFirstChar'] }}
+                        ></Trans>
+                      </Typography>
+                    </Paper>
                   </Box>
                 </Paper>
 

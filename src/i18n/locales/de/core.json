@@ -306,8 +306,9 @@
     "status": {
       "minting": "(Prägung)",
       "not_minting": "(nicht punktieren)",
+      "no_status": "kein Status",
       "synchronized": "synchronisiert",
-      "synchronizing": "Synchronisierung"
+      "synchronizing": "Synchronisierung..."
     },
     "success": {
       "order_submitted": "Ihre Kaufbestellung wurde eingereicht",

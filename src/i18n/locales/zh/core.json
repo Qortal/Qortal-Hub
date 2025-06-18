@@ -307,8 +307,9 @@
     "status": {
       "minting": "（铸造）",
       "not_minting": "（不是铸造）",
+      "no_status": "没有状态",
       "synchronized": "同步",
-      "synchronizing": "同步"
+      "synchronizing": "同步..."
     },
     "success": {
       "order_submitted": "您的买入订单已提交",

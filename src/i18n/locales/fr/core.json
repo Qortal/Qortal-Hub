@@ -307,8 +307,9 @@
     "status": {
       "minting": "(Coupure)",
       "not_minting": "(pas de la frappe)",
+      "no_status": "pas de statut",
       "synchronized": "synchronisé",
-      "synchronizing": "synchronisation"
+      "synchronizing": "synchronisation..."
     },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",

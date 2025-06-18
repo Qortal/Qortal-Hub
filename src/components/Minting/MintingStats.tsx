@@ -1,3 +1,5 @@
+import i18n from '../../i18n/i18n';
+
 const accountTargetBlocks = (level: number): number | undefined => {
   if (level === 0) {
     return 7200;
@@ -24,7 +26,7 @@ const accountTargetBlocks = (level: number): number | undefined => {
   }
 };
 
-export const accountLevel = (level: number): number | undefined => {
+export const nextLevel = (level: number): number | undefined => {
   if (level === 0) {
     return 1;
   } else if (level === 1) {
@@ -80,62 +82,62 @@ export const blockReward = (nodeStatus): number => {
   }
 };
 
-export const currentTier = (addressInfo): string | undefined => {
-  if (addressInfo.level === 0) {
+export const currentTier = (accountInfo): string | undefined => {
+  if (accountInfo.level === 0) {
     return 'Tier 0 (Level 0)';
-  } else if (addressInfo.level === 1 || addressInfo.level === 2) {
+  } else if (accountInfo.level === 1 || accountInfo.level === 2) {
     return 'Tier 1 (Level 1 + 2)';
-  } else if (addressInfo.level === 3 || addressInfo.level === 4) {
+  } else if (accountInfo.level === 3 || accountInfo.level === 4) {
     return 'Tier 2 (Level 3 + 4)';
-  } else if (addressInfo.level === 5 || addressInfo.level === 6) {
+  } else if (accountInfo.level === 5 || accountInfo.level === 6) {
     return 'Tier 3 (Level 5 + 6)';
-  } else if (addressInfo.level === 7 || addressInfo.level === 8) {
+  } else if (accountInfo.level === 7 || accountInfo.level === 8) {
     return 'Tier 4 (Level 7 + 8)';
-  } else if (addressInfo.level === 9 || addressInfo.level === 10) {
+  } else if (accountInfo.level === 9 || accountInfo.level === 10) {
     return 'Tier 5 (Level 9 + 10)';
   } else {
     return undefined; // fallback: should never reach this point
   }
 };
 
-export const tierPercent = (addressInfo, tier4Online): number | undefined => {
-  if (addressInfo.level === 0) {
+export const tierPercent = (accountInfo, tier4Online): number | undefined => {
+  if (accountInfo.level === 0) {
     return 0;
-  } else if (addressInfo.level === 1) {
+  } else if (accountInfo.level === 1) {
     return 6;
-  } else if (addressInfo.level === 2) {
+  } else if (accountInfo.level === 2) {
     return 6;
-  } else if (addressInfo.level === 3) {
+  } else if (accountInfo.level === 3) {
     return 13;
-  } else if (addressInfo.level === 4) {
+  } else if (accountInfo.level === 4) {
     return 1;
-  } else if (addressInfo.level === 5) {
+  } else if (accountInfo.level === 5) {
     if (tier4Online < 30) {
       return 45;
     } else {
       return 19;
     }
-  } else if (addressInfo.level === 6) {
+  } else if (accountInfo.level === 6) {
     if (tier4Online < 30) {
       return 45;
     } else {
       return 19;
     }
-  } else if (addressInfo.level === 7) {
+  } else if (accountInfo.level === 7) {
     if (tier4Online < 30) {
       return 45;
     } else {
       return 26;
     }
-  } else if (addressInfo.level === 8) {
+  } else if (accountInfo.level === 8) {
     if (tier4Online < 30) {
       return 45;
     } else {
       return 26;
     }
-  } else if (addressInfo.level === 9) {
+  } else if (accountInfo.level === 9) {
     return 32;
-  } else if (addressInfo.level === 10) {
+  } else if (accountInfo.level === 10) {
     return 32;
   } else {
     return undefined;
@@ -143,22 +145,22 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 };
 
 // _countLevels() {
-// 		if (this.addressInfo.level === 0) {
+// 		if (this.accountInfo.level === 0) {
 // 			let countTier0 = (this.addressLevel[0].count).toString()
 // 			return '' + countTier0
-// 		} else if (this.addressInfo.level === 1) {
+// 		} else if (this.accountInfo.level === 1) {
 // 			let countTier10 = (this.addressLevel[1].count + this.addressLevel[2].count).toString()
 // 			return '' + countTier10
-// 		} else if (this.addressInfo.level === 2) {
+// 		} else if (this.accountInfo.level === 2) {
 // 			let countTier11 = (this.addressLevel[1].count + this.addressLevel[2].count).toString()
 // 			return '' + countTier11
-// 		} else if (this.addressInfo.level === 3) {
+// 		} else if (this.accountInfo.level === 3) {
 // 			let countTier20 = (this.addressLevel[3].count + this.addressLevel[4].count).toString()
 // 			return '' + countTier20
-// 		} else if (this.addressInfo.level === 4) {
+// 		} else if (this.accountInfo.level === 4) {
 // 			let countTier21 = (this.addressLevel[3].count + this.addressLevel[4].count).toString()
 // 			return '' + countTier21
-// 		} else if (this.addressInfo.level === 5) {
+// 		} else if (this.accountInfo.level === 5) {
 // 			if (this.tier4Online < 30) {
 // 				let countTier30 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier30
@@ -166,7 +168,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countTier30 = (this.addressLevel[5].count + this.addressLevel[6].count).toString()
 // 				return '' + countTier30
 // 			}
-// 		} else if (this.addressInfo.level === 6) {
+// 		} else if (this.accountInfo.level === 6) {
 // 			if (this.tier4Online < 30) {
 // 				let countTier31 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier31
@@ -174,7 +176,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countTier31 = (this.addressLevel[5].count + this.addressLevel[6].count).toString()
 // 				return '' + countTier31
 // 			}
-// 		} else if (this.addressInfo.level === 7) {
+// 		} else if (this.accountInfo.level === 7) {
 // 			if (this.tier4Online < 30) {
 // 				let countTier40 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier40
@@ -182,7 +184,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countTier40 = (this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier40
 // 			}
-// 		} else if (this.addressInfo.level === 8) {
+// 		} else if (this.accountInfo.level === 8) {
 // 			if (this.tier4Online < 30) {
 // 				let countTier40 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier40
@@ -190,35 +192,35 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countTier41 = (this.addressLevel[7].count + this.addressLevel[8].count).toString()
 // 				return '' + countTier41
 // 			}
-// 		} else if (this.addressInfo.level === 9) {
+// 		} else if (this.accountInfo.level === 9) {
 // 			let countTier50 = (this.addressLevel[9].count + this.addressLevel[10].count).toString()
 // 			return '' + countTier50
-// 		} else if (this.addressInfo.level === 10) {
+// 		} else if (this.accountInfo.level === 10) {
 // 			let countTier51 = (this.addressLevel[9].count + this.addressLevel[10].count).toString()
 // 			return '' + countTier51
 // 		}
 // 	}
 
 // 	_countReward() {
-// 		if (this.addressInfo.level === 0) {
+// 		if (this.accountInfo.level === 0) {
 // 			return '0'
-// 		} else if (this.addressInfo.level === 1) {
+// 		} else if (this.accountInfo.level === 1) {
 // 			let countReward10 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count)).toFixed(8)
 // 			let countReward11 = (countReward10).toString()
 // 			return '' + countReward11
-// 		} else if (this.addressInfo.level === 2) {
+// 		} else if (this.accountInfo.level === 2) {
 // 			let countReward20 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count)).toFixed(8)
 // 			let countReward21 = (countReward20).toString()
 // 			return '' + countReward21
-// 		} else if (this.addressInfo.level === 3) {
+// 		} else if (this.accountInfo.level === 3) {
 // 			let countReward30 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count)).toFixed(8)
 // 			let countReward31 = (countReward30).toString()
 // 			return '' + countReward31
-// 		} else if (this.addressInfo.level === 4) {
+// 		} else if (this.accountInfo.level === 4) {
 // 			let countReward40 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count)).toFixed(8)
 // 			let countReward41 = (countReward40).toString()
 // 			return '' + countReward41
-// 		} else if (this.addressInfo.level === 5) {
+// 		} else if (this.accountInfo.level === 5) {
 // 			if (this.tier4Online < 30) {
 // 				let countReward50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
 // 				let countReward51 = (countReward50).toString()
@@ -228,7 +230,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countReward51 = (countReward50).toString()
 // 				return '' + countReward51
 // 			}
-// 		} else if (this.addressInfo.level === 6) {
+// 		} else if (this.accountInfo.level === 6) {
 // 			if (this.tier4Online < 30) {
 // 				let countReward60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
 // 				let countReward61 = (countReward60).toString()
@@ -238,7 +240,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countReward61 = (countReward60).toString()
 // 				return '' + countReward61
 // 			}
-// 		} else if (this.addressInfo.level === 7) {
+// 		} else if (this.accountInfo.level === 7) {
 // 			if (this.tier4Online < 30) {
 // 				let countReward70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
 // 				let countReward71 = (countReward70).toString()
@@ -248,7 +250,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countReward71 = (countReward70).toString()
 // 				return '' + countReward71
 // 			}
-// 		} else if (this.addressInfo.level === 8) {
+// 		} else if (this.accountInfo.level === 8) {
 // 			if (this.tier4Online < 30) {
 // 				let countReward80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
 // 				let countReward81 = (countReward80).toString()
@@ -258,11 +260,11 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countReward81 = (countReward80).toString()
 // 				return '' + countReward81
 // 			}
-// 		} else if (this.addressInfo.level === 9) {
+// 		} else if (this.accountInfo.level === 9) {
 // 			let countReward90 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count)).toFixed(8)
 // 			let countReward91 = (countReward90).toString()
 // 			return '' + countReward91
-// 		} else if (this.addressInfo.level === 10) {
+// 		} else if (this.accountInfo.level === 10) {
 // 			let countReward100 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count)).toFixed(8)
 // 			let countReward101 = (countReward100).toString()
 // 			return '' + countReward101
@@ -270,25 +272,25 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 	}
 
 // 	_countRewardDay() {
-// 		if (this.addressInfo.level === 0) {
+// 		if (this.accountInfo.level === 0) {
 // 			return '0'
-// 		} else if (this.addressInfo.level === 1) {
+// 		} else if (this.accountInfo.level === 1) {
 // 			let countRewardDay10 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay11 = (countRewardDay10).toString()
 // 			return '' + countRewardDay11
-// 		} else if (this.addressInfo.level === 2) {
+// 		} else if (this.accountInfo.level === 2) {
 // 			let countRewardDay20 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay21 = (countRewardDay20).toString()
 // 			return '' + countRewardDay21
-// 		} else if (this.addressInfo.level === 3) {
+// 		} else if (this.accountInfo.level === 3) {
 // 			let countRewardDay30 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay31 = (countRewardDay30).toString()
 // 			return '' + countRewardDay31
-// 		} else if (this.addressInfo.level === 4) {
+// 		} else if (this.accountInfo.level === 4) {
 // 			let countRewardDay40 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay41 = (countRewardDay40).toString()
 // 			return '' + countRewardDay41
-// 		} else if (this.addressInfo.level === 5) {
+// 		} else if (this.accountInfo.level === 5) {
 // 			if (this.tier4Online < 30) {
 // 				let countRewardDay50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
 // 				let countRewardDay51 = (countRewardDay50).toString()
@@ -298,7 +300,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countRewardDay51 = (countRewardDay50).toString()
 // 				return '' + countRewardDay51
 // 			}
-// 		} else if (this.addressInfo.level === 6) {
+// 		} else if (this.accountInfo.level === 6) {
 // 			if (this.tier4Online < 30) {
 // 				let countRewardDay60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
 // 				let countRewardDay61 = (countRewardDay60).toString()
@@ -308,7 +310,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countRewardDay61 = (countRewardDay60).toString()
 // 				return '' + countRewardDay61
 // 			}
-// 		} else if (this.addressInfo.level === 7) {
+// 		} else if (this.accountInfo.level === 7) {
 // 			if (this.tier4Online < 30) {
 // 				let countRewardDay70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
 // 				let countRewardDay71 = (countRewardDay70).toString()
@@ -318,7 +320,7 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countRewardDay71 = (countRewardDay70).toString()
 // 				return '' + countRewardDay71
 // 			}
-// 		} else if (this.addressInfo.level === 8) {
+// 		} else if (this.accountInfo.level === 8) {
 // 			if (this.tier4Online < 30) {
 // 				let countRewardDay80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
 // 				let countRewardDay81 = (countRewardDay80).toString()
@@ -328,47 +330,58 @@ export const tierPercent = (addressInfo, tier4Online): number | undefined => {
 // 				let countRewardDay81 = (countRewardDay80).toString()
 // 				return '' + countRewardDay81
 // 			}
-// 		} else if (this.addressInfo.level === 9) {
+// 		} else if (this.accountInfo.level === 9) {
 // 			let countRewardDay90 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay91 = (countRewardDay90).toString()
 // 			return '' + countRewardDay91
-// 		} else if (this.addressInfo.level === 10) {
+// 		} else if (this.accountInfo.level === 10) {
 // 			let countRewardDay100 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count) * this._timeCalc()).toFixed(8)
 // 			let countRewardDay101 = (countRewardDay100).toString()
 // 			return '' + countRewardDay101
 // 		}
 // 	}
 
-export const mintingStatus = () => {
+export const mintingStatus = (nodeStatus): string => {
   if (
-    this.nodeInfo.isMintingPossible === true &&
-    this.nodeInfo.isSynchronizing === true
+    nodeStatus.isMintingPossible === true &&
+    nodeStatus.isSynchronizing === true
   ) {
-    this.cssMinting = 'blue';
-    return html`${translate('appinfo.minting')}`;
+    // this.cssMinting = 'blue';
+    return i18n.t('core:message.status.minting', {
+      postProcess: 'capitalizeFirstChar',
+    });
   } else if (
-    this.nodeInfo.isMintingPossible === true &&
-    this.nodeInfo.isSynchronizing === false
+    nodeStatus.isMintingPossible === true &&
+    nodeStatus.isSynchronizing === false
   ) {
-    this.cssMinting = 'blue';
-    return html`${translate('appinfo.minting')}`;
+    // this.cssMinting = 'blue';
+    return i18n.t('core:message.status.minting', {
+      postProcess: 'capitalizeFirstChar',
+    });
   } else if (
-    this.nodeInfo.isMintingPossible === false &&
-    this.nodeInfo.isSynchronizing === true
+    nodeStatus.isMintingPossible === false &&
+    nodeStatus.isSynchronizing === true
   ) {
-    this.cssMinting = 'red';
-    return html`(${translate('appinfo.synchronizing')}...
-    ${this.nodeStatus.syncPercent !== undefined
-      ? this.nodeStatus.syncPercent + '%'
-      : ''})`;
+    // this.cssMinting = 'red';
+    return i18n.t('core:message.status.synchronizing', {
+      postProcess: 'capitalizeFirstChar',
+    }) +
+      nodeStatus.syncPercent !==
+      undefined
+      ? nodeStatus.syncPercent + '%'
+      : '';
   } else if (
-    this.nodeInfo.isMintingPossible === false &&
-    this.nodeInfo.isSynchronizing === false
+    nodeStatus.isMintingPossible === false &&
+    nodeStatus.isSynchronizing === false
   ) {
-    this.cssMinting = 'red';
-    return html`${translate('mintingpage.mchange9')}`;
+    // this.cssMinting = 'red';
+    return i18n.t('core:message.status.not_minting', {
+      postProcess: 'capitalizeFirstChar',
+    });
   } else {
-    return 'No Status';
+    return i18n.t('core:message.status.no_status', {
+      postProcess: 'capitalizeFirstChar',
+    });
   }
 };
 
@@ -404,20 +417,20 @@ export const levelUpDays = (
   adminInfo,
   nodeHeightBlock,
   nodeStatus
-) => {
+): number | undefined => {
   if (
     accountInfo?.blocksMinted === undefined ||
     nodeStatus?.height === undefined ||
     accountTargetBlocks(accountInfo?.level) == undefined
   )
-    return null;
+    return undefined;
 
   const countBlocks =
     accountTargetBlocks(accountInfo?.level)! -
     (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
 
   const countDays = countBlocks / averageBlockDay(adminInfo, nodeHeightBlock);
-  return countDays.toFixed(2);
+  return countDays;
 };
 
 export const dayReward = (adminInfo, nodeHeightBlock, nodeStatus) => {
