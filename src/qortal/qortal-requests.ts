@@ -398,7 +398,8 @@ function setupMessageListenerQortalRequest() {
           const res = await publishMultipleQDNResources(
             request.payload,
             event.source,
-            isFromExtension
+            isFromExtension,
+            appInfo
           );
           event.source.postMessage(
             {

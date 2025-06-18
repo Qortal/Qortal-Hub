@@ -575,6 +575,7 @@ export const useQortalMessageListener = (
             {
               name: appName,
               service: appService,
+              tabId,
             },
             skipAuth
           )
@@ -734,7 +735,7 @@ export const useQortalMessageListener = (
     return () => {
       frameWindow.removeEventListener('message', listener);
     };
-  }, [isDevMode, appName, appService]); // Empty dependency array to run once when the component mounts
+  }, [isDevMode, appName, appService, tabId]); // Empty dependency array to run once when the component mounts
 
   return { path, history, resetHistory, changeCurrentIndex };
 };
