@@ -1532,7 +1532,8 @@ export const checkArrrSyncStatus = async (seed) => {
 export const publishMultipleQDNResources = async (
   data: any,
   sender,
-  isFromExtension
+  isFromExtension,
+  appInfo
 ) => {
   const requiredFields = ['resources'];
   const missingFields: string[] = [];
@@ -1880,6 +1881,7 @@ export const publishMultipleQDNResources = async (
               title,
               uploadType: dataType,
               withFee: true,
+              appInfo,
             },
           ],
           true
@@ -5620,6 +5622,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
   const groupId = data.groupId;
   const qortalAddress = data?.inviteeAddress;
   const inviteTime = data?.inviteTime;
+  const txGroupId = data?.txGroupId || 0;
 
   let groupInfo = null;
   try {
@@ -5665,6 +5668,7 @@ export const inviteToGroupRequest = async (data, isFromExtension) => {
       groupId,
       qortalAddress,
       inviteTime,
+      txGroupId,
     });
     return response;
   } else {
@@ -5695,7 +5699,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
   const groupId = data.groupId;
   const qortalAddress = data?.qortalAddress;
   const reason = data?.reason;
-
+  const txGroupId = data?.txGroupId || 0;
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
@@ -5740,6 +5744,7 @@ export const kickFromGroupRequest = async (data, isFromExtension) => {
       groupId,
       qortalAddress,
       rBanReason: reason,
+      txGroupId,
     });
     return response;
   } else {
@@ -5771,6 +5776,7 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
   const qortalAddress = data?.qortalAddress;
   const rBanTime = data?.banTime;
   const reason = data?.reason;
+  const txGroupId = data?.txGroupId || 0;
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
@@ -5816,6 +5822,7 @@ export const banFromGroupRequest = async (data, isFromExtension) => {
       qortalAddress,
       rBanTime,
       rBanReason: reason,
+      txGroupId,
     });
     return response;
   } else {
@@ -5845,6 +5852,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
   }
   const groupId = data.groupId;
   const qortalAddress = data?.qortalAddress;
+  const txGroupId = data?.txGroupId || 0;
 
   let groupInfo = null;
   try {
@@ -5889,6 +5897,7 @@ export const cancelGroupBanRequest = async (data, isFromExtension) => {
     const response = await cancelBan({
       groupId,
       qortalAddress,
+      txGroupId,
     });
     return response;
   } else {
@@ -5918,6 +5927,7 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
   }
   const groupId = data.groupId;
   const qortalAddress = data?.qortalAddress;
+  const txGroupId = data?.txGroupId || 0;
 
   let groupInfo = null;
   try {
@@ -5962,6 +5972,7 @@ export const addGroupAdminRequest = async (data, isFromExtension) => {
     const response = await makeAdmin({
       groupId,
       qortalAddress,
+      txGroupId,
     });
     return response;
   } else {
@@ -5991,7 +6002,7 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
   }
   const groupId = data.groupId;
   const qortalAddress = data?.qortalAddress;
-
+  const txGroupId = data?.txGroupId || 0;
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
@@ -6035,6 +6046,7 @@ export const removeGroupAdminRequest = async (data, isFromExtension) => {
     const response = await removeAdmin({
       groupId,
       qortalAddress,
+      txGroupId,
     });
     return response;
   } else {
@@ -6064,6 +6076,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
   }
   const groupId = data.groupId;
   const qortalAddress = data?.qortalAddress;
+  const txGroupId = data?.txGroupId || 0;
 
   let groupInfo = null;
   try {
@@ -6110,6 +6123,7 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
     const response = await cancelInvitationToGroup({
       groupId,
       qortalAddress,
+      txGroupId,
     });
     return response;
   } else {
@@ -6216,7 +6230,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
   const approvalThreshold = +data?.approvalThreshold;
   const minBlock = +data?.minBlock;
   const maxBlock = +data.maxBlock;
-
+  const txGroupId = data?.txGroupId || 0;
   let groupInfo = null;
   try {
     const url = await createEndpoint(`/groups/${groupId}`);
@@ -6268,6 +6282,7 @@ export const updateGroupRequest = async (data, isFromExtension) => {
       newApprovalThreshold: approvalThreshold,
       newMinimumBlockDelay: minBlock,
       newMaximumBlockDelay: maxBlock,
+      txGroupId,
     });
     return response;
   } else {

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
@@ -156,6 +156,49 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         unsubscribeFromEvent('copyLink', copyLinkFunc);
       };
     }, [app, path]);
+
+    const receiveChunksFunc = useCallback(
+      (e) => {
+        const iframe = iframeRef?.current;
+        if (!iframe || !iframe?.src) return;
+        if (app?.tabId !== e.detail?.tabId) return;
+        const publishLocation = e.detail?.publishLocation;
+        const chunksSubmitted = e.detail?.chunksSubmitted;
+        const totalChunks = e.detail?.totalChunks;
+        try {
+          if (publishLocation === undefined || publishLocation === null) return;
+          const dataToBeSent = {};
+          if (chunksSubmitted !== undefined && chunksSubmitted !== null) {
+            dataToBeSent.chunks = chunksSubmitted;
+          }
+          if (totalChunks !== undefined && totalChunks !== null) {
+            dataToBeSent.totalChunks = totalChunks;
+          }
+          const targetOrigin = new URL(iframe.src).origin;
+          iframe.contentWindow?.postMessage(
+            {
+              action: 'PUBLISH_STATUS',
+              publishLocation,
+              ...dataToBeSent,
+              requestedHandler: 'UI',
+              processed: e.detail?.processed || false,
+            },
+            targetOrigin
+          );
+        } catch (err) {
+          console.error('Failed to send status to iframe:', err);
+        }
+      },
+      [iframeRef, app?.tabId]
+    );
+
+    useEffect(() => {
+      subscribeToEvent('receiveChunks', receiveChunksFunc);
+
+      return () => {
+        unsubscribeFromEvent('receiveChunks', receiveChunksFunc);
+      };
+    }, [receiveChunksFunc]);
 
     // Function to navigate back in iframe
     const navigateBackInIframe = async () => {
