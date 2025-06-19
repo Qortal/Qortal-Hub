@@ -66,6 +66,7 @@ import {
   isRunningPublicNodeAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
+  myGroupsWhereIAmAdminAtom,
   selectedGroupIdAtom,
   timestampEnterDataAtom,
 } from '../../atoms/global';
@@ -75,6 +76,7 @@ import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom } from 'jotai';
+import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -401,6 +403,7 @@ export const Group = ({
   const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
   );
+  const groupsPropertiesRef = useRef({});
   const [chatMode, setChatMode] = useState('groups');
   const [newChat, setNewChat] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
@@ -458,7 +461,7 @@ export const Group = ({
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
-
+  const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
   const isPrivate = useMemo(() => {
     if (selectedGroup?.groupId === '0') return false;
     if (!selectedGroup?.groupId || !groupsProperties[selectedGroup?.groupId])
@@ -898,6 +901,10 @@ export const Group = ({
     }
   };
 
+  useEffect(() => {
+    groupsPropertiesRef.current = groupsProperties;
+  }, [groupsProperties]);
+
   const getGroupsProperties = useCallback(async (address) => {
     try {
       const url = `${getBaseApiReact()}/groups/member/${address}`;
@@ -917,17 +924,48 @@ export const Group = ({
     }
   }, []);
 
+  const getGroupsWhereIAmAMember = useCallback(async (groups) => {
+    try {
+      let groupsAsAdmin = [];
+      const getAllGroupsAsAdmin = groups
+        .filter((item) => item.groupId !== '0')
+        .map(async (group) => {
+          const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(
+            () => {
+              return fetch(
+                `${getBaseApiReact()}/groups/members/${group.groupId}?limit=0&onlyAdmins=true`
+              );
+            }
+          );
+          const isAdminData = await isAdminResponse.json();
+
+          const findMyself = isAdminData?.members?.find(
+            (member) => member.member === myAddress
+          );
+
+          if (findMyself) {
+            groupsAsAdmin.push(group);
+          }
+          return true;
+        });
+
+      await Promise.all(getAllGroupsAsAdmin);
+      setMyGroupsWhereIAmAdmin(groupsAsAdmin);
+    } catch (error) {
+      console.error();
+    }
+  }, []);
+
   useEffect(() => {
     if (!myAddress) return;
     if (
-      areKeysEqual(
+      !areKeysEqual(
         groups?.map((grp) => grp?.groupId),
-        Object.keys(groupsProperties)
+        Object.keys(groupsPropertiesRef.current)
       )
     ) {
-      // TODO: empty block. Check it!
-    } else {
       getGroupsProperties(myAddress);
+      getGroupsWhereIAmAMember(groups);
     }
   }, [groups, myAddress]);
 
