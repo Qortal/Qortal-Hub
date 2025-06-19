@@ -783,13 +783,11 @@ export const NotAuthenticated = ({
             id="alert-dialog-title"
             sx={{
               textAlign: 'center',
-              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
             }}
           >
-            {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
-            :
+            {t('auth:node.custom_many', { postProcess: 'capitalizeAll' })}
           </DialogTitle>
 
           <DialogContent>
@@ -819,7 +817,6 @@ export const NotAuthenticated = ({
                   >
                     <Typography
                       sx={{
-                        color: theme.palette.text.primary,
                         fontSize: '14px',
                       }}
                     >
@@ -828,10 +825,10 @@ export const NotAuthenticated = ({
 
                     <Box
                       sx={{
+                        alignItems: 'center',
                         display: 'flex',
                         gap: '10px',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <Button
@@ -885,7 +882,6 @@ export const NotAuthenticated = ({
                       >
                         <Typography
                           sx={{
-                            color: theme.palette.text.primary,
                             fontSize: '14px',
                           }}
                         >
@@ -978,10 +974,10 @@ export const NotAuthenticated = ({
               {mode === 'add-node' && (
                 <Box
                   sx={{
+                    alignItems: 'center',
                     display: 'flex',
                     gap: '10px',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
                   }}
                 >
                   <Input
@@ -1071,7 +1067,6 @@ export const NotAuthenticated = ({
             id="alert-dialog-title"
             sx={{
               textAlign: 'center',
-              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
             }}

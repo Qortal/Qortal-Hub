@@ -80,6 +80,14 @@ const commonThemeOptions = {
         },
       },
     },
+
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
   },
 };
 
