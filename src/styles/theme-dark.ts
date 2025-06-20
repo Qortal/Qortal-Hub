@@ -114,18 +114,6 @@ export const darkThemeOptions: ThemeOptions = {
       },
     },
 
-    MuiDialog: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'rgb(77, 80, 85)',
-          color: 'rgb(255, 255, 255)',
-        },
-        paper: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-
     MuiPaper: {
       styleOverrides: {
         root: {

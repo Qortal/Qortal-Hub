@@ -73,6 +73,14 @@ const commonThemeOptions = {
       },
     },
 
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+
     MuiModal: {
       styleOverrides: {
         root: {

@@ -73,7 +73,6 @@ export const NotAuthenticated = ({
   const [mode, setMode] = useState('list');
   const [customNodes, setCustomNodes] = useState(null);
   const [importedApiKey, setImportedApiKey] = useState(null);
-  //add and edit states
   const [url, setUrl] = useState('https://');
   const [customApikey, setCustomApiKey] = useState('');
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
@@ -82,7 +81,13 @@ export const NotAuthenticated = ({
   const { showTutorial, hasSeenGettingStarted } =
     useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
@@ -635,10 +640,6 @@ export const NotAuthenticated = ({
             gap: '10px',
             outlineStyle: 'solid',
             outlineWidth: '0.5px',
-            outlineColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(255, 255, 255, 0.5)'
-                : 'rgba(0, 0, 0, 0.3)',
             padding: '20px 30px',
           }}
         >
@@ -778,19 +779,31 @@ export const NotAuthenticated = ({
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
           fullWidth
+          sx={{
+            backgroundColor: theme.palette.background.paper,
+            color: theme.palette.text.primary,
+            borderRadius: '10px',
+          }}
         >
           <DialogTitle
             id="alert-dialog-title"
             sx={{
-              textAlign: 'center',
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
+              textAlign: 'center',
             }}
           >
             {t('auth:node.custom_many', { postProcess: 'capitalizeAll' })}
           </DialogTitle>
 
-          <DialogContent>
+          <DialogContent
+            sx={{
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
+            }}
+          >
             <Box
               sx={{
                 display: 'flex',
@@ -1004,7 +1017,12 @@ export const NotAuthenticated = ({
             </Box>
           </DialogContent>
 
-          <DialogActions>
+          <DialogActions
+            sx={{
+              backgroundColor: theme.palette.background.paper,
+              color: theme.palette.text.primary,
+            }}
+          >
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
                 {t('core:action.add', { postProcess: 'capitalizeFirstChar' })}

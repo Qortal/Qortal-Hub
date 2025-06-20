@@ -116,18 +116,6 @@ export const lightThemeOptions: ThemeOptions = {
       },
     },
 
-    MuiDialog: {
-      styleOverrides: {
-        root: {
-          backgroundColor: 'rgb(220, 220, 220)',
-          color: 'rgba(0, 0, 0, 0.87)',
-        },
-        paper: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-
     MuiPaper: {
       styleOverrides: {
         root: {
