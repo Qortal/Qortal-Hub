@@ -41,21 +41,16 @@ export const ThemeProvider = ({ children }) => {
     userThemes.find((theme) => theme.id === currentThemeId) || defaultTheme;
 
   const muiTheme = useMemo(() => {
-    if (themeMode === 'light') {
-      return createTheme({
-        ...lightThemeOptions,
-        palette: {
-          ...currentTheme.light,
-        },
-      });
-    } else {
-      return createTheme({
-        ...lightThemeOptions,
-        palette: {
-          ...currentTheme.dark,
-        },
-      });
-    }
+    const baseThemeOptions =
+      themeMode === 'light' ? lightThemeOptions : darkThemeOptions;
+
+    const palette =
+      themeMode === 'light' ? currentTheme.light : currentTheme.dark;
+
+    return createTheme({
+      ...baseThemeOptions,
+      palette,
+    });
   }, [themeMode, currentTheme]);
 
   const saveSettings = (
