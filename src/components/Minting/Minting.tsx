@@ -823,15 +823,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 <Typography>
                   {t('group:message.generic.next_level', {
                     postProcess: 'capitalizeFirstChar',
-                  })}{' '}
-                  {levelUpBlocks(accountInfo, nodeStatus)}
-                </Typography>
-
-                <Typography>
-                  {t('group:message.generic.node_minting', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}{' '}
-                  {nodeStatus?.isMintingPossible?.toString()}
+                  })}
+                  : {levelUpBlocks(accountInfo, nodeStatus)}
                 </Typography>
               </Card>
 
