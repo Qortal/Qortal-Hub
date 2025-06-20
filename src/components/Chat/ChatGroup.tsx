@@ -903,7 +903,7 @@ export const ChatGroup = ({
             240000,
             true
           );
-          if (res !== true)
+          if (res?.error)
             throw new Error(
               t('core:message.error.publish_image', {
                 postProcess: 'capitalizeFirstChar',
