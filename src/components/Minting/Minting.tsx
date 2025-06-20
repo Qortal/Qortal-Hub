@@ -52,6 +52,8 @@ import {
   mintingStatus,
   countMintersInLevel,
   currentTier,
+  tierPercent,
+  countReward,
 } from './MintingStats.tsx';
 
 export type AddressLevelEntry = {
@@ -755,12 +757,24 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         )?.toFixed(0) || ''
                       }
                     />
-                    <StatCard label="Tier Share Per Block" value="13%" />
                     <StatCard
-                      label="Est. Reward Per Block"
-                      value="0.00506494 QORT"
+                      label="Tier Share Per Block"
+                      value={
+                        tierPercent(accountInfo, tier4Online)?.toFixed(0) + ' %'
+                      }
                     />
-                    <StatCard label="Est. Reward Per Day" value="pollo" />
+                    <StatCard
+                      label="Estimated Reward Per Block"
+                      value={
+                        countReward(
+                          accountInfo,
+                          addressLevel,
+                          tier4Online,
+                          nodeStatus
+                        ).toFixed(8) + ' QORT'
+                      }
+                    />
+                    <StatCard label="Estimated Reward Per Day" value="pollo" />
                     {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
                   </Grid>
                 </Paper>
