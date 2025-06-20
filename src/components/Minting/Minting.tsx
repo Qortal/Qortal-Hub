@@ -51,7 +51,13 @@ import {
   levelUpDays,
   mintingStatus,
   countMintersInLevel,
+  currentTier,
 } from './MintingStats.tsx';
+
+export type AddressLevelEntry = {
+  level: number;
+  count: number;
+};
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
@@ -63,7 +69,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [rewardShares, setRewardShares] = useState([]);
   const [adminInfo, setAdminInfo] = useState({});
   const [nodeStatus, setNodeStatus] = useState({});
-  const [addressLevel, setAddressLevel] = useState({});
+  const [addressLevel, setAddressLevel] = useState<AddressLevelEntry[]>([]);
   const [tier4Online, setTier4Online] = useState(0);
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -240,20 +246,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     }
   }, [nodeStatus]);
 
-  const getAddressLevel = useCallback(async () => {
+  const getAddressLevel = async () => {
     try {
       const url = `${getBaseApiReact()}/addresses/online/levels`;
       const response = await fetch(url);
-      const data = await response.json();
-      setAddressLevel(data);
-      setTier4Online(
-        parseFloat(data.addressLevel[7].count) +
-          parseFloat(data.addressLevel[8].count)
-      );
+      const data: AddressLevelEntry[] = await response.json();
+      if (Array.isArray(data)) {
+        setAddressLevel(data);
+        const level7 = data.find((entry) => entry.level === 7)?.count || 0;
+        const level8 = data.find((entry) => entry.level === 8)?.count || 0;
+        const tier4Count =
+          parseFloat(level7.toString()) + parseFloat(level8.toString());
+        setTier4Online(tier4Count);
+      }
     } catch (error) {
       console.error('Request failed', error);
     }
-  }, []);
+  };
 
   const getRewardShares = useCallback(async (address) => {
     try {
@@ -669,7 +678,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
                     <StatCard
                       label="Avg. Created QORT Per Day"
-                      value="3558.48 QORT"
+                      value={dayReward(
+                        adminInfo,
+                        nodeHeightBlock,
+                        nodeStatus
+                      ).toFixed(2)}
                     />
                   </Grid>
                 </Paper>
@@ -730,29 +743,24 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   <Grid container spacing={2}>
                     <StatCard
                       label="Current Tier"
-                      value="Tier 2 (Level 3 + 4)"
+                      value={currentTier(accountInfo?.level) || ''}
                     />
                     <StatCard
                       label="Total Minters in The Tier"
-                      value={countMintersInLevel(
-                        accountInfo?.level,
-                        addressLevel,
-                        tier4Online
-                      )?.toFixed(0)}
+                      value={
+                        countMintersInLevel(
+                          accountInfo?.level,
+                          addressLevel,
+                          tier4Online
+                        )?.toFixed(0) || ''
+                      }
                     />
                     <StatCard label="Tier Share Per Block" value="13%" />
                     <StatCard
                       label="Est. Reward Per Block"
                       value="0.00506494 QORT"
                     />
-                    <StatCard
-                      label="Est. Reward Per Day"
-                      value={dayReward(
-                        adminInfo,
-                        nodeHeightBlock,
-                        nodeStatus
-                      ).toFixed(2)}
-                    />
+                    <StatCard label="Est. Reward Per Day" value="pollo" />
                     {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
                   </Grid>
                 </Paper>

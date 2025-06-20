@@ -1,4 +1,5 @@
 import i18n from '../../i18n/i18n';
+import { AddressLevelEntry } from './Minting';
 
 const accountTargetBlocks = (level: number): number | undefined => {
   if (level === 0) {
@@ -82,18 +83,18 @@ export const blockReward = (nodeStatus): number => {
   }
 };
 
-export const currentTier = (accountInfo): string | undefined => {
-  if (accountInfo.level === 0) {
+export const currentTier = (level): string | undefined => {
+  if (level === 0) {
     return 'Tier 0 (Level 0)';
-  } else if (accountInfo.level === 1 || accountInfo.level === 2) {
+  } else if (level === 1 || level === 2) {
     return 'Tier 1 (Level 1 + 2)';
-  } else if (accountInfo.level === 3 || accountInfo.level === 4) {
+  } else if (level === 3 || level === 4) {
     return 'Tier 2 (Level 3 + 4)';
-  } else if (accountInfo.level === 5 || accountInfo.level === 6) {
+  } else if (level === 5 || level === 6) {
     return 'Tier 3 (Level 5 + 6)';
-  } else if (accountInfo.level === 7 || accountInfo.level === 8) {
+  } else if (level === 7 || level === 8) {
     return 'Tier 4 (Level 7 + 8)';
-  } else if (accountInfo.level === 9 || accountInfo.level === 10) {
+  } else if (level === 9 || level === 10) {
     return 'Tier 5 (Level 9 + 10)';
   } else {
     return undefined; // fallback: should never reach this point
@@ -140,87 +141,56 @@ export const tierPercent = (accountInfo, tier4Online): number | undefined => {
   } else if (accountInfo.level === 10) {
     return 32;
   } else {
-    return undefined;
+    return undefined; // fallback: should never reach this point
   }
 };
 
 export const countMintersInLevel = (
-  level,
-  addressLevel,
-  tier4Online
-): number => {
-  if (level === 0) {
-    const countTier0 = addressLevel[0].count;
-    return countTier0;
-  } else if (level === 1) {
-    const countTier10 = addressLevel[1].count + addressLevel[2].count;
-    return countTier10;
-  } else if (level === 2) {
-    const countTier11 = addressLevel[1].count + addressLevel[2].count;
-    return countTier11;
-  } else if (level === 3) {
-    const countTier20 = addressLevel[3].count + addressLevel[4].count;
-    return countTier20;
-  } else if (level === 4) {
-    const countTier21 = addressLevel[3].count + addressLevel[4].count;
-    return countTier21;
-  } else if (level === 5) {
-    if (tier4Online < 30) {
-      const countTier30 =
-        addressLevel[5].count +
-        addressLevel[6].count +
-        addressLevel[7].count +
-        addressLevel[8].count;
-      return countTier30;
-    } else {
-      const countTier30 = addressLevel[5].count + addressLevel[6].count;
-      return countTier30;
+  level: number,
+  addressLevel: AddressLevelEntry[],
+  tier4Online: number
+): number | undefined => {
+  if (addressLevel && addressLevel.length > 0) {
+    if (level === 0) {
+      const countTier0 = addressLevel[0].count;
+      return countTier0;
+    } else if (level === 1 || level === 2) {
+      const countTier1 = addressLevel[1].count + addressLevel[2].count;
+      return countTier1;
+    } else if (level === 3 || level === 4) {
+      const countTier2 = addressLevel[3].count + addressLevel[4].count;
+      return countTier2;
+    } else if (level === 5 || level === 6) {
+      if (tier4Online < 30) {
+        const countTier3 =
+          addressLevel[5].count +
+          addressLevel[6].count +
+          addressLevel[7].count +
+          addressLevel[8].count;
+        return countTier3;
+      } else {
+        const countTier3 = addressLevel[5].count + addressLevel[6].count;
+        return countTier3;
+      }
+    } else if (level === 7 || level === 8) {
+      if (tier4Online < 30) {
+        const countTier4 =
+          addressLevel[5].count +
+          addressLevel[6].count +
+          addressLevel[7].count +
+          addressLevel[8].count;
+        return countTier4;
+      } else {
+        const countTier4 = addressLevel[7].count + addressLevel[8].count;
+        return countTier4;
+      }
+    } else if (level === 9 || level === 10) {
+      const countTier5 = addressLevel[9].count + addressLevel[10].count;
+      return countTier5;
     }
-  } else if (level === 6) {
-    if (tier4Online < 30) {
-      const countTier31 =
-        addressLevel[5].count +
-        addressLevel[6].count +
-        addressLevel[7].count +
-        addressLevel[8].count;
-      return countTier31;
-    } else {
-      const countTier31 = addressLevel[5].count + addressLevel[6].count;
-      return countTier31;
-    }
-  } else if (level === 7) {
-    if (tier4Online < 30) {
-      const countTier40 =
-        addressLevel[5].count +
-        addressLevel[6].count +
-        addressLevel[7].count +
-        addressLevel[8].count;
-      return countTier40;
-    } else {
-      const countTier40 = addressLevel[7].count + addressLevel[8].count;
-      return countTier40;
-    }
-  } else if (level === 8) {
-    if (tier4Online < 30) {
-      const countTier40 =
-        addressLevel[5].count +
-        addressLevel[6].count +
-        addressLevel[7].count +
-        addressLevel[8].count;
-      return countTier40;
-    } else {
-      const countTier41 = addressLevel[7].count + addressLevel[8].count;
-      return countTier41;
-    }
-  } else if (level === 9) {
-    const countTier50 = addressLevel[9].count + addressLevel[10].count;
-    return countTier50;
-  } else if (level === 10) {
-    const countTier51 = addressLevel[9].count + addressLevel[10].count;
-    return countTier51;
   }
 
-  return 0; // should never reach this point
+  return undefined; // fallback: should never reach this point
 };
 
 // 	_countReward() {
