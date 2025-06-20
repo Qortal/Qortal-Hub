@@ -50,6 +50,7 @@ import {
   levelUpBlocks,
   levelUpDays,
   mintingStatus,
+  countMintersInLevel,
 } from './MintingStats.tsx';
 
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
@@ -733,7 +734,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label="Total Minters in The Tier"
-                      value="77 Minters"
+                      value={countMintersInLevel(
+                        accountInfo?.level,
+                        addressLevel,
+                        tier4Online
+                      )?.toFixed(0)}
                     />
                     <StatCard label="Tier Share Per Block" value="13%" />
                     <StatCard

@@ -144,200 +144,222 @@ export const tierPercent = (accountInfo, tier4Online): number | undefined => {
   }
 };
 
-// _countLevels() {
-// 		if (this.accountInfo.level === 0) {
-// 			let countTier0 = (this.addressLevel[0].count).toString()
-// 			return '' + countTier0
-// 		} else if (this.accountInfo.level === 1) {
-// 			let countTier10 = (this.addressLevel[1].count + this.addressLevel[2].count).toString()
-// 			return '' + countTier10
-// 		} else if (this.accountInfo.level === 2) {
-// 			let countTier11 = (this.addressLevel[1].count + this.addressLevel[2].count).toString()
-// 			return '' + countTier11
-// 		} else if (this.accountInfo.level === 3) {
-// 			let countTier20 = (this.addressLevel[3].count + this.addressLevel[4].count).toString()
-// 			return '' + countTier20
-// 		} else if (this.accountInfo.level === 4) {
-// 			let countTier21 = (this.addressLevel[3].count + this.addressLevel[4].count).toString()
-// 			return '' + countTier21
-// 		} else if (this.accountInfo.level === 5) {
-// 			if (this.tier4Online < 30) {
-// 				let countTier30 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier30
-// 			} else {
-// 				let countTier30 = (this.addressLevel[5].count + this.addressLevel[6].count).toString()
-// 				return '' + countTier30
-// 			}
-// 		} else if (this.accountInfo.level === 6) {
-// 			if (this.tier4Online < 30) {
-// 				let countTier31 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier31
-// 			} else {
-// 				let countTier31 = (this.addressLevel[5].count + this.addressLevel[6].count).toString()
-// 				return '' + countTier31
-// 			}
-// 		} else if (this.accountInfo.level === 7) {
-// 			if (this.tier4Online < 30) {
-// 				let countTier40 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier40
-// 			} else {
-// 				let countTier40 = (this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier40
-// 			}
-// 		} else if (this.accountInfo.level === 8) {
-// 			if (this.tier4Online < 30) {
-// 				let countTier40 = (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier40
-// 			} else {
-// 				let countTier41 = (this.addressLevel[7].count + this.addressLevel[8].count).toString()
-// 				return '' + countTier41
-// 			}
-// 		} else if (this.accountInfo.level === 9) {
-// 			let countTier50 = (this.addressLevel[9].count + this.addressLevel[10].count).toString()
-// 			return '' + countTier50
-// 		} else if (this.accountInfo.level === 10) {
-// 			let countTier51 = (this.addressLevel[9].count + this.addressLevel[10].count).toString()
-// 			return '' + countTier51
-// 		}
-// 	}
+export const countMintersInLevel = (
+  level,
+  addressLevel,
+  tier4Online
+): number => {
+  if (level === 0) {
+    const countTier0 = addressLevel[0].count;
+    return countTier0;
+  } else if (level === 1) {
+    const countTier10 = addressLevel[1].count + addressLevel[2].count;
+    return countTier10;
+  } else if (level === 2) {
+    const countTier11 = addressLevel[1].count + addressLevel[2].count;
+    return countTier11;
+  } else if (level === 3) {
+    const countTier20 = addressLevel[3].count + addressLevel[4].count;
+    return countTier20;
+  } else if (level === 4) {
+    const countTier21 = addressLevel[3].count + addressLevel[4].count;
+    return countTier21;
+  } else if (level === 5) {
+    if (tier4Online < 30) {
+      const countTier30 =
+        addressLevel[5].count +
+        addressLevel[6].count +
+        addressLevel[7].count +
+        addressLevel[8].count;
+      return countTier30;
+    } else {
+      const countTier30 = addressLevel[5].count + addressLevel[6].count;
+      return countTier30;
+    }
+  } else if (level === 6) {
+    if (tier4Online < 30) {
+      const countTier31 =
+        addressLevel[5].count +
+        addressLevel[6].count +
+        addressLevel[7].count +
+        addressLevel[8].count;
+      return countTier31;
+    } else {
+      const countTier31 = addressLevel[5].count + addressLevel[6].count;
+      return countTier31;
+    }
+  } else if (level === 7) {
+    if (tier4Online < 30) {
+      const countTier40 =
+        addressLevel[5].count +
+        addressLevel[6].count +
+        addressLevel[7].count +
+        addressLevel[8].count;
+      return countTier40;
+    } else {
+      const countTier40 = addressLevel[7].count + addressLevel[8].count;
+      return countTier40;
+    }
+  } else if (level === 8) {
+    if (tier4Online < 30) {
+      const countTier40 =
+        addressLevel[5].count +
+        addressLevel[6].count +
+        addressLevel[7].count +
+        addressLevel[8].count;
+      return countTier40;
+    } else {
+      const countTier41 = addressLevel[7].count + addressLevel[8].count;
+      return countTier41;
+    }
+  } else if (level === 9) {
+    const countTier50 = addressLevel[9].count + addressLevel[10].count;
+    return countTier50;
+  } else if (level === 10) {
+    const countTier51 = addressLevel[9].count + addressLevel[10].count;
+    return countTier51;
+  }
+
+  return 0; // should never reach this point
+};
 
 // 	_countReward() {
-// 		if (this.accountInfo.level === 0) {
+// 		if (accountInfo.level === 0) {
 // 			return '0'
-// 		} else if (this.accountInfo.level === 1) {
-// 			let countReward10 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count)).toFixed(8)
-// 			let countReward11 = (countReward10).toString()
-// 			return '' + countReward11
-// 		} else if (this.accountInfo.level === 2) {
-// 			let countReward20 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count)).toFixed(8)
-// 			let countReward21 = (countReward20).toString()
-// 			return '' + countReward21
-// 		} else if (this.accountInfo.level === 3) {
-// 			let countReward30 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count)).toFixed(8)
-// 			let countReward31 = (countReward30).toString()
-// 			return '' + countReward31
-// 		} else if (this.accountInfo.level === 4) {
-// 			let countReward40 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count)).toFixed(8)
-// 			let countReward41 = (countReward40).toString()
-// 			return '' + countReward41
-// 		} else if (this.accountInfo.level === 5) {
+// 		} else if (accountInfo.level === 1) {
+// 			const countReward10 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[1].count + addressLevel[2].count)).toFixed(8)
+// 			const countReward11 = (countReward10).toString()
+// 			return countReward11
+// 		} else if (accountInfo.level === 2) {
+// 			const countReward20 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[1].count + addressLevel[2].count)).toFixed(8)
+// 			const countReward21 = (countReward20).toString()
+// 			return countReward21
+// 		} else if (accountInfo.level === 3) {
+// 			const countReward30 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[3].count + addressLevel[4].count)).toFixed(8)
+// 			const countReward31 = (countReward30).toString()
+// 			return countReward31
+// 		} else if (accountInfo.level === 4) {
+// 			const countReward40 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[3].count + addressLevel[4].count)).toFixed(8)
+// 			const countReward41 = (countReward40).toString()
+// 			return countReward41
+// 		} else if (accountInfo.level === 5) {
 // 			if (this.tier4Online < 30) {
-// 				let countReward50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward51 = (countReward50).toString()
-// 				return '' + countReward51
+// 				const countReward50 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward51 = (countReward50).toString()
+// 				return countReward51
 // 			} else {
-// 				let countReward50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count)).toFixed(8)
-// 				let countReward51 = (countReward50).toString()
-// 				return '' + countReward51
+// 				const countReward50 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count)).toFixed(8)
+// 				const countReward51 = (countReward50).toString()
+// 				return countReward51
 // 			}
-// 		} else if (this.accountInfo.level === 6) {
+// 		} else if (accountInfo.level === 6) {
 // 			if (this.tier4Online < 30) {
-// 				let countReward60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward61 = (countReward60).toString()
-// 				return '' + countReward61
+// 				const countReward60 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward61 = (countReward60).toString()
+// 				return countReward61
 // 			} else {
-// 				let countReward60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count)).toFixed(8)
-// 				let countReward61 = (countReward60).toString()
-// 				return '' + countReward61
+// 				const countReward60 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count)).toFixed(8)
+// 				const countReward61 = (countReward60).toString()
+// 				return countReward61
 // 			}
-// 		} else if (this.accountInfo.level === 7) {
+// 		} else if (accountInfo.level === 7) {
 // 			if (this.tier4Online < 30) {
-// 				let countReward70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward71 = (countReward70).toString()
-// 				return '' + countReward71
+// 				const countReward70 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward71 = (countReward70).toString()
+// 				return countReward71
 // 			} else {
-// 				let countReward70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward71 = (countReward70).toString()
-// 				return '' + countReward71
+// 				const countReward70 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward71 = (countReward70).toString()
+// 				return countReward71
 // 			}
-// 		} else if (this.accountInfo.level === 8) {
+// 		} else if (accountInfo.level === 8) {
 // 			if (this.tier4Online < 30) {
-// 				let countReward80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward81 = (countReward80).toString()
-// 				return '' + countReward81
+// 				const countReward80 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward81 = (countReward80).toString()
+// 				return countReward81
 // 			} else {
-// 				let countReward80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[7].count + this.addressLevel[8].count)).toFixed(8)
-// 				let countReward81 = (countReward80).toString()
-// 				return '' + countReward81
+// 				const countReward80 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[7].count + addressLevel[8].count)).toFixed(8)
+// 				const countReward81 = (countReward80).toString()
+// 				return countReward81
 // 			}
-// 		} else if (this.accountInfo.level === 9) {
-// 			let countReward90 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count)).toFixed(8)
-// 			let countReward91 = (countReward90).toString()
-// 			return '' + countReward91
-// 		} else if (this.accountInfo.level === 10) {
-// 			let countReward100 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count)).toFixed(8)
-// 			let countReward101 = (countReward100).toString()
-// 			return '' + countReward101
+// 		} else if (accountInfo.level === 9) {
+// 			const countReward90 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[9].count + addressLevel[10].count)).toFixed(8)
+// 			const countReward91 = (countReward90).toString()
+// 			return countReward91
+// 		} else if (accountInfo.level === 10) {
+// 			const countReward100 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[9].count + addressLevel[10].count)).toFixed(8)
+// 			const countReward101 = (countReward100).toString()
+// 			return countReward101
 // 		}
 // 	}
 
 // 	_countRewardDay() {
-// 		if (this.accountInfo.level === 0) {
+// 		if (accountInfo.level === 0) {
 // 			return '0'
-// 		} else if (this.accountInfo.level === 1) {
-// 			let countRewardDay10 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay11 = (countRewardDay10).toString()
-// 			return '' + countRewardDay11
-// 		} else if (this.accountInfo.level === 2) {
-// 			let countRewardDay20 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[1].count + this.addressLevel[2].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay21 = (countRewardDay20).toString()
-// 			return '' + countRewardDay21
-// 		} else if (this.accountInfo.level === 3) {
-// 			let countRewardDay30 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay31 = (countRewardDay30).toString()
-// 			return '' + countRewardDay31
-// 		} else if (this.accountInfo.level === 4) {
-// 			let countRewardDay40 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[3].count + this.addressLevel[4].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay41 = (countRewardDay40).toString()
-// 			return '' + countRewardDay41
-// 		} else if (this.accountInfo.level === 5) {
+// 		} else if (accountInfo.level === 1) {
+// 			const countRewardDay10 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[1].count + addressLevel[2].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay11 = (countRewardDay10).toString()
+// 			return countRewardDay11
+// 		} else if (accountInfo.level === 2) {
+// 			const countRewardDay20 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[1].count + addressLevel[2].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay21 = (countRewardDay20).toString()
+// 			return countRewardDay21
+// 		} else if (accountInfo.level === 3) {
+// 			const countRewardDay30 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[3].count + addressLevel[4].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay31 = (countRewardDay30).toString()
+// 			return countRewardDay31
+// 		} else if (accountInfo.level === 4) {
+// 			const countRewardDay40 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[3].count + addressLevel[4].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay41 = (countRewardDay40).toString()
+// 			return countRewardDay41
+// 		} else if (accountInfo.level === 5) {
 // 			if (this.tier4Online < 30) {
-// 				let countRewardDay50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay51 = (countRewardDay50).toString()
-// 				return '' + countRewardDay51
+// 				const countRewardDay50 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay51 = (countRewardDay50).toString()
+// 				return countRewardDay51
 // 			} else {
-// 				let countRewardDay50 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay51 = (countRewardDay50).toString()
-// 				return '' + countRewardDay51
+// 				const countRewardDay50 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay51 = (countRewardDay50).toString()
+// 				return countRewardDay51
 // 			}
-// 		} else if (this.accountInfo.level === 6) {
+// 		} else if (accountInfo.level === 6) {
 // 			if (this.tier4Online < 30) {
-// 				let countRewardDay60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay61 = (countRewardDay60).toString()
-// 				return '' + countRewardDay61
+// 				const countRewardDay60 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay61 = (countRewardDay60).toString()
+// 				return countRewardDay61
 // 			} else {
-// 				let countRewardDay60 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay61 = (countRewardDay60).toString()
-// 				return '' + countRewardDay61
+// 				const countRewardDay60 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay61 = (countRewardDay60).toString()
+// 				return countRewardDay61
 // 			}
-// 		} else if (this.accountInfo.level === 7) {
+// 		} else if (accountInfo.level === 7) {
 // 			if (this.tier4Online < 30) {
-// 				let countRewardDay70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay71 = (countRewardDay70).toString()
-// 				return '' + countRewardDay71
+// 				const countRewardDay70 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay71 = (countRewardDay70).toString()
+// 				return countRewardDay71
 // 			} else {
-// 				let countRewardDay70 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay71 = (countRewardDay70).toString()
-// 				return '' + countRewardDay71
+// 				const countRewardDay70 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay71 = (countRewardDay70).toString()
+// 				return countRewardDay71
 // 			}
-// 		} else if (this.accountInfo.level === 8) {
+// 		} else if (accountInfo.level === 8) {
 // 			if (this.tier4Online < 30) {
-// 				let countRewardDay80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[5].count + this.addressLevel[6].count + this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay81 = (countRewardDay80).toString()
-// 				return '' + countRewardDay81
+// 				const countRewardDay80 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay81 = (countRewardDay80).toString()
+// 				return countRewardDay81
 // 			} else {
-// 				let countRewardDay80 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[7].count + this.addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				let countRewardDay81 = (countRewardDay80).toString()
-// 				return '' + countRewardDay81
+// 				const countRewardDay80 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
+// 				const countRewardDay81 = (countRewardDay80).toString()
+// 				return countRewardDay81
 // 			}
-// 		} else if (this.accountInfo.level === 9) {
-// 			let countRewardDay90 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay91 = (countRewardDay90).toString()
-// 			return '' + countRewardDay91
-// 		} else if (this.accountInfo.level === 10) {
-// 			let countRewardDay100 = ((this._blockReward() / 100 * this._tierPercent()) / (this.addressLevel[9].count + this.addressLevel[10].count) * this._timeCalc()).toFixed(8)
-// 			let countRewardDay101 = (countRewardDay100).toString()
-// 			return '' + countRewardDay101
+// 		} else if (accountInfo.level === 9) {
+// 			const countRewardDay90 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[9].count + addressLevel[10].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay91 = (countRewardDay90).toString()
+// 			return countRewardDay91
+// 		} else if (accountInfo.level === 10) {
+// 			const countRewardDay100 = ((this._blockReward() / 100 * this._tierPercent()) / (addressLevel[9].count + addressLevel[10].count) * this._timeCalc()).toFixed(8)
+// 			const countRewardDay101 = (countRewardDay100).toString()
+// 			return countRewardDay101
 // 		}
 // 	}
 
