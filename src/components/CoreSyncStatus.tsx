@@ -4,7 +4,7 @@ import syncedMintingImg from '../assets/syncStatus/synced_minting.webp';
 import syncingImg from '../assets/syncStatus/syncing.webp';
 import { getBaseApiReact } from '../App';
 import '../styles/CoreSyncStatus.css';
-import { useTheme } from '@mui/material';
+import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
 
@@ -106,7 +106,7 @@ export const CoreSyncStatus = () => {
     }
 
     return (
-      <div
+      <Box
         className="tooltip"
         data-theme={theme.palette.mode}
         style={{ display: 'inline' }}
@@ -119,7 +119,7 @@ export const CoreSyncStatus = () => {
           />
         </span>
 
-        <div
+        <Box
           className="core-panel"
           style={{
             right: 'unset',
@@ -166,10 +166,10 @@ export const CoreSyncStatus = () => {
             {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
             <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
           </h4>
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   };
 
-  return <div id="core-sync-status-id">{renderSyncStatusIcon()}</div>;
+  return <Box id="core-sync-status-id">{renderSyncStatusIcon()}</Box>;
 };
