@@ -779,17 +779,10 @@ export const NotAuthenticated = ({
           aria-labelledby="alert-dialog-title"
           aria-describedby="alert-dialog-description"
           fullWidth
-          sx={{
-            backgroundColor: theme.palette.background.paper,
-            color: theme.palette.text.primary,
-            borderRadius: '10px',
-          }}
         >
           <DialogTitle
             id="alert-dialog-title"
             sx={{
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
               textAlign: 'center',
@@ -798,12 +791,7 @@ export const NotAuthenticated = ({
             {t('auth:node.custom_many', { postProcess: 'capitalizeAll' })}
           </DialogTitle>
 
-          <DialogContent
-            sx={{
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.text.primary,
-            }}
-          >
+          <DialogContent>
             <Box
               sx={{
                 display: 'flex',
@@ -1017,12 +1005,7 @@ export const NotAuthenticated = ({
             </Box>
           </DialogContent>
 
-          <DialogActions
-            sx={{
-              backgroundColor: theme.palette.background.paper,
-              color: theme.palette.text.primary,
-            }}
-          >
+          <DialogActions>
             {mode === 'list' && (
               <Button variant="contained" onClick={addCustomNode}>
                 {t('core:action.add', { postProcess: 'capitalizeFirstChar' })}

@@ -76,7 +76,26 @@ const commonThemeOptions = {
     MuiDialog: {
       styleOverrides: {
         paper: {
-          backgroundImage: 'none',
+          backgroundColor: 'background.paper',
+          color: 'text.primary',
+        },
+      },
+    },
+
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'inherit',
+          color: 'inherit',
+        },
+      },
+    },
+
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'inherit',
+          color: 'inherit',
         },
       },
     },
