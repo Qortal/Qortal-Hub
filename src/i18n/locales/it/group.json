@@ -91,7 +91,6 @@
       "minting_account": "account di minting:",
       "minting_keys_per_node": "sono ammesse solo 2 chiavi di minting per nodo. Rimuoverne una se si desidera fare minting con questo account.",
       "minting_keys_per_node_different": "sono ammesse solo 2 chiavi di minting per nodo. Rimuovine una se desideri aggiungere un account diverso.",
-      "next_level": "blocchi al livello successivo",
       "node_minting_account": "account minting del nodo",
       "node_minting_key": "hai una chiave di minting per questo account collegata al nodo",
       "no_announcement": "nessun annuncio",

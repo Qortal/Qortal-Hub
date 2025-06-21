@@ -91,7 +91,6 @@
       "minting_account": "铸币账户：",
       "minting_keys_per_node": "每个节点最多允许 2 个铸币密钥。请先移除一个",
       "minting_keys_per_node_different": "每个节点最多允许 2 个铸币密钥。请先移除再添加其他账户",
-      "next_level": "距离下一级还需区块数",
       "node_minting_account": "节点铸币账户",
       "node_minting_key": "你已有该账户的铸币密钥与该节点绑定",
       "no_announcement": "暂无公告",

@@ -91,7 +91,6 @@
       "minting_account": "Minting-Konto:",
       "minting_keys_per_node": "Nur 2 Minting-Schlüssel pro Node erlaubt. Bitte entferne einen.",
       "minting_keys_per_node_different": "Nur 2 Minting-Schlüssel pro Node erlaubt. Entferne einen, um einen anderen hinzuzufügen.",
-      "next_level": "Verbleibende Blöcke bis zum nächsten Level",
       "node_minting_account": "Minting-Konten dieses Nodes",
       "node_minting_key": "Du hast bereits einen Minting-Schlüssel für dieses Konto auf diesem Node",
       "no_announcement": "Keine Ankündigungen",

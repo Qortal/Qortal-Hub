@@ -939,13 +939,6 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   })}
                   : {accountInfo?.level}
                 </Typography>
-
-                <Typography>
-                  {t('group:message.generic.next_level', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  : {levelUpBlocks(accountInfo, nodeStatus)}
-                </Typography>
               </Card>
 
               <Spacer height="10px" />

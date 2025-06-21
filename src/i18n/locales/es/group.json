@@ -91,7 +91,6 @@
       "minting_account": "cuenta de minteo:",
       "minting_keys_per_node": "solo se permiten 2 claves de minteo por nodo. Elimina una para usar esta cuenta.",
       "minting_keys_per_node_different": "solo se permiten 2 claves de minteo por nodo. Elimina una para añadir otra cuenta.",
-      "next_level": "bloques restantes para el siguiente nivel",
       "node_minting_account": "cuentas de minteo del nodo",
       "node_minting_key": "ya tienes una clave de minteo para esta cuenta en este nodo",
       "no_announcement": "no hay anuncios",
