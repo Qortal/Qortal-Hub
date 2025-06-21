@@ -78,6 +78,7 @@ const commonThemeOptions = {
         paper: {
           backgroundColor: 'background.paper',
           color: 'text.primary',
+          backgroundImage: 'none',
         },
       },
     },
@@ -95,7 +96,6 @@ const commonThemeOptions = {
       styleOverrides: {
         root: {
           backgroundColor: 'inherit',
-          color: 'inherit',
         },
       },
     },

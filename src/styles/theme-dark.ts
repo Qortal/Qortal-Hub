@@ -61,6 +61,7 @@ export const darkThemeOptions: ThemeOptions = {
           '--background-default': theme.palette.background.default,
           '--background-paper': theme.palette.background.paper,
           '--background-surface': theme.palette.background.surface,
+          '--videoplayer-bg': 'rgba(31, 32, 35, 1)',
         },
 
         '*, *::before, *::after': {
@@ -76,7 +77,6 @@ export const darkThemeOptions: ThemeOptions = {
           padding: 0,
           margin: 0,
           wordBreak: 'break-word',
-          backgroundColor: 'var(--bg-primary)',
         },
         '::-webkit-scrollbar-track': {
           backgroundColor: 'transparent',

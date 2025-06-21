@@ -608,7 +608,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
       <ControlsContainer
         sx={{
           position: 'relative',
-          background: 'var(--bg-primary)',
+          background: 'var(--videoplayer-bg)',
           width: '100%',
           flexShrink: 0,
         }}
