@@ -95,7 +95,6 @@ const commonThemeOptions = {
       styleOverrides: {
         root: {
           backgroundColor: 'inherit',
-          color: 'inherit',
         },
       },
     },
