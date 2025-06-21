@@ -25,7 +25,7 @@ window.addEventListener('message', (event) => {
 export const sendMessageBackground = (
   action,
   data = {},
-  timeout = 240000,
+  timeout = 600000,
   isExtension,
   appInfo,
   skipAuth
