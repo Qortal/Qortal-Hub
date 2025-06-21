@@ -78,7 +78,6 @@ const commonThemeOptions = {
         paper: {
           backgroundColor: 'background.paper',
           color: 'text.primary',
-          backgroundImage: 'none',
         },
       },
     },
