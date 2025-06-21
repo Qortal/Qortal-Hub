@@ -1,4 +1,5 @@
-import React, {
+import {
+  SyntheticEvent,
   useCallback,
   useContext,
   useEffect,
@@ -265,7 +266,7 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     }
   };
 
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleChange = (event: SyntheticEvent, newValue: number) => {
     setValueTabPrivateApp(newValue);
   };
 
@@ -353,13 +354,10 @@ export const AppsPrivate = ({ myName, myAddress }) => {
             <Tabs
               value={valueTabPrivateApp}
               onChange={handleChange}
-              aria-label={t('core:basic_tabs_example', {
-                postProcess: 'capitalizeFirstChar',
-              })}
               variant={'fullWidth'}
               scrollButtons="auto"
               sx={{
-                '& .MuiTabs-indicator': {
+                '&.MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
                 },
               }}

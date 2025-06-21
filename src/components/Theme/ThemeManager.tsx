@@ -306,7 +306,6 @@ export default function ThemeManager() {
         <DialogTitle
           sx={{
             textAlign: 'center',
-            color: theme.palette.text.primary,
             fontWeight: 'bold',
             opacity: 1,
           }}

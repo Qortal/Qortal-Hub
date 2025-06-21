@@ -73,10 +73,45 @@ const commonThemeOptions = {
       },
     },
 
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: 'background.paper',
+          color: 'text.primary',
+        },
+      },
+    },
+
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'inherit',
+          color: 'inherit',
+        },
+      },
+    },
+
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'inherit',
+          color: 'inherit',
+        },
+      },
+    },
+
     MuiModal: {
       styleOverrides: {
         root: {
           zIndex: 50000,
+        },
+      },
+    },
+
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundImage: 'none',
         },
       },
     },

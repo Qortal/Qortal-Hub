@@ -5,7 +5,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import IconButton from '@mui/material/IconButton';
 import { executeEvent } from '../../utils/events';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 export const ListOfThreadPostsWatched = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
@@ -175,6 +176,10 @@ export const ListOfThreadPostsWatched = () => {
                       aria-label={t('core:comment_other', {
                         postProcess: 'capitalizeFirstChar',
                       })}
+                      sx={{
+                        bgcolor: theme.palette.background.default,
+                        color: theme.palette.text.primary,
+                      }}
                     >
                       <VisibilityIcon
                         sx={{

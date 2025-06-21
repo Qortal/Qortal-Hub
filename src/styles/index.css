@@ -19,6 +19,13 @@
   font-weight: 400;
 }
 
+/* * {    // TODO restore and check
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Roboto';
+} */
+
 .image-container {
   position: relative;
 }

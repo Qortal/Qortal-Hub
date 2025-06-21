@@ -190,11 +190,10 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         <Tabs
           orientation="vertical"
           ref={tabsRef}
-          aria-label={t('core:basic_tabs_example')}
           variant="scrollable" // Make tabs scrollable
           scrollButtons={true}
           sx={{
-            '& .MuiTabs-indicator': {
+            '&.MuiTabs-indicator': {
               backgroundColor: theme.palette.background.default,
             },
             maxHeight: `275px`, // Ensure the tabs container fits within the available space

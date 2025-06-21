@@ -116,7 +116,6 @@
   "apps_official": "официальные приложения",
   "attachment": "вложение",
   "balance": "баланс:",
-  "basic_tabs_example": "Основные вкладки",
   "category": "категория",
   "category_other": "категории",
   "chat": "чат",
@@ -220,6 +219,7 @@
       "benefits_qort": "Преимущества наличия qort",
       "building": "здание",
       "building_app": "строительство приложения",
+      "confirmed": "подтвержденный",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -256,6 +256,7 @@
       "no_pinned_changes": "В настоящее время у вас нет никаких изменений в ваших приложениях",
       "no_results": "Нет результатов",
       "one_app_per_name": "ПРИМЕЧАНИЕ. В настоящее время только одно приложение и веб -сайт разрешены для имени.",
+      "ongoing_transactions": "текущие операции",
       "opened": "открыл",
       "overwrite_qdn": "перезаписать в QDN",
       "password_confirm": "Пожалуйста, подтвердите пароль",
@@ -281,7 +282,8 @@
       "space_for_admins": "Извините, это пространство только для администраторов.",
       "unread_messages": "Непрочитанные сообщения ниже",
       "unsaved_changes": "У вас есть неспасенные изменения в ваши приложения. Сохраните их в QDN.",
-      "updating": "обновление"
+      "updating": "обновление",
+      "wait": "пожалуйста, подождите"
     },
     "message": "сообщение",
     "promotion_text": "Текст продвижения",
@@ -302,12 +304,6 @@
       "reset_qdn": "Не нравятся ваши текущие локальные изменения? Хотели бы вы сбросить в сохраненные приложения QDN?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(добыча)",
-      "not_minting": "(не шахта)",
-      "synchronized": "синхронизированный",
-      "synchronizing": "синхронизация"
-    },
     "success": {
       "order_submitted": "Ваш заказ на покупку был отправлен",
       "published": "успешно опубликовано. Пожалуйста, подождите пару минут, пока сеть прокатит изменения.",
@@ -318,10 +314,37 @@
       "voted": "успешно проголосовал. Пожалуйста, подождите пару минут, пока сеть прокатит изменения."
     }
   },
-  "minting_status": "Статус майтинга",
+  "minting": {
+    "account_details": "детали аккаунта майнинга",
+    "actions": "действия по майнингу",
+    "average_blocktime": "среднее время блока Qortal",
+    "average_blocks_per_day": "среднее количество блоков в день",
+    "average_created_qorts_per_day": "среднее количество создаваемых QORT в день",
+    "blockchain_statistics": "статистика блокчейна",
+    "blocks_next_level": "блоков до следующего уровня",
+    "current_level": "текущий уровень",
+    "current_status": "текущий статус",
+    "current_tier": "текущий уровень",
+    "current_tier_content": "{{ tier }} (Уровни {{ levels }})",
+    "details": "детали майнинга",
+    "next_level": "При майнинге 24/7 вы достигнете <strong>{{ level }} уровня</strong> за <strong>{{ count }} дней</strong>",
+    "rewards_info": "информация о наградах за майнинг",
+    "reward_per_block": "предполагаемая награда за блок",
+    "reward_per_day": "предполагаемая награда в день",
+    "status": {
+      "minting": "(добыча)",
+      "not_minting": "(не шахта)",
+      "no_status": "нет статуса",
+      "synchronized": "синхронизированный",
+      "synchronizing": "синхронизация..."
+    },
+    "status_title": "Статус майтинга",
+    "tier_share_per_block": "доля уровня за блок",
+    "total_minter_in_tier": "всего майнеров на этом уровне"
+  },
   "name": "имя",
   "name_app": "имя/приложение",
-  "new_post_in": "new post in {{ title }}",
+  "new_post_in": "новые сообщения в {{ title }}",
   "none": "никто",
   "note": "примечание",
   "option": "вариант",

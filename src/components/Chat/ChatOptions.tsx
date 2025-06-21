@@ -786,6 +786,7 @@ const ShowMessage = ({ message, goToMessage, messages }) => {
       <Box
         sx={{
           alignItems: 'center',
+          background: theme.palette.background.surface,
           display: 'flex',
           justifyContent: 'space-between',
           width: '100%',

@@ -229,6 +229,10 @@ export const ManageMembers = ({
               color="inherit"
               edge="start"
               onClick={handleClose}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
             >
               <CloseIcon />
             </IconButton>
@@ -247,14 +251,11 @@ export const ManageMembers = ({
             <Tabs
               value={value}
               onChange={handleChange}
-              aria-label={t('core:basic_tabs_example', {
-                postProcess: 'capitalizeFirstChar',
-              })}
               variant="scrollable" // Make tabs scrollable
               scrollButtons="auto" // Show scroll buttons automatically
               allowScrollButtonsMobile // Show scroll buttons on mobile as well
               sx={{
-                '& .MuiTabs-indicator': {
+                '&.MuiTabs-indicator': {
                   backgroundColor: theme.palette.background.default,
                 },
                 maxWidth: '100%', // Ensure the tabs container fits within the available space

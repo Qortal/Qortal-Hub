@@ -116,18 +116,11 @@ export const lightThemeOptions: ThemeOptions = {
       },
     },
 
-    MuiDialog: {
+    MuiPaper: {
       styleOverrides: {
-        paper: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-
-    MuiPopover: {
-      styleOverrides: {
-        paper: {
-          backgroundImage: 'none',
+        root: {
+          backgroundColor: 'rgb(220, 220, 220)',
+          color: 'rgba(0, 0, 0, 0.87)',
         },
       },
     },

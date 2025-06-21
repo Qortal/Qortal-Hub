@@ -91,8 +91,6 @@
       "minting_account": "minting account:",
       "minting_keys_per_node": "only 2 minting keys are allowed per node. Please remove one if you would like to mint with this account.",
       "minting_keys_per_node_different": "only 2 minting keys are allowed per node. Please remove one if you would like to add a different account.",
-      "next_level": "blocks remaining until next level:",
-      "node_minting": "this node is minting:",
       "node_minting_account": "node's minting accounts",
       "node_minting_key": "you currently have a minting key for this account attached to this node",
       "no_announcement": "no announcements",

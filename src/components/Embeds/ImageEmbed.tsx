@@ -269,11 +269,12 @@ export function ImageViewer({ src = null, alt = '' }) {
           <IconButton
             onClick={handleCloseFullscreen}
             sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              zIndex: 10,
+              bgcolor: theme.palette.background.default,
               color: theme.palette.text.primary,
+              position: 'absolute',
+              right: 8,
+              top: 8,
+              zIndex: 10,
             }}
           >
             <CloseIcon />

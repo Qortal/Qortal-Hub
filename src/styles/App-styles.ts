@@ -138,7 +138,10 @@ interface CustomButtonProps {
   customColor?: string;
 }
 
-export const CustomButtonAccept = styled(Box)<CustomButtonProps>((props) => {
+export const CustomButtonAccept = styled(Box, {
+  shouldForwardProp: (prop) =>
+    prop !== 'customBgColor' && prop !== 'customColor',
+})<CustomButtonProps>((props) => {
   const { customBgColor, customColor, theme } = props;
   return {
     alignItems: 'center',

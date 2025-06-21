@@ -185,4 +185,4 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
       </CustomStyledMenu>
     </div>
   );
-};
+}; // TODO translate

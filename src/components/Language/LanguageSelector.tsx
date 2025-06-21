@@ -30,25 +30,18 @@ const LanguageSelector = () => {
   return (
     <Box ref={selectorRef}>
       {!showSelect && (
-        <Tooltip
-          key={currentLang}
-          title={t('core:action.change_language', {
+        <Button
+          onClick={() => setShowSelect(true)}
+          style={{
+            fontSize: '1.3rem',
+          }}
+          aria-label={t('core:current_language', {
+            language: name,
             postProcess: 'capitalizeFirstChar',
           })}
         >
-          <Button
-            onClick={() => setShowSelect(true)}
-            style={{
-              fontSize: '1.3rem',
-            }}
-            aria-label={t('core:current_language', {
-              language: name,
-              postProcess: 'capitalizeFirstChar',
-            })}
-          >
-            {flag}
-          </Button>
-        </Tooltip>
+          {flag}
+        </Button>
       )}
 
       {showSelect && (

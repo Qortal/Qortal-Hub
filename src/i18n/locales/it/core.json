@@ -116,7 +116,6 @@
   "apps_official": "app ufficiali",
   "attachment": "allegato",
   "balance": "bilancio:",
-  "basic_tabs_example": "esempio di schede base",
   "category": "categoria",
   "category_other": "categorie",
   "chat": "chat",
@@ -220,6 +219,7 @@
       "benefits_qort": "vantaggi di avere QORT",
       "building": "creazione",
       "building_app": "creazione app",
+      "confirmed": "confermato",
       "created_by": "creato da {{ owner }}",
       "buy_order_request": "l'applicazione <br/><italic>{{hostname}}</italic> <br/><span>sta effettuando {{count}} ordine d'acquisto</span>.",
       "buy_order_request_other": "l'applicazione <br/><italic>{{hostname}}</italic> <br/><span>sta effettuando {{count}} ordini d'acquisto</span>.",
@@ -255,6 +255,7 @@
       "no_pinned_changes": "per ora non ci sono modifiche alle app bloccate",
       "no_results": "nessun risultato",
       "one_app_per_name": "nota: per adesso sono consentiti solo un'app e un sito Web per nome.",
+      "ongoing_transactions": "transazioni in corso",
       "opened": "aperto",
       "overwrite_qdn": "sovrascrivi a QDN",
       "password_confirm": "si prega di confermare una password",
@@ -280,7 +281,8 @@
       "space_for_admins": "mi dispiace, questo spazio è solo per gli amministratori.",
       "unread_messages": "messaggi non letti qua sotto",
       "unsaved_changes": "hai cambiato modifiche alle app bloccate. Salvali su QDN.",
-      "updating": "aggiornamento"
+      "updating": "aggiornamento",
+      "wait": "attendere per favore"
     },
     "message": "messaggio",
     "promotion_text": "testo di promozione",
@@ -301,12 +303,6 @@
       "reset_qdn": "non ti piacciono le attuali modifiche locali? Vorresti ripristinare le app QDN salvate?",
       "transfer_qort": "vuoi trasferire {{ amount }} QORT?"
     },
-    "status": {
-      "minting": "(minting)",
-      "not_minting": "(non minting)",
-      "synchronized": "sincronizzato",
-      "synchronizing": "sincronizzazione"
-    },
     "success": {
       "order_submitted": "l'ordine di acquisto è stato inviato",
       "published": "pubblicato con successo. Si prega di attendere un paio di minuti affinché la rete propaghi le modifiche.",
@@ -317,7 +313,34 @@
       "voted": "votato con successo. Si prega di attendere un paio di minuti affinché la rete propaghi le modifiche."
     }
   },
-  "minting_status": "stato minting",
+  "minting": {
+    "account_details": "dettagli dell'account di minting",
+    "actions": "azioni sul minting",
+    "average_blocktime": "tempo medio per blocco di Qortal",
+    "average_blocks_per_day": "blocchi medi al giorno",
+    "average_created_qorts_per_day": "QORT medi creati al giorno",
+    "blockchain_statistics": "statistiche della blockchain",
+    "blocks_next_level": "blocchi al prossimo livello",
+    "current_level": "livello attuale",
+    "current_status": "stato attuale",
+    "current_tier": "fascia attuale",
+    "current_tier_content": "{{ tier }} (Livelli {{ levels }})",
+    "details": "dettagli sul minting",
+    "next_level": "Con un minting 24/7 raggiungerai il <strong>livello {{ level }}</strong> in <strong>{{ count }} giorni</strong>",
+    "rewards_info": "informazioni sulle ricompense del minting",
+    "reward_per_block": "ricompensa stimata per blocco",
+    "reward_per_day": "ricompensa stimata al giorno",
+    "status": {
+      "minting": "(minting)",
+      "not_minting": "(non minting)",
+      "no_status": "nessun stato",
+      "synchronized": "sincronizzato",
+      "synchronizing": "sincronizzazione..."
+    },
+    "status_title": "stato minting",
+    "tier_share_per_block": "quota della fascia per blocco",
+    "total_minter_in_tier": "minter totali in questa fascia"
+  },
   "name": "nome",
   "name_app": "nome/app",
   "new_post_in": "nuovo post in {{ title }}",
@@ -361,7 +384,7 @@
     "default": "tema di default",
     "light": "chiaro",
     "light_mode": "modalità chiara",
-    "manager": "manager tema",
+    "manager": "gestore del tema",
     "name": "nome tema"
   },
   "thread": "thread",

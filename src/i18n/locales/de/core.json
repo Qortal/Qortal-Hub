@@ -116,7 +116,6 @@
   "apps_official": "offizielle Apps",
   "attachment": "Anhang",
   "balance": "Gleichgewicht:",
-  "basic_tabs_example": "Basic Tabs Beispiel",
   "category": "Kategorie",
   "category_other": "Kategorien",
   "chat": "Chat",
@@ -256,6 +255,7 @@
       "no_pinned_changes": "Sie haben derzeit keine Änderungen an Ihren angestellten Apps",
       "no_results": "Keine Ergebnisse",
       "one_app_per_name": "Hinweis: Derzeit ist pro Namen nur eine App und Website zulässig.",
+      "ongoing_transactions": "laufende Transaktionen",
       "opened": "geöffnet",
       "overwrite_qdn": "überschreibt zu QDN",
       "password_confirm": "Bitte bestätigen Sie ein Passwort",
@@ -280,8 +280,9 @@
       "settings": "Sie verwenden den Export-/Import -Weg zum Speichern von Einstellungen.",
       "space_for_admins": "Entschuldigung, dieser Raum gilt nur für Administratoren.",
       "unread_messages": "ungelesene Nachrichten unten",
-      "unsaved_changes": "Sie haben nicht gespeicherte Änderungen an Ihren angestellten Apps. Speichern Sie sie bei QDN.",
-      "updating": "Aktualisierung"
+      "unsaved_changes": "sie haben nicht gespeicherte Änderungen an Ihren angestellten Apps. Speichern Sie sie bei QDN.",
+      "updating": "aktualisierung",
+      "wait": "bitte warten"
     },
     "message": "Nachricht",
     "promotion_text": "Promotionstext",
@@ -302,12 +303,6 @@
       "reset_qdn": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf Ihre gespeicherten QDN -Apps zurücksetzen?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(Prägung)",
-      "not_minting": "(nicht punktieren)",
-      "synchronized": "synchronisiert",
-      "synchronizing": "Synchronisierung"
-    },
     "success": {
       "order_submitted": "Ihre Kaufbestellung wurde eingereicht",
       "published": "erfolgreich veröffentlicht. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt.",
@@ -318,7 +313,34 @@
       "voted": "erfolgreich abgestimmt. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt."
     }
   },
-  "minting_status": "Münzstatus",
+  "minting": {
+    "account_details": "Minting-Kontodetails",
+    "actions": "Minting-Aktionen",
+    "average_blocktime": "durchschnittliche Qortal-Blockzeit",
+    "average_blocks_per_day": "durchschnittliche Blöcke pro Tag",
+    "average_created_qorts_per_day": "durchschnittlich erstellte QORTs pro Tag",
+    "blockchain_statistics": "Blockchain-Statistiken",
+    "blocks_next_level": "Blöcke bis zum nächsten Level",
+    "current_level": "aktuelles Level",
+    "current_status": "aktueller Status",
+    "current_tier": "aktuelle Stufe",
+    "current_tier_content": "{{ tier }} (Stufe {{ levels }})",
+    "details": "Minting-Details",
+    "next_level": "Mit 24/7-Minting erreichst du <strong>Level {{ level }}</strong> in <strong>{{ count }} Tagen</strong>",
+    "rewards_info": "Informationen zu Minting-Belohnungen",
+    "reward_per_block": "geschätzte Belohnung pro Block",
+    "reward_per_day": "geschätzte Belohnung pro Tag",
+    "status": {
+      "minting": "(Prägung)",
+      "not_minting": "(nicht punktieren)",
+      "no_status": "kein Status",
+      "synchronized": "synchronisiert",
+      "synchronizing": "Synchronisierung..."
+    },
+    "status_title": "Münzstatus",
+    "tier_share_per_block": "Stufenanteil pro Block",
+    "total_minter_in_tier": "Gesamtanzahl der Minter in dieser Stufe"
+  },
   "name": "Name",
   "name_app": "Name/App",
   "new_post_in": "new post in {{ title }}",

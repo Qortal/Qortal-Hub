@@ -41,15 +41,12 @@ export const Tutorials = () => {
       >
         <Tabs
           sx={{
-            '& .MuiTabs-indicator': {
+            '&.MuiTabs-indicator': {
               backgroundColor: theme.palette.background.default,
             },
           }}
           value={multiNumber}
           onChange={(e, value) => setMultiNumber(value)}
-          aria-label={t('core:basic_tabs_example', {
-            postProcess: 'capitalizeFirstChar',
-          })}
         >
           {openTutorialModal?.multi?.map((item, index) => {
             return (
@@ -75,10 +72,11 @@ export const Tutorials = () => {
           })}
           onClick={handleClose}
           sx={{
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             position: 'absolute',
             right: 8,
             top: 8,
-            color: theme.palette.text.primary,
           }}
         >
           <CloseIcon />
@@ -123,10 +121,11 @@ export const Tutorials = () => {
           })}
           onClick={handleClose}
           sx={{
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             position: 'absolute',
             right: 8,
             top: 8,
-            color: theme.palette.text.primary,
           }}
         >
           <CloseIcon />

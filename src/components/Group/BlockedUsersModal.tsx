@@ -406,10 +406,11 @@ export const BlockedUsersModal = () => {
           })}
           onClick={onCancel}
           sx={{
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
             position: 'absolute',
             right: 8,
             top: 8,
-            color: theme.palette.text.primary,
           }}
         >
           <CloseIcon />

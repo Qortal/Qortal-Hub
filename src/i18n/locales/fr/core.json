@@ -116,7 +116,6 @@
   "apps_official": "Applications officielles",
   "attachment": "pièce jointe",
   "balance": "équilibre:",
-  "basic_tabs_example": "Exemple de base des onglets",
   "category": "catégorie",
   "category_other": "catégories",
   "chat": "chat",
@@ -220,6 +219,7 @@
       "benefits_qort": "Avantages d'avoir QORT",
       "building": "bâtiment",
       "building_app": "application de construction",
+      "confirmed": "confirmé",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -256,6 +256,7 @@
       "no_pinned_changes": "Vous n'avez actuellement aucune modification à vos applications épinglées",
       "no_results": "Aucun résultat",
       "one_app_per_name": "Remarque: Actuellement, une seule application et site Web est autorisée par nom.",
+      "ongoing_transactions": "transactions en cours",
       "opened": "ouvert",
       "overwrite_qdn": "Écraser à QDN",
       "password_confirm": "Veuillez confirmer un mot de passe",
@@ -277,11 +278,12 @@
       "select_image": "Veuillez sélectionner une image pour un logo",
       "select_zip": "Sélectionnez un fichier .zip contenant du contenu statique:",
       "sending": "envoi...",
-      "settings": "Vous utilisez la manière d'exportation / l'importation d'enregistrer les paramètres.",
-      "space_for_admins": "Désolé, cet espace est uniquement pour les administrateurs.",
-      "unread_messages": "Messages non lus ci-dessous",
-      "unsaved_changes": "Vous avez des modifications non enregistrées à vos applications épinglées. Enregistrez-les sur QDN.",
-      "updating": "mise à jour"
+      "settings": "vous utilisez la manière d'exportation / importation d'enregistrement des paramètres.",
+      "space_for_admins": "désolé, cet espace est uniquement pour les administrateurs.",
+      "unread_messages": "messages non lus ci-dessous",
+      "unsaved_changes": "vous avez des modifications non enregistrées à vos applications épinglées. Enregistrez-les sur QDN.",
+      "updating": "mise à jour",
+      "wait": "attendez s'il vous plaît"
     },
     "message": "message",
     "promotion_text": "texte de promotion",
@@ -302,12 +304,6 @@
       "reset_qdn": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser avec vos applications QDN enregistrées?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(Coupure)",
-      "not_minting": "(pas de la frappe)",
-      "synchronized": "synchronisé",
-      "synchronizing": "synchronisation"
-    },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",
       "published": "publié avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications.",
@@ -318,7 +314,34 @@
       "voted": "voté avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications."
     }
   },
-  "minting_status": "statut de frappe",
+  "minting": {
+    "account_details": "détails du compte de minting",
+    "actions": "actions de minting",
+    "average_blocktime": "temps moyen par bloc Qortal",
+    "average_blocks_per_day": "blocs moyens par jour",
+    "average_created_qorts_per_day": "QORT créés en moyenne par jour",
+    "blockchain_statistics": "statistiques de la blockchain",
+    "blocks_next_level": "blocs jusqu'au niveau suivant",
+    "current_level": "niveau actuel",
+    "current_status": "statut actuel",
+    "current_tier": "niveau actuel",
+    "current_tier_content": "{{ tier }} (Niveaux {{ levels }})",
+    "details": "détails du minting",
+    "next_level": "Avec un minting 24/7, vous atteindrez le <strong>niveau {{ level }}</strong> en <strong>{{ count }} jours</strong>",
+    "rewards_info": "informations sur les récompenses de minting",
+    "reward_per_block": "récompense estimée par bloc",
+    "reward_per_day": "récompense estimée par jour",
+    "status": {
+      "minting": "(Frappe)",
+      "not_minting": "(pas de la frappe)",
+      "no_status": "pas de statut",
+      "synchronized": "synchronisé",
+      "synchronizing": "synchronisation..."
+    },
+    "status_title": "statut de frappe",
+    "tier_share_per_block": "part du niveau par bloc",
+    "total_minter_in_tier": "nombre total de minters dans ce niveau"
+  },
   "name": "nom",
   "name_app": "nom / application",
   "new_post_in": "new post in {{ title }}",

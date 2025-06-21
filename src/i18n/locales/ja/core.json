@@ -116,7 +116,6 @@
   "apps_official": "公式アプリ",
   "attachment": "添付ファイル",
   "balance": "バランス：",
-  "basic_tabs_example": "基本的なタブの例",
   "category": "カテゴリ",
   "category_other": "カテゴリ",
   "chat": "チャット",
@@ -220,6 +219,7 @@
       "benefits_qort": "QORTを持つことの利点",
       "building": "建物",
       "building_app": "ビルディングアプリ",
+      "confirmed": "確認済み",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -256,6 +256,7 @@
       "no_pinned_changes": "現在、ピン留めアプリに変更がありません",
       "no_results": "結果はありません",
       "one_app_per_name": "注：現在、名前ごとに1つのアプリとWebサイトのみが許可されています。",
+      "ongoing_transactions": "継続中の取引",
       "opened": "オープン",
       "overwrite_qdn": "QDNに上書きします",
       "password_confirm": "パスワードを確認してください",
@@ -281,7 +282,8 @@
       "space_for_admins": "申し訳ありませんが、このスペースは管理者専用です。",
       "unread_messages": "以下の未読メッセージ",
       "unsaved_changes": "ピン留めアプリに救われていない変更があります。それらをqdnに保存します。",
-      "updating": "更新"
+      "updating": "更新",
+      "wait": "お待ちください"
     },
     "message": "メッセージ",
     "promotion_text": "プロモーションテキスト",
@@ -302,12 +304,6 @@
       "reset_qdn": "あなたの現在のローカルの変更が気に入らない？保存したQDNピン留めアプリにリセットしますか？",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "（鋳造）",
-      "not_minting": "（造りではありません）",
-      "synchronized": "同期",
-      "synchronizing": "同期"
-    },
     "success": {
       "order_submitted": "購入注文が提出されました",
       "published": "正常に公開されました。ネットワークが変更を提案するまで数分待ってください。",
@@ -318,7 +314,34 @@
       "voted": "正常に投票しました。ネットワークが変更を提案するまで数分待ってください。"
     }
   },
-  "minting_status": "ミントステータス",
+  "minting": {
+    "account_details": "ミンティングアカウントの詳細",
+    "actions": "ミンティングアクション",
+    "average_blocktime": "Qortalの平均ブロック時間",
+    "average_blocks_per_day": "1日あたりの平均ブロック数",
+    "average_created_qorts_per_day": "1日あたりに作成された平均QORT数",
+    "blockchain_statistics": "ブロックチェーン統計",
+    "blocks_next_level": "次のレベルまでのブロック数",
+    "current_level": "現在のレベル",
+    "current_status": "現在のステータス",
+    "current_tier": "現在のティア",
+    "current_tier_content": "{{ tier }}（レベル {{ levels }}）",
+    "details": "ミンティングの詳細",
+    "next_level": "24時間年中無休のミンティングで、<strong>{{ count }}日</strong>以内に<strong>レベル{{ level }}</strong>に到達します",
+    "rewards_info": "ミンティング報酬情報",
+    "reward_per_block": "ブロックごとの推定報酬",
+    "reward_per_day": "1日あたりの推定報酬",
+    "status": {
+      "minting": "（鋳造）",
+      "not_minting": "（造りではありません）",
+      "no_status": "ステータスなし",
+      "synchronized": "同期",
+      "synchronizing": "同期..."
+    },
+    "status_title": "ミントステータス",
+    "tier_share_per_block": "ブロックごとのティアシェア",
+    "total_minter_in_tier": "このティアの合計ミンター数"
+  },
   "name": "名前",
   "name_app": "名前/アプリ",
   "new_post_in": "new post in {{ title }}",

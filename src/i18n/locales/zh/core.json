@@ -116,7 +116,6 @@
   "apps_official": "官方应用程序",
   "attachment": "依恋",
   "balance": "平衡：",
-  "basic_tabs_example": "基本标签示例",
   "category": "类别",
   "category_other": "类别",
   "chat": "聊天",
@@ -220,9 +219,10 @@
       "benefits_qort": "Qort的好处",
       "building": "建筑",
       "building_app": "建筑应用",
-      "created_by": "created by {{ owner }}",
-      "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
-      "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
+      "confirmed": "已确认",
+      "created_by": "创建人 {{ owner }}",
+      "buy_order_request": "应用程序<br/><italic>{{hostname}}</italic><br/><span>正在请求{{count}}购买订单</span>",
+      "buy_order_request_other": "应用程序<br/><italic>{{hostname}}</italic><br/><span>正在请求{{count}}购买订单</span>",
       "devmode_local_node": "请使用您的本地节点进行开发模式！注销并使用本地节点。",
       "downloading": "下载",
       "downloading_decrypting_app": "下载和解密私人应用程序。",
@@ -256,6 +256,7 @@
       "no_pinned_changes": "您目前对固定应用程序没有任何更改",
       "no_results": "没有结果",
       "one_app_per_name": "注意：目前，每个名称只允许一个应用程序和网站。",
+      "ongoing_transactions": "正在进行的交易",
       "opened": "打开",
       "overwrite_qdn": "覆盖为QDN",
       "password_confirm": "请确认密码",
@@ -281,7 +282,8 @@
       "space_for_admins": "抱歉，这个空间仅适用于管理员。",
       "unread_messages": "下面未读消息",
       "unsaved_changes": "您对固定应用程序有未保存的更改。将它们保存到QDN。",
-      "updating": "更新"
+      "updating": "更新",
+      "wait": "请稍等"
     },
     "message": "信息",
     "promotion_text": "促销文本",
@@ -302,12 +304,6 @@
       "reset_qdn": "不喜欢您当前的本地更改吗？您想重置保存的QDN固定应用吗？",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "（铸造）",
-      "not_minting": "（不是铸造）",
-      "synchronized": "同步",
-      "synchronizing": "同步"
-    },
     "success": {
       "order_submitted": "您的买入订单已提交",
       "published": "成功出版。请等待几分钟，以使网络传播更改。",
@@ -318,7 +314,34 @@
       "voted": "成功投票。请等待几分钟，以使网络传播更改。"
     }
   },
-  "minting_status": "铸造状态",
+  "minting": {
+    "account_details": "铸造账户详情",
+    "actions": "铸造操作",
+    "average_blocktime": "Qortal平均区块时间",
+    "average_blocks_per_day": "每日平均区块数",
+    "average_created_qorts_per_day": "每日平均生成的QORT数量",
+    "blockchain_statistics": "区块链统计",
+    "blocks_next_level": "距离下一级的区块数",
+    "current_level": "当前等级",
+    "current_status": "当前状态",
+    "current_tier": "当前等级层级",
+    "current_tier_content": "{{ tier }}（等级 {{ levels }}）",
+    "details": "铸造详情",
+    "next_level": "全天候铸造将使你在<strong>{{ count }}天</strong>内达到<strong>{{ level }}级</strong>",
+    "rewards_info": "铸造奖励信息",
+    "reward_per_block": "每个区块的预计奖励",
+    "reward_per_day": "每日预计奖励",
+    "status": {
+      "minting": "（铸造）",
+      "not_minting": "（不是铸造）",
+      "no_status": "没有状态",
+      "synchronized": "同步",
+      "synchronizing": "同步..."
+    },
+    "status_title": "铸造状态",
+    "tier_share_per_block": "每个区块的等级份额",
+    "total_minter_in_tier": "该等级层级中的总铸造者数"
+  },
   "name": "姓名",
   "name_app": "名称/应用",
   "new_post_in": "new post in {{ title }}",

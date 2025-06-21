@@ -293,9 +293,9 @@ export const RegisterName = ({
           {isNameAvailable === Availability.AVAILABLE && (
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 gap: '5px',
-                alignItems: 'center',
               }}
             >
               <CheckIcon

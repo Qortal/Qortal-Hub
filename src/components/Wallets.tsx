@@ -207,7 +207,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   if (isLoading) return null;
 
   return (
-    <div>
+    <Box>
       {wallets?.length === 0 || !wallets ? (
         <>
           <Typography>
@@ -469,7 +469,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           </Typography>
         </DialogActions>
       </Dialog>
-    </div>
+    </Box>
   );
 };
 
@@ -562,6 +562,8 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
         <IconButton
           sx={{
             alignSelf: 'flex-start',
+            bgcolor: theme.palette.background.default,
+            color: theme.palette.text.primary,
           }}
           onClick={(e) => {
             e.stopPropagation();

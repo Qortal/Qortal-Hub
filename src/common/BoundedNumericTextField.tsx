@@ -135,6 +135,10 @@ export const BoundedNumericTextField = ({
             <IconButton
               size="small"
               onClick={() => changeValueWithIncDecButton(1)}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
             >
               <AddIcon
                 sx={{
@@ -145,6 +149,10 @@ export const BoundedNumericTextField = ({
             <IconButton
               size="small"
               onClick={() => changeValueWithIncDecButton(-1)}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
             >
               <RemoveIcon
                 sx={{

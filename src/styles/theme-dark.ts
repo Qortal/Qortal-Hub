@@ -16,7 +16,7 @@ export const darkThemeOptions: ThemeOptions = {
     background: {
       default: 'rgb(49, 51, 56)',
       surface: 'rgb(58, 60, 65)',
-      paper: 'rgb(62, 64, 68)',
+      paper: 'rgb(77, 80, 85)',
     },
     text: {
       primary: 'rgb(255, 255, 255)',
@@ -114,18 +114,11 @@ export const darkThemeOptions: ThemeOptions = {
       },
     },
 
-    MuiDialog: {
+    MuiPaper: {
       styleOverrides: {
-        paper: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-
-    MuiPopover: {
-      styleOverrides: {
-        paper: {
-          backgroundImage: 'none',
+        root: {
+          backgroundColor: 'rgb(77, 80, 85)',
+          color: 'rgb(255, 255, 255)',
         },
       },
     },

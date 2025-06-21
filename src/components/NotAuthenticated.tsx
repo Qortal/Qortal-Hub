@@ -73,7 +73,6 @@ export const NotAuthenticated = ({
   const [mode, setMode] = useState('list');
   const [customNodes, setCustomNodes] = useState(null);
   const [importedApiKey, setImportedApiKey] = useState(null);
-  //add and edit states
   const [url, setUrl] = useState('https://');
   const [customApikey, setCustomApiKey] = useState('');
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
@@ -82,7 +81,13 @@ export const NotAuthenticated = ({
   const { showTutorial, hasSeenGettingStarted } =
     useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
@@ -515,9 +520,9 @@ export const NotAuthenticated = ({
 
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
         }}
       >
         <HtmlTooltip
@@ -550,9 +555,9 @@ export const NotAuthenticated = ({
 
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '10px',
-          alignItems: 'center',
         }}
       >
         <HtmlTooltip
@@ -628,18 +633,14 @@ export const NotAuthenticated = ({
 
         <Box
           sx={{
-            display: 'flex',
-            gap: '10px',
             alignItems: 'center',
-            flexDirection: 'column',
-            outlineWidth: '0.5px',
-            outlineStyle: 'solid',
-            outlineColor:
-              theme.palette.mode === 'dark'
-                ? 'rgba(255, 255, 255, 0.5)'
-                : 'rgba(0, 0, 0, 0.3)',
-            padding: '20px 30px',
             borderRadius: '8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            outlineStyle: 'solid',
+            outlineWidth: '0.5px',
+            padding: '20px 30px',
           }}
         >
           <>
@@ -782,24 +783,22 @@ export const NotAuthenticated = ({
           <DialogTitle
             id="alert-dialog-title"
             sx={{
-              textAlign: 'center',
-              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
+              textAlign: 'center',
             }}
           >
-            {t('auth:node.custom_many', { postProcess: 'capitalizeFirstChar' })}
-            :
+            {t('auth:node.custom_many', { postProcess: 'capitalizeAll' })}
           </DialogTitle>
 
           <DialogContent>
             <Box
               sx={{
-                width: '100% !important',
-                overflow: 'auto',
-                height: '60vh',
                 display: 'flex',
                 flexDirection: 'column',
+                height: '60vh',
+                overflow: 'auto',
+                width: '100% !important',
               }}
             >
               {mode === 'list' && (
@@ -819,7 +818,6 @@ export const NotAuthenticated = ({
                   >
                     <Typography
                       sx={{
-                        color: theme.palette.text.primary,
                         fontSize: '14px',
                       }}
                     >
@@ -828,10 +826,10 @@ export const NotAuthenticated = ({
 
                     <Box
                       sx={{
+                        alignItems: 'center',
                         display: 'flex',
                         gap: '10px',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
                       }}
                     >
                       <Button
@@ -885,7 +883,6 @@ export const NotAuthenticated = ({
                       >
                         <Typography
                           sx={{
-                            color: theme.palette.text.primary,
                             fontSize: '14px',
                           }}
                         >
@@ -894,10 +891,10 @@ export const NotAuthenticated = ({
 
                         <Box
                           sx={{
+                            alignItems: 'center',
                             display: 'flex',
                             gap: '10px',
                             justifyContent: 'space-between',
-                            alignItems: 'center',
                           }}
                         >
                           <Button
@@ -978,10 +975,10 @@ export const NotAuthenticated = ({
               {mode === 'add-node' && (
                 <Box
                   sx={{
+                    alignItems: 'center',
                     display: 'flex',
                     gap: '10px',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
                   }}
                 >
                   <Input
@@ -1071,7 +1068,6 @@ export const NotAuthenticated = ({
             id="alert-dialog-title"
             sx={{
               textAlign: 'center',
-              color: theme.palette.text.primary,
               fontWeight: 'bold',
               opacity: 1,
             }}

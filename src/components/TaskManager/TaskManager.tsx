@@ -16,15 +16,21 @@ import { getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import { useTranslation } from 'react-i18next';
 
 export const TaskManager = ({ getUserInfo }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
-
   const [txList, setTxList] = useAtom(txListAtom);
-
   const [open, setOpen] = React.useState(false);
   const intervals = useRef({});
   const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const handleClick = () => {
     setOpen((prev) => !prev);
@@ -199,7 +205,11 @@ export const TaskManager = ({ getUserInfo }) => {
               )}
             </ListItemIcon>
 
-            <ListItemText primary="Ongoing Transactions" />
+            <ListItemText
+              primary={t('core:message.generic.ongoing_transactions', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            />
             {open ? <ExpandLess /> : <ExpandMore />}
           </ListItemButton>
 

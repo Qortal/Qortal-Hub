@@ -2465,7 +2465,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
     const filename = data.filename;
     const blob = data.blob;
 
-    const mimeType = blob.type || data.mimeType;
     const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:download_file', {
@@ -2476,17 +2475,6 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
       isFromExtension
     );
     const { accepted } = resPermission;
-    if (!accepted) throw new Error('User declined to save file'); // TODO translate
-    showSaveFilePicker(
-      {
-        filename,
-        mimeType,
-        blob,
-      },
-      snackMethods
-    );
-
-    return true;
 
     if (accepted) {
       const mimeType = blob.type || data.mimeType;

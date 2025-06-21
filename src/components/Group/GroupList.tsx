@@ -59,8 +59,8 @@ export const GroupList = ({
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         alignItems: 'flex-start',
         background: theme.palette.background.surface,
         borderRadius: '0px 15px 15px 0px',
@@ -145,8 +145,8 @@ export const GroupList = ({
         </ButtonBase>
       </Box>
 
-      <div
-        style={{
+      <Box
+        sx={{
           alignItems: 'flex-start',
           display: 'flex',
           flexDirection: 'column',
@@ -176,10 +176,10 @@ export const GroupList = ({
             />
           ))}
         </List>
-      </div>
+      </Box>
 
-      <div
-        style={{
+      <Box
+        sx={{
           display: 'flex',
           gap: '10px',
           justifyContent: 'center',
@@ -195,7 +195,7 @@ export const GroupList = ({
           >
             <AddCircleOutlineIcon
               sx={{
-                color: theme.palette.text.primary,
+                color: theme.palette.text.secondary,
               }}
             />
             {t('group:group.group', { postProcess: 'capitalizeFirstChar' })}
@@ -213,14 +213,14 @@ export const GroupList = ({
             >
               <PersonOffIcon
                 sx={{
-                  color: theme.palette.text.primary,
+                  color: theme.palette.text.secondary,
                 }}
               />
             </CustomButton>
           )}
         </>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 
@@ -294,20 +294,22 @@ const GroupItem = React.memo(
                   ? 'no messages'
                   : `last message: ${formatEmailDate(group?.timestamp)}`
               }
-              primaryTypographyProps={{
-                style: {
-                  color:
-                    group?.groupId === selectedGroup?.groupId &&
-                    theme.palette.text.primary,
-                  fontSize: '16px',
+              slotProps={{
+                primary: {
+                  style: {
+                    color:
+                      group?.groupId === selectedGroup?.groupId &&
+                      theme.palette.text.primary,
+                    fontSize: '16px',
+                  },
                 },
-              }}
-              secondaryTypographyProps={{
-                style: {
-                  color:
-                    group?.groupId === selectedGroup?.groupId &&
-                    theme.palette.text.primary,
-                  fontSize: '12px',
+                secondary: {
+                  style: {
+                    color:
+                      group?.groupId === selectedGroup?.groupId &&
+                      theme.palette.text.primary,
+                    fontSize: '12px',
+                  },
                 },
               }}
               sx={{

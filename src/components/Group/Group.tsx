@@ -1632,10 +1632,10 @@ export const Group = ({
 
   const renderDirects = () => {
     return (
-      <div
+      <Box
         style={{
           alignItems: 'flex-start',
-          background: theme.palette.background.default,
+          background: theme.palette.background.surface,
           borderRadius: '0px 15px 15px 0px',
           display: 'flex',
           flexDirection: 'column',
@@ -1718,8 +1718,8 @@ export const Group = ({
           </ButtonBase>
         </Box>
 
-        <div
-          style={{
+        <Box
+          sx={{
             alignItems: 'flex-start',
             display: 'flex',
             flexDirection: 'column',
@@ -1763,7 +1763,7 @@ export const Group = ({
                 sx={{
                   background:
                     direct?.address === selectedDirect?.address &&
-                    theme.palette.background.default,
+                    theme.palette.background.surface,
                   borderRadius: '2px',
                   cursor: 'pointer',
                   display: 'flex',
@@ -1782,7 +1782,7 @@ export const Group = ({
                   <ListItemAvatar>
                     <Avatar
                       sx={{
-                        background: theme.palette.background.default,
+                        background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
@@ -1803,22 +1803,24 @@ export const Group = ({
                             postProcess: 'capitalizeFirstChar',
                           })
                     }
-                    primaryTypographyProps={{
-                      style: {
-                        color:
-                          direct?.address === selectedDirect?.address &&
-                          theme.palette.text.primary,
-                        textWrap: 'wrap',
-                        overflow: 'hidden',
-                        fontSize: '16px',
+                    slotProps={{
+                      primary: {
+                        style: {
+                          color:
+                            direct?.address === selectedDirect?.address &&
+                            theme.palette.text.primary,
+                          textWrap: 'wrap',
+                          overflow: 'hidden',
+                          fontSize: '16px',
+                        },
                       },
-                    }} // Change the color of the primary text
-                    secondaryTypographyProps={{
-                      style: {
-                        color:
-                          direct?.address === selectedDirect?.address &&
-                          theme.palette.text.primary,
-                        fontSize: '12px',
+                      secondary: {
+                        style: {
+                          color:
+                            direct?.address === selectedDirect?.address &&
+                            theme.palette.text.primary,
+                          fontSize: '12px',
+                        },
                       },
                     }}
                     sx={{
@@ -1827,6 +1829,7 @@ export const Group = ({
                       fontSize: '16px',
                     }}
                   />
+
                   {direct?.sender !== myAddress &&
                     direct?.timestamp &&
                     ((!timestampEnterData[direct?.address] &&
@@ -1844,10 +1847,10 @@ export const Group = ({
               </ListItem>
             </List>
           ))}
-        </div>
+        </Box>
 
-        <div
-          style={{
+        <Box
+          sx={{
             display: 'flex',
             width: '100%',
             gap: '10px',
@@ -1871,6 +1874,7 @@ export const Group = ({
               postProcess: 'capitalizeFirstChar',
             })}
           </CustomButton>
+
           {!isRunningPublicNode && (
             <CustomButton
               onClick={() => {
@@ -1888,8 +1892,8 @@ export const Group = ({
               />
             </CustomButton>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   };
 
@@ -1936,7 +1940,7 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
 
-      <div // TODO use Box
+      <Box
         style={{
           alignItems: 'flex-start',
           display: 'flex',
@@ -2004,7 +2008,7 @@ export const Group = ({
             <>
               <Box
                 sx={{
-                  background: theme.palette.background.default,
+                  background: theme.palette.background.surface,
                   bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
                   left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
                   opacity: !(desktopViewMode === 'chat') ? 0 : 1,
@@ -2458,7 +2462,7 @@ export const Group = ({
           }}
         />
         <WalletsAppWrapper />
-      </div>
+      </Box>
     </>
   );
 };

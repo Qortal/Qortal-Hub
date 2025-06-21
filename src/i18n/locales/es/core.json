@@ -116,7 +116,6 @@
   "apps_official": "aplicaciones oficiales",
   "attachment": "adjunto",
   "balance": "balance:",
-  "basic_tabs_example": "Ejemplo de pestañas básicas",
   "category": "categoría",
   "category_other": "categorías",
   "chat": "charlar",
@@ -219,7 +218,8 @@
       "avatar_size": "{{ size }} KB max. for GIFS",
       "benefits_qort": "beneficios de tener Qort",
       "building": "edificio",
-      "building_app": "Aplicación de construcción",
+      "building_app": "aplicación de construcción",
+      "confirmed": "confirmado",
       "created_by": "created by {{ owner }}",
       "buy_order_request": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy order</span>",
       "buy_order_request_other": "the Application <br/><italic>{{hostname}}</italic> <br/><span>is requesting {{count}} buy orders</span>",
@@ -256,6 +256,7 @@
       "no_pinned_changes": "Actualmente no tiene ningún cambio en sus aplicaciones fijadas",
       "no_results": "Sin resultados",
       "one_app_per_name": "Nota: Actualmente, solo se permite una aplicación y un sitio web por nombre.",
+      "ongoing_transactions": "transacciones en curso",
       "opened": "abierto",
       "overwrite_qdn": "sobrescribir a QDN",
       "password_confirm": "Confirme una contraseña",
@@ -277,11 +278,12 @@
       "select_image": "Seleccione una imagen para un logotipo",
       "select_zip": "Seleccione el archivo .zip que contenga contenido estático:",
       "sending": "envío...",
-      "settings": "Está utilizando la forma de exportación/importación de la configuración de ahorro.",
-      "space_for_admins": "Lo siento, este espacio es solo para administradores.",
-      "unread_messages": "Mensajes no leídos a continuación",
-      "unsaved_changes": "Tiene cambios no salvos en sus aplicaciones fijadas. Guárdelos a QDN.",
-      "updating": "actualización"
+      "settings": "está utilizando la forma de exportación/importación de la configuración de ahorro.",
+      "space_for_admins": "lo siento, este espacio es solo para administradores.",
+      "unread_messages": "mensajes no leídos a continuación",
+      "unsaved_changes": "tiene cambios no salvos en sus aplicaciones fijadas. Guárdelos a QDN.",
+      "updating": "actualización",
+      "wait": "espera por favor"
     },
     "message": "mensaje",
     "promotion_text": "texto de promoción",
@@ -302,12 +304,6 @@
       "reset_qdn": "¿No te gustan tus cambios locales actuales? ¿Le gustaría restablecer a sus aplicaciones guardadas de QDN guardadas?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(acuñado)",
-      "not_minting": "(no acuñar)",
-      "synchronized": "sincronizado",
-      "synchronizing": "sincronización"
-    },
     "success": {
       "order_submitted": "Su pedido de compra fue enviado",
       "published": "publicado con éxito. Espere un par de minutos para que la red propoque los cambios.",
@@ -318,7 +314,34 @@
       "voted": "votado con éxito. Espere un par de minutos para que la red propoque los cambios."
     }
   },
-  "minting_status": "estado de acuñación",
+  "minting": {
+    "account_details": "detalles de la cuenta de minting",
+    "actions": "acciones de minting",
+    "average_blocktime": "tiempo promedio por bloque de Qortal",
+    "average_blocks_per_day": "promedio de bloques por día",
+    "average_created_qorts_per_day": "promedio de QORT creados por día",
+    "blockchain_statistics": "estadísticas de la blockchain",
+    "blocks_next_level": "bloques para el siguiente nivel",
+    "current_level": "nivel actual",
+    "current_status": "estado actual",
+    "current_tier": "nivel actual",
+    "current_tier_content": "{{ tier }} (Nivels {{ levels }})",
+    "details": "detalles de minting",
+    "next_level": "Con minting 24/7 alcanzarás el <strong>nivel {{ level }}</strong> en <strong>{{ count }} días</strong>",
+    "rewards_info": "información sobre recompensas de minting",
+    "reward_per_block": "recompensa estimada por bloque",
+    "reward_per_day": "recompensa estimada por día",
+    "status": {
+      "minting": "(acuñado)",
+      "not_minting": "(no acuñar)",
+      "no_status": "sin estado",
+      "synchronized": "sincronizado",
+      "synchronizing": "sincronización..."
+    },
+    "status_title": "estado de acuñación",
+    "tier_share_per_block": "porción del nivel por bloque",
+    "total_minter_in_tier": "total de minters en el nivel"
+  },
   "name": "nombre",
   "name_app": "nombre/aplicación",
   "new_post_in": "new post in {{ title }}",
