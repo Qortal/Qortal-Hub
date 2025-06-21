@@ -1,5 +1,6 @@
 import {
   Alert,
+  alpha,
   AppBar,
   Box,
   Button,
@@ -546,16 +547,21 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   };
 
   const StatCard = ({ label, value }: { label: string; value: string }) => (
-    <Grid size={{ xs: 4, sm: 6 }}>
-      <Paper elevation={5}>
-        <Box textAlign="center">
-          <Typography variant="subtitle1" fontWeight="bold">
-            {label}
-          </Typography>
-          <Typography>{value}</Typography>
-        </Box>
-      </Paper>
-    </Grid>
+    <Paper
+      elevation={5}
+      sx={{
+        borderRadius: '10px',
+        margin: '10px',
+        padding: '10px',
+      }}
+    >
+      <Box textAlign="center">
+        <Typography variant="subtitle1" fontWeight="bold">
+          {label}
+        </Typography>
+        <Typography>{value}</Typography>
+      </Box>
+    </Paper>
   );
 
   const handleChange = (event: SyntheticEvent, newValue: number) => {
@@ -652,8 +658,22 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 position: 'relative',
               }}
             >
-              <Container maxWidth="md" sx={{ py: 4 }}>
-                <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+              <Container
+                maxWidth="md"
+                sx={{
+                  py: 4,
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{
+                    backgroundColor: (theme) =>
+                      alpha(theme.palette.background.paper, 0.5),
+                    p: 3,
+                    mb: 4,
+                    borderRadius: '10px',
+                  }}
+                >
                   <Typography
                     variant="h3"
                     gutterBottom
@@ -662,9 +682,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     Blockchain Statistics
                   </Typography>
 
-                  <Grid container spacing={2}>
+                  <Grid
+                    size={{ xs: 4, sm: 6 }}
+                    container
+                    spacing={2}
+                    justifyContent="center"
+                  >
                     <StatCard
-                      label="Avg. Qortal Blocktime (seconds)"
+                      label="Average Qortal Blocktime"
                       value={averageBlockTime(
                         adminInfo,
                         nodeHeightBlock
@@ -672,7 +697,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
 
                     <StatCard
-                      label="Avg. Blocks Per Day"
+                      label="Average Blocks Per Day"
                       value={averageBlockDay(
                         adminInfo,
                         nodeHeightBlock
@@ -680,7 +705,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
 
                     <StatCard
-                      label="Avg. Created QORT Per Day"
+                      label="Average Created QORT Per Day"
                       value={dayReward(
                         adminInfo,
                         nodeHeightBlock,
@@ -690,7 +715,16 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Grid>
                 </Paper>
 
-                <Paper elevation={0} sx={{ p: 3, mb: 4, borderRadius: '10px' }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    backgroundColor: (theme) =>
+                      alpha(theme.palette.background.paper, 0.5),
+                    p: 3,
+                    mb: 4,
+                    borderRadius: '10px',
+                  }}
+                >
                   <Typography
                     variant="h3"
                     gutterBottom
@@ -699,7 +733,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     Minting Account Details
                   </Typography>
 
-                  <Grid container spacing={2}>
+                  <Grid
+                    size={{ xs: 4, sm: 6 }}
+                    container
+                    spacing={2}
+                    justifyContent="center"
+                  >
                     <StatCard
                       label="Current Status"
                       value={mintingStatus(nodeStatus)}
@@ -710,15 +749,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label="Blocks To Next Level"
-                      value={levelUpBlocks(accountInfo, nodeStatus) || ''}
+                      value={
+                        levelUpBlocks(accountInfo, nodeStatus).toFixed(0) || ''
+                      }
                     />
                   </Grid>
 
-                  <Box mt={2} textAlign="center">
+                  <Box mt={4} textAlign="center">
                     <Paper elevation={5}>
                       <Typography sx={{ textAlign: 'center' }}>
                         <Trans
-                          i18nKey="message.generic.minting_next_level"
+                          i18nKey="message.generic.minting.next_level"
                           ns="core"
                           components={{
                             strong: <strong />,
@@ -734,7 +775,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   </Box>
                 </Paper>
 
-                <Paper elevation={0} sx={{ p: 3, borderRadius: '10px' }}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    backgroundColor: (theme) =>
+                      alpha(theme.palette.background.paper, 0.5),
+                    p: 3,
+                    borderRadius: '10px',
+                  }}
+                >
                   <Typography
                     variant="h3"
                     gutterBottom
@@ -743,7 +792,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     Minting Rewards Info
                   </Typography>
 
-                  <Grid container spacing={2}>
+                  <Grid
+                    size={{ xs: 4, sm: 6 }}
+                    container
+                    spacing={2}
+                    justifyContent="center"
+                  >
                     <StatCard
                       label="Current Tier"
                       value={currentTier(accountInfo?.level) || ''}

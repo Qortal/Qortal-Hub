@@ -183,7 +183,7 @@ export const countReward = (
   nodeStatus,
   tier4Online: number
 ): number => {
-  if (accountInfo != null && (addressLevel && addressLevel.length > 0) ) {
+  if (accountInfo != null && addressLevel && addressLevel.length > 0) {
     const level = accountInfo.level;
     if (level === 0) {
       return 0;
@@ -273,7 +273,7 @@ export const countRewardDay = (
   nodeStatus,
   tier4Online: number
 ): number => {
-  if (accountInfo != null && (addressLevel && addressLevel.length > 0) ) {
+  if (accountInfo != null && addressLevel && addressLevel.length > 0) {
     const level = accountInfo.level;
     const timeCalc = averageBlockDay(adminInfo, nodeHeightBlock);
     if (level === 0) {
@@ -369,7 +369,7 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isSynchronizing === true
   ) {
     // this.cssMinting = 'blue';
-    return i18n.t('core:message.status.minting', {
+    return i18n.t('core:minting.status.minting', {
       postProcess: 'capitalizeFirstChar',
     });
   } else if (
@@ -377,7 +377,7 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isSynchronizing === false
   ) {
     // this.cssMinting = 'blue';
-    return i18n.t('core:message.status.minting', {
+    return i18n.t('core:minting.status.minting', {
       postProcess: 'capitalizeFirstChar',
     });
   } else if (
@@ -385,7 +385,7 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isSynchronizing === true
   ) {
     // this.cssMinting = 'red';
-    return i18n.t('core:message.status.synchronizing', {
+    return i18n.t('core:minting.status.synchronizing', {
       postProcess: 'capitalizeFirstChar',
     }) +
       nodeStatus.syncPercent !==
@@ -397,11 +397,11 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isSynchronizing === false
   ) {
     // this.cssMinting = 'red';
-    return i18n.t('core:message.status.not_minting', {
+    return i18n.t('core:minting.status.not_minting', {
       postProcess: 'capitalizeFirstChar',
     });
   } else {
-    return i18n.t('core:message.status.no_status', {
+    return i18n.t('core:minting.status.no_status', {
       postProcess: 'capitalizeFirstChar',
     });
   }
@@ -429,7 +429,8 @@ export const levelUpBlocks = (accountInfo, nodeStatus): number => {
   const nextBatch = 1000 - (nodeStatus.height % 1000);
   const countBlocks =
     accountTargetBlocks(accountInfo?.level)! -
-    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) + 1000;
+    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) +
+    1000;
   const countBlocksActual = countBlocks + nextBatch - (countBlocks % 1000);
   return countBlocksActual;
 };
@@ -450,10 +451,12 @@ export const levelUpDays = (
   const nextBatch = 1000 - (nodeStatus.height % 1000);
   const countBlocks =
     accountTargetBlocks(accountInfo?.level)! -
-    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) + 1000;
-  
+    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) +
+    1000;
+
   const countBlocksActual = countBlocks + nextBatch - (countBlocks % 1000);
-  const countDays = countBlocksActual / averageBlockDay(adminInfo, nodeHeightBlock);
+  const countDays =
+    countBlocksActual / averageBlockDay(adminInfo, nodeHeightBlock);
   return countDays;
 };
 
