@@ -12,7 +12,15 @@ export const capitalizeEachFirstChar = {
 
     const leadingSpaces = value.match(/^\s*/)?.[0] || '';
     const trailingSpaces = value.match(/\s*$/)?.[0] || '';
-    const core = value.trim().replace(/\b\w/g, (char) => char.toUpperCase());
+
+    const core = value
+      .trim()
+      .split(/\s+/)
+      .map(
+        (word) =>
+          word.charAt(0).toLocaleUpperCase() + word.slice(1).toLocaleLowerCase()
+      )
+      .join(' ');
 
     return leadingSpaces + core + trailingSpaces;
   },
