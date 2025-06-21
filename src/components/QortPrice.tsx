@@ -31,7 +31,7 @@ function getTwoWeeksAgoTimestamp() {
   return now.getTime(); // Get timestamp in milliseconds
 }
 
-function formatWithCommasAndDecimals(number) {
+function formatWithCommasAndDecimals(number: number) {
   const locale = i18next.language;
   return Number(number).toLocaleString(locale);
 }
@@ -39,7 +39,7 @@ function formatWithCommasAndDecimals(number) {
 export const QortPrice = () => {
   const [ltcPerQort, setLtcPerQort] = useState(null);
   const [supply, setSupply] = useState<string>('');
-  const [lastBlock, setLastBlock] = useState(null);
+  const [lastBlock, setLastBlock] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const { t } = useTranslation(['core', 'tutorial']);
   const theme = useTheme();
@@ -47,12 +47,10 @@ export const QortPrice = () => {
   const getPrice = useCallback(async () => {
     try {
       setLoading(true);
-
       const response = await fetch(
         `${getBaseApiReact()}/crosschain/trades?foreignBlockchain=LITECOIN&minimumTimestamp=${getTwoWeeksAgoTimestamp()}&limit=20&reverse=true`
       );
       const data = await response.json();
-
       setLtcPerQort(getAverageLtcPerQort(data));
     } catch (error) {
       console.error(error);
@@ -64,10 +62,8 @@ export const QortPrice = () => {
   const getLastBlock = useCallback(async () => {
     try {
       setLoading(true);
-
       const response = await fetch(`${getBaseApiReact()}/blocks/last`);
       const data = await response.json();
-
       setLastBlock(data);
     } catch (error) {
       console.error(error);
@@ -79,13 +75,11 @@ export const QortPrice = () => {
   const getSupplyInCirculation = useCallback(async () => {
     try {
       setLoading(true);
-
       const response = await fetch(
         `${getBaseApiReact()}/stats/supply/circulating`
       );
       const data = await response.text();
-      formatWithCommasAndDecimals(data);
-      setSupply(formatWithCommasAndDecimals(data));
+      setSupply(formatWithCommasAndDecimals(parseFloat(data)));
     } catch (error) {
       console.error(error);
     } finally {
@@ -251,7 +245,7 @@ export const QortPrice = () => {
                 fontSize: '1rem',
               }}
             >
-              {lastBlock?.height}
+              {formatWithCommasAndDecimals(lastBlock?.height)}
             </Typography>
           )}
         </Box>
