@@ -183,7 +183,7 @@ export const countReward = (
   nodeStatus,
   tier4Online: number
 ): number => {
-  if (accountInfo != null) {
+  if (accountInfo != null && (addressLevel && addressLevel.length > 0) ) {
     const level = accountInfo.level;
     if (level === 0) {
       return 0;
@@ -273,7 +273,7 @@ export const countRewardDay = (
   nodeStatus,
   tier4Online: number
 ): number => {
-  if (accountInfo != null) {
+  if (accountInfo != null && (addressLevel && addressLevel.length > 0) ) {
     const level = accountInfo.level;
     const timeCalc = averageBlockDay(adminInfo, nodeHeightBlock);
     if (level === 0) {
@@ -426,11 +426,12 @@ export const levelUpBlocks = (accountInfo, nodeStatus): number => {
   )
     return 0;
 
+  const nextBatch = 1000 - (nodeStatus.height % 1000);
   const countBlocks =
     accountTargetBlocks(accountInfo?.level)! -
-    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
-
-  return countBlocks;
+    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) + 1000;
+  const countBlocksActual = countBlocks + nextBatch - (countBlocks % 1000);
+  return countBlocksActual;
 };
 
 export const levelUpDays = (
@@ -446,11 +447,13 @@ export const levelUpDays = (
   )
     return undefined;
 
+  const nextBatch = 1000 - (nodeStatus.height % 1000);
   const countBlocks =
     accountTargetBlocks(accountInfo?.level)! -
-    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment);
-
-  const countDays = countBlocks / averageBlockDay(adminInfo, nodeHeightBlock);
+    (accountInfo?.blocksMinted + accountInfo?.blocksMintedAdjustment) + 1000;
+  
+  const countBlocksActual = countBlocks + nextBatch - (countBlocks % 1000);
+  const countDays = countBlocksActual / averageBlockDay(adminInfo, nodeHeightBlock);
   return countDays;
 };
 
