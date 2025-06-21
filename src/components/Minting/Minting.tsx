@@ -824,7 +824,15 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       label={t('core:minting.current_tier', {
                         postProcess: 'capitalizeEachFirstChar',
                       })}
-                      value={currentTier(accountInfo?.level) || ''}
+                      value={t('core:minting.current_tier_content', {
+                        tier: currentTier(accountInfo?.level)
+                          ? currentTier(accountInfo?.level)[0]
+                          : '',
+                        levels: currentTier(accountInfo?.level)
+                          ? currentTier(accountInfo?.level)[1]
+                          : '',
+                        postProcess: 'capitalizeEachFirstChar',
+                      })}
                     />
                     <StatCard
                       label={t('core:minting.total_minter_in_tier', {

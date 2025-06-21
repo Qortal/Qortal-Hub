@@ -325,6 +325,7 @@
     "current_level": "текущий уровень",
     "current_status": "текущий статус",
     "current_tier": "текущий уровень",
+    "current_tier_content": "{{ tier }} (Уровни {{ levels }})",
     "details": "детали майнинга",
     "next_level": "При майнинге 24/7 вы достигнете <strong>{{ level }} уровня</strong> за <strong>{{ count }} дней</strong>",
     "rewards_info": "информация о наградах за майнинг",

@@ -326,6 +326,7 @@
     "current_level": "current level",
     "current_status": "current status",
     "current_tier": "current tier",
+    "current_tier_content": "{{ tier }} (Levels {{ levels }})",
     "details": "minting details",
     "next_level": "with a 24/7 minting you will reach <strong>level {{ level }}</strong> in <strong>{{ count }} days</strong>",
     "rewards_info": "minting rewards info",

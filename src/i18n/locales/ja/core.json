@@ -325,6 +325,7 @@
     "current_level": "現在のレベル",
     "current_status": "現在のステータス",
     "current_tier": "現在のティア",
+    "current_tier_content": "{{ tier }}（レベル {{ levels }}）",
     "details": "ミンティングの詳細",
     "next_level": "24時間年中無休のミンティングで、<strong>{{ count }}日</strong>以内に<strong>レベル{{ level }}</strong>に到達します",
     "rewards_info": "ミンティング報酬情報",

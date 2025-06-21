@@ -83,19 +83,19 @@ export const blockReward = (nodeStatus): number => {
   }
 };
 
-export const currentTier = (level): string | undefined => {
+export const currentTier = (level): [string, string] | undefined => {
   if (level === 0) {
-    return 'Tier 0 (Level 0)'; // TODO translate
+    return ['0', '0'];
   } else if (level === 1 || level === 2) {
-    return 'Tier 1 (Level 1 + 2)';
+    return ['1', '1 + 2'];
   } else if (level === 3 || level === 4) {
-    return 'Tier 2 (Level 3 + 4)';
+    return ['2', '3 + 4'];
   } else if (level === 5 || level === 6) {
-    return 'Tier 3 (Level 5 + 6)';
+    return ['3', '5 + 6'];
   } else if (level === 7 || level === 8) {
-    return 'Tier 4 (Level 7 + 8)';
+    return ['4', '7 + 8'];
   } else if (level === 9 || level === 10) {
-    return 'Tier 5 (Level 9 + 10)';
+    return ['5', '9 + 10'];
   } else {
     return undefined; // fallback: should never reach this point
   }

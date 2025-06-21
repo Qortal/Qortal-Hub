@@ -325,6 +325,7 @@
     "current_level": "当前等级",
     "current_status": "当前状态",
     "current_tier": "当前等级层级",
+    "current_tier_content": "{{ tier }}（等级 {{ levels }}）",
     "details": "铸造详情",
     "next_level": "全天候铸造将使你在<strong>{{ count }}天</strong>内达到<strong>{{ level }}级</strong>",
     "rewards_info": "铸造奖励信息",
