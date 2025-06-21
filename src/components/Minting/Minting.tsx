@@ -684,7 +684,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     sx={{ textAlign: 'center' }}
                   >
                     {t('core:minting.blockchain_statistics', {
-                      postProcess: 'capitalizeFirstChar',
+                      postProcess: 'capitalizeEachFirstChar',
                     })}
                   </Typography>
 
@@ -696,7 +696,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   >
                     <StatCard
                       label={t('core:minting.average_blocktime', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={averageBlockTime(
                         adminInfo,
@@ -706,7 +706,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
                     <StatCard
                       label={t('core:minting.average_blocks_per_day', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={averageBlockDay(
                         adminInfo,
@@ -716,7 +716,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
                     <StatCard
                       label={t('core:minting.average_created_qorts_per_day', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={dayReward(
                         adminInfo,
@@ -743,7 +743,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     sx={{ textAlign: 'center' }}
                   >
                     {t('core:minting.account_details', {
-                      postProcess: 'capitalizeFirstChar',
+                      postProcess: 'capitalizeEachFirstChar',
                     })}
                   </Typography>
 
@@ -755,19 +755,19 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   >
                     <StatCard
                       label={t('core:minting.current_status', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={mintingStatus(nodeStatus)}
                     />
                     <StatCard
                       label={t('core:minting.current_level', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={accountInfo?.level}
                     />
                     <StatCard
                       label={t('core:minting.blocks_next_level', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={
                         levelUpBlocks(accountInfo, nodeStatus).toFixed(0) || ''
@@ -810,7 +810,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     sx={{ textAlign: 'center' }}
                   >
                     {t('core:minting.rewards_info', {
-                      postProcess: 'capitalizeFirstChar',
+                      postProcess: 'capitalizeEachFirstChar',
                     })}
                   </Typography>
 
@@ -822,13 +822,13 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   >
                     <StatCard
                       label={t('core:minting.current_tier', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={currentTier(accountInfo?.level) || ''}
                     />
                     <StatCard
                       label={t('core:minting.total_minter_in_tier', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={
                         countMintersInLevel(
@@ -840,7 +840,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label={t('core:minting.tier_share_per_block', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={
                         tierPercent(accountInfo, tier4Online)?.toFixed(0) + ' %'
@@ -848,7 +848,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label={t('core:minting.reward_per_block', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={
                         countReward(
@@ -861,7 +861,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     />
                     <StatCard
                       label={t('core:minting.reward_per_day', {
-                        postProcess: 'capitalizeFirstChar',
+                        postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={
                         countRewardDay(

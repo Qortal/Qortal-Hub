@@ -4,6 +4,20 @@ export const capitalizeAll = {
   process: (value: string) => value.toUpperCase(),
 };
 
+export const capitalizeEachFirstChar = {
+  type: 'postProcessor',
+  name: 'capitalizeEachFirstChar',
+  process: (value: string) => {
+    if (!value?.trim()) return value;
+
+    const leadingSpaces = value.match(/^\s*/)?.[0] || '';
+    const trailingSpaces = value.match(/\s*$/)?.[0] || '';
+    const core = value.trim().replace(/\b\w/g, (char) => char.toUpperCase());
+
+    return leadingSpaces + core + trailingSpaces;
+  },
+};
+
 export const capitalizeFirstChar = {
   type: 'postProcessor',
   name: 'capitalizeFirstChar',

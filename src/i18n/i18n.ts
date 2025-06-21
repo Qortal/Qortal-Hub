@@ -4,6 +4,7 @@ import HttpBackend from 'i18next-http-backend';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   capitalizeAll,
+  capitalizeEachFirstChar,
   capitalizeFirstChar,
   capitalizeFirstWord,
 } from './processors';
@@ -42,6 +43,7 @@ i18n
   .use(initReactI18next)
   .use(LanguageDetector)
   .use(capitalizeAll as any)
+  .use(capitalizeEachFirstChar as any)
   .use(capitalizeFirstChar as any)
   .use(capitalizeFirstWord as any)
   .init({
