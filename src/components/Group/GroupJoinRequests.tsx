@@ -39,40 +39,14 @@ export const GroupJoinRequests = ({
   const [loading, setLoading] = useState(true);
   const [txList] = useAtom(txListAtom);
 
-  const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
+  const [myGroupsWhereIAmAdmin] = useAtom(myGroupsWhereIAmAdminAtom);
 
   const theme = useTheme();
   const getJoinRequests = async () => {
     try {
       setLoading(true);
-
-      let groupsAsAdmin = [];
-      const getAllGroupsAsAdmin = groups
-        .filter((item) => item.groupId !== '0')
-        .map(async (group) => {
-          const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(
-            () => {
-              return fetch(
-                `${getBaseApiReact()}/groups/members/${group.groupId}?limit=0&onlyAdmins=true`
-              );
-            }
-          );
-          const isAdminData = await isAdminResponse.json();
-
-          const findMyself = isAdminData?.members?.find(
-            (member) => member.member === myAddress
-          );
-
-          if (findMyself) {
-            groupsAsAdmin.push(group);
-          }
-          return true;
-        });
-
-      await Promise.all(getAllGroupsAsAdmin);
-      setMyGroupsWhereIAmAdmin(groupsAsAdmin);
       const res = await Promise.all(
-        groupsAsAdmin.map(async (group) => {
+        myGroupsWhereIAmAdmin.map(async (group) => {
           const joinRequestResponse =
             await requestQueueGroupJoinRequests.enqueue(() => {
               return fetch(
@@ -96,12 +70,12 @@ export const GroupJoinRequests = ({
   };
 
   useEffect(() => {
-    if (myAddress && groups.length > 0) {
+    if (myAddress && myGroupsWhereIAmAdmin.length > 0) {
       getJoinRequests();
     } else {
       setLoading(false);
     }
-  }, [myAddress, groups]);
+  }, [myAddress, myGroupsWhereIAmAdmin]);
 
   const filteredJoinRequests = useMemo(() => {
     return groupsWithJoinRequests.map((group) => {

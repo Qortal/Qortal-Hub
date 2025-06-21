@@ -290,8 +290,10 @@ export const AppsPrivate = ({ myName, myAddress }) => {
     }
   }, [myAddress]);
   useEffect(() => {
-    getNames();
-  }, [getNames]);
+    if (isOpenPrivateModal) {
+      getNames();
+    }
+  }, [getNames, isOpenPrivateModal]);
 
   return (
     <>

@@ -26,6 +26,10 @@ async function reusablePost(endpoint, _body) {
     },
     body: _body,
   });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
   let data;
   try {
     data = await response.clone().json();
@@ -68,7 +72,46 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
         throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
       }
       // Wait 10 seconds before next retry
-      await new Promise((res) => setTimeout(res, 10_000));
+      await new Promise((res) => setTimeout(res, 25_000));
+    }
+  }
+}
+
+async function resuablePostRetry(
+  endpoint,
+  body,
+  maxRetries = 3,
+  appInfo,
+  resourceInfo
+) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      const response = await reusablePost(endpoint, body);
+
+      return response;
+    } catch (err) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        throw new Error(
+          err instanceof Error
+            ? err?.message || `Failed to make request`
+            : `Failed to make request`
+        );
+      }
+      if (appInfo?.tabId && resourceInfo) {
+        executeEvent('receiveChunks', {
+          tabId: appInfo.tabId,
+          publishLocation: {
+            name: resourceInfo?.name,
+            identifier: resourceInfo?.identifier,
+            service: resourceInfo?.service,
+          },
+          retry: true,
+        });
+      }
+      // Wait 10 seconds before next retry
+      await new Promise((res) => setTimeout(res, 25_000));
     }
   }
 }
@@ -106,7 +149,13 @@ export const publishData = async ({
   };
 
   const convertBytesForSigning = async (transactionBytesBase58: string) => {
-    return await reusablePost('/transactions/convert', transactionBytesBase58);
+    return await resuablePostRetry(
+      '/transactions/convert',
+      transactionBytesBase58,
+      3,
+      appInfo,
+      { identifier, name: registeredName, service }
+    );
   };
 
   const getArbitraryFee = async () => {
@@ -163,9 +212,12 @@ export const publishData = async ({
   };
 
   const processTransactionVersion2 = async (bytes) => {
-    return await reusablePost(
+    return await resuablePostRetry(
       '/transactions/process?apiVersion=2',
-      Base58.encode(bytes)
+      Base58.encode(bytes),
+      3,
+      appInfo,
+      { identifier, name: registeredName, service }
     );
   };
 
@@ -226,7 +278,6 @@ export const publishData = async ({
     }
 
     let transactionBytes = await uploadData(registeredName, data, fee);
-
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
     } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
@@ -336,9 +387,14 @@ export const publishData = async ({
           chunksSubmitted: 1,
           totalChunks: 1,
           processed: false,
+          filename: filename || title || `${service}-${identifier || ''}`,
         });
       }
-      return await reusablePost(uploadDataUrl, postBody);
+      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+        identifier,
+        name: registeredName,
+        service,
+      });
     }
 
     const file = data;
@@ -365,6 +421,8 @@ export const publishData = async ({
         chunksSubmitted: 0,
         totalChunks,
         processed: false,
+        filename:
+          file?.name || filename || title || `${service}-${identifier || ''}`,
       });
     }
     for (let index = 0; index < totalChunks; index++) {
@@ -399,7 +457,7 @@ export const publishData = async ({
       headers: {},
     });
 
-    if (!response.ok) {
+    if (!response?.ok) {
       const errorText = await response.text();
       throw new Error(`Finalize failed: ${errorText}`);
     }

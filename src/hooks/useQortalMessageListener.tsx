@@ -566,11 +566,21 @@ export const useQortalMessageListener = (
       if (event?.data?.requestedHandler !== 'UI') return;
 
       const sendMessageToRuntime = (message, eventPort) => {
+        let timeout: number = 300000;
+        if (
+          message?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' &&
+          message?.payload?.resources?.length > 0
+        ) {
+          timeout = message?.payload?.resources?.length * 1200000;
+        } else if (message?.action === 'PUBLISH_QDN_RESOURCE') {
+          timeout = 1200000;
+        }
+
         window
           .sendMessage(
             message.action,
             message.payload,
-            300000,
+            timeout,
             message.isExtension,
             {
               name: appName,

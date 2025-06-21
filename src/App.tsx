@@ -108,6 +108,7 @@ import {
   mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
+  myGroupsWhereIAmAdminAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
   settingsLocalLastUpdatedAtom,
@@ -484,6 +485,9 @@ function App() {
   const resetLastPaymentSeenTimestampAtom = useResetAtom(
     lastPaymentSeenTimestampAtom
   );
+  const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
+    myGroupsWhereIAmAdminAtom
+  );
   const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
   const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
   const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
@@ -510,6 +514,7 @@ function App() {
     resetTimestampEnterAtom();
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
+    resetMyGroupsWhereIAmAdminAtom();
   };
 
   const contextValue = useMemo(
