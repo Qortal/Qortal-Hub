@@ -315,6 +315,21 @@
     }
   },
   "minting": {
+    "account_details": "ミンティングアカウントの詳細",
+    "actions": "ミンティングアクション",
+    "average_blocktime": "Qortalの平均ブロック時間",
+    "average_blocks_per_day": "1日あたりの平均ブロック数",
+    "average_created_qorts_per_day": "1日あたりに作成された平均QORT数",
+    "blockchain_statistics": "ブロックチェーン統計",
+    "blocks_next_level": "次のレベルまでのブロック数",
+    "current_level": "現在のレベル",
+    "current_status": "現在のステータス",
+    "current_tier": "現在のティア",
+    "details": "ミンティングの詳細",
+    "next_level": "24時間年中無休のミンティングで、<strong>{{ count }}日</strong>以内に<strong>レベル{{ level }}</strong>に到達します",
+    "rewards_info": "ミンティング報酬情報",
+    "reward_per_block": "ブロックごとの推定報酬",
+    "reward_per_day": "1日あたりの推定報酬",
     "status": {
       "minting": "（鋳造）",
       "not_minting": "（造りではありません）",
@@ -322,7 +337,9 @@
       "synchronized": "同期",
       "synchronizing": "同期..."
     },
-    "status_title": "ミントステータス"
+    "status_title": "ミントステータス",
+    "tier_share_per_block": "ブロックごとのティアシェア",
+    "total_minter_in_tier": "このティアの合計ミンター数"
   },
   "name": "名前",
   "name_app": "名前/アプリ",

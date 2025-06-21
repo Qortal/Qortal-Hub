@@ -315,6 +315,21 @@
     }
   },
   "minting": {
+    "account_details": "детали аккаунта майнинга",
+    "actions": "действия по майнингу",
+    "average_blocktime": "среднее время блока Qortal",
+    "average_blocks_per_day": "среднее количество блоков в день",
+    "average_created_qorts_per_day": "среднее количество создаваемых QORT в день",
+    "blockchain_statistics": "статистика блокчейна",
+    "blocks_next_level": "блоков до следующего уровня",
+    "current_level": "текущий уровень",
+    "current_status": "текущий статус",
+    "current_tier": "текущий уровень (tier)",
+    "details": "детали майнинга",
+    "next_level": "При майнинге 24/7 вы достигнете <strong>{{ level }} уровня</strong> за <strong>{{ count }} дней</strong>",
+    "rewards_info": "информация о наградах за майнинг",
+    "reward_per_block": "предполагаемая награда за блок",
+    "reward_per_day": "предполагаемая награда в день",
     "status": {
       "minting": "(добыча)",
       "not_minting": "(не шахта)",
@@ -322,7 +337,9 @@
       "synchronized": "синхронизированный",
       "synchronizing": "синхронизация..."
     },
-    "status_title": "Статус майтинга"
+    "status_title": "Статус майтинга",
+    "tier_share_per_block": "доля уровня за блок",
+    "total_minter_in_tier": "всего майнеров на этом уровне"
   },
   "name": "имя",
   "name_app": "имя/приложение",

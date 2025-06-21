@@ -315,6 +315,21 @@
     }
   },
   "minting": {
+    "account_details": "铸造账户详情",
+    "actions": "铸造操作",
+    "average_blocktime": "Qortal平均区块时间",
+    "average_blocks_per_day": "每日平均区块数",
+    "average_created_qorts_per_day": "每日平均生成的QORT数量",
+    "blockchain_statistics": "区块链统计",
+    "blocks_next_level": "距离下一级的区块数",
+    "current_level": "当前等级",
+    "current_status": "当前状态",
+    "current_tier": "当前等级层级",
+    "details": "铸造详情",
+    "next_level": "全天候铸造将使你在<strong>{{ count }}天</strong>内达到<strong>{{ level }}级</strong>",
+    "rewards_info": "铸造奖励信息",
+    "reward_per_block": "每个区块的预计奖励",
+    "reward_per_day": "每日预计奖励",
     "status": {
       "minting": "（铸造）",
       "not_minting": "（不是铸造）",
@@ -322,7 +337,9 @@
       "synchronized": "同步",
       "synchronizing": "同步..."
     },
-    "status_title": "铸造状态"
+    "status_title": "铸造状态",
+    "tier_share_per_block": "每个区块的等级份额",
+    "total_minter_in_tier": "该等级层级中的总铸造者数"
   },
   "name": "姓名",
   "name_app": "名称/应用",

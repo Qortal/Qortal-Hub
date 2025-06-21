@@ -316,7 +316,21 @@
     }
   },
   "minting": {
+    "account_details": "minting account details",
+    "actions": "minting actions",
+    "average_blocktime": "average qortal blocktime",
+    "average_blocks_per_day": "average blocks per day",
+    "average_created_qorts_per_day": "average created QORT per day",
+    "blockchain_statistics": "blockchain statistics",
+    "blocks_next_level": "blocks to nexl level",
+    "current_level": "current level",
+    "current_status": "current status",
+    "current_tier": "current tier",
+    "details": "minting details",
     "next_level": "with a 24/7 minting you will reach <strong>level {{ level }}</strong> in <strong>{{ count }} days</strong>",
+    "rewards_info": "minting rewards info",
+    "reward_per_block": "estimated reward per block",
+    "reward_per_day": "estimated reward per day",
     "status": {
       "minting": "(minting)",
       "not_minting": "(not minting)",
@@ -324,7 +338,9 @@
       "synchronized": "synchronized",
       "synchronizing": "synchronizing..."
     },
-    "status_title": "minting status"
+    "status_title": "minting status",
+    "tier_share_per_block": "tier share per block",
+    "total_minter_in_tier": "total minters in the tier"
   },
   "name": "name",
   "name_app": "name/App",

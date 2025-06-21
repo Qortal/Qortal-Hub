@@ -4,6 +4,7 @@ import { Box, Tooltip, Typography, useTheme } from '@mui/material';
 import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
 import { formatDate } from '../utils/time';
 import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 
 function getAverageLtcPerQort(trades) {
   let totalQort = 0;
@@ -31,12 +32,13 @@ function getTwoWeeksAgoTimestamp() {
 }
 
 function formatWithCommasAndDecimals(number) {
-  return Number(number).toLocaleString();
+  const locale = i18next.language;
+  return Number(number).toLocaleString(locale);
 }
 
 export const QortPrice = () => {
   const [ltcPerQort, setLtcPerQort] = useState(null);
-  const [supply, setSupply] = useState(null);
+  const [supply, setSupply] = useState<string>('');
   const [lastBlock, setLastBlock] = useState(null);
   const [loading, setLoading] = useState(true);
   const { t } = useTranslation(['core', 'tutorial']);

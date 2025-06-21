@@ -315,14 +315,31 @@
     }
   },
   "minting": {
+    "account_details": "détails du compte de minting",
+    "actions": "actions de minting",
+    "average_blocktime": "temps moyen par bloc Qortal",
+    "average_blocks_per_day": "blocs moyens par jour",
+    "average_created_qorts_per_day": "QORT créés en moyenne par jour",
+    "blockchain_statistics": "statistiques de la blockchain",
+    "blocks_next_level": "blocs jusqu'au niveau suivant",
+    "current_level": "niveau actuel",
+    "current_status": "statut actuel",
+    "current_tier": "niveau actuel",
+    "details": "détails du minting",
+    "next_level": "Avec un minting 24/7, vous atteindrez le <strong>niveau {{ level }}</strong> en <strong>{{ count }} jours</strong>",
+    "rewards_info": "informations sur les récompenses de minting",
+    "reward_per_block": "récompense estimée par bloc",
+    "reward_per_day": "récompense estimée par jour",
     "status": {
-      "minting": "(Coupure)",
+      "minting": "(Frappe)",
       "not_minting": "(pas de la frappe)",
       "no_status": "pas de statut",
       "synchronized": "synchronisé",
       "synchronizing": "synchronisation..."
     },
-    "status_title": "statut de frappe"
+    "status_title": "statut de frappe",
+    "tier_share_per_block": "part du niveau par bloc",
+    "total_minter_in_tier": "nombre total de minters dans ce niveau"
   },
   "name": "nom",
   "name_app": "nom / application",

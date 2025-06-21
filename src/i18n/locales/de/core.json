@@ -314,6 +314,21 @@
     }
   },
   "minting": {
+    "account_details": "Minting-Kontodetails",
+    "actions": "Minting-Aktionen",
+    "average_blocktime": "durchschnittliche Qortal-Blockzeit",
+    "average_blocks_per_day": "durchschnittliche Blöcke pro Tag",
+    "average_created_qorts_per_day": "durchschnittlich erstellte QORTs pro Tag",
+    "blockchain_statistics": "Blockchain-Statistiken",
+    "blocks_next_level": "Blöcke bis zum nächsten Level",
+    "current_level": "aktuelles Level",
+    "current_status": "aktueller Status",
+    "current_tier": "aktuelle Stufe",
+    "details": "Minting-Details",
+    "next_level": "Mit 24/7-Minting erreichst du <strong>Level {{ level }}</strong> in <strong>{{ count }} Tagen</strong>",
+    "rewards_info": "Informationen zu Minting-Belohnungen",
+    "reward_per_block": "geschätzte Belohnung pro Block",
+    "reward_per_day": "geschätzte Belohnung pro Tag",
     "status": {
       "minting": "(Prägung)",
       "not_minting": "(nicht punktieren)",
@@ -321,7 +336,9 @@
       "synchronized": "synchronisiert",
       "synchronizing": "Synchronisierung..."
     },
-    "status_title": "Münzstatus"
+    "status_title": "Münzstatus",
+    "tier_share_per_block": "Stufenanteil pro Block",
+    "total_minter_in_tier": "Gesamtanzahl der Minter in dieser Stufe"
   },
   "name": "Name",
   "name_app": "Name/App",
