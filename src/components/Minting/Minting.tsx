@@ -54,6 +54,7 @@ import {
   currentTier,
   tierPercent,
   countReward,
+  countRewardDay,
 } from './MintingStats.tsx';
 
 export type AddressLevelEntry = {
@@ -769,13 +770,24 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         countReward(
                           accountInfo,
                           addressLevel,
-                          tier4Online,
-                          nodeStatus
+                          nodeStatus,
+                          tier4Online
                         ).toFixed(8) + ' QORT'
                       }
                     />
-                    <StatCard label="Estimated Reward Per Day" value="pollo" />
-                    {/* <StatCard label="AdminInfo" value={adminInfo} /> */}
+                    <StatCard
+                      label="Estimated Reward Per Day"
+                      value={
+                        countRewardDay(
+                          accountInfo,
+                          addressLevel,
+                          adminInfo,
+                          nodeHeightBlock,
+                          nodeStatus,
+                          tier4Online
+                        ).toFixed(8) + ' QORT'
+                      }
+                    />
                   </Grid>
                 </Paper>
               </Container>

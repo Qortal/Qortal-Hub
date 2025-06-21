@@ -85,7 +85,7 @@ export const blockReward = (nodeStatus): number => {
 
 export const currentTier = (level): string | undefined => {
   if (level === 0) {
-    return 'Tier 0 (Level 0)';
+    return 'Tier 0 (Level 0)'; // TODO translate
   } else if (level === 1 || level === 2) {
     return 'Tier 1 (Level 1 + 2)';
   } else if (level === 3 || level === 4) {
@@ -180,8 +180,8 @@ export const countMintersInLevel = (
 export const countReward = (
   accountInfo,
   addressLevel: AddressLevelEntry[],
-  tier4Online: number,
-  nodeStatus
+  nodeStatus,
+  tier4Online: number
 ): number => {
   if (accountInfo != null) {
     const level = accountInfo.level;
@@ -265,75 +265,103 @@ export const countReward = (
   return 0; // fallback: should never reach this point
 };
 
-// 	_countRewardDay() {
-// 		if (accountInfo.level === 0) {
-// 			return '0'
-// 		} else if (accountInfo.level === 1) {
-// 			const countRewardDay10 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[1].count + addressLevel[2].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay11 = (countRewardDay10).toString()
-// 			return countRewardDay11
-// 		} else if (accountInfo.level === 2) {
-// 			const countRewardDay20 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[1].count + addressLevel[2].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay21 = (countRewardDay20).toString()
-// 			return countRewardDay21
-// 		} else if (accountInfo.level === 3) {
-// 			const countRewardDay30 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[3].count + addressLevel[4].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay31 = (countRewardDay30).toString()
-// 			return countRewardDay31
-// 		} else if (accountInfo.level === 4) {
-// 			const countRewardDay40 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[3].count + addressLevel[4].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay41 = (countRewardDay40).toString()
-// 			return countRewardDay41
-// 		} else if (accountInfo.level === 5) {
-// 			if (this.tier4Online < 30) {
-// 				const countRewardDay50 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay51 = (countRewardDay50).toString()
-// 				return countRewardDay51
-// 			} else {
-// 				const countRewardDay50 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay51 = (countRewardDay50).toString()
-// 				return countRewardDay51
-// 			}
-// 		} else if (accountInfo.level === 6) {
-// 			if (this.tier4Online < 30) {
-// 				const countRewardDay60 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay61 = (countRewardDay60).toString()
-// 				return countRewardDay61
-// 			} else {
-// 				const countRewardDay60 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay61 = (countRewardDay60).toString()
-// 				return countRewardDay61
-// 			}
-// 		} else if (accountInfo.level === 7) {
-// 			if (this.tier4Online < 30) {
-// 				const countRewardDay70 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay71 = (countRewardDay70).toString()
-// 				return countRewardDay71
-// 			} else {
-// 				const countRewardDay70 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay71 = (countRewardDay70).toString()
-// 				return countRewardDay71
-// 			}
-// 		} else if (accountInfo.level === 8) {
-// 			if (this.tier4Online < 30) {
-// 				const countRewardDay80 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[5].count + addressLevel[6].count + addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay81 = (countRewardDay80).toString()
-// 				return countRewardDay81
-// 			} else {
-// 				const countRewardDay80 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[7].count + addressLevel[8].count) * this._timeCalc()).toFixed(8)
-// 				const countRewardDay81 = (countRewardDay80).toString()
-// 				return countRewardDay81
-// 			}
-// 		} else if (accountInfo.level === 9) {
-// 			const countRewardDay90 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[9].count + addressLevel[10].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay91 = (countRewardDay90).toString()
-// 			return countRewardDay91
-// 		} else if (accountInfo.level === 10) {
-// 			const countRewardDay100 = ((blockReward(nodeStatus) / 100 * tierPercent(accountInfo, tier4Online)) / (addressLevel[9].count + addressLevel[10].count) * this._timeCalc()).toFixed(8)
-// 			const countRewardDay101 = (countRewardDay100).toString()
-// 			return countRewardDay101
-// 		}
-// 	}
+export const countRewardDay = (
+  accountInfo,
+  addressLevel: AddressLevelEntry[],
+  adminInfo,
+  nodeHeightBlock,
+  nodeStatus,
+  tier4Online: number
+): number => {
+  if (accountInfo != null) {
+    const level = accountInfo.level;
+    const timeCalc = averageBlockDay(adminInfo, nodeHeightBlock);
+    if (level === 0) {
+      return 0;
+    } else if (level === 1 || level === 2) {
+      const countRewardDay12 = parseFloat(
+        (
+          (((blockReward(nodeStatus) / 100) *
+            tierPercent(accountInfo, tier4Online)) /
+            (addressLevel[1].count + addressLevel[2].count)) *
+          timeCalc
+        ).toFixed(8)
+      );
+      return countRewardDay12;
+    } else if (level === 3 || level === 4) {
+      const countRewardDay34 = parseFloat(
+        (
+          (((blockReward(nodeStatus) / 100) *
+            tierPercent(accountInfo, tier4Online)) /
+            (addressLevel[3].count + addressLevel[4].count)) *
+          timeCalc
+        ).toFixed(8)
+      );
+      return countRewardDay34;
+    } else if (level === 5 || level === 6) {
+      if (this.tier4Online < 30) {
+        const countRewardDay56 = parseFloat(
+          (
+            (((blockReward(nodeStatus) / 100) *
+              tierPercent(accountInfo, tier4Online)) /
+              (addressLevel[5].count +
+                addressLevel[6].count +
+                addressLevel[7].count +
+                addressLevel[8].count)) *
+            timeCalc
+          ).toFixed(8)
+        );
+        return countRewardDay56;
+      } else {
+        const countRewardDay56 = parseFloat(
+          (
+            (((blockReward(nodeStatus) / 100) *
+              tierPercent(accountInfo, tier4Online)) /
+              (addressLevel[5].count + addressLevel[6].count)) *
+            timeCalc
+          ).toFixed(8)
+        );
+        return countRewardDay56;
+      }
+    } else if (level === 7 || level === 8) {
+      if (this.tier4Online < 30) {
+        const countRewardDay78 = parseFloat(
+          (
+            (((blockReward(nodeStatus) / 100) *
+              tierPercent(accountInfo, tier4Online)) /
+              (addressLevel[5].count +
+                addressLevel[6].count +
+                addressLevel[7].count +
+                addressLevel[8].count)) *
+            timeCalc
+          ).toFixed(8)
+        );
+        return countRewardDay78;
+      } else {
+        const countRewardDay78 = parseFloat(
+          (
+            (((blockReward(nodeStatus) / 100) *
+              tierPercent(accountInfo, tier4Online)) /
+              (addressLevel[7].count + addressLevel[8].count)) *
+            timeCalc
+          ).toFixed(8)
+        );
+        return countRewardDay78;
+      }
+    } else if (level === 9 || level === 10) {
+      const countRewardDay910 = parseFloat(
+        (
+          (((blockReward(nodeStatus) / 100) *
+            tierPercent(accountInfo, tier4Online)) /
+            (addressLevel[9].count + addressLevel[10].count)) *
+          timeCalc
+        ).toFixed(8)
+      );
+      return countRewardDay910;
+    }
+  }
+  return 0; // fallback: should never reach this point
+};
 
 export const mintingStatus = (nodeStatus): string => {
   if (
