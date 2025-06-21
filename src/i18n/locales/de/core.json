@@ -303,13 +303,6 @@
       "reset_qdn": "Mögen Sie Ihre aktuellen lokalen Änderungen nicht? Möchten Sie auf Ihre gespeicherten QDN -Apps zurücksetzen?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(Prägung)",
-      "not_minting": "(nicht punktieren)",
-      "no_status": "kein Status",
-      "synchronized": "synchronisiert",
-      "synchronizing": "Synchronisierung..."
-    },
     "success": {
       "order_submitted": "Ihre Kaufbestellung wurde eingereicht",
       "published": "erfolgreich veröffentlicht. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt.",
@@ -320,7 +313,16 @@
       "voted": "erfolgreich abgestimmt. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt."
     }
   },
-  "minting_status": "Münzstatus",
+  "minting": {
+    "status": {
+      "minting": "(Prägung)",
+      "not_minting": "(nicht punktieren)",
+      "no_status": "kein Status",
+      "synchronized": "synchronisiert",
+      "synchronizing": "Synchronisierung..."
+    },
+    "status_title": "Münzstatus"
+  },
   "name": "Name",
   "name_app": "Name/App",
   "new_post_in": "new post in {{ title }}",

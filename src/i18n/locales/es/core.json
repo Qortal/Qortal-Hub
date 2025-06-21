@@ -304,13 +304,6 @@
       "reset_qdn": "¿No te gustan tus cambios locales actuales? ¿Le gustaría restablecer a sus aplicaciones guardadas de QDN guardadas?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(acuñado)",
-      "not_minting": "(no acuñar)",
-      "no_status": "sin estado",
-      "synchronized": "sincronizado",
-      "synchronizing": "sincronización..."
-    },
     "success": {
       "order_submitted": "Su pedido de compra fue enviado",
       "published": "publicado con éxito. Espere un par de minutos para que la red propoque los cambios.",
@@ -321,7 +314,16 @@
       "voted": "votado con éxito. Espere un par de minutos para que la red propoque los cambios."
     }
   },
-  "minting_status": "estado de acuñación",
+  "minting": {
+    "status": {
+      "minting": "(acuñado)",
+      "not_minting": "(no acuñar)",
+      "no_status": "sin estado",
+      "synchronized": "sincronizado",
+      "synchronizing": "sincronización..."
+    },
+    "status_title": "estado de acuñación"
+  },
   "name": "nombre",
   "name_app": "nombre/aplicación",
   "new_post_in": "new post in {{ title }}",

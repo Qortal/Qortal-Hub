@@ -304,13 +304,6 @@
       "reset_qdn": "Vous n'aimez pas vos changements locaux actuels? Souhaitez-vous réinitialiser avec vos applications QDN enregistrées?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(Coupure)",
-      "not_minting": "(pas de la frappe)",
-      "no_status": "pas de statut",
-      "synchronized": "synchronisé",
-      "synchronizing": "synchronisation..."
-    },
     "success": {
       "order_submitted": "Votre commande d'achat a été soumise",
       "published": "publié avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications.",
@@ -321,7 +314,16 @@
       "voted": "voté avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications."
     }
   },
-  "minting_status": "statut de frappe",
+  "minting": {
+    "status": {
+      "minting": "(Coupure)",
+      "not_minting": "(pas de la frappe)",
+      "no_status": "pas de statut",
+      "synchronized": "synchronisé",
+      "synchronizing": "synchronisation..."
+    },
+    "status_title": "statut de frappe"
+  },
   "name": "nom",
   "name_app": "nom / application",
   "new_post_in": "new post in {{ title }}",

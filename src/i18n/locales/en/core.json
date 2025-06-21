@@ -237,7 +237,6 @@
       "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
       "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance (4 qort balance for chat, 1.25 for name, 0.75 for some transactions)",
-      "minting_next_level": "with a 24/7 minting you will reach level {{ level }} in <strong>{{ count }} days</strong>",
       "most_recent_payment": "{{ count }} most recent payment",
       "name_available": "{{ name }} is available",
       "name_benefits": "benefits of a name",
@@ -305,13 +304,7 @@
       "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "(minting)",
-      "not_minting": "(not minting)",
-      "no_status": "no status",
-      "synchronized": "synchronized",
-      "synchronizing": "synchronizing..."
-    },
+
     "success": {
       "order_submitted": "your buy order was submitted",
       "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
@@ -322,7 +315,17 @@
       "voted": "successfully voted. Please wait a couple minutes for the network to propogate the changes."
     }
   },
-  "minting_status": "minting status",
+  "minting": {
+    "next_level": "with a 24/7 minting you will reach <strong>level {{ level }}</strong> in <strong>{{ count }} days</strong>",
+    "status": {
+      "minting": "(minting)",
+      "not_minting": "(not minting)",
+      "no_status": "no status",
+      "synchronized": "synchronized",
+      "synchronizing": "synchronizing..."
+    },
+    "status_title": "minting status"
+  },
   "name": "name",
   "name_app": "name/App",
   "new_post_in": "new post in {{ title }}",

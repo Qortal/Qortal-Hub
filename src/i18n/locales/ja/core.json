@@ -304,13 +304,6 @@
       "reset_qdn": "あなたの現在のローカルの変更が気に入らない？保存したQDNピン留めアプリにリセットしますか？",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "（鋳造）",
-      "not_minting": "（造りではありません）",
-      "no_status": "ステータスなし",
-      "synchronized": "同期",
-      "synchronizing": "同期..."
-    },
     "success": {
       "order_submitted": "購入注文が提出されました",
       "published": "正常に公開されました。ネットワークが変更を提案するまで数分待ってください。",
@@ -321,7 +314,16 @@
       "voted": "正常に投票しました。ネットワークが変更を提案するまで数分待ってください。"
     }
   },
-  "minting_status": "ミントステータス",
+  "minting": {
+    "status": {
+      "minting": "（鋳造）",
+      "not_minting": "（造りではありません）",
+      "no_status": "ステータスなし",
+      "synchronized": "同期",
+      "synchronizing": "同期..."
+    },
+    "status_title": "ミントステータス"
+  },
   "name": "名前",
   "name_app": "名前/アプリ",
   "new_post_in": "new post in {{ title }}",

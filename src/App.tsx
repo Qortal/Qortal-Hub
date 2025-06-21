@@ -1906,7 +1906,7 @@ function App() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {t('core:minting_status')}
+                    {t('core:minting.status_title')}
                   </span>
                 }
                 placement="left"

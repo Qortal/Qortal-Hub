@@ -304,13 +304,6 @@
       "reset_qdn": "不喜欢您当前的本地更改吗？您想重置保存的QDN固定应用吗？",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-    "status": {
-      "minting": "（铸造）",
-      "not_minting": "（不是铸造）",
-      "no_status": "没有状态",
-      "synchronized": "同步",
-      "synchronizing": "同步..."
-    },
     "success": {
       "order_submitted": "您的买入订单已提交",
       "published": "成功出版。请等待几分钟，以使网络传播更改。",
@@ -321,7 +314,16 @@
       "voted": "成功投票。请等待几分钟，以使网络传播更改。"
     }
   },
-  "minting_status": "铸造状态",
+  "minting": {
+    "status": {
+      "minting": "（铸造）",
+      "not_minting": "（不是铸造）",
+      "no_status": "没有状态",
+      "synchronized": "同步",
+      "synchronizing": "同步..."
+    },
+    "status_title": "铸造状态"
+  },
   "name": "姓名",
   "name_app": "名称/应用",
   "new_post_in": "new post in {{ title }}",
