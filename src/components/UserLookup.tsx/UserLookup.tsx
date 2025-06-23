@@ -38,6 +38,7 @@ import {
 } from '../../utils/events';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { useTranslation } from 'react-i18next';
+import { validateAddress } from '../../utils/validateAddress.ts';
 
 function formatAddress(str) {
   if (str.length <= 12) return str;
@@ -60,7 +61,11 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
   const [nameOrAddress, setNameOrAddress] = useState('');
   const [inputValue, setInputValue] = useState('');
   const { results, isLoading } = useNameSearch(inputValue);
-  const options = useMemo(() => results?.map((item) => item.name), [results]);
+  const options = useMemo(() => {
+    const isAddress = validateAddress(inputValue);
+    if (isAddress) return [inputValue];
+    return results?.map((item) => item.name);
+  }, [results, inputValue]);
   const [errorMessage, setErrorMessage] = useState('');
   const [addressInfo, setAddressInfo] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
@@ -99,8 +104,10 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             })
           );
         }
-
-        const name = await getNameInfo(owner);
+        const isAddress = validateAddress(messageAddressOrName);
+        const name = !isAddress
+          ? messageAddressOrName
+          : await getNameInfo(owner);
         const balanceRes = await fetch(
           `${getBaseApiReact()}/addresses/balance/${owner}`
         );
@@ -209,7 +216,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
                     postProcess: 'capitalizeFirstChar',
                   })}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && nameOrAddress) {
+                    if (e.key === 'Enter' && inputValue) {
                       lookupFunc(inputValue);
                     }
                   }}
