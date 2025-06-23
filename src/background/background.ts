@@ -832,7 +832,7 @@ export async function getAddressInfo(address) {
   const data = await response.json();
 
   if (!response?.ok && data?.error !== 124)
-    throw new Error('Cannot fetch address info'); // TODO translate
+    throw new Error('Cannot retrieve address info'); // TODO translate
   if (data?.error === 124) {
     return {
       address,
