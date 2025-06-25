@@ -1546,7 +1546,6 @@ function setupMessageListenerQortalRequest() {
             request.payload,
             isFromExtension
           );
-
           event.source.postMessage(
             {
               requestId: request.requestId,
