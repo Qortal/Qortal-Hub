@@ -299,7 +299,7 @@ export const countRewardDay = (
       );
       return countRewardDay34;
     } else if (level === 5 || level === 6) {
-      if (this.tier4Online < 30) {
+      if (tier4Online < 30) {
         const countRewardDay56 = parseFloat(
           (
             (((blockReward(nodeStatus) / 100) *
@@ -324,7 +324,7 @@ export const countRewardDay = (
         return countRewardDay56;
       }
     } else if (level === 7 || level === 8) {
-      if (this.tier4Online < 30) {
+      if (tier4Online < 30) {
         const countRewardDay78 = parseFloat(
           (
             (((blockReward(nodeStatus) / 100) *
@@ -368,7 +368,6 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isMintingPossible === true &&
     nodeStatus.isSynchronizing === true
   ) {
-    // this.cssMinting = 'blue';
     return i18n.t('core:minting.status.minting', {
       postProcess: 'capitalizeFirstChar',
     });
@@ -376,7 +375,6 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isMintingPossible === true &&
     nodeStatus.isSynchronizing === false
   ) {
-    // this.cssMinting = 'blue';
     return i18n.t('core:minting.status.minting', {
       postProcess: 'capitalizeFirstChar',
     });
@@ -384,7 +382,6 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isMintingPossible === false &&
     nodeStatus.isSynchronizing === true
   ) {
-    // this.cssMinting = 'red';
     return i18n.t('core:minting.status.synchronizing', {
       postProcess: 'capitalizeFirstChar',
     }) +
@@ -396,7 +393,6 @@ export const mintingStatus = (nodeStatus): string => {
     nodeStatus.isMintingPossible === false &&
     nodeStatus.isSynchronizing === false
   ) {
-    // this.cssMinting = 'red';
     return i18n.t('core:minting.status.not_minting', {
       postProcess: 'capitalizeFirstChar',
     });

@@ -71,7 +71,7 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
       if (attempt >= maxRetries) {
         throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
       }
-      // Wait 10 seconds before next retry
+      // Wait 25 seconds before next retry
       await new Promise((res) => setTimeout(res, 25_000));
     }
   }

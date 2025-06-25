@@ -335,8 +335,8 @@
       "minting": "（鋳造）",
       "not_minting": "（造りではありません）",
       "no_status": "ステータスなし",
-      "synchronized": "同期",
-      "synchronizing": "同期..."
+      "synchronized": "同期 ({{ percent }}%)",
+      "synchronizing": "同期 ({{ percent }}%)..."
     },
     "status_title": "ミントステータス",
     "tier_share_per_block": "ブロックごとのティアシェア",

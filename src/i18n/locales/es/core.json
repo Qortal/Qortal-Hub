@@ -335,8 +335,8 @@
       "minting": "(acuñado)",
       "not_minting": "(no acuñar)",
       "no_status": "sin estado",
-      "synchronized": "sincronizado",
-      "synchronizing": "sincronización..."
+      "synchronized": "sincronizado ({{ percent }}%)",
+      "synchronizing": "sincronización ({{ percent }}%)..."
     },
     "status_title": "estado de acuñación",
     "tier_share_per_block": "porción del nivel por bloque",

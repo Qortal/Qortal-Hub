@@ -334,8 +334,8 @@
       "minting": "(Prägung)",
       "not_minting": "(nicht punktieren)",
       "no_status": "kein Status",
-      "synchronized": "synchronisiert",
-      "synchronizing": "Synchronisierung..."
+      "synchronized": "synchronisiert ({{ percent }}%)",
+      "synchronizing": "Synchronisierung ({{ percent }}%)..."
     },
     "status_title": "Münzstatus",
     "tier_share_per_block": "Stufenanteil pro Block",

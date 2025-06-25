@@ -335,8 +335,8 @@
       "minting": "（铸造）",
       "not_minting": "（不是铸造）",
       "no_status": "没有状态",
-      "synchronized": "同步",
-      "synchronizing": "同步..."
+      "synchronized": "同步 ({{ percent }}%)",
+      "synchronizing": "同步 ({{ percent }}%)..."
     },
     "status_title": "铸造状态",
     "tier_share_per_block": "每个区块的等级份额",

@@ -25,9 +25,7 @@ export const CoreSyncStatus = () => {
   useEffect(() => {
     const getNodeInfos = async () => {
       try {
-        setIsUsingGateway(
-          !!getBaseApiReact()?.includes('ext-node.qortal.link')
-        );
+        setIsUsingGateway(getBaseApiReact()?.includes('ext-node.qortal.link'));
         const url = `${getBaseApiReact()}/admin/status`;
         const response = await fetch(url, {
           method: 'GET',
@@ -82,27 +80,27 @@ export const CoreSyncStatus = () => {
       : '';
 
     let imagePath = syncingImg;
-    let message = t('core:minting.status.synchronizing', {
-      postProcess: 'capitalizeFirstChar',
-    });
+    let message: string = '';
 
-    if (isMintingPossible && !isUsingGateway) {
-      imagePath = syncedMintingImg;
-      message = `${t(`core:minting.status.${isSynchronizing ? 'synchronizing' : 'synchronized'}`, { postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
-    } else if (isSynchronizing === true && syncPercent === 99) {
+    if (isUsingGateway) {
       imagePath = syncingImg;
-    } else if (isSynchronizing && !isMintingPossible && syncPercent === 100) {
-      imagePath = syncingImg;
-      message = `${t('core:minting.status.synchronizing', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:minting.status.not_minting') : ''}`;
-    } else if (!isSynchronizing && !isMintingPossible && syncPercent === 100) {
-      imagePath = syncedImg;
-      message = `${t('core:minting.status.synchronized', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:minting.status.not_minting') : ''}`;
-    } else if (isSynchronizing && isMintingPossible && syncPercent === 100) {
-      imagePath = syncingImg;
-      message = `${t('core:minting.status.synchronizing', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:minting.status.minting') : ''}`;
-    } else if (!isSynchronizing && isMintingPossible && syncPercent === 100) {
-      imagePath = syncedMintingImg;
-      message = `${t('core:minting.status.synchronized', { postProcess: 'capitalizeFirstChar' })} ${!isUsingGateway ? t('core:minting.status.minting') : ''}`;
+      message = `${t('core:minting.status.no_status')}`;
+    } else if (isMintingPossible) {
+      if (isSynchronizing) {
+        imagePath = syncingImg;
+        message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
+      } else {
+        imagePath = syncedMintingImg;
+        message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
+      }
+    } else if (!isMintingPossible) {
+      if (syncPercent == 100) {
+        imagePath = syncedImg;
+        message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
+      } else {
+        imagePath = syncingImg;
+        message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
+      }
     }
 
     return (

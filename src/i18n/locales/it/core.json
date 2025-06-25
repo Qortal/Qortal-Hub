@@ -334,8 +334,8 @@
       "minting": "(minting)",
       "not_minting": "(non minting)",
       "no_status": "nessun stato",
-      "synchronized": "sincronizzato",
-      "synchronizing": "sincronizzazione..."
+      "synchronized": "sincronizzato ({{ percent }}%)",
+      "synchronizing": "sincronizzazione ({{ percent }}%)..."
     },
     "status_title": "stato minting",
     "tier_share_per_block": "quota della fascia per blocco",

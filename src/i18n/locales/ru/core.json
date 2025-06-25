@@ -335,8 +335,8 @@
       "minting": "(добыча)",
       "not_minting": "(не шахта)",
       "no_status": "нет статуса",
-      "synchronized": "синхронизированный",
-      "synchronizing": "синхронизация..."
+      "synchronized": "синхронизированный ({{ percent }}%)",
+      "synchronizing": "синхронизация ({{ percent }}%)..."
     },
     "status_title": "Статус майтинга",
     "tier_share_per_block": "доля уровня за блок",

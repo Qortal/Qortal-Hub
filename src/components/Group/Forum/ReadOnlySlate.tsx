@@ -96,6 +96,7 @@ interface ReadOnlySlateProps {
   content: any;
   mode?: string;
 }
+
 const ReadOnlySlate: FC<ReadOnlySlateProps> = ({ content, mode }) => {
   const [load, setLoad] = useState(false);
   const editor = useMemo(() => withReact(createEditor()), []);
@@ -103,11 +104,15 @@ const ReadOnlySlate: FC<ReadOnlySlateProps> = ({ content, mode }) => {
 
   const performUpdate = useCallback(async () => {
     setLoad(true);
-    await new Promise<void>((res) => {
-      setTimeout(() => {
-        res();
-      }, 250);
-    });
+    try {
+      await new Promise<void>((res) => {
+        setTimeout(() => {
+          res();
+        }, 250);
+      });
+    } catch (error) {
+      console.log(error);
+    }
     setLoad(false);
   }, []);
   useEffect(() => {

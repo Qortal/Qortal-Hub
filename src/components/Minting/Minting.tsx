@@ -698,10 +698,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       label={t('core:minting.average_blocktime', {
                         postProcess: 'capitalizeEachFirstChar',
                       })}
-                      value={averageBlockTime(
-                        adminInfo,
-                        nodeHeightBlock
-                      ).toFixed(2)}
+                      value={t('core:time.second', {
+                        count: parseFloat(
+                          averageBlockTime(adminInfo, nodeHeightBlock).toFixed(
+                            2
+                          )
+                        ),
+                        postProcess: 'capitalizeEachFirstChar',
+                      })}
                     />
 
                     <StatCard
