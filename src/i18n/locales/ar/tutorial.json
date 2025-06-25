@@ -1,0 +1,21 @@
+{
+  "1_getting_started": " ١.البدء",
+  "2_overview": " ٢.نظرة عامة",
+  "3_groups": " ٣.مجموعات كورتال",
+  "4_obtain_qort": "٤.الحصول على عملة كورتال",
+  "account_creation": "إنشاء حساب",
+  "important_info": "معلومات هامة",
+  "apps": {
+    "dashboard": "١.لوحة معلومات التطبيقات",
+    "navigation": "٢.التنقل بين التطبيقات"
+  },
+  "initial": {
+    "recommended_qort_qty": "لديك على الأقل {{ quantity}} عملة كورتال في محفظتك",
+    "explore": "يستكشف",
+    "general_chat": "دردشة عامة",
+    "getting_started": "ابدء",
+    "register_name": "تسجيل اسم",
+    "see_apps": "انظر التطبيقات",
+    "trade_qort": "تداول عملة كورتال"
+  }
+}

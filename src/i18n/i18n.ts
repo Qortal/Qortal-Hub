@@ -10,6 +10,7 @@ import {
 } from './processors';
 
 export const supportedLanguages = {
+  ar: { name: 'Arab', flag: '🇦🇪' },
   de: { name: 'Deutsch', flag: '🇩🇪' },
   en: { name: 'English', flag: '🇺🇸' },
   es: { name: 'Español', flag: '🇪🇸' },
