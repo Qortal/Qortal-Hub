@@ -377,6 +377,7 @@ export const ChatList = ({
                       }
                     >
                       <MessageItem
+                        key={message.signature}
                         handleReaction={handleReaction}
                         isLast={index === messages.length - 1}
                         isPrivate={isPrivate}
