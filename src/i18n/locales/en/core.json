@@ -336,8 +336,8 @@
       "minting": "(minting)",
       "not_minting": "(not minting)",
       "no_status": "no status",
-      "synchronized": "synchronized",
-      "synchronizing": "synchronizing..."
+      "synchronized": "synchronized ({{ percent }}%)",
+      "synchronizing": "synchronizing ({{ percent }}%)..."
     },
     "status_title": "minting status",
     "tier_share_per_block": "tier share per block",
@@ -399,6 +399,8 @@
     "hour_other": "{{count}} hours",
     "minute_one": "{{count}} minute",
     "minute_other": "{{count}} minutes",
+    "second_one": "{{count}} second",
+    "second_other": "{{count}} seconds",
     "time": "time"
   },
   "title": "title",

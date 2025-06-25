@@ -19,7 +19,7 @@ export const decryptStoredWallet = async (password, wallet) => {
     .process(encryptedSeedBytes)
     .finish().result;
   if (Base58.encode(mac) !== wallet.mac) {
-    throw new Error(i18n.t('auth:message.error.incorrect_password')); // TODO: i18n non-react integration
+    throw new Error(i18n.t('auth:message.error.incorrect_password'));
   }
   const decryptedBytes = AES_CBC.decrypt(
     encryptedSeedBytes,

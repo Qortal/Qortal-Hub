@@ -335,8 +335,8 @@
       "minting": "(Frappe)",
       "not_minting": "(pas de la frappe)",
       "no_status": "pas de statut",
-      "synchronized": "synchronisé",
-      "synchronizing": "synchronisation..."
+      "synchronized": "synchronisé ({{ percent }}%)",
+      "synchronizing": "synchronisation ({{ percent }}%)..."
     },
     "status_title": "statut de frappe",
     "tier_share_per_block": "part du niveau par bloc",
