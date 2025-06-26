@@ -26,6 +26,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import CloseIcon from '@mui/icons-material/Close';
@@ -92,7 +93,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const [names, setNames] = useState({});
   const [accountInfos, setAccountInfos] = useState({});
   const [showWaitDialog, setShowWaitDialog] = useState(false);
-
+  const timeoutNodeStatusRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const timeoutAdminInfoRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
     return !!groups?.find((item) => item?.groupId?.toString() === '694');
@@ -214,9 +220,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const response = await fetch(url);
       const data = await response.json();
       setAdminInfo(data);
-      setTimeout(getAdminInfo, 30000);
     } catch (error) {
       console.log(error);
+    } finally {
+      timeoutAdminInfoRef.current = setTimeout(getAccountInfo, 30000);
     }
   }, []);
 
@@ -226,9 +233,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       const response = await fetch(url);
       const data = await response.json();
       setNodeStatus(data);
-      setTimeout(getNodeStatus, 30000);
     } catch (error) {
       console.error('Request failed', error);
+    } finally {
+      timeoutNodeStatusRef.current = setTimeout(getNodeStatus, 30000);
     }
   }, []);
 
@@ -531,6 +539,17 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     getAdminInfo();
     getMintingAccounts();
     getNodeStatus();
+
+    return () => {
+      if (timeoutNodeStatusRef.current) {
+        clearTimeout(timeoutNodeStatusRef.current);
+        timeoutNodeStatusRef.current = null;
+      }
+      if (timeoutAdminInfoRef.current) {
+        clearTimeout(timeoutAdminInfoRef.current);
+        timeoutAdminInfoRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
