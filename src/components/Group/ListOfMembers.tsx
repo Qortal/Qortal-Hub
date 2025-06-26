@@ -1,29 +1,31 @@
 import {
   Avatar,
   Box,
-  Button,
   ListItem,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
   Popover,
   Typography,
-} from "@mui/material";
-import React, { useRef, useState } from "react";
+  useTheme,
+} from '@mui/material';
+import { useRef, useState } from 'react';
 import {
   AutoSizer,
   CellMeasurer,
   CellMeasurerCache,
   List,
-} from "react-virtualized";
-import { LoadingButton } from "@mui/lab";
-import { getBaseApi, getFee } from "../../background";
-import { getBaseApiReact } from "../../App";
+} from 'react-virtualized';
+import { LoadingButton } from '@mui/lab';
+import { getFee } from '../../background/background.ts';
+import { getBaseApiReact } from '../../App';
+import { useTranslation } from 'react-i18next';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
   defaultHeight: 50,
 });
+
 const ListOfMembers = ({
   members,
   groupId,
@@ -39,9 +41,15 @@ const ListOfMembers = ({
   const [isLoadingBan, setIsLoadingBan] = useState(false);
   const [isLoadingMakeAdmin, setIsLoadingMakeAdmin] = useState(false);
   const [isLoadingRemoveAdmin, setIsLoadingRemoveAdmin] = useState(false);
-
-  
-  const listRef = useRef();
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+  const listRef = useRef(null);
 
   const handlePopoverOpen = (event, index) => {
     setPopoverAnchor(event.currentTarget);
@@ -55,23 +63,29 @@ const ListOfMembers = ({
 
   const handleKick = async (address) => {
     try {
-      const fee = await getFee("GROUP_KICK");
+      const fee = await getFee('GROUP_KICK');
       await show({
-        message: "Would you like to perform a GROUP_KICK transaction?",
-        publishFee: fee.fee + " QORT",
+        message: t('core:message.question.perform_transaction', {
+          action: 'GROUP_KICK',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
       });
 
       setIsLoadingKick(true);
       new Promise((res, rej) => {
-        window.sendMessage("kickFromGroup", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('kickFromGroup', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully kicked member from group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message: t('group:message.success.group_kick', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -79,7 +93,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -87,38 +101,51 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingKick(false);
     }
   };
   const handleBan = async (address) => {
     try {
-      const fee = await getFee("GROUP_BAN");
+      const fee = await getFee('GROUP_BAN');
+
       await show({
-        message: "Would you like to perform a GROUP_BAN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: t('core:message.question.perform_transaction', {
+          action: 'GROUP_BAN',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingBan(true);
+
       await new Promise((res, rej) => {
-        window.sendMessage("banFromGroup", {
-          groupId,
-          qortalAddress: address,
-          rBanTime: 0,
-        })
+        window
+          .sendMessage('banFromGroup', {
+            groupId,
+            qortalAddress: address,
+            rBanTime: 0,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully banned member from group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message: t('group:message.success.group_ban', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -126,7 +153,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -134,15 +161,19 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingBan(false);
     }
@@ -150,22 +181,28 @@ const ListOfMembers = ({
 
   const makeAdmin = async (address) => {
     try {
-      const fee = await getFee("ADD_GROUP_ADMIN");
+      const fee = await getFee('ADD_GROUP_ADMIN');
       await show({
-        message: "Would you like to perform a ADD_GROUP_ADMIN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: t('core:message.question.perform_transaction', {
+          action: 'ADD_GROUP_ADMIN',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingMakeAdmin(true);
       await new Promise((res, rej) => {
-        window.sendMessage("makeAdmin", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('makeAdmin', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully made member an admin. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message: t('group:message.success.group_member_admin', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -173,7 +210,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -181,15 +218,19 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingMakeAdmin(false);
     }
@@ -197,22 +238,28 @@ const ListOfMembers = ({
 
   const removeAdmin = async (address) => {
     try {
-      const fee = await getFee("REMOVE_GROUP_ADMIN");
+      const fee = await getFee('REMOVE_GROUP_ADMIN');
       await show({
-        message: "Would you like to perform a REMOVE_GROUP_ADMIN transaction?",
-        publishFee: fee.fee + " QORT",
+        message: t('core:message.question.perform_transaction', {
+          action: 'REMOVE_GROUP_ADMIN',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
       });
       setIsLoadingRemoveAdmin(true);
       await new Promise((res, rej) => {
-        window.sendMessage("removeAdmin", {
-          groupId,
-          qortalAddress: address,
-        })
+        window
+          .sendMessage('removeAdmin', {
+            groupId,
+            qortalAddress: address,
+          })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message: "Successfully removed member as an admin. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message: t('group:message.success.group_remove_member', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
               });
               setOpenSnack(true);
               handlePopoverClose();
@@ -220,7 +267,7 @@ const ListOfMembers = ({
               return;
             }
             setInfoSnack({
-              type: "error",
+              type: 'error',
               message: response?.error,
             });
             setOpenSnack(true);
@@ -228,15 +275,19 @@ const ListOfMembers = ({
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
           });
-        
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingRemoveAdmin(false);
     }
@@ -260,24 +311,24 @@ const ListOfMembers = ({
               anchorEl={popoverAnchor}
               onClose={handlePopoverClose}
               anchorOrigin={{
-                vertical: "bottom",
-                horizontal: "center",
+                vertical: 'bottom',
+                horizontal: 'center',
               }}
               transformOrigin={{
-                vertical: "top",
-                horizontal: "center",
+                vertical: 'top',
+                horizontal: 'center',
               }}
-              style={{ marginTop: "8px" }}
+              style={{ marginTop: '8px' }}
             >
               <Box
                 sx={{
-                  width: "325px",
-                  height: "250px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px",
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  height: '250px',
+                  padding: '10px',
+                  width: '325px',
                 }}
               >
                 {isOwner && (
@@ -288,69 +339,80 @@ const ListOfMembers = ({
                       variant="contained"
                       onClick={() => handleKick(member?.member)}
                     >
-                      Kick member from group
+                      {t('group:action.kick_member', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingBan}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => handleBan(member?.member)}
                     >
-                      Ban member from group
+                      {t('group:action.ban', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingMakeAdmin}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => makeAdmin(member?.member)}
                     >
-                      Make an admin
+                      {t('group:action.make_admin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </LoadingButton>
+
                     <LoadingButton
                       loading={isLoadingRemoveAdmin}
                       loadingPosition="start"
                       variant="contained"
                       onClick={() => removeAdmin(member?.member)}
                     >
-                      Remove as admin
+                      {t('group:action.remove_admin', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </LoadingButton>
                   </>
                 )}
               </Box>
             </Popover>
-            <ListItem
-              key={member?.member}
-              // secondaryAction={
-              //   <Checkbox
-              //     edge="end"
-              //     onChange={handleToggle(value)}
-              //     checked={checked.indexOf(value) !== -1}
-              //     inputProps={{ 'aria-labelledby': labelId }}
-              //   />
-              // }
-              disablePadding
-            >
+
+            <ListItem key={member?.member} disablePadding>
               <ListItemButton
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
                 <ListItemAvatar>
                   <Avatar
                     alt={member?.name || member?.member}
-                    src={member?.name ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true` : ''}
+                    src={
+                      member?.name
+                        ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true`
+                        : ''
+                    }
                   />
                 </ListItemAvatar>
+
                 <ListItemText
-                  id={""}
+                  id={''}
                   primary={member?.name || member?.member}
                 />
                 {member?.isAdmin && (
-                <Typography sx={{
-                  color: 'white',
-                  marginLeft: 'auto'
-                }}>Admin</Typography>
-              )}
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.primary,
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    {t('core:admin', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                )}
               </ListItemButton>
-              
             </ListItem>
           </div>
         )}
@@ -360,28 +422,31 @@ const ListOfMembers = ({
 
   return (
     <div>
-      <p>Member list</p>
+      <p>
+        {t('core:list.member', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </p>
       <div
         style={{
-          position: "relative",
-          height: "500px",
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           flexShrink: 1,
+          height: '500px',
+          position: 'relative',
+          width: '100%',
         }}
       >
         <AutoSizer>
           {({ height, width }) => (
             <List
-              ref={listRef}
-              width={width}
+              deferredMeasurementCache={cache}
               height={height}
+              ref={listRef}
               rowCount={members.length}
               rowHeight={cache.rowHeight}
               rowRenderer={rowRenderer}
-              //   onScroll={handleScroll}
-              deferredMeasurementCache={cache}
+              width={width}
             />
           )}
         </AutoSizer>

@@ -1,0 +1,21 @@
+{
+  "1_getting_started": "1. 入门指南",
+  "2_overview": "2. 总览",
+  "3_groups": "3. Qortal 群组",
+  "4_obtain_qort": "4. 获取 QORT",
+  "account_creation": "账户创建",
+  "important_info": "重要信息",
+  "apps": {
+    "dashboard": "1. 应用仪表盘",
+    "navigation": "2. 应用导航"
+  },
+  "initial": {
+    "recommended_qort_qty": "钱包中至少拥有 {{ quantity }} QORT",
+    "explore": "探索",
+    "general_chat": "综合聊天",
+    "getting_started": "入门",
+    "register_name": "注册名称",
+    "see_apps": "查看应用",
+    "trade_qort": "交易 QORT"
+  }
+}

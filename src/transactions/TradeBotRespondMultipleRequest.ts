@@ -7,36 +7,35 @@
  */
 
 export class TradeBotRespondMultipleRequest {
-	constructor() {
-		// ...
-	}
+  constructor() {
+    // ...
+  }
 
-	createTransaction(txnReq) {
-		this.addresses(txnReq.addresses)
-		this.foreignKey(txnReq.foreignKey)
-		this.receivingAddress(txnReq.receivingAddress)
+  createTransaction(txnReq) {
+    this.addresses(txnReq.addresses);
+    this.foreignKey(txnReq.foreignKey);
+    this.receivingAddress(txnReq.receivingAddress);
 
-		return this.txnRequest()
-	}
+    return this.txnRequest();
+  }
 
-	addresses(addresses) {
-		this._addresses = addresses
-	}
+  addresses(addresses) {
+    this._addresses = addresses;
+  }
 
-	foreignKey(foreignKey) {
-		this._foreignKey = foreignKey
-	}
+  foreignKey(foreignKey) {
+    this._foreignKey = foreignKey;
+  }
 
-	receivingAddress(receivingAddress) {
-		this._receivingAddress = receivingAddress
-	}
+  receivingAddress(receivingAddress) {
+    this._receivingAddress = receivingAddress;
+  }
 
-	txnRequest() {
-		return {
-			addresses: this._addresses,
-			foreignKey: this._foreignKey,
-			receivingAddress: this._receivingAddress
-		}
-	}
+  txnRequest() {
+    return {
+      addresses: this._addresses,
+      foreignKey: this._foreignKey,
+      receivingAddress: this._receivingAddress,
+    };
+  }
 }
-

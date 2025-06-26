@@ -1,9 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import Picker, { EmojiStyle, Theme } from 'emoji-picker-react';
-import './ReactionPicker.css';
+import '../styles/ReactionPicker.css';
 import { ButtonBase } from '@mui/material';
-import { isMobile } from '../App';
 
 export const ReactionPicker = ({ onReaction }) => {
   const [showPicker, setShowPicker] = useState(false);
@@ -28,15 +27,25 @@ export const ReactionPicker = ({ onReaction }) => {
     if (showPicker) {
       setShowPicker(false);
     } else {
-      // Get the button's position
       const buttonRect = buttonRef.current.getBoundingClientRect();
-      const pickerWidth = isMobile ? 300 : 350; // Adjust based on picker width
+      const pickerWidth = 350;
+      const pickerHeight = 400; // Match Picker height prop
 
-      // Calculate position to align the right edge of the picker with the button's right edge
-      setPickerPosition({
-        top: buttonRect.bottom + window.scrollY, // Position below the button
-        left: buttonRect.right + window.scrollX - pickerWidth, // Align right edges
-      });
+      // Initial position (below the button)
+      let top = buttonRect.bottom + window.scrollY;
+      let left = buttonRect.right + window.scrollX - pickerWidth;
+
+      // If picker would overflow bottom, show it above the button
+      const overflowBottom =
+        top + pickerHeight > window.innerHeight + window.scrollY;
+      if (overflowBottom) {
+        top = buttonRect.top + window.scrollY - pickerHeight;
+      }
+
+      // Optional: prevent overflow on the left too
+      if (left < 0) left = 0;
+
+      setPickerPosition({ top, left });
       setShowPicker(true);
     }
   };
@@ -90,15 +99,14 @@ export const ReactionPicker = ({ onReaction }) => {
             }}
           >
             <Picker
-              height={isMobile ? 350 : 450}
-              width={isMobile ? 300 : 350}
-              reactionsDefaultOpen={true}
-              onReactionClick={handleReaction}
-              onEmojiClick={handlePicker}
               allowExpandReactions={true}
               autoFocusSearch={false}
-              theme={Theme.DARK}
               emojiStyle={EmojiStyle.NATIVE}
+              height={400}
+              onEmojiClick={handlePicker}
+              onReactionClick={handleReaction}
+              theme={Theme.DARK}
+              width={350}
             />
           </div>,
           document.body

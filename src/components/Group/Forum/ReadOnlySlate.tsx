@@ -1,18 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createEditor} from 'slate';
-import { withReact, Slate, Editable, RenderElementProps, RenderLeafProps  } from 'slate-react';
+import { FC, useCallback, useEffect, useMemo, useState } from 'react';
+import { createEditor } from 'slate';
+import {
+  withReact,
+  Slate,
+  Editable,
+  RenderElementProps,
+  RenderLeafProps,
+} from 'slate-react';
 
-type ExtendedRenderElementProps = RenderElementProps & { mode?: string }
+type ExtendedRenderElementProps = RenderElementProps & { mode?: string };
 
 export const renderElement = ({
   attributes,
   children,
   element,
-  mode
+  mode,
 }: ExtendedRenderElementProps) => {
   switch (element.type) {
     case 'block-quote':
-      return <blockquote {...attributes}>{children}</blockquote>
+      return <blockquote {...attributes}>{children}</blockquote>;
     case 'heading-2':
       return (
         <h2
@@ -22,7 +28,7 @@ export const renderElement = ({
         >
           {children}
         </h2>
-      )
+      );
     case 'heading-3':
       return (
         <h3
@@ -32,21 +38,21 @@ export const renderElement = ({
         >
           {children}
         </h3>
-      )
+      );
     case 'code-block':
       return (
         <pre {...attributes} className="code-block">
           <code>{children}</code>
         </pre>
-      )
+      );
     case 'code-line':
-      return <div {...attributes}>{children}</div>
+      return <div {...attributes}>{children}</div>;
     case 'link':
       return (
         <a href={element.url} {...attributes}>
           {children}
         </a>
-      )
+      );
     default:
       return (
         <p
@@ -56,24 +62,23 @@ export const renderElement = ({
         >
           {children}
         </p>
-      )
+      );
   }
-}
-
+};
 
 export const renderLeaf = ({ attributes, children, leaf }: RenderLeafProps) => {
-  let el = children
+  let el = children;
 
   if (leaf.bold) {
-    el = <strong>{el}</strong>
+    el = <strong>{el}</strong>;
   }
 
   if (leaf.italic) {
-    el = <em>{el}</em>
+    el = <em>{el}</em>;
   }
 
   if (leaf.underline) {
-    el = <u>{el}</u>
+    el = <u>{el}</u>;
   }
 
   if (leaf.link) {
@@ -81,39 +86,40 @@ export const renderLeaf = ({ attributes, children, leaf }: RenderLeafProps) => {
       <a href={leaf.link} {...attributes}>
         {el}
       </a>
-    )
+    );
   }
 
-  return <span {...attributes}>{el}</span>
-}
+  return <span {...attributes}>{el}</span>;
+};
 
 interface ReadOnlySlateProps {
-  content: any
-  mode?: string
+  content: any;
+  mode?: string;
 }
-const ReadOnlySlate: React.FC<ReadOnlySlateProps> = ({ content, mode }) => {
-  const [load, setLoad] = useState(false)
-  const editor = useMemo(() => withReact(createEditor()), [])
-  const value = useMemo(() => content, [content])
 
-  const performUpdate = useCallback(async()=> {
-    setLoad(true)
-    await new Promise<void>((res)=> {
-      setTimeout(() => {
-          res()
-      }, 250);
-    })
-    setLoad(false)
-  }, [])
-  useEffect(()=> {
+const ReadOnlySlate: FC<ReadOnlySlateProps> = ({ content, mode }) => {
+  const [load, setLoad] = useState(false);
+  const editor = useMemo(() => withReact(createEditor()), []);
+  const value = useMemo(() => content, [content]);
 
-  
+  const performUpdate = useCallback(async () => {
+    setLoad(true);
+    try {
+      await new Promise<void>((res) => {
+        setTimeout(() => {
+          res();
+        }, 250);
+      });
+    } catch (error) {
+      console.log(error);
+    }
+    setLoad(false);
+  }, []);
+  useEffect(() => {
+    performUpdate();
+  }, [value]);
 
-
-    performUpdate()
-  }, [value])
-
-  if(load) return null
+  if (load) return null;
 
   return (
     <Slate editor={editor} value={value} onChange={() => {}}>
@@ -123,7 +129,7 @@ const ReadOnlySlate: React.FC<ReadOnlySlateProps> = ({ content, mode }) => {
         renderLeaf={renderLeaf}
       />
     </Slate>
-  )
-}
+  );
+};
 
 export default ReadOnlySlate;

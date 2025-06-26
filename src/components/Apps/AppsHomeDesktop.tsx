@@ -1,143 +1,165 @@
-import React, { useMemo, useState } from "react";
+import { useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
   AppCircleLabel,
   AppLibrarySubTitle,
   AppsContainer,
-  AppsParent,
-} from "./Apps-styles";
-import { Avatar, Box, ButtonBase, Input } from "@mui/material";
-import { Add } from "@mui/icons-material";
-import { getBaseApiReact, isMobile } from "../../App";
-import LogoSelected from "../../assets/svgs/LogoSelected.svg";
-import { executeEvent } from "../../utils/events";
-import { Spacer } from "../../common/Spacer";
-import { SortablePinnedApps } from "./SortablePinnedApps";
-import { extractComponents } from "../Chat/MessageDisplay";
+} from './Apps-styles';
+import { Box, ButtonBase, Input, useTheme } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import { executeEvent } from '../../utils/events';
+import { Spacer } from '../../common/Spacer';
+import { SortablePinnedApps } from './SortablePinnedApps';
+import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
-import { AppsPrivate } from "./AppsPrivate";
+import { AppsPrivate } from './AppsPrivate';
+import { useTranslation } from 'react-i18next';
+
 export const AppsHomeDesktop = ({
   setMode,
   myApp,
   myWebsite,
   availableQapps,
-  myName
+  myName,
+  myAddress,
 }) => {
-  const [qortalUrl, setQortalUrl] = useState('')
+  const [qortalUrl, setQortalUrl] = useState('');
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
-  const openQortalUrl = ()=> {
+  const openQortalUrl = () => {
     try {
-      if(!qortalUrl) return
+      if (!qortalUrl) return;
       const res = extractComponents(qortalUrl);
       if (res) {
         const { service, name, identifier, path } = res;
-        executeEvent("addTab", { data: { service, name, identifier, path } });
-        executeEvent("open-apps-mode", { });
-        setQortalUrl('qortal://')
+        executeEvent('addTab', { data: { service, name, identifier, path } });
+        executeEvent('open-apps-mode', {});
+        setQortalUrl('qortal://');
       }
     } catch (error) {
-      
+      console.log(error);
     }
-  }
+  };
+
   return (
     <>
-     <AppsContainer
-        sx={{
-        
-          justifyContent: "flex-start",
-        }}
-      >
-      <AppLibrarySubTitle
-        sx={{
-          fontSize: "30px",
-        }}
-      >
-        Apps Dashboard
-      </AppLibrarySubTitle>
-      </AppsContainer>
-      <Spacer height="20px" />
       <AppsContainer
         sx={{
-        
-          justifyContent: "flex-start",
-          
+          justifyContent: 'flex-start',
         }}
       >
-        <Box sx={{
-          display: 'flex',
-          gap: '20px',
-          alignItems: 'center',
-          backgroundColor: '#1f2023',
-          padding: '7px',
-          borderRadius: '20px',
-          width: '100%',
-          maxWidth: '500px'
-        }}>
-      <Input
-              id="standard-adornment-name"
-              value={qortalUrl}
-              onChange={(e) => {
-                setQortalUrl(e.target.value)
-              }}
-              disableUnderline
-              autoComplete='off'
-              autoCorrect='off'
-              placeholder="qortal://"
+        <AppLibrarySubTitle
+          sx={{
+            fontSize: '30px',
+          }}
+        >
+          {t('core:apps_dashboard', { postProcess: 'capitalizeFirstChar' })}
+        </AppLibrarySubTitle>
+      </AppsContainer>
+
+      <Spacer height="20px" />
+
+      <AppsContainer
+        sx={{
+          justifyContent: 'flex-start',
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor: theme.palette.background.paper,
+            borderRadius: '20px',
+            display: 'flex',
+            gap: '20px',
+            maxWidth: '500px',
+            padding: '7px',
+            width: '100%',
+          }}
+        >
+          <Input
+            id="standard-adornment-name"
+            value={qortalUrl}
+            onChange={(e) => {
+              setQortalUrl(e.target.value);
+            }}
+            disableUnderline
+            autoComplete="off"
+            autoCorrect="off"
+            placeholder="qortal://"
+            sx={{
+              borderRadius: '7px',
+              color: theme.palette.text.primary,
+              height: '35px',
+              width: '100%',
+              '& .MuiInput-input::placeholder': {
+                color: theme.palette.text.secondary,
+                fontSize: '20px',
+                fontStyle: 'normal',
+                fontWeight: 400,
+                lineHeight: '120%', // 24px
+                letterSpacing: '0.15px',
+                opacity: 1,
+              },
+              '&:focus': {
+                outline: 'none',
+              },
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && qortalUrl) {
+                openQortalUrl();
+              }
+            }}
+          />
+          <ButtonBase onClick={() => openQortalUrl()}>
+            <ArrowOutwardIcon
               sx={{
-                width: '100%',
-                color: 'white',
-                '& .MuiInput-input::placeholder': {
-                  color: 'rgba(84, 84, 84, 0.70) !important',
-                  fontSize: '20px',
-                  fontStyle: 'normal',
-                  fontWeight: 400,
-                  lineHeight: '120%', // 24px
-                  letterSpacing: '0.15px',
-                  opacity: 1
-                },
-                '&:focus': {
-                  outline: 'none',
-                },
-                // Add any additional styles for the input here
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && qortalUrl) {
-                  openQortalUrl();
-                }
+                color: qortalUrl
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary,
               }}
             />
-            <ButtonBase onClick={()=> openQortalUrl()}>
-              <ArrowOutwardIcon sx={{
-                color: qortalUrl ? 'white' : 'rgba(84, 84, 84, 0.70)'
-              }} />
-            </ButtonBase>
-            </Box>
-            </AppsContainer>
+          </ButtonBase>
+        </Box>
+      </AppsContainer>
+
       <Spacer height="45px" />
+
       <AppsContainer
         sx={{
-          gap: "50px",
-          justifyContent: "flex-start",
+          gap: '50px',
+          justifyContent: 'flex-start',
         }}
       >
         <ButtonBase
           onClick={() => {
-            setMode("library");
+            setMode('library');
           }}
         >
           <AppCircleContainer
             sx={{
-              gap: !isMobile ? "10px" : "5px",
+              gap: '10px',
             }}
           >
             <AppCircle>
-              <Add>+</Add>
+              <AddIcon />
             </AppCircle>
-            <AppCircleLabel>Library</AppCircleLabel>
+
+            <AppCircleLabel>
+              {t('core:library', { postProcess: 'capitalizeFirstChar' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
-          <AppsPrivate myName={myName} />
+
+        <AppsPrivate myName={myName} myAddress={myAddress} />
+
         <SortablePinnedApps
           isDesktop={true}
           availableQapps={availableQapps}

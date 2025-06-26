@@ -1,49 +1,46 @@
-import * as React from "react";
-import {
-  BottomNavigation,
-  BottomNavigationAction,
-  ButtonBase,
-  Typography,
-} from "@mui/material";
-import { Home, Groups, Message, ShowChart } from "@mui/icons-material";
-import Box from "@mui/material/Box";
-import BottomLogo from "../../assets/svgs/BottomLogo5.svg";
-import { CustomSvg } from "../../common/CustomSvg";
-import { WalletIcon } from "../../assets/Icons/WalletIcon";
-import { HubsIcon } from "../../assets/Icons/HubsIcon";
-import { TradingIcon } from "../../assets/Icons/TradingIcon";
-import { MessagingIcon } from "../../assets/Icons/MessagingIcon";
-import { HomeIcon } from "../../assets/Icons/HomeIcon";
-import { NotificationIcon2 } from "../../assets/Icons/NotificationIcon2";
-import { ChatIcon } from "../../assets/Icons/ChatIcon";
-import { ThreadsIcon } from "../../assets/Icons/ThreadsIcon";
-import { MembersIcon } from "../../assets/Icons/MembersIcon";
-import { AdminsIcon } from "../../assets/Icons/AdminsIcon";
+import { useState } from 'react';
+import { ButtonBase, Typography, useTheme } from '@mui/material';
+import Box from '@mui/material/Box';
+import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
+import { ChatIcon } from '../../assets/Icons/ChatIcon';
+import { ThreadsIcon } from '../../assets/Icons/ThreadsIcon';
+import { MembersIcon } from '../../assets/Icons/MembersIcon';
+import { AdminsIcon } from '../../assets/Icons/AdminsIcon';
 import LockIcon from '@mui/icons-material/Lock';
 import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
+import { useTranslation } from 'react-i18next';
 
-const IconWrapper = ({ children, label, color, selected, selectColor, customHeight }) => {
+const IconWrapper = ({
+  children,
+  label,
+  color,
+  selected,
+  selectColor,
+  customHeight,
+}) => {
   return (
     <Box
       sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: "5px",
-        flexDirection: "column",
-        height: customHeight ? customHeight : "65px",
-        width: customHeight ? customHeight :  "65px",
-        borderRadius: "50%",
-        backgroundColor: selected ? selectColor || "rgba(28, 29, 32, 1)" : "transparent",
+        alignItems: 'center',
+        backgroundColor: selected
+          ? selectColor || 'rgba(28, 29, 32, 1)'
+          : 'transparent',
+        borderRadius: '50%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '5px',
+        height: customHeight ? customHeight : '65px',
+        justifyContent: 'center',
+        width: customHeight ? customHeight : '65px',
       }}
     >
       {children}
       <Typography
         sx={{
-          fontFamily: "Inter",
-          fontSize: "10px",
-          fontWeight: 500,
           color: color,
+          fontFamily: 'Inter',
+          fontSize: '10px',
+          fontWeight: 500,
         }}
       >
         {label}
@@ -83,63 +80,88 @@ export const DesktopHeader = ({
   isChat,
   isForum,
   setGroupSection,
-  isPrivate
+  isPrivate,
 }) => {
-  const [value, setValue] = React.useState(0);
+  const [value, setValue] = useState(0);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+
   return (
     <Box
       sx={{
-        width: "100%",
-        display: "flex",
-        alignItems: "center",
-        height: "70px", // Footer height
+        alignItems: 'center',
+        display: 'flex',
+        height: '70px', // Footer height
+        justifyContent: 'space-between',
+        padding: '10px',
+        width: '100%',
         zIndex: 1,
-        justifyContent: "space-between",
-        padding: "10px",
       }}
     >
-      <Box sx={{
-        display: 'flex',
-        gap: '10px'
-      }}>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: '10px',
+        }}
+      >
         {isPrivate && (
-          <LockIcon sx={{
-            color: 'var(--green)'
-          }} />
+          <LockIcon
+            sx={{
+              color: theme.palette.other.positive,
+            }}
+          />
         )}
+
         {isPrivate === false && (
-          <NoEncryptionGmailerrorredIcon sx={{
-            color: 'var(--danger)'
-          }} />
+          <NoEncryptionGmailerrorredIcon
+            sx={{
+              color: theme.palette.other.danger,
+            }}
+          />
         )}
+
         <Typography
           sx={{
-            fontSize: "16px",
+            fontSize: '16px',
             fontWeight: 600,
           }}
         >
-          {selectedGroup?.groupId === '0' ? 'General' :selectedGroup?.groupName}
+          {selectedGroup?.groupId === '0'
+            ? t('core:general', { postProcess: 'capitalizeFirstChar' })
+            : selectedGroup?.groupName}
         </Typography>
       </Box>
+
       <Box
         sx={{
-          display: "flex",
-          gap: "20px",
-          alignItems: "center",
-          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile'
+          alignItems: 'center',
+          display: 'flex',
+          gap: '20px',
+          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile',
         }}
       >
-      
         <ButtonBase
           onClick={() => {
-            goToAnnouncements()
+            goToAnnouncements();
           }}
         >
           <IconWrapper
-            color={isAnnouncement ? "black" :"rgba(250, 250, 250, 0.5)"}
-            label="ANN"
+            color={
+              isAnnouncement
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
+            label={t('core:announcement', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={isAnnouncement}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <NotificationIcon2
@@ -147,10 +169,10 @@ export const DesktopHeader = ({
               width={20}
               color={
                 isUnread
-                  ? "var(--unread)"
+                  ? theme.palette.other.unread
                   : isAnnouncement
-                  ? "black"
-                  : "rgba(250, 250, 250, 0.5)"
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -158,14 +180,16 @@ export const DesktopHeader = ({
 
         <ButtonBase
           onClick={() => {
-            goToChat()
+            goToChat();
           }}
         >
           <IconWrapper
-            color={isChat ? "black" :"rgba(250, 250, 250, 0.5)"}
-            label="Chat"
+            color={
+              isChat ? theme.palette.text.primary : theme.palette.text.secondary
+            }
+            label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
             selected={isChat}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <ChatIcon
@@ -173,10 +197,10 @@ export const DesktopHeader = ({
               width={20}
               color={
                 isUnreadChat
-                  ? "var(--unread)"
+                  ? theme.palette.other.unread
                   : isChat
-                  ? "black"
-                  : "rgba(250, 250, 250, 0.5)"
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary
               }
             />
           </IconWrapper>
@@ -184,15 +208,20 @@ export const DesktopHeader = ({
 
         <ButtonBase
           onClick={() => {
-            setGroupSection("forum");
-          
+            setGroupSection('forum');
           }}
         >
           <IconWrapper
-            color={isForum ? 'black' : "rgba(250, 250, 250, 0.5)"}
-            label="Threads"
+            color={
+              isForum
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
+            label={t('core:thread_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={isForum}
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
             customHeight="55px"
           >
             <ThreadsIcon
@@ -200,55 +229,59 @@ export const DesktopHeader = ({
               width={20}
               color={
                 isForum
-                  ? "black"
-                  : "rgba(250, 250, 250, 0.5)"
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
               }
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
-            setOpenManageMembers(true)
-          
+            setOpenManageMembers(true);
           }}
         >
           <IconWrapper
-            color="rgba(250, 250, 250, 0.5)"
-            label="Members"
-            selected={false}
+            color={theme.palette.text.secondary}
             customHeight="55px"
+            label={t('core:member_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            selected={false}
           >
             <MembersIcon
+              color={theme.palette.text.secondary}
               height={25}
               width={20}
-              color={
-                isForum
-                  ? "white"
-                  : "rgba(250, 250, 250, 0.5)"
-              }
             />
           </IconWrapper>
         </ButtonBase>
+
         <ButtonBase
           onClick={() => {
-            setGroupSection("adminSpace");
-          
+            setGroupSection('adminSpace');
           }}
         >
           <IconWrapper
-            color={groupSection === 'adminSpace' ? 'black' : "rgba(250, 250, 250, 0.5)"}
-            label="Admins"
+            color={
+              groupSection === 'adminSpace'
+                ? theme.palette.text.primary
+                : theme.palette.text.secondary
+            }
+            label={t('core:admin_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={groupSection === 'adminSpace'}
             customHeight="55px"
-            selectColor="#09b6e8"
+            selectColor={theme.palette.action.selected}
           >
             <AdminsIcon
               height={25}
               width={20}
               color={
                 groupSection === 'adminSpace'
-                  ? "black"
-                  : "rgba(250, 250, 250, 0.5)"
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
               }
             />
           </IconWrapper>

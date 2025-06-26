@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist.zip
 dist-ssr
 *.local
 
@@ -24,3 +25,6 @@ dist-ssr
 *.sw?
 release-builds/
 .env
+
+# reports from scripts
+scripts/i18n_report*

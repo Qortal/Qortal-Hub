@@ -1,17 +1,17 @@
 import {
   IconButton,
   InputAdornment,
-  TextField,
   TextFieldProps,
-} from "@mui/material";
-import React, { useRef, useState } from "react";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveIcon from "@mui/icons-material/Remove";
+  useTheme,
+} from '@mui/material';
+import React, { useRef, useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import {
   removeTrailingZeros,
   setNumberWithinBounds,
-} from "./numberFunctions.ts";
-import { CustomInput } from "../App-styles.ts";
+} from './numberFunctions.ts';
+import { CustomInput } from '../styles/App-styles.ts';
 
 type eventType = React.ChangeEvent<HTMLInputElement>;
 type BoundedNumericTextFieldProps = {
@@ -37,18 +37,19 @@ export const BoundedNumericTextField = ({
   ...props
 }: BoundedNumericTextFieldProps) => {
   const [textFieldValue, setTextFieldValue] = useState<string>(
-    initialValue || ""
+    initialValue || ''
   );
   const ref = useRef<HTMLInputElement | null>(null);
 
   const stringIsEmpty = (value: string) => {
-    return value === "";
+    return value === '';
   };
+  const theme = useTheme();
   const isAllZerosNum = /^0*\.?0*$/;
   const isFloatNum = /^-?[0-9]*\.?[0-9]*$/;
   const isIntegerNum = /^-?[0-9]+$/;
   const skipMinMaxCheck = (value: string) => {
-    const lastIndexIsDecimal = value.charAt(value.length - 1) === ".";
+    const lastIndexIsDecimal = value.charAt(value.length - 1) === '.';
     const isEmpty = stringIsEmpty(value);
     const isAllZeros = isAllZerosNum.test(value);
     const isInteger = isIntegerNum.test(value);
@@ -69,7 +70,7 @@ export const BoundedNumericTextField = ({
 
   const getSigDigits = (number: string) => {
     if (isIntegerNum.test(number)) return 0;
-    const decimalSplit = number.split(".");
+    const decimalSplit = number.split('.');
     return decimalSplit[decimalSplit.length - 1].length;
   };
 
@@ -78,15 +79,16 @@ export const BoundedNumericTextField = ({
   };
 
   const filterTypes = (value: string) => {
-    if (allowDecimals === false) value = value.replace(".", "");
-    if (allowNegatives === false) value = value.replace("-", "");
+    if (allowDecimals === false) value = value.replace('.', '');
+    if (allowNegatives === false) value = value.replace('-', '');
     if (sigDigitsExceeded(value, maxSigDigits)) {
       value = value.substring(0, value.length - 1);
     }
     return value;
   };
+
   const filterValue = (value: string) => {
-    if (stringIsEmpty(value)) return "";
+    if (stringIsEmpty(value)) return '';
     value = filterTypes(value);
     if (isFloatNum.test(value)) {
       return setMinMaxValue(value);
@@ -109,8 +111,8 @@ export const BoundedNumericTextField = ({
 
   const formatValueOnBlur = (e: eventType) => {
     let value = e.target.value;
-    if (stringIsEmpty(value) || value === ".") {
-      setTextFieldValue("");
+    if (stringIsEmpty(value) || value === '.') {
+      setTextFieldValue('');
       return;
     }
 
@@ -120,6 +122,7 @@ export const BoundedNumericTextField = ({
 
     setTextFieldValue(value);
   };
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { onChange, ...noChangeProps } = { ...props };
   return (
@@ -129,23 +132,41 @@ export const BoundedNumericTextField = ({
         ...props?.InputProps,
         endAdornment: addIconButtons ? (
           <InputAdornment position="end">
-            <IconButton size="small" onClick={() => changeValueWithIncDecButton(1)}>
-              <AddIcon sx={{
-                color: 'white'
-              }} />{" "}
+            <IconButton
+              size="small"
+              onClick={() => changeValueWithIncDecButton(1)}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
+            >
+              <AddIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
             </IconButton>
-            <IconButton size="small" onClick={() => changeValueWithIncDecButton(-1)}>
-              <RemoveIcon sx={{
-                color: 'white'
-              }} />{" "}
+            <IconButton
+              size="small"
+              onClick={() => changeValueWithIncDecButton(-1)}
+              sx={{
+                bgcolor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+              }}
+            >
+              <RemoveIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
             </IconButton>
           </InputAdornment>
         ) : (
           <></>
         ),
       }}
-      onChange={e => listeners(e as eventType)}
-      onBlur={e => {
+      onChange={(e) => listeners(e as eventType)}
+      onBlur={(e) => {
         formatValueOnBlur(e as eventType);
       }}
       autoComplete="off"

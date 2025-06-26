@@ -1,315 +1,392 @@
-import {
-    AppBar,
-    Button,
-    Toolbar,
-    Typography,
-    Box,
-    TextField,
-    InputLabel,
-    ButtonBase,
-  } from "@mui/material";
-  import { styled } from "@mui/system";
-  
-  export const AppsParent = styled(Box)(({ theme }) => ({
-    display: "flex",
-      width: "100%",
-      flexDirection: "column",
-      height: "100%",
-      alignItems: "center",
-      overflow: 'auto',
-        // For WebKit-based browsers (Chrome, Safari, etc.)
-    "::-webkit-scrollbar": {
-        width: "0px", // Set the width to 0 to hide the scrollbar
-        height: "0px", // Set the height to 0 for horizontal scrollbar
-      },
-    
-      // For Firefox
-      scrollbarWidth: "none", // Hides the scrollbar in Firefox
-    
-      // Optional for better cross-browser consistency
-      "-ms-overflow-style": "none" // Hides scrollbar in IE and Edge
-  }));
-  export const AppsContainer = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "90%",
-    justifyContent: 'space-evenly',
-    gap: '24px',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    alignSelf: 'center'
-  
-  }));
-  export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "100%",
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  }));
-  export const AppsWidthLimiter = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "90%",
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-  }));
-  export const AppsSearchContainer = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "90%",
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#434343',
-    borderRadius: '8px',
-    padding: '0px 10px',
-    height: '36px'
-  }));
-  export const AppsSearchLeft = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "90%",
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    gap: '10px',
-    flexGrow: 1,
-    flexShrink: 0
-  }));
-  export const AppsSearchRight = styled(Box)(({ theme }) => ({
-    display: "flex",
-    width: "90%",
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    flexShrink: 1
-  }));
-  export const AppCircleContainer = styled(Box)(({ theme }) => ({
-    display: "flex",
-      flexDirection: "column",
-      gap: '5px',
-      alignItems: 'center',
-      width: '100%'
-  }));
-  export const Add = styled(Typography)(({ theme }) => ({
-    fontSize: '36px',
-    fontWeight: 500,
-    lineHeight: '43.57px',
-    textAlign: 'left'
-    
-  }));
-  export const AppCircleLabel = styled(Typography)(({ theme }) => ({
-    fontSize: '14px',
-    fontWeight: 500,
-    lineHeight: 1.2,
-    // whiteSpace: 'nowrap',   
-  overflow: 'hidden',     
-  textOverflow: 'ellipsis', 
+import { Typography, Box, ButtonBase } from '@mui/material';
+import { styled } from '@mui/system';
+
+export const AppsParent = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
+  msOverflowStyle: 'none', // Hides scrollbar in IE and Edge
+  overflow: 'auto',
+  scrollbarWidth: 'none', // Hides the scrollbar in Firefox
+  width: '100%',
+  // For WebKit-based browsers (Chrome, Safari, etc.)
+  '::-webkit-scrollbar': {
+    width: '0px', // Set the width to 0 to hide the scrollbar
+    height: '0px', // Set the height to 0 for horizontal scrollbar
+  },
+}));
+
+export const AppsContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'flex-start',
+  alignSelf: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '24px',
+  justifyContent: 'space-evenly',
+  width: '90%',
+}));
+
+export const AppsDesktopLibraryHeader = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  flexShrink: 0,
+  width: '100%',
+}));
+
+export const AppsDesktopLibraryBody = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  flexGrow: 1,
+  width: '100%',
+}));
+
+export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-start',
+  width: '100%',
+}));
+
+export const AppsWidthLimiter = styled(Box)(({ theme }) => ({
+  alignItems: 'flex-start',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'flex-start',
+  width: '90%',
+}));
+
+export const AppsSearchContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  borderRadius: '8px',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '36px',
+  justifyContent: 'space-between',
+  padding: '0px 10px',
+  width: '90%',
+}));
+
+export const AppsSearchLeft = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexGrow: 1,
+  flexShrink: 0,
+  gap: '10px',
+  justifyContent: 'flex-start',
+  width: '90%',
+}));
+
+export const AppsSearchRight = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexShrink: 1,
+  justifyContent: 'flex-end',
+  width: '90%',
+}));
+
+export const AppCircleContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '5px',
+  width: '100%',
+}));
+
+export const AppCircleLabel = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: '-webkit-box',
+  fontSize: '14px',
+  fontWeight: 500,
+  lineHeight: 1.2,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: '2',
   width: '120%',
-  '-webkit-line-clamp': '2',
-  '-webkit-box-orient': 'vertical',
-  'display': '-webkit-box',
-    
-  }));
-  export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
-    fontSize: '16px',
-    fontWeight: 500,
-    lineHeight: 1.2,
-  }));
-  export const AppCircle = styled(Box)(({ theme }) => ({
-    display: "flex",
-      width: "75px",
-      flexDirection: "column",
-      height: "75px",
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: '50%',
-      backgroundColor: "var(--apps-circle)",
-      border: '1px solid #FFFFFF'
-  }));
+}));
 
-  export const AppInfoSnippetContainer = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%'
-  }));
+export const AppLibrarySubTitle = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  fontSize: '16px',
+  fontWeight: 500,
+  lineHeight: 1.2,
+}));
 
-  export const AppInfoSnippetLeft = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    gap: '12px'
-  }));
-  export const AppInfoSnippetRight = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  }));
+export const AppCircle = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.surface,
+  borderColor:
+    theme.palette.mode === 'dark'
+      ? 'rgb(209, 209, 209)'
+      : 'rgba(41, 41, 43, 1)',
+  borderRadius: '50%',
+  borderStyle: 'solid',
+  borderWidth: '1px',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+  height: '75px',
+  justifyContent: 'center',
+  width: '75px',
+}));
 
-  export const AppDownloadButton = styled(ButtonBase)(({ theme }) => ({
-    backgroundColor: "#247C0E",
-    width: '101px',
-    height: '29px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: '25px',
-    alignSelf: 'center'
-  }));
+export const AppInfoSnippetContainer = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'space-between',
+  width: '100%',
+}));
 
-  export const AppDownloadButtonText = styled(Typography)(({ theme }) => ({
-    fontSize: '14px',
-    fontWeight: 500,
-    lineHeight: 1.2,
-  }));
+export const AppInfoSnippetLeft = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  gap: '12px',
+  justifyContent: 'flex-start',
+}));
 
-  export const AppPublishTagsContainer = styled(Box)(({theme})=> ({
-    gap: '10px',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-    width: '100%',
-    display: 'flex'
-  }))
+export const AppInfoSnippetRight = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'flex-end',
+}));
 
+export const AppDownloadButton = styled(ButtonBase)(({ theme }) => ({
+  alignItems: 'center',
+  alignSelf: 'center',
+  backgroundColor: theme.palette.background.default,
+  borderRadius: '25px',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '29px',
+  justifyContent: 'center',
+  width: '101px',
+}));
 
-  export const AppInfoSnippetMiddle = styled(Box)(({ theme }) => ({
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  }));
+export const AppDownloadButtonText = styled(Typography)({
+  fontSize: '14px',
+  fontWeight: 500,
+  lineHeight: 1.2,
+});
 
-  export const AppInfoAppName = styled(Typography)(({ theme }) => ({
-    fontSize: '16px',
-    fontWeight: 500,
-    lineHeight: 1.2,
-    textAlign: 'start'
-  }));
-  export const AppInfoUserName = styled(Typography)(({ theme }) => ({
-    fontSize: '13px',
-    fontWeight: 400,
-    lineHeight: 1.2,
-    color: '#8D8F93',
-    textAlign: 'start'
-  }));
+export const AppPublishTagsContainer = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '10px',
+  justifyContent: 'flex-start',
+  width: '100%',
+}));
 
+export const AppInfoSnippetMiddle = styled(Box)(({ theme }) => ({
+  alignItems: 'flex-start',
+  backgroundColor: theme.palette.background.default,
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  color: theme.palette.text.primary,
+}));
 
-  export const AppsNavBarParent = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    height: '60px',
-    backgroundColor: '#1F2023',
-    padding: '0px 10px',
-    position: "fixed",
-    bottom: 0,
-    zIndex: 1,
-  }));
+export const AppInfoAppName = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  fontSize: '16px',
+  fontWeight: 500,
+  lineHeight: 1.2,
+  textAlign: 'start',
+}));
 
-  export const AppsNavBarLeft = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    flexGrow: 1
-  }));
-  export const AppsNavBarRight = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  }));
+export const AppInfoUserName = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  fontSize: '13px',
+  fontWeight: 400,
+  lineHeight: 1.2,
+  textAlign: 'start',
+}));
 
-  export const TabParent = styled(Box)(({ theme }) => ({
-    height: '36px',
-    width: '36px',
-    backgroundColor: '#434343',
-    position: 'relative',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  }));
+export const AppsNavBarParent = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  bottom: 0,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '60px',
+  justifyContent: 'space-between',
+  padding: '0px 10px',
+  position: 'fixed',
+  width: '100%',
+  zIndex: 1,
+}));
 
-  export const PublishQAppCTAParent = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    backgroundColor: '#181C23'
-  }));
+export const AppsNavBarLeft = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexGrow: 1,
+  justifyContent: 'flex-start',
+}));
 
-  export const PublishQAppCTALeft = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  }));
-  export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  }));
+export const AppsNavBarRight = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'flex-end',
+}));
 
-  export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
-    width: '101px',
-    height: '29px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: '25px',
-    border: '1px solid #FFFFFF'
-  }));
-  export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
-    display: "flex",
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '60px',
-    height: '60px',
-    backgroundColor: '#4BBCFE'
-  }));
-  
-  export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
-    fontSize: '10px',
-    fontWeight: 400,
-    lineHeight: 1.2,
-    fontStyle: 'italic'
-  }));
+export const TabParent = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  borderRadius: '50%',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '36px',
+  justifyContent: 'center',
+  position: 'relative',
+  width: '36px',
+}));
 
-  export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
-    width: '101px',
-    height: '30px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: '5px',
-    backgroundColor: '#0091E1',
-    color: 'white',
-    fontWeight: 600,
-    fontSize: '10px'
-  }));
+export const PublishQAppCTAParent = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'space-between',
+  width: '100%',
+}));
 
+export const PublishQAppCTALeft = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'flex-start',
+}));
 
-  export const AppsCategoryInfo =  styled(Box)(({ theme }) => ({
-    display: "flex",
-    alignItems: 'center',
-    width: '100%',
-  }));
+export const PublishQAppCTARight = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  justifyContent: 'flex-end',
+}));
 
-  export const AppsCategoryInfoSub =  styled(Box)(({ theme }) => ({
-    display: "flex",
-    flexDirection: 'column',
-  }));
-  export const AppsCategoryInfoLabel =  styled(Typography)(({ theme }) => ({
-    fontSize: '12px',
-    fontWeight: 700,
-    lineHeight: 1.2,
-    color: '#8D8F93',
-  }));
-  export const AppsCategoryInfoValue =  styled(Typography)(({ theme }) => ({
-    fontSize: '12px',
-    fontWeight: 500,
-    lineHeight: 1.2,
-    color: '#8D8F93',
-  }));
-  export const AppsInfoDescription =  styled(Typography)(({ theme }) => ({
-    fontSize: '13px',
-    fontWeight: 300,
-    lineHeight: 1.2,
-    width: '90%',
-    textAlign: 'start'
-  }));
+export const PublishQAppCTAButton = styled(ButtonBase)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  borderColor: theme.palette.text.primary,
+  borderRadius: '25px',
+  borderStyle: 'solid',
+  borderWidth: '1px',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '29px',
+  justifyContent: 'center',
+  width: '101px',
+}));
+
+export const PublishQAppDotsBG = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  height: '80px',
+  justifyContent: 'center',
+  width: '60px',
+}));
+
+export const PublishQAppInfo = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  fontSize: '16px',
+  fontStyle: 'italic',
+  fontWeight: 400,
+  lineHeight: 1.2,
+}));
+
+export const PublishQAppChoseFile = styled(ButtonBase)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  borderRadius: '8px',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  fontSize: '16px',
+  fontWeight: 600,
+  height: '40px',
+  justifyContent: 'center',
+  width: '120px',
+  '&:hover': {
+    backgroundColor: 'action.hover',
+  },
+}));
+
+export const AppsCategoryInfo = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  width: '100%',
+}));
+
+export const AppsCategoryInfoSub = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexDirection: 'column',
+}));
+
+export const AppsCategoryInfoLabel = styled(Typography)(({ theme }) => ({
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  fontSize: '12px',
+  fontWeight: 700,
+  lineHeight: 1.2,
+}));
+
+export const AppsCategoryInfoValue = styled(Typography)(({ theme }) => ({
+  fontSize: '12px',
+  fontWeight: 500,
+  lineHeight: 1.2,
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+}));
+
+export const AppsInfoDescription = styled(Typography)(({ theme }) => ({
+  fontSize: '13px',
+  fontWeight: 300,
+  lineHeight: 1.2,
+  width: '90%',
+  textAlign: 'start',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+}));

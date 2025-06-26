@@ -1,29 +1,38 @@
-import React, { useContext, useEffect, useMemo, useState } from "react";
-import { useRecoilState, useSetRecoilState } from "recoil";
-import isEqual from "lodash/isEqual"; // Import deep comparison utility
+import { useContext, useEffect, useMemo, useState } from 'react';
+import isEqual from 'lodash/isEqual'; // TODO Import deep comparison utility
 import {
-  canSaveSettingToQdnAtom,
   hasSettingsChangedAtom,
   isUsingImportExportSettingsAtom,
   oldPinnedAppsAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
-} from "../../atoms/global";
-import { Box, Button, ButtonBase, Popover, Typography } from "@mui/material";
-import { objectToBase64 } from "../../qdn/encryption/group-encryption";
-import { MyContext } from "../../App";
-import { getFee } from "../../background";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { SaveIcon } from "../../assets/svgs/SaveIcon";
-import { IconWrapper } from "../Desktop/DesktopFooter";
-import { Spacer } from "../../common/Spacer";
-import { LoadingButton } from "@mui/lab";
-import { saveToLocalStorage } from "../Apps/AppsNavBar";
-import { decryptData, encryptData } from "../../qortalRequests/get";
-import { saveFileToDiskGeneric } from "../../utils/generateWallet/generateWallet";
-import { base64ToUint8Array, uint8ArrayToObject } from "../../backgroundFunctions/encryption";
-
+} from '../../atoms/global';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  Popover,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { objectToBase64 } from '../../qdn/encryption/group-encryption';
+import { QORTAL_APP_CONTEXT } from '../../App';
+import { getFee } from '../../background/background.ts';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { SaveIcon } from '../../assets/Icons/SaveIcon';
+import { IconWrapper } from '../Desktop/DesktopFooter';
+import { Spacer } from '../../common/Spacer';
+import { LoadingButton } from '@mui/lab';
+import { saveToLocalStorage } from '../Apps/AppsNavBarDesktop';
+import { decryptData, encryptData } from '../../qortal/get.ts';
+import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
+import {
+  base64ToUint8Array,
+  uint8ArrayToObject,
+} from '../../encryption/encryption.ts';
+import { useTranslation } from 'react-i18next';
+import { useAtom, useSetAtom } from 'jotai';
 
 export const handleImportClick = async () => {
   const fileInput = document.createElement('input');
@@ -53,27 +62,34 @@ export const handleImportClick = async () => {
     // Trigger the file input dialog
     fileInput.click();
   });
-
-}
+};
 
 export const Save = ({ isDesktop, disableWidth, myName }) => {
-  const [pinnedApps, setPinnedApps] = useRecoilState(sortablePinnedAppsAtom);
-  const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useRecoilState(
+  const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
+  const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useAtom(
     settingsQDNLastUpdatedAtom
   );
-  const [settingsLocalLastUpdated] = useRecoilState(
-    settingsLocalLastUpdatedAtom
+  const [settingsLocalLastUpdated] = useAtom(settingsLocalLastUpdatedAtom);
+  const setHasSettingsChangedAtom = useSetAtom(hasSettingsChangedAtom);
+  const [isUsingImportExportSettings, setIsUsingImportExportSettings] = useAtom(
+    isUsingImportExportSettingsAtom
   );
-  const setHasSettingsChangedAtom = useSetRecoilState(hasSettingsChangedAtom);
-  const [isUsingImportExportSettings, setIsUsingImportExportSettings] = useRecoilState(isUsingImportExportSettingsAtom);
 
-  const [canSave] = useRecoilState(canSaveSettingToQdnAtom);
   const [openSnack, setOpenSnack] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
-  const [oldPinnedApps, setOldPinnedApps] = useRecoilState(oldPinnedAppsAtom);
+  const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
+
   const [anchorEl, setAnchorEl] = useState(null);
-  const { show } = useContext(MyContext);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const hasChanged = useMemo(() => {
     const newChanges = {
@@ -104,8 +120,6 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
     settingsLocalLastUpdated,
   ]);
 
- 
-
   useEffect(() => {
     setHasSettingsChangedAtom(hasChanged);
   }, [hasChanged]);
@@ -124,7 +138,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
       const encryptData = await new Promise((res, rej) => {
         window
           .sendMessage(
-            "ENCRYPT_DATA",
+            'ENCRYPT_DATA',
             {
               data64,
             },
@@ -139,23 +153,25 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             }
           })
           .catch((error) => {
-            console.error("Failed qortalRequest", error);
+            console.error('Failed qortalRequest', error);
           });
       });
       if (encryptData && !encryptData?.error) {
-        const fee = await getFee("ARBITRARY");
+        const fee = await getFee('ARBITRARY');
 
         await show({
-          message:
-            "Would you like to publish your settings to QDN (encrypted) ?",
-          publishFee: fee.fee + " QORT",
+          message: t('core:message.generic.publish_qnd', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
         });
         const response = await new Promise((res, rej) => {
           window
-            .sendMessage("publishOnQDN", {
+            .sendMessage('publishOnQDN', {
               data: encryptData,
-              identifier: "ext_saved_settings",
-              service: "DOCUMENT_PRIVATE",
+              identifier: 'ext_saved_settings',
+              service: 'DOCUMENT_PRIVATE',
+              uploadType: 'base64',
             })
             .then((response) => {
               if (!response?.error) {
@@ -165,24 +181,35 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
               rej(response.error);
             })
             .catch((error) => {
-              rej(error.message || "An error occurred");
+              rej(
+                error.message ||
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+              );
             });
         });
         if (response?.identifier) {
           setOldPinnedApps(pinnedApps);
           setSettingsQdnLastUpdated(Date.now());
           setInfoSnack({
-            type: "success",
-            message: "Sucessfully published to QDN",
+            type: 'success',
+            message: t('core:message.success.published_qdn', {
+              postProcess: 'capitalizeFirstChar',
+            }),
           });
           setOpenSnack(true);
-          setAnchorEl(null)
+          setAnchorEl(null);
         }
       }
     } catch (error) {
       setInfoSnack({
-        type: "error",
-        message: error?.message || "Unable to save to QDN",
+        type: 'error',
+        message:
+          error?.message ||
+          t('core:message.error.save_qdn', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -196,369 +223,407 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
 
   const revertChanges = () => {
     setPinnedApps(oldPinnedApps);
-    saveToLocalStorage("ext_saved_settings", "sortablePinnedApps", null);
-    setAnchorEl(null)
+    saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', null);
+    setAnchorEl(null);
   };
 
   return (
     <>
-      <ButtonBase
-        onClick={handlePopupClick}
-        disabled={
-          // !hasChanged ||
-          // !canSave ||
-          isLoading 
-          // settingsQdnLastUpdated === -100
-        }
-      >
+      <ButtonBase onClick={handlePopupClick} disabled={isLoading}>
         {isDesktop ? (
           <IconWrapper
             disableWidth={disableWidth}
-            color="rgba(250, 250, 250, 0.5)"
-            label="Save"
+            label={t('core:action.save', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             selected={false}
+            color={
+              hasChanged && !isLoading
+                ? '#5EB049'
+                : theme.palette.text.secondary
+            }
           >
             <SaveIcon
               color={
-                settingsQdnLastUpdated === -100
-                  ? "#8F8F91"
-                  : hasChanged && !isLoading
-                  ? "#5EB049"
-                  : "#8F8F91"
+                hasChanged && !isLoading
+                  ? '#5EB049'
+                  : theme.palette.text.secondary
               }
             />
           </IconWrapper>
         ) : (
           <SaveIcon
             color={
-              settingsQdnLastUpdated === -100
-                ? "#8F8F91"
-                : hasChanged && !isLoading
-                ? "#5EB049"
-                : "#8F8F91"
+              hasChanged && !isLoading
+                ? '#5EB049'
+                : theme.palette.text.secondary
             }
           />
         )}
       </ButtonBase>
+
       <Popover
         open={!!anchorEl}
         anchorEl={anchorEl}
         onClose={() => setAnchorEl(null)} // Close popover on click outside
         anchorOrigin={{
-          vertical: "bottom",
-          horizontal: "center",
+          vertical: 'bottom',
+          horizontal: 'center',
         }}
         transformOrigin={{
-          vertical: "top",
-          horizontal: "center",
+          vertical: 'top',
+          horizontal: 'center',
         }}
         sx={{
-          width: "300px",
-          maxWidth: "90%",
-          maxHeight: "80%",
-          overflow: "auto",
+          width: '300px',
+          maxWidth: '90%',
+          maxHeight: '80%',
+          overflow: 'auto',
         }}
       >
         {isUsingImportExportSettings && (
           <Box
-          sx={{
-            padding: "15px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-            width: '100%'
-          }}
-        >
-          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1,
+              padding: '15px',
+              width: '100%',
+            }}
+          >
+            <Box
               sx={{
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
+                alignItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                width: '100%',
               }}
             >
               <Typography
                 sx={{
-                  fontSize: "14px",
+                  fontSize: '14px',
                 }}
               >
-                You are using the export/import way of saving settings.
+                {t('core:message.generic.settings', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
+
               <Spacer height="40px" />
+
               <Button
-                  size="small"
-                  onClick={()=> {
-                    saveToLocalStorage("ext_saved_settings_import_export", "sortablePinnedApps", null, true);
-                    setIsUsingImportExportSettings(false)
-                  }}
-                  variant="contained"
-                  sx={{
-                    backgroundColor: "var(--danger)",
-                    color: "black",
-                    fontWeight: 'bold',
-                    opacity: 0.7,
-                    "&:hover": {
-                      backgroundColor: "var(--danger)",
-                      color: "black",
-                      opacity: 1,
-                    },
-                  }}
-                >
-                  Use QDN saving
-                </Button>
-              </Box>
-        </Box>
+                size="small"
+                onClick={() => {
+                  saveToLocalStorage(
+                    'ext_saved_settings_import_export',
+                    'sortablePinnedApps',
+                    null,
+                    true
+                  );
+                  setIsUsingImportExportSettings(false);
+                }}
+                variant="contained"
+                sx={{
+                  backgroundColor: theme.palette.other.danger,
+                  color: 'black',
+                  fontWeight: 'bold',
+                  opacity: 0.7,
+                  '&:hover': {
+                    backgroundColor: theme.palette.other.danger,
+                    color: 'black',
+                    opacity: 1,
+                  },
+                }}
+              >
+                {t('core:message.generic.qdn', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            </Box>
+          </Box>
         )}
         {!isUsingImportExportSettings && (
-            <Box
+          <Box
             sx={{
-              padding: "15px",
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               gap: 1,
-              width: '100%'
+              padding: '15px',
+              width: '100%',
             }}
           >
             {!myName ? (
               <Box
-              sx={{
-                width: "100%",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-              }}
-            >
-              <Typography
                 sx={{
-                  fontSize: "14px",
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  width: '100%',
                 }}
               >
-                You need a registered Qortal name to save your pinned apps to QDN.
-              </Typography>
+                <Typography
+                  sx={{
+                    fontSize: '14px',
+                  }}
+                >
+                  {t('core:message.generic.register_name', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
               </Box>
             ) : (
               <>
-                 {hasChanged && (
-              <Box
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "14px",
-                  }}
-                >
-                  You have unsaved changes to your pinned apps. Save them to QDN.
-                </Typography>
-                <Spacer height="10px" />
-                <LoadingButton
-                  sx={{
-                    backgroundColor: "var(--green)",
-                    color: "black",
-                    opacity: 0.7,
-                    fontWeight: 'bold',
-                    "&:hover": {
-                      backgroundColor: "var(--green)",
-                      color: "black",
-                      opacity: 1,
-                    },
-                  }}
-                  size="small"
-                  loading={isLoading}
-                  onClick={saveToQdn}
-                  variant="contained"
-                >
-                  Save to QDN
-                </LoadingButton>
-                <Spacer height="20px" />
-                {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated > 0 && (
-                  <>
+                {hasChanged && (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                    }}
+                  >
                     <Typography
                       sx={{
-                        fontSize: "14px",
+                        fontSize: '14px',
                       }}
                     >
-                      Don't like your current local changes? Would you like to
-                      reset to your saved QDN pinned apps?
+                      {t('core:message.generic.unsaved_changes', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
+
                     <Spacer height="10px" />
+
                     <LoadingButton
-                      size="small"
-                      loading={isLoading}
-                      onClick={revertChanges}
-                      variant="contained"
                       sx={{
-                        backgroundColor: "var(--danger)",
-                        color: "black",
-                        fontWeight: 'bold',
+                        backgroundColor: theme.palette.other.positive,
+                        color: 'black',
                         opacity: 0.7,
-                        "&:hover": {
-                          backgroundColor: "var(--danger)",
-                          color: "black",
+                        fontWeight: 'bold',
+                        '&:hover': {
+                          backgroundColor: theme.palette.other.positive,
+                          color: 'black',
                           opacity: 1,
                         },
                       }}
-                    >
-                      Revert to QDN
-                    </LoadingButton>
-                  </>
-                )}
-                {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated === 0 && (
-                  <>
-                    <Typography
-                      sx={{
-                        fontSize: "14px",
-                      }}
-                    >
-                      Don't like your current local changes? Would you like to
-                      reset to the default pinned apps?
-                    </Typography>
-                    <Spacer height="10px" />
-                    <LoadingButton
+                      size="small"
                       loading={isLoading}
-                      onClick={revertChanges}
+                      onClick={saveToQdn}
                       variant="contained"
                     >
-                      Revert to default
+                      {t('core:action.save_qdn', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </LoadingButton>
-                  </>
+                    <Spacer height="20px" />
+                    {!isNaN(settingsQdnLastUpdated) &&
+                      settingsQdnLastUpdated > 0 && (
+                        <>
+                          <Typography
+                            sx={{
+                              fontSize: '14px',
+                            }}
+                          >
+                            {t('core:message.question.reset_qdn', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </Typography>
+                          <Spacer height="10px" />
+                          <LoadingButton
+                            size="small"
+                            loading={isLoading}
+                            onClick={revertChanges}
+                            variant="contained"
+                            sx={{
+                              backgroundColor: theme.palette.other.danger,
+                              color: 'black',
+                              fontWeight: 'bold',
+                              opacity: 0.7,
+                              '&:hover': {
+                                backgroundColor: theme.palette.other.danger,
+                                color: 'black',
+                                opacity: 1,
+                              },
+                            }}
+                          >
+                            {t('core:message.generic.revert_qdn', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </LoadingButton>
+                        </>
+                      )}
+                    {!isNaN(settingsQdnLastUpdated) &&
+                      settingsQdnLastUpdated === 0 && (
+                        <>
+                          <Typography
+                            sx={{
+                              fontSize: '14px',
+                            }}
+                          >
+                            {t('core:message.question.reset_pinned', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </Typography>
+                          <Spacer height="10px" />
+                          <LoadingButton
+                            loading={isLoading}
+                            onClick={revertChanges}
+                            variant="contained"
+                          >
+                            {t('core:message.generic.revert_default', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </LoadingButton>
+                        </>
+                      )}
+                  </Box>
                 )}
-              </Box>
-            )}
-            {!isNaN(settingsQdnLastUpdated) && settingsQdnLastUpdated === -100 && isUsingImportExportSettings !== true && (
-              <Box
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "14px",
-                  }}
-                >
-                  The app was unable to download your existing QDN-saved pinned
-                  apps. Would you like to overwrite those changes?
-                </Typography>
-                <Spacer height="10px" />
-                <LoadingButton
-                  size="small"
-                  loading={isLoading}
-                  onClick={saveToQdn}
-                  variant="contained"
-                  sx={{
-                    backgroundColor: "var(--danger)",
-                    color: "black",
-                    fontWeight: 'bold',
-                    opacity: 0.7,
-                    "&:hover": {
-                      backgroundColor: "var(--danger)",
-                      color: "black",
-                      opacity: 1,
-                    },
-                  }}
-                >
-                  Overwrite to QDN
-                </LoadingButton>
-              </Box>
-            )}
-             {!hasChanged && (
-              <Box
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: "14px",
-                  }}
-                >
-                  You currently do not have any changes to your pinned apps
-                </Typography>
-                
-              </Box>
-            )}
+                {!isNaN(settingsQdnLastUpdated) &&
+                  settingsQdnLastUpdated === -100 &&
+                  isUsingImportExportSettings !== true && (
+                    <Box
+                      sx={{
+                        width: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          fontSize: '14px',
+                        }}
+                      >
+                        {t('core:message.question.overwrite_changes', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                      <Spacer height="10px" />
+                      <LoadingButton
+                        size="small"
+                        loading={isLoading}
+                        onClick={saveToQdn}
+                        variant="contained"
+                        sx={{
+                          backgroundColor: theme.palette.other.danger,
+                          color: 'black',
+                          fontWeight: 'bold',
+                          opacity: 0.7,
+                          '&:hover': {
+                            backgroundColor: theme.palette.other.danger,
+                            color: 'black',
+                            opacity: 1,
+                          },
+                        }}
+                      >
+                        {t('core:message.generic.overwrite_qdn', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
+                    </Box>
+                  )}
+                {!hasChanged && (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '14px',
+                      }}
+                    >
+                      {t('core:message.generic.no_pinned_changes', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                  </Box>
+                )}
               </>
             )}
-        
           </Box>
         )}
-              <Box
+        <Box
+          sx={{
+            padding: '15px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1,
+            width: '100%',
+          }}
+        >
+          <Box
             sx={{
-              padding: "15px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 1,
-              width: '100%'
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'flex-end',
+              width: '100%',
             }}
           >
-       <Box sx={{
-          display: 'flex',
-          gap: '10px',
-          justifyContent: 'flex-end',
-          width: '100%'
-         }}>
-          <ButtonBase  onClick={async () => {
-                      try {
-                        const fileContent = await handleImportClick();
-                        const decryptedData = await decryptData({
-                          encryptedData: fileContent,
-                        });
-                        const decryptToUnit8ArraySubject =
-                          base64ToUint8Array(decryptedData);
-                        const responseData = uint8ArrayToObject(
-                          decryptToUnit8ArraySubject
-                        );
-                        if(Array.isArray(responseData)){
-                          saveToLocalStorage("ext_saved_settings_import_export", "sortablePinnedApps", responseData, {
-                            isUsingImportExport: true
-                          });
-                          setPinnedApps(responseData)
-                          setOldPinnedApps(responseData)
-                          setIsUsingImportExportSettings(true)
-                        }
-                     
-                      } catch (error) {
-                        console.log("error", error);
+            <ButtonBase
+              onClick={async () => {
+                try {
+                  const fileContent = await handleImportClick();
+                  const decryptedData = await decryptData({
+                    encryptedData: fileContent,
+                  });
+                  const decryptToUnit8ArraySubject =
+                    base64ToUint8Array(decryptedData);
+                  const responseData = uint8ArrayToObject(
+                    decryptToUnit8ArraySubject
+                  );
+                  if (Array.isArray(responseData)) {
+                    saveToLocalStorage(
+                      'ext_saved_settings_import_export',
+                      'sortablePinnedApps',
+                      responseData,
+                      {
+                        isUsingImportExport: true,
                       }
-                    }}>
-          
-            Import
-          </ButtonBase>
-          <ButtonBase  onClick={async () => {
-                      try {
-                        const data64 = await objectToBase64(pinnedApps);
-  
-                        const encryptedData = await encryptData({
-                          data64,
-                        });
-                        const blob = new Blob([encryptedData], {
-                          type: "text/plain",
-                        });
-  
-                        const timestamp = new Date()
-                          .toISOString()
-                          .replace(/:/g, "-"); // Safe timestamp for filenames
-                        const filename = `qortal-new-ui-backup-settings-${timestamp}.txt`;
-                        await saveFileToDiskGeneric(blob, filename)
-                        
-                      } catch (error) {
-                        console.log('error', error)
-                      }
-                    }}>
-            Export
+                    );
+                    setPinnedApps(responseData);
+                    setOldPinnedApps(responseData);
+                    setIsUsingImportExportSettings(true);
+                  }
+                } catch (error) {
+                  console.log('error', error);
+                }
+              }}
+            >
+              {t('core:action.import', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </ButtonBase>
-         </Box>
-         </Box>
+
+            <ButtonBase
+              onClick={async () => {
+                try {
+                  const data64 = await objectToBase64(pinnedApps);
+
+                  const encryptedData = await encryptData({
+                    data64,
+                  });
+                  const blob = new Blob([encryptedData], {
+                    type: 'text/plain',
+                  });
+
+                  const timestamp = new Date().toISOString().replace(/:/g, '-'); // Safe timestamp for filenames
+                  const filename = `qortal-new-ui-backup-settings-${timestamp}.txt`;
+                  await saveFileToDiskGeneric(blob, filename);
+                } catch (error) {
+                  console.log('error', error);
+                }
+              }}
+            >
+              {t('core:action.export', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </ButtonBase>
+          </Box>
+        </Box>
       </Popover>
       <CustomizedSnackbars
         duration={3500}

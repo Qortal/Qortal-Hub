@@ -1,23 +1,25 @@
-import React, {
-  useCallback,
-  useState,
-  useEffect,
-  useRef,
-  useMemo,
-} from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { MessageItem } from "./MessageItem";
-import { subscribeToEvent, unsubscribeFromEvent } from "../../utils/events";
-import { useInView } from "react-intersection-observer";
-import { Box, Typography } from "@mui/material";
-import { ChatOptions } from "./ChatOptions";
-import ErrorBoundary from "../../common/ErrorBoundary";
+import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { MessageItem } from './MessageItem';
+import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { Box, Button, Typography, useTheme } from '@mui/material';
+import { ChatOptions } from './ChatOptions';
+import ErrorBoundary from '../../common/ErrorBoundary';
+import { useTranslation } from 'react-i18next';
+
+type ReactionItem = {
+  sender: string;
+  senderName?: string;
+};
+
+export type ReactionsMap = {
+  [reactionType: string]: ReactionItem[];
+};
 
 export const ChatList = ({
   initialMessages,
   myAddress,
   tempMessages,
-  chatId,
   onReply,
   onEdit,
   handleReaction,
@@ -29,9 +31,9 @@ export const ChatList = ({
   enableMentions,
   openQManager,
   hasSecretKey,
-  isPrivate
+  isPrivate,
 }) => {
-  const parentRef = useRef();
+  const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
@@ -42,33 +44,32 @@ export const ChatList = ({
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
-    getItemKey: (index) => messages[index]?.tempSignature || messages[index].signature,
+    getItemKey: (index) =>
+      messages[index]?.tempSignature || messages[index].signature,
     getScrollElement: () => parentRef?.current,
     estimateSize: useCallback(() => 80, []), // Provide an estimated height of items, adjust this as needed
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
   });
 
-  const isAtBottom = useMemo(()=> {
+  const isAtBottom = useMemo(() => {
     if (parentRef.current && rowVirtualizer?.isScrolling !== undefined) {
       const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
-   return atBottom
-  }
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
+      return atBottom;
+    }
 
-  return false
-
-  }, [rowVirtualizer?.isScrolling])
+    return false;
+  }, [rowVirtualizer?.isScrolling]);
 
   useEffect(() => {
     if (!parentRef.current || rowVirtualizer?.isScrolling === undefined) return;
-    if(isAtBottom){
+    if (isAtBottom) {
       if (scrollingIntervalRef.current) {
         clearTimeout(scrollingIntervalRef.current);
       }
       setShowScrollDownButton(false);
       return;
-    } else
-    if (rowVirtualizer?.isScrolling) {
+    } else if (rowVirtualizer?.isScrolling) {
       if (scrollingIntervalRef.current) {
         clearTimeout(scrollingIntervalRef.current);
       }
@@ -108,7 +109,13 @@ export const ChatList = ({
 
     setTimeout(() => {
       const hasUnreadMessages = totalMessages.some(
-        (msg) => msg.unread && !msg?.chatReference && !msg?.isTemp && (!msg?.chatReference && msg?.timestamp > lastSeenUnreadMessageTimestamp.current || 0)
+        (msg) =>
+          msg.unread &&
+          !msg?.chatReference &&
+          !msg?.isTemp &&
+          ((!msg?.chatReference &&
+            msg?.timestamp > lastSeenUnreadMessageTimestamp.current) ||
+            0)
       );
       if (parentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
@@ -136,9 +143,9 @@ export const ChatList = ({
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
       if (divideIndex) {
-        rowVirtualizer.scrollToIndex(divideIndex, { align: "start" });
+        rowVirtualizer.scrollToIndex(divideIndex, { align: 'start' });
       } else {
-        rowVirtualizer.scrollToIndex(index, { align: "end" });
+        rowVirtualizer.scrollToIndex(index, { align: 'end' });
       }
     }
     handleMessageSeen();
@@ -152,7 +159,7 @@ export const ChatList = ({
       }))
     );
     setShowScrollButton(false);
-    lastSeenUnreadMessageTimestamp.current = Date.now()
+    lastSeenUnreadMessageTimestamp.current = Date.now();
   }, []);
 
   const sentNewMessageGroupFunc = useCallback(() => {
@@ -166,9 +173,9 @@ export const ChatList = ({
   }, [messages]);
 
   useEffect(() => {
-    subscribeToEvent("sent-new-message-group", sentNewMessageGroupFunc);
+    subscribeToEvent('sent-new-message-group', sentNewMessageGroupFunc);
     return () => {
-      unsubscribeFromEvent("sent-new-message-group", sentNewMessageGroupFunc);
+      unsubscribeFromEvent('sent-new-message-group', sentNewMessageGroupFunc);
     };
   }, [sentNewMessageGroupFunc]);
 
@@ -181,57 +188,65 @@ export const ChatList = ({
   const goToMessage = useCallback((idx) => {
     rowVirtualizer.scrollToIndex(idx);
   }, []);
+
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+
   return (
     <Box
       sx={{
-        display: "flex",
-        width: "100%",
-        height: "100%",
+        display: 'flex',
+        height: '100%',
+        width: '100%',
       }}
     >
-      <div
+      <Box
         style={{
-          height: "100%",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-          width: "100%",
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          position: 'relative',
+          width: '100%',
         }}
       >
-        <div
+        <Box
           ref={parentRef}
-          className="List"
           style={{
+            display: 'flex',
             flexGrow: 1,
-            overflow: "auto",
-            position: "relative",
-            display: "flex",
-            height: "0px",
+            height: '0px',
+            overflow: 'auto',
+            position: 'relative',
           }}
         >
-          <div
-            style={{
+          <Box
+            sx={{
               height: rowVirtualizer.getTotalSize(),
-              width: "100%",
+              width: '100%',
             }}
           >
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
+            <Box
+              sx={{
                 left: 0,
-                width: "100%",
+                position: 'absolute',
+                top: 0,
+                width: '100%',
               }}
             >
-            
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const index = virtualRow.index;
                 let message = messages[index] || null; // Safeguard against undefined
                 let replyIndex = -1;
                 let reply = null;
-                let reactions = null;
+                let reactions: ReactionsMap | null = null;
                 let isUpdating = false;
-              
+
                 try {
                   // Safeguard for message existence
                   if (message) {
@@ -239,16 +254,19 @@ export const ChatList = ({
                     replyIndex = messages.findIndex(
                       (msg) => msg?.signature === message?.repliedTo
                     );
-              
+
                     if (message?.repliedTo && replyIndex !== -1) {
                       reply = { ...(messages[replyIndex] || {}) };
                       if (chatReferences?.[reply?.signature]?.edit) {
-                        reply.decryptedData = chatReferences[reply?.signature]?.edit;
-                        reply.text = chatReferences[reply?.signature]?.edit?.message;
-                        reply.editTimestamp = chatReferences[reply?.signature]?.edit?.timestamp
+                        reply.decryptedData =
+                          chatReferences[reply?.signature]?.edit;
+                        reply.text =
+                          chatReferences[reply?.signature]?.edit?.message;
+                        reply.editTimestamp =
+                          chatReferences[reply?.signature]?.edit?.timestamp;
                       }
                     }
-              
+
                     // GroupDirectId logic
                     if (message?.message && message?.groupDirectId) {
                       replyIndex = messages.findIndex(
@@ -264,24 +282,26 @@ export const ChatList = ({
                         status: message?.status,
                       };
                     }
-              
+
                     // Check for reactions and edits
                     if (chatReferences?.[message.signature]) {
-                      reactions = chatReferences[message.signature]?.reactions || null;
-              
-                      if (chatReferences[message.signature]?.edit?.message && message?.text) {
-                        message.text = chatReferences[message.signature]?.edit?.message;
-                        message.isEdit = true
-                        message.editTimestamp = chatReferences[message.signature]?.edit?.timestamp
+                      reactions =
+                        chatReferences[message.signature]?.reactions || null;
+
+                      if (chatReferences[message.signature]?.edit) {
+                        message.text =
+                          chatReferences[message.signature]?.edit?.message;
+                        message.messageText =
+                          chatReferences[message.signature]?.edit?.messageText;
+                        message.images =
+                          chatReferences[message.signature]?.edit?.images;
+
+                        message.isEdit = true;
+                        message.editTimestamp =
+                          chatReferences[message.signature]?.edit?.timestamp;
                       }
-                      if (chatReferences[message.signature]?.edit?.messageText && message?.messageText) {
-                        message.messageText = chatReferences[message.signature]?.edit?.messageText;
-                        message.isEdit = true
-                        message.editTimestamp = chatReferences[message.signature]?.edit?.timestamp
-                      }
-                    
                     }
-              
+
                     // Check if message is updating
                     if (
                       tempChatReferences?.some(
@@ -292,138 +312,154 @@ export const ChatList = ({
                     }
                   }
                 } catch (error) {
-                  console.error("Error processing message:", error, { index, message });
+                  console.error('Error processing message:', error, {
+                    index,
+                    message,
+                  });
                   // Gracefully handle the error by providing fallback data
                   message = null;
                   reply = null;
                   reactions = null;
                 }
-                 // Render fallback if message is null
+                // Render fallback if message is null
                 if (!message) {
-                    return (
-                      <div
-                        key={virtualRow.index}
-                        style={{
-                          position: "absolute",
-                          top: 0,
-                          left: "50%",
-                          transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
-                          width: "100%",
-                          padding: "10px 0",
-                          display: "flex",
-                          alignItems: "center",
-                          flexDirection: "column",
-                          gap: "5px",
-                        }}
-                      >
-                        <Typography>Error loading message.</Typography>
-                      </div>
-                    );
-                  }
+                  return (
+                    <Box
+                      key={virtualRow.index}
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        left: '50%',
+                        padding: '10px 0',
+                        position: 'absolute',
+                        top: 0,
+                        transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
+                        width: '100%',
+                      }}
+                    >
+                      <Typography>
+                        {t('core:message.error.message_loading', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  );
+                }
 
                 return (
-                  <div
+                  <Box
                     data-index={virtualRow.index} //needed for dynamic row height measurement
                     ref={rowVirtualizer.measureElement} //measure dynamic row height
                     key={message.signature}
-                    style={{
-                      position: "absolute",
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '5px',
+                      left: '50%', // Move to the center horizontally
+                      overscrollBehavior: 'none',
+                      padding: '10px 0',
+                      position: 'absolute',
                       top: 0,
-                      left: "50%", // Move to the center horizontally
                       transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                      width: "100%", // Control width (90% of the parent)
-                      padding: "10px 0",
-                      display: "flex",
-                      alignItems: "center",
-                      overscrollBehavior: "none",
-                      flexDirection: "column",
-                      gap: "5px",
+                      width: '100%', // Control width (90% of the parent)
                     }}
                   >
-                      <ErrorBoundary
+                    <ErrorBoundary
                       fallback={
                         <Typography>
-                          Error loading content: Invalid Data
+                          {t('group:message.generic.invalid_data', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                         </Typography>
                       }
                     >
-                    <MessageItem
-                      isLast={index === messages.length - 1}
-                      lastSignature={lastSignature}
-                      message={message}
-                      onSeen={handleMessageSeen}
-                      isTemp={!!message?.isTemp}
-                      myAddress={myAddress}
-                      onReply={onReply}
-                      onEdit={onEdit}
-                      reply={reply}
-                      replyIndex={replyIndex}
-                      scrollToItem={goToMessage}
-                      handleReaction={handleReaction}
-                      reactions={reactions}
-                      isUpdating={isUpdating}
-                      isPrivate={isPrivate}
-            
-                    />
-                     </ErrorBoundary>
-                  </div>
+                      <MessageItem
+                        key={message.signature}
+                        handleReaction={handleReaction}
+                        isLast={index === messages.length - 1}
+                        isPrivate={isPrivate}
+                        isTemp={!!message?.isTemp}
+                        isUpdating={isUpdating}
+                        lastSignature={lastSignature}
+                        message={message}
+                        myAddress={myAddress}
+                        onEdit={onEdit}
+                        onReply={onReply}
+                        onSeen={handleMessageSeen}
+                        reactions={reactions}
+                        reply={reply}
+                        replyIndex={replyIndex}
+                        scrollToItem={goToMessage}
+                      />
+                    </ErrorBoundary>
+                  </Box>
                 );
               })}
-             
-            </div>
-          </div>
-        </div>
+            </Box>
+          </Box>
+        </Box>
+
         {showScrollButton && (
-          <button
+          <Button
             onClick={() => scrollToBottom()}
-            style={{
+            sx={{
+              backgroundColor: theme.palette.other.unread,
+              border: 'none',
+              borderRadius: '20px',
               bottom: 20,
-              position: "absolute",
+              color: theme.palette.text.primary,
+              cursor: 'pointer',
+              outline: 'none',
+              padding: '10px 20px',
+              position: 'absolute',
               right: 20,
-              backgroundColor: "var(--unread)",
-              color: "black",
-              padding: "10px 20px",
-              borderRadius: "20px",
-              cursor: "pointer",
               zIndex: 10,
-              border: "none",
-              outline: "none",
             }}
           >
-            Scroll to Unread Messages
-          </button>
+            {t('group:action.scroll_unread_messages', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
         )}
+
         {showScrollDownButton && !showScrollButton && (
-          <button
+          <Button
             onClick={() => scrollToBottom()}
-            style={{
+            sx={{
+              backgroundColor: theme.palette.background.paper,
+              border: 'none',
+              borderRadius: '20px',
               bottom: 20,
-              position: "absolute",
+              color: theme.palette.text.primary,
+              cursor: 'pointer',
+              fontSize: '16px',
+              outline: `1px solid ${theme.palette.primary.light}`,
+              padding: '10px 20px',
+              position: 'absolute',
               right: 20,
-              backgroundColor: "var(--Mail-Background)",
-              color: "white",
-              padding: "10px 20px",
-              borderRadius: "20px",
-              cursor: "pointer",
+              textTransform: 'none',
               zIndex: 10,
-              border: "none",
-              outline: "none",
-              fontSize: "16px",
             }}
           >
-            Scroll to bottom
-          </button>
+            {t('group:action.scroll_bottom', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
         )}
-      </div>
+      </Box>
+
       {enableMentions && (hasSecretKey || isPrivate === false) && (
         <ChatOptions
-        openQManager={openQManager}
-          messages={messages}
           goToMessage={goToMessage}
-          members={members}
-          myName={myName}
-          selectedGroup={selectedGroup}
           isPrivate={isPrivate}
+          members={members}
+          messages={messages}
+          myName={myName}
+          openQManager={openQManager}
+          selectedGroup={selectedGroup}
         />
       )}
     </Box>

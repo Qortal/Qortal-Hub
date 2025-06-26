@@ -1,30 +1,30 @@
-import React from 'react'
-import { Box, Modal, useTheme } from '@mui/material'
-import { isMobile } from '../../../App'
+import { FC } from 'react';
+import { Box, Modal, useTheme } from '@mui/material';
 
 interface MyModalProps {
-  open: boolean
-  onClose?: () => void
-  onSubmit?: (obj: any) => Promise<void>
-  children: any
-  customStyles?: any
+  open: boolean;
+  onClose?: () => void;
+  onSubmit?: (obj: any) => Promise<void>;
+  children: any;
+  customStyles?: any;
 }
 
-export const ReusableModal: React.FC<MyModalProps> = ({
+export const ReusableModal: FC<MyModalProps> = ({
   open,
   onClose,
   onSubmit,
   children,
-  customStyles = {}
+  customStyles = {},
 }) => {
-  const theme = useTheme()
+  const theme = useTheme();
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       aria-labelledby="modal-title"
       aria-describedby="modal-description"
-      componentsProps={{
+      slotProps={{
         backdrop: {
           style: {
             backdropFilter: 'blur(3px)',
@@ -32,27 +32,27 @@ export const ReusableModal: React.FC<MyModalProps> = ({
         },
       }}
       disableAutoFocus
-  disableEnforceFocus
-  disableRestoreFocus
+      disableEnforceFocus
+      disableRestoreFocus
     >
       <Box
         sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: isMobile ? '95%' : '75%',
           bgcolor: theme.palette.primary.main,
           boxShadow: 24,
-          p: 4,
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
-          ...customStyles
+          left: '50%',
+          p: 4,
+          position: 'absolute',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '75%',
+          ...customStyles,
         }}
       >
         {children}
       </Box>
     </Modal>
-  )
-}
+  );
+};

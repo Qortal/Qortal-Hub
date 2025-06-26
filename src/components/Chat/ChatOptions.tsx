@@ -6,124 +6,145 @@ import {
   MenuItem,
   Select,
   Typography,
-  Tooltip
-} from "@mui/material";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import SearchIcon from "@mui/icons-material/Search";
-import { Spacer } from "../../common/Spacer";
-import AlternateEmailIcon from "@mui/icons-material/AlternateEmail";
-import CloseIcon from "@mui/icons-material/Close";
+  Tooltip,
+  useTheme,
+} from '@mui/material';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import SearchIcon from '@mui/icons-material/Search';
+import { Spacer } from '../../common/Spacer';
+import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
+import CloseIcon from '@mui/icons-material/Close';
 import InsertLinkIcon from '@mui/icons-material/InsertLink';
-import Highlight from "@tiptap/extension-highlight";
-import Mention from "@tiptap/extension-mention";
-import StarterKit from "@tiptap/starter-kit";
-import Underline from "@tiptap/extension-underline";
+import Highlight from '@tiptap/extension-highlight';
+import Mention from '@tiptap/extension-mention';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
 import {
   AppsSearchContainer,
   AppsSearchLeft,
   AppsSearchRight,
-} from "../Apps/Apps-styles";
-import IconSearch from "../../assets/svgs/Search.svg";
-import IconClearInput from "../../assets/svgs/ClearInput.svg";
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-} from "react-virtualized";
-import { getBaseApiReact } from "../../App";
-import { MessageDisplay } from "./MessageDisplay";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { formatTimestamp } from "../../utils/time";
-import { ContextMenuMentions } from "../ContextMenuMentions";
+} from '../Apps/Apps-styles';
+import IconClearInput from '../../assets/svgs/ClearInput.svg';
+import { getBaseApiReact } from '../../App';
+import { MessageDisplay } from './MessageDisplay';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { formatTimestamp } from '../../utils/time';
+import { ContextMenuMentions } from '../ContextMenuMentions';
 import { convert } from 'html-to-text';
-import { generateHTML } from "@tiptap/react";
-import ErrorBoundary from "../../common/ErrorBoundary";
+import { generateHTML } from '@tiptap/react';
+import ErrorBoundary from '../../common/ErrorBoundary';
+import { useTranslation } from 'react-i18next';
+import { isHtmlString } from '../../utils/chat';
+import TextStyle from '@tiptap/extension-text-style';
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
     wordwrap: false, // Disable word wrapping
   })?.toLowerCase();
 };
-const cache = new CellMeasurerCache({
-  fixedWidth: true,
-  defaultHeight: 50,
-});
 
-export const ChatOptions = ({ messages : untransformedMessages, goToMessage, members, myName, selectedGroup, openQManager, isPrivate }) => {
-  const [mode, setMode] = useState("default");
-  const [searchValue, setSearchValue] = useState("");
+export const ChatOptions = ({
+  messages: untransformedMessages,
+  goToMessage,
+  members,
+  myName,
+  selectedGroup,
+  openQManager,
+  isPrivate,
+}) => {
+  const [mode, setMode] = useState('default');
+  const [searchValue, setSearchValue] = useState('');
   const [selectedMember, setSelectedMember] = useState(0);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+  const parentRef = useRef(null);
+  const parentRefMentions = useRef(null);
+  const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null);
+  const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
 
-  const parentRef = useRef();
-  const parentRefMentions = useRef();
-  const [lastMentionTimestamp, setLastMentionTimestamp] = useState(null)
-  const [debouncedValue, setDebouncedValue] = useState(""); // Debounced value
-  const messages = useMemo(()=> {
-    return untransformedMessages?.map((item)=> {
-      if(item?.messageText){
-        let transformedMessage = item?.messageText
+  const messages = useMemo(() => {
+    return untransformedMessages?.map((item) => {
+      if (item?.messageText) {
+        let transformedMessage = item?.messageText;
+        const isHtml = isHtmlString(item?.messageText);
         try {
-            transformedMessage = generateHTML(item?.messageText, [
-              StarterKit,
-              Underline,
-              Highlight,
-              Mention
-            ])
-            return {
-              ...item,
-              messageText: transformedMessage
-            }
+          transformedMessage = isHtml
+            ? item?.messageText
+            : generateHTML(item?.messageText, [
+                StarterKit,
+                Underline,
+                Highlight,
+                Mention,
+                TextStyle,
+              ]);
+          return {
+            ...item,
+            messageText: transformedMessage,
+          };
         } catch (error) {
-          // error
+          console.log(error);
         }
-      } else return item
-    })
-  }, [untransformedMessages])
+      } else return item;
+    });
+  }, [untransformedMessages]);
+
   const getTimestampMention = async () => {
     try {
       return new Promise((res, rej) => {
-        window.sendMessage("getTimestampMention")
-  .then((response) => {
-    if (!response?.error) {
-      if(response && selectedGroup && response[selectedGroup]){
-        setLastMentionTimestamp(response[selectedGroup])
-        
-     
-        
-
-      
-      }
-    
-      res(response);
-      return;
-    }
-    rej(response.error);
-  })
-  .catch((error) => {
-    rej(error.message || "An error occurred");
-  });
-
+        window
+          .sendMessage('getTimestampMention')
+          .then((response) => {
+            if (!response?.error) {
+              if (response && selectedGroup && response[selectedGroup]) {
+                setLastMentionTimestamp(response[selectedGroup]);
+              }
+              res(response);
+              return;
+            }
+            rej(response.error);
+          })
+          .catch((error) => {
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
+          });
       });
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   };
 
-  useEffect(()=> {
-    if(mode === 'mentions' && selectedGroup){
-      window.sendMessage("addTimestampMention", {
-        timestamp: Date.now(),
-        groupId: selectedGroup
-      }).then((res)=> {
-        getTimestampMention()
-      }).catch((error) => {
-          console.error("Failed to add timestamp:", error.message || "An error occurred");
+  useEffect(() => {
+    if (mode === 'mentions' && selectedGroup) {
+      window
+        .sendMessage('addTimestampMention', {
+          timestamp: Date.now(),
+          groupId: selectedGroup,
+        })
+        .then((res) => {
+          getTimestampMention();
+        })
+        .catch((error) => {
+          console.error(
+            'Failed to add timestamp:',
+            error.message || 'An error occurred'
+          );
         });
     }
-  }, [mode, selectedGroup])
+  }, [mode, selectedGroup]);
 
-  useEffect(()=> {
-    getTimestampMention()
-  }, [])
+  useEffect(() => {
+    getTimestampMention();
+  }, []);
 
   // Debounce logic
   useEffect(() => {
@@ -146,37 +167,47 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
       }
       return [];
     }
+
     if (selectedMember) {
       return messages
         .filter(
           (message) =>
             message?.senderName === selectedMember &&
-            extractTextFromHTML(isPrivate ? message?.messageText : message?.decryptedData?.message)?.includes(
-              debouncedValue.toLowerCase()
-            )
+            extractTextFromHTML(
+              isPrivate ? message?.messageText : message?.decryptedData?.message
+            )?.includes(debouncedValue.toLowerCase())
         )
         ?.sort((a, b) => b?.timestamp - a?.timestamp);
     }
+
     return messages
       .filter((message) =>
-      extractTextFromHTML(isPrivate === false ? message?.messageText : message?.decryptedData?.message)?.includes(debouncedValue.toLowerCase())
+        extractTextFromHTML(
+          isPrivate === false
+            ? message?.messageText
+            : message?.decryptedData?.message
+        )?.includes(debouncedValue.toLowerCase())
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
   }, [debouncedValue, messages, selectedMember, isPrivate]);
 
   const mentionList = useMemo(() => {
-    if(!messages || messages.length === 0 || !myName) return []
-    if(isPrivate === false){
+    if (!messages || messages.length === 0 || !myName) return [];
+    if (isPrivate === false) {
       return messages
-      .filter((message) =>
-      extractTextFromHTML(message?.messageText)?.includes(`@${myName?.toLowerCase()}`)
-      )
-      ?.sort((a, b) => b?.timestamp - a?.timestamp);
-      
+        .filter((message) =>
+          extractTextFromHTML(message?.messageText)?.includes(
+            `@${myName?.toLowerCase()}`
+          )
+        )
+        ?.sort((a, b) => b?.timestamp - a?.timestamp);
     }
+
     return messages
       .filter((message) =>
-      extractTextFromHTML(message?.decryptedData?.message)?.includes(`@${myName?.toLowerCase()}`)
+        extractTextFromHTML(message?.decryptedData?.message)?.includes(
+          `@${myName?.toLowerCase()}`
+        )
       )
       ?.sort((a, b) => b?.timestamp - a?.timestamp);
   }, [messages, myName, isPrivate]);
@@ -203,133 +234,136 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
     overscan: 10, // Number of items to render outside the visible area to improve smoothness
   });
 
-
-
-  if (mode === "mentions") {
+  if (mode === 'mentions') {
     return (
       <Box
         sx={{
-          width: "300px",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          // alignItems: 'center',
-          backgroundColor: "#1F2023",
-          borderBottomLeftRadius: "20px",
-          borderTopLeftRadius: "20px",
-          overflow: "auto",
-          flexShrink: 0,
+          backgroundColor: theme.palette.background.default,
+          borderBottomLeftRadius: '20px',
+          borderTopLeftRadius: '20px',
+          display: 'flex',
+          flexDirection: 'column',
           flexGrow: 0,
+          flexShrink: 0,
+          height: '100%',
+          overflow: 'auto',
+          width: '300px',
         }}
       >
         <Box
           sx={{
-            padding: "10px",
-            display: "flex",
-            justifyContent: "flex-end",
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '10px',
           }}
         >
           <CloseIcon
             onClick={() => {
-              setMode("default");
+              setMode('default');
             }}
             sx={{
-              cursor: "pointer",
-              color: "white",
+              cursor: 'pointer',
+              color: theme.palette.text.primary,
             }}
           />
         </Box>
+
         <Box
           sx={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            width: '100%',
           }}
         >
-      
-     
-        
           {mentionList?.length === 0 && (
             <Typography
               sx={{
-                fontSize: "11px",
+                fontSize: '14px',
                 fontWeight: 400,
-                color: "rgba(255, 255, 255, 0.2)",
+                color: theme.palette.text.primary,
               }}
             >
-              No results
+              {t('core:message.generic.no_results', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           )}
+
           <Box
             sx={{
-              display: "flex",
-              width: "100%",
-              height: "100%",
+              display: 'flex',
+              height: '100%',
+              width: '100%',
             }}
           >
             <div
               style={{
-                height: "100%",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                position: 'relative',
+                width: '100%',
               }}
             >
               <div
                 ref={parentRefMentions}
                 className="List"
                 style={{
+                  display: 'flex',
                   flexGrow: 1,
-                  overflow: "auto",
-                  position: "relative",
-                  display: "flex",
-                  height: "0px",
+                  height: '0px',
+                  overflow: 'auto',
+                  position: 'relative',
                 }}
               >
                 <div
                   style={{
                     height: rowVirtualizerMentions.getTotalSize(),
-                    width: "100%",
+                    width: '100%',
                   }}
                 >
                   <div
                     style={{
-                      position: "absolute",
-                      top: 0,
                       left: 0,
-                      width: "100%",
+                      position: 'absolute',
+                      top: 0,
+                      width: '100%',
                     }}
                   >
-                    {rowVirtualizerMentions.getVirtualItems().map((virtualRow) => {
-                      const index = virtualRow.index;
-                      let message = mentionList[index];
-                      return (
-                        <div
-                          data-index={virtualRow.index} //needed for dynamic row height measurement
-                          ref={rowVirtualizerMentions.measureElement} //measure dynamic row height
-                          key={message.signature}
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: "50%", // Move to the center horizontally
-                            transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                            width: "100%", // Control width (90% of the parent)
-                            padding: "10px 0",
-                            display: "flex",
-                            alignItems: "center",
-                            overscrollBehavior: "none",
-                            flexDirection: "column",
-                            gap: "5px",
-                          }}
-                        >
-                          <ShowMessage messages={messages} goToMessage={goToMessage} message={message} />
-                         
-                        </div>
-                      );
-                    })}
+                    {rowVirtualizerMentions
+                      .getVirtualItems()
+                      .map((virtualRow) => {
+                        const index = virtualRow.index;
+                        let message = mentionList[index];
+                        return (
+                          <div
+                            data-index={virtualRow.index} //needed for dynamic row height measurement
+                            ref={rowVirtualizerMentions.measureElement} //measure dynamic row height
+                            key={message.signature}
+                            style={{
+                              alignItems: 'center',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '5px',
+                              left: '50%', // Move to the center horizontally
+                              overscrollBehavior: 'none',
+                              padding: '10px 0',
+                              position: 'absolute',
+                              top: 0,
+                              transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
+                              width: '100%', // Control width (90% of the parent)
+                            }}
+                          >
+                            <ShowMessage
+                              messages={messages}
+                              goToMessage={goToMessage}
+                              message={message}
+                            />
+                          </div>
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -340,69 +374,78 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
     );
   }
 
-  if (mode === "search") {
+  if (mode === 'search') {
     return (
       <Box
         sx={{
-          width: "300px",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          // alignItems: 'center',
-          backgroundColor: "#1F2023",
-          borderBottomLeftRadius: "20px",
-          borderTopLeftRadius: "20px",
-          overflow: "auto",
-          flexShrink: 0,
+          backgroundColor: theme.palette.background.paper,
+          borderBottomLeftRadius: '20px',
+          borderTopLeftRadius: '20px',
+          display: 'flex',
+          flexDirection: 'column',
           flexGrow: 0,
+          flexShrink: 0,
+          height: '98%',
+          overflow: 'auto',
+          width: '300px',
         }}
       >
         <Box
           sx={{
-            padding: "10px",
-            display: "flex",
-            justifyContent: "flex-end",
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '10px',
           }}
         >
           <CloseIcon
             onClick={() => {
-              setMode("default");
+              setMode('default');
             }}
             sx={{
-              cursor: "pointer",
-              color: "white",
+              cursor: 'pointer',
+              color: theme.palette.text.primary,
             }}
           />
         </Box>
+
         <Box
           sx={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            width: '100%',
           }}
         >
           <AppsSearchContainer>
             <AppsSearchLeft>
-              <img src={IconSearch} />
+              <SearchIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                }}
+              />
               <InputBase
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 sx={{ ml: 1, flex: 1 }}
-                placeholder="Search chat text"
+                placeholder={t('core:action.search_chat_text', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 inputProps={{
-                  "aria-label": "Search for apps",
-                  fontSize: "16px",
+                  'aria-label': t('core:action.search_apps', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                  fontSize: '16px',
                   fontWeight: 400,
                 }}
               />
             </AppsSearchLeft>
+
             <AppsSearchRight>
               {searchValue && (
                 <ButtonBase
                   onClick={() => {
-                    setSearchValue("");
+                    setSearchValue('');
                   }}
                 >
                   <img src={IconClearInput} />
@@ -410,133 +453,148 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
               )}
             </AppsSearchRight>
           </AppsSearchContainer>
+
           <Box
-          sx={{
-            padding: "10px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: 'center'
-          }}
-        >
-              <Select
-            size="small"
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={selectedMember}
-            label="By member"
-            onChange={(e) => setSelectedMember(e.target.value)}
-          >
-            <MenuItem value={0}>
-              <em>By member</em>
-            </MenuItem>
-            {members?.map((member) => {
-              return (
-                <MenuItem key={member} value={member}>
-                  {member}
-                </MenuItem>
-              );
-            })}
-          </Select>
-          {!!selectedMember && (
-            <CloseIcon
-            onClick={() => {
-              setSelectedMember(0);
-            }}
             sx={{
-              cursor: "pointer",
-              color: "white",
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              padding: '10px',
             }}
-          />
-          )}
-          
-        </Box>
-        
+          >
+            <Select
+              id="demo-simple-select"
+              label={t('core:sort.by_member', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              labelId="demo-simple-select-label"
+              onChange={(e) => setSelectedMember(e.target.value)}
+              size="small"
+              value={selectedMember}
+            >
+              <MenuItem value={0}>
+                <em>
+                  {t('core:sort.by_member', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </em>
+              </MenuItem>
+
+              {members?.map((member) => {
+                return (
+                  <MenuItem key={member} value={member}>
+                    {member}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+
+            {!!selectedMember && (
+              <CloseIcon
+                onClick={() => {
+                  setSelectedMember(0);
+                }}
+                sx={{
+                  cursor: 'pointer',
+                  color: theme.palette.text.primary,
+                }}
+              />
+            )}
+          </Box>
+
           {debouncedValue && searchedList?.length === 0 && (
             <Typography
               sx={{
-                fontSize: "11px",
+                fontSize: '11px',
                 fontWeight: 400,
-                color: "rgba(255, 255, 255, 0.2)",
+                color: theme.palette.text.secondary,
               }}
             >
-              No results
+              {t('core:message.generic.no_results', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           )}
+
           <Box
             sx={{
-              display: "flex",
-              width: "100%",
-              height: "100%",
+              display: 'flex',
+              height: '100%',
+              width: '100%',
             }}
           >
             <div
               style={{
-                height: "100%",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100%',
+                position: 'relative',
+                width: '100%',
               }}
             >
               <div
                 ref={parentRef}
                 className="List"
                 style={{
+                  display: 'flex',
                   flexGrow: 1,
-                  overflow: "auto",
-                  position: "relative",
-                  display: "flex",
-                  height: "0px",
+                  height: '0px',
+                  overflow: 'auto',
+                  position: 'relative',
                 }}
               >
                 <div
                   style={{
                     height: rowVirtualizer.getTotalSize(),
-                    width: "100%",
+                    width: '100%',
                   }}
                 >
                   <div
                     style={{
-                      position: "absolute",
-                      top: 0,
                       left: 0,
-                      width: "100%",
+                      position: 'absolute',
+                      top: 0,
+                      width: '100%',
                     }}
                   >
                     {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                       const index = virtualRow.index;
                       let message = searchedList[index];
                       return (
-                    
                         <div
                           data-index={virtualRow.index} //needed for dynamic row height measurement
                           ref={rowVirtualizer.measureElement} //measure dynamic row height
                           key={message.signature}
                           style={{
-                            position: "absolute",
+                            alignItems: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            left: '50%', // Move to the center horizontally
+                            overscrollBehavior: 'none',
+                            padding: '10px 0',
+                            position: 'absolute',
                             top: 0,
-                            left: "50%", // Move to the center horizontally
                             transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                            width: "100%", // Control width (90% of the parent)
-                            padding: "10px 0",
-                            display: "flex",
-                            alignItems: "center",
-                            overscrollBehavior: "none",
-                            flexDirection: "column",
-                            gap: "5px",
+                            width: '100%', // Control width (90% of the parent)
                           }}
                         >
-                              <ErrorBoundary
-                        fallback={
-                          <Typography>
-                            Error loading content: Invalid Data
-                          </Typography>
-                        }
-                      >
-                          <ShowMessage message={message} goToMessage={goToMessage} messages={messages} />
+                          <ErrorBoundary
+                            fallback={
+                              <Typography>
+                                {t('group:message.generic.invalid_data', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Typography>
+                            }
+                          >
+                            <ShowMessage
+                              message={message}
+                              goToMessage={goToMessage}
+                              messages={messages}
+                            />
                           </ErrorBoundary>
                         </div>
-                    
                       );
                     })}
                   </div>
@@ -548,49 +606,62 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
       </Box>
     );
   }
+
   return (
     <Box
       sx={{
-        width: "50px",
-        height: "100%",
-        gap: "20px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
+        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        height: '100%',
+        width: '50px',
       }}
     >
       <Box
         sx={{
-          width: "100%",
-          padding: "10px",
-          gap: "20px",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          backgroundColor: "#1F2023",
-          borderBottomLeftRadius: "20px",
-          borderTopLeftRadius: "20px",
-          minHeight: "200px",
+          alignItems: 'center',
+          backgroundColor: theme.palette.background.paper,
+          borderBottomLeftRadius: '20px',
+          borderTopLeftRadius: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+          minHeight: '200px',
+          padding: '10px',
+          width: '100%',
         }}
       >
-        <ButtonBase onClick={() => {
-            setMode("search")
-        }}>
+        <ButtonBase
+          onClick={() => {
+            setMode('search');
+          }}
+        >
           <Tooltip
-            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>SEARCH</span>} 
+            title={
+              <span
+                style={{
+                  color: theme.palette.text.primary,
+                  fontSize: '14px',
+                  fontWeight: 700,
+                }}
+              >
+                {t('core:action.search', { postProcess: 'capitalizeAll' })}
+              </span>
+            }
             placement="left"
             arrow
-            sx={{ fontSize: "24" }}
+            sx={{ fontSize: '24' }}
             slotProps={{
               tooltip: {
                 sx: {
-                  color: "#ffffff",
-                  backgroundColor: "#444444",
+                  color: theme.palette.text.primary,
+                  backgroundColor: theme.palette.background.default,
                 },
               },
               arrow: {
                 sx: {
-                  color: "#444444",
+                  color: theme.palette.text.secondary,
                 },
               },
             }}
@@ -598,157 +669,194 @@ export const ChatOptions = ({ messages : untransformedMessages, goToMessage, mem
             <SearchIcon />
           </Tooltip>
         </ButtonBase>
-        <ButtonBase onClick={() => {
-            setMode("default")
-            setSearchValue('')
-            setSelectedMember(0)
-            openQManager()
-        }}>
+
+        <ButtonBase
+          onClick={() => {
+            setMode('default');
+            setSearchValue('');
+            setSelectedMember(0);
+            openQManager();
+          }}
+        >
           <Tooltip
-            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>Q-MANAGER</span>} 
+            title={
+              <span
+                style={{
+                  color: theme.palette.text.primary,
+                  fontSize: '14px',
+                  fontWeight: 700,
+                }}
+              >
+                {t('core:q_apps.q_manager', { postProcess: 'capitalizeAll' })}
+              </span>
+            }
             placement="left"
             arrow
-            sx={{ fontSize: "24" }}
+            sx={{ fontSize: '24' }}
             slotProps={{
               tooltip: {
                 sx: {
-                  color: "#ffffff",
-                  backgroundColor: "#444444",
+                  color: theme.palette.text.primary,
+                  backgroundColor: theme.palette.background.default,
                 },
               },
               arrow: {
                 sx: {
-                  color: "#444444",
+                  color: theme.palette.text.secondary,
                 },
               },
             }}
           >
-            <InsertLinkIcon sx={{ color: 'white' }} />
+            <InsertLinkIcon sx={{ color: theme.palette.text.primary }} />
           </Tooltip>
         </ButtonBase>
-        <ContextMenuMentions getTimestampMention={getTimestampMention} groupId={selectedGroup}>
-        <ButtonBase onClick={() => {
-            setMode("mentions")
-            setSearchValue('')
-            setSelectedMember(0)
-        }}>
-          <Tooltip
-            title={<span style={{ color: "white", fontSize: "14px", fontWeight: 700 }}>MENTIONED</span>} 
-            placement="left"
-            arrow
-            sx={{ fontSize: "24" }}
-            slotProps={{
-              tooltip: {
-                sx: {
-                  color: "#ffffff",
-                  backgroundColor: "#444444",
-                },
-              },
-              arrow: {
-                sx: {
-                  color: "#444444",
-                },
-              },
+
+        <ContextMenuMentions
+          getTimestampMention={getTimestampMention}
+          groupId={selectedGroup}
+        >
+          <ButtonBase
+            onClick={() => {
+              setMode('mentions');
+              setSearchValue('');
+              setSelectedMember(0);
             }}
           >
-            <AlternateEmailIcon sx={{
-              color: mentionList?.length > 0 && (!lastMentionTimestamp || lastMentionTimestamp < mentionList[0]?.timestamp) ? 'var(--unread)' : 'white'
-            }} />
-          </Tooltip>
-        </ButtonBase>
-      
+            <Tooltip
+              title={
+                <span
+                  style={{
+                    color: theme.palette.text.primary,
+                    fontSize: '14px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {t('core:message.generic.mentioned', {
+                    postProcess: 'capitalizeAll',
+                  })}
+                </span>
+              }
+              placement="left"
+              arrow
+              sx={{ fontSize: '24' }}
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    color: theme.palette.text.primary,
+                    backgroundColor: theme.palette.background.default,
+                  },
+                },
+                arrow: {
+                  sx: {
+                    color: theme.palette.text.secondary,
+                  },
+                },
+              }}
+            >
+              <AlternateEmailIcon
+                sx={{
+                  color:
+                    mentionList?.length > 0 &&
+                    (!lastMentionTimestamp ||
+                      lastMentionTimestamp < mentionList[0]?.timestamp)
+                      ? theme.palette.other.unread
+                      : theme.palette.text.primary,
+                }}
+              />
+            </Tooltip>
+          </ButtonBase>
         </ContextMenuMentions>
-       
-        
       </Box>
     </Box>
   );
 };
 
-
-const ShowMessage = ({message, goToMessage, messages})=> {
+const ShowMessage = ({ message, goToMessage, messages }) => {
+  const theme = useTheme();
 
   return (
-<Box
-                            sx={{
-                              display: "flex",
-                              flexDirection: "column",
-                              width: "100%",
-                              padding: "0px 20px",
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                width: "100%",
-                              }}
-                            >
-                              <Box
-                                sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "15px",
-                                }}
-                              >
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: "#27282c",
-                                    color: "white",
-                                    height: "25px",
-                                    width: "25px",
-                                  }}
-                                  alt={message?.senderName}
-                                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                                    message?.senderName
-                                  }/qortal_avatar?async=true`}
-                                >
-                                  {message?.senderName?.charAt(0)}
-                                </Avatar>
-                                <Typography
-                                  sx={{
-                                    fontWight: 600,
-                                    fontFamily: "Inter",
-                                    color: "cadetBlue",
-                                  }}
-                                >
-                                  {message?.senderName}
-                                </Typography>
-                              </Box>
-                            </Box>
-                            <Spacer height="5px" />
-                            <Typography sx={{
-                                fontSize: '12px'
-                            }}>{formatTimestamp(message.timestamp)}</Typography>
-                            <Box
-                              style={{
-                                cursor: "pointer",
-                              }}
-                              onClick={() => {
-                                const findMsgIndex = messages.findIndex(
-                                  (item) =>
-                                    item?.signature === message?.signature
-                                );
-                                if (findMsgIndex !== -1) {
-                                  goToMessage(findMsgIndex);
-                                }
-                              }}
-                            >
-                              {message?.messageText && (
-                                  <MessageDisplay
-                                htmlContent={message?.messageText}
-                                  />
-                                )}
-                          {message?.decryptedData?.message && (
-                             <MessageDisplay
-                             htmlContent={
-                               message?.decryptedData?.message || "<p></p>"
-                             }
-                           />
-                          )}
-                             
-                            </Box>
-                          </Box>
-  )
-}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '0px 20px',
+        width: '100%',
+      }}
+    >
+      <Box
+        sx={{
+          alignItems: 'center',
+          background: theme.palette.background.surface,
+          display: 'flex',
+          justifyContent: 'space-between',
+          width: '100%',
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: '15px',
+          }}
+        >
+          <Avatar
+            sx={{
+              backgroundColor: theme.palette.background.default,
+              color: theme.palette.text.primary,
+              height: '25px',
+              width: '25px',
+            }}
+            alt={message?.senderName}
+            src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+              message?.senderName
+            }/qortal_avatar?async=true`}
+          >
+            {message?.senderName?.charAt(0)}
+          </Avatar>
+
+          <Typography
+            sx={{
+              fontWight: 600,
+              fontFamily: 'Inter',
+            }}
+          >
+            {message?.senderName}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Spacer height="5px" />
+
+      <Typography
+        sx={{
+          fontSize: '12px',
+        }}
+      >
+        {formatTimestamp(message.timestamp)}
+      </Typography>
+
+      <Box
+        style={{
+          cursor: 'pointer',
+        }}
+        onClick={() => {
+          const findMsgIndex = messages.findIndex(
+            (item) => item?.signature === message?.signature
+          );
+          if (findMsgIndex !== -1) {
+            goToMessage(findMsgIndex);
+          }
+        }}
+      >
+        {message?.messageText && (
+          <MessageDisplay htmlContent={message?.messageText} />
+        )}
+        {message?.decryptedData?.message && (
+          <MessageDisplay
+            htmlContent={message?.decryptedData?.message || '<p></p>'}
+          />
+        )}
+      </Box>
+    </Box>
+  );
+};

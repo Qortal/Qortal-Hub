@@ -1,0 +1,21 @@
+{
+  "1_getting_started": "1. はじめに",
+  "2_overview": "2. 概要",
+  "3_groups": "3. Qortal グループ",
+  "4_obtain_qort": "4. QORT の入手方法",
+  "account_creation": "アカウント作成",
+  "important_info": "重要な情報",
+  "apps": {
+    "dashboard": "1. アプリ ダッシュボード",
+    "navigation": "2. アプリ ナビゲーション"
+  },
+  "initial": {
+    "recommended_qort_qty": "ウォレットに少なくとも {{ quantity }} QORT を保有してください",
+    "explore": "探索する",
+    "general_chat": "全体チャット",
+    "getting_started": "はじめに",
+    "register_name": "名前を登録する",
+    "see_apps": "アプリを見る",
+    "trade_qort": "QORT を取引する"
+  }
+}

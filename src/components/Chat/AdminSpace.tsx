@@ -1,21 +1,7 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { GroupMail } from "../Group/Forum/GroupMail";
-import { MyContext, isMobile } from "../../App";
-import { getRootHeight } from "../../utils/mobile/mobileUtils";
-import { Box, Typography } from "@mui/material";
-import { AdminSpaceInner } from "./AdminSpaceInner";
-
-
-
-
-
+import { useEffect, useState } from 'react';
+import { Box, Typography } from '@mui/material';
+import { AdminSpaceInner } from './AdminSpaceInner';
+import { useTranslation } from 'react-i18next';
 
 export const AdminSpace = ({
   selectedGroup,
@@ -26,12 +12,21 @@ export const AdminSpace = ({
   isAdmin,
   myAddress,
   hide,
-  defaultThread, 
+  defaultThread,
   setDefaultThread,
-  setIsForceShowCreationKeyPopup
+  setIsForceShowCreationKeyPopup,
+  balance,
+  isOwner,
 }) => {
-  const {  rootHeight } = useContext(MyContext);
   const [isMoved, setIsMoved] = useState(false);
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+
   useEffect(() => {
     if (hide) {
       setTimeout(() => setIsMoved(true), 300); // Wait for the fade-out to complete before moving
@@ -42,26 +37,45 @@ export const AdminSpace = ({
 
   return (
     <div
-    style={{
-      // reference to change height
-      height: isMobile ? `calc(${rootHeight} - 127px` : "calc(100vh - 70px)",
-      display: "flex",
-      flexDirection: "column",
-      width: "100%",
-      opacity: hide ? 0 : 1,
-      visibility: hide && 'hidden',
-      position: hide ? 'fixed' : 'relative',
-    left: hide && '-1000px'
-    }}
-  >
-    {!isAdmin && <Box sx={{
-      width: '100%',
-      display: 'flex',
-      justifyContent: 'center',
-      paddingTop: '25px'
-    }}><Typography>Sorry, this space is only for Admins.</Typography></Box>}
-    {isAdmin && <AdminSpaceInner setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup} adminsWithNames={adminsWithNames} selectedGroup={selectedGroup} />}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: 'calc(100vh - 70px)',
+        left: hide && '-1000px',
+        opacity: hide ? 0 : 1,
+        overflow: 'auto',
+        position: hide ? 'fixed' : 'relative',
+        visibility: hide && 'hidden',
+        width: '100%',
+      }}
+    >
+      {!isAdmin && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            paddingTop: '25px',
+            width: '100%',
+          }}
+        >
+          <Typography>
+            {t('core:message.generic.space_for_admins', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
+      )}
 
-   </div>
+      {isAdmin && (
+        <AdminSpaceInner
+          setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup}
+          adminsWithNames={adminsWithNames}
+          selectedGroup={selectedGroup}
+          balance={balance}
+          userInfo={userInfo}
+          isOwner={isOwner}
+        />
+      )}
+    </div>
   );
 };

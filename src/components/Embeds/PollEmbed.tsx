@@ -1,5 +1,5 @@
-import React, { useContext, useEffect,  useState } from "react";
-import { MyContext } from "../../App";
+import { useContext, useEffect, useState } from 'react';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import {
   Card,
   CardContent,
@@ -12,384 +12,433 @@ import {
   Box,
   ButtonBase,
   Divider,
-
-} from "@mui/material";
-import { getNameInfo } from "../Group/Group";
-import PollIcon from "@mui/icons-material/Poll";
-import { getFee } from "../../background";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import { Spacer } from "../../common/Spacer";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import { CustomLoader } from "../../common/CustomLoader";
-
+  useTheme,
+} from '@mui/material';
+import { getNameInfo } from '../Group/Group';
+import PollIcon from '@mui/icons-material/Poll';
+import { getFee } from '../../background/background.ts';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import { Spacer } from '../../common/Spacer';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import { CustomLoader } from '../../common/CustomLoader';
+import { useTranslation } from 'react-i18next';
 
 export const PollCard = ({
-    poll,
-    setInfoSnack,
-    setOpenSnack,
-    refresh,
-    openExternal,
-    external,
-    isLoadingParent,
-    errorMsg,
-  }) => {
-    const [selectedOption, setSelectedOption] = useState("");
-    const [ownerName, setOwnerName] = useState("");
-    const [showResults, setShowResults] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-    const { show, userInfo } = useContext(MyContext);
-    const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
-    const handleVote = async () => {
-      const fee = await getFee("VOTE_ON_POLL");
-  
-      await show({
-        message: `Do you accept this VOTE_ON_POLL transaction? POLLS are public!`,
-        publishFee: fee.fee + " QORT",
-      });
-      setIsLoadingSubmit(true);
-  
-      window
-        .sendMessage(
-          "voteOnPoll",
-          {
-            pollName: poll?.info?.pollName,
-            optionIndex: +selectedOption,
-          },
-          60000
-        )
-        .then((response) => {
-          setIsLoadingSubmit(false);
-          if (response.error) {
-            setInfoSnack({
-              type: "error",
-              message: response?.error || "Unable to vote.",
-            });
-            setOpenSnack(true);
-            return;
-          } else {
-            setInfoSnack({
-              type: "success",
-              message:
-                "Successfully voted. Please wait a couple minutes for the network to propogate the changes.",
-            });
-            setOpenSnack(true);
-          }
-        })
-        .catch((error) => {
-          setIsLoadingSubmit(false);
+  poll,
+  setInfoSnack,
+  setOpenSnack,
+  refresh,
+  openExternal,
+  external,
+  isLoadingParent,
+  errorMsg,
+}) => {
+  const [selectedOption, setSelectedOption] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const { show, userInfo } = useContext(QORTAL_APP_CONTEXT);
+  const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+
+  const handleVote = async () => {
+    const fee = await getFee('VOTE_ON_POLL');
+
+    await show({
+      message: t('core:question.accept_vote_on_poll', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      publishFee: fee.fee + ' QORT',
+    });
+    setIsLoadingSubmit(true);
+
+    window
+      .sendMessage(
+        'voteOnPoll',
+        {
+          pollName: poll?.info?.pollName,
+          optionIndex: +selectedOption,
+        },
+        60000
+      )
+      .then((response) => {
+        setIsLoadingSubmit(false);
+        if (response.error) {
           setInfoSnack({
-            type: "error",
-            message: error?.message || "Unable to vote.",
+            type: 'error',
+            message:
+              response?.error ||
+              t('core:message.error.vote', {
+                postProcess: 'capitalizeFirstChar',
+              }),
           });
           setOpenSnack(true);
-        });
-    };
-  
-    const getName = async (owner) => {
-      try {
-        const res = await getNameInfo(owner);
-        if (res) {
-          setOwnerName(res);
+          return;
+        } else {
+          setInfoSnack({
+            type: 'success',
+            message: t('core:message.success.voted', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+          });
+          setOpenSnack(true);
         }
-      } catch (error) {}
-    };
-  
-    useEffect(() => {
-      if (poll?.info?.owner) {
-        getName(poll.info.owner);
+      })
+      .catch((error) => {
+        setIsLoadingSubmit(false);
+        setInfoSnack({
+          type: 'error',
+          message:
+            error?.message ||
+            t('core:message.error.vote', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+        });
+        setOpenSnack(true);
+      });
+  };
+
+  const getName = async (owner) => {
+    try {
+      const res = await getNameInfo(owner);
+      if (res) {
+        setOwnerName(res);
       }
-    }, [poll?.info?.owner]);
-  
-    return (
-      <Card
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  useEffect(() => {
+    if (poll?.info?.owner) {
+      getName(poll.info.owner);
+    }
+  }, [poll?.info?.owner]);
+
+  return (
+    <Card
+      sx={{
+        backgroundColor: theme.palette.background.default,
+        height: isOpen ? 'auto' : '150px',
+      }}
+    >
+      <Box
         sx={{
-          backgroundColor: "#1F2023",
-          height: isOpen ? "auto" : "150px",
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '16px 16px 0px 16px',
         }}
       >
         <Box
           sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "16px 16px 0px 16px",
+            alignItems: 'center',
+            display: 'flex',
+            gap: '10px',
           }}
         >
-          <Box
+          <PollIcon
             sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
+              color: theme.palette.text.primary,
             }}
-          >
-            <PollIcon
+          />
+          <Typography>
+            {t('core:poll_embed', { postProcess: 'capitalizeFirstWord' })}
+          </Typography>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <ButtonBase>
+            <RefreshIcon
+              onClick={refresh}
               sx={{
-                color: "white",
+                fontSize: '24px',
+                color: theme.palette.text.primary,
               }}
             />
-            <Typography>POLL embed</Typography>
-          </Box>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-            }}
-          >
+          </ButtonBase>
+
+          {external && (
             <ButtonBase>
-              <RefreshIcon
-                onClick={refresh}
+              <OpenInNewIcon
+                onClick={openExternal}
                 sx={{
-                  fontSize: "24px",
-                  color: "white",
+                  fontSize: '24px',
+                  color: theme.palette.text.primary,
                 }}
               />
             </ButtonBase>
-            {external && (
-              <ButtonBase>
-                <OpenInNewIcon
-                  onClick={openExternal}
-                  sx={{
-                    fontSize: "24px",
-                    color: "white",
-                  }}
-                />
-              </ButtonBase>
-            )}
-          </Box>
+          )}
         </Box>
-        <Box
+      </Box>
+      <Box
+        sx={{
+          padding: '8px 16px 8px 16px',
+        }}
+      >
+        <Typography
           sx={{
-            padding: "8px 16px 8px 16px",
+            fontSize: '12px',
           }}
         >
-          <Typography
+          {t('core:message.generic.created_by', {
+            owner: poll?.info?.owner,
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </Typography>
+      </Box>
+
+      <Divider sx={{ borderColor: 'rgb(255 255 255 / 10%)' }} />
+
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
+        }}
+      >
+        {!isOpen && !errorMsg && (
+          <>
+            <Spacer height="5px" />
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => {
+                setIsOpen(true);
+              }}
+            >
+              {t('core:action.show_poll', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
+          </>
+        )}
+
+        {isLoadingParent && isOpen && (
+          <Box
             sx={{
-              fontSize: "12px",
+              display: 'flex',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
-            Created by {ownerName || poll?.info?.owner}
-          </Typography>
-        </Box>
-        <Divider sx={{ borderColor: "rgb(255 255 255 / 10%)" }} />
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            width: "100%",
-            alignItems: "center",
-          }}
-        >
-          {!isOpen && !errorMsg && (
-            <>
-              <Spacer height="5px" />
-              <Button
-                size="small"
-                variant="contained"
-                sx={{
-                  backgroundColor: "var(--green)",
-                }}
-                onClick={() => {
-                  setIsOpen(true);
-                }}
-              >
-                Show poll
-              </Button>
-            </>
-          )}
-          {isLoadingParent && isOpen && (
-            <Box
-              sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
-              {" "}
-              <CustomLoader />{" "}
-            </Box>
-          )}
-          {errorMsg && (
-            <Box
-              sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
-              {" "}
-              <Typography
-                sx={{
-                  fontSize: "14px",
-                  color: "var(--danger)",
-                }}
-              >
-                {errorMsg}
-              </Typography>{" "}
-            </Box>
-          )}
-        </Box>
-  
-        <Box
-          sx={{
-            display: isOpen ? "block" : "none",
-          }}
-        >
-          <CardHeader
-            title={poll?.info?.pollName}
-            subheader={poll?.info?.description}
+            <CustomLoader />
+          </Box>
+        )}
+
+        {errorMsg && (
+          <Box
             sx={{
-              "& .MuiCardHeader-title": {
-                fontSize: "18px", // Custom font size for title
-              },
+              display: 'flex',
+              justifyContent: 'center',
+              width: '100%',
             }}
-          />
-          <CardContent>
+          >
             <Typography
               sx={{
-                fontSize: "18px",
+                fontSize: '14px',
+                color: theme.palette.other.danger,
               }}
             >
-              Options
+              {errorMsg}
             </Typography>
-            <RadioGroup
-              value={selectedOption}
-              onChange={(e) => setSelectedOption(e.target.value)}
+          </Box>
+        )}
+      </Box>
+
+      <Box
+        sx={{
+          display: isOpen ? 'block' : 'none',
+        }}
+      >
+        <CardHeader
+          title={poll?.info?.pollName}
+          subheader={poll?.info?.description}
+          sx={{
+            '& .MuiCardHeader-title': {
+              fontSize: '18px', // Custom font size for title
+            },
+          }}
+        />
+
+        <CardContent>
+          <Typography
+            sx={{
+              fontSize: '18px',
+            }}
+          >
+            {t('core:option_other', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+
+          <RadioGroup
+            value={selectedOption}
+            onChange={(e) => setSelectedOption(e.target.value)}
+          >
+            {poll?.info?.pollOptions?.map((option, index) => (
+              <FormControlLabel
+                key={index}
+                value={index}
+                control={<Radio />}
+                label={option?.optionName}
+                sx={{
+                  '& .MuiFormControlLabel-label': {
+                    fontSize: '14px',
+                  },
+                }}
+              />
+            ))}
+          </RadioGroup>
+
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '20px',
+            }}
+          >
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={!selectedOption || isLoadingSubmit}
+              onClick={handleVote}
             >
-              {poll?.info?.pollOptions?.map((option, index) => (
-                <FormControlLabel
-                  key={index}
-                  value={index}
-                  control={
-                    <Radio
-                      sx={{
-                        color: "white", // Unchecked color
-                        "&.Mui-checked": {
-                          color: "var(--green)", // Checked color
-                        },
-                      }}
-                    />
-                  }
-                  label={option?.optionName}
-                  sx={{
-                    "& .MuiFormControlLabel-label": {
-                      fontSize: "14px", 
-                     
-                    },
-                  }}
-                />
-              ))}
-            </RadioGroup>
-            <Box
+              {t('core:action.vote', { postProcess: 'capitalizeFirstChar' })}
+            </Button>
+
+            <Typography
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: "20px",
+                fontSize: '14px',
+                fontStyle: 'italic',
               }}
             >
-              <Button
-                variant="contained"
-                color="primary"
-                disabled={!selectedOption || isLoadingSubmit}
-                onClick={handleVote}
-              >
-                Vote
-              </Button>
+              {poll?.votes?.totalVotes}{' '}
+              {poll?.votes?.totalVotes === 1 ? ' vote' : ' votes'}
+            </Typography>
+          </Box>
+
+          <Spacer height="10px" />
+
+          <Typography
+            sx={{
+              fontSize: '14px',
+              visibility: poll?.votes?.votes?.find(
+                (item) => item?.voterPublicKey === userInfo?.publicKey
+              )
+                ? 'visible'
+                : 'hidden',
+            }}
+          >
+            {t('core:message.generic.already_voted', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+
+          <Spacer height="10px" />
+
+          {isLoadingSubmit && (
+            <Typography
+              sx={{
+                fontSize: '12px',
+              }}
+            >
+              {t('core:message.generic.processing_transaction', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          )}
+
+          <ButtonBase
+            onClick={() => {
+              setShowResults((prev) => !prev);
+            }}
+          >
+            {showResults
+              ? t('core:action.hide', { postProcess: 'capitalizeFirstChar' })
+              : t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
+          </ButtonBase>
+        </CardContent>
+
+        {showResults && <PollResults votes={poll?.votes} />}
+      </Box>
+    </Card>
+  );
+};
+
+const PollResults = ({ votes }) => {
+  const maxVotes = Math.max(
+    ...votes?.voteCounts?.map((option) => option.voteCount)
+  );
+  const options = votes?.voteCounts;
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+
+  return (
+    <Box sx={{ width: '100%', p: 2 }}>
+      {options
+        .sort((a, b) => b.voteCount - a.voteCount) // Sort options by votes (highest first)
+        .map((option, index) => (
+          <Box key={index} sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography
+                variant="body1"
                 sx={{
-                  fontSize: "14px",
-                  fontStyle: "italic",
+                  fontWeight: index === 0 ? 'bold' : 'normal',
+                  fontSize: '14px',
                 }}
               >
-                {" "}
-                {`${poll?.votes?.totalVotes} ${
-                  poll?.votes?.totalVotes === 1 ? " vote" : " votes"
-                }`}
+                {`${index + 1}. ${option.optionName}`}
+              </Typography>
+
+              <Typography
+                variant="body1"
+                sx={{
+                  fontWeight: index === 0 ? 'bold' : 'normal',
+                  fontSize: '14px',
+                }}
+              >
+                {t('core:vote', { count: option.voteCount })}
               </Typography>
             </Box>
-  
-            <Spacer height="10px" />
-            <Typography
+
+            <Box
               sx={{
-                fontSize: "14px",
-                visibility: poll?.votes?.votes?.find(
-                  (item) => item?.voterPublicKey === userInfo?.publicKey
-                )
-                  ? "visible"
-                  : "hidden",
+                backgroundColor: '#e0e0e0',
+                borderRadius: 5,
+                height: 10,
+                mt: 1,
+                overflow: 'hidden',
               }}
             >
-              You've already voted.
-            </Typography>
-            <Spacer height="10px" />
-            {isLoadingSubmit && (
-              <Typography
-                sx={{
-                  fontSize: "12px",
-                }}
-              >
-                Is processing transaction, please wait...
-              </Typography>
-            )}
-            <ButtonBase
-              onClick={() => {
-                setShowResults((prev) => !prev);
-              }}
-            >
-              {showResults ? "hide " : "show "} results
-            </ButtonBase>
-          </CardContent>
-          {showResults && <PollResults votes={poll?.votes} />}
-        </Box>
-      </Card>
-    );
-  };
-  
-  const PollResults = ({ votes }) => {
-    const maxVotes = Math.max(
-      ...votes?.voteCounts?.map((option) => option.voteCount)
-    );
-    const options = votes?.voteCounts;
-    return (
-      <Box sx={{ width: "100%", p: 2 }}>
-        {options
-          .sort((a, b) => b.voteCount - a.voteCount) // Sort options by votes (highest first)
-          .map((option, index) => (
-            <Box key={index} sx={{ mb: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: index === 0 ? "bold" : "normal" ,  fontSize: "14px"}}
-                >
-                  {`${index + 1}. ${option.optionName}`}
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: index === 0 ? "bold" : "normal" ,  fontSize: "14px"}}
-                >
-                  {option.voteCount} votes
-                </Typography>
-              </Box>
               <Box
                 sx={{
-                  mt: 1,
-                  height: 10,
-                  backgroundColor: "#e0e0e0",
-                  borderRadius: 5,
-                  overflow: "hidden",
+                  backgroundColor: index === 0 ? '#3f51b5' : '#f50057',
+                  height: '100%',
+                  transition: 'width 0.3s ease-in-out',
+                  width: `${(option.voteCount / maxVotes) * 100}%`,
                 }}
-              >
-                <Box
-                  sx={{
-                    width: `${(option.voteCount / maxVotes) * 100}%`,
-                    height: "100%",
-                    backgroundColor: index === 0 ? "#3f51b5" : "#f50057",
-                    transition: "width 0.3s ease-in-out",
-                  }}
-                />
-              </Box>
+              />
             </Box>
-          ))}
-      </Box>
-    );
-  };
+          </Box>
+        ))}
+    </Box>
+  );
+};

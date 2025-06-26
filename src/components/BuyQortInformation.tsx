@@ -1,154 +1,186 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react';
 import {
-    Avatar,
-    Box,
-    Button,
-    ButtonBase,
-    Collapse,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Input,
-    ListItem,
-    ListItemAvatar,
-    ListItemButton,
-    ListItemIcon,
-    ListItemText,
-    List,
-    MenuItem,
-    Popover,
-    Select,
-    TextField,
-    Typography,
-  } from "@mui/material";
-import { Label } from './Group/AddGroup';
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  List,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { Spacer } from '../common/Spacer';
-import { LoadingButton } from '@mui/lab';
-import { getBaseApiReact, MyContext } from '../App';
-import { getFee } from '../background';
-import qTradeLogo from "../assets/Icons/q-trade-logo.webp";
-
+import qTradeLogo from '../assets/Icons/q-trade-logo.webp';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
-import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
-import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../utils/events';
+import { useTranslation } from 'react-i18next';
 
+export const BuyQortInformation = ({ balance }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
+  const openBuyQortInfoFunc = useCallback(
+    (e) => {
+      setIsOpen(true);
+    },
+    [setIsOpen]
+  );
 
-export const BuyQortInformation = ({balance}) => {
-  const [isOpen, setIsOpen] = useState(false) 
+  useEffect(() => {
+    subscribeToEvent('openBuyQortInfo', openBuyQortInfoFunc);
 
-    const openBuyQortInfoFunc = useCallback((e) => {
-     setIsOpen(true)
- 
-     }, [ setIsOpen]);
-   
-     useEffect(() => {
-       subscribeToEvent("openBuyQortInfo", openBuyQortInfoFunc);
-   
-       return () => {
-         unsubscribeFromEvent("openBuyQortInfo", openBuyQortInfoFunc);
-       };
-     }, [openBuyQortInfoFunc]);
+    return () => {
+      unsubscribeFromEvent('openBuyQortInfo', openBuyQortInfoFunc);
+    };
+  }, [openBuyQortInfoFunc]);
 
   return (
     <Dialog
-          open={isOpen}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
-        >
-          <DialogTitle id="alert-dialog-title">
-            {"Get QORT"}
-          </DialogTitle>
-          <DialogContent>
-          <Box
-          sx={{
-            width: "400px",
-            maxWidth: '90vw',
-            height: "400px",
-            maxHeight: '90vh',
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "10px",
-            padding: "10px",
-          }}
-        >
-         <Typography>Get QORT using Qortal's crosschain trade portal</Typography>
-         <ButtonBase
-        sx={{
-          "&:hover": { backgroundColor: "secondary.main" },
-          transition: "all 0.1s ease-in-out",
-          padding: "5px",
-          borderRadius: "5px",
-          gap: "5px",
-        }}
-        onClick={async () => {
-            executeEvent("addTab", {
-              data: { service: "APP", name: "q-trade" },
-            });
-            executeEvent("open-apps-mode", {});
-            setIsOpen(false)
-          }}
-      >
-        <img
-          style={{
-            borderRadius: "50%",
-            height: '30px'
-          }}
-          src={qTradeLogo}
-        />
-        <Typography
-          sx={{
-            fontSize: "1rem",
-          }}
-        >
-          Trade QORT
-        </Typography>
-      </ButtonBase>
-      <Spacer height='40px' />
-         <Typography sx={{
-            textDecoration: 'underline'
-         }}>Benefits of having QORT</Typography>
-         <List
-      sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}
-      aria-label="contacts"
+      open={isOpen}
+      aria-labelledby="alert-dialog-title"
+      aria-describedby="alert-dialog-description"
     >
-      <ListItem disablePadding>
-         
-          <ListItemIcon>
-            <RadioButtonCheckedIcon sx={{
-                color: 'white'
-            }} />
-          </ListItemIcon>
-          <ListItemText primary="Create transactions on the Qortal Blockchain" />
-     
-      </ListItem>
-      <ListItem disablePadding>
-         
-         <ListItemIcon>
-           <RadioButtonCheckedIcon sx={{
-               color: 'white'
-           }} />
-         </ListItemIcon>
-         <ListItemText primary="Having at least 4 QORT in your balance allows you to send chat messages at near instant speed." />
-    
-     </ListItem>
-    </List>
-        </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setIsOpen(false)
+      <DialogTitle
+        id="alert-dialog-title"
+        sx={{
+          textAlign: 'center',
+          color: theme.palette.text.primary,
+          fontWeight: 'bold',
+          opacity: 1,
+        }}
+      >
+        {t('core:action.get_qort', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
+
+      <DialogContent>
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            height: '350px',
+            maxHeight: '80vh',
+            maxWidth: '90vw',
+            padding: '10px',
+            width: '400px',
+          }}
+        >
+          <Typography>
+            {t('core:message.generic.get_qort_trade_portal', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+
+          <ButtonBase
+            sx={{
+              '&:hover': { backgroundColor: theme.palette.secondary.main },
+              transition: 'all 0.1s ease-in-out',
+              padding: '5px',
+              borderRadius: '8px',
+              gap: '5px',
+            }}
+            onClick={async () => {
+              executeEvent('addTab', {
+                data: { service: 'APP', name: 'q-trade' },
+              });
+              executeEvent('open-apps-mode', {});
+              setIsOpen(false);
+            }}
+          >
+            <img
+              style={{
+                borderRadius: '50%',
+                height: '30px',
+              }}
+              src={qTradeLogo}
+            />
+            <Typography
+              sx={{
+                fontSize: '1rem',
               }}
             >
-              Close
-            </Button>
-            
-          </DialogActions>
-        </Dialog>
-  )
-}
+              {t('core:action.trade_qort', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </ButtonBase>
+
+          <Spacer height="15px" />
+
+          <Typography
+            sx={{
+              textDecoration: 'underline',
+            }}
+          >
+            {t('core:message.generic.benefits_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+
+          <List
+            sx={{
+              maxWidth: 360,
+              width: '100%',
+            }}
+            aria-label={t('core:contact_other', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          >
+            <ListItem disablePadding>
+              <ListItemIcon>
+                <RadioButtonCheckedIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary={t('core:action.create_transaction', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              />
+            </ListItem>
+
+            <ListItem disablePadding>
+              <ListItemIcon>
+                <RadioButtonCheckedIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary={t('core:message.generic.minimal_qort_balance', {
+                  quantity: 6,
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              />
+            </ListItem>
+          </List>
+        </Box>
+      </DialogContent>
+
+      <DialogActions>
+        <Button
+          variant="contained"
+          onClick={() => {
+            setIsOpen(false);
+          }}
+        >
+          {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};

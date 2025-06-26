@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -16,53 +10,52 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  ListItem,
-  ListItemAvatar,
-  ListItemButton,
-  ListItemText,
   MenuItem,
   Popover,
   Select,
   TextField,
   Typography,
-} from "@mui/material";
-
-import { getNameInfo } from "./Group";
-import { getBaseApi, getFee } from "../../background";
-import { LoadingButton } from "@mui/lab";
-import LockIcon from "@mui/icons-material/Lock";
-import NoEncryptionGmailerrorredIcon from "@mui/icons-material/NoEncryptionGmailerrorred";
+  useTheme,
+} from '@mui/material';
+import { LoadingButton } from '@mui/lab';
+import LockIcon from '@mui/icons-material/Lock';
+import NoEncryptionGmailerrorredIcon from '@mui/icons-material/NoEncryptionGmailerrorred';
 import {
-  MyContext,
+  QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
   getBaseApiReact,
-  isMobile,
-} from "../../App";
-import { Spacer } from "../../common/Spacer";
-import { CustomLoader } from "../../common/CustomLoader";
-import { RequestQueueWithPromise } from "../../utils/queue/queue";
-import { useRecoilState } from "recoil";
+} from '../../App';
+import { Spacer } from '../../common/Spacer';
+import { CustomLoader } from '../../common/CustomLoader';
+import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import {
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
-} from "../../atoms/global";
-import { Label } from "./AddGroup";
-import ShortUniqueId from "short-unique-id";
-import { CustomizedSnackbars } from "../Snackbar/Snackbar";
-import { getGroupNames } from "./UserListOfInvites";
-import { WrapperUserAction } from "../WrapperUserAction";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import ErrorBoundary from "../../common/ErrorBoundary";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-export const requestQueuePromos = new RequestQueueWithPromise(20);
+  txListAtom,
+} from '../../atoms/global';
+import { Label } from './AddGroup';
+import ShortUniqueId from 'short-unique-id';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { getGroupNames } from './UserListOfInvites';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import ErrorBoundary from '../../common/ErrorBoundary';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { getFee } from '../../background/background.ts';
+import { useAtom, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
+
+const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+const uid = new ShortUniqueId({ length: 8 });
+
+export const requestQueuePromos = new RequestQueueWithPromise(3);
 
 export function utf8ToBase64(inputString: string): string {
   // Encode the string as UTF-8
   const utf8String = encodeURIComponent(inputString).replace(
     /%([0-9A-F]{2})/g,
-    (match, p1) => String.fromCharCode(Number("0x" + p1))
+    (match, p1) => String.fromCharCode(Number('0x' + p1))
   );
 
   // Convert the UTF-8 encoded string to base64
@@ -70,40 +63,45 @@ export function utf8ToBase64(inputString: string): string {
   return base64String;
 }
 
-const uid = new ShortUniqueId({ length: 8 });
-
 export function getGroupId(str) {
   const match = str.match(/group-(\d+)-/);
   return match ? match[1] : null;
 }
-const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 export const ListOfGroupPromotions = () => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isShowModal, setIsShowModal] = useState(false);
-  const [text, setText] = useState("");
-  const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useRecoilState(
+  const [text, setText] = useState('');
+  const [myGroupsWhereIAmAdmin, setMyGroupsWhereIAmAdmin] = useAtom(
     myGroupsWhereIAmAdminAtom
   );
-  const [promotions, setPromotions] = useRecoilState(promotionsAtom);
-  const [promotionTimeInterval, setPromotionTimeInterval] = useRecoilState(
+  const [promotions, setPromotions] = useAtom(promotionsAtom);
+  const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
-  const [isExpanded, setIsExpanded] = React.useState(false);
-
+  const [isExpanded, setIsExpanded] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [fee, setFee] = useState(null);
   const [isLoadingJoinGroup, setIsLoadingJoinGroup] = useState(false);
   const [isLoadingPublish, setIsLoadingPublish] = useState(false);
-  const { show, setTxList } = useContext(MyContext);
-
-  const listRef = useRef();
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const setTxList = useSetAtom(txListAtom);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
+  const listRef = useRef(null);
   const rowVirtualizer = useVirtualizer({
     count: promotions.length,
-    getItemKey: React.useCallback(
+    getItemKey: useCallback(
       (index) => promotions[index]?.identifier,
       [promotions]
     ),
@@ -115,26 +113,30 @@ export const ListOfGroupPromotions = () => {
   useEffect(() => {
     try {
       (async () => {
-        const feeRes = await getFee("ARBITRARY");
+        const feeRes = await getFee('ARBITRARY');
         setFee(feeRes?.fee);
       })();
-    } catch (error) {}
+    } catch (error) {
+      console.log(error);
+    }
   }, []);
+
   const getPromotions = useCallback(async () => {
     try {
       setPromotionTimeInterval(Date.now());
       const identifier = `group-promotions-ui24-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=100&includemetadata=false&reverse=true&prefix=true`;
       const response = await fetch(url, {
-        method: "GET",
+        method: 'GET',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
       });
       const responseData = await response.json();
       let data: any[] = [];
       const uniqueGroupIds = new Set();
       const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
           const name = await requestQueuePromos.enqueue(async () => {
@@ -142,7 +144,7 @@ export const ListOfGroupPromotions = () => {
               promo.name
             }/${promo.identifier}`;
             const response = await fetch(url, {
-              method: "GET",
+              method: 'GET',
             });
 
             try {
@@ -164,7 +166,7 @@ export const ListOfGroupPromotions = () => {
                 }
               }
             } catch (error) {
-              console.error("Error fetching promo:", error);
+              console.error('Error fetching promo:', error);
             }
           });
         }
@@ -213,6 +215,7 @@ export const ListOfGroupPromotions = () => {
     setPopoverAnchor(null);
     setOpenPopoverIndex(null);
   };
+
   const publishPromo = async () => {
     try {
       setIsLoadingPublish(true);
@@ -222,10 +225,11 @@ export const ListOfGroupPromotions = () => {
 
       await new Promise((res, rej) => {
         window
-          .sendMessage("publishOnQDN", {
+          .sendMessage('publishOnQDN', {
             data: data,
             identifier: identifier,
-            service: "DOCUMENT",
+            service: 'DOCUMENT',
+            uploadType: 'base64',
           })
           .then((response) => {
             if (!response?.error) {
@@ -235,23 +239,32 @@ export const ListOfGroupPromotions = () => {
             rej(response.error);
           })
           .catch((error) => {
-            rej(error.message || "An error occurred");
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
           });
       });
       setInfoSnack({
-        type: "success",
-        message:
-          "Successfully published promotion. It may take a couple of minutes for the promotion to appear",
+        type: 'success',
+        message: t('group:message.success.group_promotion', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
       setOpenSnack(true);
-      setText("");
+      setText('');
       setSelectedGroup(null);
       setIsShowModal(false);
     } catch (error) {
       setInfoSnack({
-        type: "error",
+        type: 'error',
         message:
-          error?.message || "Error publishing the promotion. Please try again",
+          error?.message ||
+          t('group:message.error.group_promotion', {
+            postProcess: 'capitalizeFirstChar',
+          }),
       });
       setOpenSnack(true);
     } finally {
@@ -262,32 +275,44 @@ export const ListOfGroupPromotions = () => {
   const handleJoinGroup = async (group, isOpen) => {
     try {
       const groupId = group.groupId;
-      const fee = await getFee("JOIN_GROUP");
+      const fee = await getFee('JOIN_GROUP');
+
       await show({
-        message: "Would you like to perform an JOIN_GROUP transaction?",
-        publishFee: fee.fee + " QORT",
+        message: t('core:message.question.perform_transaction', {
+          action: 'JOIN_GROUP',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
       });
+
       setIsLoadingJoinGroup(true);
       await new Promise((res, rej) => {
         window
-          .sendMessage("joinGroup", {
+          .sendMessage('joinGroup', {
             groupId,
           })
           .then((response) => {
             if (!response?.error) {
               setInfoSnack({
-                type: "success",
-                message:
-                  "Successfully requested to join group. It may take a couple of minutes for the changes to propagate",
+                type: 'success',
+                message: t('group:message.success.group_join', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
               });
 
               if (isOpen) {
                 setTxList((prev) => [
                   {
                     ...response,
-                    type: "joined-group",
-                    label: `Joined Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Joined Group ${group?.groupName}: success!`,
+                    type: 'joined-group',
+                    label: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirstChar',
+                    }),
+                    labelDone: t('group:message.success.group_join_label', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirstChar',
+                    }),
                     done: false,
                     groupId,
                   },
@@ -297,23 +322,28 @@ export const ListOfGroupPromotions = () => {
                 setTxList((prev) => [
                   {
                     ...response,
-                    type: "joined-group-request",
-                    label: `Requested to join Group ${group?.groupName}: awaiting confirmation`,
-                    labelDone: `Requested to join Group ${group?.groupName}: success!`,
+                    type: 'joined-group-request',
+                    label: t('group:message.success.group_join_request', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirstChar',
+                    }),
+                    labelDone: t('group:message.success.group_join_outcome', {
+                      group_name: group?.groupName,
+                      postProcess: 'capitalizeFirstChar',
+                    }),
                     done: false,
                     groupId,
                   },
                   ...prev,
                 ]);
               }
-
               setOpenSnack(true);
               handlePopoverClose();
               res(response);
               return;
             } else {
               setInfoSnack({
-                type: "error",
+                type: 'error',
                 message: response?.error,
               });
               setOpenSnack(true);
@@ -322,8 +352,12 @@ export const ListOfGroupPromotions = () => {
           })
           .catch((error) => {
             setInfoSnack({
-              type: "error",
-              message: error.message || "An error occurred",
+              type: 'error',
+              message:
+                error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
             });
             setOpenSnack(true);
             rej(error);
@@ -331,6 +365,7 @@ export const ListOfGroupPromotions = () => {
       });
       setIsLoadingJoinGroup(false);
     } catch (error) {
+      console.log(error);
     } finally {
       setIsLoadingJoinGroup(false);
     }
@@ -339,55 +374,62 @@ export const ListOfGroupPromotions = () => {
   return (
     <Box
       sx={{
-        width: "100%",
-        display: "flex",
-        marginTop: "20px",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
+        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        marginTop: '20px',
+        width: '100%',
       }}
     >
-      <Box sx={{
-        display: 'flex',
-        gap: '20px',
-        width: '100%',
-        justifyContent: 'space-between'
-      }}>
+      <Box
+        sx={{
+          display: 'flex',
+          gap: '20px',
+          justifyContent: 'space-between',
+          width: '100%',
+        }}
+      >
         <ButtonBase
           sx={{
-            display: "flex",
-            flexDirection: "row",
-            padding: `0px ${isExpanded ? "24px" : "20px"}`,
-            gap: "10px",
-            justifyContent: "flex-start",
-            alignSelf: isExpanded && "flex-start",
+            alignSelf: isExpanded && 'flex-start',
+            display: 'flex',
+            flexDirection: 'row',
+            gap: '10px',
+            justifyContent: 'flex-start',
+            padding: `0px ${isExpanded ? '24px' : '20px'}`,
           }}
           onClick={() => setIsExpanded((prev) => !prev)}
         >
           <Typography
             sx={{
-              fontSize: "1rem",
+              fontSize: '1rem',
             }}
           >
-            Group promotions {promotions.length > 0 && ` (${promotions.length})`}
+            {t('group:group.promotions', {
+              postProcess: 'capitalizeFirstChar',
+            })}{' '}
+            {promotions.length > 0 && ` (${promotions.length})`}
           </Typography>
+
           {isExpanded ? (
             <ExpandLessIcon
               sx={{
-                marginLeft: "auto",
+                marginLeft: 'auto',
               }}
             />
           ) : (
             <ExpandMoreIcon
               sx={{
-                marginLeft: "auto",
+                marginLeft: 'auto',
               }}
             />
           )}
         </ButtonBase>
+
         <Box
           style={{
-            width: "330px",
+            width: '330px',
           }}
         />
       </Box>
@@ -396,90 +438,99 @@ export const ListOfGroupPromotions = () => {
         <>
           <Box
             sx={{
-              width: isMobile ? "320px" : "750px",
-              maxWidth: "90%",
-              display: "flex",
-              flexDirection: "column",
-              padding: "0px 20px",
+              display: 'flex',
+              flexDirection: 'column',
+              maxWidth: '90%',
+              padding: '0px 20px',
+              width: '750px',
             }}
           >
             <Box
               sx={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
+                alignItems: 'center',
+                display: 'flex',
+                justifyContent: 'space-between',
+                width: '100%',
               }}
             >
               <Typography
                 sx={{
-                  fontSize: "13px",
+                  fontSize: '13px',
                   fontWeight: 600,
                 }}
               ></Typography>
+
               <Button
                 variant="contained"
                 onClick={() => setIsShowModal(true)}
                 sx={{
-                  fontSize: "12px",
+                  fontSize: '12px',
                 }}
               >
-                Add Promotion
+                {t('group:action.add_promotion', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Button>
             </Box>
+
             <Spacer height="10px" />
           </Box>
+
           <Box
             sx={{
-              width: isMobile ? "320px" : "750px",
-              maxWidth: "90%",
-              maxHeight: "700px",
-              display: "flex",
-              flexDirection: "column",
-              bgcolor: "background.paper",
-              padding: "20px 0px",
-              borderRadius: "19px",
+              bgcolor: 'background.paper',
+              borderRadius: '19px',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: '700px',
+              maxWidth: '90%',
+              padding: '20px 0px',
+              width: '750px',
             }}
           >
             {loading && promotions.length === 0 && (
               <Box
                 sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
                 }}
               >
                 <CustomLoader />
               </Box>
             )}
+
             {!loading && promotions.length === 0 && (
               <Box
                 sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  height: "100%",
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100%',
                 }}
               >
                 <Typography
                   sx={{
-                    fontSize: "11px",
+                    fontSize: '11px',
                     fontWeight: 400,
-                    color: "rgba(255, 255, 255, 0.2)",
+                    color: 'rgba(255, 255, 255, 0.2)',
                   }}
                 >
-                  Nothing to display
+                  {t('group:message.generic.no_display', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Typography>
               </Box>
             )}
+
             <div
               style={{
-                height: "600px",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                width: "100%",
+                height: '600px',
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                width: '100%',
               }}
             >
               <div
@@ -487,24 +538,24 @@ export const ListOfGroupPromotions = () => {
                 className="scrollable-container"
                 style={{
                   flexGrow: 1,
-                  overflow: "auto",
-                  position: "relative",
-                  display: "flex",
-                  height: "0px",
+                  overflow: 'auto',
+                  position: 'relative',
+                  display: 'flex',
+                  height: '0px',
                 }}
               >
                 <div
                   style={{
                     height: rowVirtualizer.getTotalSize(),
-                    width: "100%",
+                    width: '100%',
                   }}
                 >
                   <div
                     style={{
-                      position: "absolute",
+                      position: 'absolute',
                       top: 0,
                       left: 0,
-                      width: "100%",
+                      width: '100%',
                     }}
                   >
                     {rowVirtualizer.getVirtualItems().map((virtualRow) => {
@@ -516,113 +567,125 @@ export const ListOfGroupPromotions = () => {
                           ref={rowVirtualizer.measureElement} //measure dynamic row height
                           key={promotion?.identifier}
                           style={{
-                            position: "absolute",
+                            alignItems: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '5px',
+                            left: '50%', // Move to the center horizontally
+                            overscrollBehavior: 'none',
+                            padding: '10px 0',
+                            position: 'absolute',
                             top: 0,
-                            left: "50%", // Move to the center horizontally
                             transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                            width: "100%", // Control width (90% of the parent)
-                            padding: "10px 0",
-                            display: "flex",
-                            alignItems: "center",
-                            overscrollBehavior: "none",
-                            flexDirection: "column",
-                            gap: "5px",
+                            width: '100%', // Control width (90% of the parent)
                           }}
                         >
                           <ErrorBoundary
                             fallback={
                               <Typography>
-                                Error loading content: Invalid Data
+                                {t('group:message.generic.invalid_data', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
                               </Typography>
                             }
                           >
                             <Box
                               sx={{
-                                display: "flex",
-                                flexDirection: "column",
-                                width: "100%",
-                                padding: "0px 20px",
+                                display: 'flex',
+                                flexDirection: 'column',
+                                width: '100%',
+                                padding: '0px 20px',
                               }}
                             >
                               <Popover
                                 open={openPopoverIndex === promotion?.groupId}
                                 anchorEl={popoverAnchor}
-                                onClose={(event, reason) => {
-                                  if (reason === "backdropClick") {
+                                onClose={(reason) => {
+                                  if (reason === 'backdropClick') {
                                     // Prevent closing on backdrop click
                                     return;
                                   }
                                   handlePopoverClose(); // Close only on other events like Esc key press
                                 }}
                                 anchorOrigin={{
-                                  vertical: "top",
-                                  horizontal: "center",
+                                  vertical: 'top',
+                                  horizontal: 'center',
                                 }}
                                 transformOrigin={{
-                                  vertical: "bottom",
-                                  horizontal: "center",
+                                  vertical: 'bottom',
+                                  horizontal: 'center',
                                 }}
-                                style={{ marginTop: "8px" }}
+                                style={{ marginTop: '8px' }}
                               >
                                 <Box
                                   sx={{
-                                    width: "325px",
-                                    height: "auto",
-                                    maxHeight: "400px",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    alignItems: "center",
-                                    gap: "10px",
-                                    padding: "10px",
+                                    width: '325px',
+                                    height: 'auto',
+                                    maxHeight: '400px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '10px',
+                                    padding: '10px',
                                   }}
                                 >
                                   <Typography
                                     sx={{
-                                      fontSize: "13px",
+                                      fontSize: '13px',
                                       fontWeight: 600,
                                     }}
                                   >
-                                    Group name: {` ${promotion?.groupName}`}
+                                    {t('group:group.name', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })}
+                                    : {` ${promotion?.groupName}`}
                                   </Typography>
+
                                   <Typography
                                     sx={{
-                                      fontSize: "13px",
+                                      fontSize: '13px',
                                       fontWeight: 600,
                                     }}
                                   >
-                                    Number of members:{" "}
-                                    {` ${promotion?.memberCount}`}
+                                    {t('group:group.member_number', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })}
+                                    : {` ${promotion?.memberCount}`}
                                   </Typography>
+
                                   {promotion?.description && (
                                     <Typography
                                       sx={{
-                                        fontSize: "13px",
+                                        fontSize: '13px',
                                         fontWeight: 600,
                                       }}
                                     >
                                       {promotion?.description}
                                     </Typography>
                                   )}
+
                                   {promotion?.isOpen === false && (
                                     <Typography
                                       sx={{
-                                        fontSize: "13px",
+                                        fontSize: '13px',
                                         fontWeight: 600,
                                       }}
                                     >
-                                      *This is a closed/private group, so you
-                                      will need to wait until an admin accepts
-                                      your request
+                                      {t('group:message.generic.closed_group', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })}
                                     </Typography>
                                   )}
+
                                   <Spacer height="5px" />
+
                                   <Box
                                     sx={{
-                                      display: "flex",
-                                      gap: "20px",
-                                      alignItems: "center",
-                                      width: "100%",
-                                      justifyContent: "center",
+                                      display: 'flex',
+                                      gap: '20px',
+                                      alignItems: 'center',
+                                      width: '100%',
+                                      justifyContent: 'center',
                                     }}
                                   >
                                     <LoadingButton
@@ -631,8 +694,11 @@ export const ListOfGroupPromotions = () => {
                                       variant="contained"
                                       onClick={handlePopoverClose}
                                     >
-                                      Close
+                                      {t('core:action.close', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })}
                                     </LoadingButton>
+
                                     <LoadingButton
                                       loading={isLoadingJoinGroup}
                                       loadingPosition="start"
@@ -644,7 +710,9 @@ export const ListOfGroupPromotions = () => {
                                         )
                                       }
                                     >
-                                      Join
+                                      {t('core:action.join', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })}
                                     </LoadingButton>
                                   </Box>
                                 </Box>
@@ -652,23 +720,23 @@ export const ListOfGroupPromotions = () => {
 
                               <Box
                                 sx={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  width: "100%",
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: '100%',
                                 }}
                               >
                                 <Box
                                   sx={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "15px",
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '15px',
                                   }}
                                 >
                                   <Avatar
                                     sx={{
-                                      backgroundColor: "#27282c",
-                                      color: "white",
+                                      backgroundColor: '#27282c',
+                                      color: theme.palette.text.primary,
                                     }}
                                     alt={promotion?.name}
                                     src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -677,75 +745,86 @@ export const ListOfGroupPromotions = () => {
                                   >
                                     {promotion?.name?.charAt(0)}
                                   </Avatar>
+
                                   <Typography
                                     sx={{
                                       fontWight: 600,
-                                      fontFamily: "Inter",
-                                      color: "cadetBlue",
+                                      fontFamily: 'Inter',
                                     }}
                                   >
                                     {promotion?.name}
                                   </Typography>
                                 </Box>
+
                                 <Typography
                                   sx={{
                                     fontWight: 600,
-                                    fontFamily: "Inter",
-                                    color: "cadetBlue",
+                                    fontFamily: 'Inter',
                                   }}
                                 >
                                   {promotion?.groupName}
                                 </Typography>
                               </Box>
+
                               <Spacer height="20px" />
+
                               <Box
                                 sx={{
-                                  display: "flex",
-                                  gap: "20px",
-                                  alignItems: "center",
+                                  display: 'flex',
+                                  gap: '20px',
+                                  alignItems: 'center',
                                 }}
                               >
                                 {promotion?.isOpen === false && (
                                   <LockIcon
                                     sx={{
-                                      color: "var(--green)",
+                                      color: theme.palette.other.positive,
                                     }}
                                   />
                                 )}
+
                                 {promotion?.isOpen === true && (
                                   <NoEncryptionGmailerrorredIcon
                                     sx={{
-                                      color: "var(--danger)",
+                                      color: theme.palette.other.danger,
                                     }}
                                   />
                                 )}
+
                                 <Typography
                                   sx={{
-                                    fontSize: "15px",
+                                    fontSize: '15px',
                                     fontWeight: 600,
                                   }}
                                 >
                                   {promotion?.isOpen
-                                    ? "Public group"
-                                    : "Private group"}
+                                    ? t('group:group.public', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })
+                                    : t('group:group.private', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })}
                                 </Typography>
                               </Box>
+
                               <Spacer height="20px" />
+
                               <Typography
                                 sx={{
                                   fontWight: 600,
-                                  fontFamily: "Inter",
-                                  color: "cadetBlue",
+                                  fontFamily: 'Inter',
                                 }}
                               >
                                 {promotion?.data}
                               </Typography>
+
                               <Spacer height="20px" />
+
                               <Box
                                 sx={{
-                                  display: "flex",
-                                  justifyContent: "center",
-                                  width: "100%",
+                                  display: 'flex',
+                                  justifyContent: 'center',
+                                  width: '100%',
                                 }}
                               >
                                 <Button
@@ -754,14 +833,18 @@ export const ListOfGroupPromotions = () => {
                                     handlePopoverOpen(event, promotion?.groupId)
                                   }
                                   sx={{
-                                    fontSize: "12px",
-                                    color: "white",
+                                    fontSize: '12px',
+                                    color: theme.palette.text.primary,
                                   }}
                                 >
-                                  Join Group: {` ${promotion?.groupName}`}
+                                  {t('group:action.join_group', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                  : {` ${promotion?.groupName}`}
                                 </Button>
                               </Box>
                             </Box>
+
                             <Spacer height="50px" />
                           </ErrorBoundary>
                         </div>
@@ -774,92 +857,131 @@ export const ListOfGroupPromotions = () => {
           </Box>
         </>
       </Collapse>
+
       <Spacer height="20px" />
 
-      {isShowModal && (
-        <Dialog
-          open={isShowModal}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
+      <Dialog
+        open={isShowModal}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
         >
-          <DialogTitle id="alert-dialog-title">
-            {"Promote your group to non-members"}
-          </DialogTitle>
-          <DialogContent>
-            <DialogContentText id="alert-dialog-description">
-              Only the latest promotion from the week will be shown for your
-              group.
-            </DialogContentText>
-            <DialogContentText id="alert-dialog-description2">
-              Max 200 characters. Publish Fee: {fee && fee} {" QORT"}
-            </DialogContentText>
-            <Spacer height="20px" />
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px",
-              }}
+          {t('group:action.promote_group', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </DialogTitle>
+
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            {t('group:message.generic.latest_promotion', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </DialogContentText>
+
+          <DialogContentText id="alert-dialog-description2">
+            {t('group:message.generic.max_chars', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            : {fee && fee} {' QORT'}
+          </DialogContentText>
+
+          <Spacer height="20px" />
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px',
+            }}
+          >
+            <Label>
+              {t('group:action.select_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Label>
+
+            <Label>
+              {t('group:message.generic.admin_only', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Label>
+
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={selectedGroup}
+              label={t('group:group.groups_admin', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              variant="outlined"
             >
-              <Label>Select a group</Label>
-              <Label>Only groups where you are an admin will be shown</Label>
-              <Select
-                labelId="demo-simple-select-label"
-                id="demo-simple-select"
-                value={selectedGroup}
-                label="Groups where you are an admin"
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                variant="outlined"
-              >
-                {myGroupsWhereIAmAdmin?.map((group) => {
-                  return (
-                    <MenuItem key={group?.groupId} value={group?.groupId}>
-                      {group?.groupName}
-                    </MenuItem>
-                  );
-                })}
-              </Select>
-            </Box>
-            <Spacer height="20px" />
-            <TextField
-              label="Promotion text"
-              variant="filled"
-              fullWidth
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              inputProps={{
-                maxLength: 200,
-              }}
-              multiline={true}
-              sx={{
-                "& .MuiFormLabel-root": {
-                  color: "white",
-                },
-                "& .MuiFormLabel-root.Mui-focused": {
-                  color: "white",
-                },
-              }}
-            />
-          </DialogContent>
-          <DialogActions>
-            <Button
-              disabled={isLoadingPublish}
-              variant="contained"
-              onClick={() => setIsShowModal(false)}
-            >
-              Close
-            </Button>
-            <Button
-              disabled={!text.trim() || !selectedGroup || isLoadingPublish}
-              variant="contained"
-              onClick={publishPromo}
-              autoFocus
-            >
-              Publish
-            </Button>
-          </DialogActions>
-        </Dialog>
-      )}
+              {myGroupsWhereIAmAdmin?.map((group) => {
+                return (
+                  <MenuItem key={group?.groupId} value={group?.groupId}>
+                    {group?.groupName}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </Box>
+
+          <Spacer height="20px" />
+
+          <TextField
+            label={t('core:message.promotion_text', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            variant="filled"
+            fullWidth
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            inputProps={{
+              maxLength: 200,
+            }}
+            multiline={true}
+            sx={{
+              '& .MuiFormLabel-root': {
+                color: theme.palette.text.primary,
+              },
+              '& .MuiFormLabel-root.Mui-focused': {
+                color: theme.palette.text.primary,
+              },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            disabled={isLoadingPublish}
+            variant="contained"
+            onClick={() => setIsShowModal(false)}
+          >
+            {t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
+          <Button
+            disabled={!text.trim() || !selectedGroup || isLoadingPublish}
+            variant="contained"
+            onClick={publishPromo}
+            autoFocus
+          >
+            {t('core:action.publish', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}

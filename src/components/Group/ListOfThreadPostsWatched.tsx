@@ -1,180 +1,207 @@
-import * as React from "react";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Checkbox from "@mui/material/Checkbox";
-import IconButton from "@mui/material/IconButton";
-import CommentIcon from "@mui/icons-material/Comment";
-import InfoIcon from "@mui/icons-material/Info";
-import GroupAddIcon from "@mui/icons-material/GroupAdd";
-import { executeEvent } from "../../utils/events";
-import { Box, Typography } from "@mui/material";
-import { Spacer } from "../../common/Spacer";
-import { getGroupNames } from "./UserListOfInvites";
-import { CustomLoader } from "../../common/CustomLoader";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import { isMobile } from "../../App";
+import { useEffect, useState } from 'react';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import IconButton from '@mui/material/IconButton';
+import { executeEvent } from '../../utils/events';
+import { Box, Typography, useTheme } from '@mui/material';
+import { Spacer } from '../../common/Spacer';
+import { CustomLoader } from '../../common/CustomLoader';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useTranslation } from 'react-i18next';
 
 export const ListOfThreadPostsWatched = () => {
-  const [posts, setPosts] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const theme = useTheme();
+  const { t } = useTranslation([
+    'auth',
+    'core',
+    'group',
+    'question',
+    'tutorial',
+  ]);
 
   const getPosts = async () => {
     try {
       await new Promise((res, rej) => {
-        window.sendMessage("getThreadActivity", {})
-        .then((response) => {
-          if (!response?.error) {
-            if (!response) {
-              res(null);
+        window
+          .sendMessage('getThreadActivity', {})
+          .then((response) => {
+            if (!response?.error) {
+              if (!response) {
+                res(null);
+                return;
+              }
+              const uniquePosts = response.reduce((acc, current) => {
+                const x = acc.find(
+                  (item) => item?.thread?.threadId === current?.thread?.threadId
+                );
+                if (!x) {
+                  return acc.concat([current]);
+                } else {
+                  return acc;
+                }
+              }, []);
+              setPosts(uniquePosts);
+              res(uniquePosts);
               return;
             }
-            const uniquePosts = response.reduce((acc, current) => {
-              const x = acc.find(
-                (item) => item?.thread?.threadId === current?.thread?.threadId
-              );
-              if (!x) {
-                return acc.concat([current]);
-              } else {
-                return acc;
-              }
-            }, []);
-            setPosts(uniquePosts);
-            res(uniquePosts);
-            return;
-          }
-          rej(response.error);
-        })
-        .catch((error) => {
-          rej(error.message || "An error occurred");
-        });
-      
+            rej(response.error);
+          })
+          .catch((error) => {
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
+          });
       });
     } catch (error) {
+      console.log(error);
     } finally {
       setLoading(false);
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     getPosts();
   }, []);
 
   return (
-    <Box sx={{
-      width: "100%",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: 'center'
-    }}>
+    <Box
+      sx={{
+        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+      }}
+    >
       <Box
         sx={{
-          width: "322px",
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           padding: '0px 20px',
-
+          width: '322px',
         }}
       >
         <Typography
           sx={{
-            fontSize: "13px",
+            fontSize: '13px',
             fontWeight: 600,
           }}
         >
-          New Thread Posts:
+          {t('group:thread_posts', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          :
         </Typography>
-        <Spacer height="10px" /> 
+
+        <Spacer height="10px" />
       </Box>
 
       <Box
         sx={{
-          width: "322px",
-          height: isMobile ? "165px" : "250px",
-          display: "flex",
-          flexDirection: "column",
-          bgcolor: "background.paper",
-          padding: "20px",
-          borderRadius: '19px'
+          bgcolor: 'background.paper',
+          borderRadius: '19px',
+          display: 'flex',
+          flexDirection: 'column',
+          height: '250px',
+          padding: '20px',
+          width: '322px',
         }}
       >
         {loading && posts.length === 0 && (
           <Box
             sx={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
+              display: 'flex',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <CustomLoader />
           </Box>
         )}
+
         {!loading && posts.length === 0 && (
           <Box
             sx={{
-              width: "100%",
-              display: "flex",
-              justifyContent: "center",
               alignItems: 'center',
+              display: 'flex',
               height: '100%',
-           
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             <Typography
               sx={{
-                fontSize: "11px",
+                fontSize: '11px',
                 fontWeight: 400,
-                color: 'rgba(255, 255, 255, 0.2)'
+                color: 'rgba(255, 255, 255, 0.2)',
               }}
             >
-              Nothing to display
+              {t('group:message.generic.no_display', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
         )}
+
         {posts?.length > 0 && (
-               <List
-               className="scrollable-container"
-               sx={{
-                 width: "100%",
-                 maxWidth: 360,
-                 bgcolor: "background.paper",
-                 maxHeight: "300px",
-                 overflow: "auto",
-               }}
-             >
-               {posts?.map((post) => {
-                 return (
-                   <ListItem
-                     key={post?.thread?.threadId}
-                     onClick={() => {
-                       executeEvent("openThreadNewPost", {
-                         data: post,
-                       });
-                     }}
-                     disablePadding
-                     secondaryAction={
-                       <IconButton edge="end" aria-label="comments">
-                         <VisibilityIcon
-                           sx={{
-                             color: "red",
-                           }}
-                         />
-                       </IconButton>
-                     }
-                   >
-                     <ListItemButton disableRipple role={undefined} dense>
-                       <ListItemText
-                         primary={`New post in ${post?.thread?.threadData?.title}`}
-                       />
-                     </ListItemButton>
-                   </ListItem>
-                 );
-               })}
-             </List>
+          <List
+            className="scrollable-container"
+            sx={{
+              bgcolor: 'background.paper',
+              maxHeight: '300px',
+              maxWidth: 360,
+              overflow: 'auto',
+              width: '100%',
+            }}
+          >
+            {posts?.map((post) => {
+              return (
+                <ListItem
+                  key={post?.thread?.threadId}
+                  onClick={() => {
+                    executeEvent('openThreadNewPost', {
+                      data: post,
+                    });
+                  }}
+                  disablePadding
+                  secondaryAction={
+                    <IconButton
+                      edge="end"
+                      aria-label={t('core:comment_other', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                      sx={{
+                        bgcolor: theme.palette.background.default,
+                        color: theme.palette.text.primary,
+                      }}
+                    >
+                      <VisibilityIcon
+                        sx={{
+                          color: 'red',
+                        }}
+                      />
+                    </IconButton>
+                  }
+                >
+                  <ListItemButton disableRipple role={undefined} dense>
+                    <ListItemText
+                      primary={t('core:new_post_in', {
+                        title: post?.thread?.threadData?.title,
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
         )}
-   
       </Box>
     </Box>
   );
