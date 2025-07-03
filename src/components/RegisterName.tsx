@@ -68,13 +68,13 @@ export const RegisterName = ({
     try {
       const res = await fetch(`${getBaseApiReact()}/names/` + name);
       const data = await res.json();
-      if (data?.message === 'name unknown') {
+      if (data?.message === 'name unknown' || data?.error) {
         setIsNameAvailable(Availability.AVAILABLE);
       } else {
         setIsNameAvailable(Availability.NOT_AVAILABLE);
       }
     } catch (error) {
-      console.error(error);
+      setIsNameAvailable(Availability.AVAILABLE);
     }
   };
   // Debounce logic
