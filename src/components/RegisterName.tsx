@@ -278,7 +278,7 @@ export const RegisterName = ({
                 <Typography>
                   {t('core:message.generic.name_registration', {
                     balance: balance ?? 0,
-                    fee: { nameFee },
+                    fee: nameFee,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
