@@ -83,8 +83,13 @@ export const CoreSyncStatus = () => {
     let message: string = '';
 
     if (isUsingGateway) {
-      imagePath = syncingImg;
-      message = `${t('core:minting.status.no_status')}`;
+      if (isSynchronizing) {
+        imagePath = syncingImg;
+        message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
+      } else {
+        imagePath = syncedImg;
+        message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
+      }
     } else if (isMintingPossible) {
       if (isSynchronizing) {
         imagePath = syncingImg;
