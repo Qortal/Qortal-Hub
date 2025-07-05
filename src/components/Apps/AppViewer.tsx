@@ -131,7 +131,8 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const copyLinkFunc = (e) => {
       const { tabId } = e.detail;
       if (tabId === app?.tabId) {
-        let link = 'qortal://' + app?.service + '/' + app?.name;
+        let link =
+          'qortal://' + app?.service + '/' + app?.name.replace(/ /g, '%20');
         if (path && path.startsWith('/')) {
           link = link + removeTrailingSlash(path);
         }

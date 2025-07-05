@@ -86,7 +86,9 @@ export const AppsDevModeHome = ({
 
         setInfoSnackCustom({
           type: 'error',
-          message: '',
+          message: t('core:message.generic.devmode_local_node', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         });
         return;
       }
