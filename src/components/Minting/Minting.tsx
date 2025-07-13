@@ -64,16 +64,62 @@ export type AddressLevelEntry = {
   count: number;
 };
 
+interface AccountInfo {
+  level: number;
+  blocksMinted: number;
+  blocksMintedAdjustment: number;
+  publicKey: string;
+  // other properties...
+}
+
+interface MintingAccount {
+  recipientAccount: string;
+  mintingAccount: string;
+  publicKey: string;
+  // other properties...
+}
+
+interface NodeStatus {
+  height: number;
+  isMintingPossible: boolean;
+  isSynchronizing: boolean;
+  syncPercent: number | undefined; // Note: syncPercent is optional, as it's checked for undefined in the code
+}
+
+interface InfoState {
+  type: string;
+  message: string;
+}
+
+interface TxListObject {
+  recipient: string;
+  type: string;
+  label: string;
+  labelDone: string;
+  done: boolean;
+  // Add any other properties that are present in the response object
+}
+
+interface RewardShare {
+  recipient: string;
+  mintingAccount: string;
+}
+
+type Group = {
+  groupId: string;
+  groupName: string;
+}
+
 export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const setTxList = useSetAtom(txListAtom);
   const [groups] = useAtom(memberGroupsAtom);
 
-  const [mintingAccounts, setMintingAccounts] = useState([]);
-  const [accountInfo, setAccountInfo] = useState(null);
-  const [mintingKey, setMintingKey] = useState('');
-  const [rewardShares, setRewardShares] = useState([]);
+  const [mintingAccounts, setMintingAccounts] = useState<MintingAccount[]>([]);
+  const [accountInfo, setAccountInfo] = useState<{ [address: string]: AccountInfo }>({});
+  // const [mintingKey, setMintingKey] = useState('');
+  const [rewardShares, setRewardShares] = useState<RewardShare[]>([]);
   const [adminInfo, setAdminInfo] = useState({});
-  const [nodeStatus, setNodeStatus] = useState({});
+  const [nodeStatus, setNodeStatus] = useState<NodeStatus | null>(null);
   const [addressLevel, setAddressLevel] = useState<AddressLevelEntry[]>([]);
   const [tier4Online, setTier4Online] = useState(0);
   const [openSnack, setOpenSnack] = useState(false);
@@ -89,19 +135,22 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     'question',
     'tutorial',
   ]);
-  const [info, setInfo] = useState(null);
+  const [info, setInfo] = useState<InfoState | null>(null);
   const [names, setNames] = useState({});
-  const [accountInfos, setAccountInfos] = useState({});
+  // const [accountInfos, setAccountInfos] = useState({});
   const [showWaitDialog, setShowWaitDialog] = useState(false);
   const timeoutNodeStatusRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-  const timeoutAdminInfoRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
+  const timeoutAdminInfoRef = useRef<number | null>(null);
   const isPartOfMintingGroup = useMemo(() => {
     if (groups?.length === 0) return false;
-    return !!groups?.find((item) => item?.groupId?.toString() === '694');
+    return !!groups?.find((item: Group) => {
+      if ('groupId' in item) {
+        return item.groupId?.toString() === '694';
+      }
+      return false;
+    });
   }, [groups]);
 
   const getMintingAccounts = useCallback(async () => {
@@ -168,7 +217,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       }
       const data = await response.json();
       if (others) {
-        setAccountInfos((prev) => {
+        setAccountInfo((prev) => {
           return {
             ...prev,
             [address]: data,
@@ -204,6 +253,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     return () => {
       unsubscribeFromEvent('refresh-rewardshare-list', refreshRewardShare);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myAddress]);
 
   const handleNames = (address) => {
@@ -308,7 +358,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           .then((response) => {
             if (!response?.error) {
               res(response);
-              setMintingKey('');
+              // setMintingKey('');
               setTimeout(() => {
                 getMintingAccounts();
               }, 300);
@@ -330,7 +380,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       setInfo({
         type: 'error',
         message:
-          error?.message ||
+          (error as { message: string })?.message ||
           t('core:message.error.minting_account_add', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -339,9 +389,10 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const removeMintingAccount = useCallback(async (val, acct) => {
+  const removeMintingAccount = useCallback(async (val) => {
     try {
       setIsLoading(true);
       return await new Promise((res, rej) => {
@@ -380,8 +431,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       setInfo({
         type: 'error',
         message:
-          error?.message ||
-          t('core:message.error.minting_account_remove', {
+          (error as { message: string })?.message ||
+          t('core:message.error.minting_account_add', {
             postProcess: 'capitalizeFirstChar',
           }),
       });
@@ -389,6 +440,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createRewardShare = useCallback(async (publicKey, recipient) => {
@@ -409,8 +461,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         })
         .then((response) => {
           if (!response?.error) {
-            setTxList((prev) => [
-              {
+            setTxList((prev: TxListObject[]) => {
+              prev.push({
                 recipient,
                 ...response,
                 type: 'add-rewardShare',
@@ -421,9 +473,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   postProcess: 'capitalizeFirstChar',
                 }),
                 done: false,
-              },
-              ...prev,
-            ]);
+              } as TxListObject);
+              return prev;
+            });
             res(response);
             return;
           }
@@ -439,6 +491,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           });
         });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getRewardSharePrivateKey = useCallback(async (publicKey) => {
@@ -464,6 +517,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           });
         });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const waitUntilRewardShareIsConfirmed = async (timeoutMs = 600000) => {
@@ -472,7 +526,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
     while (Date.now() - startTime < timeoutMs) {
-      const rewardShares = await getRewardShares(myAddress);
+      const rewardShares: RewardShare[] = await getRewardShares(myAddress);
       const findRewardShare = rewardShares?.find(
         (item) =>
           item?.recipient === myAddress && item?.mintingAccount === myAddress
@@ -490,7 +544,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       })
     );
   };
-
+  // zzz
   const startMinting = async () => {
     try {
       setIsLoading(true);
@@ -523,8 +577,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       setInfo({
         type: 'error',
         message:
-          error?.message ||
-          t('group:message.error:minting', {
+          (error as { message: string })?.message ||
+          t('core:message.error.minting_account_add', {
             postProcess: 'capitalizeFirstChar',
           }),
       });
@@ -550,12 +604,14 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         timeoutAdminInfoRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!myAddress) return;
     getRewardShares(myAddress);
     getAccountInfo(myAddress);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myAddress]);
 
   const handleClose = () => {
@@ -786,7 +842,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       label={t('core:minting.current_level', {
                         postProcess: 'capitalizeEachFirstChar',
                       })}
-                      value={accountInfo?.level}
+                      value={accountInfo?.level.toString()}
                     />
                     <StatCard
                       label={t('core:minting.blocks_next_level', {
@@ -808,7 +864,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                             strong: <strong />,
                           }}
                           values={{
-                            level: nextLevel(accountInfo?.level),
+                            level: nextLevel(Number(accountInfo?.level)),
                             count: daysToNextLevel?.toFixed(2),
                           }}
                           tOptions={{ postProcess: ['capitalizeFirstChar'] }}
@@ -848,12 +904,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         postProcess: 'capitalizeEachFirstChar',
                       })}
                       value={t('core:minting.current_tier_content', {
-                        tier: currentTier(accountInfo?.level)
-                          ? currentTier(accountInfo?.level)[0]
-                          : '',
-                        levels: currentTier(accountInfo?.level)
-                          ? currentTier(accountInfo?.level)[1]
-                          : '',
+                        tier: currentTier(accountInfo?.level)?.[0] || '',
+                        levels: currentTier(accountInfo?.level)?.[1] || '',
                         postProcess: 'capitalizeEachFirstChar',
                       })}
                     />
@@ -863,7 +915,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       })}
                       value={
                         countMintersInLevel(
-                          accountInfo?.level,
+                          Number(accountInfo?.level),
                           addressLevel,
                           tier4Online
                         )?.toFixed(0) || ''
@@ -960,7 +1012,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   {t('core:level', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                  : {accountInfo?.level}
+                  : {accountInfo?.level.toString()}
                 </Typography>
               </Card>
 
@@ -1077,7 +1129,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         },
                       }}
                       onClick={() => {
-                        removeMintingAccount(acct.publicKey, acct);
+                        removeMintingAccount(acct.publicKey);
                       }}
                       variant="contained"
                     >
@@ -1184,11 +1236,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                   >
                     {isShowNext
                       ? t('core:message.generic.confirmed', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
+                        postProcess: 'capitalizeFirstChar',
+                      })
                       : t('core:message.generic.wait', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                   </DialogTitle>
 
                   <DialogContent>
@@ -1236,7 +1288,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       >
         <Alert
           onClose={handleClose}
-          severity={info?.type}
+          severity={info?.type === 'error' || info?.type === 'warning' || info?.type === 'info' || info?.type === 'success' ? info?.type : 'info'}
           variant="filled"
           sx={{ width: '100%' }}
         >
