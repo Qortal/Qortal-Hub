@@ -1,6 +1,20 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily } from 'jotai/utils';
 
+type TxListObject = {
+  recipient: string;
+  type: string;
+  label: string;
+  labelDone: string;
+  done: boolean;
+  // Add any other properties that are present in the response object
+};
+
+interface Group {
+  groupId: string;
+  groupName: string;
+}
+
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Q-Tube', service: 'APP' },
@@ -34,7 +48,8 @@ export const isRunningPublicNodeAtom = atomWithReset(false);
 export const isUsingImportExportSettingsAtom = atomWithReset(null);
 export const lastPaymentSeenTimestampAtom = atomWithReset(null);
 export const mailsAtom = atomWithReset([]);
-export const memberGroupsAtom = atomWithReset([]);
+//export const memberGroupsAtom = atomWithReset([]);
+export const memberGroupsAtom = atomWithReset<Group[]>([]);
 export const mutedGroupsAtom = atomWithReset([]);
 export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
 export const navigationControllerAtom = atomWithReset({});
@@ -47,37 +62,38 @@ export const selectedGroupIdAtom = atomWithReset(null);
 export const settingsLocalLastUpdatedAtom = atomWithReset(0);
 export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
-export const txListAtom = atomWithReset([]);
+//export const txListAtom = atomWithReset([]);
+export const txListAtom = atomWithReset<TxListObject[]>([]);
 
 // Atom Families (replacing selectorFamily)
-export const resourceKeySelector = atomFamily((key) =>
+export const resourceKeySelector = atomFamily((key: string) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)
 );
 
-export const blobKeySelector = atomFamily((key) =>
+export const blobKeySelector = atomFamily((key: string) =>
   atom((get) => get(blobControllerAtom)[key] || null)
 );
 
-export const addressInfoKeySelector = atomFamily((key) =>
+export const addressInfoKeySelector = atomFamily((key: string) =>
   atom((get) => get(addressInfoControllerAtom)[key] || null)
 );
 
-export const groupsOwnerNamesSelector = atomFamily((key) =>
+export const groupsOwnerNamesSelector = atomFamily((key: string) =>
   atom((get) => get(groupsOwnerNamesAtom)[key] || null)
 );
 
-export const groupAnnouncementSelector = atomFamily((key) =>
+export const groupAnnouncementSelector = atomFamily((key: string) =>
   atom((get) => get(groupAnnouncementsAtom)[key] || null)
 );
 
-export const groupPropertySelector = atomFamily((key) =>
+export const groupPropertySelector = atomFamily((key: string) =>
   atom((get) => get(groupsPropertiesAtom)[key] || null)
 );
 
-export const groupChatTimestampSelector = atomFamily((key) =>
+export const groupChatTimestampSelector = atomFamily((key: string) =>
   atom((get) => get(groupChatTimestampsAtom)[key] || null)
 );
 
-export const timestampEnterDataSelector = atomFamily((key) =>
+export const timestampEnterDataSelector = atomFamily((key: string) =>
   atom((get) => get(timestampEnterDataAtom)[key] || null)
 );

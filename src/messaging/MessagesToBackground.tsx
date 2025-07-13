@@ -15,7 +15,7 @@ window.addEventListener('message', (event) => {
 
   // Check if there’s a callback stored for this requestId
   if (callbackMap.has(requestId)) {
-    const { resolve, reject } = callbackMap.get(requestId);
+    const { resolve } = callbackMap.get(requestId);
     callbackMap.delete(requestId); // Remove callback after use
 
     resolve(event.data);
@@ -26,9 +26,9 @@ export const sendMessageBackground = (
   action,
   data = {},
   timeout = 600000,
-  isExtension,
-  appInfo,
-  skipAuth
+  isExtension?,
+  appInfo?,
+  skipAuth?
 ) => {
   return new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
@@ -70,6 +70,7 @@ export const sendMessageBackground = (
       },
     });
   }).then((response) => {
+    console.log('response', response);
     // Return payload or error based on response content
     if (response?.payload !== null && response?.payload !== undefined) {
       return response.payload;
@@ -83,4 +84,9 @@ export const sendMessageBackground = (
 };
 
 // Attach to window for global access
+declare global {
+  interface Window {
+    sendMessage: typeof sendMessageBackground;
+  }
+}
 window.sendMessage = sendMessageBackground;
