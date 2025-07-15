@@ -26,7 +26,10 @@ export const CoreSyncStatus = () => {
     const getNodeInfos = async () => {
       try {
         setIsUsingGateway(getBaseApiReact()?.includes('ext-node.qortal.link'));
-        const url = `${getBaseApiReact()}/admin/status`;
+
+        // const url = `${getBaseApiReact()}/admin/status`;
+        const url = "http://127.0.0.1:12391/admin/status";
+
         const response = await fetch(url, {
           method: 'GET',
           headers: {
@@ -81,6 +84,8 @@ export const CoreSyncStatus = () => {
 
     let imagePath = syncingImg;
     let message: string = '';
+
+    console.log('nodeInfos', nodeInfos);
 
     if (isUsingGateway) {
       if (isSynchronizing) {
