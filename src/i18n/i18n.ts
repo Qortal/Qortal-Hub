@@ -19,6 +19,7 @@ export const supportedLanguages = {
   ru: { name: 'Русский', flag: '🇷🇺' },
   ja: { name: '日本語', flag: '🇯🇵' },
   zh: { name: '中文', flag: '🇨🇳' },
+  pt: { name: 'Português', flag: '🇧🇷' },
 };
 
 // Load all JSON files under locales/**/*
