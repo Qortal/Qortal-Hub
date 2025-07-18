@@ -5,7 +5,7 @@ import { app, MenuItem } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
-
+import path from 'path'
 import { ElectronCapacitorApp, setupContentSecurityPolicy, setupReloadWatcher } from './setup';
 
 // Graceful handling of unhandled errors.
@@ -48,21 +48,31 @@ const checkForUpdates = async () => {
 
 // Run Application
 (async () => {
-  // Wait for electron app to be ready.
   await app.whenReady();
-  // Security - Set Content-Security-Policy based on whether or not we are in dev mode.
+
+  // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
-  // Initialize our app, build windows, and load content.
+
+  // Initialize the app
   await myCapacitorApp.init();
-  // Check for updates if we are in a packaged app.
- 
+
+  // 🔧 Inject additional arguments for preload here:
+  const userDataPath = app.getPath('userData');
+
+  const win = myCapacitorApp.getMainWindow();
+  if (win) {
+    win.webContents.session.setPreloads([path.join(__dirname, 'preload.js')]); // optional if not using capacitor-managed preload
+    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+    // ⚠ Inject CLI arg manually so preload can read it
+    process.argv.push(`--userDataPath=${userDataPath}`);
+  }
+
+  // Start update checks
   checkForUpdates();
-
-  // Set up periodic update checks
-
-    setInterval(checkForUpdates, 24 * 60 * 60 * 1000); // 24 hours
-
+  setInterval(checkForUpdates, 24 * 60 * 60 * 1000);
 })();
+
 
 // Handle when all of our windows are close (platforms have their own expectations).
 app.on('window-all-closed', function () {

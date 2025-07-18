@@ -722,7 +722,7 @@ export const NotAuthenticated = ({
                   component="label"
                 >
                   {apiKey
-                    ? t('auth:node.use_local', {
+                    ? t('auth:apikey.change', {
                         postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:apikey.import', {
