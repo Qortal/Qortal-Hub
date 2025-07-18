@@ -36,7 +36,12 @@ export const useHandleTutorials = () => {
 
   useEffect(() => {
     try {
-      const storedData = localStorage.getItem('shown-tutorials');
+      let storedData;
+      if (window?.walletStorage) {
+        storedData = window.walletStorage.get('shown-tutorials');
+      } else {
+        storedData = localStorage.getItem('shown-tutorials');
+      }
 
       if (storedData) {
         setShowTutorials(JSON.parse(storedData));
@@ -51,12 +56,17 @@ export const useHandleTutorials = () => {
   const saveShowTutorial = useCallback((type) => {
     try {
       setShowTutorials((prev) => {
-        return {
+        const objectToSave = {
           ...(prev || {}),
           [type]: true,
         };
+        if (window?.walletStorage) {
+          window.walletStorage.set('shown-tutorials', objectToSave);
+        } else {
+          saveToLocalStorage('shown-tutorials', type, true);
+        }
+        return objectToSave;
       });
-      saveToLocalStorage('shown-tutorials', type, true);
     } catch (error) {
       //error
     }
