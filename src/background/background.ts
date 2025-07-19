@@ -251,7 +251,7 @@ export const getApiKeyFromStorage = async (): Promise<string | null> => {
 
 export const getCustomNodesFromStorage = async (): Promise<any | null> => {
   if (window?.walletStorage) {
-    const res = window.walletStorage.get('customNodes');
+    const res = await window.walletStorage.get('customNodes');
 
     return res || null;
   } else {
@@ -868,11 +868,11 @@ export async function getSaveWallet() {
 export async function getWallets() {
   let res;
   if (window?.walletStorage) {
-    res = window.walletStorage.get('wallets');
+    res = await window.walletStorage.get('wallets');
     if (!res) {
       const prevWallets = await getData<any>('wallets').catch(() => null);
       if (prevWallets) {
-        window.walletStorage.set('wallets', prevWallets);
+        await window.walletStorage.set('wallets', prevWallets);
         res = prevWallets;
       }
     }
@@ -889,7 +889,7 @@ export async function getWallets() {
 
 export async function storeWallets(wallets) {
   if (window?.walletStorage) {
-    window.walletStorage.set('wallets', wallets);
+    await window.walletStorage.set('wallets', wallets);
   } else {
     storeData('wallets', wallets).catch((error) => {
       console.error(error);

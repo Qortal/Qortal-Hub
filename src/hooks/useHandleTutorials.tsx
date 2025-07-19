@@ -35,42 +35,49 @@ export const useHandleTutorials = () => {
   const { t } = useTranslation(['core', 'tutorial']);
 
   useEffect(() => {
-    try {
-      let storedData;
-      if (window?.walletStorage) {
-        storedData = window.walletStorage.get('shown-tutorials');
-      } else {
-        storedData = localStorage.getItem('shown-tutorials');
-      }
+    const fetchShownTutorials = async () => {
+      try {
+        let storedData: any;
 
-      if (storedData) {
-        setShowTutorials(JSON.parse(storedData));
-      } else {
+        if (window?.walletStorage) {
+          storedData = await window.walletStorage.get('shown-tutorials');
+        } else {
+          const local = localStorage.getItem('shown-tutorials');
+          storedData = local ? JSON.parse(local) : {};
+        }
+
+        setShowTutorials(storedData || {});
+      } catch (error) {
+        console.error('Failed to load tutorial state:', error);
         setShowTutorials({});
       }
-    } catch (error) {
-      //error
-    }
+    };
+
+    fetchShownTutorials();
   }, []);
 
-  const saveShowTutorial = useCallback((type) => {
-    try {
-      setShowTutorials((prev) => {
-        const objectToSave = {
-          ...(prev || {}),
+  const saveShowTutorial = useCallback(
+    async (type) => {
+      try {
+        const updated = {
+          ...(shownTutorials || {}),
           [type]: true,
         };
+
+        setShowTutorials(updated);
+
         if (window?.walletStorage) {
-          window.walletStorage.set('shown-tutorials', objectToSave);
+          await window.walletStorage.set('shown-tutorials', updated);
         } else {
           saveToLocalStorage('shown-tutorials', type, true);
         }
-        return objectToSave;
-      });
-    } catch (error) {
-      //error
-    }
-  }, []);
+      } catch (error) {
+        console.error('Failed to save tutorial state:', error);
+      }
+    },
+    [shownTutorials]
+  );
+
   const showTutorial = useCallback(
     async (type, isForce) => {
       try {
