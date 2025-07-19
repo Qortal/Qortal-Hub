@@ -4,27 +4,29 @@ export const OnLaunchWrapper = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      if (window.walletStorage) {
-        const res = window.walletStorage.get('apiKey');
-        if (res) {
-          window.sendMessage('setApiKey', res).finally(() => {
-            setTimeout(() => {
-              setIsLoaded(true);
-            }, 250);
-          });
+    const fetchApiKey = async () => {
+      try {
+        if (window.walletStorage) {
+          const res = await window.walletStorage.get('apiKey');
+          if (res) {
+            await window.sendMessage('setApiKey', res);
+            setTimeout(() => setIsLoaded(true), 250);
+          } else {
+            setIsLoaded(true);
+          }
         } else {
           setIsLoaded(true);
         }
-      } else {
+      } catch (error) {
+        console.error(
+          'Error occurred when fetching apiKey info from file system',
+          error
+        );
         setIsLoaded(true);
       }
-    } catch (error) {
-      setIsLoaded(true);
-      console.error(
-        'Error has occured when fetching apiKey info from file system'
-      );
-    }
+    };
+
+    fetchApiKey();
   }, []);
   return !isLoaded ? null : children;
 };

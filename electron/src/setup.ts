@@ -6,7 +6,17 @@ import {
 } from '@capacitor-community/electron';
 import chokidar from 'chokidar';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, Menu, MenuItem, nativeImage, Tray, session, ipcMain, dialog } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  MenuItem,
+  nativeImage,
+  Tray,
+  session,
+  ipcMain,
+  dialog,
+} from 'electron';
 import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
@@ -14,24 +24,24 @@ const AdmZip = require('adm-zip');
 import { join } from 'path';
 import { myCapacitorApp } from '.';
 const fs = require('fs');
-const path = require('path')
+const path = require('path');
 
 const defaultDomains = [
   'capacitor-electron://-',
   'http://127.0.0.1:12391',
   'ws://127.0.0.1:12391',
   'https://ext-node.qortal.link',
-  'wss://ext-node.qortal.link',           
-  'https://appnode.qortal.org',             
-  'wss://appnode.qortal.org',               
-  "https://api.qortal.org",                   
-  "https://api2.qortal.org",                  
-  "https://apinode.qortalnodes.live",       
-  "https://apinode1.qortalnodes.live",
-  "https://apinode2.qortalnodes.live",
-  "https://apinode3.qortalnodes.live",
-  "https://apinode4.qortalnodes.live",
-  "https://www.qort.trade"                    
+  'wss://ext-node.qortal.link',
+  'https://appnode.qortal.org',
+  'wss://appnode.qortal.org',
+  'https://api.qortal.org',
+  'https://api2.qortal.org',
+  'https://apinode.qortalnodes.live',
+  'https://apinode1.qortalnodes.live',
+  'https://apinode2.qortalnodes.live',
+  'https://apinode3.qortalnodes.live',
+  'https://apinode4.qortalnodes.live',
+  'https://www.qort.trade',
 ];
 
 // let allowedDomains: string[] = [...defaultDomains]
@@ -44,7 +54,9 @@ const reloadWatcher = {
   ready: false,
   watcher: null,
 };
-export function setupReloadWatcher(electronCapacitorApp: ElectronCapacitorApp): void {
+export function setupReloadWatcher(
+  electronCapacitorApp: ElectronCapacitorApp
+): void {
   reloadWatcher.watcher = chokidar
     .watch(join(app.getAppPath(), 'app'), {
       ignored: /[/\\]\./,
@@ -93,7 +105,9 @@ export class ElectronCapacitorApp {
   ) {
     this.CapacitorFileConfig = capacitorFileConfig;
 
-    this.customScheme = this.CapacitorFileConfig.electron?.customUrlScheme ?? 'capacitor-electron';
+    this.customScheme =
+      this.CapacitorFileConfig.electron?.customUrlScheme ??
+      'capacitor-electron';
 
     if (trayMenuTemplate) {
       this.TrayMenuTemplate = trayMenuTemplate;
@@ -126,7 +140,11 @@ export class ElectronCapacitorApp {
 
   async init(): Promise<void> {
     const icon = nativeImage.createFromPath(
-      join(app.getAppPath(), 'assets', process.platform === 'win32' ? 'appIcon.ico' : 'appIcon.png')
+      join(
+        app.getAppPath(),
+        'assets',
+        process.platform === 'win32' ? 'appIcon.ico' : 'appIcon.png'
+      )
     );
     this.mainWindowState = windowStateKeeper({
       defaultWidth: 1000,
@@ -141,23 +159,29 @@ export class ElectronCapacitorApp {
       y: this.mainWindowState.y,
       width: this.mainWindowState.width,
       height: this.mainWindowState.height,
-      backgroundColor: '#27282c', 
+      backgroundColor: '#27282c',
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
         // Use preload to inject the electron varriant overrides for capacitor plugins.
         // preload: join(app.getAppPath(), "node_modules", "@capacitor-community", "electron", "dist", "runtime", "electron-rt.js"),
-        preload: preloadPath      },
+        preload: preloadPath,
+      },
     });
     this.mainWindowState.manage(this.MainWindow);
 
     if (this.CapacitorFileConfig.backgroundColor) {
-      this.MainWindow.setBackgroundColor(this.CapacitorFileConfig.electron.backgroundColor);
+      this.MainWindow.setBackgroundColor(
+        this.CapacitorFileConfig.electron.backgroundColor
+      );
     }
 
     // If we close the main window with the splashscreen enabled we need to destory the ref.
     this.MainWindow.on('closed', () => {
-      if (this.SplashScreen?.getSplashWindow() && !this.SplashScreen.getSplashWindow().isDestroyed()) {
+      if (
+        this.SplashScreen?.getSplashWindow() &&
+        !this.SplashScreen.getSplashWindow().isDestroyed()
+      ) {
         this.SplashScreen.getSplashWindow().close();
       }
     });
@@ -186,11 +210,15 @@ export class ElectronCapacitorApp {
         }
       });
       this.TrayIcon.setToolTip(app.getName());
-      this.TrayIcon.setContextMenu(Menu.buildFromTemplate(this.TrayMenuTemplate));
+      this.TrayIcon.setContextMenu(
+        Menu.buildFromTemplate(this.TrayMenuTemplate)
+      );
     }
 
     // Setup the main manu bar at the top of our window.
-    Menu.setApplicationMenu(Menu.buildFromTemplate(this.AppMenuBarMenuTemplate));
+    Menu.setApplicationMenu(
+      Menu.buildFromTemplate(this.AppMenuBarMenuTemplate)
+    );
 
     // If the splashscreen is enabled, show it first while the main window loads then switch it out for the main window, or just load the main window from the start.
     if (this.CapacitorFileConfig.electron?.splashScreenEnabled) {
@@ -198,7 +226,8 @@ export class ElectronCapacitorApp {
         imageFilePath: join(
           app.getAppPath(),
           'assets',
-          this.CapacitorFileConfig.electron?.splashScreenImageName ?? 'splash.png'
+          this.CapacitorFileConfig.electron?.splashScreenImageName ??
+            'splash.png'
         ),
         windowWidth: 400,
         windowHeight: 400,
@@ -237,31 +266,36 @@ export class ElectronCapacitorApp {
         if (electronIsDev) {
           this.MainWindow.webContents.openDevTools();
         }
-        CapElectronEventEmitter.emit('CAPELECTRON_DeeplinkListenerInitialized', '');
+        CapElectronEventEmitter.emit(
+          'CAPELECTRON_DeeplinkListenerInitialized',
+          ''
+        );
       }, 400);
     });
   }
 }
 
-
-
-
 export function setupContentSecurityPolicy(customScheme: string): void {
-  session.defaultSession.webRequest.onHeadersReceived((details: any, callback) => {
-    const allowedSources = ["'self'", customScheme, ...domainHolder.allowedDomains];
-    const frameSources = [
-      "'self'",
-      'http://localhost:*',
-      'https://localhost:*',
-      'ws://localhost:*',
-      'ws://127.0.0.1:*',
-      'http://127.0.0.1:*',
-      'https://127.0.0.1:*',
-      ...allowedSources,
-    ];
+  session.defaultSession.webRequest.onHeadersReceived(
+    (details: any, callback) => {
+      const allowedSources = [
+        "'self'",
+        customScheme,
+        ...domainHolder.allowedDomains,
+      ];
+      const frameSources = [
+        "'self'",
+        'http://localhost:*',
+        'https://localhost:*',
+        'ws://localhost:*',
+        'ws://127.0.0.1:*',
+        'http://127.0.0.1:*',
+        'https://127.0.0.1:*',
+        ...allowedSources,
+      ];
 
-    // Create the Content Security Policy (CSP) string
-    const csp = `
+      // Create the Content Security Policy (CSP) string
+      const csp = `
     default-src 'self' ${frameSources.join(' ')};
     frame-src ${frameSources.join(' ')};
     script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${frameSources.join(' ')};
@@ -271,58 +305,56 @@ export function setupContentSecurityPolicy(customScheme: string): void {
     media-src 'self' blob: ${frameSources.join(' ')};  
     style-src 'self' 'unsafe-inline';
     font-src 'self' data:;
-  `.replace(/\s+/g, ' ').trim();
-  
-   
-    // Get the request URL and origin
-    const requestUrl = details.url;
-    const requestOrigin = details.origin || details.referrer || 'capacitor-electron://-';
+  `
+        .replace(/\s+/g, ' ')
+        .trim();
 
-    // Parse the request URL to get its origin
-    let requestUrlOrigin: string;
-    try {
-      const parsedUrl = new URL(requestUrl);
-      requestUrlOrigin = parsedUrl.origin;
-    } catch (e) {
-      // Handle invalid URLs gracefully
-      requestUrlOrigin = '';
+      // Get the request URL and origin
+      const requestUrl = details.url;
+      const requestOrigin =
+        details.origin || details.referrer || 'capacitor-electron://-';
+
+      // Parse the request URL to get its origin
+      let requestUrlOrigin: string;
+      try {
+        const parsedUrl = new URL(requestUrl);
+        requestUrlOrigin = parsedUrl.origin;
+      } catch (e) {
+        // Handle invalid URLs gracefully
+        requestUrlOrigin = '';
+      }
+
+      // Determine if the request is cross-origin
+      const isCrossOrigin = requestOrigin !== requestUrlOrigin;
+
+      // Check if the response already includes Access-Control-Allow-Origin
+      const hasAccessControlAllowOrigin = Object.keys(
+        details.responseHeaders
+      ).some(
+        (header) => header.toLowerCase() === 'access-control-allow-origin'
+      );
+
+      // Prepare response headers
+      const responseHeaders: Record<string, string | string[]> = {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [csp],
+      };
+
+      if (isCrossOrigin && !hasAccessControlAllowOrigin) {
+        // Handle CORS for cross-origin requests lacking CORS headers
+        // Optionally, check if the requestOrigin is allowed
+        responseHeaders['Access-Control-Allow-Origin'] = requestOrigin;
+        responseHeaders['Access-Control-Allow-Methods'] =
+          'GET, POST, OPTIONS, DELETE';
+        responseHeaders['Access-Control-Allow-Headers'] =
+          'Content-Type, Authorization, x-api-key';
+      }
+
+      // Callback with modified headers
+      callback({ responseHeaders });
     }
-
-    // Determine if the request is cross-origin
-    const isCrossOrigin = requestOrigin !== requestUrlOrigin;
-
-    // Check if the response already includes Access-Control-Allow-Origin
-    const hasAccessControlAllowOrigin = Object.keys(details.responseHeaders).some(
-      (header) => header.toLowerCase() === 'access-control-allow-origin'
-    );
-
-    // Prepare response headers
-    const responseHeaders: Record<string, string | string[]> = {
-      ...details.responseHeaders,
-      'Content-Security-Policy': [csp],
-    };
-
-    if (isCrossOrigin && !hasAccessControlAllowOrigin) {
-      // Handle CORS for cross-origin requests lacking CORS headers
-      // Optionally, check if the requestOrigin is allowed
-      responseHeaders['Access-Control-Allow-Origin'] = requestOrigin;
-      responseHeaders['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, DELETE';
-      responseHeaders['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, x-api-key';
-    }
-
-    // Callback with modified headers
-    callback({ responseHeaders });
-  });
+  );
 }
-
-
-
-
-
-
-
-
-
 
 // IPC listener for updating allowed domains
 ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
@@ -331,20 +363,22 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   }
   // Validate and transform user-provided domains
   const validatedUserDomains = domains
-  .flatMap((domain) => {
-    try {
-      const url = new URL(domain);
-      const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-      const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-      return [url.origin, socketUrl];
-    } catch {
-      return [];
-    }
-  })
-  .filter(Boolean) as string[];
+    .flatMap((domain) => {
+      try {
+        const url = new URL(domain);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        return [url.origin, socketUrl];
+      } catch {
+        return [];
+      }
+    })
+    .filter(Boolean) as string[];
 
   // Combine default and validated user domains
-  const newAllowedDomains = [...new Set([...defaultDomains, ...validatedUserDomains])];
+  const newAllowedDomains = [
+    ...new Set([...defaultDomains, ...validatedUserDomains]),
+  ];
 
   // Sort both current allowed domains and new domains for comparison
   const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
@@ -353,7 +387,9 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   // Check if the lists are different
   const hasChanged =
     sortedCurrentDomains.length !== sortedNewDomains.length ||
-    sortedCurrentDomains.some((domain, index) => domain !== sortedNewDomains[index]);
+    sortedCurrentDomains.some(
+      (domain, index) => domain !== sortedNewDomains[index]
+    );
 
   // If there's a change, update allowedDomains and reload the window
   if (hasChanged) {
@@ -363,15 +399,14 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.reload();
     }
-  } 
+  }
 });
-
 
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
     filters: [
-      { name: 'ZIP Files', extensions: ['zip'] } // Restrict to ZIP files
+      { name: 'ZIP Files', extensions: ['zip'] }, // Restrict to ZIP files
     ],
   });
   return result.filePaths[0];
@@ -389,9 +424,8 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 
     // Read the file as a Buffer
     const fileBuffer = fs.readFileSync(absolutePath);
-    
-    return fileBuffer
 
+    return fileBuffer;
   } catch (error) {
     console.error('Error reading file:', error.message);
     return null; // Return null on error
@@ -399,38 +433,47 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 });
 
 ipcMain.handle('fs:selectAndZip', async (_, path) => {
-  let directoryPath = path
-  if(!directoryPath){
+  let directoryPath = path;
+  if (!directoryPath) {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openDirectory'],
-  });
-  if (canceled || filePaths.length === 0) {
-    console.log('No directory selected');
-    return null;
-}
+    });
+    if (canceled || filePaths.length === 0) {
+      console.log('No directory selected');
+      return null;
+    }
 
- directoryPath = filePaths[0];
-  } 
+    directoryPath = filePaths[0];
+  }
 
-
-
-
-
-
-try {
-
+  try {
     // Add the entire directory to the zip
     const zip = new AdmZip();
 
-        // Add the entire directory to the zip
-        zip.addLocalFolder(directoryPath);
+    // Add the entire directory to the zip
+    zip.addLocalFolder(directoryPath);
 
-        // Generate the zip file as a buffer
-        const zipBuffer = zip.toBuffer();
+    // Generate the zip file as a buffer
+    const zipBuffer = zip.toBuffer();
 
-   return {buffer: zipBuffer, directoryPath}
-} catch (error) {
-    return null
-}
+    return { buffer: zipBuffer, directoryPath };
+  } catch (error) {
+    return null;
+  }
 });
 
+ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
+  const filePath = path.join(app.getPath('userData'), fileName);
+  const exists = fs.existsSync(filePath);
+  if (!exists) return null;
+  return fs.promises.readFile(filePath, 'utf-8');
+});
+
+ipcMain.handle(
+  'walletStorage:write',
+  async (_event, fileName: string, data: string) => {
+    const filePath = path.join(app.getPath('userData'), fileName);
+    await fs.promises.writeFile(filePath, data, 'utf-8');
+    return true;
+  }
+);

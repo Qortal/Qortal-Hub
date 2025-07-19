@@ -56,16 +56,14 @@ const checkForUpdates = async () => {
   // Initialize the app
   await myCapacitorApp.init();
 
-  // 🔧 Inject additional arguments for preload here:
-  const userDataPath = app.getPath('userData');
+
 
   const win = myCapacitorApp.getMainWindow();
   if (win) {
     win.webContents.session.setPreloads([path.join(__dirname, 'preload.js')]); // optional if not using capacitor-managed preload
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-    // ⚠ Inject CLI arg manually so preload can read it
-    process.argv.push(`--userDataPath=${userDataPath}`);
+ 
   }
 
   // Start update checks
