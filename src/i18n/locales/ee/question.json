@@ -123,7 +123,7 @@
   "options": "valikud: {{ optionList }}",
   "permission": {
     "access_list": "Kas annate sellele rakendusele loa nimekirjale juurde pääseda?"
-    "add_admin": "Kas annate sellele rakendusele loa lisada kasutaja {{ invitee }} administraatorina?,
+    "add_admin": "Kas annate sellele rakendusele loa lisada kasutaja {{ invitee }} administraatorina?",
     "all_item_list": "Kas annate sellele rakendusele loa lisada järgmist nimekirja {{ name }}:",
     "authenticate": "Kas annate sellele rakendusele autentimiseks loa?"
     "ban": "Kas annate sellele rakendusele loa {{ participant }} grupist blokeerida?",
@@ -143,11 +143,11 @@
     "delete_hosts_resources": "Kas annate sellele rakendusele loa kustutada {{ size }} hostitud ressurssi??",
     "fetch_balance": "Kas annate sellele rakendusele loa teie {{ coin }} saldo hankida?",
     "get_wallet_info": "Kas annate sellele rakendusele loa oma rahakotiteabe saamiseks?",
-    "get_wallet_transactions": "Kas annate sellele rakendusele loa oma rahakoti tehinguid hankida?,
+    "get_wallet_transactions": "Kas annate sellele rakendusele loa oma rahakoti tehinguid hankida?",
     "invite": "Kas sa annad sellele rakendusele loa kutsuda {{ invitee }}?",
     "kick": "Kas sa annad sellele rakendusele loa {{ participant }} grupist välja visata?",
     "leave_group": "Kas annate sellele rakendusele loa järgmisest grupist lahkuda?",
-    "list_hosted_data": "Kas annate sellele rakendusele loa hankida teie hostitud andmete nimekirja??",
+    "list_hosted_data": "Kas annate sellele rakendusele loa hankida teie hostitud andmete nimekirja?",
     "order_detail": "{{ qort_amount }} QORT for {{ foreign_amount }} {{ ticker }}",
     "pay_publish": "Kas annate sellele rakendusele loa teha järgmisi makseid ja avaldada?",
     "perform_admin_action_with_value": "väärtusega:{{ value }}",
@@ -164,7 +164,7 @@
     "send_coins": "Kas annate sellele rakendusele loa münte saata?",
     "server_add": "Kas annate sellele rakendusele loa serverit lisada??",
     "server_remove": "Kas annate sellele rakendusele loa serverit eemaldada??",
-    "set_current_server": "Kas annate sellele rakendusele loa praeguse serveri seadistamiseks??",
+    "set_current_server": "Kas annate sellele rakendusele loa praeguse serveri seadistamiseks?",
     "sign_fee": "Kas annate sellele rakendusele loa allkirjastada kõigi teie tehingupakkumiste nõutavad tasud?",
     "sign_process_transaction": "Kas annate sellele rakendusele loa tehingu allkirjastamiseks ja töötlemiseks?",
     "sign_transaction": "Kas annate sellele rakendusele loa tehingu allkirjastamiseks?",
