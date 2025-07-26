@@ -869,7 +869,7 @@ export async function getWallets() {
   let res;
   if (window?.walletStorage) {
     res = await window.walletStorage.get('wallets');
-    if (!res) {
+    if (!res || res?.length === 0) {
       const prevWallets = await getData<any>('wallets').catch(() => null);
       if (prevWallets) {
         await window.walletStorage.set('wallets', prevWallets);

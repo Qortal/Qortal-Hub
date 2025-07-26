@@ -411,7 +411,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                       onClick={saveToQdn}
                       variant="contained"
                     >
-                      {t('core:action.save_qdn', {
+                      {t('core:message.generic.save_qdn', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </LoadingButton>
