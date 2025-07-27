@@ -13,35 +13,16 @@ export enum MessageType {
   HELLO = 0,
   CHALLENGE = 2,
   RESPONSE = 3,
-}
-
-async function loadWebAssembly(memory) {
-  const importObject = {
-    env: {
-      memory: memory,
-    },
-  };
-
-  const filename = path.join(__dirname, './memory-pow.wasm.full');
-
-  try {
-    const buffer = await readFile(filename);
-    const module = await WebAssembly.compile(buffer);
-    const instance = new WebAssembly.Instance(module, importObject);
-    return instance;
-  } catch (error) {
-    console.error('Error loading WebAssembly module:', error);
-    throw error;
-  }
+  PING = 11,
 }
 
 const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
 const heap = new Uint8Array(memory.buffer);
 const initialBrk = 512 * 1024;
 let brk = initialBrk;
-const waitingQueue = [];
+const waitingQueue: any[] = [];
 
-function sbrk(size) {
+function sbrk(size: number) {
   const oldBrk = brk;
   if (brk + size > heap.length) {
     console.log('Not enough memory available, adding to waiting queue');
@@ -66,8 +47,8 @@ function processWaitingQueue() {
   }
 }
 
-function requestMemory(size) {
-  return new Promise((resolve, reject) => {
+function requestMemory(size: number) {
+  return new Promise<number>((resolve, reject) => {
     const ptr = sbrk(size);
     if (ptr !== null) {
       resolve(ptr);
@@ -77,42 +58,39 @@ function requestMemory(size) {
   });
 }
 
-interface WasmModule {
-  exports: WasmExports;
+let wasmInstance: any = null;
+let computeLock = false;
+
+async function getWasmInstance(memory: WebAssembly.Memory) {
+  if (wasmInstance) return wasmInstance;
+  const filename = path.join(__dirname, './memory-pow.wasm.full');
+  const buffer = await readFile(filename);
+  const module = await WebAssembly.compile(buffer);
+  wasmInstance = new WebAssembly.Instance(module, { env: { memory } });
+  return wasmInstance;
 }
 
-interface WasmExports {
-  compute2: (
-    hashPtr: number,
-    workBufferPtr: number,
-    workBufferLength: number,
-    difficulty: number
-  ) => number;
+async function computePow(
+  memory: WebAssembly.Memory,
+  hashPtr: number,
+  workBufferPtr: number,
+  workBufferLength: number,
+  difficulty: number
+) {
+  if (computeLock) throw new Error('Concurrent compute2 call detected');
+  computeLock = true;
+  try {
+    const wasm = await getWasmInstance(memory);
+    return wasm.exports.compute2(
+      hashPtr,
+      workBufferPtr,
+      workBufferLength,
+      difficulty
+    );
+  } finally {
+    computeLock = false;
+  }
 }
-
-const computePow = async (
-  memory,
-  hashPtr,
-  workBufferPtr,
-  workBufferLength,
-  difficulty
-) => {
-  let response = null;
-
-  await new Promise<void>((resolve) => {
-    loadWebAssembly(memory).then((wasmModule: any) => {
-      response = wasmModule.exports.compute2(
-        hashPtr,
-        workBufferPtr,
-        workBufferLength,
-        difficulty
-      );
-      resolve();
-    });
-  });
-
-  return response;
-};
 
 function resetMemory() {
   brk = initialBrk;
@@ -179,9 +157,8 @@ function encodeFramedMessage(type: number, payload: Buffer): Buffer {
   return Buffer.concat([header, typeBuf, hasId, length, checksum, payload]);
 }
 
-function ed25519ToX25519Private(edPrivateKey: Uint8Array): Uint8Array {
-  const seed = edPrivateKey.slice(0, 32);
-  const hash = sha512(seed);
+function ed25519ToX25519Private(edSeed: Uint8Array): Uint8Array {
+  const hash = sha512(edSeed);
   const h = new Uint8Array(hash);
   h[0] &= 248;
   h[31] &= 127;
@@ -207,6 +184,8 @@ export class LiteNodeClient {
   private theirChallenge: Uint8Array | null = null;
   private ourChallenge = crypto.randomBytes(32);
 
+  private alreadyResponded = false;
+
   constructor(
     private host: string,
     private port: number = 12392
@@ -216,38 +195,39 @@ export class LiteNodeClient {
     const edSeed = ed25519.utils.randomPrivateKey();
     const edPublicKey = ed25519.getPublicKey(edSeed);
 
-    const edPrivateKey = new Uint8Array(64);
-    edPrivateKey.set(edSeed);
-    edPrivateKey.set(edPublicKey, 32);
-
-    this.edPrivateKey = edPrivateKey;
+    this.edPrivateKey = new Uint8Array(64);
+    this.edPrivateKey.set(edSeed);
+    this.edPrivateKey.set(edPublicKey, 32);
     this.edPublicKey = edPublicKey;
 
-    this.xPrivateKey = ed25519ToX25519Private(this.edPrivateKey);
+    this.xPrivateKey = ed25519ToX25519Private(edSeed);
     this.xPublicKey = x25519.getPublicKey(this.xPrivateKey);
   }
 
   private async computePoWNonceWasmSafe(
-    responseHash: Uint8Array,
+    input: Uint8Array,
     difficulty: number,
-    workBufferLength: number = 2 * 1024 * 1024
+    workBufferLength = 2 * 1024 * 1024
   ): Promise<number> {
     try {
-      if (responseHash.length !== 32)
-        throw new Error('Invalid responseHash length');
+      resetMemory();
+
+      const isHashed = input.length === 32;
+      const hash = isHashed
+        ? input
+        : crypto.createHash('sha256').update(input).digest();
 
       const hashPtr = sbrk(32);
       if (hashPtr === null)
         throw new Error('Unable to allocate memory for hash');
-
       const hashView = new Uint8Array(memory.buffer, hashPtr, 32);
-      hashView.set(responseHash);
+      hashView.set(hash);
 
       const workBufferPtr = await requestMemory(workBufferLength);
       if (workBufferPtr === null)
         throw new Error('Unable to allocate memory for work buffer');
 
-      const result = await computePow(
+      const nonceValue = await computePow(
         memory,
         hashPtr,
         workBufferPtr,
@@ -256,22 +236,26 @@ export class LiteNodeClient {
       );
 
       if (
-        typeof result !== 'number' ||
-        result < 0 ||
-        !Number.isInteger(result)
+        typeof nonceValue !== 'number' ||
+        nonceValue < 0 ||
+        !Number.isInteger(nonceValue)
       ) {
-        throw new Error(`Invalid nonce computed: ${result}`);
+        throw new Error(`Invalid nonce computed: ${nonceValue}`);
       }
 
-      return result;
+      return nonceValue;
     } catch (error) {
       console.error('❌ PoW nonce computation failed:', error);
-      resetMemory();
       throw error;
+    } finally {
+      resetMemory();
     }
   }
 
   private async handleChallenge(payload: Buffer) {
+    if (this.alreadyResponded) return;
+    this.alreadyResponded = true;
+
     this.theirEdPublicKey = payload.subarray(0, 32);
     this.theirXPublicKey = ed25519ToX25519Public(this.theirEdPublicKey);
     this.theirChallenge = payload.subarray(32, 64);
@@ -280,35 +264,44 @@ export class LiteNodeClient {
       this.xPrivateKey,
       this.theirXPublicKey
     );
-
     const combined = Buffer.concat([
       Buffer.from(sharedSecret),
       this.theirChallenge,
     ]);
     const responseHash = crypto.createHash('sha256').update(combined).digest();
+    const hashPtr = sbrk(32);
+    const hashView = new Uint8Array(memory.buffer, hashPtr, 32);
+    hashView.set(responseHash);
+    const difficulty = 2;
+    const nonceValue = await this.computePoWNonceWasmSafe(combined, difficulty);
 
-    const powDifficulty = 2;
-    const nonceValue = await this.computePoWNonceWasmSafe(
-      responseHash,
-      powDifficulty
-    );
     const nonce = Buffer.alloc(4);
     nonce.writeUInt32BE(nonceValue);
 
     const responsePayload = Buffer.concat([nonce, responseHash]);
-
-    console.log('🔨 PoW nonce computed:', nonceValue);
-    console.log(
-      '🔐 Shared secret (hex):',
-      Buffer.from(sharedSecret).toString('hex')
-    );
+    console.log('📤 Sending RESPONSE with nonce:', nonceValue);
+    console.log('🔐 Response hash:', responseHash.toString('hex'));
 
     this.sendMessage(MessageType.RESPONSE, responsePayload);
-    resetMemory();
+
+    const testNonce = await this.computePoWNonceWasmSafe(
+      responseHash,
+      difficulty
+    );
+
+    if (testNonce !== nonceValue) {
+      console.error('❌ Nonce mismatch on recomputation. Internal bug!');
+    }
   }
 
   private async handleResponse(payload: Buffer) {
-    console.log('payload', payload);
+    this.startPinging();
+    const nonce = payload.readUInt32BE(0);
+    const responseHash = payload.subarray(4, 36);
+    console.log('📩 Received RESPONSE from core:');
+    console.log('    Nonce:', nonce);
+    console.log('    Hash:', responseHash.toString('hex'));
+    resetMemory();
   }
 
   async connect(): Promise<void> {
@@ -367,6 +360,17 @@ export class LiteNodeClient {
     if (!this.socket) throw new Error('Socket not connected');
     const framed = encodeFramedMessage(type, payload);
     this.socket.write(framed);
+  }
+
+  startPinging(intervalMs: number = 5000) {
+    setInterval(() => {
+      try {
+        this.sendMessage(MessageType.PING, Buffer.alloc(0));
+        console.log('📡 Sent PING');
+      } catch (err) {
+        console.error('❌ Failed to send PING:', err);
+      }
+    }, intervalMs);
   }
 
   close() {
