@@ -6,9 +6,8 @@ async function main() {
     const client = new LiteNodeClient(ip);
     try {
       await client.connect();
-      //   console.log(`Successfully connected to ${ip}`);
-      // Optionally send HELLO message here
-      break;
+
+      break; // stop after first successful connection
     } catch (err) {
       console.warn(`Failed to connect to ${ip}:`, err);
     }

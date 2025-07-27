@@ -5,8 +5,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import util from 'util';
 import fs from 'fs';
 import path from 'path';
-const readFile = util.promisify(fs.readFile); // Promisify readFile for use with async/await
-// Adjust path if needed to your wasm file
+const readFile = util.promisify(fs.readFile);
 
 export const SEED_PEERS = ['127.0.0.1'];
 
@@ -19,45 +18,37 @@ export enum MessageType {
 async function loadWebAssembly(memory) {
   const importObject = {
     env: {
-      memory: memory, // Pass the WebAssembly.Memory object to the module
+      memory: memory,
     },
   };
 
-  // Correct the path to point to the specific location of the .wasm file
   const filename = path.join(__dirname, './memory-pow.wasm.full');
 
   try {
-    // Read the .wasm file from the filesystem
     const buffer = await readFile(filename);
     const module = await WebAssembly.compile(buffer);
-
-    // Create the WebAssembly instance with the compiled module and import object
     const instance = new WebAssembly.Instance(module, importObject);
-
-    return instance; // Return the instance to be used elsewhere in your application
+    return instance;
   } catch (error) {
     console.error('Error loading WebAssembly module:', error);
-    throw error; // Rethrow the error for further handling
+    throw error;
   }
 }
+
 const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
-
 const heap = new Uint8Array(memory.buffer);
-
 const initialBrk = 512 * 1024;
-let brk = 512 * 1024; // Initialize brk outside to maintain state
-
+let brk = initialBrk;
 const waitingQueue = [];
 
 function sbrk(size) {
   const oldBrk = brk;
   if (brk + size > heap.length) {
-    // Check if the heap can accommodate the request
     console.log('Not enough memory available, adding to waiting queue');
-    return null; // Not enough memory, return null
+    return null;
   }
-  brk += size; // Advance brk by the size of the requested memory
-  return oldBrk; // Return the old break point (start of the newly allocated block)
+  brk += size;
+  return oldBrk;
 }
 
 function processWaitingQueue() {
@@ -67,11 +58,10 @@ function processWaitingQueue() {
     const request = waitingQueue[i];
     const ptr = sbrk(request.size);
     if (ptr !== null) {
-      // Check if memory was successfully allocated
       request.resolve(ptr);
-      waitingQueue.splice(i, 1); // Remove the processed request
+      waitingQueue.splice(i, 1);
     } else {
-      i++; // Continue if the current request cannot be processed
+      i++;
     }
   }
 }
@@ -82,7 +72,7 @@ function requestMemory(size) {
     if (ptr !== null) {
       resolve(ptr);
     } else {
-      waitingQueue.push({ size, resolve, reject }); // Add to queue if not enough memory
+      waitingQueue.push({ size, resolve, reject });
     }
   });
 }
@@ -99,8 +89,6 @@ interface WasmExports {
     difficulty: number
   ) => number;
 }
-
-let response: number;
 
 const computePow = async (
   memory,
@@ -127,8 +115,8 @@ const computePow = async (
 };
 
 function resetMemory() {
-  brk = initialBrk; // Reset the break point
-  processWaitingQueue(); // Try to process any waiting memory requests
+  brk = initialBrk;
+  processWaitingQueue();
 }
 
 function parseMessage(buffer: Buffer) {
@@ -225,8 +213,7 @@ export class LiteNodeClient {
   ) {}
 
   async init() {
-    // Generate keys
-    const edSeed = ed25519.utils.randomPrivateKey(); // 32-byte seed
+    const edSeed = ed25519.utils.randomPrivateKey();
     const edPublicKey = ed25519.getPublicKey(edSeed);
 
     const edPrivateKey = new Uint8Array(64);
@@ -238,6 +225,50 @@ export class LiteNodeClient {
 
     this.xPrivateKey = ed25519ToX25519Private(this.edPrivateKey);
     this.xPublicKey = x25519.getPublicKey(this.xPrivateKey);
+  }
+
+  private async computePoWNonceWasmSafe(
+    responseHash: Uint8Array,
+    difficulty: number,
+    workBufferLength: number = 2 * 1024 * 1024
+  ): Promise<number> {
+    try {
+      if (responseHash.length !== 32)
+        throw new Error('Invalid responseHash length');
+
+      const hashPtr = sbrk(32);
+      if (hashPtr === null)
+        throw new Error('Unable to allocate memory for hash');
+
+      const hashView = new Uint8Array(memory.buffer, hashPtr, 32);
+      hashView.set(responseHash);
+
+      const workBufferPtr = await requestMemory(workBufferLength);
+      if (workBufferPtr === null)
+        throw new Error('Unable to allocate memory for work buffer');
+
+      const result = await computePow(
+        memory,
+        hashPtr,
+        workBufferPtr,
+        workBufferLength,
+        difficulty
+      );
+
+      if (
+        typeof result !== 'number' ||
+        result < 0 ||
+        !Number.isInteger(result)
+      ) {
+        throw new Error(`Invalid nonce computed: ${result}`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ PoW nonce computation failed:', error);
+      resetMemory();
+      throw error;
+    }
   }
 
   private async handleChallenge(payload: Buffer) {
@@ -256,28 +287,11 @@ export class LiteNodeClient {
     ]);
     const responseHash = crypto.createHash('sha256').update(combined).digest();
 
-    const hashPtr = sbrk(32);
-    const hashAry = new Uint8Array(memory.buffer, hashPtr, 32);
-    hashAry.set(responseHash);
-
-    // Use WASM for PoW
-    const powDifficulty = 2; // Difficulty bits
-    const workBufferLength = 2 * 1024 * 1024;
-    // const nonceValue = this.computePoWNonceWasm(
-    //   responseHash,
-    //   powBufferSize,
-    //   powDifficulty
-    // );
-    const workBufferPtr = await requestMemory(workBufferLength);
-
-    const nonceValue = await computePow(
-      memory,
-      hashPtr,
-      workBufferPtr,
-      workBufferLength,
+    const powDifficulty = 2;
+    const nonceValue = await this.computePoWNonceWasmSafe(
+      responseHash,
       powDifficulty
     );
-    brk = initialBrk;
     const nonce = Buffer.alloc(4);
     nonce.writeUInt32BE(nonceValue);
 
@@ -327,14 +341,12 @@ export class LiteNodeClient {
                 createChallengePayload(this.edPublicKey, this.ourChallenge)
               );
               break;
-
             case MessageType.CHALLENGE:
               this.handleChallenge(payload);
               break;
             case MessageType.RESPONSE:
               this.handleResponse(payload);
               break;
-
             default:
               console.warn(`⚠️ Unhandled message type: ${messageType}`);
           }
