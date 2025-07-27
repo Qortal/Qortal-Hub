@@ -354,6 +354,10 @@ export const NewThread = ({
 
         const idMsg = uid.rnd();
         const identifier = `thmsg-${idThread}-${idMsg}`;
+        const res = await publishGroupEncryptedResource({
+          identifier: identifier,
+          encryptedData: encryptSinglePost,
+        });
         const dataToSaveToStoragePost = {
           threadId: idThread,
           name: myName,
