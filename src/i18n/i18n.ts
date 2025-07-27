@@ -14,6 +14,7 @@ export const supportedLanguages = {
   de: { name: 'Deutsch', flag: '🇩🇪' },
   en: { name: 'English', flag: '🇺🇸' },
   es: { name: 'Español', flag: '🇪🇸' },
+  et: { name: 'Eesti', flag: '🇪🇪' },
   fr: { name: 'Français', flag: '🇫🇷' },
   it: { name: 'Italiano', flag: '🇮🇹' },
   ru: { name: 'Русский', flag: '🇷🇺' },
