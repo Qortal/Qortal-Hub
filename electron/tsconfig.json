@@ -11,6 +11,7 @@
     "typeRoots": ["./node_modules/@types"],
     "allowJs": true,
     "rootDir": ".",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   }
 }

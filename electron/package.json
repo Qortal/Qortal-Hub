@@ -38,20 +38,28 @@
   },
   "dependencies": {
     "@capacitor-community/electron": "^5.0.0",
+    "@noble/curves": "^1.9.4",
+    "@noble/ed25519": "^2.3.0",
+    "@stablelib/ed25519": "^2.0.2",
+    "@stablelib/x25519": "^2.0.1",
     "adm-zip": "^0.5.16",
+    "bs58": "^6.0.0",
     "chokidar": "^3.6.0",
     "electron-is-dev": "~2.0.0",
     "electron-serve": "~1.1.0",
     "electron-unhandled": "~4.0.1",
     "electron-updater": "^5.3.0",
-    "electron-window-state": "^5.0.3"
+    "electron-window-state": "^5.0.3",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
+    "@types/node": "^24.1.0",
     "electron": "^32.3.1",
     "electron-builder": "^25.1.8",
-    "@electron/notarize": "^2.5.0",
-    "typescript": "^5.0.4",
-    "shelljs": "^0.8.5"
+    "shelljs": "^0.8.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   },
   "keywords": [
     "capacitor",

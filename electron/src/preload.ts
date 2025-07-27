@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 require('./rt/electron-rt');
 
 // ------------------- User Preload starts here -------------------
@@ -61,6 +65,12 @@ contextBridge.exposeInMainWorld('walletStorage', {
       JSON.stringify(data, null, 2)
     );
   },
+});
+
+contextBridge.exposeInMainWorld('liteNode', {
+  connect: () => ipcRenderer.invoke('liteNode:connect'),
+  send: (type: number, payload: any) =>
+    ipcRenderer.invoke('liteNode:send', type, payload),
 });
 
 ipcRenderer.send('test-ipc');

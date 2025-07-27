@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import type { CapacitorElectronConfig } from '@capacitor-community/electron';
 import {
   CapElectronEventEmitter,
@@ -5,6 +9,7 @@ import {
   setupCapacitorElectronPlugins,
 } from '@capacitor-community/electron';
 import chokidar from 'chokidar';
+
 import type { MenuItemConstructorOptions } from 'electron';
 import {
   app,
@@ -23,6 +28,7 @@ import windowStateKeeper from 'electron-window-state';
 const AdmZip = require('adm-zip');
 import { join } from 'path';
 import { myCapacitorApp } from '.';
+import { LiteNodeClient } from './lite-node';
 const fs = require('fs');
 const path = require('path');
 
@@ -477,3 +483,13 @@ ipcMain.handle(
     return true;
   }
 );
+
+const liteNode = new LiteNodeClient('your.qortal.peer.ip');
+
+ipcMain.handle('liteNode:connect', async () => {
+  await liteNode.connect();
+});
+
+ipcMain.handle('liteNode:send', async (_event, type: number, payload: any) => {
+  liteNode.sendMessage(type, payload);
+});
