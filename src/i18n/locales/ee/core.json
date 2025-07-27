@@ -271,7 +271,7 @@
       "register_name": "Kinnitatud rakenduste QDN-i salvestamiseks vajate registreeritud Qortali nime.",
       "replied_to": "vastus {{ person }} -le",
       "revert_default": "taasta vaikimisi",
-      "revert_qdn": "võta tagasi QDNist,
+      "revert_qdn": "võta tagasi QDNist",
       "save_qdn": "salvesta QDNi",
       "secure_ownership": "teie nime all avaldatud andmete turvaline omandiõigus. Võite isegi oma nime koos andmetega kolmandale osapoolele müüa.",
       "select_file": "palun vali fail",
