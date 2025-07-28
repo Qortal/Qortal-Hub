@@ -5,15 +5,20 @@ import { sha512 } from '@noble/hashes/sha512';
 import util from 'util';
 import fs from 'fs';
 import path from 'path';
+import bs58 from 'bs58';
+
+import { createGetAccountBalancePayload } from './createGetAccountBalancePayload';
 const readFile = util.promisify(fs.readFile);
 
-export const SEED_PEERS = ['127.0.0.1'];
+export const SEED_PEERS = ['78.72.193.212'];
 
 export enum MessageType {
   HELLO = 0,
   CHALLENGE = 2,
   RESPONSE = 3,
   PING = 11,
+  ACCOUNT_BALANCE = 170,
+  GET_ACCOUNT_BALANCE = 171,
 }
 
 const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
@@ -393,6 +398,36 @@ export class LiteNodeClient {
 
   private async handleResponse(payload: Buffer) {
     this.startPinging();
+    try {
+      const message = createGetAccountBalancePayload(
+        'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
+        0
+      );
+      this.sendMessage(MessageType.GET_ACCOUNT_BALANCE, message);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  private async handleGetAccountBalance(payload: Buffer) {
+    console.log('payload100', payload);
+    if (payload.length < 41) {
+      console.error('❌ Invalid payload length for AccountBalanceMessage');
+      return;
+    }
+
+    const addressBytes = payload.subarray(0, 25);
+    const address = bs58.encode(addressBytes);
+
+    const assetId = payload.readBigUInt64BE(25); // offset = 25
+    const balance = payload.readBigUInt64BE(33); // offset = 33
+
+    console.log('📬 Received Account Balance:');
+    console.log('🏷️ Address:', address);
+    console.log('🪙 Asset ID:', assetId.toString());
+    console.log('💰 Balance:', balance.toString());
+
+    // Optionally store or use the data here
   }
 
   private lastHandledPingIds = new Set<number>();
@@ -469,6 +504,9 @@ export class LiteNodeClient {
               break;
             case MessageType.PING:
               this.handlePing(id);
+              break;
+            case MessageType.ACCOUNT_BALANCE:
+              this.handleGetAccountBalance(payload);
               break;
             default:
               console.warn(`⚠️ Unhandled message type: ${messageType}`);
