@@ -33,7 +33,6 @@ function sbrk(size: number) {
 }
 
 function processWaitingQueue() {
-  console.log('Processing waiting queue...');
   let i = 0;
   while (i < waitingQueue.length) {
     const request = waitingQueue[i];
@@ -98,25 +97,35 @@ function resetMemory() {
 }
 
 function parseMessage(buffer: Buffer) {
-  if (buffer.length < 17) return null;
-  if (buffer.subarray(0, 4).toString('ascii') !== 'QORT') return null;
+  const magic = buffer.subarray(0, 4).toString('ascii');
+  if (magic !== 'QORT') return null;
 
-  const messageType = buffer.readUInt32BE(4);
-  const payloadLength = buffer.readUInt32BE(9);
-  const checksum = buffer.subarray(13, 17);
-  const payload = buffer.subarray(17, 17 + payloadLength);
+  const type = buffer.readUInt32BE(4); // bytes 4–7
+  const hasId = buffer.readUInt8(8); // byte 8
 
-  const expectedChecksum = crypto
-    .createHash('sha256')
-    .update(payload)
-    .digest()
-    .subarray(0, 4);
-  if (!checksum.equals(expectedChecksum)) return null;
+  let offset = 9;
+  let id = -1;
+  if (hasId) {
+    id = buffer.readUInt32BE(offset);
+    offset += 4;
+  }
+
+  const payloadLength = buffer.readUInt32BE(offset);
+  offset += 4;
+
+  const checksum = buffer.subarray(offset, offset + 4);
+  offset += 4;
+
+  const payload = buffer.subarray(offset, offset + payloadLength);
+  offset += payloadLength;
+
+  const totalLength = offset;
 
   return {
-    messageType,
+    messageType: type,
+    id,
     payload,
-    totalLength: 17 + payloadLength,
+    totalLength,
   };
 }
 
@@ -142,19 +151,37 @@ function createChallengePayload(
   return Buffer.concat([Buffer.from(publicKey), Buffer.from(challenge)]);
 }
 
-function encodeFramedMessage(type: number, payload: Buffer): Buffer {
-  const header = Buffer.from('QORT');
+function encodeFramedMessage(
+  type: number,
+  payload: Buffer,
+  id: number
+): Buffer {
+  const header = Buffer.from('QORT', 'ascii');
   const typeBuf = Buffer.alloc(4);
   typeBuf.writeUInt32BE(type);
-  const hasId = Buffer.from([0]);
+
+  const hasId = Buffer.from([1]);
+  const idBuf = Buffer.alloc(4);
+  idBuf.writeUInt32BE(id);
+
   const length = Buffer.alloc(4);
   length.writeUInt32BE(payload.length);
+
   const checksum = crypto
     .createHash('sha256')
     .update(payload)
     .digest()
     .subarray(0, 4);
-  return Buffer.concat([header, typeBuf, hasId, length, checksum, payload]);
+
+  return Buffer.concat([
+    header,
+    typeBuf,
+    hasId,
+    idBuf,
+    length,
+    checksum,
+    payload,
+  ]);
 }
 
 function ed25519ToX25519Private(edSeed: Uint8Array): Uint8Array {
@@ -183,8 +210,14 @@ export class LiteNodeClient {
   private theirXPublicKey: Uint8Array | null = null;
   private theirChallenge: Uint8Array | null = null;
   private ourChallenge = crypto.randomBytes(32);
+  private pingInterval: NodeJS.Timeout | null = null;
+  private pendingPingIds = new Set<number>();
 
   private alreadyResponded = false;
+
+  private messageQueue: Buffer[] = [];
+  private isSending: boolean = false;
+  private nextMessageId: number = 1;
 
   constructor(
     private host: string,
@@ -296,14 +329,37 @@ export class LiteNodeClient {
 
   private async handleResponse(payload: Buffer) {
     this.startPinging();
-    const nonce = payload.readUInt32BE(0);
-    const responseHash = payload.subarray(4, 36);
-    console.log('📩 Received RESPONSE from core:');
-    console.log('    Nonce:', nonce);
-    console.log('    Hash:', responseHash.toString('hex'));
-    resetMemory();
   }
 
+  private lastHandledPingIds = new Set<number>();
+
+  private handlePing(id: number) {
+    if (this.pendingPingIds.has(id)) {
+      // This is a reply to our ping — success.
+      this.pendingPingIds.delete(id);
+      console.log('✅ Received PING reply for ID', id);
+      return;
+    }
+    if (this.lastHandledPingIds.has(id)) {
+      return; // Already replied to this ping
+    }
+
+    const reply = encodeFramedMessage(
+      MessageType.PING,
+      Buffer.from([0x00]), // Required non-empty payload
+      id
+    );
+    this.messageQueue.push(reply);
+    this.flushMessageQueue();
+
+    this.lastHandledPingIds.add(id);
+    console.log('🔁 Replied to PING with ID', id);
+
+    // Optionally clean up old IDs to avoid memory leak
+    if (this.lastHandledPingIds.size > 1000) {
+      this.lastHandledPingIds.clear();
+    }
+  }
   async connect(): Promise<void> {
     await this.init();
 
@@ -312,19 +368,20 @@ export class LiteNodeClient {
         { host: this.host, port: this.port },
         () => {
           console.log(`✅ Connected to ${this.host}:${this.port}`);
-          const helloPayload = createHelloPayload();
-          this.sendMessage(MessageType.HELLO, helloPayload);
+          this.sendMessage(MessageType.HELLO, createHelloPayload());
+
           resolve();
         }
       );
 
       this.socket.on('data', (data: Buffer) => {
+        // console.log('📦 Raw data:', data.toString('hex'));
         this.buffer = Buffer.concat([this.buffer, data]);
-        while (this.buffer.length >= 17) {
+        while (true) {
           const parsed = parseMessage(this.buffer);
           if (!parsed) break;
 
-          const { messageType, payload, totalLength } = parsed;
+          const { messageType, payload, totalLength, id } = parsed;
           this.buffer = this.buffer.subarray(totalLength);
 
           switch (messageType) {
@@ -339,6 +396,9 @@ export class LiteNodeClient {
               break;
             case MessageType.RESPONSE:
               this.handleResponse(payload);
+              break;
+            case MessageType.PING:
+              this.handlePing(id);
               break;
             default:
               console.warn(`⚠️ Unhandled message type: ${messageType}`);
@@ -356,20 +416,58 @@ export class LiteNodeClient {
     });
   }
 
-  sendMessage(type: MessageType, payload: Buffer) {
-    if (!this.socket) throw new Error('Socket not connected');
-    const framed = encodeFramedMessage(type, payload);
-    this.socket.write(framed);
+  private flushMessageQueue() {
+    if (
+      this.isSending ||
+      !this.socket ||
+      this.socket.destroyed ||
+      !this.socket.writable
+    )
+      return;
+
+    while (this.messageQueue.length > 0) {
+      const message = this.messageQueue[0];
+      const flushed = this.socket.write(message);
+      if (!flushed) {
+        this.isSending = true;
+        this.socket.once('drain', () => {
+          this.isSending = false;
+          this.flushMessageQueue();
+        });
+        break;
+      }
+      this.messageQueue.shift();
+    }
+  }
+
+  private sendMessage(type: MessageType, payload: Buffer, id?: number) {
+    const messageId = id ?? this.nextMessageId++;
+    const framed = encodeFramedMessage(type, payload, messageId);
+    console.log('🔐 Response hash:', framed.toString('hex'));
+    this.messageQueue.push(framed);
+    this.flushMessageQueue();
   }
 
   startPinging(intervalMs: number = 5000) {
-    setInterval(() => {
-      try {
-        this.sendMessage(MessageType.PING, Buffer.alloc(0));
-        console.log('📡 Sent PING');
-      } catch (err) {
-        console.error('❌ Failed to send PING:', err);
+    if (this.pingInterval) clearInterval(this.pingInterval);
+
+    this.pingInterval = setInterval(() => {
+      if (!this.socket || this.socket.destroyed) {
+        console.warn('⚠️ Skipping PING: socket not connected');
+        return;
       }
+
+      const id = this.nextMessageId++;
+      this.pendingPingIds.add(id);
+      const pingMessage = encodeFramedMessage(
+        MessageType.PING,
+        Buffer.from([0x00]),
+        id
+      );
+      this.messageQueue.push(pingMessage);
+      this.flushMessageQueue();
+
+      console.log('📡 Sent PING with ID', id);
     }, intervalMs);
   }
 
