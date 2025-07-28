@@ -1,0 +1,13 @@
+export enum MessageType {
+  HELLO = 0,
+  CHALLENGE = 2,
+  RESPONSE = 3,
+  PING = 11,
+  PEERS_V2 = 20,
+  GET_PEERS = 21,
+
+  ACCOUNT = 160,
+  GET_ACCOUNT = 161,
+  ACCOUNT_BALANCE = 170,
+  GET_ACCOUNT_BALANCE = 171,
+}
