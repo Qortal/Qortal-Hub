@@ -69,6 +69,16 @@ async function getWasmInstance(memory: WebAssembly.Memory) {
   return wasmInstance;
 }
 
+function resyncToMagic(buffer: Buffer): Buffer {
+  const magicIndex = buffer.indexOf('QORT', 0, 'ascii');
+  if (magicIndex === -1) {
+    // No valid magic found, drop everything
+    return Buffer.alloc(0);
+  }
+  // Drop garbage before magic
+  return buffer.subarray(magicIndex);
+}
+
 async function computePow(
   memory: WebAssembly.Memory,
   hashPtr: number,
@@ -97,36 +107,71 @@ function resetMemory() {
 }
 
 function parseMessage(buffer: Buffer) {
+  const MIN_HEADER = 4 + 4 + 1 + 4; // Magic + Type + HasID + Data Length
+  if (buffer.length < MIN_HEADER) return null;
+
+  // Check magic
   const magic = buffer.subarray(0, 4).toString('ascii');
   if (magic !== 'QORT') return null;
 
-  const type = buffer.readUInt32BE(4); // bytes 4–7
-  const hasId = buffer.readUInt8(8); // byte 8
+  const type = buffer.readUInt32BE(4);
+  const hasId = buffer.readUInt8(8);
 
   let offset = 9;
   let id = -1;
+
   if (hasId) {
+    if (buffer.length < offset + 4) return null;
     id = buffer.readUInt32BE(offset);
     offset += 4;
   }
 
+  // Payload size
+  if (buffer.length < offset + 4) return null;
   const payloadLength = buffer.readUInt32BE(offset);
   offset += 4;
 
-  const checksum = buffer.subarray(offset, offset + 4);
-  offset += 4;
+  if (payloadLength > 10 * 1024 * 1024) {
+    throw new Error(`❌ Payload too large: ${payloadLength}`);
+  }
 
-  const payload = buffer.subarray(offset, offset + payloadLength);
-  offset += payloadLength;
+  let checksum: Buffer = Buffer.alloc(0);
+  if (payloadLength > 0) {
+    // Need 4 bytes checksum + payload
+    if (buffer.length < offset + 4 + payloadLength) return null;
 
-  const totalLength = offset;
+    checksum = buffer.subarray(offset, offset + 4);
+    offset += 4;
 
-  return {
-    messageType: type,
-    id,
-    payload,
-    totalLength,
-  };
+    const payload = buffer.subarray(offset, offset + payloadLength);
+
+    const expectedChecksum = crypto
+      .createHash('sha256')
+      .update(payload)
+      .digest()
+      .subarray(0, 4);
+    if (!checksum.equals(expectedChecksum)) {
+      console.warn('❌ Invalid checksum, discarding message');
+      return { discardBytes: offset + payloadLength };
+    }
+
+    offset += payloadLength;
+
+    return {
+      messageType: type,
+      id,
+      payload,
+      totalLength: offset,
+    };
+  } else {
+    // No payload, no checksum
+    return {
+      messageType: type,
+      id,
+      payload: Buffer.alloc(0),
+      totalLength: offset,
+    };
+  }
 }
 
 function createHelloPayload(): Buffer {
@@ -245,10 +290,7 @@ export class LiteNodeClient {
     try {
       resetMemory();
 
-      const isHashed = input.length === 32;
-      const hash = isHashed
-        ? input
-        : crypto.createHash('sha256').update(input).digest();
+      const hash = crypto.createHash('sha256').update(input).digest();
 
       const hashPtr = sbrk(32);
       if (hashPtr === null)
@@ -302,11 +344,17 @@ export class LiteNodeClient {
       this.theirChallenge,
     ]);
     const responseHash = crypto.createHash('sha256').update(combined).digest();
+    console.log('🔐 responseHash (hex):', responseHash.toString('hex'));
+
     const hashPtr = sbrk(32);
     const hashView = new Uint8Array(memory.buffer, hashPtr, 32);
     hashView.set(responseHash);
     const difficulty = 2;
-    const nonceValue = await this.computePoWNonceWasmSafe(combined, difficulty);
+
+    const nonceValue = await this.computePoWNonceWasmSafe(
+      responseHash,
+      difficulty
+    );
 
     const nonce = Buffer.alloc(4);
     nonce.writeUInt32BE(nonceValue);
@@ -314,7 +362,23 @@ export class LiteNodeClient {
     const responsePayload = Buffer.concat([nonce, responseHash]);
     console.log('📤 Sending RESPONSE with nonce:', nonceValue);
     console.log('🔐 Response hash:', responseHash.toString('hex'));
-
+    console.log('🧠 Shared Secret:', Buffer.from(sharedSecret).toString('hex'));
+    if (Buffer.isBuffer(this.theirChallenge)) {
+      console.log(
+        '📦 Challenge (Buffer):',
+        this.theirChallenge.toString('hex')
+      );
+    } else if (this.theirChallenge instanceof Uint8Array) {
+      console.log(
+        '📦 Challenge (Uint8Array):',
+        Buffer.from(this.theirChallenge).toString('hex')
+      );
+    } else {
+      console.warn('📦 Challenge is not a valid buffer:', this.theirChallenge);
+    }
+    console.log('🔗 Combined:', combined.toString('hex'));
+    console.log('🔐 SHA256(combined):', responseHash.toString('hex'));
+    console.log('🧮 Difficulty:', difficulty);
     this.sendMessage(MessageType.RESPONSE, responsePayload);
 
     const testNonce = await this.computePoWNonceWasmSafe(
@@ -375,11 +439,17 @@ export class LiteNodeClient {
       );
 
       this.socket.on('data', (data: Buffer) => {
-        // console.log('📦 Raw data:', data.toString('hex'));
         this.buffer = Buffer.concat([this.buffer, data]);
+
         while (true) {
+          // 🛠 Resync to the next 'QORT' if there's garbage before it
+          this.buffer = resyncToMagic(this.buffer);
           const parsed = parseMessage(this.buffer);
           if (!parsed) break;
+          if ('discardBytes' in parsed) {
+            this.buffer = this.buffer.subarray(parsed.discardBytes);
+            continue;
+          }
 
           const { messageType, payload, totalLength, id } = parsed;
           this.buffer = this.buffer.subarray(totalLength);
