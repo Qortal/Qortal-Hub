@@ -24,6 +24,7 @@ import {
 } from './crypto/keyConversion';
 import { handleAccount, handleAccountBalance } from './messages/handlers';
 import { discoveredPeers } from './peers';
+import { PeerManager } from './PeerManager';
 
 export class LiteNodeClient {
   private socket: net.Socket | null = null;
@@ -49,7 +50,8 @@ export class LiteNodeClient {
 
   constructor(
     private host: string,
-    private port: number = 12392
+    private port: number = 12392,
+    private manager: PeerManager
   ) {}
 
   async init() {
@@ -63,6 +65,14 @@ export class LiteNodeClient {
 
     this.xPrivateKey = ed25519ToX25519Private(edSeed);
     this.xPublicKey = x25519.getPublicKey(this.xPrivateKey);
+  }
+
+  private handleDisconnect(reason: string) {
+    const peerKey = `${this.host}:${this.port}`;
+    console.warn(`🔌 Disconnected from ${peerKey} (${reason})`);
+    this.manager.removePeer(peerKey);
+    this.manager.updatePeerStats(peerKey, false);
+    this.cleanupPendingRequests();
   }
 
   private async handleChallenge(payload: Buffer) {
@@ -113,7 +123,6 @@ export class LiteNodeClient {
 
       if (!discoveredPeers.has(addrString)) {
         discoveredPeers.add(addrString);
-        console.log(`🧭 Discovered peer: ${addrString}`);
       }
     }
 
@@ -124,26 +133,38 @@ export class LiteNodeClient {
     return /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) || /^[a-zA-Z0-9\-.]+$/.test(ip); // basic IPv4 or domain
   }
 
+  private pendingRequests = new Map<
+    number,
+    {
+      resolve: (value: any) => void;
+      reject: (reason?: any) => void;
+      timeout: NodeJS.Timeout;
+    }
+  >();
+
   private async handleResponse(_: Buffer) {
     console.log('received');
-    this.startPinging();
-    const account = 'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP';
+    const peerKey = `${this.host}:${this.port}`;
 
-    this.sendMessage(
-      MessageType.GET_ACCOUNT_BALANCE,
-      createGetAccountBalancePayload(account, 0)
-    );
-    this.sendMessage(
-      MessageType.GET_ACCOUNT,
-      createGetAccountMessagePayload(account)
-    );
+    this.manager.connectedClients.set(peerKey, this);
+    this.manager.updatePeerStats(peerKey, true);
+    this.startPinging();
+    // const account = 'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP';
+
+    // this.sendMessage(
+    //   MessageType.GET_ACCOUNT_BALANCE,
+    //   createGetAccountBalancePayload(account, 0)
+    // );
+    // this.sendMessage(
+    //   MessageType.GET_ACCOUNT,
+    //   createGetAccountMessagePayload(account)
+    // );
 
     this.handleGetPeers();
   }
 
   private handlePing(id: number) {
     if (this.pendingPingIds.delete(id)) {
-      console.log('✅ PING reply received:', id);
       return;
     }
     if (this.lastHandledPingIds.has(id)) return;
@@ -155,6 +176,18 @@ export class LiteNodeClient {
 
   private handleGetPeers() {
     this.sendMessage(MessageType.GET_PEERS, Buffer.from([0x00]));
+  }
+
+  private cleanupPendingRequests() {
+    for (const [id, { reject, timeout }] of this.pendingRequests.entries()) {
+      clearTimeout(timeout);
+      reject(
+        new Error(
+          `❌ Disconnected before receiving response for message ID ${id}`
+        )
+      );
+    }
+    this.pendingRequests.clear();
   }
 
   async connect(): Promise<void> {
@@ -196,6 +229,13 @@ export class LiteNodeClient {
 
           const { messageType, payload, totalLength, id } = parsed;
           this.buffer = this.buffer.subarray(totalLength);
+          const request = this.pendingRequests.get(id);
+          if (request) {
+            clearTimeout(request.timeout);
+            request.resolve(payload);
+            this.pendingRequests.delete(id);
+            return; // skip the switch block — handled as a response
+          }
           switch (messageType) {
             case MessageType.HELLO:
               this.sendMessage(
@@ -227,9 +267,17 @@ export class LiteNodeClient {
         }
       });
 
-      this.socket.on('error', reject);
-      this.socket.on('end', () => console.log('🔌 Disconnected'));
-      this.socket.on('timeout', () => console.warn('⏳ Socket timeout'));
+      this.socket.on('error', (err) => {
+        this.handleDisconnect('error');
+      });
+
+      this.socket.on('end', () => {
+        this.handleDisconnect('end');
+      });
+
+      this.socket.on('timeout', () => {
+        this.handleDisconnect('timeout');
+      });
     });
   }
 
@@ -238,6 +286,24 @@ export class LiteNodeClient {
     const framed = encodeFramedMessage(type, payload, messageId);
     this.messageQueue.push(framed);
     this.flushMessageQueue();
+  }
+
+  public sendRequest<T>(
+    type: MessageType,
+    payload: Buffer,
+    timeoutMs = 5000
+  ): Promise<T> {
+    const messageId = this.nextMessageId++;
+
+    return new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingRequests.delete(messageId);
+        reject(new Error(`⏰ Timeout waiting for message ID ${messageId}`));
+      }, timeoutMs);
+
+      this.pendingRequests.set(messageId, { resolve, reject, timeout });
+      this.sendMessage(type, payload, messageId);
+    });
   }
 
   private flushMessageQueue() {
@@ -267,5 +333,12 @@ export class LiteNodeClient {
   close() {
     this.socket?.end();
     if (this.pingInterval) clearInterval(this.pingInterval);
+  }
+
+  destroy() {
+    if (this.socket) {
+      this.socket.destroy();
+      this.socket = null;
+    }
   }
 }
