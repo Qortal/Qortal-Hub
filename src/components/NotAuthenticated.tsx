@@ -202,6 +202,8 @@ export const NotAuthenticated = ({
     hasLocalNodeRef.current = hasLocalNode;
   }, [hasLocalNode]);
 
+  console.log('apiKey', apiKey);
+
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
       if (key === 'isGateway') return;
@@ -1142,9 +1144,11 @@ export const NotAuthenticated = ({
                       url: 'http://127.0.0.1:12391',
                     });
                     setUseLocalNode(false);
+                    setApiKey(null);
+                    handleSetGlobalApikey(null);
                   }}
                 >
-                  {t('core:action.remove', {
+                  {t('auth:apikey.clear_storage', {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Button>
