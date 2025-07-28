@@ -202,8 +202,6 @@ export const NotAuthenticated = ({
     hasLocalNodeRef.current = hasLocalNode;
   }, [hasLocalNode]);
 
-  console.log('apiKey', apiKey);
-
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
       if (key === 'isGateway') return;
