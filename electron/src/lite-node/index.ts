@@ -8,15 +8,18 @@ import path from 'path';
 import bs58 from 'bs58';
 
 import { createGetAccountBalancePayload } from './createGetAccountBalancePayload';
+import { createGetAccountMessagePayload } from './createGetAccountMessagePayload';
 const readFile = util.promisify(fs.readFile);
 
-export const SEED_PEERS = ['78.72.193.212'];
+export const SEED_PEERS = ['127.0.0.1'];
 
 export enum MessageType {
   HELLO = 0,
   CHALLENGE = 2,
   RESPONSE = 3,
   PING = 11,
+  ACCOUNT = 160,
+  GET_ACCOUNT = 161,
   ACCOUNT_BALANCE = 170,
   GET_ACCOUNT_BALANCE = 171,
 }
@@ -404,12 +407,17 @@ export class LiteNodeClient {
         0
       );
       this.sendMessage(MessageType.GET_ACCOUNT_BALANCE, message);
+
+      const message2 = createGetAccountMessagePayload(
+        'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP'
+      );
+      this.sendMessage(MessageType.GET_ACCOUNT, message2);
     } catch (error) {
       console.error(error);
     }
   }
 
-  private async handleGetAccountBalance(payload: Buffer) {
+  private async handleAccountBalance(payload: Buffer) {
     console.log('payload100', payload);
     if (payload.length < 41) {
       console.error('❌ Invalid payload length for AccountBalanceMessage');
@@ -428,6 +436,63 @@ export class LiteNodeClient {
     console.log('💰 Balance:', balance.toString());
 
     // Optionally store or use the data here
+  }
+
+  private async handleAccount(payload: Buffer) {
+    const ADDRESS_LENGTH = 25;
+    const REFERENCE_LENGTH = 64;
+    const PUBLIC_KEY_LENGTH = 32;
+
+    if (
+      payload.length <
+      ADDRESS_LENGTH + REFERENCE_LENGTH + PUBLIC_KEY_LENGTH + 5 * 4
+    ) {
+      console.error('❌ Invalid payload length for AccountMessage');
+      return;
+    }
+
+    let offset = 0;
+
+    const addressBytes = payload.subarray(offset, offset + ADDRESS_LENGTH);
+    const address = bs58.encode(addressBytes);
+    offset += ADDRESS_LENGTH;
+
+    const reference = payload.subarray(offset, offset + REFERENCE_LENGTH);
+    offset += REFERENCE_LENGTH;
+
+    const publicKey = payload.subarray(offset, offset + PUBLIC_KEY_LENGTH);
+    offset += PUBLIC_KEY_LENGTH;
+
+    const defaultGroupId = payload.readInt32BE(offset);
+    offset += 4;
+
+    const flags = payload.readInt32BE(offset);
+    offset += 4;
+
+    const level = payload.readInt32BE(offset);
+    offset += 4;
+
+    const blocksMinted = payload.readInt32BE(offset);
+    offset += 4;
+
+    const blocksMintedAdjustment = payload.readInt32BE(offset);
+    offset += 4;
+
+    const blocksMintedPenalty = payload.readInt32BE(offset);
+    offset += 4;
+
+    console.log('📬 Received Account Info:');
+    console.log('🏷️ Address:', address);
+    console.log('🧬 Reference:', bs58.encode(reference));
+    console.log('🔑 Public Key:', bs58.encode(publicKey));
+    console.log('👥 Default Group ID:', defaultGroupId);
+    console.log('🚩 Flags:', flags);
+    console.log('⭐ Level:', level);
+    console.log('⛏️ Blocks Minted:', blocksMinted);
+    console.log('📈 Adjustment:', blocksMintedAdjustment);
+    console.log('📉 Penalty:', blocksMintedPenalty);
+
+    // Use/store this information as needed
   }
 
   private lastHandledPingIds = new Set<number>();
@@ -505,8 +570,11 @@ export class LiteNodeClient {
             case MessageType.PING:
               this.handlePing(id);
               break;
+            case MessageType.ACCOUNT:
+              this.handleAccount(payload);
+              break;
             case MessageType.ACCOUNT_BALANCE:
-              this.handleGetAccountBalance(payload);
+              this.handleAccountBalance(payload);
               break;
             default:
               console.warn(`⚠️ Unhandled message type: ${messageType}`);
