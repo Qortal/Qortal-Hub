@@ -48,6 +48,9 @@ export class LiteNodeClient {
   private knownPeers: Set<string> = new Set();
   private remoteAddress?: string;
 
+  public lastKnownBlockHeight: number | null = null;
+  public lastKnownBlockTimestamp: number | null = null;
+
   constructor(
     private host: string,
     private port: number = 12392,
@@ -126,7 +129,96 @@ export class LiteNodeClient {
       }
     }
 
-    console.log(`✅ Total known peers: ${discoveredPeers.size}`);
+    // console.log(`✅ Total known peers: ${discoveredPeers.size}`);
+  }
+
+  private handleBlockSummaries(payload: Buffer) {
+    const BLOCK_SIGNATURE_LENGTH = 128;
+    const PUBLIC_KEY_LENGTH = 32;
+    const INT_LENGTH = 4;
+    const LONG_LENGTH = 8;
+
+    const BLOCK_SUMMARY_V2_LENGTH =
+      BLOCK_SIGNATURE_LENGTH + // signature
+      PUBLIC_KEY_LENGTH + // minter public key
+      INT_LENGTH + // online accounts count
+      LONG_LENGTH + // timestamp
+      INT_LENGTH + // transaction count
+      BLOCK_SIGNATURE_LENGTH; // reference
+
+    const blockSummaries: {
+      height: number;
+      signature: Buffer;
+      minterPublicKey: Buffer;
+      onlineAccountsCount: number;
+      timestamp: number;
+      transactionsCount: number;
+      reference: Buffer;
+    }[] = [];
+
+    if (payload.length === 0) return blockSummaries;
+
+    let offset = 0;
+
+    const heightStart = payload.readInt32BE(offset);
+    offset += 4;
+    let currentHeight = heightStart;
+
+    while (offset + BLOCK_SUMMARY_V2_LENGTH <= payload.length) {
+      const signature = payload.subarray(
+        offset,
+        offset + BLOCK_SIGNATURE_LENGTH
+      );
+      offset += BLOCK_SIGNATURE_LENGTH;
+
+      const minterPublicKey = payload.subarray(
+        offset,
+        offset + PUBLIC_KEY_LENGTH
+      );
+      offset += PUBLIC_KEY_LENGTH;
+
+      const onlineAccountsCount = payload.readInt32BE(offset);
+      offset += INT_LENGTH;
+
+      const timestamp = payload.readBigInt64BE(offset);
+      offset += LONG_LENGTH;
+
+      const transactionsCount = payload.readInt32BE(offset);
+      offset += INT_LENGTH;
+
+      const reference = payload.subarray(
+        offset,
+        offset + BLOCK_SIGNATURE_LENGTH
+      );
+      offset += BLOCK_SIGNATURE_LENGTH;
+      blockSummaries.push({
+        height: currentHeight,
+        signature,
+        minterPublicKey,
+        onlineAccountsCount,
+        timestamp: Number(timestamp),
+        transactionsCount,
+        reference,
+      });
+
+      currentHeight++;
+    }
+
+    if (blockSummaries.length > 0) {
+      const latestSummary = blockSummaries[blockSummaries.length - 1];
+
+      this.lastKnownBlockHeight = latestSummary.height;
+      this.lastKnownBlockTimestamp = latestSummary.timestamp;
+
+      // Optionally: update peer stats in the manager
+      this.manager.updatePeerChainTip?.(
+        `${this.host}:${this.port}`,
+        latestSummary.height,
+        latestSummary.timestamp
+      );
+    }
+
+    // TODO: Store or evaluate summaries to determine sync quality
   }
 
   private isValidIp(ip: string): boolean {
@@ -261,8 +353,16 @@ export class LiteNodeClient {
             case MessageType.PEERS_V2:
               this.handlePeerV2(payload);
               break;
-            default:
-            // console.warn(`⚠️ Unhandled message type: ${messageType}`);
+            case MessageType.BLOCK_SUMMARIES_V2:
+              this.handleBlockSummaries(payload);
+              break;
+            default: {
+              if (messageType?.toString().includes('7')) {
+                console.warn(
+                  `⚠️ Unhandled message type: ${messageType}, ${this.host}`
+                );
+              }
+            }
           }
         }
       });
@@ -320,7 +420,7 @@ export class LiteNodeClient {
     }
   }
 
-  startPinging(intervalMs: number = 30000) {
+  startPinging(intervalMs: number = 20000) {
     if (this.pingInterval) clearInterval(this.pingInterval);
     this.pingInterval = setInterval(() => {
       if (!this.socket || this.socket.destroyed) return;

@@ -1,5 +1,11 @@
 import bs58 from 'bs58';
 
+import Decimal from 'decimal.js';
+
+function toBigDecimal(amountBigInt) {
+  return new Decimal(amountBigInt.toString()).div(1e8);
+}
+
 export async function handleAccountBalance(payload: Buffer) {
   console.log('payload100', payload);
   if (payload.length < 41) {
@@ -17,6 +23,8 @@ export async function handleAccountBalance(payload: Buffer) {
   console.log('🏷️ Address:', address);
   console.log('🪙 Asset ID:', assetId.toString());
   console.log('💰 Balance:', balance.toString());
+
+  return toBigDecimal(balance);
 
   // Optionally store or use the data here
 }
@@ -74,6 +82,18 @@ export async function handleAccount(payload: Buffer) {
   console.log('⛏️ Blocks Minted:', blocksMinted);
   console.log('📈 Adjustment:', blocksMintedAdjustment);
   console.log('📉 Penalty:', blocksMintedPenalty);
+
+  return {
+    address: address,
+    reference: bs58.encode(reference),
+    publicKey: bs58.encode(publicKey),
+    defaultGroupId: defaultGroupId,
+    flags: flags,
+    level: level,
+    blocksMinted: blocksMinted,
+    blocksMintedAdjustment: blocksMintedAdjustment,
+    blocksMintedPenalty: blocksMintedPenalty,
+  };
 
   // Use/store this information as needed
 }

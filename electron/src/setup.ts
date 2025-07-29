@@ -29,6 +29,8 @@ const AdmZip = require('adm-zip');
 import { join } from 'path';
 import { myCapacitorApp } from '.';
 import { LiteNodeClient } from './lite-node';
+import { startPeerManager } from './lite-node/peerService';
+import { createHttpServer } from './lite-node/api/httpserver';
 const fs = require('fs');
 const path = require('path');
 
@@ -174,6 +176,9 @@ export class ElectronCapacitorApp {
         preload: preloadPath,
       },
     });
+
+    // await startPeerManager();
+    // await createHttpServer();
     this.mainWindowState.manage(this.MainWindow);
 
     if (this.CapacitorFileConfig.backgroundColor) {
@@ -488,8 +493,4 @@ const liteNode = new LiteNodeClient('your.qortal.peer.ip');
 
 ipcMain.handle('liteNode:connect', async () => {
   await liteNode.connect();
-});
-
-ipcMain.handle('liteNode:send', async (_event, type: number, payload: any) => {
-  liteNode.sendMessage(type, payload);
 });
