@@ -1,11 +1,17 @@
 // accountApi.ts
 
-import { handleAccount, handleAccountBalance } from '../messages/handlers';
-import { getRandomClient, startPeerManager } from '../peerService';
+import {
+  handleAccount,
+  handleAccountBalance,
+  handleActiveChat,
+} from '../messages/handlers';
+import { getRandomClient } from '../peerService';
 import { MessageType } from '../protocol/messageTypes';
 import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
+  createGetActiveChatPayload,
+  Encoding,
 } from '../protocol/payloads';
 
 export async function getAccountBalance(address: string): Promise<any> {
@@ -20,10 +26,6 @@ export async function getAccountBalance(address: string): Promise<any> {
   return handleAccountBalance(res);
 }
 
-(async () => {
-  await startPeerManager();
-})();
-
 export async function getAccount(address: string): Promise<any> {
   const client = getRandomClient();
   if (!client) throw new Error('No available peers');
@@ -35,7 +37,3 @@ export async function getAccount(address: string): Promise<any> {
 
   return handleAccount(res);
 }
-
-(async () => {
-  await startPeerManager();
-})();

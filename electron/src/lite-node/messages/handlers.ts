@@ -7,7 +7,6 @@ function toBigDecimal(amountBigInt) {
 }
 
 export async function handleAccountBalance(payload: Buffer) {
-  console.log('payload100', payload);
   if (payload.length < 41) {
     console.error('❌ Invalid payload length for AccountBalanceMessage');
     return;
@@ -96,4 +95,132 @@ export async function handleAccount(payload: Buffer) {
   };
 
   // Use/store this information as needed
+}
+
+function readInt(buffer, offset) {
+  return { value: buffer.readInt32BE(offset), size: 4 };
+}
+
+function readLong(buffer, offset) {
+  return { value: Number(buffer.readBigInt64BE(offset)), size: 8 };
+}
+
+function readSizedInt(buffer, offset) {
+  return readInt(buffer, offset);
+}
+
+function readNullableString(buffer, offset) {
+  const { value: length, size: lenSize } = readInt(buffer, offset);
+  if (length === 0) return { value: null, size: lenSize };
+  const str = buffer.toString(
+    'utf-8',
+    offset + lenSize,
+    offset + lenSize + length
+  );
+  return { value: str, size: lenSize + length };
+}
+
+function readNullableData(buffer, offset) {
+  const { value: length, size: lenSize } = readInt(buffer, offset);
+  if (length === 0) return { value: null, size: lenSize };
+  const data = buffer.slice(offset + lenSize, offset + lenSize + length);
+  return { value: data, size: lenSize + length };
+}
+
+function readNullableTimestamp(buffer, offset) {
+  const { value: size, size: lenSize } = readInt(buffer, offset);
+  if (size === 0) return { value: null, size: lenSize };
+  if (size !== 8) throw new Error('Invalid timestamp size');
+  const timestamp = Number(buffer.readBigInt64BE(offset + lenSize));
+  return { value: timestamp, size: lenSize + 8 };
+}
+
+function readTimestamp(buffer, offset) {
+  return readLong(buffer, offset);
+}
+
+export function handleActiveChat(buffer) {
+  let offset = 0;
+
+  // GROUP CHATS
+  const { value: groupCount, size: groupCountSize } = readSizedInt(
+    buffer,
+    offset
+  );
+  offset += groupCountSize;
+  const groups = [];
+
+  for (let i = 0; i < groupCount; i++) {
+    const { value: groupId, size: s1 } = readInt(buffer, offset);
+    offset += s1;
+
+    const { value: groupName, size: s2 } = readNullableString(buffer, offset);
+    offset += s2;
+
+    const { value: timestamp, size: s3 } = readNullableTimestamp(
+      buffer,
+      offset
+    );
+    offset += s3;
+
+    const { value: sender, size: s4 } = readNullableString(buffer, offset);
+    offset += s4;
+
+    const { value: senderName, size: s5 } = readNullableString(buffer, offset);
+    offset += s5;
+
+    const { value: signature, size: s6 } = readNullableData(buffer, offset);
+    offset += s6;
+
+    const encoding = buffer.readUInt8(offset); // single byte
+    offset += 1;
+
+    const { value: data, size: s7 } = readNullableString(buffer, offset);
+    offset += s7;
+
+    groups.push({
+      groupId,
+      groupName,
+      timestamp,
+      sender,
+      senderName,
+      signature: signature ? bs58.encode(signature) : null,
+      encoding,
+      data,
+    });
+  }
+
+  // DIRECT CHATS
+  const { value: directCount, size: directCountSize } = readSizedInt(
+    buffer,
+    offset
+  );
+  offset += directCountSize;
+  const direct = [];
+
+  for (let i = 0; i < directCount; i++) {
+    const { value: address, size: s1 } = readNullableString(buffer, offset);
+    offset += s1;
+
+    const { value: name, size: s2 } = readNullableString(buffer, offset);
+    offset += s2;
+
+    const { value: timestamp, size: s3 } = readTimestamp(buffer, offset);
+    offset += s3;
+
+    const { value: sender, size: s4 } = readNullableString(buffer, offset);
+    offset += s4;
+
+    const { value: senderName, size: s5 } = readNullableString(buffer, offset);
+    offset += s5;
+
+    direct.push({
+      address,
+      name,
+      timestamp,
+      sender,
+      senderName,
+    });
+  }
+  return { groups, direct };
 }

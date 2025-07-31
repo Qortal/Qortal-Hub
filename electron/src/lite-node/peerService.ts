@@ -1,6 +1,6 @@
 // peerService.ts
 import { PeerManager } from './PeerManager';
-
+export const isDevelopment = true;
 const SEED_PEERS = [
   'node1.qortal.org',
   'node2.qortal.org',
@@ -36,7 +36,7 @@ const SEED_PEERS = [
   'node8.qortalnodes.live',
 ];
 
-const manager = new PeerManager(SEED_PEERS);
+const manager = new PeerManager(isDevelopment ? ['127.0.0.1'] : SEED_PEERS);
 
 let initialized = false;
 

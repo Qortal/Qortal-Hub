@@ -17,7 +17,7 @@ import {
   resyncToMagic,
 } from './protocol/framing';
 
-import { compute } from './wasm/computePoW';
+import { compute, queuedCompute } from './wasm/computePoW';
 import {
   ed25519ToX25519Private,
   ed25519ToX25519Public,
@@ -25,6 +25,7 @@ import {
 import { handleAccount, handleAccountBalance } from './messages/handlers';
 import { discoveredPeers } from './peers';
 import { PeerManager } from './PeerManager';
+import { isDevelopment } from './peerService';
 
 export class LiteNodeClient {
   private socket: net.Socket | null = null;
@@ -96,7 +97,7 @@ export class LiteNodeClient {
       this.theirChallenge,
     ]);
     const responseHash = crypto.createHash('sha256').update(combined).digest();
-    const nonceValue = await compute(responseHash, 2);
+    const nonceValue = await queuedCompute(responseHash, 2);
 
     const nonce = Buffer.alloc(4);
     nonce.writeUInt32BE(nonceValue);
@@ -251,15 +252,21 @@ export class LiteNodeClient {
     //   MessageType.GET_ACCOUNT,
     //   createGetAccountMessagePayload(account)
     // );
-
-    this.handleGetPeers();
+    if (!isDevelopment) {
+      this.handleGetPeers();
+    }
   }
 
   private handlePing(id: number) {
+    console.log('pingid', id);
     if (this.pendingPingIds.delete(id)) {
+      console.log('pingid entered1', id);
       return;
     }
-    if (this.lastHandledPingIds.has(id)) return;
+    if (this.lastHandledPingIds.has(id)) {
+      console.log('pingid entered12', id);
+      return;
+    }
 
     this.sendMessage(MessageType.PING, Buffer.from([0x00]), id);
     this.lastHandledPingIds.add(id);
@@ -356,6 +363,9 @@ export class LiteNodeClient {
             case MessageType.BLOCK_SUMMARIES_V2:
               this.handleBlockSummaries(payload);
               break;
+            case MessageType.ACTIVE_CHAT:
+              this.handleBlockSummaries(payload);
+              break;
             default: {
               if (messageType?.toString().includes('7')) {
                 console.warn(
@@ -398,10 +408,22 @@ export class LiteNodeClient {
     return new Promise<T>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingRequests.delete(messageId);
-        reject(new Error(`⏰ Timeout waiting for message ID ${messageId}`));
+        reject(
+          new Error(
+            `[${new Date().toLocaleTimeString()}]⏰ Timeout waiting for message ID ${messageId}`
+          )
+        );
       }, timeoutMs);
 
       this.pendingRequests.set(messageId, { resolve, reject, timeout });
+      console.log(
+        'type, payload, messageId',
+        type,
+        payload,
+        messageId,
+        this.host,
+        this.port
+      );
       this.sendMessage(type, payload, messageId);
     });
   }
@@ -409,14 +431,20 @@ export class LiteNodeClient {
   private flushMessageQueue() {
     if (!this.socket || this.socket.destroyed || !this.socket.writable) return;
 
-    while (this.messageQueue.length > 0) {
-      const message = this.messageQueue[0];
-      const flushed = this.socket.write(message);
-      if (!flushed) {
-        this.socket.once('drain', () => this.flushMessageQueue());
-        break;
+    try {
+      while (this.messageQueue.length > 0) {
+        const message = this.messageQueue[0];
+        const flushed = this.socket.write(message);
+        if (!flushed) {
+          this.socket.once('drain', () => this.flushMessageQueue());
+          break;
+        }
+        this.messageQueue.shift();
       }
-      this.messageQueue.shift();
+    } catch (err) {
+      console.error('flushMessageQueue error:', err);
+      // Optionally emit an error or destroy the socket
+      this.socket?.destroy(err as Error);
     }
   }
 

@@ -54,3 +54,28 @@ export function createGetAccountMessagePayload(address: string): Buffer {
 
   return Buffer.from(addressBytes); // ✅ Just raw payload
 }
+
+export enum Encoding {
+  BASE58 = 0,
+  BASE64 = 1,
+  // Add more if needed
+}
+
+export function createGetActiveChatPayload(
+  address: string,
+  encoding: Encoding,
+  hasChatReference: boolean
+): Buffer {
+  const addressBytes = bs58.decode(address);
+
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  const encodingByte = Buffer.from([encoding]);
+  const hasChatReferenceByte = Buffer.from([hasChatReference ? 1 : 0]);
+
+  return Buffer.concat([addressBytes, encodingByte, hasChatReferenceByte]);
+}

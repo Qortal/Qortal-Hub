@@ -127,3 +127,15 @@ export async function compute(
     resetMemory();
   }
 }
+
+let lastComputePromise: Promise<any> = Promise.resolve();
+
+export function queuedCompute(
+  input: Uint8Array,
+  difficulty: number,
+  workBufferLength = 2 * 1024 * 1024
+): Promise<number> {
+  const next = () => compute(input, difficulty, workBufferLength);
+  lastComputePromise = lastComputePromise.then(next, next);
+  return lastComputePromise;
+}

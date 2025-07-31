@@ -177,8 +177,8 @@ export class ElectronCapacitorApp {
       },
     });
 
-    // await startPeerManager();
-    // await createHttpServer();
+    await startPeerManager();
+    await createHttpServer();
     this.mainWindowState.manage(this.MainWindow);
 
     if (this.CapacitorFileConfig.backgroundColor) {
