@@ -1,4 +1,5 @@
 import bs58 from 'bs58';
+import { XMLParser } from 'fast-xml-parser';
 
 import Decimal from 'decimal.js';
 
@@ -223,4 +224,20 @@ export function handleActiveChat(buffer) {
     });
   }
   return { groups, direct };
+}
+
+export function handleProcessTransactionResponseMessage(payload: Buffer) {
+  const jsonString = payload.toString('utf-8');
+
+  try {
+    const parsed = JSON.parse(jsonString);
+
+    console.log('📬 Received ProcessTransactionResponseMessage:');
+    console.dir(parsed, { depth: null });
+
+    return parsed;
+  } catch (err) {
+    console.error('❌ Failed to parse JSON:', jsonString);
+    return null;
+  }
 }

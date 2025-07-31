@@ -55,6 +55,14 @@ export function createGetAccountMessagePayload(address: string): Buffer {
   return Buffer.from(addressBytes); // ✅ Just raw payload
 }
 
+export function createProcessTransactionMessagePayload(
+  signedBytes: string
+): Buffer {
+  const signedBytesToBytes = bs58.decode(signedBytes);
+
+  return Buffer.from(signedBytesToBytes); // ✅ Just raw payload
+}
+
 export enum Encoding {
   BASE58 = 0,
   BASE64 = 1,

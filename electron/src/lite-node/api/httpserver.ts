@@ -1,13 +1,33 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { getAccount, getAccountBalance } from './account';
+import { getAccount, getAccountBalance, processTransaction } from './account';
 import url from 'url';
 import { Encoding } from '../protocol/payloads';
 import { getActiveChat } from './chat';
+import bodyParser from 'body-parser';
 
 export async function createHttpServer() {
   const app = express();
+
+  // First route that needs raw body (do not put JSON parser above this)
+  app.post(
+    '/transactions/process',
+    bodyParser.raw({ type: '*/*' }),
+    async (req, res) => {
+      try {
+        const rawBase58 = req.body.toString('utf8').trim();
+        console.log('📨 Raw Transaction (base58):', rawBase58);
+
+        const result = await processTransaction(rawBase58);
+        res.json(result);
+      } catch (err: any) {
+        res.status(500).type('text').send(`Error: ${err.message}`);
+      }
+    }
+  );
+
+  // Now apply JSON parser for actual JSON endpoints
   app.use(express.json());
 
   app.get('/addresses/balance/:address', async (req, res) => {
@@ -46,6 +66,26 @@ export async function createHttpServer() {
     }
   });
 
+  app.get('/transactions/unitfee', async (req, res) => {
+    try {
+      res.type('text').send(1000000);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/addresses/lastreference/:address', async (req, res) => {
+    try {
+      res
+        .type('text')
+        .send(
+          '61EoUF6XwNksjQ2WVcDyMG4dhmRkKHoiBfh6HpUCXh8swsGg8paZaWjhVPE5sbRRdumJBkrRB45iRGv9sBsyDuom'
+        );
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 
@@ -53,13 +93,12 @@ export async function createHttpServer() {
     const parsedUrl = url.parse(request.url!, true);
     const pathname = parsedUrl.pathname || '';
 
-    // Basic router for WebSocket endpoints
     if (pathname.startsWith('/websockets/chat/active/')) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request, parsedUrl);
       });
     } else {
-      socket.destroy(); // Reject unknown paths
+      socket.destroy();
     }
   });
 
@@ -77,7 +116,6 @@ export async function createHttpServer() {
 
       const encoding = Encoding.BASE64;
 
-      // Setup polling
       const interval = setInterval(async () => {
         try {
           const response = await getActiveChat(
@@ -87,7 +125,7 @@ export async function createHttpServer() {
           );
 
           if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify(response)); // Send to frontend
+            ws.send(JSON.stringify(response));
           }
         } catch (err) {
           console.error('Failed to fetch active chats:', err);
@@ -108,7 +146,6 @@ export async function createHttpServer() {
         clearInterval(interval);
       });
     } else {
-      // Optional: handle other routes if needed
       ws.close();
     }
   });
