@@ -241,3 +241,22 @@ export function handleProcessTransactionResponseMessage(payload: Buffer) {
     return null;
   }
 }
+
+export async function handleLastReference(payload: Buffer) {
+  const lastReference = bs58.encode(payload);
+
+  console.log('🧾 lastReference:', lastReference);
+
+  return lastReference;
+}
+
+export function handleUnitFee(payload: Buffer): bigint {
+  if (payload.length !== 8) {
+    throw new Error(
+      `❌ Invalid payload length for UnitFeeResponseMessage. Expected 8 bytes, got ${payload.length}`
+    );
+  }
+
+  const unitFee = payload.readBigUInt64BE(0);
+  return unitFee;
+}

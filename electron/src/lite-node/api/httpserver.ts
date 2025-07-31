@@ -1,7 +1,13 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { getAccount, getAccountBalance, processTransaction } from './account';
+import {
+  getAccount,
+  getAccountBalance,
+  getLastReference,
+  getUnitFee,
+  processTransaction,
+} from './account';
 import url from 'url';
 import { Encoding } from '../protocol/payloads';
 import { getActiveChat } from './chat';
@@ -68,7 +74,13 @@ export async function createHttpServer() {
 
   app.get('/transactions/unitfee', async (req, res) => {
     try {
-      res.type('text').send(1000000);
+      const txType = req.query.txType as string;
+      const timestamp = req.query.timestamp ? +req.query.timestamp : undefined;
+
+      console.log('txType', txType, timestamp);
+
+      const unitFee = await getUnitFee(txType, timestamp);
+      res.type('text').send(unitFee.toString()); // ensure it's a string for .send()
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
@@ -76,11 +88,9 @@ export async function createHttpServer() {
 
   app.get('/addresses/lastreference/:address', async (req, res) => {
     try {
-      res
-        .type('text')
-        .send(
-          '61EoUF6XwNksjQ2WVcDyMG4dhmRkKHoiBfh6HpUCXh8swsGg8paZaWjhVPE5sbRRdumJBkrRB45iRGv9sBsyDuom'
-        );
+      const address = req.params.address;
+      const lastReference = await getLastReference(address);
+      res.type('text').send(lastReference);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }

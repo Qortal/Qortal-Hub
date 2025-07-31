@@ -4,7 +4,9 @@ import {
   handleAccount,
   handleAccountBalance,
   handleActiveChat,
+  handleLastReference,
   handleProcessTransactionResponseMessage,
+  handleUnitFee,
 } from '../messages/handlers';
 import { getRandomClient } from '../peerService';
 import { MessageType } from '../protocol/messageTypes';
@@ -12,6 +14,8 @@ import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
   createGetActiveChatPayload,
+  createGetLastReferencePayload,
+  createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
   Encoding,
 } from '../protocol/payloads';
@@ -26,6 +30,33 @@ export async function getAccountBalance(address: string): Promise<any> {
   );
 
   return handleAccountBalance(res);
+}
+
+export async function getUnitFee(
+  txType: string,
+  timestamp?: number
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_UNIT_FEE,
+    createGetUnitFeePayload(txType, timestamp)
+  );
+
+  return handleUnitFee(res);
+}
+
+export async function getLastReference(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_LAST_REFERENCE,
+    createGetLastReferencePayload(address)
+  );
+
+  return handleLastReference(res);
 }
 
 export async function getAccount(address: string): Promise<any> {

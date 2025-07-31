@@ -87,3 +87,34 @@ export function createGetActiveChatPayload(
 
   return Buffer.concat([addressBytes, encodingByte, hasChatReferenceByte]);
 }
+
+export function createGetUnitFeePayload(
+  txType: string,
+  timestamp?: number
+): Buffer {
+  const txTypeBuffer = Buffer.from(txType, 'utf-8');
+  const txTypeLength = Buffer.alloc(4);
+  txTypeLength.writeInt32BE(txTypeBuffer.length);
+
+  const payloadParts = [txTypeLength, txTypeBuffer];
+
+  if (timestamp !== undefined) {
+    const timestampBuffer = Buffer.alloc(8);
+    timestampBuffer.writeBigUInt64BE(BigInt(timestamp));
+    payloadParts.push(timestampBuffer);
+  }
+
+  return Buffer.concat(payloadParts);
+}
+
+export function createGetLastReferencePayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes);
+}
