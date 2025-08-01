@@ -118,6 +118,7 @@ const ListOfMembers = ({
       setIsLoadingKick(false);
     }
   };
+
   const handleBan = async (address) => {
     try {
       const fee = await getFee('GROUP_BAN');
@@ -306,80 +307,82 @@ const ListOfMembers = ({
       >
         {({ measure }) => (
           <div style={style} onLoad={measure}>
-            <Popover
-              open={openPopoverIndex === index}
-              anchorEl={popoverAnchor}
-              onClose={handlePopoverClose}
-              anchorOrigin={{
-                vertical: 'bottom',
-                horizontal: 'center',
-              }}
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'center',
-              }}
-              style={{ marginTop: '8px' }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  height: '250px',
-                  padding: '10px',
-                  width: '325px',
+            {isOwner && (
+              <Popover
+                open={openPopoverIndex === index}
+                anchorEl={popoverAnchor}
+                onClose={handlePopoverClose}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'center',
                 }}
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'center',
+                }}
+                style={{ marginTop: '8px' }}
               >
-                {isOwner && (
-                  <>
-                    <LoadingButton
-                      loading={isLoadingKick}
-                      loadingPosition="start"
-                      variant="contained"
-                      onClick={() => handleKick(member?.member)}
-                    >
-                      {t('group:action.kick_member', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </LoadingButton>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    height: '250px',
+                    padding: '10px',
+                    width: '325px',
+                  }}
+                >
+                  {isOwner && (
+                    <>
+                      <LoadingButton
+                        loading={isLoadingKick}
+                        loadingPosition="start"
+                        variant="contained"
+                        onClick={() => handleKick(member?.member)}
+                      >
+                        {t('group:action.kick_member', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
 
-                    <LoadingButton
-                      loading={isLoadingBan}
-                      loadingPosition="start"
-                      variant="contained"
-                      onClick={() => handleBan(member?.member)}
-                    >
-                      {t('group:action.ban', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </LoadingButton>
+                      <LoadingButton
+                        loading={isLoadingBan}
+                        loadingPosition="start"
+                        variant="contained"
+                        onClick={() => handleBan(member?.member)}
+                      >
+                        {t('group:action.ban', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
 
-                    <LoadingButton
-                      loading={isLoadingMakeAdmin}
-                      loadingPosition="start"
-                      variant="contained"
-                      onClick={() => makeAdmin(member?.member)}
-                    >
-                      {t('group:action.make_admin', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </LoadingButton>
+                      <LoadingButton
+                        loading={isLoadingMakeAdmin}
+                        loadingPosition="start"
+                        variant="contained"
+                        onClick={() => makeAdmin(member?.member)}
+                      >
+                        {t('group:action.make_admin', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
 
-                    <LoadingButton
-                      loading={isLoadingRemoveAdmin}
-                      loadingPosition="start"
-                      variant="contained"
-                      onClick={() => removeAdmin(member?.member)}
-                    >
-                      {t('group:action.remove_admin', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </LoadingButton>
-                  </>
-                )}
-              </Box>
-            </Popover>
+                      <LoadingButton
+                        loading={isLoadingRemoveAdmin}
+                        loadingPosition="start"
+                        variant="contained"
+                        onClick={() => removeAdmin(member?.member)}
+                      >
+                        {t('group:action.remove_admin', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
+                    </>
+                  )}
+                </Box>
+              </Popover>
+            )}
 
             <ListItem key={member?.member} disablePadding>
               <ListItemButton
@@ -397,7 +400,7 @@ const ListOfMembers = ({
                 </ListItemAvatar>
 
                 <ListItemText
-                  id={''}
+                  id={member?.name || member?.member}
                   primary={member?.name || member?.member}
                 />
                 {member?.isAdmin && (
