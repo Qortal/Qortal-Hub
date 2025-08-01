@@ -163,8 +163,6 @@ export class ElectronCapacitorApp {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
-        // Use preload to inject the electron varriant overrides for capacitor plugins.
-        // preload: join(app.getAppPath(), "node_modules", "@capacitor-community", "electron", "dist", "runtime", "electron-rt.js"),
         preload: preloadPath,
       },
     });
@@ -462,18 +460,40 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
   }
 });
 
+// Helper to get or create the shared settings directory
+async function getSharedSettingsFilePath(fileName: string): Promise<string> {
+  const dir = path.join(app.getPath('appData'), 'qortal-hub');
+  await fs.promises.mkdir(dir, { recursive: true });
+  return path.join(dir, fileName);
+}
+
+// READ handler
 ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
-  const filePath = path.join(app.getPath('userData'), fileName);
-  const exists = fs.existsSync(filePath);
-  if (!exists) return null;
-  return fs.promises.readFile(filePath, 'utf-8');
+  try {
+    const filePath = await getSharedSettingsFilePath(fileName);
+
+    const stats = await fs.promises.stat(filePath).catch(() => null);
+    if (!stats || !stats.isFile()) return null;
+
+    return fs.promises.readFile(filePath, 'utf-8');
+  } catch (err) {
+    console.error(`Error in walletStorage:read for "${fileName}"`, err);
+    return null;
+  }
 });
 
+// WRITE handler
 ipcMain.handle(
   'walletStorage:write',
-  async (_event, fileName: string, data: string) => {
-    const filePath = path.join(app.getPath('userData'), fileName);
-    await fs.promises.writeFile(filePath, data, 'utf-8');
-    return true;
+  async (_event, fileName: string, contents: string) => {
+    try {
+      const filePath = await getSharedSettingsFilePath(fileName);
+
+      await fs.promises.writeFile(filePath, contents, 'utf-8');
+      return true;
+    } catch (err) {
+      console.error(`Error in walletStorage:write for "${fileName}"`, err);
+      throw err;
+    }
   }
 );
