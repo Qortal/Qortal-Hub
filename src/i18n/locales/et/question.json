@@ -1,1 +1,190 @@
+  {
+    "accept_app_fee": "nõustu rakenduse tasuga"
+    "always_authenticate": "alati autentima automaatselt"
+    "always_chat_messages": "alati lubama sellelt rakenduselt vestlussõnumeid"
+    "always_retrieve_balance": "alati lubama saldo automaatset toomist"
+    "always_retrieve_list": "alati lubama loendite automaatset toomist"
+    "always_retrieve_wallet": "alati lubama rahakoti automaatset toomist"
+    "always_retrieve_wallet_transactions": "alati lubama rahakoti tehingute automaatset toomist"
+    "amount_qty": "summa: {{ quantity }}"
+    "asset_name": "vara: {{ asset }}"
+    "assets_used_pay": "maksetes kasutatud vara: {{ asset }}"
+    "coin": "münt: {{ coin }}"
+    "description": "kirjeldus: {{ description }}"
+    "deploy_at": "kas soovid seda AT-d juurutada?"
+    "download_file": "kas soovid alla laadida:"
+ "message": {
+ "error": {
+    "add_to_list": "loendisse lisamine ebaõnnestus"
+    "at_info": "AT teavet ei leitud."
+    "buy_order": "ostutellimuse esitamine ebaõnnestus"
+    "cancel_sell_order": "müügitellimuse tühistamine ebaõnnestus. Proovi uuesti!"
+    "copy_clipboard": "lõikepuhvrisse kopeerimine ebaõnnestus"
+    "create_sell_order": "müügitellimuse loomine ebaõnnestus. Proovi uuesti!"
+    "create_tradebot": "kauplemisrobotit ei saa luua"
+    "decode_transaction": "tehingu dekodeerimine ebaõnnestus"
+    "decrypt": "ei saa dekrüpteerida"
+    "decrypt_message": "sõnumi dekrüpteerimine ebaõnnestus. Veendu, et andmed ja võtmed on õiged"
+    "decryption_failed": "dekrüpteerimine ebaõnnestus"
+    "empty_receiver": "vastuvõtja ei saa olla tühi!"
+    "encrypt": "ei saa krüpteerida"
+    "encryption_failed": "krüpteerimine ebaõnnestus"
+    "encryption_requires_public_key": "andmete krüpteerimiseks on vaja avalikke võtmeid"
+    "fetch_balance_token": "{{ token }} saldo toomine ebaõnnestus. Proovi uuesti!"
+    "fetch_balance": "saldo toomine ebaõnnestus"
+    "fetch_connection_history": "serveri ühenduse ajaloo toomine ebaõnnestus"
+    "fetch_generic": "toomine ebaõnnestus"
+    "fetch_group": "grupi toomine ebaõnnestus"
+    "fetch_list": "loendi toomine ebaõnnestus"
+    "fetch_poll": "küsitluse toomine ebaõnnestus"
+    "fetch_recipient_public_key": "saaja avaliku võtme toomine ebaõnnestus"
+    "fetch_wallet_info": "rahakoti teabe toomine ebaõnnestus"
+    "fetch_wallet_transactions": "rahakoti tehingute toomine ebaõnnestus"
+    "fetch_wallet": "rahakoti toomine ebaõnnestus. Palun proovi uuesti"
+    "file_extension": "faililaiendit ei saanud tuletada"
+    "gateway_balance_local_node": "{{ token }} saldot ei saa lüüsi kaudu vaadata. Palun kasuta oma kohalikku sõlme."
+    "gateway_non_qort_local_node": "mitte-QORT münti ei saa lüüsi kaudu saata. Palun kasuta oma kohalikku sõlme."
+    "gateway_retrieve_balance": "{{ token }} saldo toomine ei ole lüüsi kaudu lubatud"
+    "gateway_wallet_local_node": "{{ token }} rahakotti ei saa lüüsi kaudu vaadata. Palun kasuta oma kohalikku sõlme."
+    "get_foreign_fee": "väärtuste välise tasu saamisel tekkis viga"
+    "insufficient_balance_qort": "sinu QORT saldo on ebapiisav"
+    "insufficient_balance": "sinu vara saldo on ebapiisav"
+    "insufficient_funds": "ebapiisavad vahendid"
+    "invalid_encryption_iv": "vigane IV: AES-GCM nõuab 12-baidist IV-d"
+    "invalid_encryption_key": "vigane võti: AES-GCM nõuab 256-bitist võtit."
+    "invalid_fullcontent": "väli fullContent on vigases formaadis. Kasuta stringi, base64 või objekti"
+    "invalid_receiver": "vigane vastuvõtja aadress või nimi"
+    "invalid_type": "vigane tüüp"
+    "mime_type": "mimeType'i ei saanud tuletada"
+    "missing_fields": "puuduvad väljad: {{ fields }}"
+    "name_already_for_sale": "see nimi on juba müügis"
+    "name_not_for_sale": "see nimi ei ole müügis"
+    "no_api_found": "ei leitud ühtegi kasutatavat API-t"
+    "no_data_encrypted_resource": "krüpteeritud ressursis andmed puuduvad"
+    "no_data_file_submitted": "andmeid ega faili ei esitatud"
+    "no_group_found": "gruppi ei leitud"
+    "no_group_key": "grupi võtit ei leitud"
+    "no_poll": "küsitlust ei leitud"
+    "no_resources_publish": "ressursse avaldamiseks pole"
+    "node_info": "sõlme teabe toomine ebaõnnestus"
+    "node_status": "sõlme oleku toomine ebaõnnestus"
+    "only_encrypted_data": "ainult krüpteeritud andmed saavad minna privaatsetesse teenustesse"
+    "perform_request": "päringu sooritamine ebaõnnestus"
+    "poll_create": "küsitluse loomine ebaõnnestus"
+    "poll_vote": "küsitlusel hääletamine ebaõnnestus"
+    "process_transaction": "tehingu töötlemine ebaõnnestus"
+    "provide_key_shared_link": "krüpteeritud ressursi jaoks peate jagatud lingi loomiseks esitama võtme"
+    "registered_name": "avaldamiseks on vaja registreeritud nime"
+    "resources_publish": "mõne ressursi avaldamine ebaõnnestus"
+    "retrieve_file": "faili toomine ebaõnnestus"
+    "retrieve_keys": "võtmete toomine ebaõnnestus"
+    "retrieve_summary": "kokkuvõtte toomine ebaõnnestus"
+    "retrieve_sync_status": "viga {{ token }} sünkroonimise oleku toomisel"
+    "same_foreign_blockchain": "kõik taotletud AT-d peavad olema samast välisest plokiahelast."
+    "send": "saatmine ebaõnnestus"
+    "server_current_add": "praeguse serveri lisamine ebaõnnestus"
+    "server_current_set": "praeguse serveri seadistamine ebaõnnestus"
+    "server_info": "viga serveri teabe toomisel"
+    "server_remove": "serveri eemaldamine ebaõnnestus"
+    "submit_sell_order": "müügitellimuse esitamine ebaõnnestus"
+    "synchronization_attempts": "sünkroonimine ebaõnnestus pärast {{ count }} katset"
+    "timeout_request": "päringu aegumine"
+    "token_not_supported": "{{ token }} ei ole selle kõne jaoks toetatud"
+    "transaction_activity_summary": "viga tehinguaktiivsuse kokkuvõttes"
+    "unknown_error": "tundmatu viga"
+    "unknown_admin_action_type": "tundmatu admini toimingu tüüp: {{ type }}"
+    "update_foreign_fee": "välise tasu värskendamine ebaõnnestus"
+    "update_tradebot": "kauplemisrobotit ei saa värskendada"
+    "upload_encryption": "üleslaadimine ebaõnnestus krüpteerimise ebaõnnestumise tõttu"
+    "upload": "üleslaadimine ebaõnnestus"
+    "use_private_service": "krüpteeritud avaldamiseks palun kasuta teenust, mis lõpeb _PRIVATE"
+    "user_qortal_name": "kasutajal puudub Qortali nimi"
+    "max_size_publish": "maksimaalne lubatud failisuurus on {{size}} GB faili kohta."
+    "max_size_publish_public": "maksimaalne lubatud failisuurus avalikus sõlmes on {{size}} MB. Palun kasuta suuremate failide jaoks oma kohalikku sõlme."
+    },
+    "generic": {
+    "calculate_fee": "*{{ amount }} satsi tasu on tuletatud {{ rate }} satsist kb kohta, tehingu puhul, mis on ligikaudu 300 baiti suur."
+    "confirm_join_group": "kinnita grupiga liitumine:"
+    "include_data_decrypt": "palun lisa dekrüpteerimiseks andmed"
+    "include_data_encrypt": "palun lisa krüpteerimiseks andmed"
+    "max_retry_transaction": "maksimaalne korduste arv saavutatud. Tehing jäetakse vahele."
+    "no_action_public_node": "seda toimingut ei saa avaliku sõlme kaudu teha"
+    "private_service": "palun kasuta privaatset teenust"
+    "provide_group_id": "palun esita grupi ID"
+    "read_transaction_carefully": "loe tehing enne aktsepteerimist hoolikalt läbi!"
+    "user_declined_add_list": "kasutaja keeldus loendisse lisamisest"
+    "user_declined_delete_from_list": "kasutaja keeldus loendist kustutamast"
+    "user_declined_delete_hosted_resources": "kasutaja keeldus majutatud ressursside kustutamisest"
+    "user_declined_join": "kasutaja keeldus grupiga liitumast"
+    }
+  },
+  "name": "nimi: {{ name }}",
+  "option": "valik: {{ option }}",
+  "options": "valikud: {{ optionList }}",
+  "permission": {
+    "access_list": "Kas annate sellele rakendusele loa nimekirjale juurde pääseda?"
+    "add_admin": "Kas annate sellele rakendusele loa lisada kasutaja {{ invitee }} administraatorina?",
+    "all_item_list": "Kas annate sellele rakendusele loa lisada järgmist nimekirja {{ name }}:",
+    "authenticate": "Kas annate sellele rakendusele autentimiseks loa?"
+    "ban": "Kas annate sellele rakendusele loa {{ participant }} grupist blokeerida?",
+    "buy_name_detail": "ostan {{ name }} hinnaga {{ price }} QORT",
+    "buy_name": "Kas annate sellele rakendusele loa nime osta?",
+    "buy_order_fee_estimation_one": "See tasu on hinnanguline, mis põhineb {{ count }} tellimusel, eeldades 300-baidist suurust ja määra {{ fee }} {{ ticker }} KB kohta.",
+    "buy_order_fee_estimation_other": "See tasu on hinnanguline, mis põhineb {{ count }} tellimusel, eeldades 300-baidist suurust ja määra {{ fee }} {{ ticker }} KB kohta.",
+    "buy_order_per_kb": "{{ fee }} {{ ticker }} per kb",
+    "buy_order_quantity_one": "{{ count }} ostu tellimus",
+    "buy_order_quantity_other": "{{ count }} ostu tellimusi",
+    "buy_order_ticker": "{{ qort_amount }} QORT for {{ foreign_amount }} {{ ticker }}",
+    "buy_order": "Kas annate sellele rakendusele loa ostutellimuse täitmiseks?"
+    "cancel_ban": "Kas annate sellele rakendusele loa tühistada kasutaja {{ partecipant }} grupikeeld?",
+    "cancel_group_invite": "Kas annate sellele rakendusele loa tühistada {{ invitee }} grupikutse?",
+    "cancel_sell_order": "Kas annate sellele rakendusele loa teostada järgmist: müügikorralduse tühistamine?",
+    "create_group": "Kas annate sellele rakendusele loa grupi loomiseks?"
+    "delete_hosts_resources": "Kas annate sellele rakendusele loa kustutada {{ size }} hostitud ressurssi??",
+    "fetch_balance": "Kas annate sellele rakendusele loa teie {{ coin }} saldo hankida?",
+    "get_wallet_info": "Kas annate sellele rakendusele loa oma rahakotiteabe saamiseks?",
+    "get_wallet_transactions": "Kas annate sellele rakendusele loa oma rahakoti tehinguid hankida?",
+    "invite": "Kas sa annad sellele rakendusele loa kutsuda {{ invitee }}?",
+    "kick": "Kas sa annad sellele rakendusele loa {{ participant }} grupist välja visata?",
+    "leave_group": "Kas annate sellele rakendusele loa järgmisest grupist lahkuda?",
+    "list_hosted_data": "Kas annate sellele rakendusele loa hankida teie hostitud andmete nimekirja?",
+    "order_detail": "{{ qort_amount }} QORT for {{ foreign_amount }} {{ ticker }}",
+    "pay_publish": "Kas annate sellele rakendusele loa teha järgmisi makseid ja avaldada?",
+    "perform_admin_action_with_value": "väärtusega:{{ value }}",
+    "perform_admin_action": "Kas annate sellele rakendusele loa administraatori toimingu tegemiseks: {{ type }}",
+    "publish_qdn": "Kas annate sellele rakendusele loa QDN-is avaldada?",
+    "register_name": "Kas annate sellele rakendusele loa selle nime registreerimiseks??",
+    "remove_admin": "Kas annate sellele rakendusele loa kasutaja {{ partecipant }} administraatorina eemaldada?",
+    "remove_from_list": "do you give this application permission to remove the following from the list {{ name }}:",
+    "sell_name_cancel": "Kas annate sellele rakendusele loa nime müügi tühistada??",
+    "sell_name_transaction_detail": "müü {{ name }} hinnaga {{ price }} QORT",
+    "sell_name_transaction": "Kas annate sellele rakendusele loa luua müüginimega tehingu?",
+    "sell_order": "Kas annate sellele rakendusele loa müügikorralduse täitmiseks?",
+    "send_chat_message": "Kas sa annad sellele rakendusele loa seda vestlussõnumit saata?",
+    "send_coins": "Kas annate sellele rakendusele loa münte saata?",
+    "server_add": "Kas annate sellele rakendusele loa serverit lisada??",
+    "server_remove": "Kas annate sellele rakendusele loa serverit eemaldada??",
+    "set_current_server": "Kas annate sellele rakendusele loa praeguse serveri seadistamiseks?",
+    "sign_fee": "Kas annate sellele rakendusele loa allkirjastada kõigi teie tehingupakkumiste nõutavad tasud?",
+    "sign_process_transaction": "Kas annate sellele rakendusele loa tehingu allkirjastamiseks ja töötlemiseks?",
+    "sign_transaction": "Kas annate sellele rakendusele loa tehingu allkirjastamiseks?",
+    "transfer_asset": "Kas annate sellele rakendusele loa järgmise vara ülekandmiseks?",
+    "update_foreign_fee": "Kas annate sellele rakendusele loa oma sõlme välismakseid uuendada?",
+    "update_group_detail": "uus omanik: {{ owner }}",
+    "update_group": "Kas annate sellele rakendusele loa seda gruppi uuendada??"
+  },
+    "poll": "küsitlus: {{ name }}",
+    "provide_recipient_group_id": "palun sisestage saaja või grupi ID",
+    "request_create_poll": "Te taotlete alloleva küsitluse loomist:",
+    "request_vote_poll": "Teil palutakse allolevas küsitluses hääletada:",
+    "sats_per_kb": "{{ amount }} sats per KB",
+    "sats": "{{ amount }} sats",
+    "server_host": "host: {{ host }}",
+    "server_type": "tüüp: {{ type }}",
+    "to_group": "to: grupp {{ group_id }}",
+    "to_recipient": "saaja: {{ recipient }}",
+    "total_locking_fee": "Lukustus tasu kokku:",
+    "total_unlocking_fee": "Avamistasu kokku:",
+    "value": "väärtus: {{ value }}"
+}
 
