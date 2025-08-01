@@ -20,9 +20,10 @@ import {
 import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
-const AdmZip = require('adm-zip');
 import { join } from 'path';
 import { myCapacitorApp } from '.';
+
+const AdmZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
 
