@@ -250,7 +250,13 @@ export const getApiKeyFromStorage = async (): Promise<string | null> => {
 };
 
 export const getCustomNodesFromStorage = async (): Promise<any | null> => {
-  return getData<any>('customNodes').catch(() => null);
+  if (window?.walletStorage) {
+    const res = await window.walletStorage.get('customNodes');
+
+    return res || null;
+  } else {
+    return getData<any>('customNodes').catch(() => null);
+  }
 };
 
 const getArbitraryEndpoint = async () => {
@@ -860,7 +866,20 @@ export async function getSaveWallet() {
 }
 
 export async function getWallets() {
-  const res = await getData<any>('wallets').catch(() => null);
+  let res;
+  if (window?.walletStorage) {
+    res = await window.walletStorage.get('wallets');
+    if (!res || res?.length === 0) {
+      const prevWallets = await getData<any>('wallets').catch(() => null);
+      if (prevWallets) {
+        await window.walletStorage.set('wallets', prevWallets);
+        res = prevWallets;
+      }
+    }
+  } else {
+    res = await getData<any>('wallets').catch(() => null);
+  }
+
   if (res) {
     return res;
   } else {
@@ -869,9 +888,13 @@ export async function getWallets() {
 }
 
 export async function storeWallets(wallets) {
-  storeData('wallets', wallets).catch((error) => {
-    console.error(error);
-  });
+  if (window?.walletStorage) {
+    await window.walletStorage.set('wallets', wallets);
+  } else {
+    storeData('wallets', wallets).catch((error) => {
+      console.error(error);
+    });
+  }
 }
 
 export async function getUserInfo() {

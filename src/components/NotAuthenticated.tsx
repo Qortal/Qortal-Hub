@@ -722,7 +722,7 @@ export const NotAuthenticated = ({
                   component="label"
                 >
                   {apiKey
-                    ? t('auth:node.use_local', {
+                    ? t('auth:apikey.change', {
                         postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:apikey.import', {
@@ -1102,6 +1102,55 @@ export const NotAuthenticated = ({
                   onChange={handleFileChangeApiKey} // File input handler
                 />
               </Button>
+              {(apiKey || importedApiKey) && (
+                <Button
+                  disabled={!!enteredApiKey}
+                  variant="contained"
+                  component="label"
+                  onClick={() => {
+                    setImportedApiKey(null);
+                    setCustomNodes((prev) => {
+                      const copyPrev = [...prev];
+                      const findLocalIndex = copyPrev?.findIndex(
+                        (item) => item?.url === 'http://127.0.0.1:12391'
+                      );
+                      if (findLocalIndex === -1) {
+                        copyPrev.unshift({
+                          url: 'http://127.0.0.1:12391',
+                          apikey: '',
+                        });
+                      } else {
+                        copyPrev[findLocalIndex] = {
+                          url: 'http://127.0.0.1:12391',
+                          apikey: '',
+                        };
+                      }
+                      window
+                        .sendMessage('setCustomNodes', copyPrev)
+                        .catch((error) => {
+                          console.error(
+                            'Failed to set custom nodes:',
+                            error.message ||
+                              t('core:message.error.generic', {
+                                postProcess: 'capitalizeFirstChar',
+                              })
+                          );
+                        });
+                      return copyPrev;
+                    });
+                    setCurrentNode({
+                      url: 'http://127.0.0.1:12391',
+                    });
+                    setUseLocalNode(false);
+                    setApiKey(null);
+                    handleSetGlobalApikey(null);
+                  }}
+                >
+                  {t('auth:apikey.clear_storage', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
+              )}
             </Box>
           </DialogContent>
 

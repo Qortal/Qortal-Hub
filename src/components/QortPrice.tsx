@@ -88,17 +88,17 @@ export const QortPrice = () => {
   }, []);
 
   useEffect(() => {
-    getPrice();
+    // getPrice();
     getSupplyInCirculation();
     getLastBlock();
     const interval = setInterval(() => {
-      getPrice();
+      // getPrice();
       getSupplyInCirculation();
       getLastBlock();
     }, 900000);
 
     return () => clearInterval(interval);
-  }, [getPrice]);
+  }, []);
 
   return (
     <Box
@@ -110,7 +110,7 @@ export const QortPrice = () => {
         width: '322px',
       }}
     >
-      <Tooltip
+      {/* <Tooltip
         title={
           <span style={{ fontSize: '14px', fontWeight: 700 }}>
             Based on the latest 20 trades
@@ -163,7 +163,7 @@ export const QortPrice = () => {
             </Typography>
           )}
         </Box>
-      </Tooltip>
+      </Tooltip> */}
 
       <Box
         sx={{
