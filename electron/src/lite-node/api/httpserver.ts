@@ -5,6 +5,8 @@ import {
   getAccount,
   getAccountBalance,
   getLastReference,
+  getNameInfo,
+  getNames,
   getPrimaryName,
   getUnitFee,
   processTransaction,
@@ -106,7 +108,25 @@ export async function createHttpServer() {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
   });
+  app.get('/names/:name', async (req, res) => {
+    try {
+      const name = req.params.name;
+      const nameInfo = await getNameInfo(name);
+      res.json(nameInfo);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
 
+  app.get('/names/address/:address', async (req, res) => {
+    try {
+      const address = req.params.address;
+      const names = await getNames(address);
+      res.json(names);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 

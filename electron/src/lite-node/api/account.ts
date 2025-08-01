@@ -5,6 +5,7 @@ import {
   handleAccountBalance,
   handleActiveChat,
   handleLastReference,
+  handleNamesMessage,
   handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
   handleUnitFee,
@@ -15,7 +16,9 @@ import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
   createGetActiveChatPayload,
+  createGetAddressNamesPayload,
   createGetLastReferencePayload,
+  createGetNameInfoPayload,
   createGetPrimaryNamePayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
@@ -71,6 +74,42 @@ export async function getPrimaryName(address: string): Promise<any> {
   );
 
   return handlePrimaryNameMessage(res);
+}
+
+export async function getNameInfo(name: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_NAME,
+    createGetNameInfoPayload(name)
+  );
+
+  const data = handleNamesMessage(res);
+  console.log('data', data);
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+
+  throw new Error('No name data');
+}
+
+export async function getNames(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_ACCOUNT_NAMES,
+    createGetAddressNamesPayload(address)
+  );
+
+  const data = handleNamesMessage(res);
+  console.log('data', data);
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  throw new Error('No name data');
 }
 
 export async function getAccount(address: string): Promise<any> {

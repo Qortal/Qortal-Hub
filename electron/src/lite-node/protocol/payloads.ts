@@ -130,3 +130,24 @@ export function createGetPrimaryNamePayload(address: string): Buffer {
 
   return Buffer.from(addressBytes);
 }
+
+export function createGetAddressNamesPayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes);
+}
+
+export function createGetNameInfoPayload(name: string): Buffer {
+  const nameBuffer = Buffer.from(name, 'utf-8');
+
+  const lengthBuffer = Buffer.alloc(4);
+  lengthBuffer.writeInt32BE(nameBuffer.length);
+
+  return Buffer.concat([lengthBuffer, nameBuffer]);
+}

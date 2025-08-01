@@ -267,6 +267,75 @@ export function handlePrimaryNameMessage(buffer) {
   };
 }
 
+export function handleNamesMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const names = [];
+
+  for (let i = 0; i < count; i++) {
+    const { value: name, size: s1 } = readNullableString(buffer, offset);
+    offset += s1;
+
+    const { value: reducedName, size: s2 } = readNullableString(buffer, offset);
+    offset += s2;
+
+    const addressBytes = buffer.subarray(offset, offset + 25);
+    const owner = bs58.encode(addressBytes);
+    offset += 25;
+
+    const { value: data, size: s3 } = readNullableString(buffer, offset);
+    offset += s3;
+
+    const { value: registered, size: s4 } = readLong(buffer, offset);
+    offset += s4;
+
+    const { value: wasUpdated, size: s5 } = readInt(buffer, offset);
+    offset += s5;
+
+    let updated = null;
+    if (wasUpdated === 1) {
+      const { value, size } = readLong(buffer, offset);
+      updated = value;
+      offset += size;
+    }
+
+    const { value: isForSaleInt, size: s6 } = readInt(buffer, offset);
+    offset += s6;
+    const isForSale = isForSaleInt === 1;
+
+    let salePrice = null;
+    if (isForSale) {
+      const { value, size } = readLong(buffer, offset);
+      salePrice = value;
+      offset += size;
+    }
+
+    const reference = buffer.subarray(offset, offset + 64);
+    offset += 64;
+
+    const { value: creationGroupId, size: s7 } = readInt(buffer, offset);
+    offset += s7;
+
+    names.push({
+      name,
+      reducedName,
+      owner,
+      data,
+      registered,
+      updated,
+      isForSale,
+      salePrice,
+      reference: bs58.encode(reference), // keep as Buffer, or convert if needed
+      creationGroupId,
+    });
+  }
+
+  return names;
+}
+
 export function handleUnitFee(payload: Buffer): bigint {
   if (payload.length !== 8) {
     throw new Error(
