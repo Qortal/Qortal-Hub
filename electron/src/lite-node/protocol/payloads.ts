@@ -118,3 +118,15 @@ export function createGetLastReferencePayload(address: string): Buffer {
 
   return Buffer.from(addressBytes);
 }
+
+export function createGetPrimaryNamePayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes);
+}

@@ -250,6 +250,23 @@ export async function handleLastReference(payload: Buffer) {
   return lastReference;
 }
 
+export function handlePrimaryNameMessage(buffer) {
+  let offset = 0;
+
+  const { value: name, size: nameSize } = readNullableString(buffer, offset);
+  offset += nameSize;
+
+  const addressBytes = buffer.subarray(offset, offset + 25);
+  offset += 25;
+
+  const owner = bs58.encode(addressBytes);
+
+  return {
+    name,
+    owner,
+  };
+}
+
 export function handleUnitFee(payload: Buffer): bigint {
   if (payload.length !== 8) {
     throw new Error(

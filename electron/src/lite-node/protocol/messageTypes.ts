@@ -18,4 +18,6 @@ export enum MessageType {
   GET_UNIT_FEE = 305,
   LAST_REFERENCE = 302,
   GET_LAST_REFERENCE = 303,
+  PRIMARY_NAME = 306,
+  GET_PRIMARY_NAME = 307,
 }

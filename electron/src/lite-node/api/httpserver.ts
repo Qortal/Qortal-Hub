@@ -5,6 +5,7 @@ import {
   getAccount,
   getAccountBalance,
   getLastReference,
+  getPrimaryName,
   getUnitFee,
   processTransaction,
 } from './account';
@@ -91,6 +92,16 @@ export async function createHttpServer() {
       const address = req.params.address;
       const lastReference = await getLastReference(address);
       res.type('text').send(lastReference);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/names/primary/:address', async (req, res) => {
+    try {
+      const address = req.params.address;
+      const primaryInfo = await getPrimaryName(address);
+      res.json(primaryInfo);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }

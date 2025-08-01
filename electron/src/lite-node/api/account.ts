@@ -5,6 +5,7 @@ import {
   handleAccountBalance,
   handleActiveChat,
   handleLastReference,
+  handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
   handleUnitFee,
 } from '../messages/handlers';
@@ -15,6 +16,7 @@ import {
   createGetAccountMessagePayload,
   createGetActiveChatPayload,
   createGetLastReferencePayload,
+  createGetPrimaryNamePayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
   Encoding,
@@ -57,6 +59,18 @@ export async function getLastReference(address: string): Promise<any> {
   );
 
   return handleLastReference(res);
+}
+
+export async function getPrimaryName(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_PRIMARY_NAME,
+    createGetPrimaryNamePayload(address)
+  );
+
+  return handlePrimaryNameMessage(res);
 }
 
 export async function getAccount(address: string): Promise<any> {
