@@ -233,11 +233,6 @@ export const resumeAllQueues = () => {
   });
 };
 
-const defaultValuesGlobal = {
-  openTutorialModal: null,
-  setOpenTutorialModal: () => {},
-};
-
 export const QORTAL_APP_CONTEXT =
   createContext<MyContextInterface>(defaultValues);
 
@@ -308,7 +303,6 @@ function App() {
   const [authenticatePassword, setAuthenticatePassword] = useState<string>('');
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
   const isAuthenticated = extState === 'authenticated';
   const { t } = useTranslation([
     'auth',
@@ -617,6 +611,7 @@ function App() {
       setIsLoading(false);
     }
   }, []);
+
   useEffect(() => {
     if (extState) {
       holdRefExtState.current = extState;
@@ -645,6 +640,7 @@ function App() {
     if (!rawWallet?.address0) return '';
     return rawWallet.address0;
   }, [rawWallet]);
+
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'application/json': ['.json'], // Only accept JSON files
@@ -790,6 +786,7 @@ function App() {
     getBalanceFunc();
     refetchUserInfo();
   };
+
   const getLtcBalanceFunc = () => {
     setLtcBalanceLoading(true);
     window
