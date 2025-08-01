@@ -43,9 +43,9 @@
     "get_qort_trade": "ottieni Qort in Q-Trade",
     "hide": "nascondi",
     "hide_qr_code": "nascondi QR code",
-    "import": "importare",
+    "import": "importa",
     "import_theme": "importa un tema",
-    "invite": "invitare",
+    "invite": "invita",
     "invite_member": "invita un nuovo membro",
     "join": "unisciti a",
     "leave_comment": "lascia un commento",
@@ -160,7 +160,6 @@
     "groups": "elenco dei gruppi",
     "invites": "elenco degli inviti",
     "join_request": "elenco di richieste di iscrizione",
-    "member": "elenco dei membri",
     "members": "elenco dei membri"
   },
   "loading": {
