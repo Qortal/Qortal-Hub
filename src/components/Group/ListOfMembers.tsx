@@ -423,7 +423,7 @@ const ListOfMembers = ({
   return (
     <div>
       <p>
-        {t('core:list.member', {
+        {t('core:list.members', {
           postProcess: 'capitalizeFirstChar',
         })}
       </p>

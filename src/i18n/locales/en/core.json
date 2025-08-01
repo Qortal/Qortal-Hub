@@ -160,7 +160,6 @@
     "groups": "list of groups",
     "invites": "list of invites",
     "join_request": "join request list",
-    "member": "member list",
     "members": "list of members"
   },
   "loading": {
