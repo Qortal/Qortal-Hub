@@ -185,9 +185,10 @@ export {
   DYNAMIC_FEE_TIMESTAMP,
 };
 
-export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS = 102;
-
-export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY = '4001'; // Q for Qortal
-
+export const EXT_NODE_QORTAL_LINK = 'ext-node.qortal.link';
+export const HTTP_LOCALHOST_12391 = 'http://127.0.0.1:12391';
+export const LOCALHOST_12391 = '127.0.0.1:12391';
 export const MAX_SIZE_PUBLIC_NODE = 500 * 1024 * 1024; // 500mb
 export const MAX_SIZE_PUBLISH = 2000 * 1024 * 1024; // 2GB
+export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY = '4001'; // Q for Qortal
+export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS = 102;

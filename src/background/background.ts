@@ -21,7 +21,12 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../constants/constants';
+import {
+  EXT_NODE_QORTAL_LINK,
+  HTTP_LOCALHOST_12391,
+  LOCALHOST_12391,
+  RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
+} from '../constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -112,13 +117,13 @@ export function getProtocol(url) {
   }
 }
 
-export const gateways = ['ext-node.qortal.link'];
+export const gateways = [EXT_NODE_QORTAL_LINK];
 
 let lastGroupNotification;
-export const groupApi = 'https://ext-node.qortal.link';
-export const groupApiSocket = 'wss://ext-node.qortal.link';
-export const groupApiLocal = 'http://127.0.0.1:12391';
-export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
+export const groupApi = 'https://' + EXT_NODE_QORTAL_LINK;
+export const groupApiSocket = 'wss://' + EXT_NODE_QORTAL_LINK;
+export const groupApiLocal = HTTP_LOCALHOST_12391;
+export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);

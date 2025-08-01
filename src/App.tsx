@@ -144,6 +144,7 @@ import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
+import { HTTP_LOCALHOST_12391 } from './constants/constants.ts';
 
 type extStates =
   | 'authenticated'
@@ -401,7 +402,7 @@ function App() {
   } = useBlockedAddresses(extState === 'authenticated');
 
   const [currentNode, setCurrentNode] = useState({
-    url: 'http://127.0.0.1:12391',
+    url: HTTP_LOCALHOST_12391,
   });
 
   const [useLocalNode, setUseLocalNode] = useState(false);

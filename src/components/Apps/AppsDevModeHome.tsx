@@ -29,6 +29,7 @@ import { Label } from '../Group/AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
+import { HTTP_LOCALHOST_12391 } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -172,7 +173,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: 'http://127.0.0.1:12391' + previewPath,
+            url: HTTP_LOCALHOST_12391 + previewPath,
             isPreview: true,
             filePath,
             refreshFunc: (tabId) => {
@@ -185,7 +186,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: 'http://127.0.0.1:12391' + previewPath,
+          url: HTTP_LOCALHOST_12391 + previewPath,
           isPreview: true,
           filePath,
           refreshFunc: (tabId) => {
@@ -258,7 +259,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: 'http://127.0.0.1:12391' + previewPath,
+            url: HTTP_LOCALHOST_12391 + previewPath,
             isPreview: true,
             directoryPath,
             refreshFunc: (tabId) => {
@@ -271,7 +272,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: 'http://127.0.0.1:12391' + previewPath,
+          url: HTTP_LOCALHOST_12391 + previewPath,
           isPreview: true,
           directoryPath,
           refreshFunc: (tabId) => {
@@ -420,7 +421,7 @@ export const AppsDevModeHome = ({
           onClick={() => {
             executeEvent('appsDevModeAddTab', {
               data: {
-                url: 'http://127.0.0.1:12391',
+                url: HTTP_LOCALHOST_12391,
                 isPreview: false,
                 customIcon: swaggerSVG,
               },
