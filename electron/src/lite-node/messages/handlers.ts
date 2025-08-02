@@ -500,3 +500,48 @@ export function handleGroupBansMessage(buffer) {
 
   return bans;
 }
+
+export function handleAddressGroupInvitesMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const invites = [];
+
+  for (let i = 0; i < count; i++) {
+    const { value: groupId, size: s1 } = readInt(buffer, offset);
+    offset += s1;
+
+    const inviterBytes = buffer.subarray(offset, offset + 25);
+    const inviter = bs58.encode(inviterBytes);
+    offset += 25;
+
+    const inviteeBytes = buffer.subarray(offset, offset + 25);
+    const invitee = bs58.encode(inviteeBytes);
+    offset += 25;
+
+    const { value: hasExpiry, size: s2 } = readInt(buffer, offset);
+    offset += s2;
+
+    let expiry = null;
+    if (hasExpiry === 1) {
+      const { value, size } = readLong(buffer, offset);
+      expiry = value;
+      offset += size;
+    }
+
+    const referenceBytes = buffer.subarray(offset, offset + 64);
+    const reference = bs58.encode(referenceBytes);
+    offset += 64;
+
+    invites.push({
+      groupId,
+      inviter,
+      invitee,
+      expiry,
+    });
+  }
+
+  return invites;
+}

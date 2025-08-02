@@ -55,6 +55,17 @@ export function createGetAccountMessagePayload(address: string): Buffer {
   return Buffer.from(addressBytes); // ✅ Just raw payload
 }
 
+export function createGetAddressGroupInvitesPayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes); // ✅ Just raw payload
+}
+
 export function createProcessTransactionMessagePayload(
   signedBytes: string
 ): Buffer {
@@ -131,6 +142,12 @@ export function createGetGroupPayload(groupId: number): Buffer {
 }
 
 export function createGetBansPayload(groupId: number): Buffer {
+  const groupIdBuffer = Buffer.alloc(4);
+  groupIdBuffer.writeInt32BE(groupId);
+  return groupIdBuffer;
+}
+
+export function createGetGroupInvitesPayload(groupId: number): Buffer {
   const groupIdBuffer = Buffer.alloc(4);
   groupIdBuffer.writeInt32BE(groupId);
   return groupIdBuffer;

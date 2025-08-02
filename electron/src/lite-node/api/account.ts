@@ -4,6 +4,7 @@ import {
   handleAccount,
   handleAccountBalance,
   handleActiveChat,
+  handleAddressGroupInvitesMessage,
   handleGroupBansMessage,
   handleGroupsMessage,
   handleLastReference,
@@ -17,8 +18,10 @@ import { MessageType } from '../protocol/messageTypes';
 import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
+  createGetAddressGroupInvitesPayload,
   createGetAddressNamesPayload,
   createGetBansPayload,
+  createGetGroupInvitesPayload,
   createGetGroupPayload,
   createGetGroupsPayload,
   createGetLastReferencePayload,
@@ -99,6 +102,32 @@ export async function getBans(groupId: number): Promise<any> {
   );
 
   const data = handleGroupBansMessage(res);
+
+  return data;
+}
+
+export async function getAddressGroupInvites(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_ADDRESS_GROUP_INVITES,
+    createGetAddressGroupInvitesPayload(address)
+  );
+
+  return handleAddressGroupInvitesMessage(res);
+}
+
+export async function getGroupInvites(groupId: number): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUP_INVITES,
+    createGetGroupInvitesPayload(groupId)
+  );
+
+  const data = handleAddressGroupInvitesMessage(res);
 
   return data;
 }

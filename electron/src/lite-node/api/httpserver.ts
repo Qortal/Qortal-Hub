@@ -4,8 +4,10 @@ import { WebSocketServer } from 'ws';
 import {
   getAccount,
   getAccountBalance,
+  getAddressGroupInvites,
   getBans,
   getGroup,
+  getGroupInvites,
   getGroups,
   getLastReference,
   getNameInfo,
@@ -108,6 +110,25 @@ export async function createHttpServer() {
 
       const groupInfo = await getGroup(groupId);
       res.json(groupInfo);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/invites/:address', async (req, res) => {
+    const address = req.params.address;
+    try {
+      const invites = await getAddressGroupInvites(address);
+      res.json(invites);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+  app.get('/groups/invites/group/:groupId', async (req, res) => {
+    const groupId = req.params.groupId;
+    try {
+      const invites = await getGroupInvites(groupId);
+      res.json(invites);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
