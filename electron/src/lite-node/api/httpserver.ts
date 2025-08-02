@@ -8,6 +8,7 @@ import {
   getBans,
   getGroup,
   getGroupInvites,
+  getGroupJoinRequests,
   getGroups,
   getLastReference,
   getNameInfo,
@@ -129,6 +130,16 @@ export async function createHttpServer() {
     try {
       const invites = await getGroupInvites(groupId);
       res.json(invites);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/joinrequests/:groupId', async (req, res) => {
+    const groupId = req.params.groupId;
+    try {
+      const joinRequests = await getGroupJoinRequests(groupId);
+      res.json(joinRequests);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }

@@ -6,6 +6,7 @@ import {
   handleActiveChat,
   handleAddressGroupInvitesMessage,
   handleGroupBansMessage,
+  handleGroupJoinRequestsMessage,
   handleGroupsMessage,
   handleLastReference,
   handleNamesMessage,
@@ -22,6 +23,7 @@ import {
   createGetAddressNamesPayload,
   createGetBansPayload,
   createGetGroupInvitesPayload,
+  createGetGroupJoinRequestsPayload,
   createGetGroupPayload,
   createGetGroupsPayload,
   createGetLastReferencePayload,
@@ -128,6 +130,20 @@ export async function getGroupInvites(groupId: number): Promise<any> {
   );
 
   const data = handleAddressGroupInvitesMessage(res);
+
+  return data;
+}
+
+export async function getGroupJoinRequests(groupId: number): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUP_JOIN_REQUESTS,
+    createGetGroupJoinRequestsPayload(groupId)
+  );
+
+  const data = handleGroupJoinRequestsMessage(res);
 
   return data;
 }

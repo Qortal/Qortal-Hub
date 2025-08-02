@@ -153,6 +153,12 @@ export function createGetGroupInvitesPayload(groupId: number): Buffer {
   return groupIdBuffer;
 }
 
+export function createGetGroupJoinRequestsPayload(groupId: number): Buffer {
+  const groupIdBuffer = Buffer.alloc(4);
+  groupIdBuffer.writeInt32BE(groupId);
+  return groupIdBuffer;
+}
+
 export function createGetLastReferencePayload(address: string): Buffer {
   const addressBytes = bs58.decode(address);
 

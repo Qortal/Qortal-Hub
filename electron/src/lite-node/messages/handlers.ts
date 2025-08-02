@@ -545,3 +545,32 @@ export function handleAddressGroupInvitesMessage(buffer) {
 
   return invites;
 }
+
+export function handleGroupJoinRequestsMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const joinRequests = [];
+
+  for (let i = 0; i < count; i++) {
+    const { value: groupId, size: s1 } = readInt(buffer, offset);
+    offset += s1;
+
+    const joinerBytes = buffer.subarray(offset, offset + 25);
+    const joiner = bs58.encode(joinerBytes);
+    offset += 25;
+
+    const referenceBytes = buffer.subarray(offset, offset + 64);
+    const reference = bs58.encode(referenceBytes);
+    offset += 64;
+
+    joinRequests.push({
+      groupId,
+      joiner,
+    });
+  }
+
+  return joinRequests;
+}
