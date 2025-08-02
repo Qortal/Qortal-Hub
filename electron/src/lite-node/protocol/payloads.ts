@@ -107,6 +107,29 @@ export function createGetUnitFeePayload(
   return Buffer.concat(payloadParts);
 }
 
+export function createGetGroupsPayload(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Buffer {
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
+}
+
+export function createGetGroupPayload(groupId: number): Buffer {
+  const groupIdBuffer = Buffer.alloc(4);
+  groupIdBuffer.writeInt32BE(groupId);
+  return groupIdBuffer;
+}
+
 export function createGetLastReferencePayload(address: string): Buffer {
   const addressBytes = bs58.decode(address);
 

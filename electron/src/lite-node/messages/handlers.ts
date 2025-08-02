@@ -346,3 +346,104 @@ export function handleUnitFee(payload: Buffer): bigint {
   const unitFee = payload.readBigUInt64BE(0);
   return unitFee;
 }
+
+export function handleGroupsMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const APPROVAL_THRESHOLDS = {
+    0: 'NONE',
+    1: 'ONE',
+    20: 'PCT20',
+    40: 'PCT40',
+    60: 'PCT60',
+    80: 'PCT80',
+    100: 'PCT100',
+  };
+
+  const groups = [];
+
+  for (let i = 0; i < count; i++) {
+    const { value: groupIdInt, size: s1 } = readInt(buffer, offset);
+    offset += s1;
+    const groupId = groupIdInt === 0 ? null : groupIdInt;
+
+    const ownerBytes = buffer.subarray(offset, offset + 25);
+    const owner = bs58.encode(ownerBytes);
+    offset += 25;
+
+    const { value: groupName, size: s2 } = readNullableString(buffer, offset);
+    offset += s2;
+
+    const { value: description, size: s3 } = readNullableString(buffer, offset);
+    offset += s3;
+
+    const { value: created, size: s4 } = readLong(buffer, offset);
+    offset += s4;
+
+    const { value: hasUpdated, size: s5 } = readInt(buffer, offset);
+    offset += s5;
+
+    let updated = null;
+    if (hasUpdated === 1) {
+      const { value, size } = readLong(buffer, offset);
+      updated = value;
+      offset += size;
+    }
+
+    const { value: isOpenInt, size: s6 } = readInt(buffer, offset);
+    offset += s6;
+    const isOpen = isOpenInt === 1;
+
+    const { value: approvalThresholdValue, size: s7 } = readInt(buffer, offset);
+    offset += s7;
+    const approvalThreshold =
+      APPROVAL_THRESHOLDS[approvalThresholdValue] || 'UNKNOWN';
+
+    const { value: minimumBlockDelay, size: s8 } = readInt(buffer, offset);
+    offset += s8;
+
+    const { value: maximumBlockDelay, size: s9 } = readInt(buffer, offset);
+    offset += s9;
+
+    const reference = buffer.subarray(offset, offset + 64);
+    offset += 64;
+
+    const { value: creationGroupId, size: s10 } = readInt(buffer, offset);
+    offset += s10;
+
+    const { value: reducedGroupName, size: s11 } = readNullableString(
+      buffer,
+      offset
+    );
+    offset += s11;
+
+    const { value: isAdminFlag, size: s12 } = readInt(buffer, offset);
+    offset += s12;
+
+    let isAdmin = null;
+    if (isAdminFlag === 1) isAdmin = false;
+    if (isAdminFlag === 2) isAdmin = true;
+
+    const { value: memberCount, size: s13 } = readInt(buffer, offset);
+    offset += s13;
+
+    groups.push({
+      groupId,
+      owner,
+      groupName,
+      description,
+      created,
+      updated,
+      isOpen,
+      approvalThreshold,
+      minimumBlockDelay,
+      maximumBlockDelay,
+      memberCount,
+    });
+  }
+
+  return groups;
+}

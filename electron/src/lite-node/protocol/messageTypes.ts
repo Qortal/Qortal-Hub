@@ -24,4 +24,9 @@ export enum MessageType {
   GET_LAST_REFERENCE = 303,
   PRIMARY_NAME = 306,
   GET_PRIMARY_NAME = 307,
+
+  // GROUPS
+  GROUPS = 310,
+  GET_GROUPS = 311,
+  GET_GROUP = 312,
 }

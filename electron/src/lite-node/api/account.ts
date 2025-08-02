@@ -4,6 +4,7 @@ import {
   handleAccount,
   handleAccountBalance,
   handleActiveChat,
+  handleGroupsMessage,
   handleLastReference,
   handleNamesMessage,
   handlePrimaryNameMessage,
@@ -15,14 +16,14 @@ import { MessageType } from '../protocol/messageTypes';
 import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
-  createGetActiveChatPayload,
   createGetAddressNamesPayload,
+  createGetGroupPayload,
+  createGetGroupsPayload,
   createGetLastReferencePayload,
   createGetNameInfoPayload,
   createGetPrimaryNamePayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
-  Encoding,
 } from '../protocol/payloads';
 
 export async function getAccountBalance(address: string): Promise<any> {
@@ -50,6 +51,40 @@ export async function getUnitFee(
   );
 
   return handleUnitFee(res);
+}
+
+export async function getGroups(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUPS,
+    createGetGroupsPayload(limit, offset, reverse)
+  );
+
+  return handleGroupsMessage(res);
+}
+
+export async function getGroup(groupId: number): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUP,
+    createGetGroupPayload(groupId)
+  );
+
+  const data = handleGroupsMessage(res);
+
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+
+  throw new Error('No group data');
 }
 
 export async function getLastReference(address: string): Promise<any> {

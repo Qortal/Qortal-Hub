@@ -4,6 +4,8 @@ import { WebSocketServer } from 'ws';
 import {
   getAccount,
   getAccountBalance,
+  getGroup,
+  getGroups,
   getLastReference,
   getNameInfo,
   getNames,
@@ -70,6 +72,30 @@ export async function createHttpServer() {
   app.get('/admin/settings/localAuthBypassEnabled', async (req, res) => {
     try {
       res.type('text').send(true);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups', async (req, res) => {
+    try {
+      const limit = req.query.limit || 100;
+      const offset = req.query.offset || 0;
+      const reverse = req.query.reverse || false;
+
+      const groups = await getGroups(limit, offset, reverse);
+      res.json(groups);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/:groupId', async (req, res) => {
+    try {
+      const groupId = req.params.groupId;
+
+      const groupInfo = await getGroup(groupId);
+      res.json(groupInfo);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
@@ -157,7 +183,7 @@ export async function createHttpServer() {
 
       const encoding = Encoding.BASE64;
 
-      const interval = setInterval(async () => {
+      const fetchAndSendActiveChats = async () => {
         try {
           const response = await getActiveChat(
             address,
@@ -171,7 +197,13 @@ export async function createHttpServer() {
         } catch (err) {
           console.error('Failed to fetch active chats:', err);
         }
-      }, 10000);
+      };
+
+      // Fetch immediately after connection
+      fetchAndSendActiveChats();
+
+      // Then set up polling every 45 seconds
+      const interval = setInterval(fetchAndSendActiveChats, 45000);
 
       ws.on('message', (msg) => {
         const message = msg.toString();
