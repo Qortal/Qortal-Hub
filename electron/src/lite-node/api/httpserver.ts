@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import {
   getAccount,
   getAccountBalance,
+  getBans,
   getGroup,
   getGroups,
   getLastReference,
@@ -85,6 +86,17 @@ export async function createHttpServer() {
 
       const groups = await getGroups(limit, offset, reverse);
       res.json(groups);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/bans/:groupId', async (req, res) => {
+    try {
+      const groupId = req.params.groupId;
+
+      const bans = await getBans(groupId);
+      res.json(bans);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }

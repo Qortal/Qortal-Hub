@@ -29,4 +29,6 @@ export enum MessageType {
   GROUPS = 310,
   GET_GROUPS = 311,
   GET_GROUP = 312,
+  GROUP_BANS = 313,
+  GET_GROUP_BANS = 314,
 }

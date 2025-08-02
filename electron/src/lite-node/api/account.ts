@@ -4,6 +4,7 @@ import {
   handleAccount,
   handleAccountBalance,
   handleActiveChat,
+  handleGroupBansMessage,
   handleGroupsMessage,
   handleLastReference,
   handleNamesMessage,
@@ -17,6 +18,7 @@ import {
   createGetAccountBalancePayload,
   createGetAccountMessagePayload,
   createGetAddressNamesPayload,
+  createGetBansPayload,
   createGetGroupPayload,
   createGetGroupsPayload,
   createGetLastReferencePayload,
@@ -85,6 +87,20 @@ export async function getGroup(groupId: number): Promise<any> {
   }
 
   throw new Error('No group data');
+}
+
+export async function getBans(groupId: number): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUP_BANS,
+    createGetBansPayload(groupId)
+  );
+
+  const data = handleGroupBansMessage(res);
+
+  return data;
 }
 
 export async function getLastReference(address: string): Promise<any> {

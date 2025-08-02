@@ -447,3 +447,56 @@ export function handleGroupsMessage(buffer) {
 
   return groups;
 }
+
+export function handleGroupBansMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const bans = [];
+
+  for (let i = 0; i < count; i++) {
+    const { value: groupId, size: s1 } = readInt(buffer, offset);
+    offset += s1;
+
+    const offenderBytes = buffer.subarray(offset, offset + 25);
+    const offender = bs58.encode(offenderBytes);
+    offset += 25;
+
+    const adminBytes = buffer.subarray(offset, offset + 25);
+    const admin = bs58.encode(adminBytes);
+    offset += 25;
+
+    const { value: banned, size: s2 } = readLong(buffer, offset);
+    offset += s2;
+
+    const { value: reason, size: s3 } = readNullableString(buffer, offset);
+    offset += s3;
+
+    const { value: hasExpiry, size: s4 } = readInt(buffer, offset);
+    offset += s4;
+
+    let expiry = null;
+    if (hasExpiry === 1) {
+      const { value, size } = readLong(buffer, offset);
+      expiry = value;
+      offset += size;
+    }
+
+    const referenceBytes = buffer.subarray(offset, offset + 64);
+    const reference = bs58.encode(referenceBytes);
+    offset += 64;
+
+    bans.push({
+      groupId,
+      offender,
+      admin,
+      banned,
+      reason,
+      expiry,
+    });
+  }
+
+  return bans;
+}

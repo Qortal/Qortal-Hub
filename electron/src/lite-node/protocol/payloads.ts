@@ -130,6 +130,12 @@ export function createGetGroupPayload(groupId: number): Buffer {
   return groupIdBuffer;
 }
 
+export function createGetBansPayload(groupId: number): Buffer {
+  const groupIdBuffer = Buffer.alloc(4);
+  groupIdBuffer.writeInt32BE(groupId);
+  return groupIdBuffer;
+}
+
 export function createGetLastReferencePayload(address: string): Buffer {
   const addressBytes = bs58.decode(address);
 
