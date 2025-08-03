@@ -16,8 +16,10 @@ import {
   getLastReference,
   getNameInfo,
   getNames,
+  getNamesForSale,
   getOwnerGroups,
   getPrimaryName,
+  getSearchNames,
   getUnitFee,
   processTransaction,
 } from './account';
@@ -223,6 +225,36 @@ export async function createHttpServer() {
       const reverse = req.query.reverse ?? false;
       if (limit === 0 || limit > 100) throw new Error('Max limit of 100');
       const names = await getAllNames(limit, offset, reverse, after);
+      res.json(names);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/names/search', async (req, res) => {
+    try {
+      console.log('hello');
+      const query = req.query?.query || '';
+      const prefix = req.query?.prefix || false;
+      const limit = req.query.limit ?? 100;
+      console.log('limit', limit);
+      const offset = req.query.offset ?? 0;
+      const reverse = req.query.reverse ?? false;
+      if (limit === 0 || limit > 100) throw new Error('Max limit of 100');
+      const names = await getSearchNames(query, limit, offset, reverse, prefix);
+      res.json(names);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/names/forsale', async (req, res) => {
+    try {
+      const limit = req.query.limit ?? 100;
+      const offset = req.query.offset ?? 0;
+      const reverse = req.query.reverse ?? false;
+      if (limit === 0 || limit > 100) throw new Error('Max limit of 100');
+      const names = await getNamesForSale(limit, offset, reverse);
       res.json(names);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);

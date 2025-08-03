@@ -31,11 +31,13 @@ import {
   createGetGroupsPayload,
   createGetLastReferencePayload,
   createGetNameInfoPayload,
+  createGetNamesForSalePayload,
   createGetNamesPayload,
   createGetOwnerGroupsPayload,
   createGetPrimaryNamePayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
+  createSearchNamesPayload,
 } from '../protocol/payloads';
 
 export async function getAccountBalance(address: string): Promise<any> {
@@ -81,6 +83,22 @@ export async function getGroups(
   return handleGroupsMessage(res, false);
 }
 
+export async function getNamesForSale(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_NAMES_FOR_SALE,
+    createGetNamesForSalePayload(limit, offset, reverse)
+  );
+
+  return handleNamesMessage(res);
+}
+
 export async function getGroupMembers(
   groupId: number,
   onlyAdmins: boolean,
@@ -111,6 +129,24 @@ export async function getAllNames(
   const res: Buffer = await client.sendRequest(
     MessageType.GET_NAMES,
     createGetNamesPayload(limit, offset, reverse, after)
+  );
+
+  return handleNamesMessage(res);
+}
+
+export async function getSearchNames(
+  query: string,
+  limit: number,
+  offset: number,
+  reverse: boolean,
+  prefix: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_SEARCH_NAMES,
+    createSearchNamesPayload(query, limit, offset, reverse, prefix)
   );
 
   return handleNamesMessage(res);

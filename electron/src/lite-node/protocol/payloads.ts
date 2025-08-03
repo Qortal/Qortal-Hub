@@ -157,6 +157,23 @@ export function createGetGroupsPayload(
   return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
 }
 
+export function createGetNamesForSalePayload(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Buffer {
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
+}
+
 export function createGetGroupMembersPayload(
   groupId: number,
   onlyAdmins: boolean,
@@ -221,6 +238,39 @@ export function createGetNamesPayload(
   }
 
   return Buffer.concat(buffers);
+}
+
+export function createSearchNamesPayload(
+  query: string,
+  limit: number,
+  offset: number,
+  reverse: boolean,
+  prefix: boolean
+): Buffer {
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  const prefixBuffer = Buffer.alloc(4);
+  prefixBuffer.writeInt32BE(prefix ? 1 : 0);
+
+  const queryBuffer = Buffer.from(query, 'utf-8');
+  const queryLengthBuffer = Buffer.alloc(4);
+  queryLengthBuffer.writeInt32BE(queryBuffer.length);
+
+  return Buffer.concat([
+    limitBuffer,
+    offsetBuffer,
+    reverseBuffer,
+    prefixBuffer,
+    queryLengthBuffer,
+    queryBuffer,
+  ]);
 }
 
 export function createGetGroupPayload(groupId: number): Buffer {

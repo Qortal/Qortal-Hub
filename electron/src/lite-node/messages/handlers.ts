@@ -309,7 +309,7 @@ export function handleNamesMessage(buffer) {
     let salePrice = null;
     if (isForSale) {
       const { value, size } = readLong(buffer, offset);
-      salePrice = value;
+      salePrice = toBigDecimal(value);
       offset += size;
     }
 
