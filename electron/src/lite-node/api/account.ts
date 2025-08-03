@@ -31,6 +31,7 @@ import {
   createGetGroupsPayload,
   createGetLastReferencePayload,
   createGetNameInfoPayload,
+  createGetNamesPayload,
   createGetOwnerGroupsPayload,
   createGetPrimaryNamePayload,
   createGetUnitFeePayload,
@@ -96,6 +97,23 @@ export async function getGroupMembers(
   );
 
   return handleGroupMembersMessage(res);
+}
+
+export async function getAllNames(
+  limit: number,
+  offset: number,
+  reverse: boolean,
+  after?: number
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_NAMES,
+    createGetNamesPayload(limit, offset, reverse, after)
+  );
+
+  return handleNamesMessage(res);
 }
 
 export async function getGroup(groupId: number): Promise<any> {

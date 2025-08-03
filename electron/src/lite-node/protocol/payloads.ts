@@ -188,6 +188,41 @@ export function createGetGroupMembersPayload(
   ]);
 }
 
+export function createGetNamesPayload(
+  limit: number,
+  offset: number,
+  reverse: boolean,
+  after?: number
+): Buffer {
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  const buffers = [limitBuffer, offsetBuffer, reverseBuffer];
+
+  // after (nullable timestamp in milliseconds)
+  if (after !== undefined && after !== null) {
+    const hasAfterBuffer = Buffer.alloc(4);
+    hasAfterBuffer.writeInt32BE(1);
+
+    const afterBuffer = Buffer.alloc(8);
+    afterBuffer.writeBigInt64BE(BigInt(after));
+
+    buffers.push(hasAfterBuffer, afterBuffer);
+  } else {
+    const hasAfterBuffer = Buffer.alloc(4);
+    hasAfterBuffer.writeInt32BE(0);
+    buffers.push(hasAfterBuffer);
+  }
+
+  return Buffer.concat(buffers);
+}
+
 export function createGetGroupPayload(groupId: number): Buffer {
   const groupIdBuffer = Buffer.alloc(4);
   groupIdBuffer.writeInt32BE(groupId);
