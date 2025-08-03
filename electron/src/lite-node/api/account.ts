@@ -31,6 +31,7 @@ import {
   createGetGroupsPayload,
   createGetLastReferencePayload,
   createGetNameInfoPayload,
+  createGetOwnerGroupsPayload,
   createGetPrimaryNamePayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
@@ -151,6 +152,18 @@ export async function getAccountGroups(address: string): Promise<any> {
   );
 
   return handleGroupsMessage(res, true);
+}
+
+export async function getOwnerGroups(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_OWNER_GROUPS,
+    createGetOwnerGroupsPayload(address)
+  );
+
+  return handleGroupsMessage(res, false);
 }
 
 export async function getGroupInvites(groupId: number): Promise<any> {

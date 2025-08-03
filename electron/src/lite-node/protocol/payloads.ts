@@ -77,6 +77,17 @@ export function createGetAccountGroupsPayload(address: string): Buffer {
   return Buffer.from(addressBytes); // ✅ Just raw payload
 }
 
+export function createGetOwnerGroupsPayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes); // ✅ Just raw payload
+}
+
 export function createProcessTransactionMessagePayload(
   signedBytes: string
 ): Buffer {

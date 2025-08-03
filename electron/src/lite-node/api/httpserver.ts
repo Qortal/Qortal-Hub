@@ -15,6 +15,7 @@ import {
   getLastReference,
   getNameInfo,
   getNames,
+  getOwnerGroups,
   getPrimaryName,
   getUnitFee,
   processTransaction,
@@ -141,6 +142,16 @@ export async function createHttpServer() {
     const address = req.params.address;
     try {
       const groups = await getAccountGroups(address);
+      res.json(groups);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/owner/:address', async (req, res) => {
+    const address = req.params.address;
+    try {
+      const groups = await getOwnerGroups(address);
       res.json(groups);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);

@@ -39,4 +39,5 @@ export enum MessageType {
   GET_ACCOUNT_GROUPS = 320,
   GROUP_MEMBERS = 321,
   GET_GROUP_MEMBERS = 322,
+  GET_OWNER_GROUPS = 323,
 }
