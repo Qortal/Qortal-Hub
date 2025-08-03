@@ -347,7 +347,7 @@ export function handleUnitFee(payload: Buffer): bigint {
   return unitFee;
 }
 
-export function handleGroupsMessage(buffer) {
+export function handleGroupsMessage(buffer, includeAdmin) {
   let offset = 0;
 
   const { value: count, size: countSize } = readInt(buffer, offset);
@@ -423,14 +423,14 @@ export function handleGroupsMessage(buffer) {
     const { value: isAdminFlag, size: s12 } = readInt(buffer, offset);
     offset += s12;
 
-    let isAdmin = null;
+    let isAdmin = false;
     if (isAdminFlag === 1) isAdmin = false;
     if (isAdminFlag === 2) isAdmin = true;
 
     const { value: memberCount, size: s13 } = readInt(buffer, offset);
     offset += s13;
 
-    groups.push({
+    const groupData: any = {
       groupId,
       owner,
       groupName,
@@ -442,7 +442,13 @@ export function handleGroupsMessage(buffer) {
       minimumBlockDelay,
       maximumBlockDelay,
       memberCount,
-    });
+    };
+
+    if (includeAdmin) {
+      groupData.isAdmin = isAdmin;
+    }
+
+    groups.push(groupData);
   }
 
   return groups;
@@ -573,4 +579,60 @@ export function handleGroupJoinRequestsMessage(buffer) {
   }
 
   return joinRequests;
+}
+
+export function handleGroupMembersMessage(buffer) {
+  let offset = 0;
+
+  // Read memberCount
+  const { value: memberCount, size: s1 } = readInt(buffer, offset);
+  offset += s1;
+
+  // Read adminCount
+  const { value: adminCount, size: s2 } = readInt(buffer, offset);
+  offset += s2;
+
+  // Read members count
+  const { value: membersCount, size: s3 } = readInt(buffer, offset);
+  offset += s3;
+
+  const members = [];
+
+  for (let i = 0; i < membersCount; i++) {
+    // member (25 bytes base58 address)
+    const memberBytes = buffer.subarray(offset, offset + 25);
+    const member = bs58.encode(memberBytes);
+    offset += 25;
+
+    // joined (nullable long)
+    const { value: hasJoined, size: s4 } = readInt(buffer, offset);
+    offset += s4;
+
+    let joined = null;
+    if (hasJoined === 1) {
+      const { value: joinedValue, size: s5 } = readLong(buffer, offset);
+      joined = joinedValue;
+      offset += s5;
+    }
+
+    // isAdmin (nullable flag: 0 = null, 1 = false, 2 = true)
+    const { value: isAdminFlag, size: s6 } = readInt(buffer, offset);
+    offset += s6;
+
+    let isAdmin = false;
+    if (isAdminFlag === 1) isAdmin = false;
+    if (isAdminFlag === 2) isAdmin = true;
+
+    members.push({
+      member,
+      joined,
+      isAdmin,
+    });
+  }
+
+  return {
+    memberCount,
+    adminCount,
+    members,
+  };
 }

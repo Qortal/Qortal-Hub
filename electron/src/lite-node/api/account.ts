@@ -7,6 +7,7 @@ import {
   handleAddressGroupInvitesMessage,
   handleGroupBansMessage,
   handleGroupJoinRequestsMessage,
+  handleGroupMembersMessage,
   handleGroupsMessage,
   handleLastReference,
   handleNamesMessage,
@@ -18,12 +19,14 @@ import { getRandomClient } from '../peerService';
 import { MessageType } from '../protocol/messageTypes';
 import {
   createGetAccountBalancePayload,
+  createGetAccountGroupsPayload,
   createGetAccountMessagePayload,
   createGetAddressGroupInvitesPayload,
   createGetAddressNamesPayload,
   createGetBansPayload,
   createGetGroupInvitesPayload,
   createGetGroupJoinRequestsPayload,
+  createGetGroupMembersPayload,
   createGetGroupPayload,
   createGetGroupsPayload,
   createGetLastReferencePayload,
@@ -73,7 +76,25 @@ export async function getGroups(
     createGetGroupsPayload(limit, offset, reverse)
   );
 
-  return handleGroupsMessage(res);
+  return handleGroupsMessage(res, false);
+}
+
+export async function getGroupMembers(
+  groupId: number,
+  onlyAdmins: boolean,
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_GROUP_MEMBERS,
+    createGetGroupMembersPayload(groupId, onlyAdmins, limit, offset, reverse)
+  );
+
+  return handleGroupMembersMessage(res);
 }
 
 export async function getGroup(groupId: number): Promise<any> {
@@ -85,7 +106,7 @@ export async function getGroup(groupId: number): Promise<any> {
     createGetGroupPayload(groupId)
   );
 
-  const data = handleGroupsMessage(res);
+  const data = handleGroupsMessage(res, false);
 
   if (Array.isArray(data) && data.length > 0) {
     return data[0];
@@ -118,6 +139,18 @@ export async function getAddressGroupInvites(address: string): Promise<any> {
   );
 
   return handleAddressGroupInvitesMessage(res);
+}
+
+export async function getAccountGroups(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_ACCOUNT_GROUPS,
+    createGetAccountGroupsPayload(address)
+  );
+
+  return handleGroupsMessage(res, true);
 }
 
 export async function getGroupInvites(groupId: number): Promise<any> {

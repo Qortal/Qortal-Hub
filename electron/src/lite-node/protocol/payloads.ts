@@ -66,6 +66,17 @@ export function createGetAddressGroupInvitesPayload(address: string): Buffer {
   return Buffer.from(addressBytes); // ✅ Just raw payload
 }
 
+export function createGetAccountGroupsPayload(address: string): Buffer {
+  const addressBytes = bs58.decode(address);
+  if (addressBytes.length !== ADDRESS_LENGTH) {
+    throw new Error(
+      `Invalid address length. Expected ${ADDRESS_LENGTH}, got ${addressBytes.length}`
+    );
+  }
+
+  return Buffer.from(addressBytes); // ✅ Just raw payload
+}
+
 export function createProcessTransactionMessagePayload(
   signedBytes: string
 ): Buffer {
@@ -133,6 +144,37 @@ export function createGetGroupsPayload(
   reverseBuffer.writeInt32BE(reverse ? 1 : 0);
 
   return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
+}
+
+export function createGetGroupMembersPayload(
+  groupId: number,
+  onlyAdmins: boolean,
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Buffer {
+  const groupIdBuffer = Buffer.alloc(4);
+  groupIdBuffer.writeInt32BE(groupId);
+
+  const onlyAdminsBuffer = Buffer.alloc(4);
+  onlyAdminsBuffer.writeInt32BE(onlyAdmins ? 1 : 0);
+
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  return Buffer.concat([
+    groupIdBuffer,
+    onlyAdminsBuffer,
+    limitBuffer,
+    offsetBuffer,
+    reverseBuffer,
+  ]);
 }
 
 export function createGetGroupPayload(groupId: number): Buffer {

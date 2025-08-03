@@ -4,11 +4,13 @@ import { WebSocketServer } from 'ws';
 import {
   getAccount,
   getAccountBalance,
+  getAccountGroups,
   getAddressGroupInvites,
   getBans,
   getGroup,
   getGroupInvites,
   getGroupJoinRequests,
+  getGroupMembers,
   getGroups,
   getLastReference,
   getNameInfo,
@@ -83,9 +85,9 @@ export async function createHttpServer() {
 
   app.get('/groups', async (req, res) => {
     try {
-      const limit = req.query.limit || 100;
-      const offset = req.query.offset || 0;
-      const reverse = req.query.reverse || false;
+      const limit = req.query.limit ?? 100;
+      const offset = req.query.offset ?? 0;
+      const reverse = req.query.reverse ?? false;
 
       const groups = await getGroups(limit, offset, reverse);
       res.json(groups);
@@ -130,6 +132,36 @@ export async function createHttpServer() {
     try {
       const invites = await getGroupInvites(groupId);
       res.json(invites);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/member/:address', async (req, res) => {
+    const address = req.params.address;
+    try {
+      const groups = await getAccountGroups(address);
+      res.json(groups);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/groups/members/:groupId', async (req, res) => {
+    const groupId = req.params.groupId;
+    const onlyAdmins = req.query.onlyAdmins ?? false;
+    const limit = req.query.limit ?? 100;
+    const offset = req.query.offset ?? 0;
+    const reverse = req.query.reverse ?? false;
+    try {
+      const members = await getGroupMembers(
+        groupId,
+        onlyAdmins,
+        limit,
+        offset,
+        reverse
+      );
+      res.json(members);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
