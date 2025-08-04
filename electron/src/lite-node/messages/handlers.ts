@@ -636,3 +636,15 @@ export function handleGroupMembersMessage(buffer) {
     members,
   };
 }
+
+export function handlePublicKeyMessage(buffer: Buffer) {
+  if (buffer.length !== 32) {
+    throw new Error(
+      `Invalid public key message length: expected 32, got ${buffer.length}`
+    );
+  }
+
+  const publicKeyBytes = buffer.subarray(0, 32);
+
+  return bs58.encode(publicKeyBytes);
+}

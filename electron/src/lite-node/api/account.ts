@@ -13,6 +13,7 @@ import {
   handleNamesMessage,
   handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
+  handlePublicKeyMessage,
   handleUnitFee,
 } from '../messages/handlers';
 import { getRandomClient } from '../peerService';
@@ -35,6 +36,7 @@ import {
   createGetNamesPayload,
   createGetOwnerGroupsPayload,
   createGetPrimaryNamePayload,
+  createGetPublickeyFromAddressPayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
   createSearchNamesPayload,
@@ -258,6 +260,18 @@ export async function getLastReference(address: string): Promise<any> {
   );
 
   return handleLastReference(res);
+}
+
+export async function getPublickeyFromAddress(address: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_PUBLIC_KEY_FROM_ADDRESS,
+    createGetPublickeyFromAddressPayload(address)
+  );
+
+  return handlePublicKeyMessage(res);
 }
 
 export async function getPrimaryName(address: string): Promise<any> {

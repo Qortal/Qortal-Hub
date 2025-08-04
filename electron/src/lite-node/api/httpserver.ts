@@ -19,6 +19,7 @@ import {
   getNamesForSale,
   getOwnerGroups,
   getPrimaryName,
+  getPublickeyFromAddress,
   getSearchNames,
   getUnitFee,
   processTransaction,
@@ -210,6 +211,16 @@ export async function createHttpServer() {
       const address = req.params.address;
       const lastReference = await getLastReference(address);
       res.type('text').send(lastReference);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/addresses/publickey/:address', async (req, res) => {
+    try {
+      const address = req.params.address;
+      const publickey = await getPublickeyFromAddress(address);
+      res.type('text').send(publickey);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
