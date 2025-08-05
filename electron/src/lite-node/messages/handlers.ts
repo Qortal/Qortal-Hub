@@ -186,7 +186,7 @@ export function handleActiveChat(buffer) {
       sender,
       senderName,
       signature: signature ? bs58.encode(signature) : null,
-      encoding,
+      encoding: encoding === 0 ? 'BASE58' : 'BASE64',
       data,
     });
   }
@@ -647,4 +647,88 @@ export function handlePublicKeyMessage(buffer: Buffer) {
   const publicKeyBytes = buffer.subarray(0, 32);
 
   return bs58.encode(publicKeyBytes);
+}
+
+export function handleChatMessages(buffer) {
+  let offset = 0;
+
+  const encoding = buffer.readUInt8(offset); // global encoding byte
+  offset += 1;
+
+  const { value: messageCount, size: messageCountSize } = readInt(
+    buffer,
+    offset
+  );
+  offset += messageCountSize;
+
+  const messages = [];
+
+  for (let i = 0; i < messageCount; i++) {
+    const { value: timestamp, size: s1 } = readTimestamp(buffer, offset);
+    offset += s1;
+
+    const { value: txGroupId, size: s2 } = readInt(buffer, offset);
+    offset += s2;
+
+    const reference = buffer.subarray(offset, offset + 64);
+    offset += 64;
+
+    const senderPublicKey = buffer.subarray(offset, offset + 32);
+    offset += 32;
+
+    const { value: sender, size: s3 } = readNullableString(buffer, offset);
+    offset += s3;
+
+    const { value: senderName, size: s4 } = readNullableString(buffer, offset);
+    offset += s4;
+
+    const { value: recipient, size: s5 } = readNullableString(buffer, offset);
+    offset += s5;
+
+    const { value: recipientName, size: s6 } = readNullableString(
+      buffer,
+      offset
+    );
+    offset += s6;
+
+    const { value: hasChatReference, size: s7 } = readInt(buffer, offset);
+    offset += s7;
+
+    let chatReference = null;
+    if (hasChatReference === 1) {
+      chatReference = buffer.subarray(offset, offset + 64);
+      offset += 64;
+    }
+
+    const { value: data, size: s8 } = readNullableString(buffer, offset);
+    offset += s8;
+
+    const { value: isText, size: s9 } = readInt(buffer, offset);
+    offset += s9;
+
+    const { value: isEncrypted, size: s10 } = readInt(buffer, offset);
+    offset += s10;
+
+    const signature = buffer.subarray(offset, offset + 64);
+    offset += 64;
+
+    messages.push({
+      timestamp,
+      txGroupId,
+      reference: bs58.encode(reference),
+      senderPublicKey: bs58.encode(senderPublicKey),
+      sender,
+      senderName,
+      recipient,
+      recipientName,
+      chatReference: chatReference ? bs58.encode(chatReference) : null,
+      encoding: encoding === 0 ? 'BASE58' : 'BASE64',
+      data,
+      isText: isText === 1,
+      isEncrypted: isEncrypted === 1,
+      signature: bs58.encode(signature),
+    });
+  }
+
+  return messages;
 }

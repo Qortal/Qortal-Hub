@@ -26,7 +26,7 @@ import {
 } from './account';
 import url from 'url';
 import { Encoding } from '../protocol/payloads';
-import { getActiveChat } from './chat';
+import { getActiveChat, getChatMessages } from './chat';
 import bodyParser from 'body-parser';
 
 export async function createHttpServer() {
@@ -300,6 +300,47 @@ export async function createHttpServer() {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
   });
+  app.get('/chat/messages', async (req, res) => {
+    try {
+      const query = req.query;
+      const involving = Array.isArray(query.involving)
+        ? query.involving
+        : [query.involving].filter(Boolean);
+
+      const encoding =
+        query.encoding === 'BASE58' ? Encoding.BASE58 : Encoding.BASE64;
+
+      const after = query.after || null;
+      const before = query.before || null;
+      const txGroupId = query.txGroupId || null;
+      const reference = query.reference || null;
+
+      const chatReference = query.chatReference || null;
+      const hasChatReference = query.hasChatReference ?? false;
+      const sender = query.sender || null;
+
+      const offset = query.offset || 0;
+      const limit = query.limit || 100;
+      const reverse = query.reverse ?? false;
+      const response = await getChatMessages(
+        txGroupId,
+        involving,
+        encoding,
+        reference,
+        before,
+        after,
+        chatReference,
+        hasChatReference,
+        sender,
+        offset,
+        limit,
+        reverse
+      );
+      res.json(response);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 
@@ -307,7 +348,10 @@ export async function createHttpServer() {
     const parsedUrl = url.parse(request.url!, true);
     const pathname = parsedUrl.pathname || '';
 
-    if (pathname.startsWith('/websockets/chat/active/')) {
+    if (
+      pathname.startsWith('/websockets/chat/active/') ||
+      pathname.startsWith('/websockets/chat/messages')
+    ) {
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request, parsedUrl);
       });
@@ -363,6 +407,75 @@ export async function createHttpServer() {
 
       ws.on('close', () => {
         console.log(`❌ Chat socket closed for ${address}`);
+        clearInterval(interval);
+      });
+    } else if (pathname === '/websockets/chat/messages') {
+      const involving = Array.isArray(query.involving)
+        ? query.involving
+        : [query.involving].filter(Boolean);
+
+      const encoding =
+        query.encoding === 'BASE58' ? Encoding.BASE58 : Encoding.BASE64;
+
+      const after = query.after || null;
+      const before = query.before || null;
+      const txGroupId = query.txGroupId || null;
+      const reference = query.reference || null;
+
+      const chatReference = query.chatReference || null;
+      const hasChatReference = query.hasChatReference ?? false;
+      const sender = query.sender || null;
+
+      const offset = query.offset || 0;
+      const limit = query.limit || 100;
+      const reverse = query.reverse ?? false;
+
+      console.log(
+        `🧩 Connected to /chat/messages involving=[${involving.join(', ')}], encoding=${encoding}, limit=${limit}`
+      );
+
+      const fetchAndSendMessages = async () => {
+        try {
+          const response = await getChatMessages(
+            txGroupId,
+            involving,
+            encoding,
+            reference,
+            before,
+            after,
+            chatReference,
+            hasChatReference,
+            sender,
+            offset,
+            limit,
+            reverse
+          );
+
+          if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(response));
+          }
+        } catch (err) {
+          console.error('Failed to fetch chat messages:', err);
+        }
+      };
+
+      // Fetch immediately after connection
+      fetchAndSendMessages();
+
+      // Then set up polling every 45 seconds
+      const interval = setInterval(fetchAndSendMessages, 45000);
+
+      ws.on('message', (msg) => {
+        const message = msg.toString();
+        if (message === 'ping') {
+          ws.send('pong');
+        } else {
+          ws.send(`Echo: ${msg}`);
+        }
+      });
+
+      ws.on('close', () => {
+        console.log(`❌ Chat messages socket closed`);
         clearInterval(interval);
       });
     } else {

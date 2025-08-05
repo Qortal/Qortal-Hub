@@ -205,6 +205,115 @@ export function createGetGroupMembersPayload(
   ]);
 }
 
+export function createGetChatMessagesPayload(
+  txGroupId: number | null,
+  involving: string[] | null | undefined,
+  encoding: number, // Assuming Encoding is a number (adjust if Enum)
+  reference: string | null,
+  before: number | null,
+  after: number | null,
+  chatReference: string | null,
+  hasChatReference: boolean,
+  sender: string | null,
+  offset: number,
+  limit: number,
+  reverse: boolean
+): Buffer {
+  const buffers: Buffer[] = [];
+
+  // txGroupId (nullable int)
+  const txGroupIdBuffer = Buffer.alloc(4);
+  txGroupIdBuffer.writeInt32BE(txGroupId !== null ? txGroupId : -1);
+  buffers.push(txGroupIdBuffer);
+
+  // involving count (handle undefined/null)
+  const involvingSafe = involving || [];
+  const involvingCountBuffer = Buffer.alloc(4);
+  involvingCountBuffer.writeInt32BE(involvingSafe.length);
+  buffers.push(involvingCountBuffer);
+
+  // involving addresses
+  for (const addr of involvingSafe) {
+    const addrBytes = bs58.decode(addr);
+    if (addrBytes.length !== 25) throw new Error('Invalid address length');
+    buffers.push(Buffer.from(addrBytes));
+  }
+
+  // encoding (1 byte)
+  const encodingBuffer = Buffer.alloc(1);
+  encodingBuffer.writeUInt8(encoding);
+  buffers.push(encodingBuffer);
+
+  // reference (nullable 64 bytes)
+  if (reference) {
+    buffers.push(Buffer.alloc(4, 1)); // hasReference = 1
+    const refBytes = bs58.decode(reference);
+    if (refBytes.length !== 64) throw new Error('Invalid reference length');
+    buffers.push(Buffer.from(refBytes));
+  } else {
+    buffers.push(Buffer.alloc(4, 0)); // hasReference = 0
+  }
+
+  // before (nullable long)
+  if (before !== null && before !== undefined) {
+    buffers.push(Buffer.alloc(4, 1)); // hasBefore = 1
+    const beforeBuffer = Buffer.alloc(8);
+    beforeBuffer.writeBigInt64BE(BigInt(before));
+    buffers.push(beforeBuffer);
+  } else {
+    buffers.push(Buffer.alloc(4, 0)); // hasBefore = 0
+  }
+
+  // after (nullable long)
+  if (after !== null && after !== undefined) {
+    buffers.push(Buffer.alloc(4, 1)); // hasAfter = 1
+    const afterBuffer = Buffer.alloc(8);
+    afterBuffer.writeBigInt64BE(BigInt(after));
+    buffers.push(afterBuffer);
+  } else {
+    buffers.push(Buffer.alloc(4, 0)); // hasAfter = 0
+  }
+
+  // chatReference (nullable 64 bytes)
+  if (hasChatReference && chatReference) {
+    buffers.push(Buffer.alloc(4, 1)); // hasChatReference = 1
+    const chatRefBytes = bs58.decode(chatReference);
+    if (chatRefBytes.length !== 64)
+      throw new Error('Invalid chatReference length');
+    buffers.push(Buffer.from(chatRefBytes));
+  } else {
+    buffers.push(Buffer.alloc(4, 0)); // hasChatReference = 0
+  }
+
+  // sender (nullable address 25 bytes)
+  if (sender) {
+    buffers.push(Buffer.alloc(4, 1)); // hasSender = 1
+    const senderBytes = bs58.decode(sender);
+    if (senderBytes.length !== 25)
+      throw new Error('Invalid sender address length');
+    buffers.push(Buffer.from(senderBytes));
+  } else {
+    buffers.push(Buffer.alloc(4, 0)); // hasSender = 0
+  }
+
+  // offset (int)
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+  buffers.push(offsetBuffer);
+
+  // limit (int)
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+  buffers.push(limitBuffer);
+
+  // reverse (int)
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+  buffers.push(reverseBuffer);
+
+  return Buffer.concat(buffers);
+}
+
 export function createGetNamesPayload(
   limit: number,
   offset: number,
