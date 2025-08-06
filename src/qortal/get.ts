@@ -485,7 +485,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 30-second timeout
+    }, 60000); // 60-second timeout
   });
 }
 

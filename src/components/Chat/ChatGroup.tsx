@@ -304,7 +304,7 @@ export const ChatGroup = ({
                   .filter((rawItem) => !rawItem?.chatReference)
                   .map((item) => {
                     const additionalFields =
-                      item?.data === 'NDAwMQ==' // TODO put magic string somewhere in a file
+                      item?.data === 'NDAwMQ=='
                         ? {
                             text: `<p>${t(
                               'group:message.generic.group_key_created',
@@ -873,7 +873,6 @@ export const ChatGroup = ({
             }),
           });
 
-          // TODO magic string
           await window.sendMessage('publishOnQDN', {
             data: 'RA==',
             identifier: onEditMessage?.images[0]?.identifier,

@@ -698,7 +698,7 @@ export const ChatDirect = ({
             disableEnter={false}
             setIsFocusedParent={setIsFocusedParent}
           />
-          {messageSize > 750 && (
+          {messageSize > 750 && ( // TODO magic number
             <Box
               sx={{
                 display: 'flex',
@@ -707,7 +707,7 @@ export const ChatDirect = ({
                 width: '100%',
               }}
             >
-              <Typography // TODO set magic number in a proper file
+              <Typography
                 sx={{
                   fontSize: '12px',
                   color:
