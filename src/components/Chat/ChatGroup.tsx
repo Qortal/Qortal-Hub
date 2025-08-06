@@ -24,7 +24,11 @@ import {
   resumeAllQueues,
 } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY } from '../../constants/constants';
+import {
+  MAX_SIZE_MESSAGE,
+  MIN_REQUIRED_QORTS,
+  PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
+} from '../../constants/constants';
 import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
   executeEvent,
@@ -796,7 +800,7 @@ export const ChatGroup = ({
 
   const sendMessage = async () => {
     try {
-      if (messageSize > 4000) return; // TODO magic number
+      if (messageSize > MAX_SIZE_MESSAGE) return;
       if (isPrivate === null)
         throw new Error(
           t('group:message.error:determine_group_private', {
@@ -804,11 +808,10 @@ export const ChatGroup = ({
           })
         );
       if (isSending) return;
-      if (+balance < 4)
-        // TODO magic number
+      if (+balance < MIN_REQUIRED_QORTS)
         throw new Error(
           t('group:message.error.qortals_required', {
-            quantity: 4,
+            quantity: MIN_REQUIRED_QORTS,
             postProcess: 'capitalizeFirstChar',
           })
         );
@@ -1065,11 +1068,10 @@ export const ChatGroup = ({
     async (reaction, chatMessage, reactionState = true) => {
       try {
         if (isSending) return;
-        if (+balance < 4)
-          // TODO magic number
+        if (+balance < MIN_REQUIRED_QORTS)
           throw new Error(
             t('group:message.error.qortals_required', {
-              quantity: 4,
+              quantity: MIN_REQUIRED_QORTS,
               postProcess: 'capitalizeFirstChar',
             })
           );
@@ -1400,7 +1402,7 @@ export const ChatGroup = ({
               membersWithNames={members}
               insertImage={insertImage}
             />
-            {messageSize > 750 && (
+            {messageSize > 750 && ( // TODO magic number
               <Box
                 sx={{
                   display: 'flex',
@@ -1409,15 +1411,17 @@ export const ChatGroup = ({
                   width: '100%',
                 }}
               >
-                <Typography //TODO magic number
+                <Typography
                   sx={{
                     fontSize: '12px',
                     color:
-                      messageSize > 4000 ? theme.palette.other.danger : 'unset',
+                      messageSize > MAX_SIZE_MESSAGE
+                        ? theme.palette.other.danger
+                        : 'unset',
                   }}
                 >
                   {t('core:message.error.message_size', {
-                    maximum: 4000,
+                    maximum: MAX_SIZE_MESSAGE,
                     size: messageSize,
                     postProcess: 'capitalizeFirstChar',
                   })}
