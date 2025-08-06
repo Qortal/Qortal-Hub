@@ -191,6 +191,33 @@ export function createGetPollsPayload(
   return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
 }
 
+export function createGetPollPayload(pollName: string): Buffer {
+  const pollNameBuffer = Buffer.from(pollName, 'utf-8');
+  const pollNameLength = Buffer.alloc(4);
+  pollNameLength.writeInt32BE(pollNameBuffer.length);
+
+  const payloadParts = [pollNameLength, pollNameBuffer];
+
+  return Buffer.concat(payloadParts);
+}
+
+export function createGetPollVotesPayload(pollName, onlyCounts) {
+  const pollNameBuffer = Buffer.from(pollName, 'utf-8');
+  const pollNameLengthBuffer = Buffer.alloc(4);
+  pollNameLengthBuffer.writeInt32BE(pollNameBuffer.length);
+
+  const onlyCountsBuffer = Buffer.alloc(4);
+  onlyCountsBuffer.writeInt32BE(onlyCounts ? 1 : 0);
+
+  const buffer = Buffer.concat([
+    pollNameLengthBuffer,
+    pollNameBuffer,
+    onlyCountsBuffer,
+  ]);
+
+  return buffer;
+}
+
 export function createGetGroupMembersPayload(
   groupId: number,
   onlyAdmins: boolean,

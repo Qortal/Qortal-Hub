@@ -12,6 +12,7 @@ import {
   handleLastReference,
   handleNamesMessage,
   handlePollsMessage,
+  handlePollVotesMessage,
   handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
   handlePublicKeyMessage,
@@ -36,7 +37,9 @@ import {
   createGetNamesForSalePayload,
   createGetNamesPayload,
   createGetOwnerGroupsPayload,
+  createGetPollPayload,
   createGetPollsPayload,
+  createGetPollVotesPayload,
   createGetPrimaryNamePayload,
   createGetPublickeyFromAddressPayload,
   createGetUnitFeePayload,
@@ -119,6 +122,38 @@ export async function getPolls(
   return handlePollsMessage(res);
 }
 
+export async function getPoll(pollName: string): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_POLL,
+    createGetPollPayload(pollName)
+  );
+
+  const data = handlePollsMessage(res);
+
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+
+  throw new Error('No poll data');
+}
+
+export async function getPollVotes(
+  pollName: string,
+  onlyCounts: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_POLL_VOTES,
+    createGetPollVotesPayload(pollName, onlyCounts)
+  );
+  const data = handlePollVotesMessage(res);
+  return data;
+}
 export async function getGroupMembers(
   groupId: number,
   onlyAdmins: boolean,

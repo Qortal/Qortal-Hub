@@ -52,4 +52,7 @@ export enum MessageType {
 
   POLLS = 326,
   GET_POLLS = 327,
+  GET_POLL = 328,
+  POLL_VOTES = 329,
+  GET_POLL_VOTES = 330,
 }

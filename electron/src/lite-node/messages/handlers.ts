@@ -391,6 +391,170 @@ export function handlePollsMessage(buffer) {
   return polls;
 }
 
+// export function handlePollVotesMessage(buffer) {
+//   let offset = 0;
+
+//   const { value: totalVotes, size: s1 } = readInt(buffer, offset);
+//   offset += s1;
+
+//   const { value: totalWeight, size: s2 } = readInt(buffer, offset);
+//   offset += s2;
+
+//   const { value: countSize, size: s3 } = readInt(buffer, offset);
+//   offset += s3;
+
+//   const voteCounts = [];
+//   for (let i = 0; i < countSize; i++) {
+//     const { value: optionName, size: s4 } = readSizedString(buffer, offset);
+//     offset += s4;
+
+//     const { value: voteCount, size: s5 } = readInt(buffer, offset);
+//     offset += s5;
+
+//     voteCounts.push({ optionName, voteCount });
+//   }
+
+//   const { value: weightSize, size: s6 } = readInt(buffer, offset);
+//   offset += s6;
+
+//   const voteWeights = [];
+//   for (let i = 0; i < weightSize; i++) {
+//     const { value: optionName, size: s7 } = readSizedString(buffer, offset);
+//     offset += s7;
+
+//     const { value: voteWeight, size: s8 } = readInt(buffer, offset);
+//     offset += s8;
+
+//     voteWeights.push({ optionName, voteWeight });
+//   }
+
+//   const { value: hasVotes, size: s9 } = readInt(buffer, offset);
+//   offset += s9;
+
+//   let votes = null;
+//   if (hasVotes === 1) {
+//     const { value: votesCount, size: s10 } = readInt(buffer, offset);
+//     offset += s10;
+
+//     votes = [];
+//     for (let i = 0; i < votesCount; i++) {
+//       const voterPublicKeyBytes = buffer.subarray(offset, offset + 32);
+//       const voterPublicKey = bs58.encode(voterPublicKeyBytes);
+//       offset += 32;
+
+//       const { value: optionIndex, size: s11 } = readInt(buffer, offset);
+//       offset += s11;
+
+//       votes.push({ voterPublicKey, optionIndex });
+//     }
+//   }
+
+//   return {
+//     totalVotes,
+//     totalWeight,
+//     voteCounts,
+//     voteWeights,
+//     votes,
+//   };
+// }
+
+// Debugger version of handlePollVotesMessage
+
+export function handlePollVotesMessage(buffer) {
+  const dataView = new DataView(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength
+  );
+  let offset = 0;
+
+  const readInt = () => {
+    const value = dataView.getInt32(offset, false); // big-endian
+    offset += 4;
+    return value;
+  };
+
+  const readSizedString = () => {
+    const length = readInt();
+    if (length === 0) return '';
+    const strBytes = buffer.subarray(offset, offset + length);
+    offset += length;
+    return new TextDecoder().decode(strBytes);
+  };
+
+  const readBytes = (length) => {
+    const bytes = buffer.subarray(offset, offset + length);
+    offset += length;
+    return bytes;
+  };
+
+  const log = (...args) => console.log('[Offset:', offset, ']', ...args);
+
+  // hasVotes flag
+  const hasVotes = readInt();
+  log('hasVotes:', hasVotes);
+
+  let votes = null;
+  if (hasVotes === 1) {
+    const votesCount = readInt();
+    log('votesCount:', votesCount);
+
+    votes = [];
+    for (let i = 0; i < votesCount; i++) {
+      const pollName = readSizedString();
+      log(`vote[${i}] pollName:`, pollName);
+
+      const voterPublicKeyBytes = readBytes(32);
+      const voterPublicKey = bs58.encode(voterPublicKeyBytes);
+      log(`vote[${i}] voterPublicKey:`, voterPublicKey);
+
+      const optionIndex = readInt();
+      log(`vote[${i}] optionIndex:`, optionIndex);
+
+      votes.push({ pollName, voterPublicKey, optionIndex });
+    }
+  }
+
+  const totalVotes = readInt();
+  log('totalVotes:', totalVotes);
+
+  const totalWeight = readInt();
+  log('totalWeight:', totalWeight);
+
+  const voteCountsSize = readInt();
+  log('voteCounts size:', voteCountsSize);
+
+  const voteCounts = [];
+  for (let i = 0; i < voteCountsSize; i++) {
+    const optionName = readSizedString();
+    const voteCount = readInt();
+    log(`voteCount[${i}] optionName:`, optionName, 'count:', voteCount);
+    voteCounts.push({ optionName, voteCount });
+  }
+
+  const voteWeightsSize = readInt();
+  log('voteWeights size:', voteWeightsSize);
+
+  const voteWeights = [];
+  for (let i = 0; i < voteWeightsSize; i++) {
+    const optionName = readSizedString();
+    const voteWeight = readInt();
+    log(`voteWeight[${i}] optionName:`, optionName, 'weight:', voteWeight);
+    voteWeights.push({ optionName, voteWeight });
+  }
+
+  log('Final offset:', offset, '/', buffer.length);
+
+  return {
+    hasVotes: hasVotes === 1,
+    votes,
+    totalVotes,
+    totalWeight,
+    voteCounts,
+    voteWeights,
+  };
+}
+
 export function handleUnitFee(payload: Buffer): bigint {
   if (payload.length !== 8) {
     throw new Error(
