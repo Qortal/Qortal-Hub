@@ -49,4 +49,7 @@ export enum MessageType {
 
   PUBLIC_KEY = 324,
   GET_PUBLIC_KEY_FROM_ADDRESS = 325,
+
+  POLLS = 326,
+  GET_POLLS = 327,
 }

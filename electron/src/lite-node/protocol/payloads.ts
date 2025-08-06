@@ -174,6 +174,23 @@ export function createGetNamesForSalePayload(
   return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
 }
 
+export function createGetPollsPayload(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Buffer {
+  const limitBuffer = Buffer.alloc(4);
+  limitBuffer.writeInt32BE(limit);
+
+  const offsetBuffer = Buffer.alloc(4);
+  offsetBuffer.writeInt32BE(offset);
+
+  const reverseBuffer = Buffer.alloc(4);
+  reverseBuffer.writeInt32BE(reverse ? 1 : 0);
+
+  return Buffer.concat([limitBuffer, offsetBuffer, reverseBuffer]);
+}
+
 export function createGetGroupMembersPayload(
   groupId: number,
   onlyAdmins: boolean,

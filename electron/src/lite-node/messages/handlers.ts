@@ -336,6 +336,61 @@ export function handleNamesMessage(buffer) {
   return names;
 }
 
+export function handlePollsMessage(buffer) {
+  let offset = 0;
+
+  const { value: count, size: countSize } = readInt(buffer, offset);
+  offset += countSize;
+
+  const polls = [];
+
+  for (let i = 0; i < count; i++) {
+    const publicKeyBytes = buffer.subarray(offset, offset + 32);
+    const creatorPublicKey = bs58.encode(publicKeyBytes);
+    offset += 32;
+
+    const ownerBytes = buffer.subarray(offset, offset + 25);
+    const owner = bs58.encode(ownerBytes);
+    offset += 25;
+
+    const { value: pollName, size: s1 } = readNullableString(buffer, offset);
+    offset += s1;
+
+    const { value: description, size: s2 } = readNullableString(buffer, offset);
+    offset += s2;
+
+    const { value: published, size: s3 } = readLong(buffer, offset);
+    offset += s3;
+
+    const { value: optionCount, size: s4 } = readInt(buffer, offset);
+    offset += s4;
+
+    const options = [];
+    for (let j = 0; j < optionCount; j++) {
+      const { value: optionName, size: s5 } = readNullableString(
+        buffer,
+        offset
+      );
+      offset += s5;
+
+      options.push({
+        optionName,
+      });
+    }
+
+    polls.push({
+      creatorPublicKey,
+      owner,
+      pollName,
+      description,
+      published,
+      options,
+    });
+  }
+
+  return polls;
+}
+
 export function handleUnitFee(payload: Buffer): bigint {
   if (payload.length !== 8) {
     throw new Error(

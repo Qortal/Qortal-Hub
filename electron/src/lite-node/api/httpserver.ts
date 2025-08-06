@@ -18,6 +18,7 @@ import {
   getNames,
   getNamesForSale,
   getOwnerGroups,
+  getPolls,
   getPrimaryName,
   getPublickeyFromAddress,
   getSearchNames,
@@ -341,6 +342,33 @@ export async function createHttpServer() {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
   });
+
+  app.get('/names/forsale', async (req, res) => {
+    try {
+      const limit = req.query.limit ?? 100;
+      const offset = req.query.offset ?? 0;
+      const reverse = req.query.reverse ?? false;
+      if (limit === 0 || limit > 100) throw new Error('Max limit of 100');
+      const names = await getNamesForSale(limit, offset, reverse);
+      res.json(names);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/polls', async (req, res) => {
+    try {
+      const limit = req.query.limit ?? 100;
+      const offset = req.query.offset ?? 0;
+      const reverse = req.query.reverse ?? false;
+      if (limit === 0 || limit > 100) throw new Error('Max limit of 100');
+      const polls = await getPolls(limit, offset, reverse);
+      res.json(polls);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
   const server = createServer(app);
   const wss = new WebSocketServer({ noServer: true });
 

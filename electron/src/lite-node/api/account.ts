@@ -11,6 +11,7 @@ import {
   handleGroupsMessage,
   handleLastReference,
   handleNamesMessage,
+  handlePollsMessage,
   handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
   handlePublicKeyMessage,
@@ -35,6 +36,7 @@ import {
   createGetNamesForSalePayload,
   createGetNamesPayload,
   createGetOwnerGroupsPayload,
+  createGetPollsPayload,
   createGetPrimaryNamePayload,
   createGetPublickeyFromAddressPayload,
   createGetUnitFeePayload,
@@ -99,6 +101,22 @@ export async function getNamesForSale(
   );
 
   return handleNamesMessage(res);
+}
+
+export async function getPolls(
+  limit: number,
+  offset: number,
+  reverse: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_POLLS,
+    createGetPollsPayload(limit, offset, reverse)
+  );
+
+  return handlePollsMessage(res);
 }
 
 export async function getGroupMembers(
