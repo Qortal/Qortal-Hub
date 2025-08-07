@@ -321,7 +321,10 @@ export async function createHttpServer() {
       const reference = query.reference || null;
 
       const chatReference = query.chatReference || null;
-      const hasChatReference = query.hasChatReference ?? false;
+      const hasChatReference =
+        query.hasChatReference === undefined
+          ? null
+          : query.hasChatReference === 'true';
       const sender = query.sender || null;
 
       const offset = query.offset || 0;
@@ -495,12 +498,15 @@ export async function createHttpServer() {
       const reference = query.reference || null;
 
       const chatReference = query.chatReference || null;
-      const hasChatReference = query.hasChatReference ?? false;
+      const hasChatReference =
+        query.hasChatReference === undefined
+          ? null
+          : query.hasChatReference === 'true';
       const sender = query.sender || null;
 
       const offset = query.offset || 0;
       const limit = query.limit || 100;
-      const reverse = query.reverse ?? false;
+      const reverse = query.reverse === 'true';
 
       console.log(
         `🧩 Connected to /chat/messages involving=[${involving.join(', ')}], encoding=${encoding}, limit=${limit}`

@@ -328,14 +328,22 @@ export function createGetChatMessagesPayload(
   }
 
   // chatReference (nullable 64 bytes)
-  if (hasChatReference && chatReference) {
-    buffers.push(Buffer.alloc(4, 1)); // hasChatReference = 1
+  const hasChatReferenceBuffer = Buffer.alloc(4);
+  if (hasChatReference === true && chatReference) {
+    hasChatReferenceBuffer.writeInt32BE(1);
+    buffers.push(hasChatReferenceBuffer);
+
     const chatRefBytes = bs58.decode(chatReference);
     if (chatRefBytes.length !== 64)
       throw new Error('Invalid chatReference length');
     buffers.push(Buffer.from(chatRefBytes));
+  } else if (hasChatReference === false) {
+    hasChatReferenceBuffer.writeInt32BE(0);
+    buffers.push(hasChatReferenceBuffer);
   } else {
-    buffers.push(Buffer.alloc(4, 0)); // hasChatReference = 0
+    // hasChatReference === null
+    hasChatReferenceBuffer.writeInt32BE(-1);
+    buffers.push(hasChatReferenceBuffer);
   }
 
   // sender (nullable address 25 bytes)
