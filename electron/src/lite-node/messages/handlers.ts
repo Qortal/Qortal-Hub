@@ -7,6 +7,19 @@ function toBigDecimal(amountBigInt) {
   return new Decimal(amountBigInt.toString()).div(1e8);
 }
 
+export function readSizedStringV2(buffer, offset) {
+  const { value: length, size: lengthSize } = readInt(buffer, offset);
+  offset += lengthSize;
+
+  const str = new TextDecoder().decode(
+    buffer.subarray(offset, offset + length)
+  );
+  return {
+    value: str,
+    size: lengthSize + length,
+  };
+}
+
 export async function handleAccountBalance(payload: Buffer) {
   if (payload.length < 41) {
     console.error('❌ Invalid payload length for AccountBalanceMessage');
@@ -403,6 +416,19 @@ export function handlePollsMessage(buffer) {
   }
 
   return polls;
+}
+
+export function handleArbitraryLatestTransaction(buffer: Uint8Array) {
+  if (buffer.length !== 64) {
+    throw new Error(
+      `Invalid buffer length (${buffer.length}). Expected 64 bytes (full signature)`
+    );
+  }
+
+  const signatureBytes = buffer.subarray(0, 64);
+  const signature = bs58.encode(signatureBytes);
+
+  return { signature };
 }
 
 // export function handlePollVotesMessage(buffer) {
@@ -1063,4 +1089,65 @@ export function handleChatMessages(buffer) {
   }
 
   return messages;
+}
+
+export function handleArbitraryDataFileList(buffer) {
+  let offset = 0;
+
+  // Signature (64 bytes)
+  const signature = buffer.subarray(offset, offset + 64);
+  offset += 64;
+
+  // Hash count
+  const { value: hashCount, size: hashCountSize } = readInt(buffer, offset);
+  offset += hashCountSize;
+
+  // Hashes (32 bytes each)
+  const hashes = [];
+  for (let i = 0; i < hashCount; i++) {
+    const hash = buffer.subarray(offset, offset + 32);
+    hashes.push(hash);
+    offset += 32;
+  }
+
+  let requestTime = null;
+  let requestHops = null;
+  let peerAddress = null;
+  let isRelayPossible = true; // Default true for legacy compatibility
+
+  if (offset < buffer.length) {
+    // requestTime (8 bytes)
+    const { value: time, size: timeSize } = readLong(buffer, offset);
+    requestTime = time;
+    offset += timeSize;
+
+    // requestHops (4 bytes)
+    const { value: hops, size: hopsSize } = readInt(buffer, offset);
+    requestHops = hops;
+    offset += hopsSize;
+
+    // peerAddress (variable length)
+    const { value: address, size: addressSize } = readSizedStringV2(
+      buffer,
+      offset
+    );
+    peerAddress = address;
+    offset += addressSize;
+
+    // isRelayPossible (4 bytes)
+    const { value: relayFlag, size: relaySize } = readInt(buffer, offset);
+    isRelayPossible = relayFlag > 0;
+    offset += relaySize;
+  }
+
+  return {
+    signature,
+    signatureBase58: bs58.encode(signature),
+    hashes,
+    hashBase58List: hashes.map((h) => bs58.encode(h)),
+    requestTime,
+    requestHops,
+    peerAddress,
+    isRelayPossible,
+  };
 }

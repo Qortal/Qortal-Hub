@@ -1,10 +1,15 @@
 // accountApi.ts
 
+import { SERVICE_NAME_TO_VALUE } from '../constants/service';
+import bs58 from 'bs58';
+
 import {
   handleAccount,
   handleAccountBalance,
   handleActiveChat,
   handleAddressGroupInvitesMessage,
+  handleArbitraryDataFileList,
+  handleArbitraryLatestTransaction,
   handleBlockDataMessage,
   handleGroupBansMessage,
   handleGroupJoinRequestsMessage,
@@ -28,6 +33,8 @@ import {
   createGetAccountMessagePayload,
   createGetAddressGroupInvitesPayload,
   createGetAddressNamesPayload,
+  createGetArbitraryDataFileListPayload,
+  createGetArbitraryLatestTransactionPayload,
   createGetBansPayload,
   createGetGroupInvitesPayload,
   createGetGroupJoinRequestsPayload,
@@ -136,6 +143,44 @@ export async function getPoll(pollName: string): Promise<any> {
 
   const data = handlePollsMessage(res);
 
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+
+  throw new Error('No poll data');
+}
+
+export async function getArbitraryResource(
+  service: string,
+  name: string,
+  identifier: string
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const serviceInt = SERVICE_NAME_TO_VALUE[service];
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_ARBITRARY_LATEST_TRANSACTION,
+    createGetArbitraryLatestTransactionPayload(serviceInt, name, identifier)
+  );
+
+  const data = handleArbitraryLatestTransaction(res);
+  console.log('arbitrary sig', data.signature);
+
+  if (data.signature) {
+    const res2: Buffer = await client.sendRequest(
+      MessageType.GET_ARBITRARY_DATA_FILE_LIST,
+      createGetArbitraryDataFileListPayload(
+        bs58.decode(data.signature),
+        null,
+        Date.now(),
+        0,
+        null
+      )
+    );
+
+    console.log('res22', handleArbitraryDataFileList(res2));
+  }
   if (Array.isArray(data) && data.length > 0) {
     return data[0];
   }

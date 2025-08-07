@@ -218,6 +218,43 @@ export function createGetPollVotesPayload(pollName, onlyCounts) {
   return buffer;
 }
 
+export function createGetArbitraryLatestTransactionPayload(
+  service: number,
+  name: string,
+  identifier: string | null
+): Buffer {
+  const serviceBuffer = Buffer.alloc(4);
+  serviceBuffer.writeInt32BE(service); // Assuming service is numeric in string form
+
+  const nameBuffer = Buffer.from(name, 'utf-8');
+  const nameLengthBuffer = Buffer.alloc(4);
+  nameLengthBuffer.writeInt32BE(nameBuffer.length);
+
+  let identifierBuffer = Buffer.alloc(0);
+  const hasIdentifierBuffer = Buffer.alloc(4);
+
+  if (identifier) {
+    const rawIdentifierBuffer = Buffer.from(identifier, 'utf-8');
+    const identifierLengthBuffer = Buffer.alloc(4);
+    identifierLengthBuffer.writeInt32BE(rawIdentifierBuffer.length);
+    hasIdentifierBuffer.writeInt32BE(1);
+    identifierBuffer = Buffer.concat([
+      identifierLengthBuffer,
+      rawIdentifierBuffer,
+    ]);
+  } else {
+    hasIdentifierBuffer.writeInt32BE(0);
+  }
+
+  return Buffer.concat([
+    serviceBuffer,
+    nameLengthBuffer,
+    nameBuffer,
+    hasIdentifierBuffer,
+    identifierBuffer,
+  ]);
+}
+
 export function createGetGroupMembersPayload(
   groupId: number,
   onlyAdmins: boolean,
@@ -522,4 +559,54 @@ export function createGetNameInfoPayload(name: string): Buffer {
   lengthBuffer.writeInt32BE(nameBuffer.length);
 
   return Buffer.concat([lengthBuffer, nameBuffer]);
+}
+
+export function writeSizedStringV2(str: string): Buffer {
+  const stringBuffer = Buffer.from(str, 'utf-8');
+  const lengthBuffer = Buffer.alloc(4);
+  lengthBuffer.writeInt32BE(stringBuffer.length);
+  return Buffer.concat([lengthBuffer, stringBuffer]);
+}
+
+export function createGetArbitraryDataFileListPayload(
+  signature, // Buffer of length 64
+  hashes, // Array of Buffers, each 32 bytes (SHA256)
+  requestTime, // Number (timestamp)
+  requestHops, // Number (int)
+  requestingPeer // String | undefined
+) {
+  const buffers = [];
+
+  // Signature (64 bytes)
+  buffers.push(signature);
+
+  // Request Time (8 bytes)
+  const requestTimeBuffer = Buffer.alloc(8);
+  requestTimeBuffer.writeBigInt64BE(BigInt(requestTime));
+  buffers.push(requestTimeBuffer);
+
+  // Request Hops (4 bytes)
+  const hopsBuffer = Buffer.alloc(4);
+  hopsBuffer.writeInt32BE(requestHops);
+  buffers.push(hopsBuffer);
+
+  // Hash count and hash list
+  const hashCountBuffer = Buffer.alloc(4);
+  const hashList = hashes || [];
+  hashCountBuffer.writeInt32BE(hashList.length);
+  buffers.push(hashCountBuffer);
+
+  for (const hash of hashList) {
+    if (!(hash instanceof Buffer) || hash.length !== 32) {
+      throw new Error('Each hash must be a Buffer of 32 bytes');
+    }
+    buffers.push(hash);
+  }
+
+  // Requesting Peer (optional)
+  if (requestingPeer) {
+    buffers.push(writeSizedStringV2(requestingPeer));
+  }
+
+  return Buffer.concat(buffers);
 }

@@ -7,6 +7,7 @@ import {
   getAccountGroups,
   getAddressGroupInvites,
   getAllNames,
+  getArbitraryResource,
   getBans,
   getGroup,
   getGroupInvites,
@@ -411,6 +412,18 @@ export async function createHttpServer() {
         req.query.includeOnlineSignatures === 'true';
       const blockInfo = await getLastBlockHeight(includeOnlineSignatures);
       res.json(blockInfo);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/arbitrary/:service/:name/:identifier', async (req, res) => {
+    try {
+      const service = req.params.service;
+      const name = req.params.name;
+      const identifier = req.params.identifier;
+      const pollInfo = await getArbitraryResource(service, name, identifier);
+      res.json(pollInfo);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }
