@@ -28,6 +28,7 @@ import { ReplyPreview } from './MessageItem';
 import { useTranslation } from 'react-i18next';
 import {
   MAX_SIZE_MESSAGE,
+  MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
 } from '../../constants/constants.ts';
 
@@ -698,7 +699,7 @@ export const ChatDirect = ({
             disableEnter={false}
             setIsFocusedParent={setIsFocusedParent}
           />
-          {messageSize > 750 && ( // TODO magic number
+          {messageSize > MESSAGE_LIMIT_WARNING && (
             <Box
               sx={{
                 display: 'flex',

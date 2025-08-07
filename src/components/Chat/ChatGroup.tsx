@@ -26,6 +26,7 @@ import {
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
   MAX_SIZE_MESSAGE,
+  MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
   PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
 } from '../../constants/constants';
@@ -1401,7 +1402,7 @@ export const ChatGroup = ({
               membersWithNames={members}
               insertImage={insertImage}
             />
-            {messageSize > 750 && ( // TODO magic number
+            {messageSize > MESSAGE_LIMIT_WARNING && (
               <Box
                 sx={{
                   display: 'flex',

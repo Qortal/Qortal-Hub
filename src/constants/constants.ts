@@ -201,12 +201,17 @@ export const HTTP_LOCALHOST_12391: string = 'http://127.0.0.1:12391';
 export const HTTPS_QORT_TRADE: string = 'https://www.qort.trade';
 export const HTTPS_TRADE_NODE: string = 'https://appnode.qortal.org';
 export const LOCALHOST_12391: string = '127.0.0.1:12391';
+export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
 
+// MIN-MAX section
 export const MAX_SIZE_AVATAR: number = 500;
 export const MAX_SIZE_PUBLIC_NODE: number = 500 * 1024 * 1024; // 500mb
 export const MAX_SIZE_PUBLISH: number = 2000 * 1024 * 1024; // 2GB
-export const MAX_SIZE_MESSAGE: number = 4000;
+export const MAX_SIZE_MESSAGE: number = 4000; // bytes
 export const MIN_REQUIRED_QORTS: number = 4;
 
 export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY: string = '4001'; // Q for Qortal
 export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
+
+// Time section
+export const TIME_20_MINUTES_IN_MILLISECONDS: number = 1200000;
