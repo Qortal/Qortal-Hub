@@ -610,3 +610,19 @@ export function createGetArbitraryDataFileListPayload(
 
   return Buffer.concat(buffers);
 }
+
+export function createGetArbitraryDataFilePayload(signature, hash) {
+  if (signature.length !== 64) {
+    throw new Error(
+      `Invalid signature length: expected 64 bytes, got ${signature.length}`
+    );
+  }
+
+  if (hash.length !== 32) {
+    throw new Error(
+      `Invalid hash length: expected 32 bytes, got ${hash.length}`
+    );
+  }
+
+  return Buffer.concat([signature, hash]);
+}

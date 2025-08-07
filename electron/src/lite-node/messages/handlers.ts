@@ -1151,3 +1151,34 @@ export function handleArbitraryDataFileList(buffer) {
     isRelayPossible,
   };
 }
+
+export function handleArbitraryDataFileMessage(buffer) {
+  let offset = 0;
+
+  if (buffer.length < 68) {
+    throw new Error(
+      `Invalid message length: got ${buffer.length}, expected at least 68`
+    );
+  }
+
+  const signature = buffer.subarray(offset, offset + 64);
+  offset += 64;
+
+  const dataLength = buffer.readInt32BE(offset);
+  offset += 4;
+
+  const remaining = buffer.length - offset;
+  if (remaining < dataLength) {
+    throw new Error(
+      `Data length mismatch: expected ${dataLength} bytes, but only ${remaining} bytes available`
+    );
+  }
+
+  const data = buffer.subarray(offset, offset + dataLength);
+
+  return {
+    signature,
+    dataLength,
+    data,
+  };
+}

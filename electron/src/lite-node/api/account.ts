@@ -9,6 +9,7 @@ import {
   handleActiveChat,
   handleAddressGroupInvitesMessage,
   handleArbitraryDataFileList,
+  handleArbitraryDataFileMessage,
   handleArbitraryLatestTransaction,
   handleBlockDataMessage,
   handleGroupBansMessage,
@@ -34,6 +35,7 @@ import {
   createGetAddressGroupInvitesPayload,
   createGetAddressNamesPayload,
   createGetArbitraryDataFileListPayload,
+  createGetArbitraryDataFilePayload,
   createGetArbitraryLatestTransactionPayload,
   createGetBansPayload,
   createGetGroupInvitesPayload,
@@ -178,8 +180,20 @@ export async function getArbitraryResource(
         null
       )
     );
+    const dataFileList = handleArbitraryDataFileList(res2);
+    if (dataFileList.hashes?.length > 0) {
+      const res3: Buffer = await client.sendRequest(
+        MessageType.GET_ARBITRARY_DATA_FILE,
+        createGetArbitraryDataFilePayload(
+          dataFileList.signature,
+          dataFileList.hashes[0]
+        )
+      );
 
-    console.log('res22', handleArbitraryDataFileList(res2));
+      console.log('res333', handleArbitraryDataFileMessage(res3));
+    }
+
+    console.log('res22');
   }
   if (Array.isArray(data) && data.length > 0) {
     return data[0];
