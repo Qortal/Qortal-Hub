@@ -29,6 +29,20 @@ export async function handleAccountBalance(payload: Buffer) {
   // Optionally store or use the data here
 }
 
+export async function handleSupply(payload: Buffer) {
+  if (payload.length < 8) {
+    console.error('❌ Invalid payload length for SupplyMessage');
+    return;
+  }
+
+  const supply = payload.readBigUInt64BE(0); // Read 8 bytes from start
+
+  console.log('📬 Received Total Supply:');
+  console.log('💰 Supply:', supply.toString());
+
+  return toBigDecimal(supply); // Or just return supply if no formatting needed
+}
+
 export async function handleAccount(payload: Buffer) {
   const ADDRESS_LENGTH = 25;
   const REFERENCE_LENGTH = 64;
@@ -552,6 +566,105 @@ export function handlePollVotesMessage(buffer) {
     totalWeight,
     voteCounts,
     voteWeights,
+  };
+}
+
+export async function handleBlockDataMessage(buffer) {
+  const dataView = new DataView(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength
+  );
+  let offset = 0;
+
+  const readInt = () => {
+    const value = dataView.getInt32(offset, false);
+    offset += 4;
+    return value;
+  };
+
+  const readLong = () => {
+    const high = dataView.getInt32(offset, false);
+    const low = dataView.getInt32(offset + 4, false);
+    offset += 8;
+    return (BigInt(high) << 32n) | BigInt(low >>> 0);
+  };
+
+  const readBytes = (length) => {
+    const bytes = buffer.subarray(offset, offset + length);
+    offset += length;
+    return bytes;
+  };
+
+  const readNullableBytes = () => {
+    const length = readInt();
+    if (length === 0) return null;
+    return readBytes(length);
+  };
+
+  const readNullableTimestamp = () => {
+    const size = readInt();
+    if (size === 0) return null;
+    if (size !== 8) throw new Error('Invalid timestamp size');
+    return readLong();
+  };
+
+  const readNullableString = () => {
+    const length = readInt();
+    if (length === 0) return null;
+    const bytes = readBytes(length);
+    return new TextDecoder().decode(bytes);
+  };
+
+  // === Read fields ===
+  const version = readInt();
+  const reference = readNullableBytes();
+  const transactionCount = readInt();
+  const totalFees = readLong();
+  const transactionsSignature = readNullableBytes();
+  const height = readInt();
+  const timestamp = readLong();
+  const minterPublicKey = readNullableBytes();
+  const minterSignature = readNullableBytes();
+  const atCount = readInt();
+  const atFees = readLong();
+  const encodedOnlineAccounts = readNullableBytes();
+  const onlineAccountsCount = readInt();
+  const onlineAccountsTimestamp = readNullableTimestamp();
+  const onlineAccountsSignatures = readNullableBytes();
+  const signature = readNullableBytes();
+
+  // === New extra fields ===
+  const minterAddress = readNullableString();
+  const minterLevel = readInt();
+
+  return {
+    signature: signature ? bs58.encode(signature) : null,
+    version,
+    reference: reference ? bs58.encode(reference) : null,
+    transactionCount,
+    totalFees: (Number(totalFees) / 1e8).toFixed(8),
+    transactionsSignature: transactionsSignature
+      ? bs58.encode(transactionsSignature)
+      : null,
+    height,
+    timestamp: Number(timestamp),
+    minterPublicKey: minterPublicKey ? bs58.encode(minterPublicKey) : null,
+    minterSignature: minterSignature ? bs58.encode(minterSignature) : null,
+    atCount,
+    atFees: (Number(atFees) / 1e8).toFixed(8),
+    encodedOnlineAccounts: encodedOnlineAccounts
+      ? bs58.encode(encodedOnlineAccounts)
+      : '',
+    onlineAccountsCount,
+    onlineAccountsTimestamp: onlineAccountsTimestamp
+      ? Number(onlineAccountsTimestamp)
+      : null,
+    onlineAccountsSignatures: onlineAccountsSignatures
+      ? bs58.encode(onlineAccountsSignatures)
+      : null,
+    minterAddress,
+    minterLevel,
   };
 }
 

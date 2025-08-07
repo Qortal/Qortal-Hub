@@ -13,6 +13,7 @@ import {
   getGroupJoinRequests,
   getGroupMembers,
   getGroups,
+  getLastBlockHeight,
   getLastReference,
   getNameInfo,
   getNames,
@@ -24,6 +25,7 @@ import {
   getPrimaryName,
   getPublickeyFromAddress,
   getSearchNames,
+  getSupply,
   getUnitFee,
   processTransaction,
 } from './account';
@@ -386,6 +388,26 @@ export async function createHttpServer() {
       const onlyCounts = req.query.onlyCounts === 'true';
       const pollInfo = await getPollVotes(pollName, Boolean(onlyCounts));
       res.json(pollInfo);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/stats/supply/circulating', async (req, res) => {
+    try {
+      const supply = await getSupply();
+      res.type('text').send(+supply);
+    } catch (err: any) {
+      res.status(500).type('text').send(`Error: ${err.message}`);
+    }
+  });
+
+  app.get('/blocks/last', async (req, res) => {
+    try {
+      const includeOnlineSignatures =
+        req.query.includeOnlineSignatures === 'true';
+      const blockInfo = await getLastBlockHeight(includeOnlineSignatures);
+      res.json(blockInfo);
     } catch (err: any) {
       res.status(500).type('text').send(`Error: ${err.message}`);
     }

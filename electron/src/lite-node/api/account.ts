@@ -5,6 +5,7 @@ import {
   handleAccountBalance,
   handleActiveChat,
   handleAddressGroupInvitesMessage,
+  handleBlockDataMessage,
   handleGroupBansMessage,
   handleGroupJoinRequestsMessage,
   handleGroupMembersMessage,
@@ -16,6 +17,7 @@ import {
   handlePrimaryNameMessage,
   handleProcessTransactionResponseMessage,
   handlePublicKeyMessage,
+  handleSupply,
   handleUnitFee,
 } from '../messages/handlers';
 import { getRandomClient } from '../peerService';
@@ -32,6 +34,7 @@ import {
   createGetGroupMembersPayload,
   createGetGroupPayload,
   createGetGroupsPayload,
+  createGetLastBlockHeightPayload,
   createGetLastReferencePayload,
   createGetNameInfoPayload,
   createGetNamesForSalePayload,
@@ -154,6 +157,33 @@ export async function getPollVotes(
   const data = handlePollVotesMessage(res);
   return data;
 }
+
+export async function getSupply(): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_SUPPLY,
+    Buffer.from([0x00])
+  );
+  const data = handleSupply(res);
+  return data;
+}
+
+export async function getLastBlockHeight(
+  includeOnlineSignatures: boolean
+): Promise<any> {
+  const client = getRandomClient();
+  if (!client) throw new Error('No available peers');
+
+  const res: Buffer = await client.sendRequest(
+    MessageType.GET_LAST_BLOCK_HEIGHT,
+    createGetLastBlockHeightPayload(includeOnlineSignatures)
+  );
+  const data = handleBlockDataMessage(res);
+  return data;
+}
+
 export async function getGroupMembers(
   groupId: number,
   onlyAdmins: boolean,

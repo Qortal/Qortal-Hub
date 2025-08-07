@@ -249,6 +249,15 @@ export function createGetGroupMembersPayload(
   ]);
 }
 
+export function createGetLastBlockHeightPayload(
+  includeOnlineSignatures: boolean
+): Buffer {
+  const onlyAdminsBuffer = Buffer.alloc(4);
+  onlyAdminsBuffer.writeInt32BE(includeOnlineSignatures ? 1 : 0);
+
+  return Buffer.concat([onlyAdminsBuffer]);
+}
+
 export function createGetChatMessagesPayload(
   txGroupId: number | null,
   involving: string[] | null | undefined,
