@@ -31,6 +31,10 @@ import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_APP_CONTEXT } from '../App';
+import {
+  HTTP_LOCALHOST_12391,
+  LOCALHOST_12391,
+} from '../constants/constants.ts';
 
 export const manifestData = {
   version: '0.5.4',
@@ -92,7 +96,7 @@ export const NotAuthenticated = ({
   const importedApiKeyRef = useRef(null);
   const currentNodeRef = useRef(null);
   const hasLocalNodeRef = useRef(null);
-  const isLocal = cleanUrl(currentNode?.url) === '127.0.0.1:12391';
+  const isLocal = cleanUrl(currentNode?.url) === LOCALHOST_12391;
   const handleFileChangeApiKey = (event) => {
     setShowSelectApiKey(false);
     const file = event.target.files[0]; // Get the selected file
@@ -106,16 +110,16 @@ export const NotAuthenticated = ({
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
             const findLocalIndex = copyPrev?.findIndex(
-              (item) => item?.url === 'http://127.0.0.1:12391'
+              (item) => item?.url === HTTP_LOCALHOST_12391
             );
             if (findLocalIndex === -1) {
               copyPrev.unshift({
-                url: 'http://127.0.0.1:12391',
+                url: HTTP_LOCALHOST_12391,
                 apikey: text,
               });
             } else {
               copyPrev[findLocalIndex] = {
-                url: 'http://127.0.0.1:12391',
+                url: HTTP_LOCALHOST_12391,
                 apikey: text,
               };
             }
@@ -138,7 +142,7 @@ export const NotAuthenticated = ({
 
   const checkIfUserHasLocalNode = useCallback(async () => {
     try {
-      const url = `http://127.0.0.1:12391/admin/status`;
+      const url = HTTP_LOCALHOST_12391 + '/admin/status';
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -172,7 +176,7 @@ export const NotAuthenticated = ({
         }
         if (Array.isArray(response)) {
           const findLocal = response?.find(
-            (item) => item?.url === 'http://127.0.0.1:12391'
+            (item) => item?.url === HTTP_LOCALHOST_12391
           );
           if (findLocal && findLocal?.apikey) {
             setImportedApiKey(findLocal?.apikey);
@@ -205,7 +209,7 @@ export const NotAuthenticated = ({
   const validateApiKey = useCallback(async (key, fromStartUp) => {
     try {
       if (key === 'isGateway') return;
-      const isLocalKey = cleanUrl(key?.url) === '127.0.0.1:12391';
+      const isLocalKey = cleanUrl(key?.url) === LOCALHOST_12391;
       if (
         fromStartUp &&
         key?.url &&
@@ -257,7 +261,7 @@ export const NotAuthenticated = ({
       //check custom nodes
       // !gateways.some(gateway => apiKey?.url?.includes(gateway))
       const isCurrentNodeLocal =
-        cleanUrl(currentNodeRef.current?.url) === '127.0.0.1:12391';
+        cleanUrl(currentNodeRef.current?.url) === LOCALHOST_12391;
       if (isLocalKey && !isCurrentNodeLocal) {
         setIsValidApiKey(false);
         setUseLocalNode(false);
@@ -265,14 +269,14 @@ export const NotAuthenticated = ({
       }
       let payload = {};
 
-      if (currentNodeRef.current?.url === 'http://127.0.0.1:12391') {
+      if (currentNodeRef.current?.url === HTTP_LOCALHOST_12391) {
         payload = {
           apikey: importedApiKeyRef.current || key?.apikey,
           url: currentNodeRef.current?.url,
         };
         if (!payload?.apikey) {
           try {
-            const generateUrl = 'http://127.0.0.1:12391/admin/apikey/generate';
+            const generateUrl = HTTP_LOCALHOST_12391 + '/admin/apikey/generate';
             const generateRes = await fetch(generateUrl, {
               method: 'POST',
             });
@@ -293,16 +297,16 @@ export const NotAuthenticated = ({
               setCustomNodes((prev) => {
                 const copyPrev = [...prev];
                 const findLocalIndex = copyPrev?.findIndex(
-                  (item) => item?.url === 'http://127.0.0.1:12391'
+                  (item) => item?.url === HTTP_LOCALHOST_12391
                 );
                 if (findLocalIndex === -1) {
                   copyPrev.unshift({
-                    url: 'http://127.0.0.1:12391',
+                    url: HTTP_LOCALHOST_12391,
                     apikey: res,
                   });
                 } else {
                   copyPrev[findLocalIndex] = {
-                    url: 'http://127.0.0.1:12391',
+                    url: HTTP_LOCALHOST_12391,
                     apikey: res,
                   };
                 }
@@ -390,7 +394,7 @@ export const NotAuthenticated = ({
       setUseLocalNode(false);
       if (fromStartUp) {
         setCurrentNode({
-          url: 'http://127.0.0.1:12391',
+          url: HTTP_LOCALHOST_12391,
         });
         window
           .sendMessage('setApiKey', 'isGateway')
@@ -675,7 +679,7 @@ export const NotAuthenticated = ({
                         validateApiKey(currentNode);
                       } else {
                         setCurrentNode({
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                         });
                         setUseLocalNode(false);
                         window
@@ -713,7 +717,7 @@ export const NotAuthenticated = ({
                 }
               />
             </Box>
-            {currentNode?.url === 'http://127.0.0.1:12391' && (
+            {currentNode?.url === HTTP_LOCALHOST_12391 && (
               <>
                 <Button
                   onClick={() => setShowSelectApiKey(true)}
@@ -821,7 +825,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      http://127.0.0.1:12391
+                      {HTTP_LOCALHOST_12391}
                     </Typography>
 
                     <Box
@@ -833,11 +837,11 @@ export const NotAuthenticated = ({
                       }}
                     >
                       <Button
-                        disabled={currentNode?.url === 'http://127.0.0.1:12391'}
+                        disabled={currentNode?.url === HTTP_LOCALHOST_12391}
                         size="small"
                         onClick={() => {
                           setCurrentNode({
-                            url: 'http://127.0.0.1:12391',
+                            url: HTTP_LOCALHOST_12391,
                           });
                           setMode('list');
                           setShow(false);
@@ -1112,16 +1116,16 @@ export const NotAuthenticated = ({
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
                       const findLocalIndex = copyPrev?.findIndex(
-                        (item) => item?.url === 'http://127.0.0.1:12391'
+                        (item) => item?.url === HTTP_LOCALHOST_12391
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: '',
                         });
                       } else {
                         copyPrev[findLocalIndex] = {
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: '',
                         };
                       }
@@ -1139,7 +1143,7 @@ export const NotAuthenticated = ({
                       return copyPrev;
                     });
                     setCurrentNode({
-                      url: 'http://127.0.0.1:12391',
+                      url: HTTP_LOCALHOST_12391,
                     });
                     setUseLocalNode(false);
                     setApiKey(null);
@@ -1165,16 +1169,16 @@ export const NotAuthenticated = ({
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
                       const findLocalIndex = copyPrev?.findIndex(
-                        (item) => item?.url === 'http://127.0.0.1:12391'
+                        (item) => item?.url === HTTP_LOCALHOST_12391
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: enteredApiKey,
                         });
                       } else {
                         copyPrev[findLocalIndex] = {
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: enteredApiKey,
                         };
                       }

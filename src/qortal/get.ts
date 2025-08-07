@@ -56,6 +56,7 @@ import {
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   QORT_DECIMALS,
+  TIME_20_MINUTES_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -485,7 +486,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 30-second timeout
+    }, 60000); // 60-second timeout
   });
 }
 
@@ -613,7 +614,8 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[groupId]?.timestamp <
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -659,7 +661,8 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -742,7 +745,8 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[groupId]?.timestamp <
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -785,7 +789,8 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic nummber
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }

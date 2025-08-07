@@ -144,6 +144,12 @@ import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
+import {
+  HTTP_LOCALHOST_12391,
+  TIME_10_SECONDS_IN_MILLISECONDS,
+  TIME_120_SECONDS_IN_MILLISECONDS,
+  TIME_40_SECONDS_IN_MILLISECONDS,
+} from './constants/constants.ts';
 
 type extStates =
   | 'authenticated'
@@ -232,11 +238,6 @@ export const resumeAllQueues = () => {
   });
 };
 
-const defaultValuesGlobal = {
-  openTutorialModal: null,
-  setOpenTutorialModal: () => {},
-};
-
 export const QORTAL_APP_CONTEXT =
   createContext<MyContextInterface>(defaultValues);
 
@@ -307,7 +308,6 @@ function App() {
   const [authenticatePassword, setAuthenticatePassword] = useState<string>('');
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
   const isAuthenticated = extState === 'authenticated';
   const { t } = useTranslation([
     'auth',
@@ -401,7 +401,7 @@ function App() {
   } = useBlockedAddresses(extState === 'authenticated');
 
   const [currentNode, setCurrentNode] = useState({
-    url: 'http://127.0.0.1:12391',
+    url: HTTP_LOCALHOST_12391,
   });
 
   const [useLocalNode, setUseLocalNode] = useState(false);
@@ -616,6 +616,7 @@ function App() {
       setIsLoading(false);
     }
   }, []);
+
   useEffect(() => {
     if (extState) {
       holdRefExtState.current = extState;
@@ -644,6 +645,7 @@ function App() {
     if (!rawWallet?.address0) return '';
     return rawWallet.address0;
   }, [rawWallet]);
+
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'application/json': ['.json'], // Only accept JSON files
@@ -746,7 +748,7 @@ function App() {
             console.error('Failed to get balance:', error);
             isCalling = false;
           });
-      }, 40000);
+      }, TIME_40_SECONDS_IN_MILLISECONDS);
     } catch (error) {
       console.error(error);
     }
@@ -789,6 +791,7 @@ function App() {
     getBalanceFunc();
     refetchUserInfo();
   };
+
   const getLtcBalanceFunc = () => {
     setLtcBalanceLoading(true);
     window
@@ -929,7 +932,7 @@ function App() {
         await new Promise((res) => {
           setTimeout(() => {
             res(null);
-          }, 10000);
+          }, TIME_10_SECONDS_IN_MILLISECONDS);
         });
       }
       window
@@ -1184,7 +1187,7 @@ function App() {
             password: authenticatePassword,
             wallet: rawWallet,
           },
-          120000
+          TIME_120_SECONDS_IN_MILLISECONDS
         )
         .then((response) => {
           if (response && !response.error) {

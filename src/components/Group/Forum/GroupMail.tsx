@@ -51,6 +51,7 @@ import { CustomButton } from '../../../styles/App-styles';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 import CheckIcon from '@mui/icons-material/Check';
+import { TIME_120_SECONDS_IN_MILLISECONDS } from '../../../constants/constants';
 export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
@@ -353,7 +354,7 @@ export const GroupMail = ({
                     },
                     isPrivate
                   ),
-                  delay(10000),
+                  delay(TIME_120_SECONDS_IN_MILLISECONDS),
                 ]);
                 if (threadRes?.title) {
                   const fullObject = {

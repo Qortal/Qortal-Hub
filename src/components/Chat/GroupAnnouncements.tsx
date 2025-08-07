@@ -34,6 +34,7 @@ import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
 import { useTranslation } from 'react-i18next';
+import { TIME_20_SECONDS_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -507,7 +508,7 @@ export const GroupAnnouncements = ({
       isCalling = true;
       const res = await checkNewMessages();
       isCalling = false;
-    }, 20000);
+    }, TIME_20_SECONDS_IN_MILLISECONDS);
   }, [checkNewMessages]);
 
   useEffect(() => {

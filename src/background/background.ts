@@ -21,7 +21,15 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../constants/constants';
+import {
+  API_ENDPOINTS,
+  EXT_NODE_QORTAL_LINK,
+  HTTP_LOCALHOST_12391,
+  HTTPS_QORT_TRADE,
+  HTTPS_TRADE_NODE,
+  LOCALHOST_12391,
+  RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
+} from '../constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -112,13 +120,13 @@ export function getProtocol(url) {
   }
 }
 
-export const gateways = ['ext-node.qortal.link'];
+export const gateways = [EXT_NODE_QORTAL_LINK];
 
 let lastGroupNotification;
-export const groupApi = 'https://ext-node.qortal.link';
-export const groupApiSocket = 'wss://ext-node.qortal.link';
-export const groupApiLocal = 'http://127.0.0.1:12391';
-export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
+export const groupApi = 'https://' + EXT_NODE_QORTAL_LINK;
+export const groupApiSocket = 'wss://' + EXT_NODE_QORTAL_LINK;
+export const groupApiLocal = HTTP_LOCALHOST_12391;
+export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
@@ -309,22 +317,10 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 
 export const walletVersion = 2;
 
-// List of your API endpoints
-const apiEndpoints = [
-  'https://api.qortal.org',
-  'https://api2.qortal.org',
-  'https://appnode.qortal.org',
-  'https://apinode.qortalnodes.live',
-  'https://apinode1.qortalnodes.live',
-  'https://apinode2.qortalnodes.live',
-  'https://apinode3.qortalnodes.live',
-  'https://apinode4.qortalnodes.live',
-];
-
-const buyTradeNodeBaseUrl = 'https://appnode.qortal.org';
 const proxyAccountAddress = 'QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku';
 const proxyAccountPublicKey = '5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7';
 const pendingResponses = new Map();
+
 let groups = null;
 let socket;
 let timeoutId;
@@ -335,7 +331,7 @@ let intervalThreads;
 
 // Function to check each API endpoint
 export async function findUsableApi() {
-  for (const endpoint of apiEndpoints) {
+  for (const endpoint of API_ENDPOINTS) {
     try {
       const response = await fetch(`${endpoint}/admin/status`);
       if (!response.ok) throw new Error('Failed to fetch');
@@ -916,7 +912,7 @@ async function connection(hostname: string) {
 
 async function getTradeInfo(qortalAtAddress) {
   const response = await fetch(
-    buyTradeNodeBaseUrl + '/crosschain/trade/' + qortalAtAddress
+    HTTPS_TRADE_NODE + '/crosschain/trade/' + qortalAtAddress
   );
   if (!response?.ok) throw new Error('Cannot crosschain trade information');
   const data = await response.json();
@@ -968,7 +964,7 @@ export async function getAssetInfo(assetId: number) {
 
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
-  let _url = `${buyTradeNodeBaseUrl}/crosschain/ltc/walletbalance`;
+  let _url = `${HTTPS_TRADE_NODE}/crosschain/ltc/walletbalance`;
   const keyPair = await getKeyPair();
   const parsedKeyPair = keyPair;
   let _body = parsedKeyPair.ltcPublicKey;
@@ -1562,7 +1558,7 @@ async function sendChatForBuyOrder({
     const signature =
       'id-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     const checkGatewayStatusRes = await fetch(
-      `${buyTradeNodeBaseUrl}/admin/status`
+      `${HTTPS_TRADE_NODE}/admin/status`
     );
     const checkGatewayStatusData = await checkGatewayStatusRes.json();
     if (
@@ -1572,18 +1568,18 @@ async function sendChatForBuyOrder({
       throw new Error('Cannot make trade. Gateway node is synchronizing');
     }
     const healthCheckRes = await fetch(
-      'https://www.qort.trade/api/transaction/healthcheck'
+      HTTPS_QORT_TRADE + '/api/transaction/healthcheck'
     );
     const healthcheckData = await healthCheckRes.json();
     if (healthcheckData?.dbConnection !== 'healthy') {
       throw new Error('Could not connect to db. Try again later.');
     }
     const res = await axios.post(
-      `https://www.qort.trade/api/transaction/updatetxgateway`,
+      HTTPS_QORT_TRADE + `/api/transaction/updatetxgateway`,
       {
         qortalAtAddresses: atAddresses,
         qortAddress: address,
-        node: buyTradeNodeBaseUrl,
+        node: HTTPS_TRADE_NODE,
         status: 'message-sent',
         encryptedMessageToBase58,
         signature,
@@ -1612,7 +1608,7 @@ async function sendChatForBuyOrder({
   let _response = await signChatFunc(
     chatBytesArray,
     nonce,
-    'https://appnode.qortal.org',
+    HTTPS_TRADE_NODE,
     keyPair
   );
   if (_response?.error) {
@@ -1947,7 +1943,7 @@ export async function createBuyOrderTx({
 
     if (res?.signature) {
       const message = await listenForChatMessageForBuyOrder({
-        nodeBaseUrl: buyTradeNodeBaseUrl,
+        nodeBaseUrl: HTTPS_TRADE_NODE,
         senderAddress: proxyAccountAddress,
         senderPublicKey: proxyAccountPublicKey,
         signature: res?.signature,
@@ -1958,7 +1954,7 @@ export async function createBuyOrderTx({
         extra: {
           message: message?.extra?.message,
           senderAddress: address,
-          node: buyTradeNodeBaseUrl,
+          node: HTTPS_TRADE_NODE,
           atAddresses:
             foreignBlockchain === 'PIRATECHAIN'
               ? [crosschainAtInfo[0].qortalAtAddress]
@@ -2718,7 +2714,7 @@ async function listenForChatMessage({
 }) {
   try {
     let validApi = '';
-    const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
+    const checkIfNodeBaseUrlIsAcceptable = API_ENDPOINTS.find(
       (item) => item === nodeBaseUrl
     );
     if (checkIfNodeBaseUrlIsAcceptable) {
@@ -2763,7 +2759,7 @@ async function listenForChatMessageForBuyOrder({
 }) {
   try {
     let validApi = '';
-    const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
+    const checkIfNodeBaseUrlIsAcceptable = API_ENDPOINTS.find(
       (item) => item === nodeBaseUrl
     );
     if (checkIfNodeBaseUrlIsAcceptable) {

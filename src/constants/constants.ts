@@ -185,9 +185,39 @@ export {
   DYNAMIC_FEE_TIMESTAMP,
 };
 
-export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS = 102;
+export const API_ENDPOINTS = [
+  'https://api.qortal.org',
+  'https://api2.qortal.org',
+  'https://appnode.qortal.org',
+  'https://apinode.qortalnodes.live',
+  'https://apinode1.qortalnodes.live',
+  'https://apinode2.qortalnodes.live',
+  'https://apinode3.qortalnodes.live',
+  'https://apinode4.qortalnodes.live',
+];
 
-export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY = '4001'; // Q for Qortal
+export const EXT_NODE_QORTAL_LINK: string = 'ext-node.qortal.link';
+export const HTTP_LOCALHOST_12391: string = 'http://127.0.0.1:12391';
+export const HTTPS_QORT_TRADE: string = 'https://www.qort.trade';
+export const HTTPS_TRADE_NODE: string = 'https://appnode.qortal.org';
+export const LOCALHOST_12391: string = '127.0.0.1:12391';
+export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
 
-export const MAX_SIZE_PUBLIC_NODE = 500 * 1024 * 1024; // 500mb
-export const MAX_SIZE_PUBLISH = 2000 * 1024 * 1024; // 2GB
+// MIN-MAX section
+export const MAX_SIZE_AVATAR: number = 500;
+export const MAX_SIZE_PUBLIC_NODE: number = 500 * 1024 * 1024; // 500mb
+export const MAX_SIZE_PUBLISH: number = 2000 * 1024 * 1024; // 2GB
+export const MAX_SIZE_MESSAGE: number = 4000; // bytes
+export const MIN_REQUIRED_QORTS: number = 4;
+
+export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY: string = '4001'; // Q for Qortal
+export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
+
+// Time section
+export const TIME_1_MINUTE_IN_MILLISECONDS: number = 60000;
+export const TIME_10_MINUTE_IN_MILLISECONDS: number = 600000;
+export const TIME_10_SECONDS_IN_MILLISECONDS: number = 10000;
+export const TIME_120_SECONDS_IN_MILLISECONDS: number = 120000;
+export const TIME_20_MINUTES_IN_MILLISECONDS: number = 1200000;
+export const TIME_20_SECONDS_IN_MILLISECONDS: number = 20000;
+export const TIME_40_SECONDS_IN_MILLISECONDS: number = 40000;
