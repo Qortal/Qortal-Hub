@@ -214,4 +214,10 @@ export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY: string = '4001'; // Q fo
 export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
 
 // Time section
+export const TIME_1_MINUTE_IN_MILLISECONDS: number = 60000;
+export const TIME_10_MINUTE_IN_MILLISECONDS: number = 600000;
+export const TIME_10_SECONDS_IN_MILLISECONDS: number = 10000;
+export const TIME_120_SECONDS_IN_MILLISECONDS: number = 120000;
 export const TIME_20_MINUTES_IN_MILLISECONDS: number = 1200000;
+export const TIME_20_SECONDS_IN_MILLISECONDS: number = 20000;
+export const TIME_40_SECONDS_IN_MILLISECONDS: number = 40000;

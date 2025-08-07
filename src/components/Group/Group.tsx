@@ -77,6 +77,10 @@ import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
+import {
+  TIME_10_MINUTE_IN_MILLISECONDS,
+  TIME_120_SECONDS_IN_MILLISECONDS,
+} from '../../constants/constants';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -687,7 +691,8 @@ export const Group = ({
           secretKeyToPublish &&
           secretKey &&
           lastFetchedSecretKey.current &&
-          Date.now() - lastFetchedSecretKey.current < 600000
+          Date.now() - lastFetchedSecretKey.current <
+            TIME_10_MINUTE_IN_MILLISECONDS
         ) {
           return secretKey;
         }
@@ -727,7 +732,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, 120000);
+          }, TIME_120_SECONDS_IN_MILLISECONDS);
           return false;
         }
 
@@ -787,7 +792,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, 120000);
+          }, TIME_120_SECONDS_IN_MILLISECONDS);
         }
       } finally {
         setIsLoadingGroup(false);

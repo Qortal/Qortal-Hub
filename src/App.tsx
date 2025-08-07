@@ -144,7 +144,12 @@ import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
-import { HTTP_LOCALHOST_12391 } from './constants/constants.ts';
+import {
+  HTTP_LOCALHOST_12391,
+  TIME_10_SECONDS_IN_MILLISECONDS,
+  TIME_120_SECONDS_IN_MILLISECONDS,
+  TIME_40_SECONDS_IN_MILLISECONDS,
+} from './constants/constants.ts';
 
 type extStates =
   | 'authenticated'
@@ -743,7 +748,7 @@ function App() {
             console.error('Failed to get balance:', error);
             isCalling = false;
           });
-      }, 40000);
+      }, TIME_40_SECONDS_IN_MILLISECONDS);
     } catch (error) {
       console.error(error);
     }
@@ -927,7 +932,7 @@ function App() {
         await new Promise((res) => {
           setTimeout(() => {
             res(null);
-          }, 10000);
+          }, TIME_10_SECONDS_IN_MILLISECONDS);
         });
       }
       window
@@ -1182,7 +1187,7 @@ function App() {
             password: authenticatePassword,
             wallet: rawWallet,
           },
-          120000
+          TIME_120_SECONDS_IN_MILLISECONDS
         )
         .then((response) => {
           if (response && !response.error) {

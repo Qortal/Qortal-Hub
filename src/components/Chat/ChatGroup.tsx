@@ -29,6 +29,7 @@ import {
   MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
   PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
+  TIME_120_SECONDS_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useMessageQueue } from '../../messaging/MessageQueueContext.tsx';
 import {
@@ -770,7 +771,7 @@ export const ChatGroup = ({
               chatReference,
               messageText,
             },
-            120000
+            TIME_120_SECONDS_IN_MILLISECONDS
           )
           .then((response) => {
             if (!response?.error) {
