@@ -1,4 +1,6 @@
 // ------------------- User Preload starts here -------------------
+require('./rt/electron-rt');
+
 console.log('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 
