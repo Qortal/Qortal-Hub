@@ -431,6 +431,171 @@ export function handleArbitraryLatestTransaction(buffer: Uint8Array) {
   return { signature };
 }
 
+// ---- helpers ----
+
+const td2 = new TextDecoder('utf-8');
+
+// ---- constants (match Qortal core) ----
+const SIGNATURE_LENGTH = 64;
+const PUBLIC_KEY_LENGTH = 32;
+const ADDRESS_LENGTH = 25;
+const REFERENCE_LENGTH = SIGNATURE_LENGTH;
+
+function ensure2(view, n) {
+  const remain = view.dataView.byteLength - view.offset;
+  if (n > remain) throw new Error(`Out of bounds: need ${n}, have ${remain}`);
+}
+
+function bytesView2(view, len) {
+  ensure2(view, len);
+  const start = view.dataView.byteOffset + view.offset;
+  const u8 = new Uint8Array(view.dataView.buffer, start, len);
+  view.offset += len;
+  return u8;
+}
+
+function readBytes2(view, len, { copy = true } = {}) {
+  const u8 = bytesView2(view, len);
+  if (!copy) return u8;
+  const out = new Uint8Array(u8.length);
+  out.set(u8);
+  return out;
+}
+
+function readByte2(view) {
+  ensure2(view, 1);
+  const v = view.dataView.getUint8(view.offset);
+  view.offset += 1;
+  return v;
+}
+
+function readInt2(view) {
+  ensure2(view, 4);
+  const val = view.dataView.getInt32(view.offset, false); // big-endian
+  view.offset += 4;
+  return val;
+}
+
+function readLong2(view) {
+  ensure2(view, 8);
+  const high = view.dataView.getInt32(view.offset, false);
+  const low = view.dataView.getInt32(view.offset + 4, false);
+  view.offset += 8;
+  return (BigInt(high) << 32n) | BigInt(low >>> 0);
+}
+
+function readSizedStringV22(view, maxLen) {
+  const len = readInt2(view);
+  if (len < 0 || len > maxLen) throw new Error(`Invalid string length ${len}`);
+  if (len === 0) return '';
+  const u8 = bytesView2(view, len); // zero-copy for decode
+  return td2.decode(u8);
+}
+
+// ---- main parser ----
+export function handleArbitraryLatestTransaction2(buffer) {
+  const u8 = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const dataView = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const view = { dataView, offset: 0 };
+
+  // Transaction type
+  const type = readInt2(view);
+
+  // transformCommonBytes order in Java:
+  const timestamp = readLong2(view);
+  const txGroupId = readInt2(view);
+  const reference = readBytes2(view, REFERENCE_LENGTH, { copy: true });
+  const senderPublicKey = readBytes2(view, PUBLIC_KEY_LENGTH, { copy: true });
+
+  // Version detection - assume v5+ for modern txs
+  const version = 5;
+
+  // v5+ fields
+  const nonce = readInt2(view);
+  const name = readSizedStringV22(view, 400); // Name.MAX_NAME_SIZE safe cap
+  const identifier = readSizedStringV22(view, 400); // MAX_IDENTIFIER_LENGTH safe cap
+  const method = readInt2(view);
+
+  const secretLength = readInt2(view);
+  if (secretLength < 0)
+    throw new Error(`Invalid secret length ${secretLength}`);
+  const secretU8 =
+    secretLength > 0
+      ? readBytes2(view, secretLength, { copy: true })
+      : new Uint8Array(0);
+
+  const compression = readInt2(view);
+
+  // Payments (version != 1)
+  const paymentsCount = readInt2(view);
+  if (paymentsCount < 0)
+    throw new Error(`Invalid paymentsCount ${paymentsCount}`);
+  const payments = [];
+  for (let i = 0; i < paymentsCount; i++) {
+    const recipientBytes = readBytes2(view, ADDRESS_LENGTH, { copy: true });
+    const assetId = readLong2(view);
+    const amount = readLong2(view);
+    payments.push({
+      recipient: bs58.encode(recipientBytes),
+      assetId,
+      amount,
+    });
+  }
+
+  // Service and data section
+  const service = readInt2(view);
+
+  const flag = readByte2(view);
+
+  // Map to Java enum ordinals:
+  // RAW_DATA (0), DATA_HASH (1)
+  const dataType = flag === 1 ? 0 : 1;
+
+  const dataLen = readInt2(view);
+  if (dataLen < 0) throw new Error(`Invalid data length ${dataLen}`);
+  const data =
+    dataLen > 0
+      ? readBytes2(view, dataLen, { copy: false })
+      : new Uint8Array(0); // keep as view
+
+  // v5+ tail: size & metadata hash
+  const size = readInt2(view);
+  const metadataHashLength = readInt2(view);
+  if (metadataHashLength < 0)
+    throw new Error(`Invalid metadataHashLength ${metadataHashLength}`);
+  const metadataHashU8 =
+    metadataHashLength > 0
+      ? readBytes2(view, metadataHashLength, { copy: true })
+      : new Uint8Array(0);
+
+  // Fee & signature (end)
+  const fee = readLong2(view);
+  const signature = readBytes2(view, SIGNATURE_LENGTH, { copy: true });
+
+  return {
+    type,
+    timestamp,
+    txGroupId,
+    reference: bs58.encode(reference),
+    senderPublicKey: bs58.encode(senderPublicKey),
+    version,
+    nonce,
+    name,
+    identifier,
+    method,
+    secret: secretU8.length ? bs58.encode(secretU8) : '',
+    compression,
+    payments,
+    service,
+    dataType,
+    data, // Uint8Array (view)
+    size,
+    metadataHash: metadataHashU8.length ? bs58.encode(metadataHashU8) : '',
+    fee,
+    signature: bs58.encode(signature),
+  };
+}
+
 // export function handlePollVotesMessage(buffer) {
 //   let offset = 0;
 

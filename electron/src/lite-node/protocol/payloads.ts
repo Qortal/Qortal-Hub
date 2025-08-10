@@ -626,3 +626,13 @@ export function createGetArbitraryDataFilePayload(signature, hash) {
 
   return Buffer.concat([signature, hash]);
 }
+
+export function createGetTransactionPayload(signature) {
+  if (signature.length !== 64) {
+    throw new Error(
+      `Invalid signature length: expected 64 bytes, got ${signature.length}`
+    );
+  }
+
+  return Buffer.concat([signature]);
+}

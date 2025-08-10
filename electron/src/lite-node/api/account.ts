@@ -11,6 +11,7 @@ import {
   handleArbitraryDataFileList,
   handleArbitraryDataFileMessage,
   handleArbitraryLatestTransaction,
+  handleArbitraryLatestTransaction2,
   handleBlockDataMessage,
   handleGroupBansMessage,
   handleGroupJoinRequestsMessage,
@@ -54,10 +55,18 @@ import {
   createGetPollVotesPayload,
   createGetPrimaryNamePayload,
   createGetPublickeyFromAddressPayload,
+  createGetTransactionPayload,
   createGetUnitFeePayload,
   createProcessTransactionMessagePayload,
   createSearchNamesPayload,
 } from '../protocol/payloads';
+import path from 'path';
+import { app } from 'electron';
+import { ChunkStore } from '../ChunkStore';
+// import { DataFileStore } from '../DataFileStore';
+
+const filePath = path.join(app.getPath('userData'), 'lite-node-data');
+const store = new ChunkStore(filePath);
 
 export async function getAccountBalance(address: string): Promise<any> {
   const client = getRandomClient();
@@ -170,6 +179,18 @@ export async function getArbitraryResource(
   console.log('arbitrary sig', data.signature);
 
   if (data.signature) {
+    const resTx: Buffer = await client.sendRequest(
+      MessageType.GET_TRANSACTION,
+      createGetTransactionPayload(bs58.decode(data.signature))
+    );
+    const arbitraryDataTransaction = handleArbitraryLatestTransaction2(resTx);
+    console.log('arbitraryDataTransaction', arbitraryDataTransaction);
+    // const dataFileStore = new DataFileStore(arbitraryDataTransaction);
+    // const decryptedPath = await decryptWithFallback2({
+    //   secretB58: tx.secret,          // base58 string from your parsed tx
+    //   encryptedPath: someEncryptedPath,
+    //   workingDir: workingDirPath,     // e.g., a temp folder
+    // });
     const res2: Buffer = await client.sendRequest(
       MessageType.GET_ARBITRARY_DATA_FILE_LIST,
       createGetArbitraryDataFileListPayload(
@@ -181,6 +202,7 @@ export async function getArbitraryResource(
       )
     );
     const dataFileList = handleArbitraryDataFileList(res2);
+    console.log('dataFileList', dataFileList);
     if (dataFileList.hashes?.length > 0) {
       const res3: Buffer = await client.sendRequest(
         MessageType.GET_ARBITRARY_DATA_FILE,
@@ -190,7 +212,16 @@ export async function getArbitraryResource(
         )
       );
 
-      console.log('res333', handleArbitraryDataFileMessage(res3));
+      const chunkRes = handleArbitraryDataFileMessage(res3);
+
+      const { filePath, hash58, existed } = await store.saveChunk(
+        chunkRes.data,
+        chunkRes.signature,
+        {
+          useTemp: false, // set true if you want the Java-style temp-first behavior
+        }
+      );
+      console.log('res333', filePath, existed);
     }
 
     console.log('res22');

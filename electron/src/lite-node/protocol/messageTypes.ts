@@ -5,6 +5,8 @@ export enum MessageType {
   PING = 11,
   PEERS_V2 = 20,
   GET_PEERS = 21,
+  TRANSACTION = 30,
+  GET_TRANSACTION = 31,
   BLOCK_SUMMARIES_V2 = 72,
   SUPPLY = 73,
   GET_SUPPLY = 74,
