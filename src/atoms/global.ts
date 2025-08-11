@@ -16,6 +16,8 @@ export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Q-Wallets', service: 'APP' },
   { name: 'Q-Search', service: 'APP' },
   { name: 'Q-Nodecontrol', service: 'APP' },
+  { name: 'Names', service: 'APP' },
+  { name: 'Q-Follow', service: 'APP' },
 ]);
 
 export const addressInfoControllerAtom = atomWithReset({});

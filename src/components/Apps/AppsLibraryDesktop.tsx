@@ -58,6 +58,8 @@ const officialAppList = [
   'q-wallets',
   'q-search',
   'q-nodecontrol',
+  'names',
+  'q-follow',
 ];
 
 const ScrollerStyled = styled('div')({
