@@ -76,7 +76,7 @@ export const CoreSyncStatus = () => {
       numberOfConnections = 0,
     } = nodeInfos;
     const buildVersion = coreInfos?.buildVersion
-      ? coreInfos?.buildVersion.substring(0, 12)
+      ? coreInfos?.buildVersion.substring(0, 20)
       : '';
 
     let imagePath = syncingImg;
