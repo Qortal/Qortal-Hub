@@ -30,6 +30,8 @@ import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../../constants/constants.ts';
+import { devServerDomainAtom, devServerPortAtom } from '../../atoms/global.ts';
+import { useAtom } from 'jotai';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -40,8 +42,8 @@ export const AppsDevModeHome = ({
   availableQapps,
   myName,
 }) => {
-  const [domain, setDomain] = useState('127.0.0.1');
-  const [port, setPort] = useState('');
+  const [domain, setDomain] = useAtom(devServerDomainAtom);
+  const [port, setPort] = useAtom(devServerPortAtom);
   const [selectedPreviewFile, setSelectedPreviewFile] = useState(null);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -534,6 +536,12 @@ export const AppsDevModeHome = ({
                 })}
                 value={port}
                 onChange={(e) => setPort(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && domain && port) {
+                    onOk({ portVal: port, domainVal: domain });
+                  }
+                }}
               />
             </Box>
           </DialogContent>
@@ -549,7 +557,6 @@ export const AppsDevModeHome = ({
               disabled={!domain || !port}
               variant="contained"
               onClick={() => onOk({ portVal: port, domainVal: domain })}
-              autoFocus
             >
               {t('core:action.add', {
                 postProcess: 'capitalizeFirstChar',
