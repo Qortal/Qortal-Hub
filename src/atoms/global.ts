@@ -51,6 +51,9 @@ export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
 export const txListAtom = atomWithReset([]);
 
+export const devServerDomainAtom = atomWithReset('127.0.0.1');
+export const devServerPortAtom = atomWithReset('');
+
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)
