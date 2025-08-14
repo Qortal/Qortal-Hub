@@ -7,10 +7,13 @@ import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
+import { useAtom } from 'jotai';
+import { nodeInfosAtom } from '../atoms/global';
 
 export const CoreSyncStatus = () => {
-  const [nodeInfos, setNodeInfos] = useState({});
+  const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
+
   const [isUsingGateway, setIsUsingGateway] = useState(false);
 
   const { t } = useTranslation([
@@ -23,23 +26,6 @@ export const CoreSyncStatus = () => {
   const theme = useTheme();
 
   useEffect(() => {
-    const getNodeInfos = async () => {
-      try {
-        setIsUsingGateway(getBaseApiReact()?.includes('ext-node.qortal.link'));
-        const url = `${getBaseApiReact()}/admin/status`;
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        const data = await response.json();
-        setNodeInfos(data);
-      } catch (error) {
-        console.error('Request failed', error);
-      }
-    };
-
     const getCoreInfos = async () => {
       try {
         const url = `${getBaseApiReact()}/admin/info`;
@@ -56,11 +42,9 @@ export const CoreSyncStatus = () => {
       }
     };
 
-    getNodeInfos();
     getCoreInfos();
 
     const interval = setInterval(() => {
-      getNodeInfos();
       getCoreInfos();
     }, 30000);
 

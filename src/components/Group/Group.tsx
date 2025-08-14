@@ -81,6 +81,7 @@ import {
   TIME_10_MINUTE_IN_MILLISECONDS,
   TIME_120_SECONDS_IN_MILLISECONDS,
 } from '../../constants/constants';
+import { useWebsocketStatus } from './useWebsocketStatus';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -460,7 +461,7 @@ export const Group = ({
     'question',
     'tutorial',
   ]);
-
+  useWebsocketStatus();
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
 

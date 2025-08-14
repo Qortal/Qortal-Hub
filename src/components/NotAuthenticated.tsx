@@ -37,7 +37,7 @@ import {
 } from '../constants/constants.ts';
 
 export const manifestData = {
-  version: '0.5.4',
+  version: '0.5.5-pre-1',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
