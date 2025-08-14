@@ -4654,7 +4654,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:permission.buy_order_quantity', {
-          quantity: atAddresses?.length,
+          count: atAddresses?.length,
           postProcess: 'capitalizeFirstChar',
         }),
         text3: i18n.t('question:permission.buy_order_ticker', {

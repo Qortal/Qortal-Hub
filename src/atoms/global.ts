@@ -53,6 +53,7 @@ export const txListAtom = atomWithReset([]);
 
 export const devServerDomainAtom = atomWithReset('127.0.0.1');
 export const devServerPortAtom = atomWithReset('');
+export const nodeInfosAtom = atomWithReset({});
 
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
