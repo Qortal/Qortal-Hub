@@ -23,7 +23,6 @@ import {
   SelectChangeEvent,
   Tab,
   Tabs,
-  styled,
   useTheme,
 } from '@mui/material';
 import { AddGroupList } from './AddGroupList';
@@ -36,14 +35,7 @@ import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { TransitionUp } from '../../common/Transitions.tsx';
-
-export const Label = styled('label')`
-  display: block;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  margin-bottom: 4px;
-`;
+import { Label } from '../../styles/App-styles.ts';
 
 export const AddGroup = ({ address, open, setOpen }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);

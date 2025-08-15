@@ -169,8 +169,6 @@
     "comments": "Chargement des commentaires ... Veuillez patienter.",
     "posts": "Chargement des messages ... Veuillez patienter."
   },
-  "member": "membre",
-  "member_other": "membres",
   "message_us": "Veuillez nous envoyer un message sur NextCloud (aucune inscription requise) ou Discord si vous avez besoin de 4 Qort pour commencer à discuter sans aucune limitation",
   "message": {
     "error": {

@@ -34,7 +34,6 @@ import {
   promotionsAtom,
   txListAtom,
 } from '../../atoms/global';
-import { Label } from './AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getGroupNames } from './UserListOfInvites';
@@ -45,6 +44,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { getFee } from '../../background/background.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { Label } from '../../styles/App-styles.ts';
 
 const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
 const uid = new ShortUniqueId({ length: 8 });

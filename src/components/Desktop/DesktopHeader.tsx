@@ -244,7 +244,7 @@ export const DesktopHeader = ({
           <IconWrapper
             color={theme.palette.text.secondary}
             customHeight="55px"
-            label={t('core:member_other', {
+            label={t('group:group.member_other', {
               postProcess: 'capitalizeFirstChar',
             })}
             selected={false}

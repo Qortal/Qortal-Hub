@@ -169,8 +169,6 @@
     "comments": "kommentaaride laadimine... palun oodake.",
     "posts": "postituste laadimine... palun oodake."
   },
-  "member": "kasutaja",
-  "member_other": "kasutajad",
   "message_us": "Kui vajad piiranguteta vestluse alustamiseks 4 QORT-i, saada meile palun sõnum Nextcloudis (registreerumine pole vajalik) või Discordis.",
   "message": {
     "error": {

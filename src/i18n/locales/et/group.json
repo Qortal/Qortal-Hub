@@ -37,6 +37,7 @@
     "approval_threshold": "grupi heakskiidu lävi",
     "avatar": "grupi avatar",
     "closed": "suletud (privaatne) - Kasutajad vajavad liitumiseks luba",
+    "created": "loodud: {{ date }}",
     "description": "grupi kirjeldus",
     "id": "grupi id",
     "invites": "grupide kutsed",
@@ -45,7 +46,9 @@
     "group_other": "grupid",
     "groups_admin": "grupid kus sa led admin",
     "management": "grupi haldus",
+    "member": "kasutaja",
     "member_number": "liikmete arv",
+    "member_other": "kasutajad",
     "messaging": "sõnumivahetus",
     "name": "grupi nimi",
     "open": "avatud (avalik)",
@@ -84,7 +87,7 @@
       "invalid_data": "sisu laadimisel viga: sobimatud andmed",
       "latest_promotion": "teie grupile kuvatakse ainult nädala uusim pakkumine.",
       "loading_members": "Laadin liikmete nimekirja koos nimedega... palun oodake.",
-      "max_chars":  "max 200 tähemärki. Avaldamistasu",
+      "max_chars": "max 200 tähemärki. Avaldamistasu",
       "manage_minting": "halda oma vermimist",
       "minter_group": "Sa ei kuulu hetkel MINTERi gruppi",
       "mintership_app": "Vermijaks kandideerimiseks külastage Q-Mintershipi rakendust",
@@ -161,4 +164,3 @@
   },
   "thread_posts": "uued teemapostitused"
 }
-

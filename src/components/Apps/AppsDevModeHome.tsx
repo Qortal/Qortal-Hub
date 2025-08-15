@@ -25,13 +25,13 @@ import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../hooks/useModal.tsx';
 import { createEndpoint, isUsingLocal } from '../../background/background.ts';
-import { Label } from '../Group/AddGroup';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../../constants/constants.ts';
 import { devServerDomainAtom, devServerPortAtom } from '../../atoms/global.ts';
 import { useAtom } from 'jotai';
+import { Label } from '../../styles/App-styles.ts';
 
 const uid = new ShortUniqueId({ length: 8 });
 

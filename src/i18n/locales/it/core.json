@@ -169,8 +169,6 @@
     "comments": "caricamento dei commenti. Attendere, per favore.",
     "posts": "caricamento di post. Attendere, per favore."
   },
-  "member": "membro",
-  "member_other": "membri",
   "message_us": "si prega di inviarci un messaggio su Nextcloud (nessuna registrazione richiesta) o Discord se hai bisogno di 4 QORT per iniziare a chattare senza limitazioni",
   "message": {
     "error": {

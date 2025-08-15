@@ -169,8 +169,6 @@
     "comments": "Cargando comentarios ... por favor espere.",
     "posts": "Cargando publicaciones ... por favor espere."
   },
-  "member": "miembro",
-  "member_other": "miembros",
   "message_us": "Envíenos un mensaje en NextCloud (no se requiere registro) o discordia si necesita 4 Qort para comenzar a chatear sin limitaciones",
   "message": {
     "error": {
