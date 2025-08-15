@@ -23,6 +23,7 @@ import {
   unsubscribeFromEvent,
 } from '../utils/events';
 import { useTranslation } from 'react-i18next';
+import { SUGGESTED_QORTS } from '../constants/constants';
 
 export const BuyQortInformation = ({ balance }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -162,7 +163,7 @@ export const BuyQortInformation = ({ balance }) => {
               </ListItemIcon>
               <ListItemText
                 primary={t('core:message.generic.minimal_qort_balance', {
-                  quantity: 6,
+                  quantity: SUGGESTED_QORTS,
                   postProcess: 'capitalizeFirstChar',
                 })}
               />

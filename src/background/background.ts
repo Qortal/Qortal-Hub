@@ -28,6 +28,7 @@ import {
   HTTPS_QORT_TRADE,
   HTTPS_TRADE_NODE,
   LOCALHOST_12391,
+  MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
 } from '../constants/constants';
 import {
@@ -1525,7 +1526,7 @@ async function sendChatForBuyOrder({
     publicKey: uint8PublicKey,
   };
   const balance = await getBalanceInfo();
-  const hasEnoughBalance = +balance < 4 ? false : true;
+  const hasEnoughBalance = +balance < MIN_REQUIRED_QORTS ? false : true;
   const jsonData = {
     addresses: message.addresses,
     foreignKey: message.foreignKey,
@@ -1635,8 +1636,6 @@ export async function sendChatGroup({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  // const balance = await getBalanceInfo();
-  // const hasEnoughBalance = +balance < 4 ? false : true;
 
   const txBody = {
     timestamp: Date.now(),
@@ -1655,10 +1654,6 @@ export async function sendChatGroup({
   }
 
   const tx = await createTransaction(181, keyPair, txBody);
-
-  // if (!hasEnoughBalance) {
-  //   throw new Error("Must have at least 4 QORT to send a chat message");
-  // }
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
@@ -1706,8 +1701,6 @@ export async function sendChatDirect({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  // const balance = await getBalanceInfo();
-  // const hasEnoughBalance = +balance < 4 ? false : true;
 
   const finalJson = {
     message: messageText,
@@ -1731,10 +1724,6 @@ export async function sendChatDirect({
     txBody['chatReference'] = chatReference;
   }
   const tx = await createTransaction(18, keyPair, txBody);
-
-  // if (!hasEnoughBalance) {
-  //   throw new Error("Must have at least 4 QORT to send a chat message");
-  // }
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
