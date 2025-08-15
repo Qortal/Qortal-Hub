@@ -169,8 +169,6 @@
     "comments": "加载评论...请等待。",
     "posts": "加载帖子...请等待。"
   },
-  "member": "成员",
-  "member_other": "成员",
   "message_us": "如果您需要4个Qort开始聊天而无需任何限制，请在NextCloud（无需注册）或不符合",
   "message": {
     "error": {

@@ -169,8 +169,6 @@
     "comments": "Kommentare laden ... bitte warten.",
     "posts": "Beiträge laden ... bitte warten."
   },
-  "member": "Mitglied",
-  "member_other": "Mitglieder",
   "message_us": "Bitte senden Sie uns eine Nachricht in NextCloud (keine Anmeldung erforderlich) oder Discord, wenn Sie 4 QORT benötigen, um ohne Einschränkungen zu chatten",
   "message": {
     "error": {

@@ -32,6 +32,11 @@ import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
+import {
+  formatDate,
+  formatTimestamp,
+  formatTimestampForum,
+} from '../../utils/time.ts';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -57,6 +62,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();
+
   const handleFilter = useCallback(
     (query) => {
       if (query) {
@@ -176,7 +182,6 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                   ...prev,
                 ]);
               }
-
               setOpenSnack(true);
               handlePopoverClose();
               res(response);
@@ -300,7 +305,34 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
 
                 <ListItemText
                   primary={group?.groupName}
-                  secondary={group?.description}
+                  secondary={
+                    <>
+                      <Typography
+                        component="span"
+                        variant="body2"
+                        color="text.secondary"
+                      >
+                        {group?.description}
+                      </Typography>
+                      <br />
+
+                      <Typography
+                        component="span"
+                        variant="h6"
+                        color="text.secondary"
+                      >
+                        {t('group:group.member', {
+                          postProcess: 'capitalizeFirstChar',
+                          count: group?.memberCount,
+                        })}
+                        {' ' + group?.memberCount + ' • '}
+                        {t('group:group.created', {
+                          postProcess: 'capitalizeFirstChar',
+                          date: formatTimestamp(group?.created),
+                        })}
+                      </Typography>
+                    </>
+                  }
                 />
               </ListItemButton>
             </ListItem>
