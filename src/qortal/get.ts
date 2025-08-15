@@ -55,6 +55,7 @@ import {
 import {
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
+  MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
   TIME_20_MINUTES_IN_MILLISECONDS,
 } from '../constants/constants.ts';
@@ -2188,11 +2189,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
     }
 
     const balance = await getBalanceInfo();
-    const hasEnoughBalance = +balance < 4 ? false : true;
+    const hasEnoughBalance = +balance < MIN_REQUIRED_QORTS ? false : true;
     if (!hasEnoughBalance) {
       throw new Error(
         i18n.t('group:message.error.qortals_required', {
-          quantity: 4,
+          quantity: MIN_REQUIRED_QORTS,
           postProcess: 'capitalizeFirstChar',
         })
       );
