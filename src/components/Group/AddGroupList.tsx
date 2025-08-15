@@ -321,11 +321,11 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                         variant="h6"
                         color="text.secondary"
                       >
+                        {group?.memberCount + ' '}
                         {t('group:group.member', {
-                          postProcess: 'capitalizeFirstChar',
                           count: group?.memberCount,
                         })}
-                        {' ' + group?.memberCount + ' • '}
+                        {' • '}
                         {t('group:group.created', {
                           postProcess: 'capitalizeFirstChar',
                           date: formatTimestamp(group?.created),
