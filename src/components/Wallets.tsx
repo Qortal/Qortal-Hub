@@ -18,10 +18,9 @@ import {
   Input,
   useTheme,
 } from '@mui/material';
-import { CustomButton } from '../styles/App-styles.ts';
+import { CustomButton, Label } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
-import { Label } from './Group/AddGroup.tsx';
 import { Spacer } from '../common/Spacer.tsx';
 import {
   getWallets,

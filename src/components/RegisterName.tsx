@@ -14,7 +14,6 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { Label } from './Group/AddGroup';
 import { Spacer } from '../common/Spacer';
 import { getBaseApiReact } from '../App';
 import { getFee } from '../background/background.ts';
@@ -26,6 +25,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { Label } from '../styles/App-styles.ts';
 
 enum NameAvailability {
   NULL = 'null',
