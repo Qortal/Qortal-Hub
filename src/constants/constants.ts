@@ -215,10 +215,15 @@ export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
 export const SUGGESTED_QORTS: number = 6;
 
 // Time section
+export const TIME_1_DAY_IN_MILLISECONDS: number = 86400000;
 export const TIME_1_MINUTE_IN_MILLISECONDS: number = 60000;
+export const TIME_1_WEEK_IN_MILLISECONDS: number = 604800000;
 export const TIME_10_MINUTE_IN_MILLISECONDS: number = 600000;
 export const TIME_10_SECONDS_IN_MILLISECONDS: number = 10000;
 export const TIME_120_SECONDS_IN_MILLISECONDS: number = 120000;
 export const TIME_20_MINUTES_IN_MILLISECONDS: number = 1200000;
 export const TIME_20_SECONDS_IN_MILLISECONDS: number = 20000;
+export const TIME_3_MINUTE_IN_MILLISECONDS: number = 180000;
+export const TIME_30_MINUTES_IN_MILLISECONDS: number = 1800000;
 export const TIME_40_SECONDS_IN_MILLISECONDS: number = 40000;
+export const TIME_6_MINUTE_IN_MILLISECONDS: number = 360000;
