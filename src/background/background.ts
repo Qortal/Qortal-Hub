@@ -30,6 +30,7 @@ import {
   LOCALHOST_12391,
   MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
+  TIME_1_WEEK_IN_MILLISECONDS,
 } from '../constants/constants';
 import {
   addDataPublishesCase,
@@ -581,7 +582,6 @@ export function updateThreadActivity({
 }) {
   getSaveWallet().then((wallet) => {
     const address = wallet.address0;
-    const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000; // One week in milliseconds
     const key = `threadactivity-${address}`;
     const currentTime = Date.now();
 
@@ -605,7 +605,7 @@ export function updateThreadActivity({
     const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
-    if (currentTime - lastResetTime > ONE_WEEK_IN_MS) {
+    if (currentTime - lastResetTime > TIME_1_WEEK_IN_MILLISECONDS) {
       // Reset visit counts and update the last reset time
       threads.mostVisitedThreads.forEach((thread) => (thread.visitCount = 0));
       threads.lastResetTime = currentTime;
@@ -2841,8 +2841,6 @@ export async function getTempPublish() {
   const key = `tempPublish-${address}`;
   const res = await getData<any>(key).catch(() => null);
 
-  const SIX_MINUTES = 6 * 60 * 1000; // 6 minutes in milliseconds
-
   if (res) {
     const parsedData = res;
     const currentTime = Date.now();
@@ -2853,7 +2851,10 @@ export async function getTempPublish() {
         // Filter out entries inside each category that are older than 6 minutes
         const filteredEntries = Object.fromEntries(
           Object.entries(entries).filter(([entryKey, entryValue]) => {
-            return currentTime - entryValue.timestampSaved < SIX_MINUTES;
+            return (
+              currentTime - entryValue.timestampSaved <
+              TIME_6_MINUTE_IN_MILLISECONDS
+            );
           })
         );
         return [category, filteredEntries];
@@ -3803,41 +3804,35 @@ let paymentsCheckInterval;
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
   if (!notificationCheckInterval) {
-    notificationCheckInterval = setInterval(
-      async () => {
-        try {
-          // This would replace the Chrome alarm callback
-          const wallet = await getSaveWallet();
-          const address = wallet?.address0;
-          if (!address) return;
+    notificationCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
 
-          checkActiveChatsForNotifications();
-          checkNewMessages();
-          checkThreads();
-        } catch (error) {
-          console.error('Error checking notifications:', error);
-        }
-      },
-      10 * 60 * 1000
-    ); // 10 minutes
+        checkActiveChatsForNotifications();
+        checkNewMessages();
+        checkThreads();
+      } catch (error) {
+        console.error('Error checking notifications:', error);
+      }
+    }, TIME_10_MINUTE_IN_MILLISECONDS);
   }
 
   if (!paymentsCheckInterval) {
-    paymentsCheckInterval = setInterval(
-      async () => {
-        try {
-          // This would replace the Chrome alarm callback
-          const wallet = await getSaveWallet();
-          const address = wallet?.address0;
-          if (!address) return;
+    paymentsCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
 
-          checkPaymentsForNotifications(address);
-        } catch (error) {
-          console.error('Error checking payments:', error);
-        }
-      },
-      3 * 60 * 1000
-    ); // 3 minutes
+        checkPaymentsForNotifications(address);
+      } catch (error) {
+        console.error('Error checking payments:', error);
+      }
+    }, TIME_3_MINUTE_IN_MILLISECONDS);
   }
 };
 

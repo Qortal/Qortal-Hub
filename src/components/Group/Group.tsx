@@ -80,6 +80,7 @@ import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
   TIME_10_MINUTE_IN_MILLISECONDS,
   TIME_120_SECONDS_IN_MILLISECONDS,
+  TIME_1_DAY_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
 
@@ -871,7 +872,7 @@ export const Group = ({
           const hasMoreRecentMsg = await getCountNewMesg(
             group.groupId,
             timestampEnterDataRef.current[group?.groupId] ||
-              Date.now() - 24 * 60 * 60 * 1000
+              Date.now() - TIME_1_DAY_IN_MILLISECONDS
           );
           if (hasMoreRecentMsg) {
             groupData[group.groupId] = hasMoreRecentMsg;
