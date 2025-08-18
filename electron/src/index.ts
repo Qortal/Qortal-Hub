@@ -114,12 +114,6 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   // Initialize the app
   await myCapacitorApp.init();
 
-  const win = myCapacitorApp.getMainWindow();
-  if (win) {
-    win.webContents.session.setPreloads([path.join(__dirname, 'preload.js')]); // optional if not using capacitor-managed preload
-    win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  }
-
   // Start update checks
   checkForUpdates();
   setInterval(checkForUpdates, 24 * 60 * 60 * 1000);

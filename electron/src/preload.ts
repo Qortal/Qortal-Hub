@@ -64,6 +64,36 @@ try {
     },
   });
 
+  // Expose it
+  contextBridge.exposeInMainWorld('coreSetup', {
+    isCoreRunning: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:isCoreRunning');
+      return raw;
+    },
+    isCoreInstalled: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:isCoreInstalled');
+      return raw;
+    },
+    installCore: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:installCore');
+      return raw;
+    },
+    startCore: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:startCore');
+      return raw;
+    },
+    onProgress: (cb: (p: any) => void) => {
+      const h = (_e: unknown, p: any) => cb(p);
+      ipcRenderer.on('coreSetup:progress', h);
+      ipcRenderer.send('coreSetup:progress:subscribe');
+
+      return () => {
+        ipcRenderer.removeListener('coreSetup:progress', h);
+        ipcRenderer.send('coreSetup:progress:unsubscribe');
+      };
+    },
+  });
+
   ipcRenderer.send('test-ipc');
 } catch (error) {
   console.log('error', error);

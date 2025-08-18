@@ -150,6 +150,7 @@ import {
   TIME_120_SECONDS_IN_MILLISECONDS,
   TIME_40_SECONDS_IN_MILLISECONDS,
 } from './constants/constants.ts';
+import { CoreSetup } from './components/CoreSetup.tsx';
 
 type extStates =
   | 'authenticated'
@@ -2050,7 +2051,7 @@ function App() {
       }}
     >
       <PdfViewer />
-
+      <CoreSetup currentNode={currentNode} />
       <QORTAL_APP_CONTEXT.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (

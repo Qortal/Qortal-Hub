@@ -22,6 +22,14 @@ import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
 import { myCapacitorApp } from '.';
+import {
+  checkOsPlatform,
+  determineJavaVersion,
+  installCore,
+  isCoreInstalled,
+  isCoreRunning,
+  startCore,
+} from './core';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -498,3 +506,137 @@ ipcMain.handle(
     }
   }
 );
+
+const progressSubscribers = new Set<Electron.WebContents>();
+
+ipcMain.on('coreSetup:progress:subscribe', (e) => {
+  const wc = e.sender;
+  progressSubscribers.add(wc);
+  broadcastProgress('ready');
+  wc.once('destroyed', () => progressSubscribers.delete(wc));
+});
+
+ipcMain.on('coreSetup:progress:unsubscribe', (e) => {
+  progressSubscribers.delete(e.sender);
+});
+
+export function broadcastProgress(p: any) {
+  for (const wc of progressSubscribers) {
+    if (!wc.isDestroyed()) {
+      wc.send('coreSetup:progress', p);
+    }
+  }
+}
+
+ipcMain.handle('coreSetup:isCoreRunning', async () => {
+  try {
+    const running = await isCoreRunning();
+    if (running) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+      broadcastProgress({
+        step: 'hasJava',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    } else {
+      const javaVersion = await determineJavaVersion();
+      const hasCore = await isCoreInstalled();
+      if (javaVersion != false) {
+        broadcastProgress({
+          step: 'hasJava',
+          status: 'done',
+          progress: 100,
+          message: '',
+        });
+      } else {
+        broadcastProgress({
+          step: 'hasJava',
+          status: 'off',
+          progress: 0,
+          message: '',
+        });
+      }
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'off',
+        progress: 0,
+        message: '',
+      });
+      if (hasCore) {
+        broadcastProgress({
+          step: 'downloadedCore',
+          status: 'done',
+          progress: 100,
+          message: '',
+        });
+      } else {
+        broadcastProgress({
+          step: 'downloadedCore',
+          status: 'off',
+          progress: 0,
+          message: '',
+        });
+      }
+    }
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:isCoreInstalled', async (event) => {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (isInstalled) {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    } else {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'off',
+        progress: 0,
+        message: '',
+      });
+    }
+    return isInstalled;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:installCore', async (event) => {
+  try {
+    const wc = event.sender;
+
+    const sendProgress = (p) => {
+      wc.send('coreSetup:progress', { step: 'download', ...p });
+    };
+    const running = await installCore(sendProgress);
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:startCore', async () => {
+  try {
+    const running = await startCore();
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('start-core-electron', async () => {
+  try {
+    checkOsPlatform();
+  } catch (error) {}
+});
