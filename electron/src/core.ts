@@ -5,6 +5,7 @@ import fs from 'fs';
 import os from 'os';
 import { spawn, exec, execFile } from 'child_process';
 import readline from 'readline';
+import { promises as fsPromise } from 'fs';
 
 import {
   downloadPath,
@@ -1399,4 +1400,97 @@ export async function installCore(installCore) {
 
 export async function startCore() {
   startQortal();
+}
+
+const BASE = 'http://127.0.0.1:12391';
+
+type SettingsResponse = {
+  apiKeyPath?: string;
+  // ...other settings fields you might have
+};
+
+async function getSettings(): Promise<SettingsResponse> {
+  const res = await fetch(`${BASE}/admin/settings`);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `GET /admin/settings failed: ${res.status} ${res.statusText} ${text}`
+    );
+  }
+  return res.json() as Promise<SettingsResponse>;
+}
+
+async function readApiKeyFile(filePath: string): Promise<string> {
+  try {
+    const contents = await fsPromise.readFile(filePath, 'utf8');
+    return contents.trim();
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code === 'ENOENT') return ''; // file missing
+    throw err;
+  }
+}
+
+async function deleteIfExists(filePath: string): Promise<void> {
+  try {
+    await fsPromise.unlink(filePath);
+  } catch (err) {
+    const e = err as NodeJS.ErrnoException;
+    if (e.code !== 'ENOENT') throw err; // ignore "not found"
+  }
+}
+
+async function generateApiKey(): Promise<string> {
+  const res = await fetch(`${BASE}/admin/apikey/generate`, { method: 'POST' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `POST /admin/apikey/generate failed: ${res.status} ${res.statusText} ${text}`
+    );
+  }
+  const key = (await res.text()).trim();
+  if (!key) throw new Error('Generated API key response was empty.');
+  return key;
+}
+
+export async function getApiKey(): Promise<string> {
+  const settings = await getSettings();
+  const apiKeyPath = (settings?.apiKeyPath ?? '').trim();
+  console.log('apiKeyPath', apiKeyPath);
+  // If apiKeyPath is empty, default to current working directory (matches Qortal behavior)
+  const dir = apiKeyPath;
+  if (!dir) throw new Error('No apiKey path found');
+  const filePath = path.join(dir, 'apikey.txt');
+
+  const existing = await readApiKeyFile(filePath);
+
+  if (existing) {
+    console.log(`Existing API key found at: ${filePath}`);
+    console.log(existing);
+    return existing;
+  }
+
+  // Empty or missing: delete file if present, then generate
+  await deleteIfExists(filePath);
+
+  const newKey = await generateApiKey();
+
+  return newKey;
+}
+
+export async function resetApikey(): Promise<boolean> {
+  const settings = await getSettings();
+  const apiKeyPath = (settings?.apiKeyPath ?? '').trim();
+  console.log('apiKeyPath', apiKeyPath);
+  // If apiKeyPath is empty, default to current working directory (matches Qortal behavior)
+  const dir = apiKeyPath;
+  if (!dir) throw new Error('No apiKey path found');
+  const filePath = path.join(dir, 'apikey.txt');
+
+  // Empty or missing: delete file if present, then generate
+  await deleteIfExists(filePath);
+
+  await generateApiKey();
+
+  return true;
 }

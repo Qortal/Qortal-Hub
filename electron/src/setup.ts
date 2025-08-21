@@ -25,9 +25,11 @@ import { myCapacitorApp } from '.';
 import {
   checkOsPlatform,
   determineJavaVersion,
+  getApiKey,
   installCore,
   isCoreInstalled,
   isCoreRunning,
+  resetApikey,
   startCore,
 } from './core';
 
@@ -631,6 +633,19 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
 ipcMain.handle('coreSetup:startCore', async () => {
   try {
     const running = await startCore();
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:getApiKey', async () => {
+  try {
+    const running = await getApiKey();
+    return running;
+  } catch (error) {}
+});
+ipcMain.handle('coreSetup:resetApikey', async () => {
+  try {
+    const running = await resetApikey();
     return running;
   } catch (error) {}
 });

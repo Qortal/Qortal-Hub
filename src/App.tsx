@@ -94,28 +94,38 @@ import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
+  authenticatePasswordAtom,
+  balanceAtom,
   canSaveSettingToQdnAtom,
   enabledDevModeAtom,
+  extStateAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
+  isLoadingAuthenticateAtom,
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
+  localApiKeyAtom,
   mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
+  qortBalanceLoadingAtom,
+  rawWalletAtom,
+  selectedNodeInfoAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
   timestampEnterDataAtom,
   txListAtom,
+  userInfoAtom,
+  walletToBeDecryptedErrorAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
@@ -151,8 +161,10 @@ import {
   TIME_40_SECONDS_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
+import { ApiKey } from './types/auth.ts';
+import { useAuth } from './hooks/useAuth.tsx';
 
-type extStates =
+export type extStates =
   | 'authenticated'
   | 'buy-order-submitted'
   | 'create-wallet'
@@ -242,13 +254,15 @@ export const resumeAllQueues = () => {
 export const QORTAL_APP_CONTEXT =
   createContext<MyContextInterface>(defaultValues);
 
-export let globalApiKey: string | null = null;
+export let globalApiKey: ApiKey | null = null;
 
+export const handleSetGlobalApikey = (data: ApiKey) => {
+  globalApiKey = data;
+};
 export const getBaseApiReact = (customApi?: string) => {
   if (customApi) {
     return customApi;
   }
-
   if (globalApiKey?.url) {
     return globalApiKey?.url;
   } else {
@@ -281,19 +295,21 @@ export const getBaseApiReactSocket = (customApi?: string) => {
 export const isMainWindow = true;
 
 function App() {
-  const [extState, setExtstate] = useState<extStates>('not-authenticated');
+  const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [backupjson, setBackupjson] = useState<any>(null);
-  const [rawWallet, setRawWallet] = useState<any>(null);
+  const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
   const [ltcBalanceLoading, setLtcBalanceLoading] = useState<boolean>(false);
-  const [qortBalanceLoading, setQortBalanceLoading] = useState<boolean>(false);
+  const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
+    qortBalanceLoadingAtom
+  );
   const [decryptedWallet, setdecryptedWallet] = useState<any>(null);
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
   const [authenticatedMode, setAuthenticatedMode] = useState('qort');
   const [requestAuthentication, setRequestAuthentication] = useState<any>(null);
-  const [userInfo, setUserInfo] = useState<any>(null);
-  const [balance, setBalance] = useState<any>(null);
+  const [userInfo, setUserInfo] = useAtom(userInfoAtom);
+  const [balance, setBalance] = useAtom(balanceAtom);
   const [ltcBalance, setLtcBalance] = useState<any>(null);
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -306,10 +322,14 @@ function App() {
     useState<string>('');
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useState<string>('');
+  const [authenticatePassword, setAuthenticatePassword] = useAtom(
+    authenticatePasswordAtom
+  );
   const [sendqortState, setSendqortState] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
+  const [localApiKey, setLocalApiKey] = useAtom(localApiKeyAtom);
+  console.log('localApiKey', localApiKey);
   const { t } = useTranslation([
     'auth',
     'core',
@@ -327,8 +347,9 @@ function App() {
   const [walletToBeDownloadedError, setWalletToBeDownloadedError] =
     useState<string>('');
 
-  const [walletToBeDecryptedError, setWalletToBeDecryptedError] =
-    useState<string>('');
+  const [walletToBeDecryptedError, setWalletToBeDecryptedError] = useAtom(
+    walletToBeDecryptedErrorAtom
+  );
 
   const [isFocused, setIsFocused] = useState(true);
 
@@ -390,10 +411,10 @@ function App() {
   const [hasLocalNode, setHasLocalNode] = useState(false);
   const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
-  const [apiKey, setApiKey] = useState('');
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
-
+  const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
+  const { isNodeValid, authenticate, getBalanceFunc } = useAuth();
   const {
     isUserBlocked,
     addToBlockList,
@@ -401,12 +422,8 @@ function App() {
     getAllBlockedUsers,
   } = useBlockedAddresses(extState === 'authenticated');
 
-  const [currentNode, setCurrentNode] = useState({
-    url: HTTP_LOCALHOST_12391,
-  });
-
-  const [useLocalNode, setUseLocalNode] = useState(false);
-
+  // const [useLocalNode, setUseLocalNode] = useState(true);
+  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
   const [confirmRequestRead, setConfirmRequestRead] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
@@ -567,10 +584,6 @@ function App() {
     ]
   );
 
-  const handleSetGlobalApikey = (key) => {
-    globalApiKey = key;
-  };
-
   useEffect(() => {
     try {
       setIsLoading(true);
@@ -579,7 +592,13 @@ function App() {
         .then((response) => {
           if (response) {
             handleSetGlobalApikey(response);
-            setApiKey(response);
+            setSelectedNode(response);
+          } else {
+            handleSetGlobalApikey(response);
+            setSelectedNode({
+              url: HTTP_LOCALHOST_12391,
+              apikey: '',
+            });
           }
         })
         .catch((error) => {
@@ -753,26 +772,6 @@ function App() {
     } catch (error) {
       console.error(error);
     }
-  };
-
-  const getBalanceFunc = () => {
-    setQortBalanceLoading(true);
-    window
-      .sendMessage('balance')
-      .then((response) => {
-        if (!response?.error && !isNaN(+response)) {
-          setBalance(response);
-        }
-
-        setQortBalanceLoading(false);
-      })
-      .catch((error) => {
-        console.error('Failed to get balance:', error);
-        setQortBalanceLoading(false);
-      })
-      .finally(() => {
-        balanceSetInterval();
-      });
   };
 
   const refetchUserInfo = () => {
@@ -1174,62 +1173,12 @@ function App() {
 
   const authenticateWallet = async () => {
     try {
-      setIsLoading(true);
-      setWalletToBeDecryptedError('');
-      await new Promise<void>((res) => {
-        setTimeout(() => {
-          res();
-        }, 250);
-      });
-      window
-        .sendMessage(
-          'decryptWallet',
-          {
-            password: authenticatePassword,
-            wallet: rawWallet,
-          },
-          TIME_120_SECONDS_IN_MILLISECONDS
-        )
-        .then((response) => {
-          if (response && !response.error) {
-            setAuthenticatePassword('');
-            setExtstate('authenticated');
-            setWalletToBeDecryptedError('');
-
-            window
-              .sendMessage('userInfo')
-              .then((response) => {
-                setIsLoading(false);
-                if (response && !response.error) {
-                  setUserInfo(response);
-                }
-              })
-              .catch((error) => {
-                setIsLoading(false);
-                console.error('Failed to get user info:', error);
-              });
-
-            getBalanceFunc();
-
-            window
-              .sendMessage('getWalletInfo')
-              .then((response) => {
-                if (response && response.walletInfo) {
-                  setRawWallet(response.walletInfo);
-                }
-              })
-              .catch((error) => {
-                console.error('Failed to get wallet info:', error);
-              });
-          } else if (response?.error) {
-            setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
-          }
-        })
-        .catch((error) => {
-          setIsLoading(false);
-          console.error('Failed to decrypt wallet:', error);
-        });
+      const isValid = await isNodeValid();
+      if (!isValid) {
+        // TODO: add alert
+        return;
+      }
+      await authenticate();
     } catch (error) {
       setWalletToBeDecryptedError(
         t('core:message.error.password_wrong', {
@@ -2051,21 +2000,13 @@ function App() {
       }}
     >
       <PdfViewer />
-      <CoreSetup currentNode={currentNode} />
+      <CoreSetup />
       <QORTAL_APP_CONTEXT.Provider value={contextValue}>
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
-            apiKey={apiKey}
-            currentNode={currentNode}
-            getInputProps={getInputProps}
-            getRootProps={getRootProps}
-            globalApiKey={globalApiKey}
             handleSetGlobalApikey={handleSetGlobalApikey}
-            setApiKey={setApiKey}
-            setCurrentNode={setCurrentNode}
             setExtstate={setExtstate}
-            setUseLocalNode={setUseLocalNode}
             useLocalNode={useLocalNode}
           />
         )}
@@ -2809,36 +2750,21 @@ function App() {
                 }}
                 ref={passwordRef}
               />
-              {useLocalNode ? (
-                <>
-                  <Spacer height="20px" />
 
-                  <Typography
-                    sx={{
-                      fontSize: '12px',
-                    }}
-                  >
-                    {t('auth:node.using', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    : {currentNode?.url}
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <Spacer height="20px" />
+              <>
+                <Spacer height="20px" />
 
-                  <Typography
-                    sx={{
-                      fontSize: '12px',
-                    }}
-                  >
-                    {t('auth:node.using_public', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </>
-              )}
+                <Typography
+                  sx={{
+                    fontSize: '12px',
+                  }}
+                >
+                  {t('auth:node.using', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  : {selectedNode?.url}
+                </Typography>
+              </>
 
               <Spacer height="20px" />
 

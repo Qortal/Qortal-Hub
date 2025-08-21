@@ -1,5 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily } from 'jotai/utils';
+import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { ApiKey } from '../types/auth';
+import { extStates } from '../App';
 
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
@@ -51,10 +54,41 @@ export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
 export const txListAtom = atomWithReset([]);
 
+export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
+
+export const isLoadingAuthenticateAtom = atomWithReset(false);
+export const authenticatePasswordAtom = atomWithReset('');
+export const extStateAtom = atomWithReset<extStates>('not-authenticated');
+export const userInfoAtom = atomWithReset<any>(null);
+export const rawWalletAtom = atomWithReset<any>(null);
+export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
+
+export const balanceAtom = atomWithReset<any>(null);
+export const qortBalanceLoadingAtom = atomWithReset<boolean>(false);
+export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
+
 export const devServerDomainAtom = atomWithReset('127.0.0.1');
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
-
+export const localApiKeyAtom = atomWithReset('');
+export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>(null);
+export const statusesAtom = atomWithReset({
+  coreRunning: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+  downloadedCore: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+  hasJava: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+});
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

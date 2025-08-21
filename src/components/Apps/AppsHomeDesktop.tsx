@@ -53,7 +53,8 @@ export const AppsHomeDesktop = ({
     <>
       <AppsContainer
         sx={{
-          justifyContent: 'flex-start',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
         <AppLibrarySubTitle
@@ -63,15 +64,6 @@ export const AppsHomeDesktop = ({
         >
           {t('core:apps_dashboard', { postProcess: 'capitalizeFirstChar' })}
         </AppLibrarySubTitle>
-      </AppsContainer>
-
-      <Spacer height="20px" />
-
-      <AppsContainer
-        sx={{
-          justifyContent: 'flex-start',
-        }}
-      >
         <Box
           sx={{
             alignItems: 'center',

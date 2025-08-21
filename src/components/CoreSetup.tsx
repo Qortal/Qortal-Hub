@@ -3,30 +3,26 @@ import { CoreSetupDialog } from './CoreSetupDialog';
 import { LOCALHOST_12391 } from '../constants/constants';
 import { cleanUrl } from '../background/background';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
+import {
+  isOpenDialogCoreRecommendationAtom,
+  localApiKeyAtom,
+  selectedNodeInfoAtom,
+  statusesAtom,
+} from '../atoms/global';
+import { useAtom } from 'jotai';
+import { CoreSetupRecommendationDialog } from './CoreSetupRecommendationDialog';
+import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
 
-export const CoreSetup = ({ currentNode }) => {
+export const CoreSetup = () => {
   const [open, setOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
-
-  const [statuses, setStatuses] = useState({
-    coreRunning: {
-      status: 'idle',
-      progress: 0,
-      message: '',
-    },
-    downloadedCore: {
-      status: 'idle',
-      progress: 0,
-      message: '',
-    },
-    hasJava: {
-      status: 'idle',
-      progress: 0,
-      message: '',
-    },
-  });
-
-  const isLocal = cleanUrl(currentNode?.url) === LOCALHOST_12391;
+  const [localApiKey, setLocalApiKey] = useAtom(localApiKeyAtom);
+  const [statuses, setStatuses] = useAtom(statusesAtom);
+  const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
+  const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
+    isOpenDialogCoreRecommendationAtom
+  );
+  const isLocal = cleanUrl(selectedNode?.url) === LOCALHOST_12391;
 
   const inFlight = useRef(false);
   useEffect(() => {
@@ -131,6 +127,32 @@ export const CoreSetup = ({ currentNode }) => {
     };
   }, [verifyCoreNotRunningFunc]);
 
+  const validateApiKey = useCallback(async () => {
+    try {
+      const apiKey = await window.coreSetup.getApiKey();
+      console.log('apiKey', apiKey);
+      const url2 = `${LOCALHOST_12391}/admin/apikey/test?apiKey=${apiKey}`;
+      const response2 = await fetch(url2);
+      let isValid = false;
+      // Assuming the response is in plain text and will be 'true' or 'false'
+      const data2 = await response2.text();
+      if (data2 === 'true') {
+        isValid = true;
+      }
+
+      if (isValid) {
+        setLocalApiKey(apiKey);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, [setLocalApiKey]);
+
+  useEffect(() => {
+    if (!isCoreRunningState) return;
+    validateApiKey();
+  }, [isCoreRunningState, validateApiKey]);
+
   return (
     <>
       <CoreSetupDialog
@@ -148,6 +170,13 @@ export const CoreSetup = ({ currentNode }) => {
         }}
         steps={statuses}
       />
+      <CoreSetupRecommendationDialog
+        open={isOpenRecommendation}
+        openLocalSetup={() => setOpen(true)}
+        onClose={() => setIsOpenRecommendation(false)}
+        setOpenCoreHandler={setOpen}
+      />
+      <CoreSetupResetApikeyDialog />
     </>
   );
 };
