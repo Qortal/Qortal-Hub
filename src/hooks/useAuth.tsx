@@ -11,6 +11,7 @@ import {
   extStateAtom,
   isLoadingAuthenticateAtom,
   isOpenDialogCoreRecommendationAtom,
+  isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
   qortBalanceLoadingAtom,
   rawWalletAtom,
@@ -24,6 +25,7 @@ let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
 export const useAuth = () => {
   const [open, setIsOpenResetApikey] = useAtom(isOpenDialogResetApikey);
+  const [_, setIsOpenCustomApikeyDialog] = useAtom(isOpenDialogCustomApikey);
 
   const [balance, setBalance] = useAtom(balanceAtom);
   const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
@@ -58,7 +60,7 @@ export const useAuth = () => {
         const runningRes = await window.coreSetup.isCoreRunning();
         if (!runningRes) {
           setIsOpenRecommendation(true);
-          return;
+          return { isValid: false, validatedNodeInfo };
         }
         //
         const apiKey = await window.coreSetup.getApiKey();
@@ -89,7 +91,8 @@ export const useAuth = () => {
       console.log('222 isValid', isValid, isLocal);
       if (!isValid && isLocal) {
         setIsOpenResetApikey(true);
-        return;
+      } else if (!isValid && !isLocal) {
+        setIsOpenCustomApikeyDialog(true);
       }
 
       return { isValid, validatedNodeInfo };
@@ -101,6 +104,8 @@ export const useAuth = () => {
   const handleSaveNodeInfo = useCallback(
     async (nodeInfo) => {
       try {
+        console.log('nodeInfo', nodeInfo);
+
         await window.sendMessage('setApiKey', nodeInfo);
         if (nodeInfo) {
           setSelectedNode(nodeInfo);

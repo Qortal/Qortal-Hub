@@ -33,10 +33,12 @@ import { useTranslation } from 'react-i18next';
 import { QORTAL_APP_CONTEXT } from '../App';
 import {
   HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   LOCALHOST_12391,
 } from '../constants/constants.ts';
 import { useAtom } from 'jotai';
 import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
+import { useAuth } from '../hooks/useAuth.tsx';
 
 export const manifestData = {
   version: '0.5.4',
@@ -61,15 +63,14 @@ function removeTrailingSlash(url) {
 export const NotAuthenticated = ({
   setExtstate,
   handleSetGlobalApikey,
-  useLocalNode,
   setUseLocalNode,
 }) => {
+  const { handleSaveNodeInfo } = useAuth();
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [show, setShow] = useState(false);
   const [mode, setMode] = useState('list');
   const [customNodes, setCustomNodes] = useState(null);
-  const [importedApiKey, setImportedApiKey] = useState(null);
   const [url, setUrl] = useState('https://');
   const [customApikey, setCustomApiKey] = useState('');
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
@@ -95,7 +96,6 @@ export const NotAuthenticated = ({
       reader.onload = (e) => {
         const text = e.target.result; // Get the file content
 
-        setImportedApiKey(text); // Store the file content in the state
         if (customNodes) {
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
@@ -140,14 +140,6 @@ export const NotAuthenticated = ({
             response?.map((node) => node.url)
           );
         }
-        if (Array.isArray(response)) {
-          const findLocal = response?.find(
-            (item) => item?.url === HTTP_LOCALHOST_12391
-          );
-          if (findLocal && findLocal?.apikey) {
-            setImportedApiKey(findLocal?.apikey);
-          }
-        }
       })
       .catch((error) => {
         console.error(
@@ -164,7 +156,7 @@ export const NotAuthenticated = ({
     setMode('add-node');
   };
 
-  const saveCustomNodes = (myNodes, isFullListOfNodes) => {
+  const saveCustomNodes = async (myNodes, isFullListOfNodes) => {
     let nodes = [...(myNodes || [])];
     if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
       nodes.splice(customNodeToSaveIndex, 1, {
@@ -173,6 +165,12 @@ export const NotAuthenticated = ({
       });
     } else if (!isFullListOfNodes && url) {
       nodes.push({
+        url: removeTrailingSlash(url),
+        apikey: customApikey,
+      });
+    }
+    if (!isFullListOfNodes && url) {
+      await handleSaveNodeInfo({
         url: removeTrailingSlash(url),
         apikey: customApikey,
       });
@@ -347,7 +345,7 @@ export const NotAuthenticated = ({
       <Typography
         sx={{
           fontSize: '12px',
-          visibility: !useLocalNode && 'hidden',
+          // visibility: !useLocalNode && 'hidden',
         }}
       >
         {t('auth:node.using', { postProcess: 'capitalizeFirstChar' })}:{' '}
@@ -547,7 +545,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      {HTTP_LOCALHOST_12391}
+                      {HTTP_LOCALHOST_12391} (Local node)
                     </Typography>
 
                     <Box
@@ -566,6 +564,69 @@ export const NotAuthenticated = ({
                           setShow(false);
                           const payload = {
                             url: HTTP_LOCALHOST_12391,
+                            apikey: '',
+                          };
+                          window
+                            .sendMessage('setApiKey', payload)
+                            .then((response) => {
+                              if (response) {
+                                setSelectedNode(payload);
+                                handleSetGlobalApikey(payload);
+                              }
+                            })
+                            .catch((error) => {
+                              console.error(
+                                t('auth:message.error.set_apikey', {
+                                  postProcess: 'capitalizeFirstChar',
+                                }),
+                                error.message ||
+                                  t('core:message.error.generic', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })
+                              );
+                            });
+                        }}
+                        variant="contained"
+                      >
+                        {t('core:action.choose', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Button>
+                    </Box>
+                  </Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: '10px',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '14px',
+                      }}
+                    >
+                      {HTTPS_EXT_NODE_QORTAL_LINK} (Public node)
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: '10px',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Button
+                        disabled={
+                          selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
+                        }
+                        size="small"
+                        onClick={() => {
+                          setMode('list');
+                          setShow(false);
+                          const payload = {
+                            url: HTTPS_EXT_NODE_QORTAL_LINK,
                             apikey: '',
                           };
                           window
@@ -679,7 +740,15 @@ export const NotAuthenticated = ({
 
                           <Button
                             size="small"
-                            onClick={() => {
+                            onClick={async () => {
+                              console.log('selectednode', selectedNode, node);
+
+                              if (node?.url === selectedNode?.url) {
+                                await handleSaveNodeInfo({
+                                  url: HTTP_LOCALHOST_12391,
+                                  apikey: '',
+                                });
+                              }
                               const nodesToSave = [
                                 ...(customNodes || []),
                               ].filter((item) => item?.url !== node?.url);
@@ -837,7 +906,6 @@ export const NotAuthenticated = ({
               disabled={!enteredApiKey}
               onClick={() => {
                 try {
-                  setImportedApiKey(enteredApiKey); // Store the file content in the state
                   if (customNodes) {
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];

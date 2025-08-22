@@ -12,6 +12,7 @@ import {
 import { useAtom } from 'jotai';
 import { CoreSetupRecommendationDialog } from './CoreSetupRecommendationDialog';
 import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
+import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
 
 export const CoreSetup = () => {
   const [open, setOpen] = useState(false);
@@ -177,6 +178,7 @@ export const CoreSetup = () => {
         setOpenCoreHandler={setOpen}
       />
       <CoreSetupResetApikeyDialog />
+      <CustomNodeApikeyDialog />
     </>
   );
 };

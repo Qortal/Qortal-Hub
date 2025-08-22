@@ -11,16 +11,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useAtom } from 'jotai';
 import { isOpenDialogResetApikey } from '../atoms/global';
 
-export type StepStatus = 'idle' | 'active' | 'done' | 'error';
-
-export interface StepState {
-  status: StepStatus;
-  /** 0..100; if omitted, inferred from status (done=>100, idle=>0) */
-  progress?: number;
-  /** Optional small helper text under the progress bar */
-  message?: string;
-}
-
 export function CoreSetupResetApikeyDialog() {
   const { authenticate, resetApikey, isNodeValid } = useAuth();
   const [open, setOpen] = useAtom(isOpenDialogResetApikey);
