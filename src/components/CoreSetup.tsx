@@ -5,7 +5,6 @@ import { cleanUrl } from '../background/background';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import {
   isOpenDialogCoreRecommendationAtom,
-  localApiKeyAtom,
   selectedNodeInfoAtom,
   statusesAtom,
 } from '../atoms/global';
@@ -17,20 +16,23 @@ import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
 export const CoreSetup = () => {
   const [open, setOpen] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [localApiKey, setLocalApiKey] = useAtom(localApiKeyAtom);
   const [statuses, setStatuses] = useAtom(statusesAtom);
-  const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
+  const [selectedNode] = useAtom(selectedNodeInfoAtom);
   const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
     isOpenDialogCoreRecommendationAtom
   );
   const isLocal = cleanUrl(selectedNode?.url) === LOCALHOST_12391;
-
+  const [customQortalPath, setCustomQortalPath] = useState('');
   const inFlight = useRef(false);
   useEffect(() => {
     if (!window?.coreSetup) return;
     const off = window.coreSetup.onProgress((p) => {
       if (p === 'ready') {
         setIsReady(true);
+        return;
+      }
+      if (p?.type === 'hasCustomPath') {
+        setCustomQortalPath(p.hasCustomPath ? p.customPath : '');
         return;
       }
       setStatuses((prev) => {
@@ -42,7 +44,7 @@ export const CoreSetup = () => {
     });
 
     return () => off();
-  }, []);
+  }, [setStatuses]);
 
   async function handleCoreSetup({
     isReady,
@@ -88,6 +90,7 @@ export const CoreSetup = () => {
     (key) => statuses[key]?.status === 'active'
   );
   const isNotRunning = statuses['coreRunning']?.status === 'off';
+  console.log('statuses', statuses);
   useEffect(() => {
     if (!isReady || !isLocal) return;
     if (isNotRunning) {
@@ -117,7 +120,7 @@ export const CoreSetup = () => {
       });
       handleCoreSetup({ isReady, isLocal });
     },
-    [isLocal, isReady]
+    [isLocal, isReady, setStatuses]
   );
 
   useEffect(() => {
@@ -127,32 +130,6 @@ export const CoreSetup = () => {
       unsubscribeFromEvent('verifyCoreNotRunning', verifyCoreNotRunningFunc);
     };
   }, [verifyCoreNotRunningFunc]);
-
-  const validateApiKey = useCallback(async () => {
-    try {
-      const apiKey = await window.coreSetup.getApiKey();
-      console.log('apiKey', apiKey);
-      const url2 = `${LOCALHOST_12391}/admin/apikey/test?apiKey=${apiKey}`;
-      const response2 = await fetch(url2);
-      let isValid = false;
-      // Assuming the response is in plain text and will be 'true' or 'false'
-      const data2 = await response2.text();
-      if (data2 === 'true') {
-        isValid = true;
-      }
-
-      if (isValid) {
-        setLocalApiKey(apiKey);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }, [setLocalApiKey]);
-
-  useEffect(() => {
-    if (!isCoreRunningState) return;
-    validateApiKey();
-  }, [isCoreRunningState, validateApiKey]);
 
   return (
     <>
@@ -170,6 +147,8 @@ export const CoreSetup = () => {
           }
         }}
         steps={statuses}
+        customQortalPath={customQortalPath}
+        verifyCoreNotRunningFunc={verifyCoreNotRunningFunc}
       />
       <CoreSetupRecommendationDialog
         open={isOpenRecommendation}

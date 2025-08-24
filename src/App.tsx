@@ -109,7 +109,6 @@ import {
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
-  localApiKeyAtom,
   mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
@@ -328,8 +327,7 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
-  const [localApiKey, setLocalApiKey] = useAtom(localApiKeyAtom);
-  console.log('localApiKey', localApiKey);
+
   const { t } = useTranslation([
     'auth',
     'core',
@@ -2000,8 +1998,9 @@ function App() {
       }}
     >
       <PdfViewer />
-      <CoreSetup />
+
       <QORTAL_APP_CONTEXT.Provider value={contextValue}>
+        <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated

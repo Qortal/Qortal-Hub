@@ -48,7 +48,7 @@ import {
   zipurl,
 } from './core-constants';
 import extract from 'extract-zip';
-import { broadcastProgress } from './setup';
+import { broadcastProgress, getSharedSettingsFilePath } from './setup';
 const isRunning = (query, cb) => {
   const platform = process.platform;
   let cmd = '';
@@ -148,8 +148,23 @@ function watchForApiStart(
 }
 
 async function startQortal() {
-  const logPath = path.join(qortaldir, 'qortal.log');
+  const running = await isCoreRunning();
+  if (running) return;
+  const isInstalled = await isCoreInstalled();
+  if (!isInstalled) return;
   const startTimestamp = Date.now();
+  const selectedCustomDir = await customQortalInstalledDir();
+  let qortalDirLocation = qortaldir;
+  let qortalJarLocation = qortaljar;
+  let qortalSettingsLocation = qortalsettings;
+
+  if (selectedCustomDir) {
+    qortalDirLocation = selectedCustomDir;
+    qortalJarLocation = path.join(selectedCustomDir, 'qortal.jar');
+    qortalSettingsLocation = path.join(selectedCustomDir, 'settings.json');
+  }
+  const logPath = path.join(qortalDirLocation, 'qortal.log');
+
   broadcastProgress({
     step: 'coreRunning',
     status: 'active',
@@ -192,14 +207,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -228,14 +243,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -267,14 +282,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -303,14 +318,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -342,14 +357,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -378,14 +393,14 @@ async function startQortal() {
                 '-Xss256m',
                 '-XX:+UseSerialGC',
                 '-jar',
-                qortaljar,
-                qortalsettings,
+                qortalJarLocation,
+                qortalSettingsLocation,
                 '1>run.log',
                 '2>&1',
                 '&',
               ],
               {
-                cwd: qortaldir,
+                cwd: qortalDirLocation,
                 shell: true,
                 detached: true,
               }
@@ -419,8 +434,8 @@ async function startQortal() {
               '-Xss256m',
               '-XX:+UseSerialGC',
               '-jar',
-              qortaljar,
-              qortalsettings,
+              qortalJarLocation,
+              qortalSettingsLocation,
               '1>run.log',
               '2>&1',
               '&',
@@ -455,14 +470,14 @@ async function startQortal() {
               '-Xss256m',
               '-XX:+UseSerialGC',
               '-jar',
-              qortaljar,
-              qortalsettings,
+              qortalJarLocation,
+              qortalSettingsLocation,
               '1>run.log',
               '2>&1',
               '&',
             ],
             {
-              cwd: qortaldir,
+              cwd: qortalDirLocation,
               shell: true,
               detached: true,
             }
@@ -493,8 +508,8 @@ async function startQortal() {
               '-Xss256m',
               '-XX:+UseSerialGC',
               '-jar',
-              qortaljar,
-              qortalsettings,
+              qortalJarLocation,
+              qortalSettingsLocation,
               '1>run.log',
               '2>&1',
               '&',
@@ -529,14 +544,14 @@ async function startQortal() {
               '-Xss256m',
               '-XX:+UseSerialGC',
               '-jar',
-              qortaljar,
-              qortalsettings,
+              qortalJarLocation,
+              qortalSettingsLocation,
               '1>run.log',
               '2>&1',
               '&',
             ],
             {
-              cwd: qortaldir,
+              cwd: qortalDirLocation,
               shell: true,
               detached: true,
             }
@@ -569,8 +584,13 @@ async function startElectronWin() {
   }
 }
 
-function startElectronUnix() {
-  if (fs.existsSync(qortaljar)) {
+async function startElectronUnix() {
+  const selectedCustomDir = await customQortalInstalledDir();
+  let qortalJarLocation = qortaljar;
+  if (selectedCustomDir) {
+    qortalJarLocation = path.join(selectedCustomDir, 'qortal.jar');
+  }
+  if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
         console.log('Core is running, perfect !');
@@ -613,14 +633,51 @@ export async function isCoreRunning() {
   });
 }
 
-export async function isCoreInstalled() {
+export async function customQortalInstalledDir() {
+  const filePath = await getSharedSettingsFilePath('wallet-storage.json');
+
+  const stats = await fs.promises.stat(filePath).catch(() => null);
+  if (!stats || !stats.isFile()) return null;
+
+  const raw = await fs.promises.readFile(filePath, 'utf-8');
+
+  const data = raw ? JSON.parse(raw) : {};
+  return data['qortalDirectory'] || null;
+}
+
+export async function removeCustomQortalPath() {
+  const filePath = await getSharedSettingsFilePath('wallet-storage.json');
+
+  const stats = await fs.promises.stat(filePath).catch(() => null);
+  if (!stats || !stats.isFile()) return null;
+
+  const raw = await fs.promises.readFile(filePath, 'utf-8');
+
+  const data = raw ? JSON.parse(raw) : {};
+  data['qortalDirectory'] = null;
+  await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+export async function isCoreInstalled(customDir?: string) {
+  const selectedCustomDir = await customQortalInstalledDir();
+
   return new Promise((res, rej) => {
     if (process.platform === 'win32') {
-      if (fs.existsSync(winjar)) {
+      const dir = customDir
+        ? path.join(customDir, 'qortal.jar')
+        : selectedCustomDir
+          ? path.join(selectedCustomDir, 'qortal.jar')
+          : winjar;
+      if (fs.existsSync(dir)) {
         res(true);
       } else res(false);
     } else if (process.platform === 'linux' || process.platform === 'darwin') {
-      if (fs.existsSync(qortaljar)) {
+      const dir = customDir
+        ? path.join(customDir, 'qortal.jar')
+        : selectedCustomDir
+          ? path.join(selectedCustomDir, 'qortal.jar')
+          : qortaljar;
+      if (fs.existsSync(dir)) {
         res(true);
       } else res(false);
     } else {
@@ -769,8 +826,12 @@ function downloadWithNode(
   });
 }
 
+let isDownloadingQortal = false;
+
 async function downloadQortal() {
   try {
+    if (isDownloadingQortal) return;
+    isDownloadingQortal = true;
     console.log('Starting Download Qortal');
     broadcastProgress({
       step: 'downloadedCore',
@@ -790,6 +851,8 @@ async function downloadQortal() {
         });
       }
     });
+
+    await unzipQortal();
   } catch (err) {
     broadcastProgress({
       step: 'downloadedCore',
@@ -801,9 +864,9 @@ async function downloadQortal() {
     });
     console.log('Download Qortal error', err);
     // (We’ll continue to unzip attempt, same as your original flow)
+  } finally {
+    isDownloadingQortal = false;
   }
-
-  await unzipQortal();
 }
 
 export function doesFileExist(
@@ -896,11 +959,15 @@ async function pickUrl(primary: string, backup: string): Promise<string> {
   return res;
 }
 
+let isDownloadingJava = false;
+
 async function downloadJavaArchive(url: string): Promise<string> {
   const dest = destPathForUrl(url);
 
   console.log('Starting Download JAVA');
   try {
+    if (isDownloadingJava) return null;
+    isDownloadingJava = true;
     await downloadWithNode(url, dest, ({ percent }) => {
       if (percent !== undefined)
         broadcastProgress({
@@ -910,7 +977,9 @@ async function downloadJavaArchive(url: string): Promise<string> {
           message: 'Setting up Java... please wait.',
         });
     });
+    isDownloadingJava = false;
   } catch (err) {
+    isDownloadingJava = false;
     broadcastProgress({
       step: 'hasJava',
       status: 'error',
@@ -920,6 +989,7 @@ async function downloadJavaArchive(url: string): Promise<string> {
         : 'Error downloading JAVA archive',
     });
     console.error('Download JAVA error', err);
+    return null;
     // We still return dest so your unzip function can try (same behavior you had)
   }
   console.log('Saved Java archive to:', dest);
@@ -936,31 +1006,36 @@ async function installJava() {
       const url = await pickUrl(linjavax64url, linjavax64urlbackup);
       const archivePath = await downloadJavaArchive(url);
 
-      // If your unzip functions expect a known variable, set it here:
-      // global.javaZipPath = archivePath;
-      await unzipJavaX64Linux(); // or pass archivePath if your unzip accepts it
+      if (archivePath) {
+        await unzipJavaX64Linux();
+      }
     } else if (process.arch === 'arm64') {
       const url = await pickUrl(linjavaarm64url, linjavaarm64urlbackup);
+
       const archivePath = await downloadJavaArchive(url);
-      // global.javaZipPath = archivePath;
-      await unzipJavaArm64Linux();
+      if (archivePath) {
+        await unzipJavaArm64Linux();
+      }
     } else if (process.arch === 'arm') {
       const url = await pickUrl(linjavaarmurl, linjavaarmurlbackup);
       const archivePath = await downloadJavaArchive(url);
-      // global.javaZipPath = archivePath;
-      await unzipJavaArmLinux();
+      if (archivePath) {
+        await unzipJavaArmLinux();
+      }
     }
   } else if (process.platform === 'darwin') {
     if (process.arch === 'x64') {
       const url = await pickUrl(macjavax64url, macjavax64urlbackup);
       const archivePath = await downloadJavaArchive(url);
-      // global.javaZipPath = archivePath;
-      await unzipJavaX64Mac();
+      if (archivePath) {
+        await unzipJavaX64Mac();
+      }
     } else {
       const url = await pickUrl(macjavaaarch64url, macjavaaarch64urlbackup);
       const archivePath = await downloadJavaArchive(url);
-      // global.javaZipPath = archivePath;
-      await unzipJavaAarch64Mac();
+      if (archivePath) {
+        await unzipJavaAarch64Mac();
+      }
     }
   }
 }
@@ -1099,8 +1174,13 @@ async function chmodJava() {
   await removeJavaZip();
 }
 
-function checkQortal() {
-  if (fs.existsSync(qortaljar)) {
+async function checkQortal() {
+  const selectedCustomDir = await customQortalInstalledDir();
+  let qortalJarLocation = qortaljar;
+  if (selectedCustomDir) {
+    qortalJarLocation = path.join(selectedCustomDir, 'qortal.jar');
+  }
+  if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
         console.log('Core is running, perfect !');
@@ -1387,8 +1467,8 @@ export async function downloadCoreWindows() {
   await removeQortalExe();
 }
 
-export async function installCore(installCore) {
-  installCore();
+export async function installCore(executeProgress) {
+  executeProgress();
   return new Promise(async (res, rej) => {
     if (process.platform === 'win32') {
       await downloadCoreWindows();

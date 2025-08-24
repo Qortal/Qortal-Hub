@@ -24,11 +24,13 @@ import { join } from 'path';
 import { myCapacitorApp } from '.';
 import {
   checkOsPlatform,
+  customQortalInstalledDir,
   determineJavaVersion,
   getApiKey,
   installCore,
   isCoreInstalled,
   isCoreRunning,
+  removeCustomQortalPath,
   resetApikey,
   startCore,
 } from './core';
@@ -472,7 +474,9 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
 });
 
 // Helper to get or create the shared settings directory
-async function getSharedSettingsFilePath(fileName: string): Promise<string> {
+export async function getSharedSettingsFilePath(
+  fileName: string
+): Promise<string> {
   const dir = path.join(app.getPath('appData'), 'qortal-hub');
   await fs.promises.mkdir(dir, { recursive: true });
   return path.join(dir, fileName);
@@ -532,6 +536,34 @@ export function broadcastProgress(p: any) {
 
 ipcMain.handle('coreSetup:isCoreRunning', async () => {
   try {
+    try {
+      const customPath = await customQortalInstalledDir();
+      if (!customPath) {
+        broadcastProgress({
+          type: 'hasCustomPath',
+          hasCustomPath: false,
+          customPath: null,
+        });
+      } else {
+        const isInstalledWithCustomPath = await isCoreInstalled();
+        if (isInstalledWithCustomPath) {
+          broadcastProgress({
+            type: 'hasCustomPath',
+            hasCustomPath: true,
+            customPath,
+          });
+        } else {
+          await removeCustomQortalPath();
+          broadcastProgress({
+            type: 'hasCustomPath',
+            hasCustomPath: false,
+            customPath: null,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
     const running = await isCoreRunning();
     if (running) {
       broadcastProgress({
@@ -648,6 +680,53 @@ ipcMain.handle('coreSetup:resetApikey', async () => {
     const running = await resetApikey();
     return running;
   } catch (error) {}
+});
+ipcMain.handle('coreSetup:removeCustomPath', async () => {
+  try {
+    await removeCustomQortalPath();
+    broadcastProgress({
+      type: 'hasCustomPath',
+      hasCustomPath: false,
+      customPath: null,
+    });
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    console.log('canceled, filePaths', canceled, filePaths);
+    if (canceled || filePaths.length === 0) return null;
+    const dir = filePaths[0];
+    const isInstalled = await isCoreInstalled(dir);
+    console.log('isInstalled', isInstalled);
+    if (isInstalled) {
+      const filePath = await getSharedSettingsFilePath('wallet-storage.json');
+
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats || !stats.isFile()) return null;
+
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+
+      const data = raw ? JSON.parse(raw) : {};
+      data['qortalDirectory'] = dir;
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(data, null, 2),
+        'utf-8'
+      );
+      broadcastProgress({
+        type: 'hasCustomPath',
+        hasCustomPath: true,
+        customPath: filePath,
+      });
+    } else return false;
+  } catch (error) {
+    return false;
+    console.log('error', error);
+  }
 });
 
 ipcMain.handle('start-core-electron', async () => {

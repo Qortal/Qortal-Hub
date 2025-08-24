@@ -90,6 +90,14 @@ try {
       const raw = await ipcRenderer.invoke('coreSetup:resetApikey');
       return raw;
     },
+    pickQortalDirectory: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:pickQortalDirectory');
+      return raw;
+    },
+    removeCustomPath: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:removeCustomPath');
+      return raw;
+    },
     onProgress: (cb: (p: any) => void) => {
       const h = (_e: unknown, p: any) => cb(p);
       ipcRenderer.on('coreSetup:progress', h);

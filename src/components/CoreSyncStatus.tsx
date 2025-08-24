@@ -14,7 +14,9 @@ export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
-  const [isUsingGateway, setIsUsingGateway] = useState(false);
+  const [isUsingGateway, setIsUsingGateway] = useState(
+    getBaseApiReact()?.includes('ext-node.qortal.link') ?? false
+  );
 
   const { t } = useTranslation([
     'auth',
@@ -67,7 +69,7 @@ export const CoreSyncStatus = () => {
     let message: string = '';
 
     if (isUsingGateway) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       } else {
@@ -75,7 +77,7 @@ export const CoreSyncStatus = () => {
         message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       }
     } else if (isMintingPossible) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
       } else {

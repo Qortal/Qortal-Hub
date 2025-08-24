@@ -1,5 +1,8 @@
 import * as React from 'react';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Dialog,
@@ -15,6 +18,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
@@ -22,6 +27,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
+import { QORTAL_APP_CONTEXT } from '../App';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -33,6 +39,11 @@ export interface StepState {
   message?: string;
 }
 
+export interface Steps {
+  hasJava: StepState;
+  downloadedCore: StepState;
+  coreRunning: StepState;
+}
 export interface CoreSetupDialogProps {
   open: boolean;
   onClose?: () => void;
@@ -42,16 +53,14 @@ export interface CoreSetupDialogProps {
   /** Show loading state on the action button */
   actionLoading?: boolean;
 
-  steps: {
-    hasJava: StepState;
-    downloadedCore: StepState;
-    coreRunning: StepState;
-  };
+  steps: Steps;
 
   /** Optional override for the action label. If not provided, it’s computed. */
   actionLabelOverride?: string;
   /** If true, hides the action button entirely when core is already running */
   hideActionIfRunning?: boolean;
+  customQortalPath: string;
+  verifyCoreNotRunningFunc: () => void;
 }
 
 const statusIcon = (status: StepStatus) => {
@@ -98,9 +107,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     actionLoading = false,
     steps,
     actionLabelOverride,
-    hideActionIfRunning = false,
+    customQortalPath,
+    verifyCoreNotRunningFunc,
   } = props;
-
+  const { setOpenSnackGlobal, setInfoSnackCustom } =
+    React.useContext(QORTAL_APP_CONTEXT);
   const stepDefs = [
     {
       key: 'hasJava' as const,
@@ -142,6 +153,32 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   // Enable action if Java is installed and core is not already running
   const canAction = !actionLoading;
 
+  const pickPath = async () => {
+    try {
+      const res = await window.coreSetup.pickQortalDirectory();
+
+      if (res === false) {
+        console.log('res', res, setOpenSnackGlobal);
+        setOpenSnackGlobal(true);
+        setInfoSnackCustom({
+          type: 'error',
+          message: 'Chosen directory does not contain a qortal.jar',
+        });
+      } else {
+        verifyCoreNotRunningFunc();
+      }
+    } catch (error) {}
+  };
+
+  const removePath = async () => {
+    try {
+      await window.coreSetup.removeCustomPath();
+      verifyCoreNotRunningFunc();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -151,6 +188,23 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     >
       <DialogTitle id="core-setup-title">Qortal Core Setup</DialogTitle>
       <DialogContent dividers>
+        <Accordion>
+          <AccordionSummary
+            expandIcon={<ArrowDropDownIcon />}
+            aria-controls="panel2-content"
+            id="panel2-header"
+          >
+            <Typography component="span">Advanced options</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {!customQortalPath ? (
+              <Button onClick={pickPath}>Pick custom Qortal Path</Button>
+            ) : (
+              <Button onClick={removePath}>Remove custom Qortal Path</Button>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
         <Stepper activeStep={activeStep} orientation="vertical">
           {stepStates.map(({ key, label, state }, idx) => {
             const prog = resolveProgress(state);

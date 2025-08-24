@@ -3,6 +3,7 @@ import { atomWithReset, atomFamily } from 'jotai/utils';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
+import { Steps } from '../components/CoreSetupDialog';
 
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
@@ -71,9 +72,8 @@ export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
 export const devServerDomainAtom = atomWithReset('127.0.0.1');
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
-export const localApiKeyAtom = atomWithReset('');
 export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>(null);
-export const statusesAtom = atomWithReset({
+export const statusesAtom = atomWithReset<Steps>({
   coreRunning: {
     status: 'idle',
     progress: 0,

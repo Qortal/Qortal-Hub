@@ -293,7 +293,7 @@ export const getBaseApi = async (customApi?: string) => {
 
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  if (apiKey?.url) {
+  if (apiKey?.url && !apiKey?.url?.includes('ext-node.qortal.link')) {
     return true;
   } else {
     return false;
