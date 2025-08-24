@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily } from 'jotai/utils';
+import { LOCALHOST } from '../constants/constants';
 
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
@@ -51,7 +52,7 @@ export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
 export const txListAtom = atomWithReset([]);
 
-export const devServerDomainAtom = atomWithReset('127.0.0.1');
+export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
 
