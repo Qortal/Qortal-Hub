@@ -14,6 +14,7 @@ export const zipurl =
   'https://github.com/Qortal/qortal/releases/latest/download/qortal.zip';
 
 export const qortaldir = homePath + '/qortal/';
+export const qortalWindir = 'C:\\Program Files\\Qortal';
 export const qortaljar = homePath + '/qortal/qortal.jar';
 export const qortalsettings = homePath + '/qortal/settings.json';
 

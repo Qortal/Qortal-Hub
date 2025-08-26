@@ -61,6 +61,7 @@ export interface CoreSetupDialogProps {
   hideActionIfRunning?: boolean;
   customQortalPath: string;
   verifyCoreNotRunningFunc: () => void;
+  isWindows: boolean
 }
 
 const statusIcon = (status: StepStatus) => {
@@ -109,6 +110,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     actionLabelOverride,
     customQortalPath,
     verifyCoreNotRunningFunc,
+    isWindows
   } = props;
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     React.useContext(QORTAL_APP_CONTEXT);
@@ -130,7 +132,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     },
   ];
 
-  const stepStates = stepDefs.map((def) => ({
+  const stepStates = stepDefs.filter((step)=> isWindows ? step.key !== 'hasJava' : step).map((def) => ({
     ...def,
     state: steps[def.key],
   }));
@@ -167,7 +169,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       } else {
         verifyCoreNotRunningFunc();
       }
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const removePath = async () => {
@@ -188,22 +190,25 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     >
       <DialogTitle id="core-setup-title">Qortal Core Setup</DialogTitle>
       <DialogContent dividers>
-        <Accordion>
-          <AccordionSummary
-            expandIcon={<ArrowDropDownIcon />}
-            aria-controls="panel2-content"
-            id="panel2-header"
-          >
-            <Typography component="span">Advanced options</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            {!customQortalPath ? (
-              <Button onClick={pickPath}>Pick custom Qortal Path</Button>
-            ) : (
-              <Button onClick={removePath}>Remove custom Qortal Path</Button>
-            )}
-          </AccordionDetails>
-        </Accordion>
+        {!isWindows && (
+          <Accordion>
+            <AccordionSummary
+              expandIcon={<ArrowDropDownIcon />}
+              aria-controls="panel2-content"
+              id="panel2-header"
+            >
+              <Typography component="span">Advanced options</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              {!customQortalPath ? (
+                <Button onClick={pickPath}>Pick custom Qortal Path</Button>
+              ) : (
+                <Button onClick={removePath}>Remove custom Qortal Path</Button>
+              )}
+            </AccordionDetails>
+          </Accordion>
+        )}
+
 
         <Stepper activeStep={activeStep} orientation="vertical">
           {stepStates.map(({ key, label, state }, idx) => {

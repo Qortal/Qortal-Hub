@@ -238,7 +238,7 @@ export class ElectronCapacitorApp {
           app.getAppPath(),
           'assets',
           this.CapacitorFileConfig.electron?.splashScreenImageName ??
-            'splash.png'
+          'splash.png'
         ),
         windowWidth: 400,
         windowHeight: 400,
@@ -519,6 +519,10 @@ ipcMain.on('coreSetup:progress:subscribe', (e) => {
   const wc = e.sender;
   progressSubscribers.add(wc);
   broadcastProgress('ready');
+  broadcastProgress({
+    type: 'osType',
+    osType: process.platform
+  });
   wc.once('destroyed', () => progressSubscribers.delete(wc));
 });
 
@@ -625,7 +629,7 @@ ipcMain.handle('coreSetup:isCoreRunning', async () => {
       }
     }
     return running;
-  } catch (error) {}
+  } catch (error) { }
 });
 
 ipcMain.handle('coreSetup:isCoreInstalled', async (event) => {
@@ -647,7 +651,7 @@ ipcMain.handle('coreSetup:isCoreInstalled', async (event) => {
       });
     }
     return isInstalled;
-  } catch (error) {}
+  } catch (error) { }
 });
 
 ipcMain.handle('coreSetup:installCore', async (event) => {
@@ -659,27 +663,27 @@ ipcMain.handle('coreSetup:installCore', async (event) => {
     };
     const running = await installCore(sendProgress);
     return running;
-  } catch (error) {}
+  } catch (error) { }
 });
 
 ipcMain.handle('coreSetup:startCore', async () => {
   try {
     const running = await startCore();
     return running;
-  } catch (error) {}
+  } catch (error) { }
 });
 
 ipcMain.handle('coreSetup:getApiKey', async () => {
   try {
     const running = await getApiKey();
     return running;
-  } catch (error) {}
+  } catch (error) { }
 });
 ipcMain.handle('coreSetup:resetApikey', async () => {
   try {
     const running = await resetApikey();
     return running;
-  } catch (error) {}
+  } catch (error) { }
 });
 ipcMain.handle('coreSetup:removeCustomPath', async () => {
   try {
@@ -689,7 +693,7 @@ ipcMain.handle('coreSetup:removeCustomPath', async () => {
       hasCustomPath: false,
       customPath: null,
     });
-  } catch (error) {}
+  } catch (error) { }
 });
 
 ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
@@ -732,5 +736,5 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
 ipcMain.handle('start-core-electron', async () => {
   try {
     checkOsPlatform();
-  } catch (error) {}
+  } catch (error) { }
 });

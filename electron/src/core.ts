@@ -39,6 +39,7 @@ import {
   qortaldir,
   qortaljar,
   qortalsettings,
+  qortalWindir,
   startWinCore,
   winexe,
   winjar,
@@ -48,11 +49,13 @@ import {
   zipurl,
 } from './core-constants';
 import extract from 'extract-zip';
+import net from "net";
+
 import { broadcastProgress, getSharedSettingsFilePath } from './setup';
 const isRunning = (query, cb) => {
   const platform = process.platform;
   let cmd = '';
-
+  console.log('platform', platform)
   switch (platform) {
     case 'win32':
       cmd = `tasklist`;
@@ -71,6 +74,41 @@ const isRunning = (query, cb) => {
     cb(stdout.toLowerCase().indexOf(query.toLowerCase()) > -1);
   });
 };
+
+
+function isPortOpen(host: string, port: number, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    let done = false;
+
+    const finish = (result: boolean) => {
+      if (done) return;
+      done = true;
+      try { sock.destroy(); } catch {}
+      resolve(result);
+    };
+
+    sock.setTimeout(timeoutMs);
+    sock.once("connect", () => finish(true));
+    sock.once("timeout", () => finish(false));
+    sock.once("error", () => finish(false));
+    sock.connect(port, host);
+  });
+}
+
+export async function isCorePortRunning(): Promise<boolean> {
+  const host =  "127.0.0.1";
+  const port = 12391;
+  const timeoutMs = 600;
+
+  // 1) Fast path: check if API port is listening.
+ 
+    const ok = await isPortOpen(host, port, timeoutMs);
+    if (ok) return true;
+  
+
+  return false
+}
 
 function watchForApiStart(
   logFilePath: string,
@@ -154,7 +192,9 @@ async function startQortal() {
   if (!isInstalled) return;
   const startTimestamp = Date.now();
   const selectedCustomDir = await customQortalInstalledDir();
-  let qortalDirLocation = qortaldir;
+
+  const isWin = process.platform === 'win32'
+  let qortalDirLocation = isWin ? qortalWindir : qortaldir;
   let qortalJarLocation = qortaljar;
   let qortalSettingsLocation = qortalsettings;
 
@@ -569,19 +609,18 @@ async function startQortal() {
         }
       }
     }
+  } else if (process.platform === 'win32') {
+    let winCore = startWinCore
+    if (selectedCustomDir) {
+
+      winCore = path.join(selectedCustomDir, 'qortal.exe');
+    }
+    spawn(winCore, { detached: true });
   }
 }
 
 async function startElectronWin() {
-  if (fs.existsSync(winjar)) {
-    isRunning('qortal.exe', (status) => {
-      if (status == true) {
-        console.log('Core is running, perfect !');
-      } else {
-        spawn(startWinCore, { detached: true });
-      }
-    });
-  }
+ startCore()
 }
 
 async function startElectronUnix() {
@@ -610,9 +649,15 @@ export async function checkOsPlatform() {
 }
 
 export async function isCoreRunning() {
-  return new Promise((res, rej) => {
+  return new Promise(async (res, rej) => {
     if (process.platform === 'win32') {
+      const isPortRunning = await isCorePortRunning()
+      if(isPortRunning){
+        res(true)
+        return
+      }
       isRunning('qortal.exe', (status) => {
+        console.log('status', status)
         if (status == true) {
           res(true);
         } else {
@@ -668,7 +713,12 @@ export async function isCoreInstalled(customDir?: string) {
         : selectedCustomDir
           ? path.join(selectedCustomDir, 'qortal.jar')
           : winjar;
-      if (fs.existsSync(dir)) {
+          const dirExe = customDir
+        ? path.join(customDir, 'qortal.exe')
+        : selectedCustomDir
+          ? path.join(selectedCustomDir, 'qortal.exe')
+          : winjar;
+      if (fs.existsSync(dir) && fs.existsSync(dirExe)) {
         res(true);
       } else res(false);
     } else if (process.platform === 'linux' || process.platform === 'darwin') {
@@ -918,7 +968,7 @@ export function doesFileExist(
               (getRes) => {
                 resolve(
                   !!getRes &&
-                    (getRes.statusCode === 200 || getRes.statusCode === 206)
+                  (getRes.statusCode === 200 || getRes.statusCode === 206)
                 );
                 getRes.resume();
               }
@@ -1421,6 +1471,7 @@ async function removeQortalExe() {
   } catch (err) {
     console.log('remove error', err);
   }
+ 
   await startElectronWin();
 }
 
@@ -1435,6 +1486,12 @@ export async function downloadCoreWindows() {
       winexe,
       ({ percent, received, total }) => {
         if (percent !== undefined) {
+           broadcastProgress({
+          step: 'downloadedCore',
+          status: 'active',
+          progress: percent,
+          message: 'Downloading the Qortal Core... please wait.',
+        });
           // console.log('percent', percent);
         } else console.log(`received ${received} / ${total || 0} bytes`);
       }
@@ -1459,9 +1516,21 @@ export async function downloadCoreWindows() {
       // args = ['/S'];
       const { stdout, stderr } = await execFileAsync(winexe, args);
       console.log('Qortal Core Installation Done', stdout, stderr);
+       broadcastProgress({
+      step: 'downloadedCore',
+      status: 'done',
+      progress: 100,
+      message: '',
+    });
     }
   } catch (e) {
     console.log('Download/Install error', e);
+     broadcastProgress({
+        step: 'downloadedCore',
+        status: 'error',
+        progress: 0,
+        message: e?.message ? `Error: ${e.message}` :'Error: Unable to download or install the Core',
+      });
   }
 
   await removeQortalExe();

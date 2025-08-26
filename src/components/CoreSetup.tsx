@@ -18,6 +18,7 @@ export const CoreSetup = () => {
   const [isReady, setIsReady] = useState(false);
   const [statuses, setStatuses] = useAtom(statusesAtom);
   const [selectedNode] = useAtom(selectedNodeInfoAtom);
+  const [osType, setOsType] = useState(null)
   const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
     isOpenDialogCoreRecommendationAtom
   );
@@ -33,6 +34,11 @@ export const CoreSetup = () => {
       }
       if (p?.type === 'hasCustomPath') {
         setCustomQortalPath(p.hasCustomPath ? p.customPath : '');
+        return;
+      }
+
+        if (p?.type === 'osType') {
+        setOsType(p.osType);
         return;
       }
       setStatuses((prev) => {
@@ -99,7 +105,7 @@ export const CoreSetup = () => {
   }, [isNotRunning, isReady, isLocal]);
 
   const verifyCoreNotRunningFunc = useCallback(
-    (e) => {
+    () => {
       if (!isLocal) return;
       setStatuses({
         coreRunning: {
@@ -149,6 +155,7 @@ export const CoreSetup = () => {
         steps={statuses}
         customQortalPath={customQortalPath}
         verifyCoreNotRunningFunc={verifyCoreNotRunningFunc}
+        isWindows={osType === 'win32'}
       />
       <CoreSetupRecommendationDialog
         open={isOpenRecommendation}
