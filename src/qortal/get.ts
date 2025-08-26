@@ -4359,7 +4359,7 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === 'DGB') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.dbgPrivateKey;
+    const xprv58 = parsedData.dgbPrivateKey;
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
