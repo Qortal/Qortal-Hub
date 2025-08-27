@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   HTTP_LOCALHOST_12391,
   TIME_120_SECONDS_IN_MILLISECONDS,
@@ -20,6 +20,10 @@ import {
   walletToBeDecryptedErrorAtom,
 } from '../atoms/global';
 import { handleSetGlobalApikey } from '../App';
+import {
+  getLocalApiKeyNotElectronCase,
+  setLocalApiKeyNotElectronCase,
+} from '../background/background-cases';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
@@ -40,6 +44,11 @@ export const useAuth = () => {
     walletToBeDecryptedErrorAtom
   );
 
+  const savedApiKey = useMemo(
+    () => selectedNode?.apikey,
+    [selectedNode?.apikey]
+  );
+
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const [extState, setExtstate] = useAtom(extStateAtom);
 
@@ -50,54 +59,128 @@ export const useAuth = () => {
 
   const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
 
-  const validateApiKey = useCallback(async (currentNode) => {
-    const validatedNodeInfo = currentNode;
-
+  const checkIfLocalIsRunning = useCallback(async () => {
     try {
-      const isLocal = validatedNodeInfo?.url === HTTP_LOCALHOST_12391;
+      const res = await fetch('http://127.0.0.1:12391/admin/status');
+      if (res?.ok) return true;
+      return false;
+    } catch (error) {
+      return false;
+    }
+  }, []);
 
-      if (isLocal) {
-        const runningRes = await window.coreSetup.isCoreRunning();
-        if (!runningRes) {
-          setIsOpenRecommendation(true);
-          return { isValid: false, validatedNodeInfo };
-        }
-        //
-        const apiKey = await window.coreSetup.getApiKey();
-        validatedNodeInfo.apikey = apiKey;
+  const generateApiKey = useCallback(async () => {
+    try {
+      const res = await fetch(`http://127.0.0.1:12391/admin/apikey/generate`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        return null;
       }
+      const key = (await res.text()).trim();
+      if (!key) return null;
+      return key;
+    } catch (error) {
+      return null;
+    }
+  }, []);
 
-      let isValid = false;
+  console.log('selectedNode', selectedNode);
 
-      const url = `${validatedNodeInfo?.url}/admin/settings/localAuthBypassEnabled`;
-      const response = await fetch(url);
+  const validateApiKey = useCallback(
+    async (currentNode) => {
+      console.log('hello sup');
+      const isElectron = !!window?.coreSetup;
+      const validatedNodeInfo = currentNode;
 
-      // Assuming the response is in plain text and will be 'true' or 'false'
-      const data = await response.text();
-      if (data && data === 'true') {
-        isValid = true;
-      } else {
-        try {
-          const url2 = `${validatedNodeInfo?.url}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
-          const response2 = await fetch(url2);
+      try {
+        const isLocal = validatedNodeInfo?.url === HTTP_LOCALHOST_12391;
+        console.log('isLocal', isLocal);
+        if (isLocal) {
+          const runningRes = isElectron
+            ? await window.coreSetup.isCoreRunning()
+            : await checkIfLocalIsRunning();
+          if (!runningRes) {
+            setIsOpenRecommendation(true);
+            return { isValid: false, validatedNodeInfo };
+          }
+          //
+          const apiKey = isElectron
+            ? await window.coreSetup.getApiKey()
+            : await getLocalApiKeyNotElectronCase();
+          console.log('apikey', apiKey);
+          if (apiKey) {
+            validatedNodeInfo.apikey = apiKey;
+          }
+        }
 
-          // Assuming the response is in plain text and will be 'true' or 'false'
-          const data2 = await response2.text();
-          if (data2 === 'true') {
+        let isValid = false;
+
+        const url = `${validatedNodeInfo?.url}/admin/settings/localAuthBypassEnabled`;
+        const response = await fetch(url);
+
+        // Assuming the response is in plain text and will be 'true' or 'false'
+        const data = await response.text();
+        if (data && data === 'true') {
+          isValid = true;
+        } else {
+          try {
+            const url2 = `${validatedNodeInfo?.url}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
+            const response2 = await fetch(url2);
+
+            // Assuming the response is in plain text and will be 'true' or 'false'
+            const data2 = await response2.text();
+            if (data2 === 'true') {
+              isValid = true;
+            }
+          } catch (error) {}
+        }
+        if (!isValid && isLocal && !isElectron) {
+          const resGenerateApiKey = await generateApiKey();
+          if (resGenerateApiKey) {
+            validatedNodeInfo.apikey = resGenerateApiKey;
             isValid = true;
           }
-        } catch (error) {}
+        }
+        console.log('333 isValid', isValid, isLocal);
+        if (!isValid && isLocal) {
+          setIsOpenResetApikey(true);
+        } else if (!isValid && !isLocal) {
+          setIsOpenCustomApikeyDialog(true);
+        }
+        if (isValid && !isElectron && isLocal) {
+          setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
+        }
+
+        return { isValid, validatedNodeInfo };
+      } catch (error) {
+        return { isValid: false, validatedNodeInfo };
       }
-      console.log('222 isValid', isValid, isLocal);
-      if (!isValid && isLocal) {
-        setIsOpenResetApikey(true);
-      } else if (!isValid && !isLocal) {
-        setIsOpenCustomApikeyDialog(true);
+    },
+    [
+      setIsOpenCustomApikeyDialog,
+      setIsOpenRecommendation,
+      setIsOpenResetApikey,
+      checkIfLocalIsRunning,
+      generateApiKey,
+    ]
+  );
+
+  const validateLocalApiKey = useCallback(async (apiKey) => {
+    try {
+      const url2 = `http://127.0.0.1:12391/admin/apikey/test?apiKey=${apiKey}`;
+      const response2 = await fetch(url2);
+
+      // Assuming the response is in plain text and will be 'true' or 'false'
+      const data2 = await response2.text();
+      if (data2 === 'true') {
+        setLocalApiKeyNotElectronCase(apiKey);
+        return true;
       }
 
-      return { isValid, validatedNodeInfo };
+      return false;
     } catch (error) {
-      return { isValid: false, validatedNodeInfo };
+      return false;
     }
   }, []);
 
@@ -291,5 +374,6 @@ export const useAuth = () => {
     authenticate,
     getBalanceFunc,
     resetApikey,
+    validateLocalApiKey,
   };
 };

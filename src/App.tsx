@@ -592,11 +592,12 @@ function App() {
             handleSetGlobalApikey(response);
             setSelectedNode(response);
           } else {
-            handleSetGlobalApikey(response);
-            setSelectedNode({
+            const payload = {
               url: HTTP_LOCALHOST_12391,
               apikey: '',
-            });
+            };
+            handleSetGlobalApikey(response);
+            setSelectedNode(payload);
           }
         })
         .catch((error) => {

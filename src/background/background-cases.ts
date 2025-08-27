@@ -949,6 +949,14 @@ export async function addTimestampEnterChatCase(request, event) {
   }
 }
 
+export async function setLocalApiKeyNotElectronCase(localApiKey) {
+  storeData('localApiKey', localApiKey);
+}
+
+export async function getLocalApiKeyNotElectronCase() {
+  return await getData('localApiKey').catch((error) => null);
+}
+
 export async function setApiKeyCase(request, event) {
   try {
     const payload = request.payload;

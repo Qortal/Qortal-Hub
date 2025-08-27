@@ -18,7 +18,7 @@ export const CoreSetup = () => {
   const [isReady, setIsReady] = useState(false);
   const [statuses, setStatuses] = useAtom(statusesAtom);
   const [selectedNode] = useAtom(selectedNodeInfoAtom);
-  const [osType, setOsType] = useState(null)
+  const [osType, setOsType] = useState(null);
   const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
     isOpenDialogCoreRecommendationAtom
   );
@@ -37,7 +37,7 @@ export const CoreSetup = () => {
         return;
       }
 
-        if (p?.type === 'osType') {
+      if (p?.type === 'osType') {
         setOsType(p.osType);
         return;
       }
@@ -79,6 +79,7 @@ export const CoreSetup = () => {
   }
 
   useEffect(() => {
+    if (!window?.coreSetup) return;
     let cancelled = false;
 
     if (!cancelled) {
@@ -98,38 +99,37 @@ export const CoreSetup = () => {
   const isNotRunning = statuses['coreRunning']?.status === 'off';
   console.log('statuses', statuses);
   useEffect(() => {
+    if (!window?.coreSetup) return;
     if (!isReady || !isLocal) return;
     if (isNotRunning) {
       setOpen(true);
     }
   }, [isNotRunning, isReady, isLocal]);
 
-  const verifyCoreNotRunningFunc = useCallback(
-    () => {
-      if (!isLocal) return;
-      setStatuses({
-        coreRunning: {
-          status: 'idle',
-          progress: 0,
-          message: '',
-        },
-        downloadedCore: {
-          status: 'idle',
-          progress: 0,
-          message: '',
-        },
-        hasJava: {
-          status: 'idle',
-          progress: 0,
-          message: '',
-        },
-      });
-      handleCoreSetup({ isReady, isLocal });
-    },
-    [isLocal, isReady, setStatuses]
-  );
+  const verifyCoreNotRunningFunc = useCallback(() => {
+    if (!isLocal) return;
+    setStatuses({
+      coreRunning: {
+        status: 'idle',
+        progress: 0,
+        message: '',
+      },
+      downloadedCore: {
+        status: 'idle',
+        progress: 0,
+        message: '',
+      },
+      hasJava: {
+        status: 'idle',
+        progress: 0,
+        message: '',
+      },
+    });
+    handleCoreSetup({ isReady, isLocal });
+  }, [isLocal, isReady, setStatuses]);
 
   useEffect(() => {
+    if (!window?.coreSetup) return;
     subscribeToEvent('verifyCoreNotRunning', verifyCoreNotRunningFunc);
 
     return () => {
