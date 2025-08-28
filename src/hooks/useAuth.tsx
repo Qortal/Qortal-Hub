@@ -1,10 +1,10 @@
-import React, { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
   TIME_120_SECONDS_IN_MILLISECONDS,
   TIME_40_SECONDS_IN_MILLISECONDS,
 } from '../constants/constants';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -28,29 +28,20 @@ import {
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
 export const useAuth = () => {
-  const [open, setIsOpenResetApikey] = useAtom(isOpenDialogResetApikey);
-  const [_, setIsOpenCustomApikeyDialog] = useAtom(isOpenDialogCustomApikey);
+  const setIsOpenResetApikey = useSetAtom(isOpenDialogResetApikey);
+  const setIsOpenCustomApikeyDialog = useSetAtom(isOpenDialogCustomApikey);
 
-  const [balance, setBalance] = useAtom(balanceAtom);
-  const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
-    qortBalanceLoadingAtom
-  );
-  const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
+  const setBalance = useSetAtom(balanceAtom);
+  const setQortBalanceLoading = useSetAtom(qortBalanceLoadingAtom);
+  const setIsOpenRecommendation = useSetAtom(
     isOpenDialogCoreRecommendationAtom
   );
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
-  const [userInfo, setUserInfo] = useAtom(userInfoAtom);
-  const [walletToBeDecryptedError, setWalletToBeDecryptedError] = useAtom(
-    walletToBeDecryptedErrorAtom
-  );
+  const setUserInfo = useSetAtom(userInfoAtom);
+  const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
 
-  const savedApiKey = useMemo(
-    () => selectedNode?.apikey,
-    [selectedNode?.apikey]
-  );
-
-  const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
-  const [extState, setExtstate] = useAtom(extStateAtom);
+  const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
+  const setExtstate = useSetAtom(extStateAtom);
 
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
@@ -84,8 +75,6 @@ export const useAuth = () => {
       return null;
     }
   }, []);
-
-  console.log('selectedNode', selectedNode);
 
   const validateApiKey = useCallback(
     async (currentNode) => {
@@ -186,25 +175,11 @@ export const useAuth = () => {
 
   const handleSaveNodeInfo = useCallback(
     async (nodeInfo) => {
-      try {
-        console.log('nodeInfo', nodeInfo);
-
-        await window.sendMessage('setApiKey', nodeInfo);
-        if (nodeInfo) {
-          setSelectedNode(nodeInfo);
-        }
-        handleSetGlobalApikey(nodeInfo);
-      } catch (error) {
-        //   console.error(
-        //     t('auth:message.error.set_apikey', {
-        //       postProcess: 'capitalizeFirstChar',
-        //     }),
-        //     error.message ||
-        //       t('core:message.error.generic', {
-        //         postProcess: 'capitalizeFirstChar',
-        //       })
-        //   );
+      await window.sendMessage('setApiKey', nodeInfo);
+      if (nodeInfo) {
+        setSelectedNode(nodeInfo);
       }
+      handleSetGlobalApikey(nodeInfo);
     },
     [setSelectedNode]
   );

@@ -61,7 +61,7 @@ export interface CoreSetupDialogProps {
   hideActionIfRunning?: boolean;
   customQortalPath: string;
   verifyCoreNotRunningFunc: () => void;
-  isWindows: boolean
+  isWindows: boolean;
 }
 
 const statusIcon = (status: StepStatus) => {
@@ -110,7 +110,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     actionLabelOverride,
     customQortalPath,
     verifyCoreNotRunningFunc,
-    isWindows
+    isWindows,
   } = props;
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     React.useContext(QORTAL_APP_CONTEXT);
@@ -132,10 +132,12 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     },
   ];
 
-  const stepStates = stepDefs.filter((step)=> isWindows ? step.key !== 'hasJava' : step).map((def) => ({
-    ...def,
-    state: steps[def.key],
-  }));
+  const stepStates = stepDefs
+    .filter((step) => (isWindows ? step.key !== 'hasJava' : step))
+    .map((def) => ({
+      ...def,
+      state: steps[def.key],
+    }));
 
   // Determine active step (first not done). If all done, last index.
   let activeStep = stepStates.findIndex((s) => s.state.status !== 'done');
@@ -169,7 +171,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       } else {
         verifyCoreNotRunningFunc();
       }
-    } catch (error) { }
+    } catch (error) {}
   };
 
   const removePath = async () => {
@@ -208,7 +210,6 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             </AccordionDetails>
           </Accordion>
         )}
-
 
         <Stepper activeStep={activeStep} orientation="vertical">
           {stepStates.map(({ key, label, state }, idx) => {
@@ -277,17 +278,6 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             );
           })}
         </Stepper>
-
-        {/* Optional guidance if Java isn't installed */}
-        {steps.hasJava.status !== 'done' && (
-          <Box sx={{ mt: 2 }}>
-            <Tooltip title="Install Java 17+ and retry.">
-              <Typography variant="caption" color="text.secondary">
-                Java not detected — please install Java 17+ to continue.
-              </Typography>
-            </Tooltip>
-          </Box>
-        )}
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>

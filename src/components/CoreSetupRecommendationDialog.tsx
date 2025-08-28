@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
-
+const isElectron = !!window?.coreSetup;
 export interface StepState {
   status: StepStatus;
   /** 0..100; if omitted, inferred from status (done=>100, idle=>0) */
@@ -75,17 +75,29 @@ export function CoreSetupRecommendationDialog(
         <Button onClick={proceedWithPublic} variant="text">
           Continue with public node
         </Button>
-
-        <Button
-          onClick={() => {
-            setOpenCoreHandler(true);
-            onClose();
-          }}
-          color="success"
-          variant="contained"
-        >
-          Open local setup
-        </Button>
+        {isElectron ? (
+          <Button
+            onClick={() => {
+              setOpenCoreHandler(true);
+              onClose();
+            }}
+            color="success"
+            variant="contained"
+          >
+            Open local setup
+          </Button>
+        ) : (
+          <Button
+            onClick={() => {
+              window.open('https://qortal.dev/downloads', '_system');
+              onClose();
+            }}
+            color="success"
+            variant="contained"
+          >
+            Go to downloads
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
