@@ -219,15 +219,15 @@ export const SUGGESTED_QORTS: number = 6;
 export const TIME_DAY_1_IN_MILLISECONDS: number = 86400000;
 
 export const TIME_MINUTE_1_IN_MILLISECONDS: number = 60000;
+export const TIME_MINUTES_3_IN_MILLISECONDS: number = 180000;
+export const TIME_MINUTES_6_IN_MILLISECONDS: number = 360000;
 export const TIME_MINUTES_10_IN_MILLISECONDS: number = 600000;
 export const TIME_MINUTES_20_IN_MILLISECONDS: number = 1200000;
-export const TIME_MINUTES_3_IN_MILLISECONDS: number = 180000;
 export const TIME_MINUTES_30_IN_MILLISECONDS: number = 1800000;
-export const TIME_MINUTES_6_IN_MILLISECONDS: number = 360000;
 
 export const TIME_SECONDS_10_IN_MILLISECONDS: number = 10000;
-export const TIME_SECONDS_120_IN_MILLISECONDS: number = 120000;
 export const TIME_SECONDS_20_IN_MILLISECONDS: number = 20000;
 export const TIME_SECONDS_40_IN_MILLISECONDS: number = 40000;
+export const TIME_SECONDS_120_IN_MILLISECONDS: number = 120000;
 
 export const TIME_WEEK_1_IN_MILLISECONDS: number = 604800000;
