@@ -4,14 +4,15 @@ import './chat.css';
 import { executeEvent } from '../../utils/events';
 import { Embed } from '../Embeds/Embed';
 import { Box, useTheme } from '@mui/material';
+import { QORTAL_PROTOCOL } from '../../constants/constants';
 
 export const extractComponents = (url) => {
-  if (!url || !url.startsWith('qortal://')) {
+  if (!url || !url.startsWith(QORTAL_PROTOCOL)) {
     return null;
   }
 
   // Skip links starting with "qortal://use-"
-  if (url.startsWith('qortal://use-')) {
+  if (url.startsWith(QORTAL_PROTOCOL + 'use-')) {
     return null;
   }
 
@@ -39,7 +40,7 @@ function processText(input) {
       if (parts.length > 0) {
         const fragment = document.createDocumentFragment();
         parts.forEach((part) => {
-          if (part.startsWith('qortal://')) {
+          if (part.startsWith(QORTAL_PROTOCOL)) {
             const link = document.createElement('span');
             link.setAttribute('data-url', part);
             link.textContent = part;
