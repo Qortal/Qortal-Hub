@@ -46,8 +46,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Label } from '../../styles/App-styles.ts';
 import {
-  TIME_1_WEEK_IN_MILLISECONDS,
-  TIME_30_MINUTES_IN_MILLISECONDS,
+  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_MINUTES_30_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 8 });
@@ -138,7 +138,7 @@ export const ListOfGroupPromotions = () => {
       const responseData = await response.json();
       const data: any[] = [];
       const uniqueGroupIds = new Set();
-      const oneWeekAgo = Date.now() - TIME_1_WEEK_IN_MILLISECONDS;
+      const oneWeekAgo = Date.now() - TIME_WEEK_1_IN_MILLISECONDS;
 
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
@@ -192,16 +192,16 @@ export const ListOfGroupPromotions = () => {
 
     const timeSinceLastFetch = now - promotionTimeInterval;
     const initialDelay =
-      timeSinceLastFetch >= TIME_30_MINUTES_IN_MILLISECONDS
+      timeSinceLastFetch >= TIME_MINUTES_30_IN_MILLISECONDS
         ? 0
-        : TIME_30_MINUTES_IN_MILLISECONDS - timeSinceLastFetch;
+        : TIME_MINUTES_30_IN_MILLISECONDS - timeSinceLastFetch;
     const initialTimeout = setTimeout(() => {
       getPromotions();
 
       // Start a 30-minute interval
       const interval = setInterval(() => {
         getPromotions();
-      }, TIME_30_MINUTES_IN_MILLISECONDS);
+      }, TIME_MINUTES_30_IN_MILLISECONDS);
 
       return () => clearInterval(interval);
     }, initialDelay);

@@ -17,7 +17,7 @@ import { executeEvent } from '../../utils/events';
 import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
-import { TIME_1_MINUTE_IN_MILLISECONDS } from '../../constants/constants';
+import { TIME_MINUTE_1_IN_MILLISECONDS } from '../../constants/constants';
 
 export const TaskManager = ({ getUserInfo }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
@@ -54,7 +54,7 @@ export const TaskManager = ({ getUserInfo }) => {
             await new Promise((res) =>
               setTimeout(() => {
                 res(null);
-              }, TIME_1_MINUTE_IN_MILLISECONDS)
+              }, TIME_MINUTE_1_IN_MILLISECONDS)
             );
             setTxList((prev) => {
               let previousData = [...prev];
@@ -81,7 +81,7 @@ export const TaskManager = ({ getUserInfo }) => {
 
     intervals.current[signature] = setInterval(
       getAnswer,
-      TIME_1_MINUTE_IN_MILLISECONDS
+      TIME_MINUTE_1_IN_MILLISECONDS
     );
   };
 

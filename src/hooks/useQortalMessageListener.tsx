@@ -7,7 +7,7 @@ import { mimeToExtensionMap } from '../utils/memeTypes';
 import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
-import { TIME_20_MINUTES_IN_MILLISECONDS } from '../constants/constants';
+import { TIME_MINUTES_20_IN_MILLISECONDS } from '../constants/constants';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -574,9 +574,9 @@ export const useQortalMessageListener = (
         ) {
           timeout =
             message?.payload?.resources?.length *
-            TIME_20_MINUTES_IN_MILLISECONDS;
+            TIME_MINUTES_20_IN_MILLISECONDS;
         } else if (message?.action === 'PUBLISH_QDN_RESOURCE') {
-          timeout = TIME_20_MINUTES_IN_MILLISECONDS;
+          timeout = TIME_MINUTES_20_IN_MILLISECONDS;
         }
 
         window
