@@ -30,7 +30,7 @@ import {
   MAX_SIZE_MESSAGE,
   MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
-  TIME_2_MINUTES_IN_MILLISECONDS,
+  TIME_SECONDS_120_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 5 });
@@ -360,7 +360,7 @@ export const ChatDirect = ({
               publicKeyOfRecipient,
               address: directTo,
             },
-            TIME_2_MINUTES_IN_MILLISECONDS
+            TIME_SECONDS_120_IN_MILLISECONDS
           )
           .then(async (response) => {
             if (!response?.error) {
