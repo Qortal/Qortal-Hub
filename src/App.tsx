@@ -146,9 +146,9 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
-  TIME_10_SECONDS_IN_MILLISECONDS,
-  TIME_120_SECONDS_IN_MILLISECONDS,
-  TIME_40_SECONDS_IN_MILLISECONDS,
+  TIME_SECONDS_10_IN_MILLISECONDS,
+  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 
 type extStates =
@@ -748,7 +748,7 @@ function App() {
             console.error('Failed to get balance:', error);
             isCalling = false;
           });
-      }, TIME_40_SECONDS_IN_MILLISECONDS);
+      }, TIME_SECONDS_40_IN_MILLISECONDS);
     } catch (error) {
       console.error(error);
     }
@@ -932,7 +932,7 @@ function App() {
         await new Promise((res) => {
           setTimeout(() => {
             res(null);
-          }, TIME_10_SECONDS_IN_MILLISECONDS);
+          }, TIME_SECONDS_10_IN_MILLISECONDS);
         });
       }
       window
@@ -1187,7 +1187,7 @@ function App() {
             password: authenticatePassword,
             wallet: rawWallet,
           },
-          TIME_120_SECONDS_IN_MILLISECONDS
+          TIME_SECONDS_120_IN_MILLISECONDS
         )
         .then((response) => {
           if (response && !response.error) {

@@ -78,9 +78,9 @@ import { GroupList } from './GroupList';
 import { useAtom, useSetAtom } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
-  TIME_10_MINUTE_IN_MILLISECONDS,
-  TIME_120_SECONDS_IN_MILLISECONDS,
-  TIME_1_DAY_IN_MILLISECONDS,
+  TIME_MINUTES_10_IN_MILLISECONDS,
+  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_DAY_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
 
@@ -694,7 +694,7 @@ export const Group = ({
           secretKey &&
           lastFetchedSecretKey.current &&
           Date.now() - lastFetchedSecretKey.current <
-            TIME_10_MINUTE_IN_MILLISECONDS
+            TIME_MINUTES_10_IN_MILLISECONDS
         ) {
           return secretKey;
         }
@@ -734,7 +734,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_120_SECONDS_IN_MILLISECONDS);
+          }, TIME_SECONDS_120_IN_MILLISECONDS);
           return false;
         }
 
@@ -794,7 +794,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_120_SECONDS_IN_MILLISECONDS);
+          }, TIME_SECONDS_120_IN_MILLISECONDS);
         }
       } finally {
         setIsLoadingGroup(false);
@@ -872,7 +872,7 @@ export const Group = ({
           const hasMoreRecentMsg = await getCountNewMesg(
             group.groupId,
             timestampEnterDataRef.current[group?.groupId] ||
-              Date.now() - TIME_1_DAY_IN_MILLISECONDS
+              Date.now() - TIME_DAY_1_IN_MILLISECONDS
           );
           if (hasMoreRecentMsg) {
             groupData[group.groupId] = hasMoreRecentMsg;
