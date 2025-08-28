@@ -2651,7 +2651,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -3036,7 +3036,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
