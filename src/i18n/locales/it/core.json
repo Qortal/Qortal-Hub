@@ -125,7 +125,7 @@
     "block_height": "altezza del blocco",
     "information": "informazioni di base",
     "peers": "peer connessi",
-    "version": "versione principale"
+    "version": "versione core"
   },
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
