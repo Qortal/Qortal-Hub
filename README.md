@@ -34,3 +34,7 @@ The setup includes modularized translation files, language detection, context an
 Files with translation are in `src/i18n/locales/<locale>` folder.
 
 See [guidelines](./docs/i18n_languages.md).
+
+## Developer contribution
+
+See the dedicated page for [development](./docs/development.md).
