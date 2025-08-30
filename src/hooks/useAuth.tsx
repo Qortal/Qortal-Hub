@@ -78,13 +78,11 @@ export const useAuth = () => {
 
   const validateApiKey = useCallback(
     async (currentNode) => {
-      console.log('hello sup');
       const isElectron = !!window?.coreSetup;
       const validatedNodeInfo = currentNode;
 
       try {
         const isLocal = validatedNodeInfo?.url === HTTP_LOCALHOST_12391;
-        console.log('isLocal', isLocal);
         if (isLocal) {
           const runningRes = isElectron
             ? await window.coreSetup.isCoreRunning()
@@ -97,7 +95,6 @@ export const useAuth = () => {
           const apiKey = isElectron
             ? await window.coreSetup.getApiKey()
             : await getLocalApiKeyNotElectronCase();
-          console.log('apikey', apiKey);
           if (apiKey) {
             validatedNodeInfo.apikey = apiKey;
           }
@@ -131,7 +128,6 @@ export const useAuth = () => {
             isValid = true;
           }
         }
-        console.log('333 isValid', isValid, isLocal);
         if (!isValid && isLocal) {
           setIsOpenResetApikey(true);
         } else if (!isValid && !isLocal) {
@@ -290,7 +286,6 @@ export const useAuth = () => {
         TIME_120_SECONDS_IN_MILLISECONDS
       )
       .then((response) => {
-        console.log('response', response);
         if (response && !response.error) {
           setAuthenticatePassword('');
           setExtstate('authenticated');

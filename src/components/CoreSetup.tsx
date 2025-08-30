@@ -80,15 +80,8 @@ export const CoreSetup = () => {
 
   useEffect(() => {
     if (!window?.coreSetup) return;
-    let cancelled = false;
 
-    if (!cancelled) {
-      handleCoreSetup({ isReady, isLocal });
-    }
-
-    return () => {
-      cancelled = true;
-    };
+    handleCoreSetup({ isReady, isLocal });
   }, [isReady, isLocal]);
 
   const isCoreInstalledState = statuses['downloadedCore']?.status === 'done';
@@ -97,7 +90,6 @@ export const CoreSetup = () => {
     (key) => statuses[key]?.status === 'active'
   );
   const isNotRunning = statuses['coreRunning']?.status === 'off';
-  console.log('statuses', statuses);
   useEffect(() => {
     if (!window?.coreSetup) return;
     if (!isReady || !isLocal) return;

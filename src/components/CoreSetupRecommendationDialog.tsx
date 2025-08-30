@@ -37,6 +37,7 @@ export function CoreSetupRecommendationDialog(
       await handleSaveNodeInfo(null);
       await authenticate();
     } catch (error) {
+      console.error(error);
     } finally {
       onClose();
     }

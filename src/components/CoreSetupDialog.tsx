@@ -15,7 +15,6 @@ import {
   StepContent,
   StepLabel,
   Stepper,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
@@ -162,7 +161,6 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       const res = await window.coreSetup.pickQortalDirectory();
 
       if (res === false) {
-        console.log('res', res, setOpenSnackGlobal);
         setOpenSnackGlobal(true);
         setInfoSnackCustom({
           type: 'error',
@@ -171,7 +169,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       } else {
         verifyCoreNotRunningFunc();
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const removePath = async () => {

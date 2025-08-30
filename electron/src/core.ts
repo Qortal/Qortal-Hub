@@ -49,13 +49,12 @@ import {
   zipurl,
 } from './core-constants';
 import extract from 'extract-zip';
-import net from "net";
+import net from 'net';
 
 import { broadcastProgress, getSharedSettingsFilePath } from './setup';
 const isRunning = (query, cb) => {
   const platform = process.platform;
   let cmd = '';
-  console.log('platform', platform)
   switch (platform) {
     case 'win32':
       cmd = `tasklist`;
@@ -75,8 +74,11 @@ const isRunning = (query, cb) => {
   });
 };
 
-
-function isPortOpen(host: string, port: number, timeoutMs: number): Promise<boolean> {
+function isPortOpen(
+  host: string,
+  port: number,
+  timeoutMs: number
+): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new net.Socket();
     let done = false;
@@ -84,30 +86,31 @@ function isPortOpen(host: string, port: number, timeoutMs: number): Promise<bool
     const finish = (result: boolean) => {
       if (done) return;
       done = true;
-      try { sock.destroy(); } catch {}
+      try {
+        sock.destroy();
+      } catch {}
       resolve(result);
     };
 
     sock.setTimeout(timeoutMs);
-    sock.once("connect", () => finish(true));
-    sock.once("timeout", () => finish(false));
-    sock.once("error", () => finish(false));
+    sock.once('connect', () => finish(true));
+    sock.once('timeout', () => finish(false));
+    sock.once('error', () => finish(false));
     sock.connect(port, host);
   });
 }
 
 export async function isCorePortRunning(): Promise<boolean> {
-  const host =  "127.0.0.1";
+  const host = '127.0.0.1';
   const port = 12391;
   const timeoutMs = 600;
 
   // 1) Fast path: check if API port is listening.
- 
-    const ok = await isPortOpen(host, port, timeoutMs);
-    if (ok) return true;
-  
 
-  return false
+  const ok = await isPortOpen(host, port, timeoutMs);
+  if (ok) return true;
+
+  return false;
 }
 
 function watchForApiStart(
@@ -193,7 +196,7 @@ async function startQortal() {
   const startTimestamp = Date.now();
   const selectedCustomDir = await customQortalInstalledDir();
 
-  const isWin = process.platform === 'win32'
+  const isWin = process.platform === 'win32';
   let qortalDirLocation = isWin ? qortalWindir : qortaldir;
   let qortalJarLocation = qortaljar;
   let qortalSettingsLocation = qortalsettings;
@@ -610,9 +613,8 @@ async function startQortal() {
       }
     }
   } else if (process.platform === 'win32') {
-    let winCore = startWinCore
+    let winCore = startWinCore;
     if (selectedCustomDir) {
-
       winCore = path.join(selectedCustomDir, 'qortal.exe');
     }
     spawn(winCore, { detached: true });
@@ -620,7 +622,7 @@ async function startQortal() {
 }
 
 async function startElectronWin() {
- startCore()
+  startCore();
 }
 
 async function startElectronUnix() {
@@ -651,13 +653,12 @@ export async function checkOsPlatform() {
 export async function isCoreRunning() {
   return new Promise(async (res, rej) => {
     if (process.platform === 'win32') {
-      const isPortRunning = await isCorePortRunning()
-      if(isPortRunning){
-        res(true)
-        return
+      const isPortRunning = await isCorePortRunning();
+      if (isPortRunning) {
+        res(true);
+        return;
       }
       isRunning('qortal.exe', (status) => {
-        console.log('status', status)
         if (status == true) {
           res(true);
         } else {
@@ -713,7 +714,7 @@ export async function isCoreInstalled(customDir?: string) {
         : selectedCustomDir
           ? path.join(selectedCustomDir, 'qortal.jar')
           : winjar;
-          const dirExe = customDir
+      const dirExe = customDir
         ? path.join(customDir, 'qortal.exe')
         : selectedCustomDir
           ? path.join(selectedCustomDir, 'qortal.exe')
@@ -913,7 +914,6 @@ async function downloadQortal() {
         : 'Error downloading Qortal Core',
     });
     console.log('Download Qortal error', err);
-    // (We’ll continue to unzip attempt, same as your original flow)
   } finally {
     isDownloadingQortal = false;
   }
@@ -968,7 +968,7 @@ export function doesFileExist(
               (getRes) => {
                 resolve(
                   !!getRes &&
-                  (getRes.statusCode === 200 || getRes.statusCode === 206)
+                    (getRes.statusCode === 200 || getRes.statusCode === 206)
                 );
                 getRes.resume();
               }
@@ -1471,7 +1471,7 @@ async function removeQortalExe() {
   } catch (err) {
     console.log('remove error', err);
   }
- 
+
   await startElectronWin();
 }
 
@@ -1486,13 +1486,12 @@ export async function downloadCoreWindows() {
       winexe,
       ({ percent, received, total }) => {
         if (percent !== undefined) {
-           broadcastProgress({
-          step: 'downloadedCore',
-          status: 'active',
-          progress: percent,
-          message: 'Downloading the Qortal Core... please wait.',
-        });
-          // console.log('percent', percent);
+          broadcastProgress({
+            step: 'downloadedCore',
+            status: 'active',
+            progress: percent,
+            message: 'Downloading the Qortal Core... please wait.',
+          });
         } else console.log(`received ${received} / ${total || 0} bytes`);
       }
     );
@@ -1516,21 +1515,23 @@ export async function downloadCoreWindows() {
       // args = ['/S'];
       const { stdout, stderr } = await execFileAsync(winexe, args);
       console.log('Qortal Core Installation Done', stdout, stderr);
-       broadcastProgress({
-      step: 'downloadedCore',
-      status: 'done',
-      progress: 100,
-      message: '',
-    });
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
     }
   } catch (e) {
     console.log('Download/Install error', e);
-     broadcastProgress({
-        step: 'downloadedCore',
-        status: 'error',
-        progress: 0,
-        message: e?.message ? `Error: ${e.message}` :'Error: Unable to download or install the Core',
-      });
+    broadcastProgress({
+      step: 'downloadedCore',
+      status: 'error',
+      progress: 0,
+      message: e?.message
+        ? `Error: ${e.message}`
+        : 'Error: Unable to download or install the Core',
+    });
   }
 
   await removeQortalExe();
@@ -1605,7 +1606,6 @@ async function generateApiKey(): Promise<string> {
 export async function getApiKey(): Promise<string> {
   const settings = await getSettings();
   const apiKeyPath = (settings?.apiKeyPath ?? '').trim();
-  console.log('apiKeyPath', apiKeyPath);
   // If apiKeyPath is empty, default to current working directory (matches Qortal behavior)
   const dir = apiKeyPath;
   if (!dir) throw new Error('No apiKey path found');
@@ -1615,7 +1615,6 @@ export async function getApiKey(): Promise<string> {
 
   if (existing) {
     console.log(`Existing API key found at: ${filePath}`);
-    console.log(existing);
     return existing;
   }
 
@@ -1630,7 +1629,6 @@ export async function getApiKey(): Promise<string> {
 export async function resetApikey(): Promise<boolean> {
   const settings = await getSettings();
   const apiKeyPath = (settings?.apiKeyPath ?? '').trim();
-  console.log('apiKeyPath', apiKeyPath);
   // If apiKeyPath is empty, default to current working directory (matches Qortal behavior)
   const dir = apiKeyPath;
   if (!dir) throw new Error('No apiKey path found');
