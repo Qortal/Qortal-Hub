@@ -73,7 +73,6 @@ const validateTheme = (theme) => {
 };
 
 export default function ThemeManager() {
-  const theme = useTheme();
   const { userThemes, addUserTheme, setUserTheme, currentThemeId } =
     useThemeContext();
   const [openEditor, setOpenEditor] = useState(false);
