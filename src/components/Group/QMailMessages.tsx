@@ -17,14 +17,14 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { TIME_WEEK_1_IN_MILLISECONDS } from '../../constants/constants';
+import { TIME_1_WEEK_IN_MILLISECONDS } from '../../constants/constants';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
   const now = Date.now();
 
   // Check if the timestamp is newer than one week ago
-  return timestamp > TIME_WEEK_1_IN_MILLISECONDS;
+  return timestamp > TIME_1_WEEK_IN_MILLISECONDS;
 };
 
 export function formatEmailDate(timestamp: number) {

@@ -1,4 +1,4 @@
-import { TIME_MINUTES_10_IN_MILLISECONDS } from '../constants/constants';
+import { TIME_10_MINUTES_IN_MILLISECONDS } from '../constants/constants';
 
 // Utility to generate unique request IDs
 function generateRequestId() {
@@ -27,7 +27,7 @@ window.addEventListener('message', (event) => {
 export const sendMessageBackground = (
   action,
   data = {},
-  timeout = TIME_MINUTES_10_IN_MILLISECONDS,
+  timeout = TIME_10_MINUTES_IN_MILLISECONDS,
   isExtension,
   appInfo,
   skipAuth

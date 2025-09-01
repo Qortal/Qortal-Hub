@@ -30,9 +30,9 @@ import {
   LOCALHOST_12391,
   MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
-  TIME_MINUTES_3_IN_MILLISECONDS,
-  TIME_MINUTES_10_IN_MILLISECONDS,
-  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_3_MINUTES_IN_MILLISECONDS,
+  TIME_10_MINUTES_IN_MILLISECONDS,
+  TIME_1_WEEK_IN_MILLISECONDS,
 } from '../constants/constants';
 import {
   addDataPublishesCase,
@@ -607,7 +607,7 @@ export function updateThreadActivity({
     const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
-    if (currentTime - lastResetTime > TIME_WEEK_1_IN_MILLISECONDS) {
+    if (currentTime - lastResetTime > TIME_1_WEEK_IN_MILLISECONDS) {
       // Reset visit counts and update the last reset time
       threads.mostVisitedThreads.forEach((thread) => (thread.visitCount = 0));
       threads.lastResetTime = currentTime;
@@ -3819,7 +3819,7 @@ const createNotificationCheck = () => {
       } catch (error) {
         console.error('Error checking notifications:', error);
       }
-    }, TIME_MINUTES_10_IN_MILLISECONDS);
+    }, TIME_10_MINUTES_IN_MILLISECONDS);
   }
 
   if (!paymentsCheckInterval) {
@@ -3834,7 +3834,7 @@ const createNotificationCheck = () => {
       } catch (error) {
         console.error('Error checking payments:', error);
       }
-    }, TIME_MINUTES_3_IN_MILLISECONDS);
+    }, TIME_3_MINUTES_IN_MILLISECONDS);
   }
 };
 

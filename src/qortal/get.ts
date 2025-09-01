@@ -58,7 +58,7 @@ import {
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
-  TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_20_MINUTES_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -617,7 +617,7 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
       Date.now() - groupSecretkeys[groupId]?.timestamp <
-        TIME_MINUTES_20_IN_MILLISECONDS
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -664,7 +664,7 @@ export const encryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
       Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
-        TIME_MINUTES_20_IN_MILLISECONDS
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -748,7 +748,7 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
       Date.now() - groupSecretkeys[groupId]?.timestamp <
-        TIME_MINUTES_20_IN_MILLISECONDS
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -792,7 +792,7 @@ export const decryptQortalGroupData = async (data, sender) => {
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
       Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
-        TIME_MINUTES_20_IN_MILLISECONDS
+        TIME_20_MINUTES_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }

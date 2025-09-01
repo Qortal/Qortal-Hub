@@ -78,8 +78,8 @@ import { GroupList } from './GroupList';
 import { useAtom, useSetAtom } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
-  TIME_MINUTES_10_IN_MILLISECONDS,
-  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_10_MINUTES_IN_MILLISECONDS,
+  TIME_2_MINUTES_IN_MILLISECONDS,
   TIME_DAY_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
@@ -694,7 +694,7 @@ export const Group = ({
           secretKey &&
           lastFetchedSecretKey.current &&
           Date.now() - lastFetchedSecretKey.current <
-            TIME_MINUTES_10_IN_MILLISECONDS
+            TIME_10_MINUTES_IN_MILLISECONDS
         ) {
           return secretKey;
         }
@@ -734,7 +734,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_SECONDS_120_IN_MILLISECONDS);
+          }, TIME_2_MINUTES_IN_MILLISECONDS);
           return false;
         }
 
@@ -794,7 +794,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_SECONDS_120_IN_MILLISECONDS);
+          }, TIME_2_MINUTES_IN_MILLISECONDS);
         }
       } finally {
         setIsLoadingGroup(false);
