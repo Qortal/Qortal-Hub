@@ -5111,11 +5111,12 @@ export const adminAction = async (data, isFromExtension) => {
   });
   // For actions that require a value, check for 'value' field
   const actionsRequiringValue = [
-    'addpeer',
-    'removepeer',
-    'forcesync',
     'addmintingaccount',
+    'addpeer',
+    'forcesync',
+    'getmintingaccounts',
     'removemintingaccount',
+    'removepeer',
   ];
   if (actionsRequiringValue.includes(data.type.toLowerCase()) && !data.value) {
     missingFields.push('value');
@@ -5154,6 +5155,9 @@ export const adminAction = async (data, isFromExtension) => {
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
       method = 'POST';
       includeValueInBody = true;
+      break;
+    case 'getmintingaccounts':
+      apiEndpoint = await createEndpoint('/admin/mintingaccounts');
       break;
     case 'removemintingaccount':
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
