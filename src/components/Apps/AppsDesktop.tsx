@@ -27,6 +27,7 @@ import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
+import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -162,12 +163,9 @@ export const AppsDesktop = ({
   useEffect(() => {
     getQapps();
 
-    const interval = setInterval(
-      () => {
-        getQapps();
-      },
-      20 * 60 * 1000
-    ); // 20 minutes in milliseconds
+    const interval = setInterval(() => {
+      getQapps();
+    }, TIME_MINUTES_20_IN_MILLISECONDS);
 
     return () => clearInterval(interval);
   }, [getQapps]);

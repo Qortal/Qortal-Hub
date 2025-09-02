@@ -45,8 +45,11 @@ import { getFee } from '../../background/background.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Label } from '../../styles/App-styles.ts';
+import {
+  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_MINUTES_30_IN_MILLISECONDS,
+} from '../../constants/constants.ts';
 
-const THIRTY_MINUTES = 30 * 60 * 1000; // 30 minutes in milliseconds
 const uid = new ShortUniqueId({ length: 8 });
 
 export const requestQueuePromos = new RequestQueueWithPromise(3);
@@ -133,13 +136,13 @@ export const ListOfGroupPromotions = () => {
         },
       });
       const responseData = await response.json();
-      let data: any[] = [];
+      const data: any[] = [];
       const uniqueGroupIds = new Set();
-      const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const oneWeekAgo = Date.now() - TIME_WEEK_1_IN_MILLISECONDS;
 
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
-          const name = await requestQueuePromos.enqueue(async () => {
+          await requestQueuePromos.enqueue(async () => {
             const url = `${getBaseApiReact()}/arbitrary/${promo.service}/${
               promo.name
             }/${promo.identifier}`;
@@ -189,16 +192,16 @@ export const ListOfGroupPromotions = () => {
 
     const timeSinceLastFetch = now - promotionTimeInterval;
     const initialDelay =
-      timeSinceLastFetch >= THIRTY_MINUTES
+      timeSinceLastFetch >= TIME_MINUTES_30_IN_MILLISECONDS
         ? 0
-        : THIRTY_MINUTES - timeSinceLastFetch;
+        : TIME_MINUTES_30_IN_MILLISECONDS - timeSinceLastFetch;
     const initialTimeout = setTimeout(() => {
       getPromotions();
 
       // Start a 30-minute interval
       const interval = setInterval(() => {
         getPromotions();
-      }, THIRTY_MINUTES);
+      }, TIME_MINUTES_30_IN_MILLISECONDS);
 
       return () => clearInterval(interval);
     }, initialDelay);
