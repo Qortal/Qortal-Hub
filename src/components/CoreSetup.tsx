@@ -92,12 +92,14 @@ export const CoreSetup = () => {
   );
   const initializedRef = useRef(false);
   const isNotRunning = statuses['coreRunning']?.status === 'off';
+  console.log('isNotRunning', isNotRunning);
   useEffect(() => {
     if (!window?.coreSetup) return;
     if (!isReady || !isLocal) return;
     if (initializedRef.current) return;
-    initializedRef.current = true;
+
     if (isNotRunning) {
+      initializedRef.current = true;
       setOpen(true);
     }
   }, [isNotRunning, isReady, isLocal, setOpen]);

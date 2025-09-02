@@ -1,39 +1,35 @@
-const path = require('path')
-const shell = require("shelljs")
+// scripts/afterPack.js
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
 
-const runShellCommand = (appOutDir) => {
-	shell.exec(
-		`chmod 4755 ${path.join(appOutDir, "chrome-sandbox")}`,
+module.exports = async function afterPack(context) {
+  const { appOutDir, electronPlatformName } = context;
 
-		function (code, stdout, stderr) {
-			console.log('runShellCommand ==> Exit code:', code)
-			if (stderr) {
-				console.log('runShellCommand ==> Program stderr:', stderr)
-			}
-		}
-	)
-}
+  if (!electronPlatformName.toLowerCase().includes('linux')) return;
 
-async function doLinux(context) {
-	console.log("Running doLinux ==> ")
+  const chromeSandbox = path.join(appOutDir, 'chrome-sandbox');
+  if (!fs.existsSync(chromeSandbox)) {
+    console.log('ℹ️ chrome-sandbox not found, skipping.');
+    return;
+  }
 
-	const { targets, appOutDir } = context
+  console.log('🔧 Fixing chrome-sandbox permissions...');
+  try {
+    // Set setuid bit (rwsr-xr-x)
+    execSync(`chmod 4755 "${chromeSandbox}"`, { stdio: 'inherit' });
 
-	targets.forEach(async target => {
-		if (!["appimage", "snap"].includes(target.name.toLowerCase())) {
-			await runShellCommand(appOutDir)
-		}
-	})
-}
+    // // Needs root to succeed; if not root, we warn but continue
+    // try {
+    //   execSync(`chown root:root "${chromeSandbox}"`, { stdio: 'inherit' });
+    // } catch (e) {
+    //   console.warn(
+    //     '⚠️ chown root:root failed (not running as root?). AppImage may refuse to run the sandbox.'
+    //   );
+    // }
 
-async function afterPack(context) {
-	console.log("Running AfterPack")
-
-	const electronPlatformName = context.electronPlatformName.toLowerCase()
-
-	if (electronPlatformName.includes("linux")) {
-		await doLinux(context)
-	}
-}
-
-module.exports = afterPack
+    console.log('✅ chrome-sandbox permissions fixed.');
+  } catch (e) {
+    console.warn('⚠️ Failed to set chrome-sandbox permissions:', e.message);
+  }
+};

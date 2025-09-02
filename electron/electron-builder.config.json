@@ -3,6 +3,8 @@
   "directories": {
     "buildResources": "resources"
   },
+  "afterPack": "scripts/afterPack.js",
+
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "nsis": {
     "allowElevation": true,
