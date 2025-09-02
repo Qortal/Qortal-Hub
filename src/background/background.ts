@@ -32,7 +32,8 @@ import {
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
   TIME_MINUTES_3_IN_MILLISECONDS,
   TIME_MINUTES_10_IN_MILLISECONDS,
-  TIME_WEEK_1_IN_MILLISECONDS
+  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_MINUTES_6_IN_MILLISECONDS,
 } from '../constants/constants';
 import {
   addDataPublishesCase,
@@ -2855,7 +2856,7 @@ export async function getTempPublish() {
           Object.entries(entries).filter(([entryKey, entryValue]) => {
             return (
               currentTime - entryValue.timestampSaved <
-              TIME_6_MINUTE_IN_MILLISECONDS
+              TIME_MINUTES_6_IN_MILLISECONDS
             );
           })
         );
