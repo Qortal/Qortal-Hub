@@ -33,6 +33,10 @@ import {
   TIME_MINUTES_3_IN_MILLISECONDS,
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_WEEK_1_IN_MILLISECONDS,
+<<<<<<< HEAD
+=======
+  TIME_MINUTES_6_IN_MILLISECONDS,
+>>>>>>> 981da3b (Add getmintingaccounts)
 } from '../constants/constants';
 import {
   addDataPublishesCase,

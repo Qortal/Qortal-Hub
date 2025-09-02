@@ -5155,6 +5155,9 @@ export const adminAction = async (data, isFromExtension) => {
       method = 'POST';
       includeValueInBody = true;
       break;
+    case 'getmintingaccounts':
+      apiEndpoint = await createEndpoint('/admin/mintingaccounts');
+      break;
     case 'removemintingaccount':
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
       method = 'DELETE';
