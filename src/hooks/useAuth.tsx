@@ -1,8 +1,8 @@
 import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
-  TIME_120_SECONDS_IN_MILLISECONDS,
-  TIME_40_SECONDS_IN_MILLISECONDS,
+  TIME_120_SECOND_IN_MILLISECONDS,
+  TIME_40_SECOND_IN_MILLISECONDS,
 } from '../constants/constants';
 import { useAtom, useSetAtom } from 'jotai';
 import {
@@ -239,7 +239,7 @@ export const useAuth = () => {
             console.error('Failed to get balance:', error);
             isCalling = false;
           });
-      }, TIME_40_SECONDS_IN_MILLISECONDS);
+      }, TIME_40_SECOND_IN_MILLISECONDS);
     } catch (error) {
       console.error(error);
     }
@@ -288,7 +288,7 @@ export const useAuth = () => {
           password: authenticatePassword,
           wallet: rawWallet,
         },
-        TIME_120_SECONDS_IN_MILLISECONDS
+        TIME_120_SECOND_IN_MILLISECONDS
       )
       .then((response) => {
         if (response && !response.error) {
