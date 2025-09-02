@@ -412,7 +412,12 @@ function App() {
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
-  const { isNodeValid, authenticate, getBalanceFunc } = useAuth();
+  const {
+    isNodeValid,
+    authenticate,
+    getBalanceFunc,
+    validateApiKeyFromRegistration,
+  } = useAuth();
   const {
     isUserBlocked,
     addToBlockList,
@@ -1046,6 +1051,7 @@ function App() {
         crypto.kdfThreads,
         () => {}
       );
+      await validateApiKeyFromRegistration();
       window
         .sendMessage('decryptWallet', {
           password: walletToBeDownloadedPassword,

@@ -4,6 +4,7 @@ import { LOCALHOST_12391 } from '../constants/constants';
 import { cleanUrl } from '../background/background';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import {
+  isOpenCoreSetup,
   isOpenDialogCoreRecommendationAtom,
   selectedNodeInfoAtom,
   statusesAtom,
@@ -14,7 +15,7 @@ import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
 import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
 
 export const CoreSetup = () => {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useAtom(isOpenCoreSetup);
   const [isReady, setIsReady] = useState(false);
   const [statuses, setStatuses] = useAtom(statusesAtom);
   const [selectedNode] = useAtom(selectedNodeInfoAtom);
@@ -89,14 +90,17 @@ export const CoreSetup = () => {
   const actionLoading = Object.keys(statuses).find(
     (key) => statuses[key]?.status === 'active'
   );
+  const initializedRef = useRef(false);
   const isNotRunning = statuses['coreRunning']?.status === 'off';
   useEffect(() => {
     if (!window?.coreSetup) return;
     if (!isReady || !isLocal) return;
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     if (isNotRunning) {
       setOpen(true);
     }
-  }, [isNotRunning, isReady, isLocal]);
+  }, [isNotRunning, isReady, isLocal, setOpen]);
 
   const verifyCoreNotRunningFunc = useCallback(() => {
     if (!isLocal) return;

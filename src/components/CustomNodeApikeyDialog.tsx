@@ -12,14 +12,16 @@ import { useAuth } from '../hooks/useAuth';
 import { useAtom } from 'jotai';
 import {
   isOpenDialogCustomApikey,
-  isOpenDialogResetApikey,
   selectedNodeInfoAtom,
 } from '../atoms/global';
 import { Label } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
+import { useTranslation } from 'react-i18next';
 
 export function CustomNodeApikeyDialog() {
   const { validateApiKey, handleSaveNodeInfo, authenticate } = useAuth();
+  const { t } = useTranslation(['node', 'core']);
+
   const [apikey, setApikey] = React.useState('');
   const [open, setOpen] = useAtom(isOpenDialogCustomApikey);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
@@ -59,7 +61,6 @@ export function CustomNodeApikeyDialog() {
         const findNode = copyCustomNodes.findIndex(
           (n) => n?.url === selectedNode?.url
         );
-        console.log('findNode', findNode);
         if (findNode !== -1) {
           copyCustomNodes.splice(findNode, 1, payload);
           setCustomNodes(copyCustomNodes);
@@ -71,9 +72,14 @@ export function CustomNodeApikeyDialog() {
         setOpen(false);
         return;
       }
-      setMessage('Invalid apikey');
-      console.log('isValid', isValid);
-    } catch (error) {}
+      setMessage(
+        t('node:error.invalidKey', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    } catch (error) {
+      console.error(error);
+    }
   };
   return (
     <Dialog
@@ -82,10 +88,16 @@ export function CustomNodeApikeyDialog() {
       maxWidth="sm"
       aria-labelledby="core-setup-title"
     >
-      <DialogTitle id="core-setup-title">Invalid apikey</DialogTitle>
+      <DialogTitle id="core-setup-title">
+        {t('node:invalidKey.title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body1" gutterBottom>
-          Your apikey is invalid for this node. Please insert the valid apikey.
+          {t('node:invalidKey.description', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
         <Spacer height="20px" />
         <Label>Node</Label>
@@ -99,7 +111,9 @@ export function CustomNodeApikeyDialog() {
 
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => setOpen(false)} variant="text">
-          close
+          {t('core:action.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
 
         <Button
@@ -109,7 +123,9 @@ export function CustomNodeApikeyDialog() {
           color="success"
           variant="contained"
         >
-          Continue
+          {t('node:actions.continue', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
       </DialogActions>
     </Dialog>

@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useAtom } from 'jotai';
 import { isOpenDialogResetApikey } from '../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../App';
+import { useTranslation } from 'react-i18next';
 
 const isElectron = !!window?.coreSetup;
 
@@ -23,6 +24,7 @@ export function CoreSetupResetApikeyDialog() {
     validateLocalApiKey,
     handleSaveNodeInfo,
   } = useAuth();
+  const { t } = useTranslation(['node', 'core']);
   const [newApiKey, setNewApiKey] = React.useState('');
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     React.useContext(QORTAL_APP_CONTEXT);
@@ -44,7 +46,9 @@ export function CoreSetupResetApikeyDialog() {
         setOpenSnackGlobal(true);
         setInfoSnackCustom({
           type: 'error',
-          message: 'Invalid apikey',
+          message: t('node:error.invalidKey', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         });
         return;
       }
@@ -68,10 +72,16 @@ export function CoreSetupResetApikeyDialog() {
         maxWidth="sm"
         aria-labelledby="core-setup-title"
       >
-        <DialogTitle id="core-setup-title">Invalid apikey</DialogTitle>
+        <DialogTitle id="core-setup-title">
+          {t('node:invalidKey.title', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body1" gutterBottom>
-            Your apikey is invalid. Please insert a valid apikey.
+            {t('node:invalidKey.description', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Typography>
           <TextField
             placeholder="Apikey"
@@ -82,7 +92,9 @@ export function CoreSetupResetApikeyDialog() {
 
         <DialogActions sx={{ p: 2 }}>
           <Button onClick={() => setOpen(false)} variant="text">
-            close
+            {t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
 
           <Button
@@ -93,7 +105,9 @@ export function CoreSetupResetApikeyDialog() {
             color="success"
             variant="contained"
           >
-            Reset apikey
+            {t('node:actions.resetKey', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         </DialogActions>
       </Dialog>
@@ -106,16 +120,25 @@ export function CoreSetupResetApikeyDialog() {
       maxWidth="sm"
       aria-labelledby="core-setup-title"
     >
-      <DialogTitle id="core-setup-title">Invalid apikey</DialogTitle>
+      <DialogTitle id="core-setup-title">
+        {' '}
+        {t('node:invalidKey.title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body1" gutterBottom>
-          Your apikey is invalid. Click reset to proceed.
+          {t('node:invalidKey.resetDescription', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={() => setOpen(false)} variant="text">
-          close
+          {t('core:action.close', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
 
         <Button
@@ -125,7 +148,9 @@ export function CoreSetupResetApikeyDialog() {
           color="success"
           variant="contained"
         >
-          Reset apikey
+          {t('node:actions.resetKey', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
       </DialogActions>
     </Dialog>

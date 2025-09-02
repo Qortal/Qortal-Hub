@@ -68,6 +68,7 @@ export const balanceAtom = atomWithReset<any>(null);
 export const qortBalanceLoadingAtom = atomWithReset<boolean>(false);
 export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
 export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
+export const isOpenCoreSetup = atomWithReset<boolean>(false);
 
 export const devServerDomainAtom = atomWithReset('127.0.0.1');
 export const devServerPortAtom = atomWithReset('');

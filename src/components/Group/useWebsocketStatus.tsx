@@ -65,7 +65,7 @@ export const useWebsocketStatus = () => {
             if (!lastPopup.current || Date.now() - lastPopup.current > 600000) {
               setTimeout(() => {
                 sendMessageVerifyCoreNotRunning();
-              }, 25_000);
+              }, 12_000);
               lastPopup.current = Date.now();
             }
             setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds

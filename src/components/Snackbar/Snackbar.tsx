@@ -18,7 +18,6 @@ export const CustomizedSnackbars = ({
     setOpen(false);
     setInfo(null);
   };
-  console.log('open', open);
 
   if (!open) return null;
 

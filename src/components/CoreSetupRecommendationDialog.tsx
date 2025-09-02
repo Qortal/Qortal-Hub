@@ -8,6 +8,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 const isElectron = !!window?.coreSetup;
@@ -31,6 +32,7 @@ export function CoreSetupRecommendationDialog(
 ) {
   const { open, onClose, setOpenCoreHandler } = props;
   const { handleSaveNodeInfo, authenticate } = useAuth();
+  const { t } = useTranslation(['node']);
 
   const proceedWithPublic = async () => {
     try {
@@ -49,32 +51,55 @@ export function CoreSetupRecommendationDialog(
       maxWidth="sm"
       aria-labelledby="core-setup-title"
     >
-      <DialogTitle id="core-setup-title">Using your local Node</DialogTitle>
+      <DialogTitle id="core-setup-title">
+        {t('node:recommendation.title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
       <DialogContent dividers>
         <Typography variant="body1" gutterBottom>
-          You may proceed with the public node if you wish, but we strongly
-          recommend using your local node for the best experience.
+          {t('node:recommendation.description', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
 
         <Typography variant="subtitle1" gutterBottom>
-          Advantages of using your local node:
+          {t('node:recommendation.subTitle', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
         <ul>
-          <li>Full decentralized access</li>
-          <li>Faster downloads</li>
-          <li>User-controlled data</li>
+          <li>
+            {' '}
+            {t('node:recommendation.point1', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </li>
+          <li>
+            {' '}
+            {t('node:recommendation.point2', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </li>
+          <li>
+            {t('node:recommendation.point3', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </li>
         </ul>
 
         <Typography variant="body2" color="text.secondary">
-          The public node you connect to is actually a privately operated node
-          that has been made publicly accessible. While convenient, it comes
-          with certain limitations compared to running your own.
+          {t('node:recommendation.publicExplanation', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Typography>
       </DialogContent>
 
       <DialogActions sx={{ p: 2 }}>
         <Button onClick={proceedWithPublic} variant="text">
-          Continue with public node
+          {t('node:actions.continuePublic', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
         {isElectron ? (
           <Button
@@ -85,7 +110,9 @@ export function CoreSetupRecommendationDialog(
             color="success"
             variant="contained"
           >
-            Open local setup
+            {t('node:actions.openSetup', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         ) : (
           <Button
@@ -96,7 +123,9 @@ export function CoreSetupRecommendationDialog(
             color="success"
             variant="contained"
           >
-            Go to downloads
+            {t('node:actions.goToDownloads', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         )}
       </DialogActions>

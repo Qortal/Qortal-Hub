@@ -741,8 +741,6 @@ export const NotAuthenticated = ({
                           <Button
                             size="small"
                             onClick={async () => {
-                              console.log('selectednode', selectedNode, node);
-
                               if (node?.url === selectedNode?.url) {
                                 await handleSaveNodeInfo({
                                   url: HTTP_LOCALHOST_12391,

@@ -212,7 +212,7 @@ async function startQortal() {
     step: 'coreRunning',
     status: 'active',
     progress: 10,
-    message: 'Starting up the core... please wait.',
+    message: '001',
   });
   watchForApiStart(
     logPath,
@@ -230,7 +230,7 @@ async function startQortal() {
         step: 'coreRunning',
         status: 'error',
         progress: 0,
-        message: 'Error: Unable to start repository',
+        message: '002',
       });
     }
   );
@@ -267,9 +267,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -303,9 +301,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -342,9 +338,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -378,9 +372,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -417,9 +409,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -453,9 +443,7 @@ async function startQortal() {
               step: 'coreRunning',
               status: 'error',
               progress: 0,
-              message: err?.message
-                ? `Error running Qortal Core: ${err?.message}`
-                : 'Error running Qortal Core',
+              message: '003',
             });
             console.error('Start qortal error', err);
           }
@@ -494,9 +482,7 @@ async function startQortal() {
             step: 'coreRunning',
             status: 'error',
             progress: 0,
-            message: err?.message
-              ? `Error running Qortal Core: ${err?.message}`
-              : 'Error running Qortal Core',
+            message: '003',
           });
           console.error('Start qortal error', err);
         }
@@ -530,9 +516,7 @@ async function startQortal() {
             step: 'coreRunning',
             status: 'error',
             progress: 0,
-            message: err?.message
-              ? `Error running Qortal Core: ${err?.message}`
-              : 'Error running Qortal Core',
+            message: '003',
           });
           console.error('Start qortal error', err);
         }
@@ -568,9 +552,7 @@ async function startQortal() {
             step: 'coreRunning',
             status: 'error',
             progress: 0,
-            message: err?.message
-              ? `Error running Qortal Core: ${err?.message}`
-              : 'Error running Qortal Core',
+            message: '003',
           });
           console.error('Start qortal error', err);
         }
@@ -604,9 +586,7 @@ async function startQortal() {
             step: 'coreRunning',
             status: 'error',
             progress: 0,
-            message: err?.message
-              ? `Error running Qortal Core: ${err?.message}`
-              : 'Error running Qortal Core',
+            message: '003',
           });
           console.error('Start qortal error', err);
         }
@@ -752,9 +732,7 @@ async function unzipQortal() {
       step: 'downloadedCore',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Qortal Core: ${err?.message}`
-        : 'Error unzipping Qortal Core',
+      message: '004',
     });
     console.log('Unzip Qortal error', err);
   }
@@ -888,7 +866,7 @@ async function downloadQortal() {
       step: 'downloadedCore',
       status: 'active',
       progress: 0,
-      message: 'Downloading the Qortal Core... please wait.',
+      message: '005',
     });
     await fs.promises.mkdir(zipdir, { recursive: true });
 
@@ -898,7 +876,7 @@ async function downloadQortal() {
           step: 'downloadedCore',
           status: 'active',
           progress: percent,
-          message: 'Downloading the Qortal Core... please wait.',
+          message: '005',
         });
       }
     });
@@ -909,9 +887,7 @@ async function downloadQortal() {
       step: 'downloadedCore',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error downloading Qortal Core: ${err?.message}`
-        : 'Error downloading Qortal Core',
+      message: '005',
     });
     console.log('Download Qortal error', err);
   } finally {
@@ -1024,7 +1000,7 @@ async function downloadJavaArchive(url: string): Promise<string> {
           step: 'hasJava',
           status: 'active',
           progress: percent,
-          message: 'Setting up Java... please wait.',
+          message: '006',
         });
     });
     isDownloadingJava = false;
@@ -1034,9 +1010,7 @@ async function downloadJavaArchive(url: string): Promise<string> {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error downloading JAVA: ${err?.message}`
-        : 'Error downloading JAVA archive',
+      message: '007',
     });
     console.error('Download JAVA error', err);
     return null;
@@ -1104,9 +1078,7 @@ async function unzipJavaX64Linux() {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Java: ${err?.message}`
-        : 'Error unzipping Java',
+      message: '008',
     });
     console.error('Unzip Java error', err);
   }
@@ -1129,9 +1101,7 @@ async function unzipJavaArm64Linux() {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Java: ${err?.message}`
-        : 'Error unzipping Java',
+      message: '008',
     });
     console.error('Unzip Java error', err);
   }
@@ -1154,9 +1124,7 @@ async function unzipJavaArmLinux() {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Java: ${err?.message}`
-        : 'Error unzipping Java',
+      message: '008',
     });
     console.error('Unzip Java error', err);
   }
@@ -1179,9 +1147,7 @@ async function unzipJavaX64Mac() {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Java: ${err?.message}`
-        : 'Error unzipping Java',
+      message: '008',
     });
     console.error('Unzip Java error', err);
   }
@@ -1204,9 +1170,7 @@ async function unzipJavaAarch64Mac() {
       step: 'hasJava',
       status: 'error',
       progress: 0,
-      message: err?.message
-        ? `Error unzipping Java: ${err?.message}`
-        : 'Error unzipping Java',
+      message: '008',
     });
     console.error('Unzip Java error', err);
   }
@@ -1490,7 +1454,7 @@ export async function downloadCoreWindows() {
             step: 'downloadedCore',
             status: 'active',
             progress: percent,
-            message: 'Downloading the Qortal Core... please wait.',
+            message: '009',
           });
         } else console.log(`received ${received} / ${total || 0} bytes`);
       }
@@ -1528,9 +1492,7 @@ export async function downloadCoreWindows() {
       step: 'downloadedCore',
       status: 'error',
       progress: 0,
-      message: e?.message
-        ? `Error: ${e.message}`
-        : 'Error: Unable to download or install the Core',
+      message: '010',
     });
   }
 

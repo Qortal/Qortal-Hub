@@ -960,7 +960,6 @@ export async function getLocalApiKeyNotElectronCase() {
 export async function setApiKeyCase(request, event) {
   try {
     const payload = request.payload;
-    console.log('case payload', payload);
     if (window?.walletStorage && payload?.url) {
       await window.walletStorage.set('apiKey', payload);
     }

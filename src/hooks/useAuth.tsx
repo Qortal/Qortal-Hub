@@ -10,6 +10,7 @@ import {
   balanceAtom,
   extStateAtom,
   isLoadingAuthenticateAtom,
+  isOpenCoreSetup,
   isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
@@ -36,6 +37,8 @@ export const useAuth = () => {
   const setIsOpenRecommendation = useSetAtom(
     isOpenDialogCoreRecommendationAtom
   );
+
+  const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
@@ -77,7 +80,7 @@ export const useAuth = () => {
   }, []);
 
   const validateApiKey = useCallback(
-    async (currentNode) => {
+    async (currentNode, disablePopup = false) => {
       const isElectron = !!window?.coreSetup;
       const validatedNodeInfo = currentNode;
 
@@ -87,7 +90,8 @@ export const useAuth = () => {
           const runningRes = isElectron
             ? await window.coreSetup.isCoreRunning()
             : await checkIfLocalIsRunning();
-          if (!runningRes) {
+          if (!runningRes && !disablePopup) {
+            setIsOpenCoreSetup(false);
             setIsOpenRecommendation(true);
             return { isValid: false, validatedNodeInfo };
           }
@@ -128,12 +132,12 @@ export const useAuth = () => {
             isValid = true;
           }
         }
-        if (!isValid && isLocal) {
+        if (!isValid && isLocal && !disablePopup) {
           setIsOpenResetApikey(true);
-        } else if (!isValid && !isLocal) {
+        } else if (!isValid && !isLocal && !disablePopup) {
           setIsOpenCustomApikeyDialog(true);
         }
-        if (isValid && !isElectron && isLocal) {
+        if (isValid && !isElectron && isLocal && !disablePopup) {
           setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
         }
 
@@ -148,6 +152,7 @@ export const useAuth = () => {
       setIsOpenResetApikey,
       checkIfLocalIsRunning,
       generateApiKey,
+      setIsOpenCoreSetup,
     ]
   );
 
@@ -337,6 +342,18 @@ export const useAuth = () => {
     getBalanceFunc,
   ]);
 
+  const validateApiKeyFromRegistration = useCallback(async () => {
+    try {
+      const { isValid } = await validateApiKey(selectedNode, true);
+      if (!isValid) {
+        await handleSaveNodeInfo(null);
+      }
+    } catch (error) {
+      await handleSaveNodeInfo(null);
+      console.error(error);
+    }
+  }, [selectedNode, validateApiKey, handleSaveNodeInfo]);
+
   return {
     validateApiKey,
     isNodeValid,
@@ -345,5 +362,6 @@ export const useAuth = () => {
     getBalanceFunc,
     resetApikey,
     validateLocalApiKey,
+    validateApiKeyFromRegistration,
   };
 };

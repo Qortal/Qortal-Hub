@@ -27,6 +27,7 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import { QORTAL_APP_CONTEXT } from '../App';
+import { useTranslation } from 'react-i18next';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -84,20 +85,6 @@ function resolveProgress({ status, progress }: StepState) {
   return undefined; // shows indeterminate bar for 'active'/'error' without explicit number
 }
 
-function statusText(status: StepStatus) {
-  switch (status) {
-    case 'done':
-      return 'Complete';
-    case 'active':
-      return 'In progress';
-    case 'error':
-      return 'Error';
-    case 'idle':
-    default:
-      return 'Pending';
-  }
-}
-
 export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const {
     open,
@@ -113,23 +100,59 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   } = props;
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     React.useContext(QORTAL_APP_CONTEXT);
-  const stepDefs = [
-    {
-      key: 'hasJava' as const,
-      label: 'Has Java installed',
-      icon: <RocketLaunchIcon fontSize="inherit" />,
+
+  const { t } = useTranslation(['node', 'core']);
+
+  const statusText = React.useCallback(
+    (status: StepStatus) => {
+      switch (status) {
+        case 'done':
+          return t('node:status.complete', {
+            postProcess: 'capitalizeFirstChar',
+          });
+        case 'active':
+          return t('node:status.inProgress', {
+            postProcess: 'capitalizeFirstChar',
+          });
+        case 'error':
+          return t('node:status.error', {
+            postProcess: 'capitalizeFirstChar',
+          });
+        case 'idle':
+        default:
+          return t('node:status.pending', {
+            postProcess: 'capitalizeFirstChar',
+          });
+      }
     },
-    {
-      key: 'downloadedCore' as const,
-      label: 'Downloaded Core',
-      icon: <DownloadIcon fontSize="inherit" />,
-    },
-    {
-      key: 'coreRunning' as const,
-      label: 'Core running',
-      icon: <PlayArrowIcon fontSize="inherit" />,
-    },
-  ];
+    [t]
+  );
+  const stepDefs = React.useMemo(
+    () => [
+      {
+        key: 'hasJava' as const,
+        label: t('node:steps.java', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: <RocketLaunchIcon fontSize="inherit" />,
+      },
+      {
+        key: 'downloadedCore' as const,
+        label: t('node:steps.downloaded', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: <DownloadIcon fontSize="inherit" />,
+      },
+      {
+        key: 'coreRunning' as const,
+        label: t('node:steps.running', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        icon: <PlayArrowIcon fontSize="inherit" />,
+      },
+    ],
+    [t]
+  );
 
   const stepStates = stepDefs
     .filter((step) => (isWindows ? step.key !== 'hasJava' : step))
@@ -145,11 +168,21 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const downloaded = steps.downloadedCore.status === 'done';
   const running = steps.coreRunning.status === 'done';
 
-  const computedActionLabel = running
-    ? 'Finished'
-    : downloaded
-      ? 'Start Qortal Core'
-      : 'Install and Start Qortal Core';
+  const computedActionLabel = React.useMemo(
+    () =>
+      running
+        ? t('node:actions.finished', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : downloaded
+          ? t('node:actions.start', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('node:actions.install', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+    [running, downloaded, t]
+  );
 
   const actionLabel = actionLabelOverride ?? computedActionLabel;
 
@@ -164,7 +197,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         setOpenSnackGlobal(true);
         setInfoSnackCustom({
           type: 'error',
-          message: 'Chosen directory does not contain a qortal.jar',
+          message: t('node:error.noJar', {
+            postProcess: 'capitalizeFirstChar',
+          }),
         });
       } else {
         verifyCoreNotRunningFunc();
@@ -190,7 +225,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       maxWidth="sm"
       aria-labelledby="core-setup-title"
     >
-      <DialogTitle id="core-setup-title">Qortal Core Setup</DialogTitle>
+      <DialogTitle id="core-setup-title">
+        {t('node:setup.title', {
+          postProcess: 'capitalizeFirstChar',
+        })}
+      </DialogTitle>
       <DialogContent dividers>
         {!isWindows && (
           <Accordion>
@@ -199,13 +238,25 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
               aria-controls="panel2-content"
               id="panel2-header"
             >
-              <Typography component="span">Advanced options</Typography>
+              <Typography component="span">
+                {t('node:setup.advancedOptions', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
             </AccordionSummary>
             <AccordionDetails>
               {!customQortalPath ? (
-                <Button onClick={pickPath}>Pick custom Qortal Path</Button>
+                <Button onClick={pickPath}>
+                  {t('node:setup.pickPath', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
               ) : (
-                <Button onClick={removePath}>Remove custom Qortal Path</Button>
+                <Button onClick={removePath}>
+                  {t('node:setup.removePath', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
               )}
             </AccordionDetails>
           </Accordion>
@@ -269,7 +320,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
                     {state.message ? (
                       <Typography variant="body2" color="text.secondary">
-                        {state.message}
+                        {t(`node:messages.${state.message}`, {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
                     ) : null}
                   </Stack>
@@ -283,7 +336,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       <DialogActions sx={{ p: 2 }}>
         {onClose && !running && (
           <Button onClick={onClose} disabled={disableClose} variant="text">
-            Close
+            {t('core:action.close', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         )}
 
