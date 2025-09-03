@@ -3,7 +3,7 @@
   "productName": "Qortal Hub",
   "copyright": "Copyright © 2021 - 2025 Qortal",
   "compression": "normal",
-  "asar": "true",
+  "asar": true,
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "win": {
     "legalTrademarks": "QORTAL.ORG",
