@@ -594,7 +594,7 @@ function App() {
       window
         .sendMessage('getApiKey')
         .then((response) => {
-          if (response) {
+          if (response?.url) {
             handleSetGlobalApikey(response);
             setSelectedNode(response);
           } else {

@@ -73,7 +73,10 @@ export const isOpenCoreSetup = atomWithReset<boolean>(false);
 export const devServerDomainAtom = atomWithReset('127.0.0.1');
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
-export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>(null);
+export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({
+  url: HTTP_LOCALHOST_12391,
+  apikey: '',
+});
 export const statusesAtom = atomWithReset<Steps>({
   coreRunning: {
     status: 'idle',
