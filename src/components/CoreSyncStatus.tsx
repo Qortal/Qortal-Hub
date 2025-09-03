@@ -9,14 +9,13 @@ import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
 import { useAtom } from 'jotai';
 import { nodeInfosAtom } from '../atoms/global';
+import { nodeDisplay } from '../utils/helpers';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
-  const [isUsingGateway, setIsUsingGateway] = useState(
-    getBaseApiReact()?.includes('ext-node.qortal.link') ?? false
-  );
+  const [isUsingGateway, setIsUsingGateway] = useState(getBaseApiReact());
 
   const { t } = useTranslation([
     'auth',
@@ -142,12 +141,12 @@ export const CoreSyncStatus = () => {
           </h4>
 
           <h4 className="lineHeight">
-            {t('auth:node.using_public', {
+            {t('auth:node.using', {
               postProcess: 'capitalizeFirstChar',
             })}
             :{' '}
             <span style={{ color: '#03a9f4' }}>
-              {isUsingGateway?.toString()}
+              {nodeDisplay(isUsingGateway)}
             </span>
           </h4>
 

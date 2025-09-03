@@ -33,7 +33,7 @@
   "recommendation": {
     "title": "using your local core",
     "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
+    "subTitle": "advantages of using a local node:",
     "point1": "full decentralized access",
     "point2": "faster downloads",
     "point3": "user-controlled data",

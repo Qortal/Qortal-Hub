@@ -39,6 +39,7 @@ import {
 import { useAtom } from 'jotai';
 import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
 import { useAuth } from '../hooks/useAuth.tsx';
+import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
   version: '0.5.4',
@@ -349,7 +350,7 @@ export const NotAuthenticated = ({
         }}
       >
         {t('auth:node.using', { postProcess: 'capitalizeFirstChar' })}:{' '}
-        {selectedNode?.url}
+        {nodeDisplay(selectedNode?.url)}
       </Typography>
 
       <>

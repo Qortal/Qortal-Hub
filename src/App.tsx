@@ -162,6 +162,7 @@ import {
 import { CoreSetup } from './components/CoreSetup.tsx';
 import { ApiKey } from './types/auth.ts';
 import { useAuth } from './hooks/useAuth.tsx';
+import { nodeDisplay } from './utils/helpers.ts';
 
 export type extStates =
   | 'authenticated'
@@ -2767,7 +2768,7 @@ function App() {
                   {t('auth:node.using', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                  : {selectedNode?.url}
+                  : {nodeDisplay(selectedNode?.url)}
                 </Typography>
               </>
 
