@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "Настройка Qortal Core",
+    "advancedOptions": "дополнительные параметры",
+    "pickPath": "выбрать пользовательский путь установки Qortal",
+    "removePath": "удалить пользовательский путь Qortal"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "есть Java",
+    "downloaded": "Core загружен",
+    "running": "ядро запущено"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "завершено",
+    "start": "запустить Qortal Core",
+    "install": "установить и запустить Qortal Core",
+    "continuePublic": "продолжить с публичным узлом",
+    "openSetup": "открыть локальную настройку",
+    "goToDownloads": "перейти к загрузкам",
+    "resetKey": "сбросить API-ключ",
+    "continue": "продолжить"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "выбранная директория не содержит qortal.jar",
+    "invalidKey": "недействительный API-ключ"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "завершено",
+    "inProgress": "в процессе",
+    "pending": "в ожидании",
+    "error": "ошибка"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "использование локального узла",
+    "description": "вы можете продолжить с публичным узлом, но мы настоятельно рекомендуем использовать локальный узел для лучшего опыта.",
+    "subTitle": "преимущества локального узла:",
+    "point1": "полный децентрализованный доступ",
+    "point2": "более быстрая загрузка",
+    "point3": "контроль над данными пользователя",
+    "publicExplanation": "Публичный узел, к которому вы подключаетесь, на самом деле является частным, но открытым для общего доступа. Это удобно, но имеет ограничения по сравнению с собственным узлом."
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "недействительный API-ключ",
+    "description": "Ваш API-ключ недействителен. Пожалуйста, введите правильный ключ.",
+    "resetDescription": "Ваш API-ключ недействителен. Нажмите «Сброс» для продолжения."
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "запуск ядра... пожалуйста, подождите.",
+    "002": "ошибка: невозможно запустить репозиторий",
+    "003": "ошибка при запуске Qortal Core",
+    "004": "ошибка распаковки Qortal Core",
+    "005": "загрузка Qortal Core... пожалуйста, подождите.",
+    "006": "настройка Java... пожалуйста, подождите.",
+    "007": "ошибка загрузки Java.",
+    "008": "ошибка распаковки Java",
+    "009": "загрузка Qortal Core... пожалуйста, подождите.",
+    "010": "ошибка: не удалось загрузить или установить ядро"
   }
 }

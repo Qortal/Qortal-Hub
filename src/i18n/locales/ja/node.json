@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "Qortal Core セットアップ",
+    "advancedOptions": "高度なオプション",
+    "pickPath": "カスタム Qortal インストールパスを選択",
+    "removePath": "カスタム Qortal パスを削除"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "Java がある",
+    "downloaded": "Core をダウンロード済み",
+    "running": "Core が実行中"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "完了",
+    "start": "Qortal Core を起動",
+    "install": "Qortal Core をインストールして起動",
+    "continuePublic": "パブリックノードで続行",
+    "openSetup": "ローカルセットアップを開く",
+    "goToDownloads": "ダウンロードに移動",
+    "resetKey": "APIキーをリセット",
+    "continue": "続行"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "選択されたディレクトリに qortal.jar が存在しません",
+    "invalidKey": "無効な APIキー"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "完了",
+    "inProgress": "進行中",
+    "pending": "保留中",
+    "error": "エラー"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "ローカルノードの使用",
+    "description": "希望する場合はパブリックノードを使用できますが、最良の体験のためにはローカルノードの使用を強く推奨します。",
+    "subTitle": "ローカルノードを使用する利点：",
+    "point1": "完全に分散化されたアクセス",
+    "point2": "高速なダウンロード",
+    "point3": "ユーザーが制御するデータ",
+    "publicExplanation": "接続するパブリックノードは、実際には公開されたプライベートノードです。便利ですが、自分でノードを実行する場合と比べて制限があります。"
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "無効な APIキー",
+    "description": "APIキーが無効です。有効なキーを入力してください。",
+    "resetDescription": "APIキーが無効です。[リセット] をクリックして続行してください。"
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "Core を起動中... お待ちください。",
+    "002": "エラー：リポジトリの起動に失敗しました",
+    "003": "Qortal Core の実行中にエラー",
+    "004": "Qortal Core の解凍エラー",
+    "005": "Qortal Core をダウンロード中... お待ちください。",
+    "006": "Java を設定中... お待ちください。",
+    "007": "Java のダウンロードエラー。",
+    "008": "Java の解凍エラー",
+    "009": "Qortal Core をダウンロード中... お待ちください。",
+    "010": "エラー：Core をダウンロードまたはインストールできません"
   }
 }

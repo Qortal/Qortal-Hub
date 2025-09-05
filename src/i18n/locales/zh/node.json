@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "Qortal Core 设置",
+    "advancedOptions": "高级选项",
+    "pickPath": "选择自定义 Qortal 安装路径",
+    "removePath": "移除自定义 Qortal 路径"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "已安装 Java",
+    "downloaded": "已下载核心",
+    "running": "核心正在运行"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "已完成",
+    "start": "启动 Qortal Core",
+    "install": "安装并启动 Qortal Core",
+    "continuePublic": "继续使用公共节点",
+    "openSetup": "打开本地设置",
+    "goToDownloads": "前往下载",
+    "resetKey": "重置 API 密钥",
+    "continue": "继续"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "所选目录不包含 qortal.jar",
+    "invalidKey": "无效的 API 密钥"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "完成",
+    "inProgress": "进行中",
+    "pending": "待处理",
+    "error": "错误"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "使用你的本地核心",
+    "description": "如果你愿意，可以继续使用公共节点，但我们强烈建议使用本地节点以获得最佳体验。",
+    "subTitle": "使用本地节点的优点：",
+    "point1": "完全去中心化访问",
+    "point2": "下载更快",
+    "point3": "用户控制的数据",
+    "publicExplanation": "你连接的公共节点实际上是一个对外开放的私人节点。虽然方便，但相比自己运行节点有一些限制。"
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "无效的 API 密钥",
+    "description": "你的 API 密钥无效。请输入有效的密钥。",
+    "resetDescription": "你的 API 密钥无效。点击重置以继续。"
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "正在启动核心...请稍候。",
+    "002": "错误：无法启动存储库",
+    "003": "运行 Qortal Core 时出错",
+    "004": "解压 Qortal Core 出错",
+    "005": "正在下载 Qortal Core...请稍候。",
+    "006": "正在设置 Java...请稍候。",
+    "007": "下载 Java 出错。",
+    "008": "解压 Java 出错",
+    "009": "正在下载 Qortal Core...请稍候。",
+    "010": "错误：无法下载或安装核心"
   }
 }

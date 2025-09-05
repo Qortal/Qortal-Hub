@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "Qortal Core Einrichtung",
+    "advancedOptions": "erweiterte Optionen",
+    "pickPath": "benutzerdefinierten Qortal-Installationspfad wählen",
+    "removePath": "benutzerdefinierten Qortal-Pfad entfernen"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "Java vorhanden",
+    "downloaded": "Core heruntergeladen",
+    "running": "Core läuft"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "abgeschlossen",
+    "start": "Qortal Core starten",
+    "install": "Qortal Core installieren und starten",
+    "continuePublic": "mit öffentlichem Node fortfahren",
+    "openSetup": "lokale Einrichtung öffnen",
+    "goToDownloads": "zu Downloads gehen",
+    "resetKey": "API-Schlüssel zurücksetzen",
+    "continue": "fortfahren"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "gewähltes Verzeichnis enthält keine qortal.jar",
+    "invalidKey": "ungültiger API-Schlüssel"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "abgeschlossen",
+    "inProgress": "in Bearbeitung",
+    "pending": "ausstehend",
+    "error": "Fehler"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "lokalen Core verwenden",
+    "description": "Du kannst mit dem öffentlichen Node fortfahren, aber wir empfehlen dringend, deinen lokalen Node für das beste Erlebnis zu verwenden.",
+    "subTitle": "Vorteile eines lokalen Nodes:",
+    "point1": "vollständig dezentrierter Zugriff",
+    "point2": "schnellere Downloads",
+    "point3": "benutzerkontrollierte Daten",
+    "publicExplanation": "Der öffentliche Node, mit dem du dich verbindest, ist in Wirklichkeit ein privat betriebener Node. Er ist praktisch, hat aber Einschränkungen im Vergleich zum eigenen Node."
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "ungültiger API-Schlüssel",
+    "description": "Dein API-Schlüssel ist ungültig. Bitte gib einen gültigen ein.",
+    "resetDescription": "Dein API-Schlüssel ist ungültig. Klicke auf 'Zurücksetzen', um fortzufahren."
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "Core wird gestartet... bitte warten.",
+    "002": "Fehler: Repository konnte nicht gestartet werden",
+    "003": "Fehler beim Starten von Qortal Core",
+    "004": "Fehler beim Entpacken von Qortal Core",
+    "005": "Qortal Core wird heruntergeladen... bitte warten.",
+    "006": "Java wird eingerichtet... bitte warten.",
+    "007": "Fehler beim Herunterladen von Java.",
+    "008": "Fehler beim Entpacken von Java",
+    "009": "Qortal Core wird heruntergeladen... bitte warten.",
+    "010": "Fehler: Core konnte nicht heruntergeladen oder installiert werden"
   }
 }

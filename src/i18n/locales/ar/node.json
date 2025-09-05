@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "إعداد Qortal Core",
+    "advancedOptions": "خيارات متقدمة",
+    "pickPath": "اختر مسار تثبيت Qortal المخصص",
+    "removePath": "إزالة مسار Qortal المخصص"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "يوجد Java",
+    "downloaded": "تم تحميل النواة",
+    "running": "النواة تعمل"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "انتهى",
+    "start": "ابدأ Qortal Core",
+    "install": "ثبت وابدأ Qortal Core",
+    "continuePublic": "تابع مع العقدة العامة",
+    "openSetup": "افتح الإعداد المحلي",
+    "goToDownloads": "اذهب إلى التنزيلات",
+    "resetKey": "إعادة تعيين مفتاح API",
+    "continue": "استمر"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "الدليل المحدد لا يحتوي على qortal.jar",
+    "invalidKey": "مفتاح API غير صالح"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "مكتمل",
+    "inProgress": "قيد التنفيذ",
+    "pending": "معلق",
+    "error": "خطأ"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "استخدام النواة المحلية",
+    "description": "يمكنك المتابعة باستخدام العقدة العامة إذا رغبت، لكننا نوصي بشدة باستخدام النواة المحلية لأفضل تجربة.",
+    "subTitle": "مزايا استخدام العقدة المحلية:",
+    "point1": "وصول لامركزي كامل",
+    "point2": "تنزيلات أسرع",
+    "point3": "التحكم الكامل في البيانات",
+    "publicExplanation": "العقدة العامة التي تتصل بها هي في الواقع عقدة خاصة تم جعلها متاحة للعامة. رغم أنها مريحة، إلا أن لها قيودًا معينة مقارنة بتشغيل عقدتك الخاصة."
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "مفتاح API غير صالح",
+    "description": "مفتاح API الخاص بك غير صالح. الرجاء إدخال مفتاح صحيح.",
+    "resetDescription": "مفتاح API الخاص بك غير صالح. اضغط على إعادة التعيين للمتابعة."
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "جاري تشغيل النواة... الرجاء الانتظار.",
+    "002": "خطأ: تعذر بدء المستودع",
+    "003": "خطأ أثناء تشغيل Qortal Core",
+    "004": "خطأ في فك ضغط Qortal Core",
+    "005": "جاري تنزيل Qortal Core... الرجاء الانتظار.",
+    "006": "جاري إعداد Java... الرجاء الانتظار.",
+    "007": "خطأ في تنزيل Java.",
+    "008": "خطأ في فك ضغط Java",
+    "009": "جاري تنزيل Qortal Core... الرجاء الانتظار.",
+    "010": "خطأ: تعذر تنزيل أو تثبيت النواة"
   }
 }

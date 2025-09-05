@@ -1,59 +1,59 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick custom Qortal installation path",
-    "removePath": "remove custom Qortal path"
+    "title": "Qortal Core seadistus",
+    "advancedOptions": "täpsemad valikud",
+    "pickPath": "vali kohandatud Qortali installitee",
+    "removePath": "eemalda kohandatud Qortali tee"
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "Java olemas",
+    "downloaded": "Core alla laaditud",
+    "running": "Core töötab"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "valmis",
+    "start": "käivita Qortal Core",
+    "install": "installi ja käivita Qortal Core",
+    "continuePublic": "jätka avaliku noodiga",
+    "openSetup": "ava kohalik seadistus",
+    "goToDownloads": "mine allalaadimistele",
+    "resetKey": "lähtesta API võti",
+    "continue": "jätka"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "valitud kaustas puudub qortal.jar",
+    "invalidKey": "kehtetu API võti"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "valmis",
+    "inProgress": "töös",
+    "pending": "ootel",
+    "error": "viga"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "kasuta oma lokaalset node’i",
+    "description": "Võid jätkata avaliku noodiga, kuid soovitame tungivalt kasutada lokaalset node’i parima kogemuse jaoks.",
+    "subTitle": "Lokaalse node’i eelised:",
+    "point1": "täielikult detsentraliseeritud ligipääs",
+    "point2": "kiirem allalaadimine",
+    "point3": "kasutaja kontrollitud andmed",
+    "publicExplanation": "Avalik node, millega ühendud, on tegelikult eraviisiliselt hallatav node, mis on tehtud avalikkusele kättesaadavaks. Kuigi mugav, on sellel piiranguid võrreldes enda node’i käitamisega."
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "kehtetu API võti",
+    "description": "Sinu API võti on kehtetu. Palun sisesta korrektne võti.",
+    "resetDescription": "Sinu API võti on kehtetu. Klõpsa lähtesta, et jätkata."
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "Core käivitamine... palun oota.",
+    "002": "viga: ei saa hoidlaga alustada",
+    "003": "viga Qortal Core käivitamisel",
+    "004": "viga Qortal Core lahtipakkimisel",
+    "005": "Qortal Core allalaadimine... palun oota.",
+    "006": "Java seadistamine... palun oota.",
+    "007": "viga Java allalaadimisel.",
+    "008": "viga Java lahtipakkimisel",
+    "009": "Qortal Core allalaadimine... palun oota.",
+    "010": "viga: ei saa Core’i alla laadida või installida"
   }
 }
