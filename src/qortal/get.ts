@@ -1349,6 +1349,7 @@ export const publishQDNResource = async (
   const file = data?.file || data?.blob;
   const tags = data?.tags || [];
   const result = {};
+  const isMultiFileZip = data?.isMultiFileZip === true;
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
     throw new Error(
@@ -1461,7 +1462,7 @@ export const publishQDNResource = async (
         data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: data64 ? 'base64' : 'file',
+        uploadType: isMultiFileZip ? 'zip' : data64 ? 'base64' : 'file',
         filename: filename,
         title,
         description,
@@ -1817,6 +1818,7 @@ export const publishMultipleQDNResources = async (
       const category = resource.category;
       const tags = resource?.tags || [];
       const result = {};
+      const isMultiFileZip = resource?.isMultiFileZip === true;
 
       // Fill tags dynamically while maintaining backward compatibility
       for (let i = 0; i < 5; i++) {
@@ -1880,8 +1882,9 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
-        const dataType =
-          resource?.base64 || resource?.data64 || resourceEncrypt
+        const dataType = isMultiFileZip
+          ? 'zip'
+          : resource?.base64 || resource?.data64 || resourceEncrypt
             ? 'base64'
             : 'file';
 
