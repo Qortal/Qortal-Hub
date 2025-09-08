@@ -18,7 +18,7 @@ export const extractComponents = (url) => {
 
   url = url.replace(/^(qortal\:\/\/)/, '');
   if (url.includes('/')) {
-    let parts = url.split('/');
+    const parts = url.split('/');
     const service = parts[0].toUpperCase();
     parts.shift();
     const name = parts[0];
@@ -160,11 +160,9 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         if (copyUrl.startsWith('use-')) {
           // Handle the new 'use' format
           const parts = copyUrl.split('/');
-          const type = parts[0].split('-')[1]; // e.g., 'group' from 'use-group'
           parts.shift();
           const action = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., 'invite' from 'action-invite'
           parts.shift();
-          const idPrefix = parts.length > 0 ? parts[0].split('-')[0] : null; // e.g., 'groupid' from 'groupid-321'
           const id = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., '321' from 'groupid-321'
           if (action === 'join') {
             executeEvent('globalActionJoinGroup', { groupId: id });
