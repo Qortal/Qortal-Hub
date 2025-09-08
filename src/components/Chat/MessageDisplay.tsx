@@ -16,7 +16,7 @@ export const extractComponents = (url) => {
     return null;
   }
 
-  url = url.replace(/^(qortal\:\/\/)/, '');
+  url = url.replace(/^(qortal:\/\/)/, '');
   if (url.includes('/')) {
     const parts = url.split('/');
     const service = parts[0].toUpperCase();
