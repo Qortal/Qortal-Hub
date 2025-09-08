@@ -1,12 +1,12 @@
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 
-function decodeHTMLEntities(str) {
+function decodeHTMLEntities(str: string) {
   const txt = document.createElement('textarea');
   txt.innerHTML = str;
   return txt.value;
 }
 
-export const parseQortalLink = (link) => {
+export const parseQortalLink = (link: string) => {
   const prefix = QORTAL_PROTOCOL + 'use-embed/';
   if (!link.startsWith(prefix)) {
     throw new Error('Invalid link format');
