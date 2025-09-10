@@ -113,6 +113,8 @@ export async function isCorePortRunning(): Promise<boolean> {
   return false;
 }
 
+const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
 function watchForApiStart(
   logFilePath: string,
   startTimestamp: number,
@@ -121,9 +123,27 @@ function watchForApiStart(
 ) {
   let stream: fs.ReadStream | null = null;
   let rl: readline.Interface | null = null;
+  let fileCreationTimeout: NodeJS.Timeout | null = null;
+  let lineDetectionTimeout: NodeJS.Timeout | null = null;
+  let dirWatcher: fs.FSWatcher | null = null;
+  let pollingStopped = false;
+
+  const clearTimers = () => {
+    if (fileCreationTimeout) clearTimeout(fileCreationTimeout);
+    if (lineDetectionTimeout) clearTimeout(lineDetectionTimeout);
+  };
+
+  const cleanup = () => {
+    clearTimers();
+    pollingStopped = true;
+    if (rl) rl.close();
+    if (stream) stream.close();
+    fs.unwatchFile(logFilePath);
+    if (dirWatcher) dirWatcher.close();
+  };
 
   const checkLine = (line: string) => {
-    const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/); // timestamp at start of line
+    const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
     if (!match) return;
 
     const logDate = new Date(match[1]);
@@ -142,29 +162,30 @@ function watchForApiStart(
     }
   };
 
-  const cleanup = () => {
-    if (rl) rl.close();
-    if (stream) stream.close();
-    fs.unwatchFile(logFilePath);
-  };
-
   const watch = () => {
+    if (fileCreationTimeout) clearTimeout(fileCreationTimeout);
+
+    lineDetectionTimeout = setTimeout(
+      () => {
+        cleanup();
+        onError(); // no success/error line detected in time
+      },
+      6 * 60 * 1000
+    ); // 6 mins
+
     stream = fs.createReadStream(logFilePath, {
       encoding: 'utf8',
       start: fs.statSync(logFilePath).size,
     });
     rl = readline.createInterface({ input: stream });
-
     rl.on('line', checkLine);
 
     fs.watchFile(logFilePath, { interval: 500 }, () => {
       if (!stream || !rl) return;
-
       const newStream = fs.createReadStream(logFilePath, {
         encoding: 'utf8',
         start: stream.bytesRead,
       });
-
       newStream.on('data', (chunk) => {
         chunk
           .toString()
@@ -174,14 +195,57 @@ function watchForApiStart(
     });
   };
 
+  const pollApi = async (timeoutMs: number) => {
+    const BASE = 'http://127.0.0.1:12391';
+    const end = Date.now() + timeoutMs;
+
+    while (!pollingStopped && Date.now() < end) {
+      try {
+        const running = await isCoreRunning();
+        if (!running) {
+          cleanup();
+          onError();
+          return;
+        }
+        const res = await fetch(`${BASE}/admin/info`);
+        if (res.ok) {
+          cleanup();
+          onDetected();
+          return;
+        }
+      } catch (_) {
+        // ignore, try again later
+      }
+      await delay(20_000); // wait 20 seconds
+    }
+
+    if (!pollingStopped) {
+      cleanup();
+      onError();
+    }
+  };
+
   if (fs.existsSync(logFilePath)) {
     watch();
   } else {
     const dir = path.dirname(logFilePath);
     const filename = path.basename(logFilePath);
-    const watcher = fs.watch(dir, (eventType, createdFile) => {
+
+    fileCreationTimeout = setTimeout(
+      () => {
+        if (dirWatcher) dirWatcher.close();
+        // fallback: poll API for up to 6 minutes
+        pollApi(6 * 60 * 1000).catch(() => {
+          cleanup();
+          onError();
+        });
+      },
+      1 * 60 * 1000
+    ); // wait 1 min for file creation
+
+    dirWatcher = fs.watch(dir, (eventType, createdFile) => {
       if (createdFile === filename && fs.existsSync(logFilePath)) {
-        watcher.close();
+        if (dirWatcher) dirWatcher.close();
         watch();
       }
     });

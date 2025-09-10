@@ -15,8 +15,8 @@ export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
-  const [isUsingGateway, setIsUsingGateway] = useState(getBaseApiReact());
-
+  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -144,10 +144,7 @@ export const CoreSyncStatus = () => {
             {t('auth:node.using', {
               postProcess: 'capitalizeFirstChar',
             })}
-            :{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {nodeDisplay(isUsingGateway)}
-            </span>
+            : <span style={{ color: '#03a9f4' }}>{nodeDisplay(nodeBase)}</span>
           </h4>
 
           <h4 className="lineHeight">
