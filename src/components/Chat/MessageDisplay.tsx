@@ -59,7 +59,7 @@ function processText(input) {
   }
 
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = input;
+  wrapper.innerHTML = DOMPurify.sanitize(input);
   processNode(wrapper);
   return wrapper.innerHTML;
 }
