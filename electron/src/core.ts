@@ -147,6 +147,7 @@ function watchForApiStart(
     if (!match) return;
 
     const logDate = new Date(match[1]);
+
     if (
       logDate.getTime() > startTimestamp &&
       line.includes('Starting API on port')
@@ -159,6 +160,26 @@ function watchForApiStart(
     ) {
       cleanup();
       onError();
+    } else if (
+      logDate.getTime() > startTimestamp &&
+      line.includes('Downloading full node bootstrap')
+    ) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'active',
+        progress: 50,
+        message: '001',
+      });
+    } else if (
+      logDate.getTime() > startTimestamp &&
+      line.includes('Extracting bootstrap')
+    ) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'active',
+        progress: 75,
+        message: '001',
+      });
     }
   };
 
@@ -170,8 +191,8 @@ function watchForApiStart(
         cleanup();
         onError(); // no success/error line detected in time
       },
-      6 * 60 * 1000
-    ); // 6 mins
+      20 * 60 * 1000
+    ); // 20 mins
 
     stream = fs.createReadStream(logFilePath, {
       encoding: 'utf8',
@@ -235,7 +256,7 @@ function watchForApiStart(
       () => {
         if (dirWatcher) dirWatcher.close();
         // fallback: poll API for up to 6 minutes
-        pollApi(6 * 60 * 1000).catch(() => {
+        pollApi(20 * 60 * 1000).catch(() => {
           cleanup();
           onError();
         });

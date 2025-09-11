@@ -102,7 +102,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     React.useContext(QORTAL_APP_CONTEXT);
 
   const { t } = useTranslation(['node', 'core']);
-
+  const [mode, setMode] = React.useState(1);
   const statusText = React.useCallback(
     (status: StepStatus) => {
       switch (status) {
@@ -218,6 +218,12 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     }
   };
 
+  React.useEffect(() => {
+    if (downloaded) {
+      setMode(2);
+    }
+  }, [downloaded]);
+
   return (
     <Dialog
       open={open}
@@ -225,133 +231,208 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       maxWidth="sm"
       aria-labelledby="core-setup-title"
     >
-      <DialogTitle id="core-setup-title">
-        {t('node:setup.title', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </DialogTitle>
-      <DialogContent dividers>
-        {!isWindows && (
-          <Accordion>
-            <AccordionSummary
-              expandIcon={<ArrowDropDownIcon />}
-              aria-controls="panel2-content"
-              id="panel2-header"
-            >
-              <Typography component="span">
-                {t('node:setup.advancedOptions', {
+      {mode === 1 && (
+        <>
+          <DialogTitle id="core-setup-title">Welcome to Qortal</DialogTitle>
+
+          <DialogContent dividers>
+            <Typography gutterBottom>
+              Qortal is a decentralized platform that gives you full control
+              over your data, applications, and finances. To get started, we
+              recommend that you install the <strong>Qortal Core</strong>, which
+              powers the network and enables all features of Qortal.
+            </Typography>
+
+            <Typography gutterBottom>
+              This setup wizard will guide you through installing and
+              configuring the Qortal Core on your device. Click{' '}
+              <strong>Next</strong> to continue with the installation.
+            </Typography>
+            <Typography variant="subtitle1" gutterBottom>
+              {t('node:recommendation.subTitle', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <ul>
+              <li>
+                {' '}
+                {t('node:recommendation.point1', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              {!customQortalPath ? (
-                <Button onClick={pickPath}>
-                  {t('node:setup.pickPath', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-              ) : (
-                <Button onClick={removePath}>
-                  {t('node:setup.removePath', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Button>
-              )}
-            </AccordionDetails>
-          </Accordion>
-        )}
+              </li>
+              <li>
+                {' '}
+                {t('node:recommendation.point2', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </li>
+              <li>
+                {t('node:recommendation.point3', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </li>
+            </ul>
+          </DialogContent>
 
-        <Stepper activeStep={activeStep} orientation="vertical">
-          {stepStates.map(({ key, label, state }, idx) => {
-            const prog = resolveProgress(state);
-            const isIndeterminate =
-              prog === undefined &&
-              (state.status === 'active' || state.status === 'error');
+          <DialogActions sx={{ p: 2 }}>
+            {onClose && !running && (
+              <Button onClick={onClose} disabled={disableClose} variant="text">
+                {t('core:action.close', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            )}
 
-            return (
-              <Step key={key} expanded>
-                <StepLabel
-                  icon={statusIcon(state.status)}
-                  optional={
-                    <Typography variant="caption" color="text.secondary">
-                      {statusText(state.status)}
-                    </Typography>
-                  }
-                >
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {label}
-                    </Typography>
-                  </Stack>
-                </StepLabel>
-                <StepContent>
-                  <Stack
-                    spacing={1.25}
-                    sx={{ pb: idx === stepStates.length - 1 ? 0 : 2 }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Box sx={{ flex: 1 }}>
-                        <LinearProgress
-                          variant={
-                            prog !== undefined ? 'determinate' : 'indeterminate'
-                          }
-                          value={prog}
-                          color={state.status === 'error' ? 'error' : 'primary'}
-                          aria-label={`${label} progress`}
-                          sx={{
-                            height: 8,
-                            borderRadius: 2,
-                          }}
-                        />
-                      </Box>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ minWidth: 48, textAlign: 'right' }}
-                      >
-                        {prog !== undefined
-                          ? `${prog}%`
-                          : isIndeterminate
-                            ? '...'
-                            : '0%'}
-                      </Typography>
-                    </Box>
-
-                    {state.message ? (
-                      <Typography variant="body2" color="text.secondary">
-                        {t(`node:messages.${state.message}`, {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-                    ) : null}
-                  </Stack>
-                </StepContent>
-              </Step>
-            );
-          })}
-        </Stepper>
-      </DialogContent>
-
-      <DialogActions sx={{ p: 2 }}>
-        {onClose && !running && (
-          <Button onClick={onClose} disabled={disableClose} variant="text">
-            {t('core:action.close', {
+            <Button
+              onClick={() => setMode(2)}
+              color="success"
+              variant="contained"
+            >
+              Next
+            </Button>
+          </DialogActions>
+        </>
+      )}
+      {mode === 2 && (
+        <>
+          <DialogTitle id="core-setup-title">
+            {t('node:setup.title', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </Button>
-        )}
+          </DialogTitle>
+          <DialogContent dividers>
+            {!isWindows && (
+              <Accordion>
+                <AccordionSummary
+                  expandIcon={<ArrowDropDownIcon />}
+                  aria-controls="panel2-content"
+                  id="panel2-header"
+                >
+                  <Typography component="span">
+                    {t('node:setup.advancedOptions', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {!customQortalPath ? (
+                    <Button onClick={pickPath}>
+                      {t('node:setup.pickPath', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  ) : (
+                    <Button onClick={removePath}>
+                      {t('node:setup.removePath', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            )}
 
-        <Button
-          onClick={onAction}
-          color="success"
-          variant="contained"
-          disabled={!canAction}
-          loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
-        >
-          {actionLabel}
-        </Button>
-      </DialogActions>
+            <Stepper activeStep={activeStep} orientation="vertical">
+              {stepStates.map(({ key, label, state }, idx) => {
+                const prog = resolveProgress(state);
+                const isIndeterminate =
+                  prog === undefined &&
+                  (state.status === 'active' || state.status === 'error');
+
+                return (
+                  <Step key={key} expanded>
+                    <StepLabel
+                      icon={statusIcon(state.status)}
+                      optional={
+                        <Typography variant="caption" color="text.secondary">
+                          {statusText(state.status)}
+                        </Typography>
+                      }
+                    >
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Typography
+                          variant="subtitle1"
+                          sx={{ fontWeight: 600 }}
+                        >
+                          {label}
+                        </Typography>
+                      </Stack>
+                    </StepLabel>
+                    <StepContent>
+                      <Stack
+                        spacing={1.25}
+                        sx={{ pb: idx === stepStates.length - 1 ? 0 : 2 }}
+                      >
+                        <Box
+                          sx={{ display: 'flex', alignItems: 'center', gap: 2 }}
+                        >
+                          <Box sx={{ flex: 1 }}>
+                            <LinearProgress
+                              variant={
+                                prog !== undefined
+                                  ? 'determinate'
+                                  : 'indeterminate'
+                              }
+                              value={prog}
+                              color={
+                                state.status === 'error' ? 'error' : 'primary'
+                              }
+                              aria-label={`${label} progress`}
+                              sx={{
+                                height: 8,
+                                borderRadius: 2,
+                              }}
+                            />
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ minWidth: 48, textAlign: 'right' }}
+                          >
+                            {prog !== undefined
+                              ? `${prog}%`
+                              : isIndeterminate
+                                ? '...'
+                                : '0%'}
+                          </Typography>
+                        </Box>
+
+                        {state.message ? (
+                          <Typography variant="body2" color="text.secondary">
+                            {t(`node:messages.${state.message}`, {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </StepContent>
+                  </Step>
+                );
+              })}
+            </Stepper>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 2 }}>
+            {onClose && !running && (
+              <Button onClick={onClose} disabled={disableClose} variant="text">
+                {t('core:action.close', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            )}
+
+            <Button
+              onClick={onAction}
+              color="success"
+              variant="contained"
+              disabled={!canAction}
+              loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
+            >
+              {actionLabel}
+            </Button>
+          </DialogActions>
+        </>
+      )}
     </Dialog>
   );
 }

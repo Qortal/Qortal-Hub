@@ -210,7 +210,6 @@ export const NotAuthenticated = ({
   return (
     <>
       <Spacer height="35px" />
-
       <Box
         className="image-container"
         style={{
@@ -220,9 +219,7 @@ export const NotAuthenticated = ({
       >
         <img src={Logo1Dark} className="base-image" />
       </Box>
-
       <Spacer height="30px" />
-
       <TextP
         sx={{
           textAlign: 'center',
@@ -240,9 +237,7 @@ export const NotAuthenticated = ({
           QORTAL
         </TextSpan>
       </TextP>
-
       <Spacer height="30px" />
-
       <Box
         sx={{
           alignItems: 'center',
@@ -275,9 +270,7 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-
       <Spacer height="6px" />
-
       <Box
         sx={{
           alignItems: 'center',
@@ -340,19 +333,19 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-
       <Spacer height="15px" />
-
       <Typography
         sx={{
           fontSize: '12px',
-          // visibility: !useLocalNode && 'hidden',
+          ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+            fontWeight: 'bold',
+            color: theme.palette.other.positive,
+          }),
         }}
       >
         {t('auth:node.using', { postProcess: 'capitalizeFirstChar' })}:{' '}
         {nodeDisplay(selectedNode?.url)}
       </Typography>
-
       <>
         <Spacer height="15px" />
 
@@ -490,14 +483,12 @@ export const NotAuthenticated = ({
           </Typography>
         </Box>
       </>
-
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}
         info={infoSnack}
         setInfo={setInfoSnack}
       />
-
       {show && (
         <Dialog
           open={show}
@@ -851,7 +842,6 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
-
       {showSelectApiKey && (
         <Dialog
           open={showSelectApiKey}
@@ -960,8 +950,8 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
-
-      <ButtonBase
+      {/* TODO update tutorial */}
+      {/* <ButtonBase
         onClick={() => {
           showTutorial('create-account', true);
         }}
@@ -976,7 +966,7 @@ export const NotAuthenticated = ({
             color: theme.palette.other.unread,
           }}
         />
-      </ButtonBase>
+      </ButtonBase> */}
     </>
   );
 };

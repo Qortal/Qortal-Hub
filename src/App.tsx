@@ -378,6 +378,7 @@ function App() {
     show: showUnsavedChanges,
     message: messageUnsavedChanges,
   } = useModal();
+  const confirmRef = useRef(null);
 
   const {
     isShow: isShowInfo,
@@ -476,7 +477,8 @@ function App() {
   useEffect(() => {
     if (!shownTutorialsInitiated) return;
     if (extState === 'not-authenticated') {
-      showTutorial('create-account');
+      // TODO update tutorial
+      // showTutorial('create-account');
     } else if (extState === 'create-wallet' && walletToBeDownloaded) {
       showTutorial('important-information');
     } else if (extState === 'authenticated') {
@@ -2763,6 +2765,10 @@ function App() {
                 <Typography
                   sx={{
                     fontSize: '12px',
+                    ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+                      fontWeight: 'bold',
+                      color: theme.palette.other.positive,
+                    }),
                   }}
                 >
                   {t('auth:node.using', {
@@ -3045,6 +3051,11 @@ function App() {
                     onChange={(e) =>
                       setWalletToBeDownloadedPassword(e.target.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        confirmRef.current?.focus();
+                      }
+                    }}
                   />
 
                   <Spacer height="5px" />
@@ -3058,11 +3069,17 @@ function App() {
                   <Spacer height="5px" />
 
                   <PasswordField
+                    inputRef={confirmRef}
                     id="standard-adornment-password"
                     value={walletToBeDownloadedPasswordConfirm}
                     onChange={(e) =>
                       setWalletToBeDownloadedPasswordConfirm(e.target.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        createAccountFunc();
+                      }
+                    }}
                   />
                   <Spacer height="5px" />
 

@@ -14,6 +14,7 @@ import {
   isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
+  isOpenSyncingDialogAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -37,7 +38,7 @@ export const useAuth = () => {
   const setIsOpenRecommendation = useSetAtom(
     isOpenDialogCoreRecommendationAtom
   );
-
+  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
   const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
@@ -273,7 +274,27 @@ export const useAuth = () => {
     }
   }, []);
 
+  const isSyncedLocal = useCallback(async () => {
+    try {
+      if (!useLocalNode) return true;
+      const res = await fetch('http://127.0.0.1:12391/admin/status');
+      if (!res?.ok) return false;
+      const data = await res.json();
+      if (data?.syncPercent !== 100) {
+        setIsOpenSyncingDialog(true);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, [useLocalNode, setIsOpenSyncingDialog]);
+
   const authenticate = useCallback(async () => {
+    const isInSync = await isSyncedLocal();
+    if (!isInSync) {
+      return;
+    }
     setIsLoading(true);
     setWalletToBeDecryptedError('');
     await new Promise<void>((res) => {
@@ -363,5 +384,6 @@ export const useAuth = () => {
     resetApikey,
     validateLocalApiKey,
     validateApiKeyFromRegistration,
+    isSyncedLocal,
   };
 };

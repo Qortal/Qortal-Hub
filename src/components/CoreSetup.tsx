@@ -13,6 +13,7 @@ import { useAtom } from 'jotai';
 import { CoreSetupRecommendationDialog } from './CoreSetupRecommendationDialog';
 import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
 import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
+import { CoreSyncing } from './CoreSyncing';
 
 export const CoreSetup = () => {
   const [open, setOpen] = useAtom(isOpenCoreSetup);
@@ -163,6 +164,7 @@ export const CoreSetup = () => {
       />
       <CoreSetupResetApikeyDialog />
       <CustomNodeApikeyDialog />
+      <CoreSyncing />
     </>
   );
 };
