@@ -4315,7 +4315,30 @@ class CaretBrowsingMode {
 
 ;// ./web/download_manager.js
 
+/**
+ * Only allow safe download URLs, such as blob: and http(s): URLs.
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isValidDownloadUrl(url) {
+  try {
+    const parsed = new URL(url, window.location.origin);
+    // Allow only blob: and http(s): protocols
+    return (
+      parsed.protocol === "blob:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "http:"
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
 function download(blobUrl, filename) {
+  if (!isValidDownloadUrl(blobUrl)) {
+    console.error(`download - refusing to use invalid or unsafe URL: ${blobUrl}`);
+    return;
+  }
   const a = document.createElement("a");
   if (!a.click) {
     throw new Error('DownloadManager: "a.click()" is not supported.');
