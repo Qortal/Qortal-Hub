@@ -68,5 +68,9 @@
     "008": "Fehler beim Entpacken von Java",
     "009": "Qortal Core wird heruntergeladen... bitte warten.",
     "010": "Fehler: Core konnte nicht heruntergeladen oder installiert werden"
+  },
+  "url": {
+    "title": "ungültige URL",
+    "description": "falsche URL oder Knoten läuft nicht"
   }
 }

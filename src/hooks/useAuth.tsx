@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useContext } from 'react';
 import {
   HTTP_LOCALHOST_12391,
   TIME_SECONDS_120_IN_MILLISECONDS,
@@ -15,6 +15,7 @@ import {
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
   isOpenSyncingDialogAtom,
+  isOpenUrlInvalidAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -26,6 +27,7 @@ import {
   getLocalApiKeyNotElectronCase,
   setLocalApiKeyNotElectronCase,
 } from '../background/background-cases';
+import { ApiKey } from '../types/auth';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
@@ -43,6 +45,7 @@ export const useAuth = () => {
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
+  const setIsUrlInvalid = useSetAtom(isOpenUrlInvalidAtom);
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
@@ -105,6 +108,25 @@ export const useAuth = () => {
           }
         }
 
+        if (!isLocal) {
+          let isUrlGood = true;
+          try {
+            const resUrlCheck = await fetch(
+              `${validatedNodeInfo?.url}/admin/status`
+            );
+            if (!resUrlCheck.ok) {
+              isUrlGood = false;
+            }
+          } catch (error) {
+            isUrlGood = false;
+          }
+
+          if (!isUrlGood) {
+            setIsUrlInvalid(true);
+            return { isValid: false, validatedNodeInfo };
+          }
+        }
+
         let isValid = false;
 
         const url = `${validatedNodeInfo?.url}/admin/settings/localAuthBypassEnabled`;
@@ -154,6 +176,7 @@ export const useAuth = () => {
       checkIfLocalIsRunning,
       generateApiKey,
       setIsOpenCoreSetup,
+      setIsUrlInvalid,
     ]
   );
 
@@ -361,7 +384,29 @@ export const useAuth = () => {
     setWalletToBeDecryptedError,
     rawWallet,
     getBalanceFunc,
+    isSyncedLocal,
   ]);
+
+  const saveCustomNodes = useCallback(async (updatedNode: ApiKey) => {
+    let nodes = [];
+
+    try {
+      nodes = await window.sendMessage('getCustomNodesFromStorage');
+    } catch (error) {
+      console.error(error);
+    }
+    if (!nodes) return;
+    const customNodeToSaveIndex = nodes.findIndex(
+      (n) => n?.url === updatedNode?.url
+    );
+    if (customNodeToSaveIndex === -1) return;
+
+    nodes.splice(customNodeToSaveIndex, 1, updatedNode);
+
+    window.sendMessage('setCustomNodes', nodes).catch(() => {
+      console.error('Failed to set custom nodes');
+    });
+  }, []);
 
   const validateApiKeyFromRegistration = useCallback(async () => {
     try {
@@ -385,5 +430,6 @@ export const useAuth = () => {
     validateLocalApiKey,
     validateApiKeyFromRegistration,
     isSyncedLocal,
+    saveCustomNodes,
   };
 };

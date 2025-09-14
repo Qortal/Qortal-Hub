@@ -68,5 +68,9 @@
     "008": "erro ao descompactar o Java",
     "009": "baixando o Qortal Core... por favor, aguarde.",
     "010": "erro: não foi possível baixar ou instalar o core"
+  },
+  "url": {
+    "title": "URL inválido",
+    "description": "URL incorreta ou nó não está em execução"
   }
 }

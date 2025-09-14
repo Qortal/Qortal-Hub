@@ -68,5 +68,9 @@
     "008": "error al descomprimir Java",
     "009": "descargando Qortal Core... por favor espera.",
     "010": "error: no se puede descargar o instalar el núcleo"
+  },
+  "url": {
+    "title": "URL inválida",
+    "description": "URL incorrecta o el nodo no se está ejecutando"
   }
 }

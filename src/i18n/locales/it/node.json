@@ -68,5 +68,9 @@
     "008": "errore durante l'estrazione di Java",
     "009": "scaricamento di Qortal Core... attendere.",
     "010": "errore: impossibile scaricare o installare il Core"
+  },
+  "url": {
+    "title": "URL non valido",
+    "description": "URL errato o nodo non in esecuzione"
   }
 }

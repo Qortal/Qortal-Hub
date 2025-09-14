@@ -17,9 +17,11 @@ import {
 import { Label } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
+import { ApiKey } from '../types/auth';
 
 export function CustomNodeApikeyDialog() {
-  const { validateApiKey, handleSaveNodeInfo, authenticate } = useAuth();
+  const { validateApiKey, handleSaveNodeInfo, authenticate, saveCustomNodes } =
+    useAuth();
   const { t } = useTranslation(['node', 'core']);
 
   const [apikey, setApikey] = React.useState('');
@@ -50,8 +52,8 @@ export function CustomNodeApikeyDialog() {
   const handleContinue = async () => {
     try {
       setMessage('');
-      const payload = {
-        url: selectedNode?.url,
+      const payload: ApiKey = {
+        url: selectedNode?.url as string,
         apikey,
       };
       const { isValid } = await validateApiKey(payload);
@@ -67,6 +69,7 @@ export function CustomNodeApikeyDialog() {
         }
 
         await handleSaveNodeInfo(payload);
+        await saveCustomNodes(payload);
         await authenticate();
         setMessage('');
         setOpen(false);

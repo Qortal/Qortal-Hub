@@ -68,5 +68,9 @@
     "008": "error unzipping Java",
     "009": "downloading the Qortal Core... please wait.",
     "010": "error: unable to download or install the Core"
+  },
+  "url": {
+    "title": "url invalid",
+    "description": "incorrect url or node not running"
   }
 }

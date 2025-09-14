@@ -68,5 +68,9 @@
     "008": "viga Java lahtipakkimisel",
     "009": "Qortal Core allalaadimine... palun oota.",
     "010": "viga: ei saa Core’i alla laadida või installida"
+  },
+  "url": {
+    "title": "vigane URL",
+    "description": "vale URL või sõlm ei tööta"
   }
 }

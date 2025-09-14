@@ -14,6 +14,7 @@ import { CoreSetupRecommendationDialog } from './CoreSetupRecommendationDialog';
 import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
 import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
 import { CoreSyncing } from './CoreSyncing';
+import { CoreUrlInvalid } from './CoreUrlInvalid';
 
 export const CoreSetup = () => {
   const [open, setOpen] = useAtom(isOpenCoreSetup);
@@ -165,6 +166,7 @@ export const CoreSetup = () => {
       <CoreSetupResetApikeyDialog />
       <CustomNodeApikeyDialog />
       <CoreSyncing />
+      <CoreUrlInvalid />
     </>
   );
 };

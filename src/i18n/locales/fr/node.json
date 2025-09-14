@@ -68,5 +68,9 @@
     "008": "erreur lors de la décompression de Java",
     "009": "téléchargement de Qortal Core... veuillez patienter.",
     "010": "erreur : impossible de télécharger ou d’installer le Core"
+  },
+  "url": {
+    "title": "URL invalide",
+    "description": "URL incorrecte ou nœud non en cours d’exécution"
   }
 }
