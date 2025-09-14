@@ -1,9 +1,22 @@
 {
   "setup": {
     "title": "Qortal Core セットアップ",
-    "advancedOptions": "高度なオプション",
-    "pickPath": "カスタム Qortal インストールパスを選択",
+    "advancedOptions": "詳細オプション",
+    "pickPath": "Core がデフォルト以外の場所にインストールされている場合は、カスタム Qortal インストールパスを選択してください。",
     "removePath": "カスタム Qortal パスを削除"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal は分散型プラットフォームで、データ、アプリケーション、財務を完全にコントロールできます。始めるには、ネットワークを駆動し Qortal の全機能を有効にする <strong>Qortal Core</strong> をインストールすることをおすすめします。",
+    "paragraph2": "このセットアップウィザードは、Qortal Core をデバイスにインストールし構成する手順を案内します。インストールを続行するには <strong>次へ</strong> をクリックしてください。",
+    "note": "上級ユーザー向けの注意",
+    "advanced": "リモートノードを使用している場合は、このセットアップウィザードを閉じてから「カスタムノードを選択」をクリックしてください"
+  },
+  "sync": {
+    "behind": "{{count}} ブロック遅れています。",
+    "waiting": "同期が完了するまでお待ちください。",
+    "not_syncronized": "未同期",
+    "syncronized": "同期済み",
+    "syncronized_desc": "現在同期されています。続行できます。"
   },
   "steps": {
     "java": "Java がある",

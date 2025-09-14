@@ -2,8 +2,21 @@
   "setup": {
     "title": "Configurazione di Qortal Core",
     "advancedOptions": "opzioni avanzate",
-    "pickPath": "scegli il percorso personalizzato di installazione di Qortal",
-    "removePath": "rimuovi percorso personalizzato di Qortal"
+    "pickPath": "scegli un percorso di installazione personalizzato di Qortal se il tuo Core è installato in una posizione non predefinita.",
+    "removePath": "rimuovi percorso Qortal personalizzato"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal è una piattaforma decentralizzata che ti dà il pieno controllo sui tuoi dati, applicazioni e finanze. Per iniziare, ti consigliamo di installare il <strong>Qortal Core</strong>, che alimenta la rete e abilita tutte le funzionalità di Qortal.",
+    "paragraph2": "Questa procedura guidata ti accompagnerà nell’installazione e configurazione di Qortal Core sul tuo dispositivo. Fai clic su <strong>Avanti</strong> per continuare con l’installazione.",
+    "note": "nota per utenti avanzati",
+    "advanced": "se stai usando un nodo remoto, chiudi questa procedura guidata e fai clic su \"Scegli nodo personalizzato\""
+  },
+  "sync": {
+    "behind": "Sei indietro di {{count}} blocchi.",
+    "waiting": "Attendi fino a quando non sei sincronizzato.",
+    "not_syncronized": "non sincronizzato",
+    "syncronized": "sincronizzato",
+    "syncronized_desc": "ora sei sincronizzato. puoi continuare."
   },
   "steps": {
     "java": "ha Java",

@@ -519,7 +519,7 @@ function App() {
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
   const resettxListAtomAtom = useResetAtom(txListAtom);
   const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
-
+  const [storeAccount, setStoredAccount] = useState<boolean>(true);
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
@@ -1063,7 +1063,9 @@ function App() {
         .then((response) => {
           if (response && !response.error) {
             setRawWallet(wallet);
-            saveWalletToLocalStorage(wallet);
+            if (storeAccount) {
+              saveWalletToLocalStorage(wallet);
+            }
             setWalletToBeDownloaded({
               wallet,
               qortAddress: wallet.address0,
@@ -2690,6 +2692,7 @@ function App() {
                 onClick={() => {
                   setRawWallet(null);
                   setExtstate('wallets');
+                  setAuthenticatePassword('');
                   logoutFunc();
                 }}
               />
@@ -2826,6 +2829,8 @@ function App() {
                     onClick={() => {
                       if (creationStep === 2) {
                         setCreationStep(1);
+                        setWalletToBeDownloadedPasswordConfirm('');
+                        setWalletToBeDownloadedPassword('');
                         return;
                       }
                       setExtstate('not-authenticated');
@@ -3088,7 +3093,38 @@ function App() {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
-
+                  <Spacer height="5px" />
+                  <FormControlLabel
+                    sx={{
+                      margin: 0,
+                    }}
+                    control={
+                      <Checkbox
+                        onChange={(e) => setStoredAccount(e.target.checked)}
+                        checked={storeAccount}
+                        edge="start"
+                        tabIndex={-1}
+                        disableRipple
+                        sx={{
+                          '&.Mui-checked': {
+                            color: theme.palette.text.secondary,
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: theme.palette.text.secondary,
+                          },
+                        }}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography sx={{ fontSize: '14px' }}>
+                          {t('auth:store_account', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+                    }
+                  />
                   <Spacer height="17px" />
 
                   <CustomButton onClick={createAccountFunc}>

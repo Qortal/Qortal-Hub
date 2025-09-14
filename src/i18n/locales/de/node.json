@@ -2,8 +2,21 @@
   "setup": {
     "title": "Qortal Core Einrichtung",
     "advancedOptions": "erweiterte Optionen",
-    "pickPath": "benutzerdefinierten Qortal-Installationspfad wählen",
+    "pickPath": "Wählen Sie einen benutzerdefinierten Qortal-Installationspfad, wenn Ihr Core an einem nicht standardmäßigen Ort installiert ist.",
     "removePath": "benutzerdefinierten Qortal-Pfad entfernen"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal ist eine dezentrale Plattform, die Ihnen volle Kontrolle über Ihre Daten, Anwendungen und Finanzen gibt. Um zu beginnen, empfehlen wir die Installation von <strong>Qortal Core</strong>, das das Netzwerk betreibt und alle Funktionen von Qortal aktiviert.",
+    "paragraph2": "Dieser Einrichtungsassistent führt Sie durch die Installation und Konfiguration von Qortal Core auf Ihrem Gerät. Klicken Sie auf <strong>Weiter</strong>, um mit der Installation fortzufahren.",
+    "note": "Hinweis für fortgeschrittene Benutzer",
+    "advanced": "Wenn Sie einen Remote-Knoten verwenden, schließen Sie bitte diesen Einrichtungsassistenten und klicken Sie anschließend auf „Benutzerdefinierten Knoten auswählen“"
+  },
+  "sync": {
+    "behind": "Sie sind {{count}} Blöcke im Rückstand.",
+    "waiting": "Bitte warten Sie, bis Sie synchronisiert sind.",
+    "not_syncronized": "nicht synchronisiert",
+    "syncronized": "synchronisiert",
+    "syncronized_desc": "Sie sind jetzt synchronisiert. Sie können fortfahren."
   },
   "steps": {
     "java": "Java vorhanden",

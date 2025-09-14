@@ -27,7 +27,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import { QORTAL_APP_CONTEXT } from '../App';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
+import { Spacer } from '../common/Spacer';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -233,20 +234,26 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     >
       {mode === 1 && (
         <>
-          <DialogTitle id="core-setup-title">Welcome to Qortal</DialogTitle>
+          <DialogTitle id="core-setup-title">
+            {' '}
+            {t('core:welcome', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </DialogTitle>
 
           <DialogContent dividers>
             <Typography gutterBottom>
-              Qortal is a decentralized platform that gives you full control
-              over your data, applications, and finances. To get started, we
-              recommend that you install the <strong>Qortal Core</strong>, which
-              powers the network and enables all features of Qortal.
+              <Trans
+                i18nKey="node:introSetup.paragraph1"
+                components={{ strong: <strong /> }}
+              />
             </Typography>
 
             <Typography gutterBottom>
-              This setup wizard will guide you through installing and
-              configuring the Qortal Core on your device. Click{' '}
-              <strong>Next</strong> to continue with the installation.
+              <Trans
+                i18nKey="node:introSetup.paragraph2"
+                components={{ strong: <strong /> }}
+              />
             </Typography>
             <Typography variant="subtitle1" gutterBottom>
               {t('node:recommendation.subTitle', {
@@ -272,6 +279,33 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 })}
               </li>
             </ul>
+            <Box
+              sx={{
+                alignItems: 'center',
+                borderRadius: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                outlineStyle: 'solid',
+                outlineWidth: '0.5px',
+                padding: '20px 30px',
+              }}
+            >
+              <Typography
+                sx={{
+                  textDecoration: 'underline',
+                }}
+              >
+                {t('node:introSetup.note', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+              <Typography>
+                {t('node:introSetup.advanced', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            </Box>
           </DialogContent>
 
           <DialogActions sx={{ p: 2 }}>
@@ -288,7 +322,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
               color="success"
               variant="contained"
             >
-              Next
+              {t('core:page.next', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
           </DialogActions>
         </>

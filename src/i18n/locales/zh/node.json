@@ -2,8 +2,21 @@
   "setup": {
     "title": "Qortal Core 设置",
     "advancedOptions": "高级选项",
-    "pickPath": "选择自定义 Qortal 安装路径",
+    "pickPath": "如果您的 Core 安装在非默认位置，请选择自定义 Qortal 安装路径。",
     "removePath": "移除自定义 Qortal 路径"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal 是一个去中心化平台，让您完全掌控数据、应用和财务。开始之前，我们建议您安装 <strong>Qortal Core</strong>，它驱动网络并启用 Qortal 的所有功能。",
+    "paragraph2": "此安装向导将引导您在设备上安装和配置 Qortal Core。点击 <strong>下一步</strong> 继续安装。",
+    "note": "高级用户注意",
+    "advanced": "如果您正在使用远程节点，请关闭此安装向导，然后点击“选择自定义节点”"
+  },
+  "sync": {
+    "behind": "您落后 {{count}} 个区块。",
+    "waiting": "请等待同步完成。",
+    "not_syncronized": "未同步",
+    "syncronized": "已同步",
+    "syncronized_desc": "您现在已同步，可以继续。"
   },
   "steps": {
     "java": "已安装 Java",

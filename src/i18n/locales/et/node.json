@@ -2,8 +2,21 @@
   "setup": {
     "title": "Qortal Core seadistus",
     "advancedOptions": "täpsemad valikud",
-    "pickPath": "vali kohandatud Qortali installitee",
+    "pickPath": "vali kohandatud Qortali installitee, kui Core on paigaldatud mittevaikimisi asukohta.",
     "removePath": "eemalda kohandatud Qortali tee"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab teile täieliku kontrolli oma andmete, rakenduste ja rahanduse üle. Alustamiseks soovitame paigaldada <strong>Qortal Core</strong>, mis töötab võrgu ja võimaldab kõiki Qortali funktsioone.",
+    "paragraph2": "See seadistusviisard juhendab teid Qortal Core’i installimisel ja seadistamisel teie seadmes. Jätkamiseks klõpsake <strong>Järgmine</strong>.",
+    "note": "märkus edasijõudnud kasutajatele",
+    "advanced": "kui kasutate kaug-sõlme, sulgege see seadistusviisard ja klõpsake \"Vali kohandatud sõlm\""
+  },
+  "sync": {
+    "behind": "Te olete {{count}} plokki maas.",
+    "waiting": "Palun oodake kuni sünkroonimine on lõpule viidud.",
+    "not_syncronized": "sünkroonimata",
+    "syncronized": "sünkroonitud",
+    "syncronized_desc": "te olete nüüd sünkroonitud. võite jätkata."
   },
   "steps": {
     "java": "Java olemas",

@@ -97,12 +97,18 @@ export function CoreSyncing() {
     >
       {!canContinue && (
         <>
-          <DialogTitle id="core-setup-title">Not Syncronized</DialogTitle>
+          <DialogTitle id="core-setup-title">
+            {t('node:sync.not_syncronized', {
+              postProcess: 'capitalizeEachFirstChar',
+            })}
+          </DialogTitle>
           <DialogContent dividers>
             <Typography variant="body1" gutterBottom>
               {blocksBehind > 0 &&
-                `You are ${blocksBehind?.toFixed(0)} blocks behind.`}{' '}
-              Please wait until you are Syncronized.{' '}
+                t('node:sync.behind', {
+                  count: Number(blocksBehind.toFixed(0)),
+                })}{' '}
+              {t('node:sync.waiting')}{' '}
               <CircularProgress size="1.2rem" color="primary" />
             </Typography>
           </DialogContent>
@@ -111,10 +117,16 @@ export function CoreSyncing() {
 
       {canContinue && (
         <>
-          <DialogTitle id="core-setup-title">Syncronized</DialogTitle>
+          <DialogTitle id="core-setup-title">
+            {t('node:sync.syncronized', {
+              postProcess: 'capitalizeEachFirstChar',
+            })}
+          </DialogTitle>
           <DialogContent dividers>
             <Typography variant="body1" gutterBottom>
-              You are now Syncronized. You may continue.
+              {t('node:sync.syncronized_desc', {
+                postProcess: 'capitalizeFirstWord',
+              })}
             </Typography>
           </DialogContent>
         </>
