@@ -6,7 +6,7 @@ import { Embed } from '../Embeds/Embed';
 import { Box, useTheme } from '@mui/material';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 
-export const extractComponents = (url) => {
+export const extractComponents = (url: string) => {
   if (!url || !url.startsWith(QORTAL_PROTOCOL)) {
     return null;
   }
@@ -16,7 +16,13 @@ export const extractComponents = (url) => {
     return null;
   }
 
-  url = url.replace(/^(qortal:\/\/)/, '');
+  // Remove protocol prefix
+  url = url.replace(/^qortal:\/\/?/i, '').trim();
+
+  // If nothing meaningful left (e.g., "qortal://", "qortal:////"), return null
+  if (!/[^/]/.test(url)) return null;
+
+  // Case 1: url contains a slash → already service-based
   if (url.includes('/')) {
     const parts = url.split('/');
     const service = parts[0].toUpperCase();
@@ -28,7 +34,13 @@ export const extractComponents = (url) => {
     return { service, name, identifier, path };
   }
 
-  return null;
+  // Case 2: url is just a username → default to WEBSITE
+  return {
+    service: 'WEBSITE',
+    name: url,
+    identifier: undefined,
+    path: '',
+  };
 };
 
 function processText(input) {
