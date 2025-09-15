@@ -2,7 +2,7 @@
 const utils = {
   int32ToBytes(word) {
     const byteArray = [];
-    for (const b = 0; b < 32; b += 8) {
+    for (var b = 0; b < 32; b += 8) {
       byteArray.push((word >>> (24 - (b % 32))) & 0xff);
     }
     return byteArray;
@@ -12,7 +12,7 @@ const utils = {
     if (typeof message === 'string') {
       const s = unescape(encodeURIComponent(message)); // UTF-8
       message = new Uint8Array(s.length);
-      for (const i = 0; i < s.length; i++) {
+      for (var i = 0; i < s.length; i++) {
         message[i] = s.charCodeAt(i) & 0xff;
       }
     }
@@ -32,7 +32,7 @@ const utils = {
     // we want to represent the input as a 8-bytes array
     const byteArray = [0, 0, 0, 0, 0, 0, 0, 0];
 
-    for (const index = 0; index < byteArray.length; index++) {
+    for (var index = 0; index < byteArray.length; index++) {
       const byte = int64 & 0xff;
       byteArray[byteArray.length - index - 1] = byte;
       int64 = (int64 - byte) / 256;
@@ -45,7 +45,7 @@ const utils = {
     if (buf1.byteLength != buf2.byteLength) return false;
     const dv1 = new Uint8Array(buf1);
     const dv2 = new Uint8Array(buf2);
-    for (const i = 0; i != buf1.byteLength; i++) {
+    for (var i = 0; i != buf1.byteLength; i++) {
       if (dv1[i] != dv2[i]) return false;
     }
     return true;

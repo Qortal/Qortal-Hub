@@ -15,7 +15,7 @@ while (i < ALPHABET.length) {
 
 Base58.encode = function (buffer) {
   buffer = new Uint8Array(buffer);
-  const carry, digits, j;
+  var carry, digits, j;
   if (buffer.length === 0) {
     return '';
   }
@@ -58,7 +58,7 @@ Base58.encode = function (buffer) {
 };
 
 Base58.decode = function (string) {
-  const bytes, c, carry, j;
+  var bytes, c, carry, j;
   if (string.length === 0) {
     return new (
       typeof Uint8Array !== 'undefined' && Uint8Array !== null
