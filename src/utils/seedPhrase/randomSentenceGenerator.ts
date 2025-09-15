@@ -101,7 +101,7 @@ class RandomSentenceGenerator extends LitElement {
     if (crypto) {
       const entropy256 = Math.ceil(entropy / 8);
 
-      const buffer = new Uint8Array(entropy256);
+      let buffer = new Uint8Array(entropy256);
 
       crypto.getRandomValues(buffer);
 
