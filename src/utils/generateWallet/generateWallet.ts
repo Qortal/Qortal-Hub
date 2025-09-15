@@ -5,7 +5,6 @@ import { doInitWorkers, kdf } from '../../encryption/kdf';
 import PhraseWallet from './phrase-wallet';
 import * as WORDLISTS from './wordlists';
 import FileSaver from 'file-saver';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { mimeToExtensionMap } from '../memeTypes';
 
 export function generateRandomSentence(
