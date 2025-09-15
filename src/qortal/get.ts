@@ -57,6 +57,7 @@ import {
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
+  QORTAL_PROTOCOL,
   TIME_MINUTES_20_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
