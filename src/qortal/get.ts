@@ -57,6 +57,7 @@ import {
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
+  QORTAL_PROTOCOL,
   TIME_MINUTES_20_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
@@ -2650,7 +2651,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -3035,7 +3036,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -5431,7 +5432,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       ]
         .filter(Boolean) // Remove null values
         .join('&'); // Join with `&`
-      const link = `qortal://use-embed/POLL?${queryParams}`;
+      const link = `${QORTAL_PROTOCOL}use-embed/POLL?${queryParams}`;
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
@@ -5455,7 +5456,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       }
       const queryParams = buildQueryParams(data);
 
-      const link = `qortal://use-embed/${data.type}?${queryParams}`;
+      const link = `${QORTAL_PROTOCOL}use-embed/${data.type}?${queryParams}`;
 
       try {
         await navigator.clipboard.writeText(link);

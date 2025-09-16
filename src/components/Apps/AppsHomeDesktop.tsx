@@ -15,6 +15,7 @@ import { extractComponents } from '../Chat/MessageDisplay';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import { AppsPrivate } from './AppsPrivate';
 import { useTranslation } from 'react-i18next';
+import { QORTAL_PROTOCOL } from '../../constants/constants';
 
 export const AppsHomeDesktop = ({
   setMode,
@@ -42,7 +43,7 @@ export const AppsHomeDesktop = ({
         const { service, name, identifier, path } = res;
         executeEvent('addTab', { data: { service, name, identifier, path } });
         executeEvent('open-apps-mode', {});
-        setQortalUrl('qortal://');
+        setQortalUrl(QORTAL_PROTOCOL);
       }
     } catch (error) {
       console.log(error);
@@ -93,7 +94,7 @@ export const AppsHomeDesktop = ({
             disableUnderline
             autoComplete="off"
             autoCorrect="off"
-            placeholder="qortal://"
+            placeholder={QORTAL_PROTOCOL}
             sx={{
               borderRadius: '7px',
               color: theme.palette.text.primary,

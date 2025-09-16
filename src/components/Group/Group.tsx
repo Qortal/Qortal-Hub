@@ -1596,6 +1596,12 @@ export const Group = ({
     setFirstSecretKeyInCreation(true);
   }, []);
 
+  const getUserAvatarUrl = useCallback((name?: string) => {
+    return name
+      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${name}/qortal_avatar?async=true`
+      : '';
+  }, []);
+
   const goToHome = async () => {
     setDesktopViewMode('home');
 
@@ -1831,6 +1837,7 @@ export const Group = ({
                         color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
+                      src={getUserAvatarUrl(direct?.name)}
                     >
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>

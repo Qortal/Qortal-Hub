@@ -25,8 +25,8 @@ class Semaphore {
   }
 }
 
-let semaphore = new Semaphore(1);
-let reader = new FileReader();
+const semaphore = new Semaphore(1);
+const reader = new FileReader();
 
 export const fileToBase64 = (file) =>
   new Promise(async (resolve, reject) => {

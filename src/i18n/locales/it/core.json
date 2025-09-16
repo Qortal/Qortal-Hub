@@ -125,7 +125,7 @@
     "block_height": "altezza del blocco",
     "information": "informazioni di base",
     "peers": "peer connessi",
-    "version": "versione principale"
+    "version": "versione core"
   },
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
@@ -347,9 +347,9 @@
   "option_no": "nessuna opzione",
   "option_other": "opzioni",
   "page": {
-    "last": "scorso",
-    "first": "primo",
-    "next": "prossimo",
+    "last": "ultima",
+    "first": "prima",
+    "next": "prossima",
     "previous": "precedente"
   },
   "payment": "pagamento",
