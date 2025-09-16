@@ -1,4 +1,4 @@
-import { useCallback, useContext } from 'react';
+import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
   TIME_SECONDS_120_IN_MILLISECONDS,
@@ -59,7 +59,7 @@ export const useAuth = () => {
 
   const checkIfLocalIsRunning = useCallback(async () => {
     try {
-      const res = await fetch('http://127.0.0.1:12391/admin/status');
+      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (res?.ok) return true;
       return false;
     } catch (error) {
@@ -69,7 +69,7 @@ export const useAuth = () => {
 
   const generateApiKey = useCallback(async () => {
     try {
-      const res = await fetch(`http://127.0.0.1:12391/admin/apikey/generate`, {
+      const res = await fetch(`${HTTP_LOCALHOST_12391}/admin/apikey/generate`, {
         method: 'POST',
       });
       if (!res.ok) {
@@ -182,7 +182,7 @@ export const useAuth = () => {
 
   const validateLocalApiKey = useCallback(async (apiKey) => {
     try {
-      const url2 = `http://127.0.0.1:12391/admin/apikey/test?apiKey=${apiKey}`;
+      const url2 = `${HTTP_LOCALHOST_12391}/admin/apikey/test?apiKey=${apiKey}`;
       const response2 = await fetch(url2);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
@@ -300,7 +300,7 @@ export const useAuth = () => {
   const isSyncedLocal = useCallback(async () => {
     try {
       if (!useLocalNode) return true;
-      const res = await fetch('http://127.0.0.1:12391/admin/status');
+      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
       if (data?.syncPercent !== 100) {

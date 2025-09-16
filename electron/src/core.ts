@@ -2,10 +2,12 @@ import path from 'path';
 import http from 'http';
 import https from 'https';
 import fs from 'fs';
-import os from 'os';
 import { spawn, exec, execFile } from 'child_process';
 import readline from 'readline';
 import { promises as fsPromise } from 'fs';
+
+export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
+export const CORE_LOCALHOST = '127.0.0.1';
 
 import {
   downloadPath,
@@ -101,7 +103,7 @@ function isPortOpen(
 }
 
 export async function isCorePortRunning(): Promise<boolean> {
-  const host = '127.0.0.1';
+  const host = CORE_LOCALHOST;
   const port = 12391;
   const timeoutMs = 600;
 
@@ -217,7 +219,6 @@ function watchForApiStart(
   };
 
   const pollApi = async (timeoutMs: number) => {
-    const BASE = 'http://127.0.0.1:12391';
     const end = Date.now() + timeoutMs;
 
     while (!pollingStopped && Date.now() < end) {
@@ -228,7 +229,7 @@ function watchForApiStart(
           onError();
           return;
         }
-        const res = await fetch(`${BASE}/admin/info`);
+        const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/info`);
         if (res.ok) {
           cleanup();
           onDetected();
@@ -1599,15 +1600,13 @@ export async function startCore() {
   startQortal();
 }
 
-const BASE = 'http://127.0.0.1:12391';
-
 type SettingsResponse = {
   apiKeyPath?: string;
   // ...other settings fields you might have
 };
 
 async function getSettings(): Promise<SettingsResponse> {
-  const res = await fetch(`${BASE}/admin/settings`);
+  const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/settings`);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(
@@ -1638,7 +1637,9 @@ async function deleteIfExists(filePath: string): Promise<void> {
 }
 
 async function generateApiKey(): Promise<string> {
-  const res = await fetch(`${BASE}/admin/apikey/generate`, { method: 'POST' });
+  const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/apikey/generate`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(

@@ -13,6 +13,7 @@ import { useAtom } from 'jotai';
 import { isOpenSyncingDialogAtom } from '../atoms/global';
 
 import { useTranslation } from 'react-i18next';
+import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 
 export function CoreSyncing() {
   const { authenticate } = useAuth();
@@ -37,7 +38,7 @@ export function CoreSyncing() {
     try {
       if (isCallingRef.current) return;
       isCallingRef.current = true;
-      const res = await fetch('http://127.0.0.1:12391/admin/status');
+      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
       if (data?.syncPercent === 100) {
@@ -45,7 +46,7 @@ export function CoreSyncing() {
         setCanContinue(true);
         return false;
       }
-      const endpointLastBlock = `http://127.0.0.1:12391/blocks/last`;
+      const endpointLastBlock = `${HTTP_LOCALHOST_12391}/blocks/last`;
       const resLastBlock = await fetch(endpointLastBlock);
       const dataLastBlock = await resLastBlock.json();
       const timestampNow = Date.now();
