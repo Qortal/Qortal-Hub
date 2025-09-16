@@ -36,6 +36,7 @@ import InsertLinkIcon from '@mui/icons-material/InsertLink';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { QORTAL_PROTOCOL } from '../../constants/constants.ts';
 
 function a11yProps(index: number) {
   return {
@@ -358,7 +359,7 @@ export const ManageMembers = ({
                   gap: '10px',
                 }}
                 onClick={async () => {
-                  const link = `qortal://use-group/action-join/groupid-${groupInfo?.groupId}`;
+                  const link = `${QORTAL_PROTOCOL}use-group/action-join/groupid-${groupInfo?.groupId}`;
                   await navigator.clipboard.writeText(link);
                 }}
               >

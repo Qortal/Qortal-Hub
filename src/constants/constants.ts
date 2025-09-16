@@ -203,8 +203,10 @@ export const HTTPS_EXT_NODE_QORTAL_LINK: string =
 export const HTTP_LOCALHOST_12391: string = 'http://127.0.0.1:12391';
 export const HTTPS_QORT_TRADE: string = 'https://www.qort.trade';
 export const HTTPS_TRADE_NODE: string = 'https://appnode.qortal.org';
+export const LOCALHOST: string = '127.0.0.1';
 export const LOCALHOST_12391: string = '127.0.0.1:12391';
 export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
+export const QORTAL_PROTOCOL: string = 'qortal://';
 
 // MIN-MAX section
 export const MAX_SIZE_AVATAR: number = 500;

@@ -4,6 +4,7 @@ import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
+import { LOCALHOST } from '../constants/constants';
 
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
@@ -71,7 +72,7 @@ export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
 export const isOpenCoreSetup = atomWithReset<boolean>(false);
 export const isOpenSyncingDialogAtom = atomWithReset<boolean>(false);
 export const isOpenUrlInvalidAtom = atomWithReset<boolean>(false);
-export const devServerDomainAtom = atomWithReset('127.0.0.1');
+export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
 export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({

@@ -1,3 +1,5 @@
+import { QORTAL_PROTOCOL } from '../constants/constants';
+
 export function buildImageEmbedLink(image?: {
   name?: string;
   identifier?: string;
@@ -6,7 +8,7 @@ export function buildImageEmbedLink(image?: {
 }): string | null {
   if (!image?.name || !image.identifier || !image.service) return null;
 
-  const base = `qortal://use-embed/IMAGE?name=${image.name}&identifier=${image.identifier}&service=${image.service}&mimeType=image%2Fpng&timestamp=${image?.timestamp || ''}`;
+  const base = `${QORTAL_PROTOCOL}use-embed/IMAGE?name=${image.name}&identifier=${image.identifier}&service=${image.service}&mimeType=image%2Fpng&timestamp=${image?.timestamp || ''}`;
 
   const isEncrypted = image.identifier.startsWith('grp-q-manager_0');
   return isEncrypted ? `${base}&encryptionType=group` : base;
