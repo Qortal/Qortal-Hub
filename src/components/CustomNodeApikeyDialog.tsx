@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   Button,
   Dialog,
@@ -18,16 +17,17 @@ import { Label } from '../styles/App-styles';
 import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 import { ApiKey } from '../types/auth';
+import { useEffect, useState } from 'react';
 
 export function CustomNodeApikeyDialog() {
   const { validateApiKey, handleSaveNodeInfo, authenticate, saveCustomNodes } =
     useAuth();
   const { t } = useTranslation(['node', 'core']);
 
-  const [apikey, setApikey] = React.useState('');
+  const [apikey, setApikey] = useState('');
   const [open, setOpen] = useAtom(isOpenDialogCustomApikey);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
-  const [message, setMessage] = React.useState('');
+  const [message, setMessage] = useState('');
   const setCustomNodes = (nodes) => {
     window.sendMessage('setCustomNodes', nodes).catch((error) => {
       console.error(error);
@@ -43,7 +43,7 @@ export function CustomNodeApikeyDialog() {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (selectedNode) {
       setApikey(selectedNode?.apikey || '');
     }
