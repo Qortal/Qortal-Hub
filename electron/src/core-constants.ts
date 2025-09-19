@@ -1,65 +1,76 @@
 import { app } from 'electron';
-export const homePath = app.getPath('home');
-export const downloadPath = app.getPath('downloads');
+export const HOME_PATH = app.getPath('home');
+export const DOWNLOAD_PATH = app.getPath('downloads');
+
+const GITHUB_QORTAL_RELEASES_URL: string =
+  'https://github.com/qortal/qortal/releases';
+
+const DOWNLOAD_QORTAL_URL: string = 'https://download.qortal.online';
+const CLOUD_QORTAL_URL: string = 'https://cloud.qortal.org/s';
 
 export const winjar = String.raw`C:\Program Files\Qortal\qortal.jar`;
 export const winurl =
-  'https://github.com/Qortal/qortal/releases/latest/download/qortal.exe';
-export const winexe = downloadPath + '\\qortal.exe';
+  GITHUB_QORTAL_RELEASES_URL + '/latest/download/qortal.exe';
+export const winexe = DOWNLOAD_PATH + '\\qortal.exe';
 export const startWinCore = 'C:\\Program Files\\Qortal\\qortal.exe';
 
-export const zipdir = homePath;
-export const zipfile = homePath + '/qortal.zip';
+export const zipdir = HOME_PATH;
+export const zipfile = HOME_PATH + '/qortal.zip';
 export const zipurl =
-  'https://github.com/Qortal/qortal/releases/latest/download/qortal.zip';
+  GITHUB_QORTAL_RELEASES_URL + '/latest/download/qortal.zip';
 
-export const qortaldir = homePath + '/qortal/';
+export const qortaldir = HOME_PATH + '/qortal/';
 export const qortalWindir = 'C:\\Program Files\\Qortal';
-export const qortaljar = homePath + '/qortal/qortal.jar';
-export const qortalsettings = homePath + '/qortal/settings.json';
+export const qortaljar = HOME_PATH + '/qortal/qortal.jar';
+export const qortalsettings = HOME_PATH + '/qortal/settings.json';
 
-export const javadir = homePath + '/jdk-17.0.2/';
+export const javadir = HOME_PATH + '/jdk-17.0.2/';
 
 export const linjavax64url =
-  'https://download.qortal.online/openjdk-17.0.2_linux-x64_bin.zip';
+  DOWNLOAD_QORTAL_URL + '/openjdk-17.0.2_linux-x64_bin.zip';
 export const linjavax64urlbackup =
-  'https://cloud.qortal.org/s/aSxDWTskG8kBR5T/download/openjdk-17.0.2_linux-x64_bin.zip';
-export const linjavax64file = homePath + '/openjdk-17.0.2_linux-x64_bin.zip';
-export const linjavax64bindir = homePath + '/jdk-17.0.2/bin';
-export const linjavax64binfile = homePath + '/jdk-17.0.2/bin/java';
+  CLOUD_QORTAL_URL +
+  '/aSxDWTskG8kBR5T/download/openjdk-17.0.2_linux-x64_bin.zip';
+export const linjavax64file = HOME_PATH + '/openjdk-17.0.2_linux-x64_bin.zip';
+export const linjavax64bindir = HOME_PATH + '/jdk-17.0.2/bin';
+export const linjavax64binfile = HOME_PATH + '/jdk-17.0.2/bin/java';
 
 export const linjavaarmurl =
-  'https://download.qortal.online/openjdk-17.0.2_linux-arm_bin.zip';
+  DOWNLOAD_QORTAL_URL + '/openjdk-17.0.2_linux-arm_bin.zip';
 export const linjavaarmurlbackup =
-  'https://cloud.qortal.org/s/DAMFBEri469R3dj/download/openjdk-17.0.2_linux-arm_bin.zip';
-export const linjavaarmfile = homePath + '/openjdk-17.0.2_linux-arm_bin.zip';
-export const linjavaarmbindir = homePath + '/jdk-17.0.2/bin';
-export const linjavaarmbinfile = homePath + '/jdk-17.0.2/bin/java';
+  CLOUD_QORTAL_URL +
+  '/DAMFBEri469R3dj/download/openjdk-17.0.2_linux-arm_bin.zip';
+export const linjavaarmfile = HOME_PATH + '/openjdk-17.0.2_linux-arm_bin.zip';
+export const linjavaarmbindir = HOME_PATH + '/jdk-17.0.2/bin';
+export const linjavaarmbinfile = HOME_PATH + '/jdk-17.0.2/bin/java';
 
 export const linjavaarm64url =
-  'https://download.qortal.online/openjdk-17.0.2_linux-arm64_bin.zip';
+  DOWNLOAD_QORTAL_URL + '/openjdk-17.0.2_linux-arm64_bin.zip';
 export const linjavaarm64urlbackup =
-  'https://cloud.qortal.org/s/t7Kk9ZpEAroFmg2/download/openjdk-17.0.2_linux-arm64_bin.zip';
+  CLOUD_QORTAL_URL +
+  '/t7Kk9ZpEAroFmg2/download/openjdk-17.0.2_linux-arm64_bin.zip';
 export const linjavaarm64file =
-  homePath + '/openjdk-17.0.2_linux-arm64_bin.zip';
-export const linjavaarm64bindir = homePath + '/jdk-17.0.2/bin';
-export const linjavaarm64binfile = homePath + '/jdk-17.0.2/bin/java';
+  HOME_PATH + '/openjdk-17.0.2_linux-arm64_bin.zip';
+export const linjavaarm64bindir = HOME_PATH + '/jdk-17.0.2/bin';
+export const linjavaarm64binfile = HOME_PATH + '/jdk-17.0.2/bin/java';
 
 export const macjavax64url =
-  'https://download.qortal.online/openjdk-17.0.2_macos-x64_bin.zip';
+  DOWNLOAD_QORTAL_URL + '/openjdk-17.0.2_macos-x64_bin.zip';
 export const macjavax64urlbackup =
-  'https://cloud.qortal.org/s/7t9d6xPfk8tsDxB/download/openjdk-17.0.2_macos-x64_bin.zip';
-export const macjavax64file = homePath + '/openjdk-17.0.2_macos-x64_bin.zip';
-export const macjavax64bindir = homePath + '/jdk-17.0.2/Contents/Home/bin';
+  CLOUD_QORTAL_URL +
+  '/7t9d6xPfk8tsDxB/download/openjdk-17.0.2_macos-x64_bin.zip';
+export const macjavax64file = HOME_PATH + '/openjdk-17.0.2_macos-x64_bin.zip';
+export const macjavax64bindir = HOME_PATH + '/jdk-17.0.2/Contents/Home/bin';
 export const macjavax64binfile =
-  homePath + '/jdk-17.0.2/Contents/Home/bin/java';
+  HOME_PATH + '/jdk-17.0.2/Contents/Home/bin/java';
 
 export const macjavaaarch64url =
-  'https://download.qortal.online/openjdk-17.0.2_macos-aarch64_bin.zip';
+  DOWNLOAD_QORTAL_URL + '/openjdk-17.0.2_macos-aarch64_bin.zip';
 export const macjavaaarch64urlbackup =
-  'https://cloud.qortal.org/s/GRE3CGqMospwtZP/download/openjdk-17.0.2_macos-aarch64_bin.zip';
+  CLOUD_QORTAL_URL +
+  '/GRE3CGqMospwtZP/download/openjdk-17.0.2_macos-aarch64_bin.zip';
 export const macjavaaarch64file =
-  homePath + '/openjdk-17.0.2_macos-aarch64_bin.zip';
-export const macjavaaarch64bindir = homePath + '/jdk-17.0.2/Contents/Home/bin';
+  HOME_PATH + '/openjdk-17.0.2_macos-aarch64_bin.zip';
+export const macjavaaarch64bindir = HOME_PATH + '/jdk-17.0.2/Contents/Home/bin';
 export const macjavaaarch64binfile =
-  homePath + '/jdk-17.0.2/Contents/Home/bin/java';
+  HOME_PATH + '/jdk-17.0.2/Contents/Home/bin/java';
