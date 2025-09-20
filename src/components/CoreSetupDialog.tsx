@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   Accordion,
   AccordionDetails,
@@ -28,7 +27,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import { QORTAL_APP_CONTEXT } from '../App';
 import { Trans, useTranslation } from 'react-i18next';
-import { Spacer } from '../common/Spacer';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -100,11 +99,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     isWindows,
   } = props;
   const { setOpenSnackGlobal, setInfoSnackCustom } =
-    React.useContext(QORTAL_APP_CONTEXT);
+    useContext(QORTAL_APP_CONTEXT);
 
   const { t } = useTranslation(['node', 'core']);
-  const [mode, setMode] = React.useState(1);
-  const statusText = React.useCallback(
+  const [mode, setMode] = useState(1);
+  const statusText = useCallback(
     (status: StepStatus) => {
       switch (status) {
         case 'done':
@@ -128,7 +127,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     },
     [t]
   );
-  const stepDefs = React.useMemo(
+  const stepDefs = useMemo(
     () => [
       {
         key: 'hasJava' as const,
@@ -169,7 +168,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const downloaded = steps.downloadedCore.status === 'done';
   const running = steps.coreRunning.status === 'done';
 
-  const computedActionLabel = React.useMemo(
+  const computedActionLabel = useMemo(
     () =>
       running
         ? t('node:actions.finished', {
@@ -219,7 +218,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     }
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (downloaded) {
       setMode(2);
     }

@@ -10,8 +10,8 @@ export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
 export const CORE_LOCALHOST = '127.0.0.1';
 
 import {
-  downloadPath,
-  homePath,
+  DOWNLOAD_PATH,
+  HOME_PATH,
   javadir,
   linjavaarm64bindir,
   linjavaarm64binfile,
@@ -829,7 +829,7 @@ async function unzipQortal() {
 async function chmodQortal() {
   try {
     await spawn('chmod', ['-R', '+x', qortaldir], {
-      cwd: homePath,
+      cwd: HOME_PATH,
       shell: true,
     });
   } catch (err) {
@@ -841,7 +841,7 @@ async function chmodQortal() {
 
 async function removeQortalZip() {
   try {
-    await spawn('rm', ['-rf', zipfile], { cwd: homePath, shell: true });
+    await spawn('rm', ['-rf', zipfile], { cwd: HOME_PATH, shell: true });
   } catch (err) {
     console.log('rm error', err);
   }
@@ -1062,7 +1062,7 @@ export function doesFileExist(
 function destPathForUrl(urlStr: string): string {
   // Save into homePath with the URL's basename (matches your previous behavior)
   const base = path.basename(new URL(urlStr).pathname) || 'java-archive';
-  return path.join(homePath, base);
+  return path.join(HOME_PATH, base);
 }
 
 async function pickUrl(primary: string, backup: string): Promise<string> {
@@ -1151,7 +1151,7 @@ async function installJava() {
 }
 async function unzipJavaX64Linux() {
   try {
-    await extract(linjavax64file, { dir: homePath });
+    await extract(linjavax64file, { dir: HOME_PATH });
     broadcastProgress({
       step: 'hasJava',
       status: 'done',
@@ -1174,7 +1174,7 @@ async function unzipJavaX64Linux() {
 
 async function unzipJavaArm64Linux() {
   try {
-    await extract(linjavaarm64file, { dir: homePath });
+    await extract(linjavaarm64file, { dir: HOME_PATH });
     broadcastProgress({
       step: 'hasJava',
       status: 'done',
@@ -1197,7 +1197,7 @@ async function unzipJavaArm64Linux() {
 
 async function unzipJavaArmLinux() {
   try {
-    await extract(linjavaarmfile, { dir: homePath });
+    await extract(linjavaarmfile, { dir: HOME_PATH });
     broadcastProgress({
       step: 'hasJava',
       status: 'done',
@@ -1220,7 +1220,7 @@ async function unzipJavaArmLinux() {
 
 async function unzipJavaX64Mac() {
   try {
-    await extract(macjavax64file, { dir: homePath });
+    await extract(macjavax64file, { dir: HOME_PATH });
     broadcastProgress({
       step: 'hasJava',
       status: 'done',
@@ -1243,7 +1243,7 @@ async function unzipJavaX64Mac() {
 
 async function unzipJavaAarch64Mac() {
   try {
-    await extract(macjavaaarch64file, { dir: homePath });
+    await extract(macjavaaarch64file, { dir: HOME_PATH });
     broadcastProgress({
       step: 'hasJava',
       status: 'done',
@@ -1266,7 +1266,10 @@ async function unzipJavaAarch64Mac() {
 
 async function chmodJava() {
   try {
-    await spawn('chmod', ['-R', '+x', javadir], { cwd: homePath, shell: true });
+    await spawn('chmod', ['-R', '+x', javadir], {
+      cwd: HOME_PATH,
+      shell: true,
+    });
   } catch (err) {
     console.error('chmod error', err);
   }
@@ -1297,7 +1300,7 @@ async function removeJavaZip() {
     if (process.arch === 'x64') {
       try {
         await spawn('rm', ['-rf', linjavax64file], {
-          cwd: homePath,
+          cwd: HOME_PATH,
           shell: true,
         });
       } catch (err) {
@@ -1308,7 +1311,7 @@ async function removeJavaZip() {
     } else if (process.arch === 'arm64') {
       try {
         await spawn('rm', ['-rf', linjavaarm64file], {
-          cwd: homePath,
+          cwd: HOME_PATH,
           shell: true,
         });
       } catch (err) {
@@ -1319,7 +1322,7 @@ async function removeJavaZip() {
     } else if (process.arch === 'arm') {
       try {
         await spawn('rm', ['-rf', linjavaarmfile], {
-          cwd: homePath,
+          cwd: HOME_PATH,
           shell: true,
         });
       } catch (err) {
@@ -1332,7 +1335,7 @@ async function removeJavaZip() {
     if (process.arch === 'x64') {
       try {
         await spawn('rm', ['-rf', macjavax64file], {
-          cwd: homePath,
+          cwd: HOME_PATH,
           shell: true,
         });
       } catch (err) {
@@ -1343,7 +1346,7 @@ async function removeJavaZip() {
     } else {
       try {
         await spawn('rm', ['-rf', macjavaaarch64file], {
-          cwd: homePath,
+          cwd: HOME_PATH,
           shell: true,
         });
       } catch (err) {
@@ -1529,7 +1532,7 @@ async function removeQortalExe() {
 export async function downloadCoreWindows() {
   console.log('Starting Download Qortal Core Installer');
   try {
-    await fs.promises.mkdir(downloadPath, { recursive: true });
+    await fs.promises.mkdir(DOWNLOAD_PATH, { recursive: true });
 
     await downloadWithNodeWindows(
       winurl,

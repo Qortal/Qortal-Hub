@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   Button,
   Dialog,
@@ -14,6 +13,7 @@ import { isOpenDialogResetApikey } from '../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../App';
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { useContext, useState } from 'react';
 
 const isElectron = !!window?.coreSetup;
 
@@ -26,9 +26,9 @@ export function CoreSetupResetApikeyDialog() {
     handleSaveNodeInfo,
   } = useAuth();
   const { t } = useTranslation(['node', 'core']);
-  const [newApiKey, setNewApiKey] = React.useState('');
+  const [newApiKey, setNewApiKey] = useState('');
   const { setOpenSnackGlobal, setInfoSnackCustom } =
-    React.useContext(QORTAL_APP_CONTEXT);
+    useContext(QORTAL_APP_CONTEXT);
   const [open, setOpen] = useAtom(isOpenDialogResetApikey);
   const resetApikeyFunc = async () => {
     try {

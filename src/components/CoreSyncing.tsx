@@ -1,4 +1,3 @@
-import * as React from 'react';
 import {
   Button,
   CircularProgress,
@@ -14,17 +13,18 @@ import { isOpenSyncingDialogAtom } from '../atoms/global';
 
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function CoreSyncing() {
   const { authenticate } = useAuth();
   const { t } = useTranslation(['node', 'core']);
-  const [canContinue, setCanContinue] = React.useState(false);
+  const [canContinue, setCanContinue] = useState(false);
   const [open, setOpen] = useAtom(isOpenSyncingDialogAtom);
-  const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
-  const isCallingRef = React.useRef<boolean>(false);
-  const [blocksBehind, setBlocksBehind] = React.useState(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isCallingRef = useRef<boolean>(false);
+  const [blocksBehind, setBlocksBehind] = useState(0);
 
-  const cleanUp = React.useCallback(() => {
+  const cleanUp = useCallback(() => {
     setBlocksBehind(0);
     setCanContinue(false);
     isCallingRef.current = false;
@@ -34,7 +34,7 @@ export function CoreSyncing() {
     }
   }, []);
 
-  const getStatus = React.useCallback(async () => {
+  const getStatus = useCallback(async () => {
     try {
       if (isCallingRef.current) return;
       isCallingRef.current = true;
@@ -70,7 +70,7 @@ export function CoreSyncing() {
     }
   }, [cleanUp]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (intervalRef.current) return;
     if (open) {
       intervalRef.current = setInterval(() => getStatus(), 5000);
