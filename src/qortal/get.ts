@@ -592,6 +592,8 @@ export const encryptQortalGroupData = async (data, sender) => {
   let data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
+
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -613,6 +615,7 @@ export const encryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
@@ -660,6 +663,7 @@ export const encryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
@@ -725,6 +729,7 @@ export const decryptQortalGroupData = async (data, sender) => {
   const data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -744,6 +749,7 @@ export const decryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
@@ -788,6 +794,7 @@ export const decryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
