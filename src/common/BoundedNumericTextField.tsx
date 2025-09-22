@@ -4,7 +4,6 @@ import {
   TextFieldProps,
   useTheme,
 } from '@mui/material';
-import React, { useRef, useState } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import {
@@ -12,6 +11,7 @@ import {
   setNumberWithinBounds,
 } from './numberFunctions.ts';
 import { CustomInput } from '../styles/App-styles.ts';
+import { useRef, useState } from 'react';
 
 type eventType = React.ChangeEvent<HTMLInputElement>;
 type BoundedNumericTextFieldProps = {

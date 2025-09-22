@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CoreSetupDialog } from './CoreSetupDialog';
 import { LOCALHOST_12391 } from '../constants/constants';
 import { cleanUrl } from '../background/background';
