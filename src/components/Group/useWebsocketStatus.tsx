@@ -1,10 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { getBaseApiReactSocket } from '../../App';
-import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
 import { useSetAtom } from 'jotai';
 import { nodeInfosAtom } from '../../atoms/global';
 
 export const useWebsocketStatus = () => {
+  const lastPopup = useRef<null | number>(null);
+
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const socketRef = useRef(null); // WebSocket reference
   const groupSocketTimeoutRef = useRef(null); // Group Socket Timeout reference
@@ -28,6 +34,10 @@ export const useWebsocketStatus = () => {
     };
   }, []);
 
+  const sendMessageVerifyCoreNotRunning = () => {
+    executeEvent('verifyCoreNotRunning', {});
+  };
+
   useEffect(() => {
     const initWebsocketMessageGroup = async () => {
       forceCloseWebSocket(); // Ensure we close any existing connection
@@ -49,8 +59,15 @@ export const useWebsocketStatus = () => {
 
         socketRef.current.onclose = (event) => {
           clearTimeout(groupSocketTimeoutRef.current);
+          setNodeInfos({});
           console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
           if (event.reason !== 'forced' && event.code !== 1000) {
+            if (!lastPopup.current || Date.now() - lastPopup.current > 600000) {
+              setTimeout(() => {
+                sendMessageVerifyCoreNotRunning();
+              }, 18_000);
+              lastPopup.current = Date.now();
+            }
             setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
           }
         };

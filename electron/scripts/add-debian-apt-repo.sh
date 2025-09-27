@@ -2,16 +2,19 @@
 
 # Make necessary config and add Qortal Hub apt repo
 
-# SCript to run HUB without sandbox
-echo \'/opt/${productFilename}/qortal-hub\' --no-sandbox > '/opt/${productFilename}/run-hub'
+# Wrapper without --no-sandbox (proper shebang + quoting)
+cat > '/opt/${productFilename}/run-hub' <<'EOF'
+#!/bin/sh
+exec '/opt/${productFilename}/qortal-hub' "$@"
+EOF
 chmod +x '/opt/${productFilename}/run-hub'
 
-# Link to run-ui
+# Symlink into PATH (so .desktop can call qortal-hub)
 ln -sf '/opt/${productFilename}/run-hub' '/usr/bin/${executable}'
 
-# SUID chrome-sandbox for Electron 5+
-sudo chown root '/opt/${productFilename}/chrome-sandbox' || true
-sudo chmod 4755 '/opt/${productFilename}/chrome-sandbox' || true
+# SUID chrome-sandbox for Electron 5+ (no sudo in maintainer scripts)
+chown root '/opt/${productFilename}/chrome-sandbox' || true
+chmod 4755 '/opt/${productFilename}/chrome-sandbox' || true
 
 update-mime-database /usr/share/mime || true
 update-desktop-database /usr/share/applications || true

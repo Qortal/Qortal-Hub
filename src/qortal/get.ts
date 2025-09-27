@@ -592,6 +592,8 @@ export const encryptQortalGroupData = async (data, sender) => {
   let data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
+
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -613,6 +615,7 @@ export const encryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
@@ -660,6 +663,7 @@ export const encryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
@@ -725,6 +729,7 @@ export const decryptQortalGroupData = async (data, sender) => {
   const data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -744,6 +749,7 @@ export const decryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
@@ -788,6 +794,7 @@ export const decryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
@@ -1350,6 +1357,7 @@ export const publishQDNResource = async (
   const file = data?.file || data?.blob;
   const tags = data?.tags || [];
   const result = {};
+  const isMultiFileZip = data?.isMultiFileZip === true;
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
     throw new Error(
@@ -1462,7 +1470,7 @@ export const publishQDNResource = async (
         data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: data64 ? 'base64' : 'file',
+        uploadType: isMultiFileZip ? 'zip' : data64 ? 'base64' : 'file',
         filename: filename,
         title,
         description,
@@ -1818,6 +1826,7 @@ export const publishMultipleQDNResources = async (
       const category = resource.category;
       const tags = resource?.tags || [];
       const result = {};
+      const isMultiFileZip = resource?.isMultiFileZip === true;
 
       // Fill tags dynamically while maintaining backward compatibility
       for (let i = 0; i < 5; i++) {
@@ -1881,8 +1890,9 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
-        const dataType =
-          resource?.base64 || resource?.data64 || resourceEncrypt
+        const dataType = isMultiFileZip
+          ? 'zip'
+          : resource?.base64 || resource?.data64 || resourceEncrypt
             ? 'base64'
             : 'file';
 
@@ -4360,7 +4370,7 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === 'DGB') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.dbgPrivateKey;
+    const xprv58 = parsedData.dgbPrivateKey;
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {

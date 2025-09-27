@@ -1,0 +1,76 @@
+{
+  "setup": {
+    "title": "Qortal Core セットアップ",
+    "advancedOptions": "詳細オプション",
+    "pickPath": "Core がデフォルト以外の場所にインストールされている場合は、カスタム Qortal インストールパスを選択してください。",
+    "removePath": "カスタム Qortal パスを削除"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal は分散型プラットフォームで、データ、アプリケーション、財務を完全にコントロールできます。始めるには、ネットワークを駆動し Qortal の全機能を有効にする <strong>Qortal Core</strong> をインストールすることをおすすめします。",
+    "paragraph2": "このセットアップウィザードは、Qortal Core をデバイスにインストールし構成する手順を案内します。インストールを続行するには <strong>次へ</strong> をクリックしてください。",
+    "note": "上級ユーザー向けの注意",
+    "advanced": "リモートノードを使用している場合は、このセットアップウィザードを閉じてから「カスタムノードを選択」をクリックしてください"
+  },
+  "sync": {
+    "behind": "{{count}} ブロック遅れています。",
+    "waiting": "同期が完了するまでお待ちください。",
+    "not_syncronized": "未同期",
+    "syncronized": "同期済み",
+    "syncronized_desc": "現在同期されています。続行できます。"
+  },
+  "steps": {
+    "java": "Java がある",
+    "downloaded": "Core をダウンロード済み",
+    "running": "Core が実行中"
+  },
+  "actions": {
+    "finished": "完了",
+    "start": "Qortal Core を起動",
+    "install": "Qortal Core をインストールして起動",
+    "continuePublic": "パブリックノードで続行",
+    "openSetup": "ローカルセットアップを開く",
+    "goToDownloads": "ダウンロードに移動",
+    "resetKey": "APIキーをリセット",
+    "continue": "続行"
+  },
+  "error": {
+    "noJar": "選択されたディレクトリに qortal.jar が存在しません",
+    "invalidKey": "無効な APIキー"
+  },
+  "status": {
+    "complete": "完了",
+    "inProgress": "進行中",
+    "pending": "保留中",
+    "error": "エラー"
+  },
+  "recommendation": {
+    "title": "ローカルノードの使用",
+    "description": "希望する場合はパブリックノードを使用できますが、最良の体験のためにはローカルノードの使用を強く推奨します。",
+    "subTitle": "ローカルノードを使用する利点：",
+    "point1": "完全に分散化されたアクセス",
+    "point2": "高速なダウンロード",
+    "point3": "ユーザーが制御するデータ",
+    "publicExplanation": "接続するパブリックノードは、実際には公開されたプライベートノードです。便利ですが、自分でノードを実行する場合と比べて制限があります。"
+  },
+  "invalidKey": {
+    "title": "無効な APIキー",
+    "description": "APIキーが無効です。有効なキーを入力してください。",
+    "resetDescription": "APIキーが無効です。[リセット] をクリックして続行してください。"
+  },
+  "messages": {
+    "001": "Core を起動中... お待ちください。",
+    "002": "エラー：リポジトリの起動に失敗しました",
+    "003": "Qortal Core の実行中にエラー",
+    "004": "Qortal Core の解凍エラー",
+    "005": "Qortal Core をダウンロード中... お待ちください。",
+    "006": "Java を設定中... お待ちください。",
+    "007": "Java のダウンロードエラー。",
+    "008": "Java の解凍エラー",
+    "009": "Qortal Core をダウンロード中... お待ちください。",
+    "010": "エラー：Core をダウンロードまたはインストールできません"
+  },
+  "url": {
+    "title": "無効なURL",
+    "description": "URLが正しくないか、ノードが実行されていません"
+  }
+}

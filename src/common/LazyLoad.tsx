@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useInView } from 'react-intersection-observer';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material';

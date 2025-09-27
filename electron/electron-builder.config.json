@@ -3,6 +3,8 @@
   "directories": {
     "buildResources": "resources"
   },
+  "afterPack": "scripts/afterPack.js",
+
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "nsis": {
     "allowElevation": true,
@@ -27,9 +29,10 @@
     "category": "Network",
     "packageCategory": "Network",
     "desktop": {
-      "StartupWMClass": "qortal-hub"
+      "StartupWMClass": "qortal-hub",
+      "Name": "Qortal Hub"
     },
-    "executableName": "Qortal-Hub",
+    "executableName": "qortal-hub",
     "icon": "assets/png",
     "asar": true
   },

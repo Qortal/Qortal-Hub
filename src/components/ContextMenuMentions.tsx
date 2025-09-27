@@ -1,27 +1,19 @@
-import React, { useState, useRef, useMemo, useEffect } from "react";
-import {
-  ListItemIcon,
-  Menu,
-  MenuItem,
-  Typography,
-  styled,
-} from "@mui/material";
-
-import { executeEvent } from "../utils/events";
+import { useState, useRef } from 'react';
+import { Menu, MenuItem, Typography, styled } from '@mui/material';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
-  "& .MuiPaper-root": {
-    backgroundColor: "#f9f9f9",
-    borderRadius: "12px",
+  '& .MuiPaper-root': {
+    backgroundColor: '#f9f9f9',
+    borderRadius: '12px',
     padding: theme.spacing(1),
-    boxShadow: "0 5px 15px rgba(0, 0, 0, 0.2)",
+    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.2)',
   },
-  "& .MuiMenuItem-root": {
-    fontSize: "14px", // Smaller font size for the menu item text
-    color: "#444",
-    transition: "0.3s background-color",
-    "&:hover": {
-      backgroundColor: "#f0f0f0", // Explicit hover state
+  '& .MuiMenuItem-root': {
+    fontSize: '14px', // Smaller font size for the menu item text
+    color: '#444',
+    transition: '0.3s background-color',
+    '&:hover': {
+      backgroundColor: '#f0f0f0', // Explicit hover state
     },
   },
 }));
@@ -29,13 +21,11 @@ const CustomStyledMenu = styled(Menu)(({ theme }) => ({
 export const ContextMenuMentions = ({
   children,
   groupId,
-  getTimestampMention
+  getTimestampMention,
 }) => {
   const [menuPosition, setMenuPosition] = useState(null);
   const longPressTimeout = useRef(null);
   const preventClick = useRef(false); // Flag to prevent click after long-press or right-click
-
-
 
   // Handle right-click (context menu) for desktop
   const handleContextMenu = (event) => {
@@ -73,30 +63,35 @@ export const ContextMenuMentions = ({
     }
   };
 
-
   const handleClose = (e) => {
     e.preventDefault();
     e.stopPropagation();
     setMenuPosition(null);
   };
 
-  const addTimestamp = ()=> {
-    window.sendMessage("addTimestampMention", {
-      timestamp: Date.now(),
-      groupId
-    }).then((res)=> {
-      getTimestampMention()
-    }).catch((error) => {
-        console.error("Failed to add timestamp:", error.message || "An error occurred");
+  const addTimestamp = () => {
+    window
+      .sendMessage('addTimestampMention', {
+        timestamp: Date.now(),
+        groupId,
+      })
+      .then((res) => {
+        getTimestampMention();
+      })
+      .catch((error) => {
+        console.error(
+          'Failed to add timestamp:',
+          error.message || 'An error occurred'
+        );
       });
-  }
+  };
 
   return (
     <div
       onContextMenu={handleContextMenu} // For desktop right-click
       onTouchStart={handleTouchStart} // For mobile long-press start
       onTouchEnd={handleTouchEnd} // For mobile long-press end
-      style={{ width: "100%", height: "100%" }}
+      style={{ width: '100%', height: '100%' }}
     >
       {children}
 
@@ -117,10 +112,10 @@ export const ContextMenuMentions = ({
         <MenuItem
           onClick={(e) => {
             handleClose(e);
-            addTimestamp()
+            addTimestamp();
           }}
         >
-          <Typography variant="inherit" sx={{ fontSize: "14px" }}>
+          <Typography variant="inherit" sx={{ fontSize: '14px' }}>
             Unmark
           </Typography>
         </MenuItem>

@@ -9,13 +9,15 @@ import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
 import { useAtom } from 'jotai';
 import { nodeInfosAtom } from '../atoms/global';
+import { nodeDisplay } from '../utils/helpers';
+import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
-  const [isUsingGateway, setIsUsingGateway] = useState(false);
-
+  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -67,7 +69,7 @@ export const CoreSyncStatus = () => {
     let message: string = '';
 
     if (isUsingGateway) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       } else {
@@ -75,7 +77,7 @@ export const CoreSyncStatus = () => {
         message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       }
     } else if (isMintingPossible) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
       } else {
@@ -140,12 +142,20 @@ export const CoreSyncStatus = () => {
           </h4>
 
           <h4 className="lineHeight">
-            {t('auth:node.using_public', {
+            {t('auth:node.using', {
               postProcess: 'capitalizeFirstChar',
             })}
             :{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {isUsingGateway?.toString()}
+            <span
+              style={{
+                color: '#03a9f4',
+                ...(nodeBase === HTTP_LOCALHOST_12391 && {
+                  fontWeight: 'bold',
+                  color: theme.palette.other.positive,
+                }),
+              }}
+            >
+              {nodeDisplay(nodeBase)}
             </span>
           </h4>
 

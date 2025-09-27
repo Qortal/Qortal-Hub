@@ -297,7 +297,7 @@ export const getBaseApi = async (customApi?: string) => {
 
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  if (apiKey?.url) {
+  if (apiKey?.url && !apiKey?.url?.includes('ext-node.qortal.link')) {
     return true;
   } else {
     return false;
@@ -968,7 +968,7 @@ export async function getAssetInfo(assetId: number) {
 
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
-  let _url = `${HTTPS_TRADE_NODE}/crosschain/ltc/walletbalance`;
+  let _url = await createEndpoint(`/crosschain/ltc/walletbalance`);
   const keyPair = await getKeyPair();
   const parsedKeyPair = keyPair;
   let _body = parsedKeyPair.ltcPublicKey;
@@ -983,7 +983,7 @@ export async function getLTCBalance() {
     const data = await response.text();
     const dataLTCBalance = (Number(data) / 1e8).toFixed(8);
     return +dataLTCBalance;
-  } else throw new Error('Onable to get LTC balance');
+  } else throw new Error('Unable to get LTC balance');
 }
 
 export async function parseErrorResponse(

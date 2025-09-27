@@ -1,0 +1,76 @@
+{
+  "setup": {
+    "title": "Configuration de Qortal Core",
+    "advancedOptions": "options avancées",
+    "pickPath": "choisissez un chemin d’installation personnalisé de Qortal si votre Core est installé dans un emplacement non par défaut.",
+    "removePath": "supprimer le chemin Qortal personnalisé"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal est une plateforme décentralisée qui vous donne un contrôle total sur vos données, applications et finances. Pour commencer, nous vous recommandons d’installer le <strong>Qortal Core</strong>, qui alimente le réseau et active toutes les fonctionnalités de Qortal.",
+    "paragraph2": "Cet assistant de configuration vous guidera pour installer et configurer Qortal Core sur votre appareil. Cliquez sur <strong>Suivant</strong> pour continuer l’installation.",
+    "note": "remarque pour les utilisateurs avancés",
+    "advanced": "si vous utilisez un nœud distant, veuillez fermer cet assistant de configuration puis cliquer sur « Choisir un nœud personnalisé »"
+  },
+  "sync": {
+    "behind": "Vous avez {{count}} blocs de retard.",
+    "waiting": "Veuillez patienter jusqu’à la synchronisation.",
+    "not_syncronized": "non synchronisé",
+    "syncronized": "synchronisé",
+    "syncronized_desc": "vous êtes maintenant synchronisé. vous pouvez continuer."
+  },
+  "steps": {
+    "java": "Java installé",
+    "downloaded": "Core téléchargé",
+    "running": "core en cours d'exécution"
+  },
+  "actions": {
+    "finished": "terminé",
+    "start": "démarrer Qortal Core",
+    "install": "installer et démarrer Qortal Core",
+    "continuePublic": "continuer avec le nœud public",
+    "openSetup": "ouvrir la configuration locale",
+    "goToDownloads": "aller aux téléchargements",
+    "resetKey": "réinitialiser la clé API",
+    "continue": "continuer"
+  },
+  "error": {
+    "noJar": "le répertoire choisi ne contient pas de qortal.jar",
+    "invalidKey": "clé API invalide"
+  },
+  "status": {
+    "complete": "terminé",
+    "inProgress": "en cours",
+    "pending": "en attente",
+    "error": "erreur"
+  },
+  "recommendation": {
+    "title": "utiliser votre nœud local",
+    "description": "vous pouvez continuer avec le nœud public si vous le souhaitez, mais nous vous recommandons vivement d’utiliser votre propre nœud local pour une meilleure expérience.",
+    "subTitle": "avantages d’un nœud local :",
+    "point1": "accès totalement décentralisé",
+    "point2": "téléchargements plus rapides",
+    "point3": "données contrôlées par l’utilisateur",
+    "publicExplanation": "Le nœud public auquel vous vous connectez est en réalité un nœud privé rendu accessible au public. Bien que pratique, il présente certaines limites par rapport à l'exécution du vôtre."
+  },
+  "invalidKey": {
+    "title": "clé API invalide",
+    "description": "Votre clé API est invalide. Veuillez saisir une clé valide.",
+    "resetDescription": "Votre clé API est invalide. Cliquez sur réinitialiser pour continuer."
+  },
+  "messages": {
+    "001": "démarrage du core... veuillez patienter.",
+    "002": "erreur : impossible de démarrer le dépôt",
+    "003": "erreur lors de l'exécution de Qortal Core",
+    "004": "erreur lors de la décompression de Qortal Core",
+    "005": "téléchargement de Qortal Core... veuillez patienter.",
+    "006": "configuration de Java... veuillez patienter.",
+    "007": "erreur lors du téléchargement de Java.",
+    "008": "erreur lors de la décompression de Java",
+    "009": "téléchargement de Qortal Core... veuillez patienter.",
+    "010": "erreur : impossible de télécharger ou d’installer le Core"
+  },
+  "url": {
+    "title": "URL invalide",
+    "description": "URL incorrecte ou nœud non en cours d’exécution"
+  }
+}

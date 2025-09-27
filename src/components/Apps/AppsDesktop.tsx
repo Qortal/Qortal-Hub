@@ -1,4 +1,12 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
@@ -102,7 +110,7 @@ export const AppsDesktop = ({
     }, 100);
   }, [show, tabs, selectedTab, isNewTabWindow]);
 
-  const getCategories = React.useCallback(async () => {
+  const getCategories = useCallback(async () => {
     try {
       const url = `${getBaseApiReact()}/arbitrary/categories`;
 
@@ -121,7 +129,7 @@ export const AppsDesktop = ({
     }
   }, []);
 
-  const getQapps = React.useCallback(async () => {
+  const getQapps = useCallback(async () => {
     try {
       let apps = [];
       let websites = [];
@@ -524,7 +532,7 @@ export const AppsDesktop = ({
 
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
-          iframeRefs.current[tab.tabId] = React.createRef();
+          iframeRefs.current[tab.tabId] = createRef();
         }
         return (
           <AppViewerContainer

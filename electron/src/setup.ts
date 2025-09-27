@@ -22,6 +22,18 @@ import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
 import { myCapacitorApp } from '.';
+import {
+  checkOsPlatform,
+  customQortalInstalledDir,
+  determineJavaVersion,
+  getApiKey,
+  installCore,
+  isCoreInstalled,
+  isCoreRunning,
+  removeCustomQortalPath,
+  resetApikey,
+  startCore,
+} from './core';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -438,7 +450,7 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
       properties: ['openDirectory'],
     });
     if (canceled || filePaths.length === 0) {
-      console.log('No directory selected');
+      console.error('No directory selected');
       return null;
     }
 
@@ -462,7 +474,9 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
 });
 
 // Helper to get or create the shared settings directory
-async function getSharedSettingsFilePath(fileName: string): Promise<string> {
+export async function getSharedSettingsFilePath(
+  fileName: string
+): Promise<string> {
   const dir = path.join(app.getPath('appData'), 'qortal-hub');
   await fs.promises.mkdir(dir, { recursive: true });
   return path.join(dir, fileName);
@@ -498,3 +512,220 @@ ipcMain.handle(
     }
   }
 );
+
+const progressSubscribers = new Set<Electron.WebContents>();
+
+ipcMain.on('coreSetup:progress:subscribe', (e) => {
+  const wc = e.sender;
+  progressSubscribers.add(wc);
+  broadcastProgress('ready');
+  broadcastProgress({
+    type: 'osType',
+    osType: process.platform,
+  });
+  wc.once('destroyed', () => progressSubscribers.delete(wc));
+});
+
+ipcMain.on('coreSetup:progress:unsubscribe', (e) => {
+  progressSubscribers.delete(e.sender);
+});
+
+export function broadcastProgress(p: any) {
+  for (const wc of progressSubscribers) {
+    if (!wc.isDestroyed()) {
+      wc.send('coreSetup:progress', p);
+    }
+  }
+}
+
+ipcMain.handle('coreSetup:isCoreRunning', async () => {
+  try {
+    try {
+      const customPath = await customQortalInstalledDir();
+      if (!customPath) {
+        broadcastProgress({
+          type: 'hasCustomPath',
+          hasCustomPath: false,
+          customPath: null,
+        });
+      } else {
+        const isInstalledWithCustomPath = await isCoreInstalled();
+        if (isInstalledWithCustomPath) {
+          broadcastProgress({
+            type: 'hasCustomPath',
+            hasCustomPath: true,
+            customPath,
+          });
+        } else {
+          await removeCustomQortalPath();
+          broadcastProgress({
+            type: 'hasCustomPath',
+            hasCustomPath: false,
+            customPath: null,
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    const running = await isCoreRunning();
+    if (running) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+      broadcastProgress({
+        step: 'hasJava',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    } else {
+      const javaVersion = await determineJavaVersion();
+      const hasCore = await isCoreInstalled();
+      if (javaVersion != false) {
+        broadcastProgress({
+          step: 'hasJava',
+          status: 'done',
+          progress: 100,
+          message: '',
+        });
+      } else {
+        broadcastProgress({
+          step: 'hasJava',
+          status: 'off',
+          progress: 0,
+          message: '',
+        });
+      }
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'off',
+        progress: 0,
+        message: '',
+      });
+      if (hasCore) {
+        broadcastProgress({
+          step: 'downloadedCore',
+          status: 'done',
+          progress: 100,
+          message: '',
+        });
+      } else {
+        broadcastProgress({
+          step: 'downloadedCore',
+          status: 'off',
+          progress: 0,
+          message: '',
+        });
+      }
+    }
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:isCoreInstalled', async () => {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (isInstalled) {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    } else {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'off',
+        progress: 0,
+        message: '',
+      });
+    }
+    return isInstalled;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:installCore', async (event) => {
+  try {
+    const wc = event.sender;
+
+    const sendProgress = (p) => {
+      wc.send('coreSetup:progress', { step: 'download', ...p });
+    };
+    const running = await installCore(sendProgress);
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:startCore', async () => {
+  try {
+    const running = await startCore();
+    return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:getApiKey', async () => {
+  try {
+    const running = await getApiKey();
+    return running;
+  } catch (error) {}
+});
+ipcMain.handle('coreSetup:resetApikey', async () => {
+  try {
+    const running = await resetApikey();
+    return running;
+  } catch (error) {}
+});
+ipcMain.handle('coreSetup:removeCustomPath', async () => {
+  try {
+    await removeCustomQortalPath();
+    broadcastProgress({
+      type: 'hasCustomPath',
+      hasCustomPath: false,
+      customPath: null,
+    });
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
+  try {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+    });
+    if (canceled || filePaths.length === 0) return null;
+    const dir = filePaths[0];
+    const isInstalled = await isCoreInstalled(dir);
+    if (isInstalled) {
+      const filePath = await getSharedSettingsFilePath('wallet-storage.json');
+
+      const stats = await fs.promises.stat(filePath).catch(() => null);
+      if (!stats || !stats.isFile()) return null;
+
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+
+      const data = raw ? JSON.parse(raw) : {};
+      data['qortalDirectory'] = dir;
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(data, null, 2),
+        'utf-8'
+      );
+      broadcastProgress({
+        type: 'hasCustomPath',
+        hasCustomPath: true,
+        customPath: filePath,
+      });
+    } else return false;
+  } catch (error) {
+    return false;
+  }
+});
