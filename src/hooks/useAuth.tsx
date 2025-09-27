@@ -122,7 +122,9 @@ export const useAuth = () => {
           }
 
           if (!isUrlGood) {
-            setIsUrlInvalid(true);
+            if (!disablePopup) {
+              setIsUrlInvalid(true);
+            }
             return { isValid: false, validatedNodeInfo };
           }
         }
@@ -313,79 +315,85 @@ export const useAuth = () => {
     }
   }, [useLocalNode, setIsOpenSyncingDialog]);
 
-  const authenticate = useCallback(async () => {
-    const isInSync = await isSyncedLocal();
-    if (!isInSync) {
-      return;
-    }
-    setIsLoading(true);
-    setWalletToBeDecryptedError('');
-    await new Promise<void>((res) => {
-      setTimeout(() => {
-        res();
-      }, 250);
-    });
-    window
-      .sendMessage(
-        'decryptWallet',
-        {
-          password: authenticatePassword,
-          wallet: rawWallet,
-        },
-        TIME_SECONDS_120_IN_MILLISECONDS
-      )
-      .then((response) => {
-        if (response && !response.error) {
-          setAuthenticatePassword('');
-          setExtstate('authenticated');
-          setWalletToBeDecryptedError('');
-
-          window
-            .sendMessage('userInfo')
-            .then((response) => {
-              setIsLoading(false);
-              if (response && !response.error) {
-                setUserInfo(response);
-              }
-            })
-            .catch((error) => {
-              setIsLoading(false);
-              console.error('Failed to get user info:', error);
-            });
-
-          getBalanceFunc();
-
-          window
-            .sendMessage('getWalletInfo')
-            .then((response) => {
-              if (response && response.walletInfo) {
-                setRawWallet(response.walletInfo);
-              }
-            })
-            .catch((error) => {
-              console.error('Failed to get wallet info:', error);
-            });
-        } else if (response?.error) {
-          setIsLoading(false);
-          setWalletToBeDecryptedError(response.error);
+  const authenticate = useCallback(
+    async (skipToPublic?: boolean) => {
+      if (!skipToPublic) {
+        const isInSync = await isSyncedLocal();
+        if (!isInSync) {
+          return;
         }
-      })
-      .catch((error) => {
-        setIsLoading(false);
-        console.error('Failed to decrypt wallet:', error);
+      }
+
+      setIsLoading(true);
+      setWalletToBeDecryptedError('');
+      await new Promise<void>((res) => {
+        setTimeout(() => {
+          res();
+        }, 250);
       });
-  }, [
-    setIsLoading,
-    setAuthenticatePassword,
-    setExtstate,
-    authenticatePassword,
-    setUserInfo,
-    setRawWallet,
-    setWalletToBeDecryptedError,
-    rawWallet,
-    getBalanceFunc,
-    isSyncedLocal,
-  ]);
+      window
+        .sendMessage(
+          'decryptWallet',
+          {
+            password: authenticatePassword,
+            wallet: rawWallet,
+          },
+          TIME_SECONDS_120_IN_MILLISECONDS
+        )
+        .then((response) => {
+          if (response && !response.error) {
+            setAuthenticatePassword('');
+            setExtstate('authenticated');
+            setWalletToBeDecryptedError('');
+
+            window
+              .sendMessage('userInfo')
+              .then((response) => {
+                setIsLoading(false);
+                if (response && !response.error) {
+                  setUserInfo(response);
+                }
+              })
+              .catch((error) => {
+                setIsLoading(false);
+                console.error('Failed to get user info:', error);
+              });
+
+            getBalanceFunc();
+
+            window
+              .sendMessage('getWalletInfo')
+              .then((response) => {
+                if (response && response.walletInfo) {
+                  setRawWallet(response.walletInfo);
+                }
+              })
+              .catch((error) => {
+                console.error('Failed to get wallet info:', error);
+              });
+          } else if (response?.error) {
+            setIsLoading(false);
+            setWalletToBeDecryptedError(response.error);
+          }
+        })
+        .catch((error) => {
+          setIsLoading(false);
+          console.error('Failed to decrypt wallet:', error);
+        });
+    },
+    [
+      setIsLoading,
+      setAuthenticatePassword,
+      setExtstate,
+      authenticatePassword,
+      setUserInfo,
+      setRawWallet,
+      setWalletToBeDecryptedError,
+      rawWallet,
+      getBalanceFunc,
+      isSyncedLocal,
+    ]
+  );
 
   const saveCustomNodes = useCallback(async (updatedNode: ApiKey) => {
     let nodes = [];
