@@ -1,5 +1,4 @@
 import { useTheme } from '@mui/material';
-import React from 'react';
 
 export const MessagingIconFilled = ({ color, height = 31, width = 31 }) => {
   const theme = useTheme();

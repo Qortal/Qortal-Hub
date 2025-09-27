@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
@@ -23,7 +23,6 @@ import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
-import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 
@@ -113,7 +112,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
     },
   });
 
-  const getQapp = React.useCallback(async (name, appType) => {
+  const getQapp = useCallback(async (name, appType) => {
     try {
       setIsLoading('Loading app information');
       const url = `${getBaseApiReact()}/arbitrary/resources/search?service=${appType}&mode=ALL&name=${name}&includemetadata=true`;
