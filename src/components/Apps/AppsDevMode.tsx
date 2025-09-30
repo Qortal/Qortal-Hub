@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { createRef, useEffect, useRef, useState } from 'react';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
 import {
@@ -398,7 +398,7 @@ export const AppsDevMode = ({
 
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
-          iframeRefs.current[tab.tabId] = React.createRef();
+          iframeRefs.current[tab.tabId] = createRef();
         }
         return (
           <AppViewerContainer
