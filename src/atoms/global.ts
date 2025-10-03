@@ -20,7 +20,7 @@ export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Q-Mintership', service: 'APP' },
   { name: 'Q-Wallets', service: 'APP' },
   { name: 'Q-Search', service: 'APP' },
-  { name: 'Q-Nodecontrol', service: 'APP' },
+  { name: 'Q-Node', service: 'APP' },
   { name: 'Names', service: 'APP' },
   { name: 'Q-Follow', service: 'APP' },
 ]);
