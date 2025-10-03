@@ -5126,6 +5126,7 @@ export const adminAction = async (data, isFromExtension) => {
     'addpeer',
     'forcesync',
     'getmintingaccounts',
+    'getpeers',
     'removemintingaccount',
     'removepeer',
   ];
@@ -5169,6 +5170,9 @@ export const adminAction = async (data, isFromExtension) => {
       break;
     case 'getmintingaccounts':
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
+      break;
+    case 'getpeers':
+      apiEndpoint = await createEndpoint('/peers');
       break;
     case 'removemintingaccount':
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
