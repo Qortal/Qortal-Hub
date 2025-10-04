@@ -7,6 +7,7 @@ import {
   RenderElementProps,
   RenderLeafProps,
 } from 'slate-react';
+import { TIME_MILLISECONDS_250 } from '../../../constants/constants';
 
 type ExtendedRenderElementProps = RenderElementProps & { mode?: string };
 
@@ -108,7 +109,7 @@ const ReadOnlySlate: FC<ReadOnlySlateProps> = ({ content, mode }) => {
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
-        }, 250);
+        }, TIME_MILLISECONDS_250);
       });
     } catch (error) {
       console.log(error);

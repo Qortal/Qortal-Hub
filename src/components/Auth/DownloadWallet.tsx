@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import { crypto, walletVersion } from '../../constants/decryptWallet';
+import { TIME_MILLISECONDS_250 } from '../../constants/constants';
 
 export const DownloadWallet = ({
   returnToMain,
@@ -93,7 +94,7 @@ export const DownloadWallet = ({
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
-        }, 250);
+        }, TIME_MILLISECONDS_250);
       });
       const newPasswordForWallet = !keepCurrentPassword ? newPassword : null;
       const res = await saveWalletFunc(

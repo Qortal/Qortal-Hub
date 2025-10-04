@@ -16,6 +16,7 @@ import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_400, TIME_MILLISECONDS_500 } from '../../constants/constants';
 
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
@@ -66,12 +67,12 @@ export const AppsCategoryDesktop = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
-    }, 350);
+    }, TIME_MILLISECONDS_400);
     setTimeout(() => {
       if (virtuosoRef.current) {
         virtuosoRef.current.scrollToIndex({ index: 0 });
       }
-    }, 500);
+    }, TIME_MILLISECONDS_500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);

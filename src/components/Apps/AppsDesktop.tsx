@@ -35,7 +35,7 @@ import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
-import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
+import { TIME_MILLISECONDS_100, TIME_MILLISECONDS_400, TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -107,7 +107,7 @@ export const AppsDesktop = ({
           isNewTabWindow: isNewTabWindow,
         },
       });
-    }, 100);
+    }, TIME_MILLISECONDS_100);
   }, [show, tabs, selectedTab, isNewTabWindow]);
 
   const getCategories = useCallback(async () => {
@@ -296,7 +296,7 @@ export const AppsDesktop = ({
           isNewTabWindow: isNewTabWindow,
         },
       });
-    }, 100);
+    }, TIME_MILLISECONDS_100);
     setIsNewTabWindow(false);
   };
 
@@ -325,7 +325,7 @@ export const AppsDesktop = ({
           selectedTab: copyTabs[0],
         },
       });
-    }, 400);
+    }, TIME_MILLISECONDS_400);
   };
 
   useEffect(() => {

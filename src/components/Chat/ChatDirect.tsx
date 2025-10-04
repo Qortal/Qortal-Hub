@@ -30,7 +30,13 @@ import {
   MAX_SIZE_MESSAGE,
   MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
+  TIME_MILLISECONDS_250,
+  TIME_MILLISECONDS_400,
+  TIME_MILLISECONDS_50,
+  TIME_SECONDS_10_IN_MILLISECONDS,
   TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_SECONDS_40_IN_MILLISECONDS,
+  TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 5 });
@@ -259,7 +265,7 @@ export const ChatDirect = ({
             socketRef.current.close();
             clearTimeout(groupSocketTimeoutRef.current);
           }
-        }, 5000); // Close if no pong in 5 seconds
+        }, TIME_SECONDS_5_IN_MILLISECONDS); // Close if no pong in 5 seconds
       }
     } catch (error) {
       console.error('Error during ping:', error);
@@ -275,14 +281,14 @@ export const ChatDirect = ({
     socketRef.current = new WebSocket(socketLink);
 
     socketRef.current.onopen = () => {
-      setTimeout(pingWebSocket, 50); // Initial ping
+      setTimeout(pingWebSocket, TIME_MILLISECONDS_50); // Initial ping
     };
 
     socketRef.current.onmessage = (e) => {
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, 45000); // Ping every 45 seconds
+          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, TIME_SECONDS_40_IN_MILLISECONDS); // Ping every 40 seconds
         } else {
           middletierFunc(
             JSON.parse(e.data),
@@ -302,7 +308,7 @@ export const ChatDirect = ({
       clearTimeout(timeoutIdRef.current);
       console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
       if (event.reason !== 'forced' && event.code !== 1000) {
-        setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
+        setTimeout(() => initWebsocketMessageGroup(), TIME_SECONDS_10_IN_MILLISECONDS); // Retry after 10 seconds
       }
     };
 
@@ -393,7 +399,7 @@ export const ChatDirect = ({
 
                 setTimeout(() => {
                   getTimestampEnterChat();
-                }, 400);
+                }, TIME_MILLISECONDS_400);
               }
               res(response);
               return;
@@ -505,7 +511,7 @@ export const ChatDirect = ({
         );
         setTimeout(() => {
           executeEvent('sent-new-message-group', {});
-        }, 150);
+        }, TIME_MILLISECONDS_250);
         clearEditorContent();
         setReplyMessage(null);
         setOnEditMessage(null);

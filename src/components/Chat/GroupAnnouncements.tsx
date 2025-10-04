@@ -34,7 +34,7 @@ import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
 import { useTranslation } from 'react-i18next';
-import { TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { TIME_MILLISECONDS_400, TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -698,7 +698,7 @@ export const GroupAnnouncements = ({
                   clearEditorContent();
                   setTimeout(() => {
                     triggerRerender();
-                  }, 300);
+                  }, TIME_MILLISECONDS_400);
                   // Unfocus the editor
                 }}
                 style={{

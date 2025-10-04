@@ -16,6 +16,7 @@ import { ImageCard } from './ImageEmbed';
 import { AttachmentCard } from './AttachmentEmbed';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { TIME_SECONDS_5_IN_MILLISECONDS } from '../../constants/constants';
 
 const getPoll = async (name) => {
   const pollName = name;
@@ -235,7 +236,7 @@ export const Embed = ({ embedLink }) => {
           await new Promise((res) => {
             setTimeout(() => {
               res(null);
-            }, 5000);
+            }, TIME_SECONDS_5_IN_MILLISECONDS);
           });
         }
       }

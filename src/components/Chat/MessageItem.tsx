@@ -55,6 +55,7 @@ import {
 } from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
+import { TIME_MILLISECONDS_100 } from '../../constants/constants';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -777,7 +778,7 @@ const WatchComponent = ({ onSeen, isLast, children }) => {
     if (inView && isLast && onSeen) {
       setTimeout(() => {
         onSeen();
-      }, 100);
+      }, TIME_MILLISECONDS_100);
     }
   }, [inView, isLast, onSeen]);
 

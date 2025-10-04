@@ -8,6 +8,7 @@ import { createEndpoint, getBaseApi } from '../../background/background';
 import { getData } from '../../utils/chromeStorage';
 import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
+import { TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants';
 
 export async function reusableGet(endpoint) {
   const validApi = await getBaseApi();
@@ -68,8 +69,8 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
       if (attempt >= maxRetries) {
         throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
       }
-      // Wait 25 seconds before next retry
-      await new Promise((res) => setTimeout(res, 25_000));
+      // Wait before next retry
+      await new Promise((res) => setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS));
     }
   }
 }
@@ -107,8 +108,8 @@ async function reusablePostRetry(
           retry: true,
         });
       }
-      // Wait 10 seconds before next retry
-      await new Promise((res) => setTimeout(res, 25_000));
+      // Wait before next retry
+      await new Promise((res) => setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS));
     }
   }
 }

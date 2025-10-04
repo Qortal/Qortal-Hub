@@ -81,6 +81,9 @@ import {
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_SECONDS_120_IN_MILLISECONDS,
   TIME_DAY_1_IN_MILLISECONDS,
+  TIME_MILLISECONDS_250,
+  TIME_MILLISECONDS_400,
+  TIME_MILLISECONDS_500,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
 
@@ -573,7 +576,7 @@ export const Group = ({
     setGroupSection('default');
     setTimeout(() => {
       setGroupSection('home');
-    }, 300);
+    }, TIME_MILLISECONDS_400);
   };
 
   const getGroupAnnouncements = async () => {
@@ -1021,7 +1024,7 @@ export const Group = ({
 
         setTimeout(() => {
           getTimestampEnterChat();
-        }, 600);
+        }, TIME_MILLISECONDS_500);
       }
 
       if (message?.action === 'SET_GROUP_ANNOUNCEMENTS') {
@@ -1046,7 +1049,7 @@ export const Group = ({
 
           setTimeout(() => {
             getGroupAnnouncements();
-          }, 200);
+          }, TIME_MILLISECONDS_250);
         }
       }
 
@@ -1242,7 +1245,7 @@ export const Group = ({
         setSelectedDirect(findDirect);
         getTimestampEnterChat();
         isLoadingOpenSectionFromNotification.current = false;
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     } else {
       isLoadingOpenSectionFromNotification.current = false;
     }
@@ -1276,7 +1279,7 @@ export const Group = ({
       setTimeout(() => {
         setSelectedDirect(findDirect);
         getTimestampEnterChat();
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     } else {
       setDesktopSideView('directs');
       setNewChat(true);
@@ -1284,7 +1287,7 @@ export const Group = ({
         executeEvent('setDirectToValueNewChat', {
           directToValue: name || directAddress,
         });
-      }, 500);
+      }, TIME_MILLISECONDS_500);
     }
   };
 
@@ -1336,7 +1339,7 @@ export const Group = ({
     setTimeout(() => {
       getGroupAnnouncements();
       getTimestampEnterChat();
-    }, 200);
+    }, TIME_MILLISECONDS_250);
   };
 
   useEffect(() => {
@@ -1474,7 +1477,7 @@ export const Group = ({
         setDesktopSideView('groups');
         getTimestampEnterChat();
         isLoadingOpenSectionFromNotification.current = false;
-      }, 350);
+      }, TIME_MILLISECONDS_400);
     } else {
       isLoadingOpenSectionFromNotification.current = false;
     }
@@ -1528,7 +1531,7 @@ export const Group = ({
         setMobileViewMode('group');
         setDesktopSideView('groups');
         getGroupAnnouncements();
-      }, 350);
+      }, TIME_MILLISECONDS_400);
     }
   };
 
@@ -1580,7 +1583,7 @@ export const Group = ({
         setMobileViewMode('group');
         setDesktopSideView('groups');
         getGroupAnnouncements();
-      }, 350);
+      }, TIME_MILLISECONDS_400);
     }
   };
 
@@ -1608,7 +1611,7 @@ export const Group = ({
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     });
   };
 
@@ -1617,7 +1620,7 @@ export const Group = ({
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     });
     setSelectedDirect(null);
     setNewChat(false);
@@ -1636,7 +1639,7 @@ export const Group = ({
 
     setTimeout(() => {
       getGroupAnnouncements();
-    }, 200);
+    }, TIME_MILLISECONDS_250);
   };
 
   const openDrawerGroups = () => {
@@ -1655,7 +1658,7 @@ export const Group = ({
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     });
     setGroupSection('chat');
     setNewChat(false);
@@ -1675,7 +1678,7 @@ export const Group = ({
 
       setTimeout(() => {
         getTimestampEnterChat();
-      }, 200);
+      }, TIME_MILLISECONDS_250);
     }
   };
 
@@ -1807,9 +1810,8 @@ export const Group = ({
 
                   setTimeout(() => {
                     setSelectedDirect(direct);
-
                     getTimestampEnterChat();
-                  }, 200);
+                  }, TIME_MILLISECONDS_250);
                 }}
                 sx={{
                   background:
@@ -1975,7 +1977,7 @@ export const Group = ({
     setIsForceShowCreationKeyPopup(false);
     setTimeout(() => {
       setSelectedGroup(group);
-    }, 200);
+    }, TIME_MILLISECONDS_250);
   }, []);
 
   return (

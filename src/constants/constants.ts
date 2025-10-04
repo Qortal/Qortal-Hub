@@ -220,14 +220,25 @@ export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
 export const SUGGESTED_QORTS: number = 6;
 
 // Time section
+export const TIME_MILLISECONDS_10: number = 10;
+export const TIME_MILLISECONDS_50: number = 50;
+export const TIME_MILLISECONDS_100: number = 100;
+export const TIME_MILLISECONDS_250: number = 250;
+export const TIME_MILLISECONDS_400: number = 400;
+export const TIME_MILLISECONDS_500: number = 500;
+export const TIME_MILLISECONDS_1500: number = 1500;
+
 export const TIME_MINUTES_3_IN_MILLISECONDS: number = 180000;
 export const TIME_MINUTES_6_IN_MILLISECONDS: number = 360000;
 export const TIME_MINUTES_10_IN_MILLISECONDS: number = 600000;
 export const TIME_MINUTES_20_IN_MILLISECONDS: number = 1200000;
 export const TIME_MINUTES_30_IN_MILLISECONDS: number = 1800000;
 
+export const TIME_SECONDS_1_IN_MILLISECONDS: number = 1000;
+export const TIME_SECONDS_5_IN_MILLISECONDS: number = 5000;
 export const TIME_SECONDS_10_IN_MILLISECONDS: number = 10000;
 export const TIME_SECONDS_20_IN_MILLISECONDS: number = 20000;
+export const TIME_SECONDS_30_IN_MILLISECONDS: number = 30000;
 export const TIME_SECONDS_40_IN_MILLISECONDS: number = 40000;
 export const TIME_SECONDS_60_IN_MILLISECONDS: number = 40000;
 export const TIME_SECONDS_120_IN_MILLISECONDS: number = 120000;

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
+  TIME_MILLISECONDS_250,
   TIME_SECONDS_120_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
@@ -329,7 +330,7 @@ export const useAuth = () => {
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
-        }, 250);
+        }, TIME_MILLISECONDS_250);
       });
       window
         .sendMessage(
