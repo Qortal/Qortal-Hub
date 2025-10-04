@@ -7,6 +7,7 @@ import {
 } from '../../utils/events';
 import { useSetAtom } from 'jotai';
 import { nodeInfosAtom } from '../../atoms/global';
+import { TIME_SECONDS_10_IN_MILLISECONDS, TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants';
 
 export const useWebsocketStatus = () => {
   const lastPopup = useRef<null | number>(null);
@@ -65,10 +66,10 @@ export const useWebsocketStatus = () => {
             if (!lastPopup.current || Date.now() - lastPopup.current > 600000) {
               setTimeout(() => {
                 sendMessageVerifyCoreNotRunning();
-              }, 18_000);
+              }, TIME_SECONDS_20_IN_MILLISECONDS);
               lastPopup.current = Date.now();
             }
-            setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
+            setTimeout(() => initWebsocketMessageGroup(), TIME_SECONDS_10_IN_MILLISECONDS); // Retry after 10 seconds
           }
         };
 

@@ -36,6 +36,7 @@ import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
 import { isHtmlString } from '../../utils/chat';
 import TextStyle from '@tiptap/extension-text-style';
+import { TIME_MILLISECONDS_400 } from '../../constants/constants';
 
 const extractTextFromHTML = (htmlString = '') => {
   return convert(htmlString, {
@@ -150,7 +151,7 @@ export const ChatOptions = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
-    }, 350);
+    }, TIME_MILLISECONDS_400);
 
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {

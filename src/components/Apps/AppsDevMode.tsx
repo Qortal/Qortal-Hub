@@ -20,6 +20,7 @@ import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
+import { TIME_MILLISECONDS_100, TIME_MILLISECONDS_400 } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -66,7 +67,7 @@ export const AppsDevMode = ({
           isNewTabWindow: isNewTabWindow,
         },
       });
-    }, 100);
+    }, TIME_MILLISECONDS_100);
   }, [show, tabs, selectedTab, isNewTabWindow]);
 
   const navigateBackFunc = (e) => {
@@ -167,7 +168,7 @@ export const AppsDevMode = ({
           isNewTabWindow: isNewTabWindow,
         },
       });
-    }, 100);
+    }, TIME_MILLISECONDS_100);
     setIsNewTabWindow(false);
   };
 
@@ -196,7 +197,7 @@ export const AppsDevMode = ({
           selectedTab: copyTabs[0],
         },
       });
-    }, 400);
+    }, TIME_MILLISECONDS_400);
   };
 
   useEffect(() => {

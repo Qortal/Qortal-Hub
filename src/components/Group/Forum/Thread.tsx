@@ -43,6 +43,7 @@ import { WrapperUserAction } from '../../WrapperUserAction';
 import { formatTimestampForum } from '../../../utils/time';
 import { useTranslation } from 'react-i18next';
 import { ReturnIcon } from '../../../assets/Icons/ReturnIcon';
+import { TIME_MILLISECONDS_100, TIME_MILLISECONDS_250, TIME_MILLISECONDS_400 } from '../../../constants/constants';
 
 const requestQueueSaveToLocal = new RequestQueueWithPromise(1);
 
@@ -268,12 +269,12 @@ export const Thread = ({
         if (before === null && after === null && isReverse) {
           setTimeout(() => {
             containerRef.current.scrollIntoView({ behavior: 'smooth' });
-          }, 300);
+          }, TIME_MILLISECONDS_250);
         }
         if (after || (before === null && after === null && !isReverse)) {
           setTimeout(() => {
             threadBeginningRef.current.scrollIntoView();
-          }, 100);
+          }, TIME_MILLISECONDS_100);
         }
 
         if (fullArrayMsg.length === 0) {
@@ -393,7 +394,7 @@ export const Thread = ({
     await new Promise((res) => {
       setTimeout(() => {
         res(null);
-      }, 400);
+      }, TIME_MILLISECONDS_400);
     });
     if (firstMount.current) return;
     getMessages();
@@ -548,7 +549,7 @@ export const Thread = ({
     };
     setTimeout(() => {
       handleScroll();
-    }, 400);
+    }, TIME_MILLISECONDS_400);
 
     container.addEventListener('scroll', handleScroll);
 

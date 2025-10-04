@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { resourceDownloadControllerAtom } from '../atoms/global';
 import { getBaseApiReact } from '../App';
 import { useSetAtom } from 'jotai';
+import { TIME_SECONDS_30_IN_MILLISECONDS } from '../constants/constants';
 
 export const useFetchResources = () => {
   const setResources = useSetAtom(resourceDownloadControllerAtom);
@@ -106,7 +107,7 @@ export const useFetchResources = () => {
                 timeoutId = setTimeout(() => {
                   isCalling = false;
                   downloadResource({ name, service, identifier }, true);
-                }, 25000);
+                }, TIME_SECONDS_30_IN_MILLISECONDS);
 
                 return;
               }

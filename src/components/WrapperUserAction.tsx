@@ -11,6 +11,7 @@ import { QORTAL_APP_CONTEXT } from '../App';
 import { useAtom } from 'jotai';
 import { isRunningPublicNodeAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_250 } from '../constants/constants';
 
 export const WrapperUserAction = ({ children, address, name, disabled }) => {
   const theme = useTheme();
@@ -97,7 +98,7 @@ export const WrapperUserAction = ({ children, address, name, disabled }) => {
                     address,
                     name,
                   });
-                }, 200);
+                }, TIME_MILLISECONDS_250);
               }}
               sx={{
                 color: theme.palette.text.primary,

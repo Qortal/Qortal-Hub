@@ -8,17 +8,16 @@ import { createEndpoint, getBaseApi } from '../../background/background';
 import { getData } from '../../utils/chromeStorage';
 import { executeEvent } from '../../utils/events';
 import { fileToBase64 } from '../../utils/fileReading';
+import { TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants';
 
 export async function reusableGet(endpoint) {
   const validApi = await getBaseApi();
-
   const response = await fetch(validApi + endpoint);
   const data = await response.json();
   return data;
 }
 
 async function reusablePost(endpoint, _body) {
-  // const validApi = await findUsableApi();
   const url = await createEndpoint(endpoint);
   const response = await fetch(url, {
     method: 'POST',
@@ -42,9 +41,7 @@ async function reusablePost(endpoint, _body) {
 
 async function reusablePostStream(endpoint, _body) {
   const url = await createEndpoint(endpoint);
-
   const headers = {};
-
   const response = await fetch(url, {
     method: 'POST',
     headers,
@@ -72,13 +69,15 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
       if (attempt >= maxRetries) {
         throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
       }
-      // Wait 25 seconds before next retry
-      await new Promise((res) => setTimeout(res, 25_000));
+      // Wait before next retry
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS)
+      );
     }
   }
 }
 
-async function resuablePostRetry(
+async function reusablePostRetry(
   endpoint,
   body,
   maxRetries = 3,
@@ -89,7 +88,6 @@ async function resuablePostRetry(
   while (attempt < maxRetries) {
     try {
       const response = await reusablePost(endpoint, body);
-
       return response;
     } catch (err) {
       attempt++;
@@ -111,8 +109,10 @@ async function resuablePostRetry(
           retry: true,
         });
       }
-      // Wait 10 seconds before next retry
-      await new Promise((res) => setTimeout(res, 25_000));
+      // Wait before next retry
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -150,7 +150,7 @@ export const publishData = async ({
   };
 
   const convertBytesForSigning = async (transactionBytesBase58: string) => {
-    return await resuablePostRetry(
+    return await reusablePostRetry(
       '/transactions/convert',
       transactionBytesBase58,
       3,
@@ -162,7 +162,7 @@ export const publishData = async ({
   const getArbitraryFee = async () => {
     const timestamp = Date.now();
 
-    let fee = await reusableGet(
+    const fee = await reusableGet(
       `/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
     );
 
@@ -179,7 +179,7 @@ export const publishData = async ({
     keyPair
   ) => {
     if (!arbitraryBytesBase58) {
-      throw new Error('ArbitraryBytesBase58 not defined'); // TODO translate
+      throw new Error('ArbitraryBytesBase58 not defined');
     }
 
     if (!keyPair) {
@@ -213,7 +213,7 @@ export const publishData = async ({
   };
 
   const processTransactionVersion2 = async (bytes) => {
-    return await resuablePostRetry(
+    return await reusablePostRetry(
       '/transactions/process?apiVersion=2',
       Base58.encode(bytes),
       3,
@@ -223,7 +223,7 @@ export const publishData = async ({
   };
 
   const signAndProcessWithFee = async (transactionBytesBase58: string) => {
-    let convertedBytesBase58 = await convertBytesForSigning(
+    const convertedBytesBase58 = await convertBytesForSigning(
       transactionBytesBase58
     );
 
@@ -240,7 +240,7 @@ export const publishData = async ({
       publicKey: uint8PublicKey,
     };
 
-    let signedArbitraryBytes = signArbitraryWithFee(
+    const signedArbitraryBytes = signArbitraryWithFee(
       transactionBytesBase58,
       convertedBytesBase58,
       keyPair
@@ -259,7 +259,7 @@ export const publishData = async ({
   };
 
   const validate = async () => {
-    let validNameRes = await validateName(registeredName);
+    const validNameRes = await validateName(registeredName);
 
     if (validNameRes.error) {
       throw new Error('Name not found');
@@ -278,7 +278,7 @@ export const publishData = async ({
       }
     }
 
-    let transactionBytes = await uploadData(registeredName, data, fee);
+    const transactionBytes = await uploadData(registeredName, data, fee);
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
     } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
@@ -392,7 +392,7 @@ export const publishData = async ({
           filename: filename || title || `${service}-${identifier || ''}`,
         });
       }
-      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+      return await reusablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
         identifier,
         name: registeredName,
         service,
@@ -420,7 +420,7 @@ export const publishData = async ({
           filename: filename || title || `${service}-${identifier || ''}`,
         });
       }
-      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+      return await reusablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
         identifier,
         name: registeredName,
         service,

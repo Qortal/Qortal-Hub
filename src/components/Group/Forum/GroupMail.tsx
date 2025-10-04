@@ -51,7 +51,7 @@ import { CustomButton } from '../../../styles/App-styles';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 import CheckIcon from '@mui/icons-material/Check';
-import { TIME_SECONDS_120_IN_MILLISECONDS } from '../../../constants/constants';
+import { TIME_MILLISECONDS_250, TIME_SECONDS_120_IN_MILLISECONDS } from '../../../constants/constants';
 export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
@@ -500,7 +500,7 @@ export const GroupMail = ({
       executeEvent('threadFetchMode', {
         mode: 'last-page',
       });
-    }, 300);
+    }, TIME_MILLISECONDS_250);
   };
 
   useEffect(() => {
@@ -780,7 +780,7 @@ export const GroupMail = ({
                       executeEvent('threadFetchMode', {
                         mode: 'last-page',
                       });
-                    }, 300);
+                    }, TIME_MILLISECONDS_250);
                   }}
                   sx={{
                     alignItems: 'center',
