@@ -70,7 +70,9 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
         throw new Error(`Chunk ${index} failed after ${maxRetries} attempts`);
       }
       // Wait before next retry
-      await new Promise((res) => setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS));
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -86,7 +88,6 @@ async function reusablePostRetry(
   while (attempt < maxRetries) {
     try {
       const response = await reusablePost(endpoint, body);
-
       return response;
     } catch (err) {
       attempt++;
@@ -109,7 +110,9 @@ async function reusablePostRetry(
         });
       }
       // Wait before next retry
-      await new Promise((res) => setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS));
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_20_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -159,7 +162,7 @@ export const publishData = async ({
   const getArbitraryFee = async () => {
     const timestamp = Date.now();
 
-    let fee = await reusableGet(
+    const fee = await reusableGet(
       `/transactions/unitfee?txType=ARBITRARY&timestamp=${timestamp}`
     );
 
@@ -220,7 +223,7 @@ export const publishData = async ({
   };
 
   const signAndProcessWithFee = async (transactionBytesBase58: string) => {
-    let convertedBytesBase58 = await convertBytesForSigning(
+    const convertedBytesBase58 = await convertBytesForSigning(
       transactionBytesBase58
     );
 
@@ -237,7 +240,7 @@ export const publishData = async ({
       publicKey: uint8PublicKey,
     };
 
-    let signedArbitraryBytes = signArbitraryWithFee(
+    const signedArbitraryBytes = signArbitraryWithFee(
       transactionBytesBase58,
       convertedBytesBase58,
       keyPair
@@ -256,7 +259,7 @@ export const publishData = async ({
   };
 
   const validate = async () => {
-    let validNameRes = await validateName(registeredName);
+    const validNameRes = await validateName(registeredName);
 
     if (validNameRes.error) {
       throw new Error('Name not found');
