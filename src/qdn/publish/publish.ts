@@ -11,14 +11,12 @@ import { fileToBase64 } from '../../utils/fileReading';
 
 export async function reusableGet(endpoint) {
   const validApi = await getBaseApi();
-
   const response = await fetch(validApi + endpoint);
   const data = await response.json();
   return data;
 }
 
 async function reusablePost(endpoint, _body) {
-  // const validApi = await findUsableApi();
   const url = await createEndpoint(endpoint);
   const response = await fetch(url, {
     method: 'POST',
@@ -42,9 +40,7 @@ async function reusablePost(endpoint, _body) {
 
 async function reusablePostStream(endpoint, _body) {
   const url = await createEndpoint(endpoint);
-
   const headers = {};
-
   const response = await fetch(url, {
     method: 'POST',
     headers,
@@ -78,7 +74,7 @@ async function uploadChunkWithRetry(endpoint, formData, index, maxRetries = 3) {
   }
 }
 
-async function resuablePostRetry(
+async function reusablePostRetry(
   endpoint,
   body,
   maxRetries = 3,
@@ -150,7 +146,7 @@ export const publishData = async ({
   };
 
   const convertBytesForSigning = async (transactionBytesBase58: string) => {
-    return await resuablePostRetry(
+    return await reusablePostRetry(
       '/transactions/convert',
       transactionBytesBase58,
       3,
@@ -179,7 +175,7 @@ export const publishData = async ({
     keyPair
   ) => {
     if (!arbitraryBytesBase58) {
-      throw new Error('ArbitraryBytesBase58 not defined'); // TODO translate
+      throw new Error('ArbitraryBytesBase58 not defined');
     }
 
     if (!keyPair) {
@@ -213,7 +209,7 @@ export const publishData = async ({
   };
 
   const processTransactionVersion2 = async (bytes) => {
-    return await resuablePostRetry(
+    return await reusablePostRetry(
       '/transactions/process?apiVersion=2',
       Base58.encode(bytes),
       3,
@@ -392,7 +388,7 @@ export const publishData = async ({
           filename: filename || title || `${service}-${identifier || ''}`,
         });
       }
-      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+      return await reusablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
         identifier,
         name: registeredName,
         service,
@@ -420,7 +416,7 @@ export const publishData = async ({
           filename: filename || title || `${service}-${identifier || ''}`,
         });
       }
-      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+      return await reusablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
         identifier,
         name: registeredName,
         service,
