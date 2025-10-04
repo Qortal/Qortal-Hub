@@ -5125,8 +5125,6 @@ export const adminAction = async (data, isFromExtension) => {
     'addmintingaccount',
     'addpeer',
     'forcesync',
-    'getmintingaccounts',
-    'getpeers',
     'removemintingaccount',
     'removepeer',
   ];
