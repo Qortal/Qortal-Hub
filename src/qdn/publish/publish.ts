@@ -278,7 +278,7 @@ export const publishData = async ({
       }
     }
 
-    let transactionBytes = await uploadData(registeredName, data, fee);
+    const transactionBytes = await uploadData(registeredName, data, fee);
     if (!transactionBytes || transactionBytes.error) {
       throw new Error(transactionBytes?.message || 'Error when uploading');
     } else if (transactionBytes.includes('Error 500 Internal Server Error')) {
