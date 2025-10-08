@@ -2456,7 +2456,7 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
         locationUrl + `?attachment=true&attachmentFilename=${data?.filename}`
       );
       a.href = endpoint;
-      a.download = data.filename;
+      a.download = encodeURIComponent(data.filename);
       document.body.appendChild(a);
       a.click();
       a.remove();
