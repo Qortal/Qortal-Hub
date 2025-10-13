@@ -89,7 +89,7 @@
     "show": "ava",
     "show_poll": "näita küsitlust",
     "start_minting": "alusta vermimist",
-    "start_typing": "alusta kirjutades siia...",
+    "start_typing": "Sisesta tekst ja saada...",
     "trade_qort": "kauple QORT",
     "transfer_qort": "saada QORT",
     "unpin": "eemalda",
@@ -376,7 +376,7 @@
   "service_type": "teenuse tüüp",
   "settings": "seaded",
   "sort": {
-    "by_member": "by kasutaja"
+    "by_member": "kasutaja nime järgi"
   },
   "supply": "varutud",
   "tags": "sildid",
