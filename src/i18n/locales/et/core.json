@@ -352,10 +352,10 @@
   "option_no": "puuduvad valikud",
   "option_other": "teised valikud",
   "page": {
-    "last": "viimane",
-    "first": "esimene",
-    "next": "järgmine",
-    "previous": "eelmine"
+    "last": "eelmine",
+    "first": "TAGASI",
+    "next": "EDASI",
+    "previous": "järgmine"
   },
   "payment_notification": "teavitus uuest maksest",
   "payment": "makse",
