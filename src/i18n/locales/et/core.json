@@ -1,6 +1,6 @@
 {
   "action": {
-    "accept": "aktsepteeri",
+    "accept": "NÕUSTUN",
     "access": "juurdepääs",
     "access_app": "juurdepääsurakendus",
     "add": "LISA",
@@ -29,7 +29,7 @@
     "create_file": "loo fail",
     "create_transaction": "loo tehinguid Qortal Blockchainis",
     "create_thread": "loo teema",
-    "decline": "tagasi lükatud",
+    "decline": "TÜHISTAN",
     "decrypt": "dekrüpteeri",
     "disable_enter": "keela ENTER",
     "download": "laadialla",
@@ -115,7 +115,7 @@
   "apps_dashboard": "Rakenduset töölaud",
   "apps_official": "ametrlikud rakendused",
   "attachment": "manus",
-  "balance": "tasakaal:",
+  "balance": "Hetkel kasutatav QORTide summa:",
   "category": "katekooria",
   "category_other": "kategooriad",
   "chat": "chät",
@@ -132,7 +132,7 @@
   "dev_mode": "Arendajarežiim",
   "domain": "domeen",
   "ui": {
-    "version": "UI versioon"
+    "version": "HUBi versioon"
   },
   "count": {
     "none": "puudub",
@@ -152,7 +152,7 @@
   "home": "avalehele",
   "identifier": "identifikaator",
   "image_embed": "pildi manustamine",
-  "last_height": "viimane kõrgus",
+  "last_height": "ploki kõrgus",
   "level": "tase",
   "library": "raamatukogu",
   "list": {
@@ -175,11 +175,11 @@
   "message_us": "Kui vajad piiranguteta vestluse alustamiseks 4 QORT-i, saada meile palun sõnum Nextcloudis (registreerumine pole vajalik) või Discordis.",
   "message": {
     "error": {
-      "address_not_found": "teie aadressi ei leitud",
-      "app_need_name": "teie rakendusele on vaja nime",
+      "address_not_found": "aadressi ei leitud",
+      "app_need_name": "rakendusele on vaja nime",
       "build_app": "privaatset rakendust ei saa luua",
       "decrypt_app": "Privaatset rakendust ei saanud dekrüpteerida'",
-      "download_image": "IMAGE allalaadimine ebaõnnestus. Palun proovige hiljem uuesti, klõpsates värskendamisnupul.",
+      "download_image": "pildi allalaadimine ebaõnnestus. Palun proovi hiljem uuesti, klõpsates värskendamisnupul.",
       "download_private_app": "Privaatset rakendust ei saa alla laadida",
       "encrypt_app": "Rakendust ei saanud krüptida. Rakendust pole avaldatud.'",
       "fetch_app": "Rakenduse toomine ebaõnnestus",
@@ -196,9 +196,9 @@
       "invalid_theme_format": "vigane teema formaat",
       "invalid_zip": "vigane zip",
       "message_loading": "viga sõnumi laadimisel.",
-      "message_size": "teie sõnumi suurus on {{ size }} baiti maksimaalsest {{ maximum }} lubatust",
+      "message_size": "sõnumi suurus on {{ size }} baiti maksimaalsest {{ maximum }} lubatust",
       "minting_account_add": "rahapaja konto lisamine ebaõnnestus",
-      "minting_account_remove": "rahapaja kontot ei õnnestunud eemaldadat",
+      "minting_account_remove": "vermimis kontot ei õnnestunud eemaldadat",
       "missing_fields": "puuduv väli: {{ fields }}",
       "navigation_timeout": "navigeerimise ajalõpp",
       "network_generic": "võrgu viga",
@@ -240,7 +240,7 @@
       "most_recent_payment": "{{ count }} viimane makse",
       "name_available": "{{ name }} on SAADAVAL",
       "name_benefits": "nime eelised",
-      "name_checking": "kontrollitakse, kas nimi on juba olemas",
+      "name_checking": "kontrollin, kas nimi on juba olemas",
       "name_preview": "eelvaate kasutamiseks on vaja nime",
       "name_publish": "Avaldamiseks on vaja Qortali nime",
       "name_rate": "hindamiseks on vaja nime.",
@@ -340,8 +340,8 @@
       "synchronizing": "sünkroonin ({{ percent }}%)..."
     },
     "status_title": "vermimise staatus",
-    "tier_share_per_block": "astme osakaal ploki kohta",
-    "total_minter_in_tier": "astmel olevate vermijate koguarv"
+    "tier_share_per_block": "teenitav protsent sellel tasemel",
+    "total_minter_in_tier": "vermijate koguarv antud tasemel"
   },
   "name": "nimi",
   "name_app": "nimi/App",
@@ -362,7 +362,7 @@
   "poll_embed": "lisa küsitlus",
   "port": "port",
   "price": "hind",
-  "publish": "Avalda",
+  "publish": "AVALDA",
   "q_apps": {
     "about": "Detailsemalt sellest Q-App",
     "q_mail": "q-mail",
@@ -403,8 +403,8 @@
     "second_other": "{{count}} sekundit",
     "time": "aeg"
   },
-  "title": "Pealkiri to",
-  "to": "to",
+  "title": "Pealkiri",
+  "to": "Saaja nimi või aadress",
   "tutorial": "õpetus",
   "url": "url",
   "user_lookup": "kasutaja info otsing",
