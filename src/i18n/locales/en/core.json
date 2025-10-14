@@ -160,7 +160,6 @@
     "groups": "list of groups",
     "invites": "list of invites",
     "join_request": "join request list",
-    "member": "member list",
     "members": "list of members"
   },
   "loading": {
@@ -170,8 +169,6 @@
     "comments": "loading comments... please wait.",
     "posts": "loading posts... please wait."
   },
-  "member": "member",
-  "member_other": "members",
   "message_us": "please message us on Nextcloud (no signup required) or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {

@@ -1,0 +1,76 @@
+{
+  "setup": {
+    "title": "Qortal Core seadistus",
+    "advancedOptions": "täpsemad valikud",
+    "pickPath": "vali kohandatud Qortali installitee, kui Core on paigaldatud mittevaikimisi asukohta.",
+    "removePath": "eemalda kohandatud Qortali tee"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab teile täieliku kontrolli oma andmete, rakenduste ja rahanduse üle. Alustamiseks soovitame paigaldada <strong>Qortal Core</strong>, mis töötab võrgu ja võimaldab kõiki Qortali funktsioone.",
+    "paragraph2": "See seadistusviisard juhendab teid Qortal Core’i installimisel ja seadistamisel teie seadmes. Jätkamiseks klõpsake <strong>Järgmine</strong>.",
+    "note": "märkus edasijõudnud kasutajatele",
+    "advanced": "kui kasutate kaug-sõlme, sulgege see seadistusviisard ja klõpsake \"Vali kohandatud sõlm\""
+  },
+  "sync": {
+    "behind": "Te olete {{count}} plokki maas.",
+    "waiting": "Palun oodake kuni sünkroonimine on lõpule viidud.",
+    "not_syncronized": "sünkroonimata",
+    "syncronized": "sünkroonitud",
+    "syncronized_desc": "te olete nüüd sünkroonitud. võite jätkata."
+  },
+  "steps": {
+    "java": "Java olemas",
+    "downloaded": "Core alla laaditud",
+    "running": "Core töötab"
+  },
+  "actions": {
+    "finished": "valmis",
+    "start": "käivita Qortal Core",
+    "install": "installi ja käivita Qortal Core",
+    "continuePublic": "jätka avaliku noodiga",
+    "openSetup": "ava kohalik seadistus",
+    "goToDownloads": "mine allalaadimistele",
+    "resetKey": "lähtesta API võti",
+    "continue": "jätka"
+  },
+  "error": {
+    "noJar": "valitud kaustas puudub qortal.jar",
+    "invalidKey": "kehtetu API võti"
+  },
+  "status": {
+    "complete": "valmis",
+    "inProgress": "töös",
+    "pending": "ootel",
+    "error": "viga"
+  },
+  "recommendation": {
+    "title": "kasuta oma lokaalset node’i",
+    "description": "Võid jätkata avaliku noodiga, kuid soovitame tungivalt kasutada lokaalset node’i parima kogemuse jaoks.",
+    "subTitle": "Lokaalse node’i eelised:",
+    "point1": "täielikult detsentraliseeritud ligipääs",
+    "point2": "kiirem allalaadimine",
+    "point3": "kasutaja kontrollitud andmed",
+    "publicExplanation": "Avalik node, millega ühendud, on tegelikult eraviisiliselt hallatav node, mis on tehtud avalikkusele kättesaadavaks. Kuigi mugav, on sellel piiranguid võrreldes enda node’i käitamisega."
+  },
+  "invalidKey": {
+    "title": "kehtetu API võti",
+    "description": "Sinu API võti on kehtetu. Palun sisesta korrektne võti.",
+    "resetDescription": "Sinu API võti on kehtetu. Klõpsa lähtesta, et jätkata."
+  },
+  "messages": {
+    "001": "Core käivitamine... palun oota.",
+    "002": "viga: ei saa hoidlaga alustada",
+    "003": "viga Qortal Core käivitamisel",
+    "004": "viga Qortal Core lahtipakkimisel",
+    "005": "Qortal Core allalaadimine... palun oota.",
+    "006": "Java seadistamine... palun oota.",
+    "007": "viga Java allalaadimisel.",
+    "008": "viga Java lahtipakkimisel",
+    "009": "Qortal Core allalaadimine... palun oota.",
+    "010": "viga: ei saa Core’i alla laadida või installida"
+  },
+  "url": {
+    "title": "vigane URL",
+    "description": "vale URL või sõlm ei tööta"
+  }
+}

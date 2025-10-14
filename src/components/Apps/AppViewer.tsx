@@ -6,6 +6,7 @@ import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
+import { QORTAL_PROTOCOL } from '../../constants/constants';
 
 type AppViewerProps = {
   app: any;
@@ -132,7 +133,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       const { tabId } = e.detail;
       if (tabId === app?.tabId) {
         let link =
-          'qortal://' + app?.service + '/' + app?.name.replace(/ /g, '%20');
+          QORTAL_PROTOCOL + app?.service + '/' + app?.name.replace(/ /g, '%20');
         if (path && path.startsWith('/')) {
           link = link + removeTrailingSlash(path);
         }

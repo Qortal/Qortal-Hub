@@ -21,7 +21,20 @@ import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
 import { Sha256 } from 'asmcrypto.js';
 import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondMultipleRequest';
-import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../constants/constants';
+import {
+  API_ENDPOINTS,
+  EXT_NODE_QORTAL_LINK,
+  HTTP_LOCALHOST_12391,
+  HTTPS_QORT_TRADE,
+  HTTPS_TRADE_NODE,
+  LOCALHOST_12391,
+  MIN_REQUIRED_QORTS,
+  RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
+  TIME_MINUTES_3_IN_MILLISECONDS,
+  TIME_MINUTES_10_IN_MILLISECONDS,
+  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_MINUTES_6_IN_MILLISECONDS,
+} from '../constants/constants';
 import {
   addDataPublishesCase,
   addEnteredQmailTimestampCase,
@@ -112,13 +125,13 @@ export function getProtocol(url) {
   }
 }
 
-export const gateways = ['ext-node.qortal.link'];
+export const gateways = [EXT_NODE_QORTAL_LINK];
 
 let lastGroupNotification;
-export const groupApi = 'https://ext-node.qortal.link';
-export const groupApiSocket = 'wss://ext-node.qortal.link';
-export const groupApiLocal = 'http://127.0.0.1:12391';
-export const groupApiSocketLocal = 'ws://127.0.0.1:12391';
+export const groupApi = 'https://' + EXT_NODE_QORTAL_LINK;
+export const groupApiSocket = 'wss://' + EXT_NODE_QORTAL_LINK;
+export const groupApiLocal = HTTP_LOCALHOST_12391;
+export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
@@ -284,7 +297,7 @@ export const getBaseApi = async (customApi?: string) => {
 
 export const isUsingLocal = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
-  if (apiKey?.url) {
+  if (apiKey?.url && !apiKey?.url?.includes('ext-node.qortal.link')) {
     return true;
   } else {
     return false;
@@ -309,22 +322,10 @@ export const createEndpoint = async (endpoint, customApi?: string) => {
 
 export const walletVersion = 2;
 
-// List of your API endpoints
-const apiEndpoints = [
-  'https://api.qortal.org',
-  'https://api2.qortal.org',
-  'https://appnode.qortal.org',
-  'https://apinode.qortalnodes.live',
-  'https://apinode1.qortalnodes.live',
-  'https://apinode2.qortalnodes.live',
-  'https://apinode3.qortalnodes.live',
-  'https://apinode4.qortalnodes.live',
-];
-
-const buyTradeNodeBaseUrl = 'https://appnode.qortal.org';
 const proxyAccountAddress = 'QXPejUe5Za1KD3zCMViWCX35AreMQ9H7ku';
 const proxyAccountPublicKey = '5hP6stDWybojoDw5t8z9D51nV945oMPX7qBd29rhX1G7';
 const pendingResponses = new Map();
+
 let groups = null;
 let socket;
 let timeoutId;
@@ -335,7 +336,7 @@ let intervalThreads;
 
 // Function to check each API endpoint
 export async function findUsableApi() {
-  for (const endpoint of apiEndpoints) {
+  for (const endpoint of API_ENDPOINTS) {
     try {
       const response = await fetch(`${endpoint}/admin/status`);
       if (!response.ok) throw new Error('Failed to fetch');
@@ -584,7 +585,6 @@ export function updateThreadActivity({
 }) {
   getSaveWallet().then((wallet) => {
     const address = wallet.address0;
-    const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000; // One week in milliseconds
     const key = `threadactivity-${address}`;
     const currentTime = Date.now();
 
@@ -608,7 +608,7 @@ export function updateThreadActivity({
     const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
-    if (currentTime - lastResetTime > ONE_WEEK_IN_MS) {
+    if (currentTime - lastResetTime > TIME_WEEK_1_IN_MILLISECONDS) {
       // Reset visit counts and update the last reset time
       threads.mostVisitedThreads.forEach((thread) => (thread.visitCount = 0));
       threads.lastResetTime = currentTime;
@@ -916,7 +916,7 @@ async function connection(hostname: string) {
 
 async function getTradeInfo(qortalAtAddress) {
   const response = await fetch(
-    buyTradeNodeBaseUrl + '/crosschain/trade/' + qortalAtAddress
+    HTTPS_TRADE_NODE + '/crosschain/trade/' + qortalAtAddress
   );
   if (!response?.ok) throw new Error('Cannot crosschain trade information');
   const data = await response.json();
@@ -968,7 +968,7 @@ export async function getAssetInfo(assetId: number) {
 
 export async function getLTCBalance() {
   const wallet = await getSaveWallet();
-  let _url = `${buyTradeNodeBaseUrl}/crosschain/ltc/walletbalance`;
+  let _url = await createEndpoint(`/crosschain/ltc/walletbalance`);
   const keyPair = await getKeyPair();
   const parsedKeyPair = keyPair;
   let _body = parsedKeyPair.ltcPublicKey;
@@ -983,7 +983,7 @@ export async function getLTCBalance() {
     const data = await response.text();
     const dataLTCBalance = (Number(data) / 1e8).toFixed(8);
     return +dataLTCBalance;
-  } else throw new Error('Onable to get LTC balance');
+  } else throw new Error('Unable to get LTC balance');
 }
 
 export async function parseErrorResponse(
@@ -1529,7 +1529,7 @@ async function sendChatForBuyOrder({
     publicKey: uint8PublicKey,
   };
   const balance = await getBalanceInfo();
-  const hasEnoughBalance = +balance < 4 ? false : true;
+  const hasEnoughBalance = +balance < MIN_REQUIRED_QORTS ? false : true;
   const jsonData = {
     addresses: message.addresses,
     foreignKey: message.foreignKey,
@@ -1562,7 +1562,7 @@ async function sendChatForBuyOrder({
     const signature =
       'id-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     const checkGatewayStatusRes = await fetch(
-      `${buyTradeNodeBaseUrl}/admin/status`
+      `${HTTPS_TRADE_NODE}/admin/status`
     );
     const checkGatewayStatusData = await checkGatewayStatusRes.json();
     if (
@@ -1572,18 +1572,18 @@ async function sendChatForBuyOrder({
       throw new Error('Cannot make trade. Gateway node is synchronizing');
     }
     const healthCheckRes = await fetch(
-      'https://www.qort.trade/api/transaction/healthcheck'
+      HTTPS_QORT_TRADE + '/api/transaction/healthcheck'
     );
     const healthcheckData = await healthCheckRes.json();
     if (healthcheckData?.dbConnection !== 'healthy') {
       throw new Error('Could not connect to db. Try again later.');
     }
     const res = await axios.post(
-      `https://www.qort.trade/api/transaction/updatetxgateway`,
+      HTTPS_QORT_TRADE + `/api/transaction/updatetxgateway`,
       {
         qortalAtAddresses: atAddresses,
         qortAddress: address,
-        node: buyTradeNodeBaseUrl,
+        node: HTTPS_TRADE_NODE,
         status: 'message-sent',
         encryptedMessageToBase58,
         signature,
@@ -1612,7 +1612,7 @@ async function sendChatForBuyOrder({
   let _response = await signChatFunc(
     chatBytesArray,
     nonce,
-    'https://appnode.qortal.org',
+    HTTPS_TRADE_NODE,
     keyPair
   );
   if (_response?.error) {
@@ -1639,8 +1639,6 @@ export async function sendChatGroup({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  // const balance = await getBalanceInfo();
-  // const hasEnoughBalance = +balance < 4 ? false : true;
 
   const txBody = {
     timestamp: Date.now(),
@@ -1659,10 +1657,6 @@ export async function sendChatGroup({
   }
 
   const tx = await createTransaction(181, keyPair, txBody);
-
-  // if (!hasEnoughBalance) {
-  //   throw new Error("Must have at least 4 QORT to send a chat message");
-  // }
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
@@ -1710,8 +1704,6 @@ export async function sendChatDirect({
     privateKey: uint8PrivateKey,
     publicKey: uint8PublicKey,
   };
-  // const balance = await getBalanceInfo();
-  // const hasEnoughBalance = +balance < 4 ? false : true;
 
   const finalJson = {
     message: messageText,
@@ -1735,10 +1727,6 @@ export async function sendChatDirect({
     txBody['chatReference'] = chatReference;
   }
   const tx = await createTransaction(18, keyPair, txBody);
-
-  // if (!hasEnoughBalance) {
-  //   throw new Error("Must have at least 4 QORT to send a chat message");
-  // }
 
   const chatBytes = tx.chatBytes;
   const difficulty = 8;
@@ -1947,7 +1935,7 @@ export async function createBuyOrderTx({
 
     if (res?.signature) {
       const message = await listenForChatMessageForBuyOrder({
-        nodeBaseUrl: buyTradeNodeBaseUrl,
+        nodeBaseUrl: HTTPS_TRADE_NODE,
         senderAddress: proxyAccountAddress,
         senderPublicKey: proxyAccountPublicKey,
         signature: res?.signature,
@@ -1958,7 +1946,7 @@ export async function createBuyOrderTx({
         extra: {
           message: message?.extra?.message,
           senderAddress: address,
-          node: buyTradeNodeBaseUrl,
+          node: HTTPS_TRADE_NODE,
           atAddresses:
             foreignBlockchain === 'PIRATECHAIN'
               ? [crosschainAtInfo[0].qortalAtAddress]
@@ -2718,7 +2706,7 @@ async function listenForChatMessage({
 }) {
   try {
     let validApi = '';
-    const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
+    const checkIfNodeBaseUrlIsAcceptable = API_ENDPOINTS.find(
       (item) => item === nodeBaseUrl
     );
     if (checkIfNodeBaseUrlIsAcceptable) {
@@ -2763,7 +2751,7 @@ async function listenForChatMessageForBuyOrder({
 }) {
   try {
     let validApi = '';
-    const checkIfNodeBaseUrlIsAcceptable = apiEndpoints.find(
+    const checkIfNodeBaseUrlIsAcceptable = API_ENDPOINTS.find(
       (item) => item === nodeBaseUrl
     );
     if (checkIfNodeBaseUrlIsAcceptable) {
@@ -2856,8 +2844,6 @@ export async function getTempPublish() {
   const key = `tempPublish-${address}`;
   const res = await getData<any>(key).catch(() => null);
 
-  const SIX_MINUTES = 6 * 60 * 1000; // 6 minutes in milliseconds
-
   if (res) {
     const parsedData = res;
     const currentTime = Date.now();
@@ -2868,7 +2854,10 @@ export async function getTempPublish() {
         // Filter out entries inside each category that are older than 6 minutes
         const filteredEntries = Object.fromEntries(
           Object.entries(entries).filter(([entryKey, entryValue]) => {
-            return currentTime - entryValue.timestampSaved < SIX_MINUTES;
+            return (
+              currentTime - entryValue.timestampSaved <
+              TIME_MINUTES_6_IN_MILLISECONDS
+            );
           })
         );
         return [category, filteredEntries];
@@ -3818,41 +3807,35 @@ let paymentsCheckInterval;
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
   if (!notificationCheckInterval) {
-    notificationCheckInterval = setInterval(
-      async () => {
-        try {
-          // This would replace the Chrome alarm callback
-          const wallet = await getSaveWallet();
-          const address = wallet?.address0;
-          if (!address) return;
+    notificationCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
 
-          checkActiveChatsForNotifications();
-          checkNewMessages();
-          checkThreads();
-        } catch (error) {
-          console.error('Error checking notifications:', error);
-        }
-      },
-      10 * 60 * 1000
-    ); // 10 minutes
+        checkActiveChatsForNotifications();
+        checkNewMessages();
+        checkThreads();
+      } catch (error) {
+        console.error('Error checking notifications:', error);
+      }
+    }, TIME_MINUTES_10_IN_MILLISECONDS);
   }
 
   if (!paymentsCheckInterval) {
-    paymentsCheckInterval = setInterval(
-      async () => {
-        try {
-          // This would replace the Chrome alarm callback
-          const wallet = await getSaveWallet();
-          const address = wallet?.address0;
-          if (!address) return;
+    paymentsCheckInterval = setInterval(async () => {
+      try {
+        // This would replace the Chrome alarm callback
+        const wallet = await getSaveWallet();
+        const address = wallet?.address0;
+        if (!address) return;
 
-          checkPaymentsForNotifications(address);
-        } catch (error) {
-          console.error('Error checking payments:', error);
-        }
-      },
-      3 * 60 * 1000
-    ); // 3 minutes
+        checkPaymentsForNotifications(address);
+      } catch (error) {
+        console.error('Error checking payments:', error);
+      }
+    }, TIME_MINUTES_3_IN_MILLISECONDS);
   }
 };
 

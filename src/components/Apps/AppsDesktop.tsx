@@ -1,4 +1,12 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createRef,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
@@ -27,6 +35,7 @@ import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
+import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -101,7 +110,7 @@ export const AppsDesktop = ({
     }, 100);
   }, [show, tabs, selectedTab, isNewTabWindow]);
 
-  const getCategories = React.useCallback(async () => {
+  const getCategories = useCallback(async () => {
     try {
       const url = `${getBaseApiReact()}/arbitrary/categories`;
 
@@ -120,7 +129,7 @@ export const AppsDesktop = ({
     }
   }, []);
 
-  const getQapps = React.useCallback(async () => {
+  const getQapps = useCallback(async () => {
     try {
       let apps = [];
       let websites = [];
@@ -162,12 +171,9 @@ export const AppsDesktop = ({
   useEffect(() => {
     getQapps();
 
-    const interval = setInterval(
-      () => {
-        getQapps();
-      },
-      20 * 60 * 1000
-    ); // 20 minutes in milliseconds
+    const interval = setInterval(() => {
+      getQapps();
+    }, TIME_MINUTES_20_IN_MILLISECONDS);
 
     return () => clearInterval(interval);
   }, [getQapps]);
@@ -526,7 +532,7 @@ export const AppsDesktop = ({
 
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
-          iframeRefs.current[tab.tabId] = React.createRef();
+          iframeRefs.current[tab.tabId] = createRef();
         }
         return (
           <AppViewerContainer

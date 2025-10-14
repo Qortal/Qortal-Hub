@@ -1,5 +1,10 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily } from 'jotai/utils';
+import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { ApiKey } from '../types/auth';
+import { extStates } from '../App';
+import { Steps } from '../components/CoreSetupDialog';
+import { LOCALHOST } from '../constants/constants';
 
 // Atoms (resettable)
 export const sortablePinnedAppsAtom = atomWithReset([
@@ -15,7 +20,9 @@ export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Q-Mintership', service: 'APP' },
   { name: 'Q-Wallets', service: 'APP' },
   { name: 'Q-Search', service: 'APP' },
-  { name: 'Q-Nodecontrol', service: 'APP' },
+  { name: 'Q-Node', service: 'APP' },
+  { name: 'Names', service: 'APP' },
+  { name: 'Q-Follow', service: 'APP' },
 ]);
 
 export const addressInfoControllerAtom = atomWithReset({});
@@ -49,6 +56,46 @@ export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
 export const txListAtom = atomWithReset([]);
 
+export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
+
+export const isLoadingAuthenticateAtom = atomWithReset(false);
+export const authenticatePasswordAtom = atomWithReset('');
+export const extStateAtom = atomWithReset<extStates>('not-authenticated');
+export const userInfoAtom = atomWithReset<any>(null);
+export const rawWalletAtom = atomWithReset<any>(null);
+export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
+
+export const balanceAtom = atomWithReset<any>(null);
+export const qortBalanceLoadingAtom = atomWithReset<boolean>(false);
+export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
+export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
+export const isOpenCoreSetup = atomWithReset<boolean>(false);
+export const isOpenSyncingDialogAtom = atomWithReset<boolean>(false);
+export const isOpenUrlInvalidAtom = atomWithReset<boolean>(false);
+export const devServerDomainAtom = atomWithReset(LOCALHOST);
+export const devServerPortAtom = atomWithReset('');
+export const nodeInfosAtom = atomWithReset({});
+export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({
+  url: HTTP_LOCALHOST_12391,
+  apikey: '',
+});
+export const statusesAtom = atomWithReset<Steps>({
+  coreRunning: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+  downloadedCore: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+  hasJava: {
+    status: 'idle',
+    progress: 0,
+    message: '',
+  },
+});
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

@@ -7,12 +7,17 @@ import '../styles/CoreSyncStatus.css';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { manifestData } from './NotAuthenticated';
+import { useAtom } from 'jotai';
+import { nodeInfosAtom } from '../atoms/global';
+import { nodeDisplay } from '../utils/helpers';
+import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 
 export const CoreSyncStatus = () => {
-  const [nodeInfos, setNodeInfos] = useState({});
+  const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
-  const [isUsingGateway, setIsUsingGateway] = useState(false);
 
+  const [nodeBase, setNodeBase] = useState(getBaseApiReact());
+  const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -23,23 +28,6 @@ export const CoreSyncStatus = () => {
   const theme = useTheme();
 
   useEffect(() => {
-    const getNodeInfos = async () => {
-      try {
-        setIsUsingGateway(getBaseApiReact()?.includes('ext-node.qortal.link'));
-        const url = `${getBaseApiReact()}/admin/status`;
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        const data = await response.json();
-        setNodeInfos(data);
-      } catch (error) {
-        console.error('Request failed', error);
-      }
-    };
-
     const getCoreInfos = async () => {
       try {
         const url = `${getBaseApiReact()}/admin/info`;
@@ -56,11 +44,9 @@ export const CoreSyncStatus = () => {
       }
     };
 
-    getNodeInfos();
     getCoreInfos();
 
     const interval = setInterval(() => {
-      getNodeInfos();
       getCoreInfos();
     }, 30000);
 
@@ -76,14 +62,14 @@ export const CoreSyncStatus = () => {
       numberOfConnections = 0,
     } = nodeInfos;
     const buildVersion = coreInfos?.buildVersion
-      ? coreInfos?.buildVersion.substring(0, 12)
+      ? coreInfos?.buildVersion.substring(0, 20)
       : '';
 
     let imagePath = syncingImg;
     let message: string = '';
 
     if (isUsingGateway) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       } else {
@@ -91,7 +77,7 @@ export const CoreSyncStatus = () => {
         message = `${t(`core:minting.status.synchronized`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.not_minting')}`;
       }
     } else if (isMintingPossible) {
-      if (isSynchronizing) {
+      if (isSynchronizing && syncPercent !== 100) {
         imagePath = syncingImg;
         message = `${t(`core:minting.status.synchronizing`, { percent: syncPercent, postProcess: 'capitalizeFirstChar' })} ${t('core:minting.status.minting')}`;
       } else {
@@ -156,12 +142,20 @@ export const CoreSyncStatus = () => {
           </h4>
 
           <h4 className="lineHeight">
-            {t('auth:node.using_public', {
+            {t('auth:node.using', {
               postProcess: 'capitalizeFirstChar',
             })}
             :{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {isUsingGateway?.toString()}
+            <span
+              style={{
+                color: '#03a9f4',
+                ...(nodeBase === HTTP_LOCALHOST_12391 && {
+                  fontWeight: 'bold',
+                  color: theme.palette.other.positive,
+                }),
+              }}
+            >
+              {nodeDisplay(nodeBase)}
             </span>
           </h4>
 

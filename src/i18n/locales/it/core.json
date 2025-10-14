@@ -43,9 +43,9 @@
     "get_qort_trade": "ottieni Qort in Q-Trade",
     "hide": "nascondi",
     "hide_qr_code": "nascondi QR code",
-    "import": "importare",
+    "import": "importa",
     "import_theme": "importa un tema",
-    "invite": "invitare",
+    "invite": "invita",
     "invite_member": "invita un nuovo membro",
     "join": "unisciti a",
     "leave_comment": "lascia un commento",
@@ -125,7 +125,7 @@
     "block_height": "altezza del blocco",
     "information": "informazioni di base",
     "peers": "peer connessi",
-    "version": "versione principale"
+    "version": "versione core"
   },
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
@@ -160,7 +160,6 @@
     "groups": "elenco dei gruppi",
     "invites": "elenco degli inviti",
     "join_request": "elenco di richieste di iscrizione",
-    "member": "elenco dei membri",
     "members": "elenco dei membri"
   },
   "loading": {
@@ -170,8 +169,6 @@
     "comments": "caricamento dei commenti. Attendere, per favore.",
     "posts": "caricamento di post. Attendere, per favore."
   },
-  "member": "membro",
-  "member_other": "membri",
   "message_us": "si prega di inviarci un messaggio su Nextcloud (nessuna registrazione richiesta) o Discord se hai bisogno di 4 QORT per iniziare a chattare senza limitazioni",
   "message": {
     "error": {
@@ -350,9 +347,9 @@
   "option_no": "nessuna opzione",
   "option_other": "opzioni",
   "page": {
-    "last": "scorso",
-    "first": "primo",
-    "next": "prossimo",
+    "last": "ultima",
+    "first": "prima",
+    "next": "prossima",
     "previous": "precedente"
   },
   "payment": "pagamento",

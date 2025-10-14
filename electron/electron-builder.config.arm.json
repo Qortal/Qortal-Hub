@@ -1,9 +1,9 @@
 {
   "appId": "org.qortal.Qortal-Hub",
-  "productName": "Qortal Hub",
+  "productName": "qortal-hub",
   "copyright": "Copyright © 2021 - 2025 Qortal",
   "compression": "normal",
-  "asar": "true",
+  "asar": true,
   "afterPack": "scripts/afterPack.js",
   "files": [
     "assets/**/*",
@@ -17,9 +17,10 @@
     "category": "Network",
     "packageCategory": "Network",
     "desktop": {
+      "Name": "Qortal Hub",
       "StartupWMClass": "qortal-hub"
     },
-    "executableName": "Qortal Hub",
+    "executableName": "qortal-hub",
     "icon": "assets/png"
   },
   "appImage": {

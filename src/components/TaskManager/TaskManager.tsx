@@ -7,7 +7,7 @@ import {
   IconButton,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PendingIcon from '@mui/icons-material/Pending';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import ExpandLess from '@mui/icons-material/ExpandLess';
@@ -17,11 +17,12 @@ import { executeEvent } from '../../utils/events';
 import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { TIME_SECONDS_60_IN_MILLISECONDS } from '../../constants/constants';
 
 export const TaskManager = ({ getUserInfo }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
   const [txList, setTxList] = useAtom(txListAtom);
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   const intervals = useRef({});
   const theme = useTheme();
   const { t } = useTranslation([
@@ -53,7 +54,7 @@ export const TaskManager = ({ getUserInfo }) => {
             await new Promise((res) =>
               setTimeout(() => {
                 res(null);
-              }, 60000)
+              }, TIME_SECONDS_60_IN_MILLISECONDS)
             );
             setTxList((prev) => {
               let previousData = [...prev];
@@ -78,7 +79,10 @@ export const TaskManager = ({ getUserInfo }) => {
       }
     };
 
-    intervals.current[signature] = setInterval(getAnswer, 60000);
+    intervals.current[signature] = setInterval(
+      getAnswer,
+      TIME_SECONDS_60_IN_MILLISECONDS
+    );
   };
 
   useEffect(() => {

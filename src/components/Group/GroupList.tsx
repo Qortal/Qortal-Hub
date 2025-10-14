@@ -8,7 +8,7 @@ import {
   ListItemText,
   useTheme,
 } from '@mui/material';
-import React, { useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
@@ -224,7 +224,7 @@ export const GroupList = ({
   );
 };
 
-const GroupItem = React.memo(
+const GroupItem = memo(
   ({ selectGroupFunc, group, selectedGroup, getUserSettings, myAddress }) => {
     const theme = useTheme();
     const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));

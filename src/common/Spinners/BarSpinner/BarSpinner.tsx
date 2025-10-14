@@ -1,10 +1,12 @@
-import React from 'react'
-import './barSpinner.css'
-export const BarSpinner = ({width = '20px', color}) => {
+import './barSpinner.css';
+export const BarSpinner = ({ width = '20px', color }) => {
   return (
-    <div style={{
+    <div
+      style={{
         width,
-        color: color || 'green'
-    }} className="loader-bar"></div>
-  )
-}
+        color: color || 'green',
+      }}
+      className="loader-bar"
+    ></div>
+  );
+};

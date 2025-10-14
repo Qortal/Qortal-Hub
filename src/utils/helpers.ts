@@ -1,3 +1,8 @@
+import {
+  HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
+} from '../constants/constants';
+
 export const delay = (time: number) =>
   new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Request timed out')), time)
@@ -26,3 +31,15 @@ export function updateMessageDetails(
 
   return htmlString;
 }
+
+export const nodeDisplay = (url) => {
+  switch (url) {
+    case HTTP_LOCALHOST_12391:
+      // code block
+      return 'Local';
+    case HTTPS_EXT_NODE_QORTAL_LINK:
+      return 'Public';
+    default:
+      return url;
+  }
+};

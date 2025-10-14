@@ -160,7 +160,6 @@
     "groups": "lista de grupos",
     "invites": "lista de convites",
     "join_request": "lista de solicitações de adesão",
-    "member": "lista de membros",
     "members": "lista de membros"
   },
   "loading": {
@@ -170,8 +169,6 @@
     "comments": "carregando comentários... favor agurdar.",
     "posts": "carregando postagens... favor agurdar."
   },
-  "member": "membro",
-  "member_other": "membors",
   "message_us": "envie-nos uma mensagem no Nextcloud (não é necessário cadastro) ou no Discord se precisar de 4 QORTs para começar a conversar sem limitações",
   "message": {
     "error": {

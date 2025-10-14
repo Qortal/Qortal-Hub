@@ -26,6 +26,12 @@ import ShortUniqueId from 'short-unique-id';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { ReplyPreview } from './MessageItem';
 import { useTranslation } from 'react-i18next';
+import {
+  MAX_SIZE_MESSAGE,
+  MESSAGE_LIMIT_WARNING,
+  MIN_REQUIRED_QORTS,
+  TIME_SECONDS_120_IN_MILLISECONDS,
+} from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -354,7 +360,7 @@ export const ChatDirect = ({
               publicKeyOfRecipient,
               address: directTo,
             },
-            120000
+            TIME_SECONDS_120_IN_MILLISECONDS
           )
           .then(async (response) => {
             if (!response?.error) {
@@ -437,13 +443,11 @@ export const ChatDirect = ({
 
   const sendMessage = async () => {
     try {
-      if (messageSize > 4000) return;
-
-      // TODO set magic number in a proper file
-      if (+balance < 4)
+      if (messageSize > MAX_SIZE_MESSAGE) return;
+      if (+balance < MIN_REQUIRED_QORTS)
         throw new Error(
           t('group:message.error.qortals_required', {
-            quantity: 4,
+            quantity: MIN_REQUIRED_QORTS,
             postProcess: 'capitalizeFirstChar',
           })
         );
@@ -514,7 +518,7 @@ export const ChatDirect = ({
         message:
           errorMsg === 'invalid signature'
             ? t('group:message.error.qortals_required', {
-                quantity: 4,
+                quantity: MIN_REQUIRED_QORTS,
                 postProcess: 'capitalizeFirstChar',
               })
             : errorMsg,
@@ -696,7 +700,7 @@ export const ChatDirect = ({
             disableEnter={false}
             setIsFocusedParent={setIsFocusedParent}
           />
-          {messageSize > 750 && (
+          {messageSize > MESSAGE_LIMIT_WARNING && (
             <Box
               sx={{
                 display: 'flex',
@@ -705,15 +709,17 @@ export const ChatDirect = ({
                 width: '100%',
               }}
             >
-              <Typography // TODO set magic number in a proper file
+              <Typography
                 sx={{
                   fontSize: '12px',
                   color:
-                    messageSize > 4000 ? theme.palette.other.danger : 'unset',
+                    messageSize > MAX_SIZE_MESSAGE
+                      ? theme.palette.other.danger
+                      : 'unset',
                 }}
               >
                 {t('core:message.error.message_size', {
-                  maximum: 4000,
+                  maximum: MAX_SIZE_MESSAGE,
                   size: messageSize,
                   postProcess: 'capitalizeFirstChar',
                 })}

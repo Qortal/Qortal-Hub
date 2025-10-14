@@ -39,6 +39,7 @@ export const GeneralNotifications = ({ address }) => {
     'question',
     'tutorial',
   ]);
+
   const theme = useTheme();
 
   return (

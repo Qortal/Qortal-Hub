@@ -1,4 +1,3 @@
-import React from 'react';
 import { styled } from '@mui/system';
 import { SVGProps } from './interfaces';
 import { useTheme } from '@mui/material';

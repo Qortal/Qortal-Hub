@@ -11,8 +11,7 @@ export const decryptChatMessage = (
   recipientPublicKey,
   lastReference
 ) => {
-  const test = encryptedMessage;
-  let _encryptedMessage = atob(encryptedMessage);
+  const _encryptedMessage = atob(encryptedMessage);
   const binaryLength = _encryptedMessage.length;
   const bytes = new Uint8Array(binaryLength);
 

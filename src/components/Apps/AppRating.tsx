@@ -8,6 +8,7 @@ import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
 import { AppInfoUserName } from './Apps-styles';
 import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
+import { TIME_SECONDS_60_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const [value, setValue] = useState(0);
@@ -145,7 +146,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 pollOptions: pollOptions,
                 pollOwnerAddress: myName,
               },
-              60000
+              TIME_SECONDS_60_IN_MILLISECONDS
             )
             .then((response) => {
               if (response.error) {
@@ -186,7 +187,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                 pollName: pollName,
                 optionIndex,
               },
-              60000
+              TIME_SECONDS_60_IN_MILLISECONDS
             )
             .then((response) => {
               if (response.error) {

@@ -18,10 +18,9 @@ import {
   Input,
   useTheme,
 } from '@mui/material';
-import { CustomButton } from '../styles/App-styles.ts';
+import { CustomButton, Label } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
-import { Label } from './Group/AddGroup.tsx';
 import { Spacer } from '../common/Spacer.tsx';
 import {
   getWallets,
@@ -117,6 +116,45 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       }
     },
   });
+
+  const { getRootProps: getRootPropsTemp, getInputProps: getInputPropsTemp } =
+    useDropzone({
+      accept: {
+        'application/json': ['.json'], // Only accept JSON files
+      },
+      multiple: false,
+      onDrop: async (acceptedFiles) => {
+        const files: any = acceptedFiles;
+        let importedWallet: any = null;
+
+        for (const file of files) {
+          try {
+            const fileContents = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+
+              reader.onabort = () => reject('File reading was aborted'); // TODO translate
+              reader.onerror = () => reject('File reading has failed');
+              reader.onload = () => {
+                // Resolve the promise with the reader result when reading completes
+                resolve(reader.result);
+              };
+
+              // Read the file as text
+              reader.readAsText(file);
+            });
+            if (typeof fileContents !== 'string') continue;
+            const parsedData = JSON.parse(fileContents);
+            importedWallet = parsedData;
+          } catch (error) {
+            console.error(error);
+          }
+        }
+
+        if (importedWallet) {
+          selectedWalletFunc(importedWallet);
+        }
+      },
+    });
 
   const updateWalletItem = (idx, wallet) => {
     setWallets((prev) => {
@@ -284,7 +322,35 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         }}
       >
         <HtmlTooltip
-          disableHoverListener={hasSeenGettingStarted === true}
+          title={
+            <Fragment>
+              <Typography
+                color="inherit"
+                sx={{
+                  fontSize: '16px',
+                }}
+              >
+                {t('auth:temp_auth.tooltip', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Typography>
+            </Fragment>
+          }
+        >
+          <CustomButton
+            {...getRootPropsTemp()}
+            sx={{
+              padding: '10px',
+              display: 'inline',
+            }}
+          >
+            <input {...getInputPropsTemp()} />
+            {t('auth:temp_auth.button', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </CustomButton>
+        </HtmlTooltip>
+        <HtmlTooltip
           title={
             <Fragment>
               <Typography
@@ -314,7 +380,6 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         </HtmlTooltip>
 
         <HtmlTooltip
-          disableHoverListener={hasSeenGettingStarted === true}
           title={
             <Fragment>
               <Typography

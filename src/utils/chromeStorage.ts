@@ -1,7 +1,6 @@
 import { SecureStoragePlugin } from '@evva/capacitor-secure-storage-plugin';
 
 let inMemoryKey: CryptoKey | null = null;
-let inMemoryIV: Uint8Array | null = null;
 
 const keysToEncrypt = ['keyPair'];
 

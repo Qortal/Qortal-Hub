@@ -33,6 +33,7 @@ import {
 } from '../../encryption/encryption.ts';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
+import { TIME_SECONDS_60_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 export const handleImportClick = async () => {
   const fileInput = document.createElement('input');
@@ -142,7 +143,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             {
               data64,
             },
-            60000
+            TIME_SECONDS_60_IN_MILLISECONDS
           )
           .then((response) => {
             if (response.error) {

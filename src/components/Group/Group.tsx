@@ -77,6 +77,12 @@ import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
+import {
+  TIME_MINUTES_10_IN_MILLISECONDS,
+  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_DAY_1_IN_MILLISECONDS,
+} from '../../constants/constants';
+import { useWebsocketStatus } from './useWebsocketStatus';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -456,7 +462,7 @@ export const Group = ({
     'question',
     'tutorial',
   ]);
-
+  useWebsocketStatus();
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
 
@@ -687,7 +693,8 @@ export const Group = ({
           secretKeyToPublish &&
           secretKey &&
           lastFetchedSecretKey.current &&
-          Date.now() - lastFetchedSecretKey.current < 600000
+          Date.now() - lastFetchedSecretKey.current <
+            TIME_MINUTES_10_IN_MILLISECONDS
         ) {
           return secretKey;
         }
@@ -727,7 +734,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, 120000);
+          }, TIME_SECONDS_120_IN_MILLISECONDS);
           return false;
         }
 
@@ -787,7 +794,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, 120000);
+          }, TIME_SECONDS_120_IN_MILLISECONDS);
         }
       } finally {
         setIsLoadingGroup(false);
@@ -865,7 +872,7 @@ export const Group = ({
           const hasMoreRecentMsg = await getCountNewMesg(
             group.groupId,
             timestampEnterDataRef.current[group?.groupId] ||
-              Date.now() - 24 * 60 * 60 * 1000
+              Date.now() - TIME_DAY_1_IN_MILLISECONDS
           );
           if (hasMoreRecentMsg) {
             groupData[group.groupId] = hasMoreRecentMsg;
@@ -1589,6 +1596,12 @@ export const Group = ({
     setFirstSecretKeyInCreation(true);
   }, []);
 
+  const getUserAvatarUrl = useCallback((name?: string) => {
+    return name
+      ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${name}/qortal_avatar?async=true`
+      : '';
+  }, []);
+
   const goToHome = async () => {
     setDesktopViewMode('home');
 
@@ -1824,6 +1837,7 @@ export const Group = ({
                         color: theme.palette.text.primary,
                       }}
                       alt={direct?.name || direct?.address}
+                      src={getUserAvatarUrl(direct?.name)}
                     >
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>

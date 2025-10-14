@@ -55,7 +55,10 @@ import {
 import {
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
+  MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
+  QORTAL_PROTOCOL,
+  TIME_MINUTES_20_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -485,7 +488,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 30-second timeout
+    }, 60000); // 60-second timeout
   });
 }
 
@@ -589,6 +592,8 @@ export const encryptQortalGroupData = async (data, sender) => {
   let data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
+
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -610,10 +615,12 @@ export const encryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[groupId]?.timestamp <
+        TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -656,10 +663,12 @@ export const encryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
+        TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -720,6 +729,7 @@ export const decryptQortalGroupData = async (data, sender) => {
   const data64 = data?.data64 || data?.base64;
   const groupId = data?.groupId;
   const isAdmins = data?.isAdmins;
+  const refreshCache = data?.refreshCache === true;
   if (!groupId) {
     throw new Error(
       i18n.t('question:message.generic.provide_group_id', {
@@ -739,10 +749,12 @@ export const decryptQortalGroupData = async (data, sender) => {
   let secretKeyObject;
   if (!isAdmins) {
     if (
+      !refreshCache &&
       groupSecretkeys[groupId] &&
       groupSecretkeys[groupId].secretKeyObject &&
       groupSecretkeys[groupId]?.timestamp &&
-      Date.now() - groupSecretkeys[groupId]?.timestamp < 1200000 // TODO magic number
+      Date.now() - groupSecretkeys[groupId]?.timestamp <
+        TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
     }
@@ -782,10 +794,12 @@ export const decryptQortalGroupData = async (data, sender) => {
     }
   } else {
     if (
+      !refreshCache &&
       groupSecretkeys[`admins-${groupId}`] &&
       groupSecretkeys[`admins-${groupId}`].secretKeyObject &&
       groupSecretkeys[`admins-${groupId}`]?.timestamp &&
-      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp < 1200000 // TODO magic nummber
+      Date.now() - groupSecretkeys[`admins-${groupId}`]?.timestamp <
+        TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[`admins-${groupId}`].secretKeyObject;
     }
@@ -922,7 +936,7 @@ export const getHostedData = async (data, isFromExtension) => {
   }
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:message.error.submit_sell_order', {
+      text1: i18n.t('question:permission.list_hosted_data', {
         postProcess: 'capitalizeFirstChar',
       }),
     },
@@ -1343,6 +1357,7 @@ export const publishQDNResource = async (
   const file = data?.file || data?.blob;
   const tags = data?.tags || [];
   const result = {};
+  const isMultiFileZip = data?.isMultiFileZip === true;
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
     throw new Error(
@@ -1455,7 +1470,7 @@ export const publishQDNResource = async (
         data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: data64 ? 'base64' : 'file',
+        uploadType: isMultiFileZip ? 'zip' : data64 ? 'base64' : 'file',
         filename: filename,
         title,
         description,
@@ -1811,6 +1826,7 @@ export const publishMultipleQDNResources = async (
       const category = resource.category;
       const tags = resource?.tags || [];
       const result = {};
+      const isMultiFileZip = resource?.isMultiFileZip === true;
 
       // Fill tags dynamically while maintaining backward compatibility
       for (let i = 0; i < 5; i++) {
@@ -1874,8 +1890,9 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
-        const dataType =
-          resource?.base64 || resource?.data64 || resourceEncrypt
+        const dataType = isMultiFileZip
+          ? 'zip'
+          : resource?.base64 || resource?.data64 || resourceEncrypt
             ? 'base64'
             : 'file';
 
@@ -2183,11 +2200,11 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
     }
 
     const balance = await getBalanceInfo();
-    const hasEnoughBalance = +balance < 4 ? false : true;
+    const hasEnoughBalance = +balance < MIN_REQUIRED_QORTS ? false : true;
     if (!hasEnoughBalance) {
       throw new Error(
         i18n.t('group:message.error.qortals_required', {
-          quantity: 4,
+          quantity: MIN_REQUIRED_QORTS,
           postProcess: 'capitalizeFirstChar',
         })
       );
@@ -2644,7 +2661,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -3029,7 +3046,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -4353,7 +4370,7 @@ export const sendCoin = async (data, isFromExtension) => {
   } else if (checkCoin === 'DGB') {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
-    const xprv58 = parsedData.dbgPrivateKey;
+    const xprv58 = parsedData.dgbPrivateKey;
     const feePerByte = data.fee ? data.fee : dgbFeePerByte;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
@@ -4649,7 +4666,7 @@ export const createBuyOrder = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         }),
         text2: i18n.t('question:permission.buy_order_quantity', {
-          quantity: atAddresses?.length,
+          count: atAddresses?.length,
           postProcess: 'capitalizeFirstChar',
         }),
         text3: i18n.t('question:permission.buy_order_ticker', {
@@ -5105,11 +5122,11 @@ export const adminAction = async (data, isFromExtension) => {
   });
   // For actions that require a value, check for 'value' field
   const actionsRequiringValue = [
-    'addpeer',
-    'removepeer',
-    'forcesync',
     'addmintingaccount',
+    'addpeer',
+    'forcesync',
     'removemintingaccount',
+    'removepeer',
   ];
   if (actionsRequiringValue.includes(data.type.toLowerCase()) && !data.value) {
     missingFields.push('value');
@@ -5148,6 +5165,12 @@ export const adminAction = async (data, isFromExtension) => {
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
       method = 'POST';
       includeValueInBody = true;
+      break;
+    case 'getmintingaccounts':
+      apiEndpoint = await createEndpoint('/admin/mintingaccounts');
+      break;
+    case 'getpeers':
+      apiEndpoint = await createEndpoint('/peers');
       break;
     case 'removemintingaccount':
       apiEndpoint = await createEndpoint('/admin/mintingaccounts');
@@ -5421,7 +5444,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       ]
         .filter(Boolean) // Remove null values
         .join('&'); // Join with `&`
-      const link = `qortal://use-embed/POLL?${queryParams}`;
+      const link = `${QORTAL_PROTOCOL}use-embed/POLL?${queryParams}`;
       try {
         await navigator.clipboard.writeText(link);
       } catch (error) {
@@ -5445,7 +5468,7 @@ export const createAndCopyEmbedLink = async (data, isFromExtension) => {
       }
       const queryParams = buildQueryParams(data);
 
-      const link = `qortal://use-embed/${data.type}?${queryParams}`;
+      const link = `${QORTAL_PROTOCOL}use-embed/${data.type}?${queryParams}`;
 
       try {
         await navigator.clipboard.writeText(link);

@@ -9,6 +9,7 @@ import { Spacer } from '../../common/Spacer';
 import { QMailMessages } from './QMailMessages';
 import { executeEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
+import { SUGGESTED_QORTS } from '../../constants/constants';
 
 export const ThingsToDoInitial = ({
   myAddress,
@@ -122,7 +123,7 @@ export const ThingsToDoInitial = ({
                     },
                   }}
                   primary={t('tutorial:initial.recommended_qort_qty', {
-                    quantity: 6,
+                    quantity: SUGGESTED_QORTS,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 />
