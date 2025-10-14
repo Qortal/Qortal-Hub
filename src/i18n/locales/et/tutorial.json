@@ -7,15 +7,15 @@
   "important_info": "oluline teave",
   "apps": {
     "dashboard": "1. Rakenduste juhtpaneel",
-    "navigation": "2. Rakenduste navigeerimine"
+    "navigation": "2. Rakendustes navigeerimine"
   },
   "initial": {
     "recommended_qort_qty": "rahakotis peaks olema vähemalt {{ quantity }} QORT",
-    "explore": "Õpi tundma",
+    "explore": "Kiirvalikud",
     "general_chat": "Peamine chät",
     "getting_started": "alustamine",
     "register_name": "registreeri nimi",
-    "see_apps": "vaata rakendusi kõiki",
-    "trade_qort": "kauple QORT"
+    "see_apps": "vaata kõiki rakendusi",
+    "trade_qort": "QORT - krüptoturg"
   }
 }
