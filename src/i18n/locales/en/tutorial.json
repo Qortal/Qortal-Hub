@@ -1,21 +1,21 @@
 {
-  "1_getting_started": "1. Getting Started",
-  "2_overview": "2. Overview",
-  "3_groups": "3. Qortal Groups",
-  "4_obtain_qort": "4. Obtaining Qort",
-  "account_creation": "account creation",
-  "important_info": "important information",
+  "1_getting_started": "1. Aloittaminen",
+  "2_overview": "2. Yleiskatsaus",
+  "3_groups": "3. Qortal-ryhmät",
+  "4_obtain_qort": "4. Qortin hankkiminen",
+  "account_creation": "tilin luominen",
+  "important_info": "tärkeää tietoa",
   "apps": {
-    "dashboard": "1. Apps Dashboard",
-    "navigation": "2. Apps Navigation"
+    "dashboard": "1. Sovellusten hallintapaneeli",
+    "navigation": "2. Sovellusten navigointi"
   },
   "initial": {
-    "recommended_qort_qty": "have at least {{ quantity }} QORT in your wallet",
-    "explore": "explore",
-    "general_chat": "general chat",
-    "getting_started": "getting started",
-    "register_name": "register a name",
-    "see_apps": "see apps",
-    "trade_qort": "trade QORT"
+    "recommended_qort_qty": "pidä lompakossasi vähintään {{ quantity }} QORT",
+    "explore": "tutki",
+    "general_chat": "yleinen chat",
+    "getting_started": "aloittaminen",
+    "register_name": "rekisteröi nimi",
+    "see_apps": "katso sovellukset",
+    "trade_qort": "käy kauppaa QORTilla"
   }
 }
