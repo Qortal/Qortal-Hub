@@ -1,76 +1,76 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
-    "advancedOptions": "advanced options",
-    "pickPath": "pick a custom Qortal installation path if your Core is installed in a non-default location.",
-    "removePath": "remove custom Qortal path"
+    "title": "Qortal Core -asetus",
+    "advancedOptions": "lisäasetukset",
+    "pickPath": "valitse mukautettu Qortalin asennuspolku, jos Core on asennettu muuhun kuin oletussijaintiin.",
+    "removePath": "poista mukautettu Qortal-polku"
   },
   "introSetup": {
-    "paragraph1": "Qortal is a decentralized platform that gives you full control over your data, applications, and finances. To get started, we recommend that you install the <strong>Qortal Core</strong>, which powers the network and enables all features of Qortal.",
-    "paragraph2": "This setup wizard will guide you through installing and configuring the Qortal Core on your device. Click <strong>Next</strong> to continue with the installation.",
-    "note": "note for advanced users",
-    "advanced": "if you are using a remote node, please close this setup wizard and then click \"Choose custom node\""
+    "paragraph1": "Qortal on hajautettu alusta, joka antaa sinulle täyden hallinnan tietoihisi, sovelluksiisi ja talouteesi. Aloittaaksesi suosittelemme asentamaan **Qortal Core** -ytimen, joka antaa virtaa verkolle ja mahdollistaa kaikki Qortalin ominaisuudet.",
+    "paragraph2": "Tämä asennusohjelma opastaa sinua Qortal Coren asentamisessa ja määrittämisessä laitteellesi. Jatkaaksesi asennusta, napsauta **Seuraava**.",
+    "note": "huomautus edistyneille käyttäjille",
+    "advanced": "jos käytät etäsolmua, sulje tämä asennusohjelma ja napsauta sitten \"Valitse mukautettu solmu\""
   },
   "sync": {
-    "behind": "You are {{count}} blocks behind.",
-    "waiting": "Please wait until you are synchronized.",
-    "not_syncronized": "not syncronized",
-    "syncronized": "syncronized",
-    "syncronized_desc": "you are now Syncronized. you may continue."
+    "behind": "Olet {{count}} lohkoa jäljessä.",
+    "waiting": "Odota, kunnes synkronointi on valmis.",
+    "not_syncronized": "ei synkronoitu",
+    "syncronized": "synkronoitu",
+    "syncronized_desc": "olet nyt synkronoitu. voit jatkaa."
   },
   "steps": {
-    "java": "has java",
-    "downloaded": "downloaded Core",
-    "running": "core running"
+    "java": "java on asennettu",
+    "downloaded": "Core ladattu",
+    "running": "core käynnissä"
   },
   "actions": {
-    "finished": "finished",
-    "start": "start Qortal Core",
-    "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "openSetup": "open local setup",
-    "goToDownloads": "go to downloads",
-    "resetKey": "reset apikey",
-    "continue": "continue"
+    "finished": "valmis",
+    "start": "käynnistä Qortal Core",
+    "install": "asenna ja käynnistä Qortal Core",
+    "continuePublic": "jatka julkisella solmulla",
+    "openSetup": "avaa paikallinen asetus",
+    "goToDownloads": "siirry latauksiin",
+    "resetKey": "nollaa apikey",
+    "continue": "jatka"
   },
   "error": {
-    "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "noJar": "valittu hakemisto ei sisällä qortal.jar -tiedostoa",
+    "invalidKey": "virheellinen apikey"
   },
   "status": {
-    "complete": "complete",
-    "inProgress": "in progress",
-    "pending": "pending",
-    "error": "error"
+    "complete": "valmis",
+    "inProgress": "käynnissä",
+    "pending": "odottaa",
+    "error": "virhe"
   },
   "recommendation": {
-    "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
-    "subTitle": "advantages of using a local node:",
-    "point1": "full decentralized access",
-    "point2": "faster downloads",
-    "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "title": "paikallisen core-ytimen käyttö",
+    "description": "voit jatkaa julkisella solmulla halutessasi, mutta suosittelemme vahvasti käyttämään paikallista solmua parhaan käyttökokemuksen saavuttamiseksi.",
+    "subTitle": "paikallisen solmun käytön edut:",
+    "point1": "täysi hajautettu pääsy",
+    "point2": "nopeammat lataukset",
+    "point3": "käyttäjän hallitsema data",
+    "publicExplanation": "julkinen solmu, johon yhdistät, on itse asiassa yksityisesti ylläpidetty solmu, joka on tehty julkisesti saataville. Vaikka se on kätevä, siihen liittyy tiettyjä rajoituksia verrattuna oman solmun ajamiseen."
   },
   "invalidKey": {
-    "title": "invalid apikey",
-    "description": "Your apikey is invalid. Please insert a valid apikey.",
-    "resetDescription": "Your apikey is invalid. Click reset to proceed."
+    "title": "virheellinen apikey",
+    "description": "Apikeysi on virheellinen. Anna kelvollinen apikey.",
+    "resetDescription": "Apikeysi on virheellinen. Napsauta nollaa (reset) jatkaaksesi."
   },
   "messages": {
-    "001": "starting up the core... please wait.",
-    "002": "error: Unable to start repository",
-    "003": "error running Qortal Core",
-    "004": "error unzipping Qortal Core",
-    "005": "downloading the Qortal Core... please wait.",
-    "006": "setting up Java... please wait.",
-    "007": "error downloading Java.",
-    "008": "error unzipping Java",
-    "009": "downloading the Qortal Core... please wait.",
-    "010": "error: unable to download or install the Core"
+    "001": "käynnistetään core-ydintä... odota hetki.",
+    "002": "virhe: tallennustilan käynnistäminen ei onnistu",
+    "003": "virhe Qortal Coren ajamisessa",
+    "004": "virhe Qortal Coren purkamisessa (unzipping)",
+    "005": "ladataan Qortal Core -ydintä... odota hetki.",
+    "006": "asetetaan Javaa... odota hetki.",
+    "007": "virhe Javan lataamisessa.",
+    "008": "virhe Javan purkamisessa (unzipping)",
+    "009": "ladataan Qortal Core -ydintä... odota hetki.",
+    "010": "virhe: core-ydintä ei voida ladata tai asentaa"
   },
   "url": {
-    "title": "url invalid",
-    "description": "incorrect url or node not running"
+    "title": "url virheellinen",
+    "description": "virheellinen url tai solmu ei ole käynnissä"
   }
 }
