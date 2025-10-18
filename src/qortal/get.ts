@@ -936,7 +936,7 @@ export const getHostedData = async (data, isFromExtension) => {
   }
   const resPermission = await getUserPermission(
     {
-      text1: i18n.t('question:message.error.submit_sell_order', {
+      text1: i18n.t('question:permission.list_hosted_data', {
         postProcess: 'capitalizeFirstChar',
       }),
     },
