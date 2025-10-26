@@ -66,7 +66,12 @@ export const NotAuthenticated = ({
   handleSetGlobalApikey,
   setUseLocalNode,
 }) => {
-  const { handleSaveNodeInfo } = useAuth();
+  const {
+    handleSaveNodeInfo,
+    isSyncedLocal,
+    isCoreRunningLocally,
+    isUsingLocal,
+  } = useAuth();
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [show, setShow] = useState(false);
@@ -311,7 +316,17 @@ export const NotAuthenticated = ({
           }
         >
           <CustomButton
-            onClick={() => {
+            onClick={async () => {
+              if (isUsingLocal) {
+                const isRunning = await isCoreRunningLocally();
+                if (isRunning) {
+                  const isInSync = await isSyncedLocal('CREATION');
+                  if (!isInSync) {
+                    return;
+                  }
+                }
+              }
+
               setExtstate('create-wallet');
             }}
             sx={{

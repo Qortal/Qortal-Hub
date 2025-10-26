@@ -1,7 +1,7 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily } from 'jotai/utils';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
-import { ApiKey } from '../types/auth';
+import { ApiKey, OpenSyncingDialogAtomType } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
 import { LOCALHOST } from '../constants/constants';
@@ -70,7 +70,8 @@ export const qortBalanceLoadingAtom = atomWithReset<boolean>(false);
 export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
 export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
 export const isOpenCoreSetup = atomWithReset<boolean>(false);
-export const isOpenSyncingDialogAtom = atomWithReset<boolean>(false);
+export const openSyncingDialogAtom =
+  atomWithReset<OpenSyncingDialogAtomType>(null);
 export const isOpenUrlInvalidAtom = atomWithReset<boolean>(false);
 export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');

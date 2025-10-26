@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   HTTP_LOCALHOST_12391,
   TIME_SECONDS_120_IN_MILLISECONDS,
@@ -14,8 +14,8 @@ import {
   isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
-  isOpenSyncingDialogAtom,
   isOpenUrlInvalidAtom,
+  openSyncingDialogAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -27,7 +27,7 @@ import {
   getLocalApiKeyNotElectronCase,
   setLocalApiKeyNotElectronCase,
 } from '../background/background-cases';
-import { ApiKey } from '../types/auth';
+import { ApiKey, OpenSyncingDialogAtomType } from '../types/auth';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
@@ -40,7 +40,7 @@ export const useAuth = () => {
   const setIsOpenRecommendation = useSetAtom(
     isOpenDialogCoreRecommendationAtom
   );
-  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
+  const setOpenSyncingDialog = useSetAtom(openSyncingDialogAtom);
   const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
@@ -299,21 +299,24 @@ export const useAuth = () => {
     }
   }, []);
 
-  const isSyncedLocal = useCallback(async () => {
-    try {
-      if (!useLocalNode) return true;
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
-      if (!res?.ok) return false;
-      const data = await res.json();
-      if (data?.syncPercent !== 100) {
-        setIsOpenSyncingDialog(true);
+  const isSyncedLocal = useCallback(
+    async (mode: OpenSyncingDialogAtomType = 'AUTH') => {
+      try {
+        if (!useLocalNode) return true;
+        const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+        if (!res?.ok) return false;
+        const data = await res.json();
+        if (data?.syncPercent !== 100) {
+          setOpenSyncingDialog(mode);
+          return false;
+        }
+        return true;
+      } catch (error) {
         return false;
       }
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }, [useLocalNode, setIsOpenSyncingDialog]);
+    },
+    [useLocalNode, setOpenSyncingDialog]
+  );
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean) => {
@@ -428,6 +431,16 @@ export const useAuth = () => {
     }
   }, [selectedNode, validateApiKey, handleSaveNodeInfo]);
 
+  const isCoreRunningLocally = useCallback(async () => {
+    const isElectron = !!window?.coreSetup;
+    return isElectron
+      ? await window.coreSetup.isCoreRunning()
+      : await checkIfLocalIsRunning();
+  }, [checkIfLocalIsRunning]);
+
+  const isUsingLocal = useMemo(() => {
+    return selectedNode?.url === HTTP_LOCALHOST_12391;
+  }, [selectedNode?.url]);
   return {
     validateApiKey,
     isNodeValid,
@@ -439,5 +452,7 @@ export const useAuth = () => {
     validateApiKeyFromRegistration,
     isSyncedLocal,
     saveCustomNodes,
+    isCoreRunningLocally,
+    isUsingLocal,
   };
 };

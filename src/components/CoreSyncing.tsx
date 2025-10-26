@@ -8,21 +8,22 @@ import {
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
-import { useAtom } from 'jotai';
-import { isOpenSyncingDialogAtom } from '../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
 
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { extStateAtom, openSyncingDialogAtom } from '../atoms/global';
 
 export function CoreSyncing() {
   const { authenticate } = useAuth();
   const { t } = useTranslation(['node', 'core']);
   const [canContinue, setCanContinue] = useState(false);
-  const [open, setOpen] = useAtom(isOpenSyncingDialogAtom);
+  const [open, setOpen] = useAtom(openSyncingDialogAtom);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isCallingRef = useRef<boolean>(false);
   const [blocksBehind, setBlocksBehind] = useState(0);
+  const setExtstate = useSetAtom(extStateAtom);
 
   const cleanUp = useCallback(() => {
     setBlocksBehind(0);
@@ -79,9 +80,13 @@ export function CoreSyncing() {
 
   const handleContinue = async () => {
     try {
-      await authenticate();
+      if (open === 'AUTH') {
+        await authenticate();
+      } else {
+        setExtstate('create-wallet');
+      }
 
-      setOpen(false);
+      setOpen(null);
       return;
     } catch (error) {
       console.error(error);
@@ -91,7 +96,7 @@ export function CoreSyncing() {
   };
   return (
     <Dialog
-      open={open}
+      open={!!open}
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
@@ -136,7 +141,7 @@ export function CoreSyncing() {
       <DialogActions sx={{ p: 2 }}>
         <Button
           onClick={() => {
-            setOpen(false);
+            setOpen(null);
             cleanUp();
           }}
           variant="text"
