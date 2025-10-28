@@ -454,6 +454,7 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false);
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
+  const [disableGeneralChat, setDisableGeneralChat] = useState(false);
   const groupsOwnerNamesRef = useRef({});
   const { t } = useTranslation([
     'auth',
@@ -538,9 +539,39 @@ export const Group = ({
     }
   }, [setMutedGroups]);
 
+  const getDisableGeneralChatSetting = useCallback(async () => {
+    try {
+      return new Promise((res, rej) => {
+        window
+          .sendMessage('getUserSettings', {
+            key: 'disable-general-chat',
+          })
+          .then((response) => {
+            if (!response?.error) {
+              setDisableGeneralChat(response || false);
+              res(response);
+              return;
+            }
+            rej(response.error);
+          })
+          .catch((error) => {
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
+          });
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
   useEffect(() => {
     getUserSettings();
-  }, [getUserSettings]);
+    getDisableGeneralChatSetting();
+  }, [getUserSettings, getDisableGeneralChatSetting]);
 
   const getTimestampEnterChat = useCallback(async () => {
     try {
@@ -990,6 +1021,8 @@ export const Group = ({
         setMemberGroups(
           message.payload?.filter((item) => item?.groupId !== '0')
         );
+        // Refresh general chat visibility preference when groups update
+        getDisableGeneralChatSetting();
 
         if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
           window
@@ -1978,6 +2011,27 @@ export const Group = ({
     }, 200);
   }, []);
 
+  // Apply general chat visibility changes immediately without app reload
+  useEffect(() => {
+    const onGeneralChatVisibilityChanged = (e) => {
+      const disabled = !!e.detail?.disabled;
+      setDisableGeneralChat(disabled);
+      if (disabled && selectedGroupRef.current?.groupId === '0') {
+        const next = groups.find((g) => g.groupId !== '0');
+        if (next) {
+          selectGroupFunc(next);
+        } else {
+          setSelectedGroup(null);
+        }
+      }
+    };
+
+    subscribeToEvent('generalChatVisibilityChanged', onGeneralChatVisibilityChanged);
+    return () => {
+      unsubscribeFromEvent('generalChatVisibilityChanged', onGeneralChatVisibilityChanged);
+    };
+  }, [groups, selectGroupFunc]);
+
   return (
     <>
       <WebSocketActive
@@ -2030,7 +2084,7 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={groups}
+            groups={disableGeneralChat ? groups.filter((g) => g.groupId !== '0') : groups}
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}
