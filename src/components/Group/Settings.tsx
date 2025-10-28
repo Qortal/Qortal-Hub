@@ -6,6 +6,7 @@ import {
   Ref,
   useContext,
   useEffect,
+  useCallback,
   useState,
 } from 'react';
 import Dialog from '@mui/material/Dialog';
@@ -143,7 +144,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     setOpen(false);
   };
 
-  const getUserSettings = async () => {
+  const getUserSettings = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
         window
@@ -170,9 +171,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     } catch (error) {
       console.log('error', error);
     }
-  };
+  }, [setChecked]);
 
-  const getGeneralChatSetting = async () => {
+  const getGeneralChatSetting = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
         window
@@ -200,12 +201,12 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     } catch (error) {
       console.log('error', error);
     }
-  };
+  }, [setGeneralChatEnabled]);
 
   useEffect(() => {
     getUserSettings();
     getGeneralChatSetting();
-  }, []);
+  }, [getUserSettings, getGeneralChatSetting]);
 
   return (
     <Fragment>
