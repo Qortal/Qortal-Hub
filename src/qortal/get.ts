@@ -2801,7 +2801,7 @@ export const getWalletBalance = async (
           postProcess: 'capitalizeFirstChar',
         }),
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_balance', {
             postProcess: 'capitalizeFirstChar',
           }),
@@ -3151,7 +3151,7 @@ export const getUserWalletTransactions = async (
         }),
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
-          value: true,
+          value: false,
           label: i18n.t('question:always_retrieve_wallet_transactions', {
             postProcess: 'capitalizeFirstChar',
           }),
