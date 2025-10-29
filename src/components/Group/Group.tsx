@@ -678,6 +678,9 @@ export const Group = ({
   const groupChatHasUnread = useMemo(() => {
     let hasUnread = false;
     groups.forEach((group) => {
+      if (group?.groupId === '0' && disableGeneralChat) {
+        return;
+      }
       if (
         group?.data &&
         group?.sender !== myAddress &&
@@ -691,7 +694,13 @@ export const Group = ({
       }
     });
     return hasUnread;
-  }, [timestampEnterData, groups, myAddress, groupChatTimestamps]);
+  }, [
+    timestampEnterData,
+    groups,
+    myAddress,
+    groupChatTimestamps,
+    disableGeneralChat,
+  ]);
 
   const groupsAnnHasUnread = useMemo(() => {
     let hasUnread = false;
@@ -2026,9 +2035,15 @@ export const Group = ({
       }
     };
 
-    subscribeToEvent('generalChatVisibilityChanged', onGeneralChatVisibilityChanged);
+    subscribeToEvent(
+      'generalChatVisibilityChanged',
+      onGeneralChatVisibilityChanged
+    );
     return () => {
-      unsubscribeFromEvent('generalChatVisibilityChanged', onGeneralChatVisibilityChanged);
+      unsubscribeFromEvent(
+        'generalChatVisibilityChanged',
+        onGeneralChatVisibilityChanged
+      );
     };
   }, [groups, selectGroupFunc]);
 
@@ -2084,7 +2099,11 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={disableGeneralChat ? groups.filter((g) => g.groupId !== '0') : groups}
+            groups={
+              disableGeneralChat
+                ? groups.filter((g) => g.groupId !== '0')
+                : groups
+            }
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}
