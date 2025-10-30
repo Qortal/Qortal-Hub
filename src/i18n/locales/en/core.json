@@ -405,6 +405,7 @@
   "tutorial": "tutorial",
   "url": "url",
   "user_lookup": "user lookup",
+  "video_embed": "video embed",
   "vote": "vote",
   "vote_other": "{{ count }} votes",
   "zip": "zip",

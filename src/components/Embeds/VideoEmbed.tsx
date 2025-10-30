@@ -24,7 +24,9 @@ export const VideoCard = ({ owner, resourceData, refresh, openExternal, external
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 0px 16px' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <MovieIcon sx={{ color: theme.palette.text.primary }} />
-          <Typography>VIDEO embed</Typography>
+          <Typography>
+            {t('core:video_embed', { postProcess: 'capitalizeFirstWord' })}
+          </Typography>
         </Box>
 
         <Box sx={{ alignItems: 'center', display: 'flex', gap: '10px' }}>
