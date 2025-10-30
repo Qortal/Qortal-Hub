@@ -11,6 +11,7 @@ import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
+import { executeEvent } from '../../utils/events';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -80,6 +81,7 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
+          executeEvent('newTabWindow', {});
           setDesktopViewMode('apps');
         }}
       >
