@@ -10,6 +10,7 @@ import LanguageSelector from '../Language/LanguageSelector';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -149,6 +150,8 @@ export const DesktopSideBar = ({
           </IconWrapper>
         </ButtonBase>
       )}
+
+      <AppsNavBarDesktop />
 
       <Box
         sx={{
