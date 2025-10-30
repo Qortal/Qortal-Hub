@@ -75,6 +75,8 @@ export const AppsDevModeNavBar = () => {
     };
   }, []);
 
+  const hasTabs = (tabs || []).length > 0;
+
   return (
     <AppsNavBarParent
       sx={{
@@ -92,55 +94,59 @@ export const AppsDevModeNavBar = () => {
           flexDirection: 'column',
         }}
       >
-        <ButtonBase
-          onClick={() => {
-            executeEvent('devModeNavigateBack', selectedTab?.tabId);
-          }}
-          disabled={isDisableBackButton}
-          sx={{
-            opacity: !isDisableBackButton ? 1 : 0.1,
-            cursor: !isDisableBackButton ? 'pointer' : 'default',
-          }}
-        >
-          <NavBack />
-        </ButtonBase>
-
-        <Tabs
-          orientation="vertical"
-          ref={tabsRef}
-          variant="scrollable" // Make tabs scrollable
-          scrollButtons={true}
-          sx={{
-            '&.MuiTabs-indicator': {
-              backgroundColor: theme.palette.text.primary,
-            },
-            maxHeight: `275px`, // Ensure the tabs container fits within the available space
-            overflow: 'hidden', // Prevents overflow on small screens
-          }}
-        >
-          {tabs?.map((tab) => (
-            <Tab
-              key={tab.tabId}
-              label={
-                <AppsDevModeTabComponent
-                  isSelected={
-                    tab?.tabId === selectedTab?.tabId && !isNewTabWindow
-                  }
-                  app={tab}
-                />
-              } // Pass custom component
-              sx={{
-                '&.Mui-selected': {
-                  color: theme.palette.text.primary,
-                },
-                padding: '0px',
-                margin: '0px',
-                minWidth: '0px',
-                width: '50px',
+        {hasTabs && (
+          <>
+            <ButtonBase
+              onClick={() => {
+                executeEvent('devModeNavigateBack', selectedTab?.tabId);
               }}
-            />
-          ))}
-        </Tabs>
+              disabled={isDisableBackButton}
+              sx={{
+                opacity: !isDisableBackButton ? 1 : 0.1,
+                cursor: !isDisableBackButton ? 'pointer' : 'default',
+              }}
+            >
+              <NavBack />
+            </ButtonBase>
+
+            <Tabs
+              orientation="vertical"
+              ref={tabsRef}
+              variant="scrollable" // Make tabs scrollable
+              scrollButtons={true}
+              sx={{
+                '&.MuiTabs-indicator': {
+                  backgroundColor: theme.palette.text.primary,
+                },
+                maxHeight: `275px`, // Ensure the tabs container fits within the available space
+                overflow: 'hidden', // Prevents overflow on small screens
+              }}
+            >
+              {tabs?.map((tab) => (
+                <Tab
+                  key={tab.tabId}
+                  label={
+                    <AppsDevModeTabComponent
+                      isSelected={
+                        tab?.tabId === selectedTab?.tabId && !isNewTabWindow
+                      }
+                      app={tab}
+                    />
+                  } // Pass custom component
+                  sx={{
+                    '&.Mui-selected': {
+                      color: theme.palette.text.primary,
+                    },
+                    padding: '0px',
+                    margin: '0px',
+                    minWidth: '0px',
+                    width: '50px',
+                  }}
+                />
+              ))}
+            </Tabs>
+          </>
+        )}
       </AppsNavBarLeft>
 
       {selectedTab && (
