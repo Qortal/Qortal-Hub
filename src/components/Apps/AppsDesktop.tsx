@@ -393,7 +393,9 @@ export const AppsDesktop = ({
 
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode('apps');
+            if (selectedTab?.tabId) {
+              executeEvent('newTabWindow', {});
+            } 
           }}
         >
           <IconWrapper
