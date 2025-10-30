@@ -355,7 +355,9 @@ export const AppsDevMode = ({
           </IconWrapper>
         </ButtonBase>
 
-        {mode !== 'home' && <AppsDevModeNavBar />}
+        {mode !== 'home' && (
+          <AppsDevModeNavBar isDev={desktopViewMode === 'dev'} />
+        )}
         <Box
           sx={{
             alignItems: 'flex-start',

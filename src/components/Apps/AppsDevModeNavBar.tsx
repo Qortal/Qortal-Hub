@@ -18,7 +18,7 @@ import { AppsDevModeTabComponent } from './AppsDevModeTabComponent';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
-export const AppsDevModeNavBar = () => {
+export const AppsDevModeNavBar = ({ isDev }: { isDev?: boolean }) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] = useAtom(
@@ -126,16 +126,16 @@ export const AppsDevModeNavBar = () => {
                 <Tab
                   key={tab.tabId}
                   label={
-                    <AppsDevModeTabComponent
-                      isSelected={
-                        tab?.tabId === selectedTab?.tabId && !isNewTabWindow
-                      }
-                      app={tab}
-                    />
-                  } // Pass custom component
-                  sx={{
-                    '&.Mui-selected': {
-                      color: theme.palette.text.primary,
+                <AppsDevModeTabComponent
+                  isSelected={
+                    !!isDev && tab?.tabId === selectedTab?.tabId && !isNewTabWindow
+                  }
+                  app={tab}
+                />
+              } // Pass custom component
+              sx={{
+                '&.Mui-selected': {
+                  color: theme.palette.text.primary,
                     },
                     padding: '0px',
                     margin: '0px',
