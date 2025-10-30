@@ -382,6 +382,7 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
+  const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
   const lastFetchedSecretKey = useRef(null);
@@ -447,6 +448,12 @@ export const Group = ({
     groupChatTimestampsAtom
   );
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+
+  useEffect(() => {
+    if (desktopViewMode === 'apps' || desktopViewMode === 'dev') {
+      setLastQappViewMode(desktopViewMode);
+    }
+  }, [desktopViewMode]);
 
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
