@@ -138,6 +138,7 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
+            executeEvent('devModeNewTabWindow', {});
             setDesktopViewMode('dev');
           }}
         >
