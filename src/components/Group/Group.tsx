@@ -1472,6 +1472,18 @@ export const Group = ({
     };
   }, []);
 
+  const openDevMode = () => {
+    setDesktopViewMode('dev');
+  };
+
+  useEffect(() => {
+    subscribeToEvent('open-dev-mode', openDevMode);
+
+    return () => {
+      unsubscribeFromEvent('open-dev-mode', openDevMode);
+    };
+  }, []);
+
   const openGroupChatFromNotification = (e) => {
     if (isLoadingOpenSectionFromNotification.current) return;
 
