@@ -151,7 +151,7 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <AppsNavBarDesktop />
+      <AppsNavBarDesktop isApps={isApps} />
 
       <Box
         sx={{

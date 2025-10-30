@@ -65,7 +65,7 @@ export function saveToLocalStorage(key, subKey, newValue) {
   }
 }
 
-export const AppsNavBarDesktop = ({ disableBack }) => {
+export const AppsNavBarDesktop = ({ disableBack, isApps }: { disableBack?: boolean; isApps?: boolean }) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] = useAtom(
@@ -211,7 +211,9 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
                   label={
                     <TabComponent
                       isSelected={
-                        tab?.tabId === selectedTab?.tabId && !isNewTabWindow
+                        !!isApps &&
+                        tab?.tabId === selectedTab?.tabId &&
+                        !isNewTabWindow
                       }
                       app={tab}
                     />
@@ -232,7 +234,7 @@ export const AppsNavBarDesktop = ({ disableBack }) => {
         )}
       </AppsNavBarLeft>
 
-      {selectedTab && (
+      {isApps && selectedTab && (
         <AppsNavBarRight
           sx={{
             gap: '10px',

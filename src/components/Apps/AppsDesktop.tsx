@@ -472,6 +472,7 @@ export const AppsDesktop = ({
         {mode !== 'home' && (
           <AppsNavBarDesktop
             disableBack={isNewTabWindow && mode === 'viewer'}
+            isApps
           />
         )}
       </Box>
