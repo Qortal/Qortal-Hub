@@ -22,7 +22,7 @@ import { Spacer } from '../../common/Spacer';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { CustomLoader } from '../../common/CustomLoader';
 import { useTranslation } from 'react-i18next';
-import { TIME_SECONDS_60_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 export const PollCard = ({
   poll,
@@ -67,7 +67,7 @@ export const PollCard = ({
           pollName: poll?.info?.pollName,
           optionIndex: +selectedOption,
         },
-        TIME_SECONDS_60_IN_MILLISECONDS
+        TIME_MINUTES_1_IN_MILLISECONDS
       )
       .then((response) => {
         setIsLoadingSubmit(false);
