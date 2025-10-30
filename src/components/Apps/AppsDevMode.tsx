@@ -328,7 +328,9 @@ export const AppsDevMode = ({
 
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode('dev');
+            if (selectedTab?.tabId) {
+              executeEvent('devModeNewTabWindow', {});
+            } 
           }}
         >
           <IconWrapper
