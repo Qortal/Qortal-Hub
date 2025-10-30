@@ -11,6 +11,7 @@ import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
+import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
 import { executeEvent } from '../../utils/events';
 
 export const DesktopSideBar = ({
@@ -26,6 +27,7 @@ export const DesktopSideBar = ({
   setDesktopViewMode,
   desktopViewMode,
   myName,
+  lastQappViewMode,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
@@ -153,10 +155,11 @@ export const DesktopSideBar = ({
         </ButtonBase>
       )}
 
-      <AppsNavBarDesktop
-        disableBack
-        isApps={isApps}
-      />
+      {lastQappViewMode === 'dev' ? (
+        <AppsDevModeNavBar />
+      ) : (
+        <AppsNavBarDesktop disableBack isApps={isApps} />
+      )}
 
       <Box
         sx={{

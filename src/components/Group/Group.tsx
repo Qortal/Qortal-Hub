@@ -2094,6 +2094,7 @@ export const Group = ({
             isDirects={isOpenSideViewDirects}
             hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
             setDesktopViewMode={setDesktopViewMode}
+            lastQappViewMode={lastQappViewMode}
           />
         )}
 
