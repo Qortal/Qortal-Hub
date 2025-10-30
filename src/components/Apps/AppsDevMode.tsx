@@ -356,7 +356,10 @@ export const AppsDevMode = ({
         </ButtonBase>
 
         {mode !== 'home' && (
-          <AppsDevModeNavBar isDev={desktopViewMode === 'dev'} />
+          <AppsDevModeNavBar
+            disableBack={isNewTabWindow && mode === 'viewer'}
+            isDev={desktopViewMode === 'dev'}
+          />
         )}
         <Box
           sx={{

@@ -157,7 +157,10 @@ export const DesktopSideBar = ({
       )}
 
       {lastQappViewMode === 'dev' ? (
-        <AppsDevModeNavBar isDev={desktopViewMode === 'dev'} />
+        <AppsDevModeNavBar
+          disableBack={desktopViewMode !== 'dev'}
+          isDev={desktopViewMode === 'dev'}
+        />
       ) : (
         <AppsNavBarDesktop disableBack isApps={isApps} />
       )}

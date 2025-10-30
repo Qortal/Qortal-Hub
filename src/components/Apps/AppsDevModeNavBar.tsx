@@ -18,7 +18,13 @@ import { AppsDevModeTabComponent } from './AppsDevModeTabComponent';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
-export const AppsDevModeNavBar = ({ isDev }: { isDev?: boolean }) => {
+export const AppsDevModeNavBar = ({
+  isDev,
+  disableBack,
+}: {
+  disableBack?: boolean;
+  isDev?: boolean;
+}) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] = useAtom(
@@ -52,12 +58,13 @@ export const AppsDevModeNavBar = ({ isDev }: { isDev?: boolean }) => {
   }, [tabs.length]); // Dependency on the number of tabs
 
   const isDisableBackButton = useMemo(() => {
+    if (disableBack) return true;
     if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
       return false;
     if (selectedTab && !navigationController[selectedTab?.tabId]?.hasBack)
       return true;
     return false;
-  }, [navigationController, selectedTab]);
+  }, [navigationController, selectedTab, disableBack]);
 
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
