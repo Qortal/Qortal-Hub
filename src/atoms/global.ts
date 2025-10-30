@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import { atomWithReset, atomFamily } from 'jotai/utils';
+import { atomWithReset, atomFamily, useAtomCallback } from 'jotai/utils';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
@@ -128,3 +128,10 @@ export const groupChatTimestampSelector = atomFamily((key) =>
 export const timestampEnterDataSelector = atomFamily((key) =>
   atom((get) => get(timestampEnterDataAtom)[key] || null)
 );
+
+export function useGetResourceStatus() {
+  return useAtomCallback(async (get, _set, id: string) => {
+    const resources = get(resourceDownloadControllerAtom);
+    return resources?.[id];
+  });
+}

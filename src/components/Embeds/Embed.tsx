@@ -434,10 +434,8 @@ export const Embed = ({ embedLink }) => {
         <VideoCard
           resourceData={resourceData}
           owner={parsedData?.name}
-          refresh={handleLink}
           openExternal={openExternal}
           external={external}
-          encryptionType={encryptionType}
         />
       )}
       <CustomizedSnackbars
