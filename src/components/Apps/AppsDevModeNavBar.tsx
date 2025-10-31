@@ -67,9 +67,6 @@ export const AppsDevModeNavBar = ({
     return false;
   }, [navigationController, selectedTab, disableBack]);
 
-  console.log('isDisableBackButton', isDisableBackButton);
-  console.log('selectedTab', selectedTab);
-
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
 
