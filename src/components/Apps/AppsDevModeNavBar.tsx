@@ -59,12 +59,16 @@ export const AppsDevModeNavBar = ({
 
   const isDisableBackButton = useMemo(() => {
     if (disableBack) return true;
+    if (!selectedTab) return true;
     if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
       return false;
     if (selectedTab && !navigationController[selectedTab?.tabId]?.hasBack)
       return true;
     return false;
   }, [navigationController, selectedTab, disableBack]);
+
+  console.log('isDisableBackButton', isDisableBackButton);
+  console.log('selectedTab', selectedTab);
 
   const setTabsToNav = (e) => {
     const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
@@ -133,16 +137,18 @@ export const AppsDevModeNavBar = ({
                 <Tab
                   key={tab.tabId}
                   label={
-                <AppsDevModeTabComponent
-                  isSelected={
-                    !!isDev && tab?.tabId === selectedTab?.tabId && !isNewTabWindow
-                  }
-                  app={tab}
-                />
-              } // Pass custom component
-              sx={{
-                '&.Mui-selected': {
-                  color: theme.palette.text.primary,
+                    <AppsDevModeTabComponent
+                      isSelected={
+                        !!isDev &&
+                        tab?.tabId === selectedTab?.tabId &&
+                        !isNewTabWindow
+                      }
+                      app={tab}
+                    />
+                  } // Pass custom component
+                  sx={{
+                    '&.Mui-selected': {
+                      color: theme.palette.text.primary,
                     },
                     padding: '0px',
                     margin: '0px',

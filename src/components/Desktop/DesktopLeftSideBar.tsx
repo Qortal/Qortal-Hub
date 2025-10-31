@@ -39,6 +39,11 @@ export const DesktopSideBar = ({
     'tutorial',
   ]);
 
+  const setAppsSectionToNewWindow = () => {
+    executeEvent('devModeNewTabWindow', {});
+    executeEvent('newTabWindow', {});
+  };
+
   return (
     <Box
       sx={{
@@ -68,6 +73,7 @@ export const DesktopSideBar = ({
           width: '60px',
         }}
         onClick={() => {
+          setAppsSectionToNewWindow();
           goToHome();
         }}
       >
@@ -83,16 +89,12 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
-          executeEvent('newTabWindow', {});
+          setAppsSectionToNewWindow();
           setDesktopViewMode('apps');
         }}
       >
         <IconWrapper
-          color={
-            isApps ? theme.palette.text.primary : theme.palette.text.secondary
-          }
           label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
-          selected={isApps}
           disableWidth
         >
           <AppsIcon
@@ -106,6 +108,7 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
+          setAppsSectionToNewWindow();
           setDesktopViewMode('chat');
         }}
       >
@@ -138,20 +141,22 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
-            executeEvent('devModeNewTabWindow', {});
+            setAppsSectionToNewWindow();
             setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
-            color={
-              desktopViewMode === 'dev'
-                ? theme.palette.text.primary
-                : theme.palette.text.secondary
-            }
             label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
           >
-            <AppsIcon height={30} color={theme.palette.text.secondary} />
+            <AppsIcon
+              height={30}
+              color={
+                desktopViewMode === 'dev'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
+            />
           </IconWrapper>
         </ButtonBase>
       )}
