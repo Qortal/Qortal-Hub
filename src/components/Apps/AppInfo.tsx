@@ -8,6 +8,7 @@ import {
   AppInfoSnippetLeft,
   AppInfoSnippetMiddle,
   AppInfoUserName,
+  AppsBackContainer,
   AppsCategoryInfo,
   AppsCategoryInfoLabel,
   AppsCategoryInfoSub,
@@ -29,6 +30,8 @@ import {
 import { saveToLocalStorage } from './AppsNavBarDesktop';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 
 export const AppInfo = ({ app, myName }) => {
   const isInstalled = app?.status?.status === 'READY';
@@ -57,6 +60,31 @@ export const AppInfo = ({ app, myName }) => {
         justifyContent: 'flex-start',
       }}
     >
+      <AppsBackContainer>
+        <Spacer height="20px" />
+
+        <ShowMessageReturnButton
+          sx={{
+            padding: '2px',
+          }}
+          onClick={() => {
+            executeEvent('navigateBack', {});
+          }}
+        >
+          <ReturnIcon />
+          <ComposeP
+            sx={{
+              fontSize: '18px',
+            }}
+          >
+            {t('core:action.return', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </ComposeP>
+        </ShowMessageReturnButton>
+
+        <Spacer height="20px" />
+      </AppsBackContainer>
       <Box
         sx={{
           display: 'flex',

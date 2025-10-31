@@ -2,7 +2,7 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
-import { enabledDevModeAtom } from '../../atoms/global';
+import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
 import { CoreSyncStatus } from '../CoreSyncStatus';
@@ -28,7 +28,10 @@ export const DesktopSideBar = ({
   desktopViewMode,
   myName,
   lastQappViewMode,
+  mode,
 }) => {
+  const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
+
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -167,7 +170,10 @@ export const DesktopSideBar = ({
           isDev={desktopViewMode === 'dev'}
         />
       ) : (
-        <AppsNavBarDesktop disableBack isApps={isApps} />
+        <AppsNavBarDesktop
+          disableBack={!isApps || isNewTabWindow}
+          isApps={isApps}
+        />
       )}
 
       <Box

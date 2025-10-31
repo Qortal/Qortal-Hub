@@ -27,7 +27,7 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from '../Desktop/DesktopFooter';
-import { enabledDevModeAtom } from '../../atoms/global';
+import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
@@ -56,7 +56,7 @@ export const AppsDesktop = ({
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
-  const [isNewTabWindow, setIsNewTabWindow] = useState(false);
+  const [isNewTabWindow, setIsNewTabWindow] = useAtom(isNewTabWindowAtom);
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
