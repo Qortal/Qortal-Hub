@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
-  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
 import { useAtom, useSetAtom } from 'jotai';
@@ -338,7 +338,7 @@ export const useAuth = () => {
             password: authenticatePassword,
             wallet: rawWallet,
           },
-          TIME_SECONDS_120_IN_MILLISECONDS
+          TIME_MINUTES_2_IN_MILLISECONDS
         )
         .then((response) => {
           if (response && !response.error) {
