@@ -28,6 +28,7 @@ import {
 } from '../../atoms/global';
 
 import { useAtomValue, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 const VideoContainer = styled(Box)`
   align-items: center;
   display: flex;
@@ -82,6 +83,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
   poster,
   service,
 }) => {
+  const { t } = useTranslation(['core']);
   const keyIdentifier = useMemo(() => {
     if (name && identifier && service) {
       return `${service}-${name}-${identifier}`;
@@ -537,9 +539,17 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
           >
             {resourceStatus?.status === 'FAILED_TO_DOWNLOAD' ? (
               <>
-                <>Failed to download</>
+                <>
+                  {t('core:video_failed', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </>
 
-                <Button onClick={retry}>Retry</Button>
+                <Button onClick={retry}>
+                  {t('core:retry', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
               </>
             ) : resourceStatus?.status === 'REFETCHING' ? (
               <>
@@ -553,7 +563,11 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
                 <> Refetching data in 25 seconds</>
               </>
             ) : resourceStatus?.status === 'DOWNLOADED' ? (
-              <>Download Completed: building tutorial video...</>
+              <>
+                {t('core:video_building', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </>
             ) : resourceStatus?.status !== 'READY' ? (
               <>
                 {getDownloadProgress(
@@ -562,7 +576,11 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
                 )}
               </>
             ) : (
-              <>Fetching tutorial from the Qortal Network...</>
+              <>
+                {t('core:video_fetching', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </>
             )}
           </Typography>
         </Box>
