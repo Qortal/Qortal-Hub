@@ -42,11 +42,6 @@ export const DesktopSideBar = ({
     'tutorial',
   ]);
 
-  const setAppsSectionToNewWindow = () => {
-    executeEvent('devModeNewTabWindow', {});
-    executeEvent('newTabWindow', {});
-  };
-
   return (
     <Box
       sx={{
@@ -76,7 +71,6 @@ export const DesktopSideBar = ({
           width: '60px',
         }}
         onClick={() => {
-          setAppsSectionToNewWindow();
           goToHome();
         }}
       >
@@ -92,8 +86,9 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
-          setAppsSectionToNewWindow();
-          setDesktopViewMode('apps');
+          isApps
+            ? executeEvent('newTabWindow', {})
+            : setDesktopViewMode('apps');
         }}
       >
         <IconWrapper
@@ -111,7 +106,6 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
-          setAppsSectionToNewWindow();
           setDesktopViewMode('chat');
         }}
       >
@@ -144,8 +138,9 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
-            setAppsSectionToNewWindow();
-            setDesktopViewMode('dev');
+            desktopViewMode === 'dev'
+              ? executeEvent('devModeNewTabWindow', {})
+              : setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
