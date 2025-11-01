@@ -25,7 +25,7 @@ export const AppsHomeDesktop = ({
   myName,
   myAddress,
 }) => {
-  const [qortalUrl, setQortalUrl] = useState('');
+  const [qortalUrl, setQortalUrl] = useState(QORTAL_PROTOCOL);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

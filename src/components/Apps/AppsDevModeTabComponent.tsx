@@ -15,6 +15,7 @@ export const AppsDevModeTabComponent = ({ isSelected, app }) => {
           });
           return;
         }
+        executeEvent('open-dev-mode', {});
         executeEvent('setSelectedTabDevMode', {
           data: app,
           isDevMode: true,

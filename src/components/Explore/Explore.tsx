@@ -61,6 +61,7 @@ export const Explore = ({ setDesktopViewMode }) => {
           transition: 'all 0.1s ease-in-out',
         }}
         onClick={() => {
+          executeEvent('newTabWindow', {});
           setDesktopViewMode('apps');
         }}
       >

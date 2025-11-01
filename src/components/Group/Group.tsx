@@ -382,6 +382,7 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
+  const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
   const lastFetchedSecretKey = useRef(null);
@@ -447,6 +448,12 @@ export const Group = ({
     groupChatTimestampsAtom
   );
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+
+  useEffect(() => {
+    if (desktopViewMode === 'apps' || desktopViewMode === 'dev') {
+      setLastQappViewMode(desktopViewMode);
+    }
+  }, [desktopViewMode]);
 
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
@@ -1465,6 +1472,18 @@ export const Group = ({
     };
   }, []);
 
+  const openDevMode = () => {
+    setDesktopViewMode('dev');
+  };
+
+  useEffect(() => {
+    subscribeToEvent('open-dev-mode', openDevMode);
+
+    return () => {
+      unsubscribeFromEvent('open-dev-mode', openDevMode);
+    };
+  }, []);
+
   const openGroupChatFromNotification = (e) => {
     if (isLoadingOpenSectionFromNotification.current) return;
 
@@ -2070,25 +2089,23 @@ export const Group = ({
           width: '100%',
         }}
       >
-        {((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') ||
-          isOpenSideViewGroups) && (
-          <DesktopSideBar
-            desktopViewMode={desktopViewMode}
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
-            mode={appsMode}
-            setMode={setAppsMode}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
-            isApps={desktopViewMode === 'apps'}
-            myName={userInfo?.name}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            setDesktopViewMode={setDesktopViewMode}
-          />
-        )}
+        <DesktopSideBar
+          desktopViewMode={desktopViewMode}
+          toggleSideViewGroups={toggleSideViewGroups}
+          toggleSideViewDirects={toggleSideViewDirects}
+          goToHome={goToHome}
+          mode={appsMode}
+          setMode={setAppsMode}
+          setDesktopSideView={setDesktopSideView}
+          hasUnreadDirects={directChatHasUnread}
+          isApps={desktopViewMode === 'apps'}
+          myName={userInfo?.name}
+          isGroups={isOpenSideViewGroups}
+          isDirects={isOpenSideViewDirects}
+          hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+          setDesktopViewMode={setDesktopViewMode}
+          lastQappViewMode={lastQappViewMode}
+        />
 
         {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
           <GroupList
