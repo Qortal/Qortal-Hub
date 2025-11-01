@@ -13,6 +13,7 @@ import {
 import { parseQortalLink } from './embed-utils';
 import { PollCard } from './PollEmbed';
 import { ImageCard } from './ImageEmbed';
+import { VideoCard } from './VideoEmbed';
 import { AttachmentCard } from './AttachmentEmbed';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -319,6 +320,10 @@ export const Embed = ({ embedLink }) => {
           setType('IMAGE');
 
           break;
+        case 'VIDEO':
+          setType('VIDEO');
+
+          break;
         case 'ATTACHMENT':
           setType('ATTACHMENT');
 
@@ -423,6 +428,14 @@ export const Embed = ({ embedLink }) => {
           errorMsg={errorMsg}
           encryptionType={encryptionType}
           selectedGroupId={selectedGroupId}
+        />
+      )}
+      {parsedType === 'VIDEO' && resourceData && (
+        <VideoCard
+          resourceData={resourceData}
+          owner={parsedData?.name}
+          openExternal={openExternal}
+          external={external}
         />
       )}
       <CustomizedSnackbars
