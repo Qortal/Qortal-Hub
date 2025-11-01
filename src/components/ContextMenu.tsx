@@ -7,11 +7,13 @@ import {
   styled,
   useTheme,
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import { executeEvent } from '../utils/events';
 import { mutedGroupsAtom } from '../atoms/global';
 import { useAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -35,6 +37,7 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
   const longPressTimeout = useRef(null);
   const preventClick = useRef(false); // Flag to prevent click after long-press or right-click
   const theme = useTheme();
+  const { t } = useTranslation(['group', 'core']);
   const [mutedGroups] = useAtom(mutedGroupsAtom);
 
   const isMuted = useMemo(() => {
@@ -182,6 +185,29 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
             {isMuted ? 'Unmute ' : 'Mute '}Push Notifications
           </Typography>
         </MenuItem>
+        {!(groupId === 0 || groupId === '0') && (
+          <MenuItem
+            onClick={async (e) => {
+              handleClose(e);
+              try {
+                const link = `qortal://use-group/action-join/groupid-${groupId}`;
+                await navigator.clipboard.writeText(link);
+              } catch (err) {
+                console.error('Failed to copy join link', err);
+              }
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: '32px' }}>
+              <ContentCopyIcon
+                fontSize="small"
+                sx={{ color: theme.palette.text.primary }}
+              />
+            </ListItemIcon>
+            <Typography variant="inherit" sx={{ fontSize: '14px' }}>
+              {t('group:join_link', { postProcess: 'capitalizeEachFirstChar' })}: {t(groupId)}
+            </Typography>
+          </MenuItem>
+        )}
       </CustomStyledMenu>
     </div>
   );
