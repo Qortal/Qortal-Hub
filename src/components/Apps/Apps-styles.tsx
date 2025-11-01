@@ -54,7 +54,7 @@ export const AppsBackContainer = styled(Box)(({ theme }) => ({
   flexDirection: 'column',
   alignItems: 'flex-start',
   width: '90%',
-  maxWidth: '1500px',
+  maxWidth: '1200px',
 }));
 
 export const AppsLibraryContainer = styled(Box)(({ theme }) => ({

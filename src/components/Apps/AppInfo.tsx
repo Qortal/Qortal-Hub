@@ -61,28 +61,34 @@ export const AppInfo = ({ app, myName }) => {
       }}
     >
       <AppsBackContainer>
-        <Spacer height="20px" />
-
-        <ShowMessageReturnButton
+        <Spacer height="30px" />
+        <AppsWidthLimiter
           sx={{
-            padding: '2px',
-          }}
-          onClick={() => {
-            executeEvent('navigateBack', {});
+            justifyContent: 'space-between',
+            aliginItems: 'center',
+            flexDirection: 'row',
           }}
         >
-          <ReturnIcon />
-          <ComposeP
+          <ShowMessageReturnButton
             sx={{
-              fontSize: '18px',
+              padding: '2px',
+            }}
+            onClick={() => {
+              executeEvent('navigateBack', {});
             }}
           >
-            {t('core:action.return', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </ComposeP>
-        </ShowMessageReturnButton>
-
+            <ReturnIcon />
+            <ComposeP
+              sx={{
+                fontSize: '18px',
+              }}
+            >
+              {t('core:action.return', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </ComposeP>
+          </ShowMessageReturnButton>
+        </AppsWidthLimiter>
         <Spacer height="20px" />
       </AppsBackContainer>
       <Box
