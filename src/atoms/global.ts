@@ -96,6 +96,9 @@ export const statusesAtom = atomWithReset<Steps>({
     message: '',
   },
 });
+
+export const isNewTabWindowAtom = atomWithReset<boolean>(false);
+
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

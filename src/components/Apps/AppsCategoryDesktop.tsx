@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppLibrarySubTitle,
+  AppsBackContainer,
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
   AppsLibraryContainer,
@@ -16,6 +17,9 @@ import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
 import { useTranslation } from 'react-i18next';
+import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
+import { executeEvent } from '../../utils/events';
+import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
@@ -126,9 +130,31 @@ export const AppsCategoryDesktop = ({
       >
         <AppsWidthLimiter
           sx={{
-            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            aliginItems: 'center',
+            flexDirection: 'row',
           }}
         >
+          <ShowMessageReturnButton
+            sx={{
+              padding: '2px',
+            }}
+            onClick={() => {
+              executeEvent('navigateBack', {});
+              setSearchValue('');
+            }}
+          >
+            <ReturnIcon />
+            <ComposeP
+              sx={{
+                fontSize: '18px',
+              }}
+            >
+              {t('core:action.return', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </ComposeP>
+          </ShowMessageReturnButton>
           <AppsSearchContainer
             sx={{
               width: '412px',

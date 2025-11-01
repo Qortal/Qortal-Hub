@@ -2,7 +2,7 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
-import { enabledDevModeAtom } from '../../atoms/global';
+import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
 import { CoreSyncStatus } from '../CoreSyncStatus';
@@ -28,7 +28,10 @@ export const DesktopSideBar = ({
   desktopViewMode,
   myName,
   lastQappViewMode,
+  mode,
 }) => {
+  const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
+
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -38,6 +41,11 @@ export const DesktopSideBar = ({
     'question',
     'tutorial',
   ]);
+
+  const setAppsSectionToNewWindow = () => {
+    executeEvent('devModeNewTabWindow', {});
+    executeEvent('newTabWindow', {});
+  };
 
   return (
     <Box
@@ -68,6 +76,7 @@ export const DesktopSideBar = ({
           width: '60px',
         }}
         onClick={() => {
+          setAppsSectionToNewWindow();
           goToHome();
         }}
       >
@@ -83,16 +92,12 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
-          executeEvent('newTabWindow', {});
+          setAppsSectionToNewWindow();
           setDesktopViewMode('apps');
         }}
       >
         <IconWrapper
-          color={
-            isApps ? theme.palette.text.primary : theme.palette.text.secondary
-          }
           label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
-          selected={isApps}
           disableWidth
         >
           <AppsIcon
@@ -106,6 +111,7 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
+          setAppsSectionToNewWindow();
           setDesktopViewMode('chat');
         }}
       >
@@ -138,20 +144,22 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
-            executeEvent('devModeNewTabWindow', {});
+            setAppsSectionToNewWindow();
             setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
-            color={
-              desktopViewMode === 'dev'
-                ? theme.palette.text.primary
-                : theme.palette.text.secondary
-            }
             label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
           >
-            <AppsIcon height={30} color={theme.palette.text.secondary} />
+            <AppsIcon
+              height={30}
+              color={
+                desktopViewMode === 'dev'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
+            />
           </IconWrapper>
         </ButtonBase>
       )}
@@ -162,7 +170,10 @@ export const DesktopSideBar = ({
           isDev={desktopViewMode === 'dev'}
         />
       ) : (
-        <AppsNavBarDesktop disableBack isApps={isApps} />
+        <AppsNavBarDesktop
+          disableBack={!isApps || isNewTabWindow}
+          isApps={isApps}
+        />
       )}
 
       <Box

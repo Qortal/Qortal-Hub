@@ -2089,26 +2089,23 @@ export const Group = ({
           width: '100%',
         }}
       >
-        {((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') ||
-          isOpenSideViewGroups) && (
-          <DesktopSideBar
-            desktopViewMode={desktopViewMode}
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
-            mode={appsMode}
-            setMode={setAppsMode}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
-            isApps={desktopViewMode === 'apps'}
-            myName={userInfo?.name}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            setDesktopViewMode={setDesktopViewMode}
-            lastQappViewMode={lastQappViewMode}
-          />
-        )}
+        <DesktopSideBar
+          desktopViewMode={desktopViewMode}
+          toggleSideViewGroups={toggleSideViewGroups}
+          toggleSideViewDirects={toggleSideViewDirects}
+          goToHome={goToHome}
+          mode={appsMode}
+          setMode={setAppsMode}
+          setDesktopSideView={setDesktopSideView}
+          hasUnreadDirects={directChatHasUnread}
+          isApps={desktopViewMode === 'apps'}
+          myName={userInfo?.name}
+          isGroups={isOpenSideViewGroups}
+          isDirects={isOpenSideViewDirects}
+          hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+          setDesktopViewMode={setDesktopViewMode}
+          lastQappViewMode={lastQappViewMode}
+        />
 
         {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
           <GroupList

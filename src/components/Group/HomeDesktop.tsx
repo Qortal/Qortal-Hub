@@ -11,6 +11,19 @@ import { Explore } from '../Explore/Explore';
 import { NewUsersCTA } from '../NewUsersCTA';
 import { useTranslation } from 'react-i18next';
 
+import {
+  AnimatePresence,
+  m,
+  LazyMotion,
+  domAnimation,
+  useReducedMotion,
+  motion,
+  cubicBezier,
+  Variants,
+} from 'framer-motion';
+
+const MotionBox = m(Box);
+
 export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
@@ -30,6 +43,8 @@ export const HomeDesktop = ({
 }) => {
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
+
+  const reduce = useReducedMotion();
 
   const { t } = useTranslation([
     'auth',
@@ -61,188 +76,207 @@ export const HomeDesktop = ({
   }, [checked1, isLoaded, checked2]);
 
   return (
-    <Box
-      sx={{
-        alignItems: 'center',
-        display: desktopViewMode === 'home' ? 'flex' : 'none',
-        flexDirection: 'column',
-        height: '100%',
-        overflow: 'auto',
-        width: '100%',
-      }}
-    >
-      <Spacer height="20px" />
-
-      <Box
-        sx={{
-          alignItems: 'flex-start',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          maxWidth: '1036px',
-          width: '100%',
-        }}
-      >
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontWeight: 400,
-            fontSize: userInfo?.name?.length > 15 ? '16px' : '20px',
-            padding: '10px',
-          }}
-        >
-          {t('core:welcome', { postProcess: 'capitalizeFirstChar' })}
-          {userInfo?.name ? (
-            <span
-              style={{
-                fontStyle: 'italic',
-              }}
-            >{`, ${userInfo?.name}`}</span>
-          ) : null}
-        </Typography>
-
-        <Spacer height="30px" />
-
-        {!isLoadingGroups && (
-          <Box
-            sx={{
+    <LazyMotion features={domAnimation}>
+      <AnimatePresence mode="wait">
+        {desktopViewMode === 'home' && (
+          <motion.div
+            key="home"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            custom={reduce}
+            style={{
+              alignItems: 'center',
               display: 'flex',
-              flexWrap: 'wrap',
-              gap: '20px',
-              justifyContent: 'center',
+              flexDirection: 'column',
+              height: '100%',
+              overflow: 'auto',
               width: '100%',
+              willChange: 'transform, opacity',
+              backfaceVisibility: 'hidden',
             }}
           >
+            <Spacer height="20px" />
+
             <Box
               sx={{
+                alignItems: 'flex-start',
                 display: 'flex',
                 flexDirection: 'column',
-                flexWrap: 'wrap',
-                gap: '20px',
+                height: '100%',
+                maxWidth: '1036px',
+                width: '100%',
               }}
             >
-              <Box
+              <Typography
                 sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  width: '330px',
+                  color: theme.palette.text.primary,
+                  fontWeight: 400,
+                  fontSize: userInfo?.name?.length > 15 ? '16px' : '20px',
+                  padding: '10px',
                 }}
               >
-                <ThingsToDoInitial
-                  balance={balance}
-                  myAddress={myAddress}
-                  name={userInfo?.name}
-                  userInfo={userInfo}
-                  hasGroups={
-                    groups?.filter((item) => item?.groupId !== '0').length !== 0
-                  }
-                />
-              </Box>
+                {t('core:welcome', { postProcess: 'capitalizeFirstChar' })}
+                {userInfo?.name ? (
+                  <span
+                    style={{
+                      fontStyle: 'italic',
+                    }}
+                  >{`, ${userInfo?.name}`}</span>
+                ) : null}
+              </Typography>
 
-              {desktopViewMode === 'home' && (
+              <Spacer height="30px" />
+
+              {!isLoadingGroups && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '20px',
+                    justifyContent: 'center',
+                    width: '100%',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      flexWrap: 'wrap',
+                      gap: '20px',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        width: '330px',
+                      }}
+                    >
+                      <ThingsToDoInitial
+                        balance={balance}
+                        myAddress={myAddress}
+                        name={userInfo?.name}
+                        userInfo={userInfo}
+                        hasGroups={
+                          groups?.filter((item) => item?.groupId !== '0')
+                            .length !== 0
+                        }
+                      />
+                    </Box>
+
+                    {desktopViewMode === 'home' && (
+                      <>
+                        {hasDoneNameAndBalanceAndIsLoaded && (
+                          <>
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                width: '330px',
+                              }}
+                            >
+                              <GroupJoinRequests
+                                setGroupSection={setGroupSection}
+                                setSelectedGroup={setSelectedGroup}
+                                getTimestampEnterChat={getTimestampEnterChat}
+                                setOpenManageMembers={setOpenManageMembers}
+                                myAddress={myAddress}
+                                groups={groups}
+                                setMobileViewMode={setMobileViewMode}
+                                setDesktopViewMode={setDesktopViewMode}
+                              />
+                            </Box>
+
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                width: '330px',
+                              }}
+                            >
+                              <GroupInvites
+                                setOpenAddGroup={setOpenAddGroup}
+                                myAddress={myAddress}
+                                groups={groups}
+                                setMobileViewMode={setMobileViewMode}
+                              />
+                            </Box>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </Box>
+                  <QortPrice />
+                </Box>
+              )}
+
+              {!isLoadingGroups && (
                 <>
-                  {hasDoneNameAndBalanceAndIsLoaded && (
-                    <>
-                      <Box
-                        sx={{
-                          alignItems: 'center',
-                          display: 'flex',
-                          justifyContent: 'center',
-                          width: '330px',
-                        }}
-                      >
-                        <GroupJoinRequests
-                          setGroupSection={setGroupSection}
-                          setSelectedGroup={setSelectedGroup}
-                          getTimestampEnterChat={getTimestampEnterChat}
-                          setOpenManageMembers={setOpenManageMembers}
-                          myAddress={myAddress}
-                          groups={groups}
-                          setMobileViewMode={setMobileViewMode}
-                          setDesktopViewMode={setDesktopViewMode}
-                        />
-                      </Box>
+                  <Spacer height="60px" />
 
-                      <Box
+                  <Divider
+                    color="secondary"
+                    sx={{
+                      width: '100%',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: '10px',
+                      }}
+                    >
+                      <ExploreIcon
                         sx={{
-                          alignItems: 'center',
-                          display: 'flex',
-                          justifyContent: 'center',
-                          width: '330px',
+                          color: theme.palette.text.primary,
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          fontSize: '1rem',
                         }}
                       >
-                        <GroupInvites
-                          setOpenAddGroup={setOpenAddGroup}
-                          myAddress={myAddress}
-                          groups={groups}
-                          setMobileViewMode={setMobileViewMode}
-                        />
-                      </Box>
-                    </>
+                        {t('tutorial:initial.explore', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  </Divider>
+
+                  {!hasDoneNameAndBalanceAndIsLoaded && (
+                    <Spacer height="40px" />
                   )}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '20px',
+                      justifyContent: 'center',
+                      width: '100%',
+                    }}
+                  >
+                    {hasDoneNameAndBalanceAndIsLoaded && (
+                      <ListOfGroupPromotions />
+                    )}
+
+                    <Explore setDesktopViewMode={setDesktopViewMode} />
+                  </Box>
+
+                  <NewUsersCTA balance={balance} />
                 </>
               )}
             </Box>
-            <QortPrice />
-          </Box>
+
+            <Spacer height="180px" />
+          </motion.div>
         )}
-
-        {!isLoadingGroups && (
-          <>
-            <Spacer height="60px" />
-
-            <Divider
-              color="secondary"
-              sx={{
-                width: '100%',
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <ExploreIcon
-                  sx={{
-                    ccolor: theme.palette.text.primary,
-                  }}
-                />
-                <Typography
-                  sx={{
-                    fontSize: '1rem',
-                  }}
-                >
-                  {t('tutorial:initial.explore', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-            </Divider>
-
-            {!hasDoneNameAndBalanceAndIsLoaded && <Spacer height="40px" />}
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '20px',
-                justifyContent: 'center',
-                width: '100%',
-              }}
-            >
-              {hasDoneNameAndBalanceAndIsLoaded && <ListOfGroupPromotions />}
-
-              <Explore setDesktopViewMode={setDesktopViewMode} />
-            </Box>
-
-            <NewUsersCTA balance={balance} />
-          </>
-        )}
-      </Box>
-
-      <Spacer height="180px" />
-    </Box>
+      </AnimatePresence>
+    </LazyMotion>
   );
 };

@@ -65,7 +65,13 @@ export function saveToLocalStorage(key, subKey, newValue) {
   }
 }
 
-export const AppsNavBarDesktop = ({ disableBack, isApps }: { disableBack?: boolean; isApps?: boolean }) => {
+export const AppsNavBarDesktop = ({
+  disableBack,
+  isApps,
+}: {
+  disableBack?: boolean;
+  isApps?: boolean;
+}) => {
   const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
   const [navigationController, setNavigationController] = useAtom(

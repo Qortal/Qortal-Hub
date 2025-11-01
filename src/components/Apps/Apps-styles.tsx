@@ -49,6 +49,14 @@ export const AppsDesktopLibraryBody = styled(Box)(({ theme }) => ({
   width: '100%',
 }));
 
+export const AppsBackContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-start',
+  width: '90%',
+  maxWidth: '1500px',
+}));
+
 export const AppsLibraryContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.default,
