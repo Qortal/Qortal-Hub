@@ -19,12 +19,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import HubIcon from '@mui/icons-material/Hub';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
@@ -106,6 +108,7 @@ import {
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
+  isOpenCoreSetup,
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
@@ -320,6 +323,7 @@ function App() {
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
+  const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
@@ -3976,6 +3980,14 @@ function App() {
             width: 'auto',
           }}
         >
+          {window?.coreSetup && (
+            <Box sx={{ alignSelf: 'center' }}>
+              <IconButton onClick={() => setOpenCoreSetup(true)}>
+                <HubIcon />
+              </IconButton>
+            </Box>
+          )}
+
           <Box sx={{ alignSelf: 'left' }}>
             <LanguageSelector />
           </Box>

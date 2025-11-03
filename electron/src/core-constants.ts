@@ -22,6 +22,7 @@ export const zipurl =
 export const qortaldir = HOME_PATH + '/qortal/';
 export const qortalWindir = 'C:\\Program Files\\Qortal';
 export const qortaljar = HOME_PATH + '/qortal/qortal.jar';
+export const qortalStopScriptLocation = HOME_PATH + '/qortal/stop.sh';
 export const qortalsettings = HOME_PATH + '/qortal/settings.json';
 
 export const javadir = HOME_PATH + '/jdk-17.0.2/';

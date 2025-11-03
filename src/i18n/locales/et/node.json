@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core'i seadistamine",
+    "title": "Kohalik seadistus: Hub ja Core töötavad samas süsteemis",
     "advancedOptions": "lisavalikud",
     "pickPath": "vali kohandatud Qortali paigaldustee, kui sinu Core on paigaldatud mitte-vaikimisi asukohta.",
     "removePath": "eemalda kohandatud Qortali tee"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "valitud kaust ei sisalda qortal.jar-faili",
-    "invalidKey": "sobimatu API-võti"
+    "invalidKey": "sobimatu API-võti",
+    "failed_stop": "Core'i peatamine ebaõnnestus",
+    "failed_bootstrap": "bootstrap ebaõnnestus",
+    "failed_delete": "andmebaasi kustutamine ebaõnnestus"
   },
   "status": {
     "complete": "valmis",
@@ -72,5 +75,15 @@
   "url": {
     "title": "sobimatu URL",
     "description": "sobimatu URL või haare ei tööta"
-  }
+  },
+  "confirmations": {
+    "stop": "kas oled kindel, et soovid Core peatada?",
+    "bootstrap": "kas oled kindel, et soovid bootstrapi käivitada?",
+    "delete": "kas oled kindel, et soovid andmebaasi kustutada?"
+  },
+  "stop": "peata Core",
+  "bootstrap": "bootstrap",
+  "delete": "kustuta andmebaas",
+  "more": "rohkem valikuid",
+  "less": "vähem valikuid"
 }

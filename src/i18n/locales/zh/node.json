@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core 设置",
+    "title": "本地设置：Hub 和 Core 在同一系统上运行",
     "advancedOptions": "高级选项",
     "pickPath": "如果您的 Core 安装在非默认位置，请选择自定义 Qortal 安装路径。",
     "removePath": "移除自定义 Qortal 路径"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "所选目录不包含 qortal.jar",
-    "invalidKey": "无效的 API 密钥"
+    "invalidKey": "无效的 API 密钥",
+    "failed_stop": "无法停止 Core",
+    "failed_bootstrap": "无法引导启动",
+    "failed_delete": "无法删除数据库"
   },
   "status": {
     "complete": "完成",
@@ -72,5 +75,15 @@
   "url": {
     "title": "URL 无效",
     "description": "URL 不正确或节点未运行"
-  }
+  },
+  "confirmations": {
+    "stop": "确定要停止 Core 吗？",
+    "bootstrap": "确定要引导启动吗？",
+    "delete": "确定要删除数据库吗？"
+  },
+  "stop": "停止 Core",
+  "bootstrap": "引导启动",
+  "delete": "删除数据库",
+  "more": "更多选项",
+  "less": "更少选项"
 }

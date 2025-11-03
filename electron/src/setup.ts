@@ -23,16 +23,19 @@ import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
 import { myCapacitorApp } from '.';
 import {
-  checkOsPlatform,
+  bootstrap,
   customQortalInstalledDir,
+  deleteDB,
   determineJavaVersion,
   getApiKey,
   installCore,
   isCoreInstalled,
+  isCorePortRunning,
   isCoreRunning,
   removeCustomQortalPath,
   resetApikey,
   startCore,
+  stopCore,
 } from './core';
 
 const AdmZip = require('adm-zip');
@@ -632,6 +635,51 @@ ipcMain.handle('coreSetup:isCoreRunning', async () => {
   } catch (error) {}
 });
 
+ipcMain.handle('coreSetup:isCoreRunningOnSystem', async () => {
+  try {
+    const running = await isCoreRunning(true);
+
+    return running;
+  } catch (error) {
+    return false;
+  }
+});
+
+ipcMain.handle('coreSetup:verifySteps', async () => {
+  try {
+    const javaVersion = await determineJavaVersion();
+    if (javaVersion != false) {
+      broadcastProgress({
+        step: 'hasJava',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    }
+    const hasCore = await isCoreInstalled();
+    if (hasCore) {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    }
+
+    const running = await isCorePortRunning();
+    if (running) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    }
+  } catch (error) {
+    console.log('error', error);
+  }
+});
+
 ipcMain.handle('coreSetup:isCoreInstalled', async () => {
   try {
     const isInstalled = await isCoreInstalled();
@@ -654,8 +702,36 @@ ipcMain.handle('coreSetup:isCoreInstalled', async () => {
   } catch (error) {}
 });
 
+ipcMain.handle('coreSetup:isCoreInstalledOnSystem', async () => {
+  try {
+    const isInstalled = await isCoreInstalled();
+
+    return isInstalled;
+  } catch (error) {}
+});
+
 ipcMain.handle('coreSetup:installCore', async (event) => {
   try {
+    const isInstalled = await isCoreInstalled();
+    const isRunning = await isCoreRunning();
+    if (isInstalled) {
+      broadcastProgress({
+        step: 'downloadedCore',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    }
+    if (isRunning) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'done',
+        progress: 100,
+        message: '',
+      });
+    }
+
+    if (isInstalled) return;
     const wc = event.sender;
 
     const sendProgress = (p) => {
@@ -670,6 +746,13 @@ ipcMain.handle('coreSetup:startCore', async () => {
   try {
     const running = await startCore();
     return running;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:deleteDB', async () => {
+  try {
+    const isDeleted = await deleteDB();
+    return isDeleted;
   } catch (error) {}
 });
 
@@ -694,6 +777,20 @@ ipcMain.handle('coreSetup:removeCustomPath', async () => {
       customPath: null,
     });
   } catch (error) {}
+});
+ipcMain.handle('coreSetup:stopCore', async () => {
+  try {
+    return await stopCore();
+  } catch (error) {
+    console.error('error', error);
+  }
+});
+ipcMain.handle('coreSetup:bootstrap', async () => {
+  try {
+    return await bootstrap();
+  } catch (error) {
+    console.error('error', error);
+  }
 });
 
 ipcMain.handle('coreSetup:pickQortalDirectory', async () => {

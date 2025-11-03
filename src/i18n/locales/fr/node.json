@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Configuration de Qortal Core",
+    "title": "Configuration locale : le Hub et le Core fonctionnent sur le même système",
     "advancedOptions": "options avancées",
     "pickPath": "choisissez un chemin d’installation personnalisé de Qortal si votre Core est installé dans un emplacement non par défaut.",
     "removePath": "supprimer le chemin Qortal personnalisé"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "le répertoire choisi ne contient pas de qortal.jar",
-    "invalidKey": "clé API invalide"
+    "invalidKey": "clé API invalide",
+    "failed_stop": "impossible d’arrêter le Core",
+    "failed_bootstrap": "impossible d’initialiser",
+    "failed_delete": "impossible de supprimer la base de données"
   },
   "status": {
     "complete": "terminé",
@@ -72,5 +75,15 @@
   "url": {
     "title": "URL invalide",
     "description": "URL incorrecte ou nœud non en cours d’exécution"
-  }
+  },
+  "confirmations": {
+    "stop": "êtes-vous sûr de vouloir arrêter le Core ?",
+    "bootstrap": "êtes-vous sûr de vouloir initialiser ?",
+    "delete": "êtes-vous sûr de vouloir supprimer la base de données ?"
+  },
+  "stop": "arrêter le Core",
+  "bootstrap": "initialiser",
+  "delete": "supprimer la base de données",
+  "more": "plus d’options",
+  "less": "moins d’options"
 }
