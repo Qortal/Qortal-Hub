@@ -5,6 +5,7 @@ import fs from 'fs';
 import { spawn, exec, execFile } from 'child_process';
 import readline from 'readline';
 import { promises as fsPromise } from 'fs';
+import os from 'os';
 
 export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
 export const CORE_LOCALHOST = '127.0.0.1';
@@ -2192,22 +2193,67 @@ export async function bootstrap(): Promise<boolean> {
 
 const rmAsync = promisify(fs.rm ?? fs.rmdir); // Node 14+ supports fs.rm
 
+async function readJsonIfExists<T = any>(file: string): Promise<T | null> {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const raw = await fs.promises.readFile(file, 'utf8');
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteDB(): Promise<boolean> {
   try {
     const isInstalled = await isCoreInstalled();
     if (!isInstalled) return false;
 
     const selectedCustomDir = await customQortalInstalledDir();
-
     const isWin = process.platform === 'win32';
     let qortalDirLocation = isWin ? qortalWindir : qortaldir;
 
-    if (selectedCustomDir) {
-      qortalDirLocation = selectedCustomDir;
+    if (isWin) {
+      // Windows: get repositoryPath via Program Files + userPath + settings.json chain
+      const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+      const pfSettingsPath = path.join(programFiles, 'Qortal', 'settings.json');
+      const pfSettings = await readJsonIfExists<{ userPath?: string }>(
+        pfSettingsPath
+      );
+      const userPath = pfSettings?.userPath;
+
+      let repositoryPath: string | undefined;
+      if (userPath) {
+        const userSettingsPath = path.join(userPath, 'settings.json');
+        const userSettings = await readJsonIfExists<{
+          repositoryPath?: string;
+        }>(userSettingsPath);
+        repositoryPath = userSettings?.repositoryPath;
+      }
+
+      const defaultRepo = path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+        'qortal'
+      );
+
+      qortalDirLocation = repositoryPath || defaultRepo;
+    } else {
+      // 🐧 macOS/Linux
+      if (selectedCustomDir) {
+        qortalDirLocation = selectedCustomDir;
+      }
+
+      // Check if qortalDirLocation has a settings.json with repositoryPath
+      const settingsPath = path.join(qortalDirLocation, 'settings.json');
+      const settings = await readJsonIfExists<{ repositoryPath?: string }>(
+        settingsPath
+      );
+      if (settings?.repositoryPath) {
+        qortalDirLocation = settings.repositoryPath;
+      }
     }
 
     const dbPath = path.join(qortalDirLocation, 'db');
-    // Check if the db folder exists
+
     if (fs.existsSync(dbPath)) {
       const isRunning = await isCoreRunning();
       if (isRunning) {
@@ -2222,14 +2268,11 @@ export async function deleteDB(): Promise<boolean> {
       }
 
       console.log(`Deleting DB folder at: ${dbPath}`);
-
-      // Use fs.rm with recursive flag (Node 14.14+)
       await rmAsync(dbPath, { recursive: true, force: true });
-
       console.log('DB folder deleted successfully');
       return true;
     } else {
-      console.log('ℹNo DB folder found to delete');
+      console.log('ℹ No DB folder found to delete');
       return false;
     }
   } catch (error) {

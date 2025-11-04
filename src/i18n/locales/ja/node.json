@@ -85,5 +85,6 @@
   "bootstrap": "ブートストラップ",
   "delete": "データベースを削除",
   "more": "その他のオプション",
-  "less": "少ないオプション"
+  "less": "少ないオプション",
+  "enableAuthWhenSyncing": "同期時に認証を有効にする"
 }

@@ -85,5 +85,6 @@
   "bootstrap": "initialiser",
   "delete": "supprimer la base de données",
   "more": "plus d’options",
-  "less": "moins d’options"
+  "less": "moins d’options",
+  "enableAuthWhenSyncing": "activer l'authentification lors de la synchronisation"
 }

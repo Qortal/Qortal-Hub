@@ -85,5 +85,6 @@
   "bootstrap": "bootstrap",
   "delete": "delete db",
   "more": "more options",
-  "less": "less options"
+  "less": "less options",
+  "enableAuthWhenSyncing": "enable auth when syncing"
 }

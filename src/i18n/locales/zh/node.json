@@ -85,5 +85,6 @@
   "bootstrap": "引导启动",
   "delete": "删除数据库",
   "more": "更多选项",
-  "less": "更少选项"
+  "less": "更少选项",
+  "enableAuthWhenSyncing": "同步时启用身份验证"
 }

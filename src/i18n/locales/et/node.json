@@ -85,5 +85,6 @@
   "bootstrap": "bootstrap",
   "delete": "kustuta andmebaas",
   "more": "rohkem valikuid",
-  "less": "vähem valikuid"
+  "less": "vähem valikuid",
+  "enableAuthWhenSyncing": "luba autentimine sünkroonimisel"
 }

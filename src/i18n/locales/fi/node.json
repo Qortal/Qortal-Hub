@@ -85,5 +85,6 @@
   "bootstrap": "bootstrap",
   "delete": "poista tietokanta",
   "more": "lisää vaihtoehtoja",
-  "less": "vähemmän vaihtoehtoja"
+  "less": "vähemmän vaihtoehtoja",
+  "enableAuthWhenSyncing": "ota todennus käyttöön synkronoinnin aikana"
 }

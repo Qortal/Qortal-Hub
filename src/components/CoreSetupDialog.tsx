@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   Stack,
@@ -41,6 +42,9 @@ import {
 } from 'react';
 import { Spacer } from '../common/Spacer';
 import { useModal } from '../hooks/useModal';
+import { LocalNodeSwitch } from './Group/Settings';
+import { useAtom } from 'jotai';
+import { enableAuthWhenSyncingAtom } from '../atoms/global';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -124,9 +128,13 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const [deleteDBLoading, setDeleteDBLoading] = useState(false);
   const [coreRunningOnSystem, setCoreRunningOnSystem] = useState(false);
   const [coreInstalledOnSystem, setCoreInstalledOnSystem] = useState(false);
+  const [enableAuthWhenSyncing, setEnableAuthWhenSyncing] = useAtom(
+    enableAuthWhenSyncingAtom
+  );
   const isActiveRef = useRef(false);
   const bootstrapLoadingRef = useRef(false);
   const deleteDBLoadingRef = useRef(false);
+  const stopCoreLoadingRef = useRef(false);
   const { isShow, onCancel, onOk, message, show } = useModal();
 
   const theme = useTheme();
@@ -198,9 +206,10 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   useEffect(() => {
     isActiveRef.current = isActive;
-    bootstrapLoadingRef.current = deleteDBLoading;
-    deleteDBLoadingRef.current = stopCoreLoading;
-  }, [isActive, deleteDBLoading, stopCoreLoading]);
+    bootstrapLoadingRef.current = bootstrapLoading;
+    deleteDBLoadingRef.current = deleteDBLoading;
+    stopCoreLoadingRef.current = stopCoreLoading;
+  }, [isActive, deleteDBLoading, stopCoreLoading, bootstrapLoading]);
 
   const computedActionLabel = useMemo(
     () =>
@@ -269,11 +278,19 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   const getIsCoreRunningOnSystem = async () => {
     try {
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current
+      )
+        return;
       const response = await window?.coreSetup?.isCoreRunningOnSystem();
       if (
         isActiveRef.current ||
         bootstrapLoadingRef.current ||
-        deleteDBLoadingRef.current
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current
       )
         return;
       setCoreRunningOnSystem(response);
@@ -712,6 +729,31 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                     })}
                   </Button>
                   <Typography>{errorDeleteDB}</Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <LocalNodeSwitch
+                        checked={enableAuthWhenSyncing}
+                        onChange={(e) => {
+                          setEnableAuthWhenSyncing(e.target.checked);
+                          localStorage.setItem(
+                            'enableAuthWhenSyncing',
+                            JSON.stringify(e.target.checked)
+                          );
+                        }}
+                      />
+                    }
+                    label={t('node:enableAuthWhenSyncing', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  />
                 </Box>
               </Box>
             </Collapse>

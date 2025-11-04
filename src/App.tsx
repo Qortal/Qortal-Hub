@@ -99,6 +99,7 @@ import {
   authenticatePasswordAtom,
   balanceAtom,
   canSaveSettingToQdnAtom,
+  enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
   groupAnnouncementsAtom,
@@ -442,6 +443,7 @@ function App() {
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
 
   const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
 
@@ -465,6 +467,12 @@ function App() {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
     if (isDevModeFromStorage) {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
+    }
+    const enableAuthWhenSyncingFromStorage = localStorage.getItem(
+      'enableAuthWhenSyncing'
+    );
+    if (enableAuthWhenSyncingFromStorage) {
+      setEnableAuthWhenSyncing(JSON.parse(enableAuthWhenSyncingFromStorage));
     }
   }, []);
 
