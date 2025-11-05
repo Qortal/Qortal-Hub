@@ -2232,10 +2232,11 @@ export async function deleteDB(): Promise<boolean> {
 
       const defaultRepo = path.join(
         process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
-        'qortal'
+        'Qortal'
       );
-
       qortalDirLocation = repositoryPath || defaultRepo;
+
+      qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
     } else {
       // 🐧 macOS/Linux
       if (selectedCustomDir) {
@@ -2251,6 +2252,8 @@ export async function deleteDB(): Promise<boolean> {
         qortalDirLocation = settings.repositoryPath;
       }
     }
+
+    qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
 
     const dbPath = path.join(qortalDirLocation, 'db');
 
@@ -2273,6 +2276,71 @@ export async function deleteDB(): Promise<boolean> {
       return true;
     } else {
       console.log('ℹ No DB folder found to delete');
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Failed to delete DB folder:', error);
+    return false;
+  }
+}
+
+export async function dbExists(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (!isInstalled) return false;
+
+    const selectedCustomDir = await customQortalInstalledDir();
+    const isWin = process.platform === 'win32';
+    let qortalDirLocation = isWin ? qortalWindir : qortaldir;
+
+    if (isWin) {
+      // Windows: get repositoryPath via Program Files + userPath + settings.json chain
+      const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+      const pfSettingsPath = path.join(programFiles, 'Qortal', 'settings.json');
+      const pfSettings = await readJsonIfExists<{ userPath?: string }>(
+        pfSettingsPath
+      );
+      const userPath = pfSettings?.userPath;
+
+      let repositoryPath: string | undefined;
+      if (userPath) {
+        const userSettingsPath = path.join(userPath, 'settings.json');
+        const userSettings = await readJsonIfExists<{
+          repositoryPath?: string;
+        }>(userSettingsPath);
+        repositoryPath = userSettings?.repositoryPath;
+      }
+
+      const defaultRepo = path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+        'Qortal'
+      );
+      qortalDirLocation = repositoryPath || defaultRepo;
+
+      qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+    } else {
+      // 🐧 macOS/Linux
+      if (selectedCustomDir) {
+        qortalDirLocation = selectedCustomDir;
+      }
+
+      // Check if qortalDirLocation has a settings.json with repositoryPath
+      const settingsPath = path.join(qortalDirLocation, 'settings.json');
+      const settings = await readJsonIfExists<{ repositoryPath?: string }>(
+        settingsPath
+      );
+      if (settings?.repositoryPath) {
+        qortalDirLocation = settings.repositoryPath;
+      }
+    }
+
+    qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+
+    const dbPath = path.join(qortalDirLocation, 'db');
+
+    if (fs.existsSync(dbPath)) {
+      return true;
+    } else {
       return false;
     }
   } catch (error) {

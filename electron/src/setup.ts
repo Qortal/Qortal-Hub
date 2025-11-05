@@ -25,6 +25,7 @@ import { myCapacitorApp } from '.';
 import {
   bootstrap,
   customQortalInstalledDir,
+  dbExists,
   deleteDB,
   determineJavaVersion,
   getApiKey,
@@ -752,6 +753,13 @@ ipcMain.handle('coreSetup:startCore', async () => {
 ipcMain.handle('coreSetup:deleteDB', async () => {
   try {
     const isDeleted = await deleteDB();
+    return isDeleted;
+  } catch (error) {}
+});
+
+ipcMain.handle('coreSetup:dbExists', async () => {
+  try {
+    const isDeleted = await dbExists();
     return isDeleted;
   } catch (error) {}
 });

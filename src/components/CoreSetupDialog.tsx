@@ -125,6 +125,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const [mode, setMode] = useState(1);
   const [stopCoreLoading, setStopCoreLoading] = useState(false);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [dbExists, setDbExists] = useState(false);
   const [deleteDBLoading, setDeleteDBLoading] = useState(false);
   const [coreRunningOnSystem, setCoreRunningOnSystem] = useState(false);
   const [coreInstalledOnSystem, setCoreInstalledOnSystem] = useState(false);
@@ -132,6 +133,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     enableAuthWhenSyncingAtom
   );
   const isActiveRef = useRef(false);
+  const startPause = useRef(false);
   const bootstrapLoadingRef = useRef(false);
   const deleteDBLoadingRef = useRef(false);
   const stopCoreLoadingRef = useRef(false);
@@ -282,7 +284,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         isActiveRef.current ||
         bootstrapLoadingRef.current ||
         deleteDBLoadingRef.current ||
-        stopCoreLoadingRef.current
+        stopCoreLoadingRef.current ||
+        startPause.current
       )
         return;
       const response = await window?.coreSetup?.isCoreRunningOnSystem();
@@ -314,6 +317,24 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     }
   };
 
+  const getDbExists = async () => {
+    try {
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current ||
+        startPause.current
+      )
+        return;
+      const response = await window?.coreSetup?.dbExists();
+
+      setDbExists(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     if (
       !open ||
@@ -326,12 +347,14 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     if (window?.coreSetup?.isCoreRunningOnSystem) {
       getIsCoreRunningOnSystem();
       getIsCoreInstalledOnSystem();
+      getDbExists();
     }
     const intervalId = setInterval(() => {
       window?.coreSetup?.verifySteps();
       if (window?.coreSetup?.isCoreRunningOnSystem) {
         getIsCoreRunningOnSystem();
         getIsCoreInstalledOnSystem();
+        getDbExists();
       }
     }, 5000); // every 5s
 
@@ -342,6 +365,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     try {
       setErrorStop('');
       setStopCoreLoading(true);
+      stopCoreLoadingRef.current = true;
       await show({
         message: t('node:confirmations.stop', {
           postProcess: 'capitalizeFirstChar',
@@ -715,6 +739,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                     onClick={deleteDB}
                     variant="contained"
                     disabled={
+                      !dbExists ||
                       deleteDBLoading ||
                       !coreInstalledOnSystem ||
                       isActive ||
@@ -783,7 +808,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 setErrorBootstrap('');
                 setErrorDeleteDB('');
                 if (onAction) {
+                  startPause.current = true;
                   onAction();
+                  setTimeout(() => {
+                    startPause.current = false;
+                  }, 7000);
                 }
               }}
               color="success"

@@ -90,6 +90,10 @@ try {
       const raw = await ipcRenderer.invoke('coreSetup:deleteDB');
       return raw;
     },
+    dbExists: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:dbExists');
+      return raw;
+    },
     installCore: async () => {
       const raw = await ipcRenderer.invoke('coreSetup:installCore');
       return raw;
