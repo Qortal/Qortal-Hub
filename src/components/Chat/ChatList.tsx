@@ -244,6 +244,7 @@ export const ChatList = ({
                 let message = messages[index] || null; // Safeguard against undefined
                 let replyIndex = -1;
                 let reply = null;
+                let replyExpiredMeta: any = null;
                 let reactions: ReactionsMap | null = null;
                 let isUpdating = false;
 
@@ -264,6 +265,27 @@ export const ChatList = ({
                           chatReferences[reply?.signature]?.edit?.message;
                         reply.editTimestamp =
                           chatReferences[reply?.signature]?.edit?.timestamp;
+                      }
+                    } else if (message?.repliedTo && replyIndex === -1) {
+                      // If original message is missing, attempt to use any edit metadata as minimal context
+                      const editMeta = chatReferences?.[message?.repliedTo]?.edit;
+                      if (editMeta) {
+                        replyExpiredMeta = {
+                          senderName: editMeta?.senderName,
+                          sender: editMeta?.sender,
+                          messageText:
+                            editMeta?.messageText !== undefined
+                              ? editMeta?.messageText
+                              : undefined,
+                          text:
+                            editMeta?.message !== undefined
+                              ? editMeta?.message
+                              : undefined,
+                          decryptedData: editMeta,
+                          editTimestamp: editMeta?.timestamp,
+                        };
+                      } else {
+                        replyExpiredMeta = { missing: true };
                       }
                     }
 
@@ -392,6 +414,7 @@ export const ChatList = ({
                         reactions={reactions}
                         reply={reply}
                         replyIndex={replyIndex}
+                        replyExpiredMeta={replyExpiredMeta}
                         scrollToItem={goToMessage}
                       />
                     </ErrorBoundary>
