@@ -4,10 +4,14 @@ import {
   AccordionSummary,
   Box,
   Button,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
+  FormControlLabel,
+  IconButton,
   LinearProgress,
   Stack,
   Step,
@@ -15,6 +19,7 @@ import {
   StepLabel,
   Stepper,
   Typography,
+  useTheme,
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 
@@ -27,7 +32,19 @@ import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
 import { QORTAL_APP_CONTEXT } from '../App';
 import { Trans, useTranslation } from 'react-i18next';
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Spacer } from '../common/Spacer';
+import { useModal } from '../hooks/useModal';
+import { LocalNodeSwitch } from './Group/Settings';
+import { useAtom } from 'jotai';
+import { enableAuthWhenSyncingAtom } from '../atoms/global';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -100,9 +117,29 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   } = props;
   const { setOpenSnackGlobal, setInfoSnackCustom } =
     useContext(QORTAL_APP_CONTEXT);
-
+  const [isExtended, setIsExtended] = useState(false);
+  const [errorStop, setErrorStop] = useState('');
+  const [errorDeleteDB, setErrorDeleteDB] = useState('');
+  const [errorBootstrap, setErrorBootstrap] = useState('');
   const { t } = useTranslation(['node', 'core']);
   const [mode, setMode] = useState(1);
+  const [stopCoreLoading, setStopCoreLoading] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [dbExists, setDbExists] = useState(false);
+  const [deleteDBLoading, setDeleteDBLoading] = useState(false);
+  const [coreRunningOnSystem, setCoreRunningOnSystem] = useState(false);
+  const [coreInstalledOnSystem, setCoreInstalledOnSystem] = useState(false);
+  const [enableAuthWhenSyncing, setEnableAuthWhenSyncing] = useAtom(
+    enableAuthWhenSyncingAtom
+  );
+  const isActiveRef = useRef(false);
+  const startPause = useRef(false);
+  const bootstrapLoadingRef = useRef(false);
+  const deleteDBLoadingRef = useRef(false);
+  const stopCoreLoadingRef = useRef(false);
+  const { isShow, onCancel, onOk, message, show } = useModal();
+
+  const theme = useTheme();
   const statusText = useCallback(
     (status: StepStatus) => {
       switch (status) {
@@ -167,6 +204,14 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   const downloaded = steps.downloadedCore.status === 'done';
   const running = steps.coreRunning.status === 'done';
+  const isActive = steps['coreRunning']?.status === 'active';
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+    bootstrapLoadingRef.current = bootstrapLoading;
+    deleteDBLoadingRef.current = deleteDBLoading;
+    stopCoreLoadingRef.current = stopCoreLoading;
+  }, [isActive, deleteDBLoading, stopCoreLoading, bootstrapLoading]);
 
   const computedActionLabel = useMemo(
     () =>
@@ -223,6 +268,173 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       setMode(2);
     }
   }, [downloaded]);
+
+  useEffect(() => {
+    if (open) {
+      verifyCoreNotRunningFunc();
+      setErrorStop('');
+      setErrorDeleteDB('');
+      setErrorBootstrap('');
+    }
+  }, [open, verifyCoreNotRunningFunc]);
+
+  const getIsCoreRunningOnSystem = async () => {
+    try {
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current ||
+        startPause.current
+      )
+        return;
+      const response = await window?.coreSetup?.isCoreRunningOnSystem();
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current
+      )
+        return;
+      setCoreRunningOnSystem(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const getIsCoreInstalledOnSystem = async () => {
+    try {
+      const response = await window?.coreSetup?.isCoreInstalledOnSystem();
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current
+      )
+        return;
+      setCoreInstalledOnSystem(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const getDbExists = async () => {
+    try {
+      if (
+        isActiveRef.current ||
+        bootstrapLoadingRef.current ||
+        deleteDBLoadingRef.current ||
+        stopCoreLoadingRef.current ||
+        startPause.current
+      )
+        return;
+      const response = await window?.coreSetup?.dbExists();
+
+      setDbExists(response);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      !open ||
+      !window?.coreSetup ||
+      isActive ||
+      bootstrapLoading ||
+      deleteDBLoading
+    )
+      return; // only start when modal is open
+    if (window?.coreSetup?.isCoreRunningOnSystem) {
+      getIsCoreRunningOnSystem();
+      getIsCoreInstalledOnSystem();
+      getDbExists();
+    }
+    const intervalId = setInterval(() => {
+      window?.coreSetup?.verifySteps();
+      if (window?.coreSetup?.isCoreRunningOnSystem) {
+        getIsCoreRunningOnSystem();
+        getIsCoreInstalledOnSystem();
+        getDbExists();
+      }
+    }, 5000); // every 5s
+
+    return () => clearInterval(intervalId); // cleanup on close/unmount
+  }, [open, isActive, bootstrapLoading, deleteDBLoading]);
+
+  const stopCore = async () => {
+    try {
+      setErrorStop('');
+      setStopCoreLoading(true);
+      stopCoreLoadingRef.current = true;
+      await show({
+        message: t('node:confirmations.stop', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+
+      const response = await window?.coreSetup?.stopCore();
+      if (response === true) {
+        verifyCoreNotRunningFunc();
+      } else {
+        setErrorStop(
+          t('node:error.failed_stop', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setStopCoreLoading(false);
+    }
+  };
+  const bootstrap = async () => {
+    try {
+      setErrorBootstrap('');
+      setBootstrapLoading(true);
+      await show({
+        message: t('node:confirmations.bootstrap', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      const response = await window?.coreSetup?.bootstrap();
+      if (response !== true) {
+        setErrorBootstrap(
+          t('node:error.failed_bootstrap', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setBootstrapLoading(false);
+    }
+  };
+
+  const deleteDB = async () => {
+    try {
+      setErrorDeleteDB('');
+      setDeleteDBLoading(true);
+      await show({
+        message: t('node:confirmations.delete', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      const response = await window?.coreSetup?.deleteDB();
+      if (response !== true) {
+        setErrorDeleteDB(
+          t('node:error.failed_delete', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setDeleteDBLoading(false);
+    }
+  };
 
   return (
     <Dialog
@@ -336,6 +548,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             })}
           </DialogTitle>
           <DialogContent dividers>
+            <Typography></Typography>
             {!isWindows && (
               <Accordion>
                 <AccordionSummary
@@ -445,11 +658,144 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 );
               })}
             </Stepper>
+            <Spacer height="20px" />
+            <Button onClick={() => setIsExtended((prev) => !prev)}>
+              {!isExtended
+                ? t(`node:more`, {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t(`node:less`, {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+            </Button>
+            <Collapse in={isExtended} timeout="auto" unmountOnExit>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '15px',
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <Button
+                    onClick={stopCore}
+                    variant="contained"
+                    disabled={
+                      stopCoreLoading ||
+                      !running ||
+                      !coreRunningOnSystem ||
+                      deleteDBLoading ||
+                      bootstrapLoading
+                    }
+                    loading={stopCoreLoading}
+                  >
+                    {t(`node:stop`, {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Button>
+                  <Typography>{errorStop}</Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <Button
+                    onClick={bootstrap}
+                    variant="contained"
+                    disabled={
+                      bootstrapLoading ||
+                      !coreInstalledOnSystem ||
+                      isActive ||
+                      !coreRunningOnSystem ||
+                      stopCoreLoading ||
+                      deleteDBLoading
+                    }
+                    loading={bootstrapLoading}
+                  >
+                    {t(`node:bootstrap`, {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Button>
+                  <Typography>{errorBootstrap}</Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <Button
+                    onClick={deleteDB}
+                    variant="contained"
+                    disabled={
+                      !dbExists ||
+                      deleteDBLoading ||
+                      !coreInstalledOnSystem ||
+                      isActive ||
+                      stopCoreLoading ||
+                      deleteDBLoading ||
+                      bootstrapLoading
+                    }
+                    loading={deleteDBLoading}
+                  >
+                    {t(`node:delete`, {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Button>
+                  <Typography>{errorDeleteDB}</Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '5px',
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <LocalNodeSwitch
+                        checked={enableAuthWhenSyncing}
+                        onChange={(e) => {
+                          setEnableAuthWhenSyncing(e.target.checked);
+                          localStorage.setItem(
+                            'enableAuthWhenSyncing',
+                            JSON.stringify(e.target.checked)
+                          );
+                        }}
+                      />
+                    }
+                    label={t('node:enableAuthWhenSyncing', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  />
+                </Box>
+              </Box>
+            </Collapse>
           </DialogContent>
 
           <DialogActions sx={{ p: 2 }}>
             {onClose && !running && (
-              <Button onClick={onClose} disabled={disableClose} variant="text">
+              <Button
+                onClick={onClose}
+                disabled={
+                  disableClose ||
+                  stopCoreLoading ||
+                  actionLoading ||
+                  bootstrapLoading
+                }
+                variant="text"
+              >
                 {t('core:action.close', {
                   postProcess: 'capitalizeFirstChar',
                 })}
@@ -457,10 +803,21 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             )}
 
             <Button
-              onClick={onAction}
+              onClick={() => {
+                setErrorStop('');
+                setErrorBootstrap('');
+                setErrorDeleteDB('');
+                if (onAction) {
+                  startPause.current = true;
+                  onAction();
+                  setTimeout(() => {
+                    startPause.current = false;
+                  }, 7000);
+                }
+              }}
               color="success"
               variant="contained"
-              disabled={!canAction}
+              disabled={!canAction || stopCoreLoading || bootstrapLoading}
               loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
             >
               {actionLabel}
@@ -468,6 +825,72 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
           </DialogActions>
         </>
       )}
+
+      <Dialog
+        open={isShow}
+        onClose={onCancel}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle
+          id="alert-dialog-title"
+          sx={{
+            textAlign: 'center',
+            color: theme.palette.text.primary,
+            fontWeight: 'bold',
+            opacity: 1,
+          }}
+        ></DialogTitle>
+
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            {message?.message}
+          </DialogContentText>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            sx={{
+              backgroundColor: theme.palette.other.positive,
+              color: theme.palette.text.primary,
+              fontWeight: 'bold',
+              opacity: 0.7,
+              '&:hover': {
+                backgroundColor: theme.palette.other.positive,
+                color: 'black',
+                opacity: 1,
+              },
+            }}
+            variant="contained"
+            onClick={onOk}
+            autoFocus
+          >
+            {t('core:action.accept', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
+
+          <Button
+            sx={{
+              backgroundColor: theme.palette.other.danger,
+              color: 'black',
+              fontWeight: 'bold',
+              opacity: 0.7,
+              '&:hover': {
+                backgroundColor: theme.palette.other.danger,
+                color: 'black',
+                opacity: 1,
+              },
+            }}
+            variant="contained"
+            onClick={onCancel}
+          >
+            {t('core:action.decline', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }

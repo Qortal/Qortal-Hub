@@ -8,6 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
+  enableAuthWhenSyncingAtom,
   extStateAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
@@ -49,7 +50,7 @@ export const useAuth = () => {
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
-
+  const [enableAuthWhenSyncing] = useAtom(enableAuthWhenSyncingAtom);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
   );
@@ -305,7 +306,7 @@ export const useAuth = () => {
       const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
-      if (data?.syncPercent !== 100) {
+      if (data?.syncPercent !== 100 && !enableAuthWhenSyncing) {
         setIsOpenSyncingDialog(true);
         return false;
       }
@@ -313,7 +314,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, setIsOpenSyncingDialog]);
+  }, [useLocalNode, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean) => {

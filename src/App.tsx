@@ -19,12 +19,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import HubIcon from '@mui/icons-material/Hub';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
@@ -97,6 +99,7 @@ import {
   authenticatePasswordAtom,
   balanceAtom,
   canSaveSettingToQdnAtom,
+  enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
   groupAnnouncementsAtom,
@@ -106,6 +109,7 @@ import {
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
+  isOpenCoreSetup,
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
@@ -320,6 +324,7 @@ function App() {
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
+  const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
@@ -438,6 +443,7 @@ function App() {
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
 
   const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
 
@@ -461,6 +467,12 @@ function App() {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
     if (isDevModeFromStorage) {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
+    }
+    const enableAuthWhenSyncingFromStorage = localStorage.getItem(
+      'enableAuthWhenSyncing'
+    );
+    if (enableAuthWhenSyncingFromStorage) {
+      setEnableAuthWhenSyncing(JSON.parse(enableAuthWhenSyncingFromStorage));
     }
   }, []);
 
@@ -3976,6 +3988,14 @@ function App() {
             width: 'auto',
           }}
         >
+          {window?.coreSetup && (
+            <Box sx={{ alignSelf: 'center' }}>
+              <IconButton onClick={() => setOpenCoreSetup(true)}>
+                <HubIcon />
+              </IconButton>
+            </Box>
+          )}
+
           <Box sx={{ alignSelf: 'left' }}>
             <LanguageSelector />
           </Box>

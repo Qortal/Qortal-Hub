@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Configuração do Qortal Core",
+    "title": "Configuração local: Hub e Core executam no mesmo sistema",
     "advancedOptions": "opções avançadas",
     "pickPath": "escolha um caminho de instalação personalizado do Qortal se o seu Core estiver instalado em um local não padrão.",
     "removePath": "remover caminho personalizado do Qortal"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "o diretório escolhido não contém um qortal.jar",
-    "invalidKey": "chave API inválida"
+    "invalidKey": "chave API inválida",
+    "failed_stop": "não foi possível parar o Core",
+    "failed_bootstrap": "não foi possível inicializar",
+    "failed_delete": "não foi possível excluir o banco de dados"
   },
   "status": {
     "complete": "completo",
@@ -72,5 +75,16 @@
   "url": {
     "title": "URL inválido",
     "description": "URL incorreta ou nó não está em execução"
-  }
+  },
+  "confirmations": {
+    "stop": "tem certeza de que deseja parar o Core?",
+    "bootstrap": "tem certeza de que deseja inicializar?",
+    "delete": "tem certeza de que deseja excluir o banco de dados?"
+  },
+  "stop": "parar Core",
+  "bootstrap": "inicializar",
+  "delete": "excluir banco de dados",
+  "more": "mais opções",
+  "less": "menos opções",
+  "enableAuthWhenSyncing": "ativar autenticação ao sincronizar"
 }

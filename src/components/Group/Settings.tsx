@@ -44,7 +44,7 @@ import { executeEvent } from '../../utils/events';
 import { useTranslation } from 'react-i18next';
 import { TransitionUp } from '../../common/Transitions.tsx';
 
-const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
+export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
   '& .MuiSwitch-track': {
     borderRadius: 22 / 2,

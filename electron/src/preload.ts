@@ -70,8 +70,28 @@ try {
       const raw = await ipcRenderer.invoke('coreSetup:isCoreRunning');
       return raw;
     },
+    isCoreRunningOnSystem: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:isCoreRunning');
+      return raw;
+    },
+    isCoreInstalledOnSystem: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:isCoreInstalledOnSystem');
+      return raw;
+    },
     isCoreInstalled: async () => {
       const raw = await ipcRenderer.invoke('coreSetup:isCoreInstalled');
+      return raw;
+    },
+    verifySteps: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:verifySteps');
+      return raw;
+    },
+    deleteDB: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:deleteDB');
+      return raw;
+    },
+    dbExists: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:dbExists');
       return raw;
     },
     installCore: async () => {
@@ -96,6 +116,14 @@ try {
     },
     removeCustomPath: async () => {
       const raw = await ipcRenderer.invoke('coreSetup:removeCustomPath');
+      return raw;
+    },
+    stopCore: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:stopCore');
+      return raw;
+    },
+    bootstrap: async () => {
+      const raw = await ipcRenderer.invoke('coreSetup:bootstrap');
       return raw;
     },
     onProgress: (cb: (p: any) => void) => {

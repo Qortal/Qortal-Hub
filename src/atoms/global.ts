@@ -71,6 +71,7 @@ export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
 export const isOpenDialogCustomApikey = atomWithReset<boolean>(false);
 export const isOpenCoreSetup = atomWithReset<boolean>(false);
 export const isOpenSyncingDialogAtom = atomWithReset<boolean>(false);
+export const enableAuthWhenSyncingAtom = atomWithReset<boolean>(false);
 export const isOpenUrlInvalidAtom = atomWithReset<boolean>(false);
 export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
