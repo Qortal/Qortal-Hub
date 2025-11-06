@@ -52,7 +52,6 @@ const officialAppList = [
   'q-fund',
   'q-shop',
   'q-trade',
-  'q-support',
   'q-manager',
   'q-mintership',
   'q-wallets',
@@ -60,6 +59,7 @@ const officialAppList = [
   'q-node',
   'names',
   'q-follow',
+  'q-assets',
 ];
 
 const ScrollerStyled = styled('div')({
