@@ -93,12 +93,6 @@ export const AppsDesktop = ({
   }, [myName, availableQapps]);
 
   useEffect(() => {
-    if (show) {
-      showTutorial('qapps');
-    }
-  }, [show]);
-
-  useEffect(() => {
     setTimeout(() => {
       executeEvent('setTabsToNav', {
         data: {

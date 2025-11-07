@@ -486,18 +486,6 @@ function App() {
       });
   }, [extState]);
 
-  useEffect(() => {
-    if (!shownTutorialsInitiated) return;
-    if (extState === 'not-authenticated') {
-      // TODO update tutorial
-      // showTutorial('create-account');
-    } else if (extState === 'create-wallet' && walletToBeDownloaded) {
-      showTutorial('important-information');
-    } else if (extState === 'authenticated') {
-      showTutorial('getting-started');
-    }
-  }, [extState, walletToBeDownloaded, shownTutorialsInitiated]);
-
   //resets for recoil
   const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
   const resetAtomIsUsingImportExportSettingsAtom = useResetAtom(
