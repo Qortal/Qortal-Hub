@@ -1,48 +1,59 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 // Import path module for resolving file paths
-import fixReactVirtualized from "esbuild-plugin-react-virtualized";
-import wasm from "vite-plugin-wasm";
-import topLevelAwait from "vite-plugin-top-level-await";
-import { VitePWA } from "vite-plugin-pwa";
+import fixReactVirtualized from 'esbuild-plugin-react-virtualized';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  test: {
-    environment: "jsdom",
-    globals: true,
-    setupFiles: ["./src/test/setup.ts"],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+      },
+    },
   },
-  assetsInclude: ["**/*.wasm"],
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+  },
+  assetsInclude: ['**/*.wasm'],
   plugins: [
     react(),
     wasm(),
     topLevelAwait(),
     VitePWA({
-      registerType: "prompt",
+      registerType: 'prompt',
       manifest: {
-        name: "Qortal Hub",
-        short_name: "Hub",
-        description: "Your easy access to the Qortal blockchain",
-        start_url: "/",
-        display: "standalone",
-        theme_color: "#ffffff",
-        background_color: "#ffffff",
+        name: 'Qortal Hub',
+        short_name: 'Hub',
+        description: 'Your easy access to the Qortal blockchain',
+        start_url: '/',
+        display: 'standalone',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         icons: [
           {
-            src: "/qortal192.png",
-            sizes: "192x192",
-            type: "image/png",
+            src: '/qortal192.png',
+            sizes: '192x192',
+            type: 'image/png',
           },
           {
-            src: "/qortal.png",
-            sizes: "512x512",
-            type: "image/png",
+            src: '/qortal.png',
+            sizes: '512x512',
+            type: 'image/png',
           },
         ],
       },
       workbox: {
-        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB limit
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB limit
         disableDevLogs: true, // Suppresses logs in development
       },
     }),

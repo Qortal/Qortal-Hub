@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import QRCode from 'react-qr-code';
 import { TextP } from '../styles/App-styles';
 import { Box, Typography } from '@mui/material';

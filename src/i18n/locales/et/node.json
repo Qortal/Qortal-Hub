@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "title": "Kohalik seadistus: Hub ja Core töötavad samas süsteemis",
+    "advancedOptions": "lisavalikud",
+    "pickPath": "vali kohandatud Qortali paigaldustee, kui sinu Core on paigaldatud mitte-vaikimisi asukohta.",
+    "removePath": "eemalda kohandatud Qortali tee"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab sulle täieliku kontrolli oma andmete, rakenduste ja rahaasjade üle. Alustamiseks soovitame sul paigaldada **Qortal Core**'i, mis annab võrgule jõudu ja võimaldab kasutada kõiki Qortali funktsioone.",
+    "paragraph2": "See seadistusviisard juhendab sind Qortal Core'i paigaldamisel ja seadistamisel sinu seadmes. Paigaldamisega jätkamiseks klõpsa **Järgmine**.",
+    "note": "märkus edasijõudnud kasutajatele",
+    "advanced": "kui sa kasutad kaughaaret (remote node), palun sulge see seadistusviisard ja klõpsa seejärel \"Vali kohandatud haare\""
+  },
+  "sync": {
+    "behind": "Sa oled {{count}} plokki maas.",
+    "waiting": "Palun oota, kuni oled sünkroonitud.",
+    "not_syncronized": "ei ole sünkroonitud",
+    "syncronized": "sünkroonitud",
+    "syncronized_desc": "sa oled nüüd sünkroonitud. võid jätkata."
+  },
+  "steps": {
+    "java": "Java on olemas",
+    "downloaded": "Core on alla laaditud",
+    "running": "Core töötab"
+  },
+  "actions": {
+    "finished": "lõpetatud",
+    "start": "käivita Qortal Core",
+    "install": "paigalda ja käivita Qortal Core",
+    "continuePublic": "jätka avaliku haardega",
+    "openSetup": "ava kohalik seadistus",
+    "goToDownloads": "mine allalaadimistesse",
+    "resetKey": "lähtesta API-võti",
+    "continue": "jätka"
+  },
+  "error": {
+    "noJar": "valitud kaust ei sisalda qortal.jar-faili",
+    "invalidKey": "sobimatu API-võti",
+    "failed_stop": "Core'i peatamine ebaõnnestus",
+    "failed_bootstrap": "bootstrap ebaõnnestus",
+    "failed_delete": "andmebaasi kustutamine ebaõnnestus"
+  },
+  "status": {
+    "complete": "valmis",
+    "inProgress": "pooleli",
+    "pending": "ootel",
+    "error": "viga"
+  },
+  "recommendation": {
+    "title": "kohaliku Core'i kasutamine",
+    "description": "sa võid soovi korral jätkata avaliku haardega, kuid parima kogemuse saamiseks soovitame tungivalt kasutada oma kohalikku haaret.",
+    "subTitle": "kohaliku haarde kasutamise eelised:",
+    "point1": "täielik detsentraliseeritud juurdepääs",
+    "point2": "kiiremad allalaadimised",
+    "point3": "kasutaja kontrollitud andmed",
+    "publicExplanation": "Avalik haare, millega sa ühendud, on tegelikult eraviisiliselt hallatav haare, mis on tehtud avalikult kättesaadavaks. Kuigi see on mugav, kaasnevad sellega teatud piirangud võrreldes oma haarde käitamisega."
+  },
+  "invalidKey": {
+    "title": "sobimatu API-võti",
+    "description": "Sinu API-võti on sobimatu. Palun sisesta kehtiv API-võti.",
+    "resetDescription": "Sinu API-võti on sobimatu. Jätkamiseks klõpsa 'Lähtesta'."
+  },
+  "messages": {
+    "001": "käivitan Core'i... palun oota.",
+    "002": "viga: hoidlat ei õnnestu käivitada",
+    "003": "viga Qortal Core'i käitamisel",
+    "004": "viga Qortal Core'i lahti pakkimisel",
+    "005": "laadin Qortal Core'i alla... palun oota.",
+    "006": "seadistan Java't... palun oota.",
+    "007": "viga Java allalaadimisel.",
+    "008": "viga Java lahti pakkimisel",
+    "009": "laadin Qortal Core'i alla... palun oota.",
+    "010": "viga: Core'i ei õnnestu alla laadida ega paigaldada"
+  },
+  "url": {
+    "title": "sobimatu URL",
+    "description": "sobimatu URL või haare ei tööta"
+  },
+  "confirmations": {
+    "stop": "kas oled kindel, et soovid Core peatada?",
+    "bootstrap": "kas oled kindel, et soovid bootstrapi käivitada?",
+    "delete": "kas oled kindel, et soovid andmebaasi kustutada?"
+  },
+  "stop": "peata Core",
+  "bootstrap": "bootstrap",
+  "delete": "kustuta andmebaas",
+  "more": "rohkem valikuid",
+  "less": "vähem valikuid",
+  "enableAuthWhenSyncing": "luba autentimine sünkroonimisel"
+}

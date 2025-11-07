@@ -135,10 +135,10 @@ export const ListOfJoinRequests = ({
                 {
                   ...response,
                   type: 'join-request-accept',
-                  label: t('group:message.success,invitation_request', {
+                  label: t('group:message.success.invitation_request', {
                     postProcess: 'capitalizeFirstChar',
                   }),
-                  labelDone: t('group:message.success,user_joined', {
+                  labelDone: t('group:message.success.user_joined', {
                     postProcess: 'capitalizeFirstChar',
                   }),
                   done: false,

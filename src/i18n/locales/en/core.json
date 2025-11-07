@@ -73,6 +73,7 @@
     "remove": "remove",
     "remove_reaction": "remove reaction",
     "return_apps_dashboard": "return to Apps Dashboard",
+    "return": "return",
     "save": "save",
     "save_disk": "save to disk",
     "search": "search",
@@ -160,7 +161,6 @@
     "groups": "list of groups",
     "invites": "list of invites",
     "join_request": "join request list",
-    "member": "member list",
     "members": "list of members"
   },
   "loading": {
@@ -170,8 +170,6 @@
     "comments": "loading comments... please wait.",
     "posts": "loading posts... please wait."
   },
-  "member": "member",
-  "member_other": "members",
   "message_us": "please message us on Nextcloud (no signup required) or Discord if you need 4 QORT to start chatting without any limitations",
   "message": {
     "error": {
@@ -322,7 +320,7 @@
     "average_blocks_per_day": "average blocks per day",
     "average_created_qorts_per_day": "average created QORT per day",
     "blockchain_statistics": "blockchain statistics",
-    "blocks_next_level": "blocks to nexl level",
+    "blocks_next_level": "blocks to next level",
     "current_level": "current level",
     "current_status": "current status",
     "current_tier": "current tier",
@@ -408,6 +406,11 @@
   "tutorial": "tutorial",
   "url": "url",
   "user_lookup": "user lookup",
+  "video_embed": "video embed",
+  "video_failed": "failed to download",
+  "retry": "retry",
+  "video_fetching": "fetching video from the Qortal Network...",
+  "video_building": "download completed: building video...",
   "vote": "vote",
   "vote_other": "{{ count }} votes",
   "zip": "zip",

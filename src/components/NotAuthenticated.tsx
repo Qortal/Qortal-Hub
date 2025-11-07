@@ -31,9 +31,18 @@ import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_APP_CONTEXT } from '../App';
+import {
+  HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  LOCALHOST_12391,
+} from '../constants/constants.ts';
+import { useAtom } from 'jotai';
+import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
+import { useAuth } from '../hooks/useAuth.tsx';
+import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.5.4',
+  version: '0.5.5',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -53,30 +62,21 @@ function removeTrailingSlash(url) {
 }
 
 export const NotAuthenticated = ({
-  getRootProps,
-  getInputProps,
   setExtstate,
-  apiKey,
-  setApiKey,
-  globalApiKey,
   handleSetGlobalApikey,
-  currentNode,
-  setCurrentNode,
-  useLocalNode,
   setUseLocalNode,
 }) => {
-  const [isValidApiKey, setIsValidApiKey] = useState<boolean | null>(null);
-  const [hasLocalNode, setHasLocalNode] = useState<boolean | null>(null);
+  const { handleSaveNodeInfo } = useAuth();
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [show, setShow] = useState(false);
   const [mode, setMode] = useState('list');
   const [customNodes, setCustomNodes] = useState(null);
-  const [importedApiKey, setImportedApiKey] = useState(null);
   const [url, setUrl] = useState('https://');
   const [customApikey, setCustomApiKey] = useState('');
   const [showSelectApiKey, setShowSelectApiKey] = useState(false);
   const [enteredApiKey, setEnteredApiKey] = useState('');
+  const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] = useState(null);
   const { showTutorial, hasSeenGettingStarted } =
     useContext(QORTAL_APP_CONTEXT);
@@ -89,10 +89,6 @@ export const NotAuthenticated = ({
     'tutorial',
   ]);
 
-  const importedApiKeyRef = useRef(null);
-  const currentNodeRef = useRef(null);
-  const hasLocalNodeRef = useRef(null);
-  const isLocal = cleanUrl(currentNode?.url) === '127.0.0.1:12391';
   const handleFileChangeApiKey = (event) => {
     setShowSelectApiKey(false);
     const file = event.target.files[0]; // Get the selected file
@@ -101,21 +97,20 @@ export const NotAuthenticated = ({
       reader.onload = (e) => {
         const text = e.target.result; // Get the file content
 
-        setImportedApiKey(text); // Store the file content in the state
         if (customNodes) {
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
             const findLocalIndex = copyPrev?.findIndex(
-              (item) => item?.url === 'http://127.0.0.1:12391'
+              (item) => item?.url === HTTP_LOCALHOST_12391
             );
             if (findLocalIndex === -1) {
               copyPrev.unshift({
-                url: 'http://127.0.0.1:12391',
+                url: HTTP_LOCALHOST_12391,
                 apikey: text,
               });
             } else {
               copyPrev[findLocalIndex] = {
-                url: 'http://127.0.0.1:12391',
+                url: HTTP_LOCALHOST_12391,
                 apikey: text,
               };
             }
@@ -136,30 +131,6 @@ export const NotAuthenticated = ({
     }
   };
 
-  const checkIfUserHasLocalNode = useCallback(async () => {
-    try {
-      const url = `http://127.0.0.1:12391/admin/status`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      const data = await response.json();
-      if (data?.height) {
-        setHasLocalNode(true);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      return false;
-    }
-  }, []);
-
-  useEffect(() => {
-    checkIfUserHasLocalNode();
-  }, []);
-
   useEffect(() => {
     window
       .sendMessage('getCustomNodesFromStorage')
@@ -169,14 +140,6 @@ export const NotAuthenticated = ({
           window.electronAPI.setAllowedDomains(
             response?.map((node) => node.url)
           );
-        }
-        if (Array.isArray(response)) {
-          const findLocal = response?.find(
-            (item) => item?.url === 'http://127.0.0.1:12391'
-          );
-          if (findLocal && findLocal?.apikey) {
-            setImportedApiKey(findLocal?.apikey);
-          }
         }
       })
       .catch((error) => {
@@ -190,255 +153,11 @@ export const NotAuthenticated = ({
       });
   }, []);
 
-  useEffect(() => {
-    importedApiKeyRef.current = importedApiKey;
-  }, [importedApiKey]);
-
-  useEffect(() => {
-    currentNodeRef.current = currentNode;
-  }, [currentNode]);
-
-  useEffect(() => {
-    hasLocalNodeRef.current = hasLocalNode;
-  }, [hasLocalNode]);
-
-  const validateApiKey = useCallback(async (key, fromStartUp) => {
-    try {
-      if (key === 'isGateway') return;
-      const isLocalKey = cleanUrl(key?.url) === '127.0.0.1:12391';
-      if (
-        fromStartUp &&
-        key?.url &&
-        key?.apikey &&
-        !isLocalKey &&
-        !gateways.some((gateway) => key?.url?.includes(gateway))
-      ) {
-        setCurrentNode({
-          url: key?.url,
-          apikey: key?.apikey,
-        });
-
-        let isValid = false;
-
-        const url = `${key?.url}/admin/settings/localAuthBypassEnabled`;
-        const response = await fetch(url);
-
-        // Assuming the response is in plain text and will be 'true' or 'false'
-        const data = await response.text();
-        if (data && data === 'true') {
-          isValid = true;
-        } else {
-          const url2 = `${key?.url}/admin/apikey/test?apiKey=${key?.apikey}`;
-          const response2 = await fetch(url2);
-
-          // Assuming the response is in plain text and will be 'true' or 'false'
-          const data2 = await response2.text();
-          if (data2 === 'true') {
-            isValid = true;
-          }
-        }
-
-        if (isValid) {
-          setIsValidApiKey(true);
-          setUseLocalNode(true);
-          return;
-        }
-      }
-      if (!currentNodeRef.current) return;
-      const stillHasLocal = await checkIfUserHasLocalNode();
-
-      if (isLocalKey && !stillHasLocal && !fromStartUp) {
-        throw new Error(
-          t('auth:message.generic.turn_local_node', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      }
-      //check custom nodes
-      // !gateways.some(gateway => apiKey?.url?.includes(gateway))
-      const isCurrentNodeLocal =
-        cleanUrl(currentNodeRef.current?.url) === '127.0.0.1:12391';
-      if (isLocalKey && !isCurrentNodeLocal) {
-        setIsValidApiKey(false);
-        setUseLocalNode(false);
-        return;
-      }
-      let payload = {};
-
-      if (currentNodeRef.current?.url === 'http://127.0.0.1:12391') {
-        payload = {
-          apikey: importedApiKeyRef.current || key?.apikey,
-          url: currentNodeRef.current?.url,
-        };
-        if (!payload?.apikey) {
-          try {
-            const generateUrl = 'http://127.0.0.1:12391/admin/apikey/generate';
-            const generateRes = await fetch(generateUrl, {
-              method: 'POST',
-            });
-            let res;
-            try {
-              res = await generateRes.clone().json();
-            } catch (e) {
-              res = await generateRes.text();
-            }
-            if (res != null && !res.error && res.length >= 8) {
-              payload = {
-                apikey: res,
-                url: currentNodeRef.current?.url,
-              };
-
-              setImportedApiKey(res); // Store the file content in the state
-
-              setCustomNodes((prev) => {
-                const copyPrev = [...prev];
-                const findLocalIndex = copyPrev?.findIndex(
-                  (item) => item?.url === 'http://127.0.0.1:12391'
-                );
-                if (findLocalIndex === -1) {
-                  copyPrev.unshift({
-                    url: 'http://127.0.0.1:12391',
-                    apikey: res,
-                  });
-                } else {
-                  copyPrev[findLocalIndex] = {
-                    url: 'http://127.0.0.1:12391',
-                    apikey: res,
-                  };
-                }
-                window
-                  .sendMessage('setCustomNodes', copyPrev)
-                  .catch((error) => {
-                    console.error(
-                      'Failed to set custom nodes:',
-                      error.message ||
-                        t('core:message.error.generic', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                    );
-                  });
-                return copyPrev;
-              });
-            }
-          } catch (error) {
-            console.error(error);
-          }
-        }
-      } else if (currentNodeRef.current) {
-        payload = currentNodeRef.current;
-      }
-
-      let isValid = false;
-
-      const url = `${payload?.url}/admin/settings/localAuthBypassEnabled`;
-      const response = await fetch(url);
-
-      // Assuming the response is in plain text and will be 'true' or 'false'
-      const data = await response.text();
-      if (data && data === 'true') {
-        isValid = true;
-      } else {
-        const url2 = `${payload?.url}/admin/apikey/test?apiKey=${payload?.apikey}`;
-        const response2 = await fetch(url2);
-
-        // Assuming the response is in plain text and will be 'true' or 'false'
-        const data2 = await response2.text();
-        if (data2 === 'true') {
-          isValid = true;
-        }
-      }
-
-      if (isValid) {
-        window
-          .sendMessage('setApiKey', payload)
-          .then((response) => {
-            if (response) {
-              handleSetGlobalApikey(payload);
-              setIsValidApiKey(true);
-              setUseLocalNode(true);
-              if (!fromStartUp) {
-                setApiKey(payload);
-              }
-            }
-          })
-          .catch((error) => {
-            console.error(
-              t('auth:message.error.set_apikey', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-            );
-          });
-      } else {
-        setIsValidApiKey(false);
-        setUseLocalNode(false);
-        if (!fromStartUp) {
-          setInfoSnack({
-            type: 'error',
-            message: t('auth:apikey.select_valid', {
-              postProcess: 'capitalizeFirstChar',
-            }),
-          });
-          setOpenSnack(true);
-        }
-      }
-    } catch (error) {
-      setIsValidApiKey(false);
-      setUseLocalNode(false);
-      if (fromStartUp) {
-        setCurrentNode({
-          url: 'http://127.0.0.1:12391',
-        });
-        window
-          .sendMessage('setApiKey', 'isGateway')
-          .then((response) => {
-            if (response) {
-              setApiKey(null);
-              handleSetGlobalApikey(null);
-            }
-          })
-          .catch((error) => {
-            console.error(
-              t('auth:message.error.set_apikey', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-            );
-          });
-        return;
-      }
-      if (!fromStartUp) {
-        setInfoSnack({
-          type: 'error',
-          message:
-            error?.message ||
-            t('auth:apikey.select_valid', {
-              postProcess: 'capitalizeFirstChar',
-            }),
-        });
-        setOpenSnack(true);
-      }
-      console.error('Error validating API key:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (apiKey) {
-      validateApiKey(apiKey, true);
-    }
-  }, [apiKey]);
-
   const addCustomNode = () => {
     setMode('add-node');
   };
 
-  const saveCustomNodes = (myNodes, isFullListOfNodes) => {
+  const saveCustomNodes = async (myNodes, isFullListOfNodes) => {
     let nodes = [...(myNodes || [])];
     if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
       nodes.splice(customNodeToSaveIndex, 1, {
@@ -447,6 +166,12 @@ export const NotAuthenticated = ({
       });
     } else if (!isFullListOfNodes && url) {
       nodes.push({
+        url: removeTrailingSlash(url),
+        apikey: customApikey,
+      });
+    }
+    if (!isFullListOfNodes && url) {
+      await handleSaveNodeInfo({
         url: removeTrailingSlash(url),
         apikey: customApikey,
       });
@@ -485,7 +210,6 @@ export const NotAuthenticated = ({
   return (
     <>
       <Spacer height="35px" />
-
       <Box
         className="image-container"
         style={{
@@ -495,9 +219,7 @@ export const NotAuthenticated = ({
       >
         <img src={Logo1Dark} className="base-image" />
       </Box>
-
       <Spacer height="30px" />
-
       <TextP
         sx={{
           textAlign: 'center',
@@ -515,9 +237,7 @@ export const NotAuthenticated = ({
           QORTAL
         </TextSpan>
       </TextP>
-
       <Spacer height="30px" />
-
       <Box
         sx={{
           alignItems: 'center',
@@ -550,9 +270,7 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-
       <Spacer height="6px" />
-
       <Box
         sx={{
           alignItems: 'center',
@@ -615,19 +333,19 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-
       <Spacer height="15px" />
-
       <Typography
         sx={{
           fontSize: '12px',
-          visibility: !useLocalNode && 'hidden',
+          ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+            fontWeight: 'bold',
+            color: theme.palette.other.positive,
+          }),
         }}
       >
         {t('auth:node.using', { postProcess: 'capitalizeFirstChar' })}:{' '}
-        {currentNode?.url}
+        {nodeDisplay(selectedNode?.url)}
       </Typography>
-
       <>
         <Spacer height="15px" />
 
@@ -652,7 +370,7 @@ export const NotAuthenticated = ({
               {t('auth:advanced_users', { postProcess: 'capitalizeFirstChar' })}
             </Typography>
 
-            <Box
+            {/* <Box
               sx={{
                 alignItems: 'center',
                 display: 'flex',
@@ -669,13 +387,13 @@ export const NotAuthenticated = ({
                 }}
                 control={
                   <Switch
-                    checked={useLocalNode}
+                    checked={!useLocalNode}
                     onChange={(event) => {
-                      if (event.target.checked) {
+                      if (!event.target.checked) {
                         validateApiKey(currentNode);
                       } else {
                         setCurrentNode({
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                         });
                         setUseLocalNode(false);
                         window
@@ -704,7 +422,7 @@ export const NotAuthenticated = ({
                 }
                 label={
                   isLocal
-                    ? t('auth:node.use_local', {
+                    ? t('auth:node.use_public', {
                         postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:node.use_custom', {
@@ -712,8 +430,8 @@ export const NotAuthenticated = ({
                       })
                 }
               />
-            </Box>
-            {currentNode?.url === 'http://127.0.0.1:12391' && (
+            </Box> */}
+            {/* {currentNode?.url === HTTP_LOCALHOST_12391 && (
               <>
                 <Button
                   onClick={() => setShowSelectApiKey(true)}
@@ -722,7 +440,7 @@ export const NotAuthenticated = ({
                   component="label"
                 >
                   {apiKey
-                    ? t('auth:node.use_local', {
+                    ? t('auth:apikey.change', {
                         postProcess: 'capitalizeFirstChar',
                       })
                     : t('auth:apikey.import', {
@@ -740,7 +458,7 @@ export const NotAuthenticated = ({
                   : {importedApiKey}
                 </Typography>
               </>
-            )}
+            )} */}
 
             <Button
               size="small"
@@ -765,14 +483,12 @@ export const NotAuthenticated = ({
           </Typography>
         </Box>
       </>
-
       <CustomizedSnackbars
         open={openSnack}
         setOpen={setOpenSnack}
         info={infoSnack}
         setInfo={setInfoSnack}
       />
-
       {show && (
         <Dialog
           open={show}
@@ -821,7 +537,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      http://127.0.0.1:12391
+                      {HTTP_LOCALHOST_12391} (Local node)
                     </Typography>
 
                     <Box
@@ -833,21 +549,84 @@ export const NotAuthenticated = ({
                       }}
                     >
                       <Button
-                        disabled={currentNode?.url === 'http://127.0.0.1:12391'}
+                        disabled={selectedNode?.url === HTTP_LOCALHOST_12391}
                         size="small"
                         onClick={() => {
-                          setCurrentNode({
-                            url: 'http://127.0.0.1:12391',
-                          });
                           setMode('list');
                           setShow(false);
-                          setUseLocalNode(false);
+                          const payload = {
+                            url: HTTP_LOCALHOST_12391,
+                            apikey: '',
+                          };
                           window
-                            .sendMessage('setApiKey', null)
+                            .sendMessage('setApiKey', payload)
                             .then((response) => {
                               if (response) {
-                                setApiKey(null);
-                                handleSetGlobalApikey(null);
+                                setSelectedNode(payload);
+                                handleSetGlobalApikey(payload);
+                              }
+                            })
+                            .catch((error) => {
+                              console.error(
+                                t('auth:message.error.set_apikey', {
+                                  postProcess: 'capitalizeFirstChar',
+                                }),
+                                error.message ||
+                                  t('core:message.error.generic', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })
+                              );
+                            });
+                        }}
+                        variant="contained"
+                      >
+                        {t('core:action.choose', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Button>
+                    </Box>
+                  </Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: '10px',
+                      flexDirection: 'column',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '14px',
+                      }}
+                    >
+                      {HTTPS_EXT_NODE_QORTAL_LINK} (Public node)
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: '10px',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Button
+                        disabled={
+                          selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
+                        }
+                        size="small"
+                        onClick={() => {
+                          setMode('list');
+                          setShow(false);
+                          const payload = {
+                            url: HTTPS_EXT_NODE_QORTAL_LINK,
+                            apikey: '',
+                          };
+                          window
+                            .sendMessage('setApiKey', payload)
+                            .then((response) => {
+                              if (response) {
+                                setSelectedNode(payload);
+                                handleSetGlobalApikey(payload);
                               }
                             })
                             .catch((error) => {
@@ -898,23 +677,23 @@ export const NotAuthenticated = ({
                           }}
                         >
                           <Button
-                            disabled={currentNode?.url === node?.url}
+                            disabled={selectedNode?.url === node?.url}
                             size="small"
                             onClick={() => {
-                              setCurrentNode({
+                              const payload = {
                                 url: node?.url,
                                 apikey: node?.apikey,
-                              });
+                              };
+
                               setMode('list');
                               setShow(false);
-                              setIsValidApiKey(false);
-                              setUseLocalNode(false);
+
                               window
-                                .sendMessage('setApiKey', null)
+                                .sendMessage('setApiKey', payload)
                                 .then((response) => {
                                   if (response) {
-                                    setApiKey(null);
-                                    handleSetGlobalApikey(null);
+                                    setSelectedNode(payload);
+                                    handleSetGlobalApikey(payload);
                                   }
                                 })
                                 .catch((error) => {
@@ -953,7 +732,13 @@ export const NotAuthenticated = ({
 
                           <Button
                             size="small"
-                            onClick={() => {
+                            onClick={async () => {
+                              if (node?.url === selectedNode?.url) {
+                                await handleSaveNodeInfo({
+                                  url: HTTP_LOCALHOST_12391,
+                                  apikey: '',
+                                });
+                              }
                               const nodesToSave = [
                                 ...(customNodes || []),
                               ].filter((item) => item?.url !== node?.url);
@@ -1057,7 +842,6 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
-
       {showSelectApiKey && (
         <Dialog
           open={showSelectApiKey}
@@ -1111,21 +895,20 @@ export const NotAuthenticated = ({
               disabled={!enteredApiKey}
               onClick={() => {
                 try {
-                  setImportedApiKey(enteredApiKey); // Store the file content in the state
                   if (customNodes) {
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
                       const findLocalIndex = copyPrev?.findIndex(
-                        (item) => item?.url === 'http://127.0.0.1:12391'
+                        (item) => item?.url === HTTP_LOCALHOST_12391
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: enteredApiKey,
                         });
                       } else {
                         copyPrev[findLocalIndex] = {
-                          url: 'http://127.0.0.1:12391',
+                          url: HTTP_LOCALHOST_12391,
                           apikey: enteredApiKey,
                         };
                       }
@@ -1167,8 +950,8 @@ export const NotAuthenticated = ({
           </DialogActions>
         </Dialog>
       )}
-
-      <ButtonBase
+      {/* TODO update tutorial */}
+      {/* <ButtonBase
         onClick={() => {
           showTutorial('create-account', true);
         }}
@@ -1183,7 +966,7 @@ export const NotAuthenticated = ({
             color: theme.palette.other.unread,
           }}
         />
-      </ButtonBase>
+      </ButtonBase> */}
     </>
   );
 };

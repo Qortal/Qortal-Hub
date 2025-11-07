@@ -21,6 +21,7 @@ import { fileToBase64 } from '../../utils/fileReading';
 import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useTranslation } from 'react-i18next';
+import { MAX_SIZE_AVATAR } from '../../constants/constants.ts';
 
 export const GroupAvatar = ({
   myName,
@@ -299,7 +300,7 @@ const PopoverComp = ({
           }}
         >
           {t('core:message.generic.avatar_size', {
-            size: 500, // TODO magic number
+            size: MAX_SIZE_AVATAR,
             postProcess: 'capitalizeFirstChar',
           })}
         </Typography>

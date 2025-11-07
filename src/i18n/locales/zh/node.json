@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "title": "本地设置：Hub 和 Core 在同一系统上运行",
+    "advancedOptions": "高级选项",
+    "pickPath": "如果您的 Core 安装在非默认位置，请选择自定义 Qortal 安装路径。",
+    "removePath": "移除自定义 Qortal 路径"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal 是一个去中心化平台，让您完全掌控数据、应用和财务。开始之前，我们建议您安装 <strong>Qortal Core</strong>，它驱动网络并启用 Qortal 的所有功能。",
+    "paragraph2": "此安装向导将引导您在设备上安装和配置 Qortal Core。点击 <strong>下一步</strong> 继续安装。",
+    "note": "高级用户注意",
+    "advanced": "如果您正在使用远程节点，请关闭此安装向导，然后点击“选择自定义节点”"
+  },
+  "sync": {
+    "behind": "您落后 {{count}} 个区块。",
+    "waiting": "请等待同步完成。",
+    "not_syncronized": "未同步",
+    "syncronized": "已同步",
+    "syncronized_desc": "您现在已同步，可以继续。"
+  },
+  "steps": {
+    "java": "已安装 Java",
+    "downloaded": "已下载核心",
+    "running": "核心正在运行"
+  },
+  "actions": {
+    "finished": "已完成",
+    "start": "启动 Qortal Core",
+    "install": "安装并启动 Qortal Core",
+    "continuePublic": "继续使用公共节点",
+    "openSetup": "打开本地设置",
+    "goToDownloads": "前往下载",
+    "resetKey": "重置 API 密钥",
+    "continue": "继续"
+  },
+  "error": {
+    "noJar": "所选目录不包含 qortal.jar",
+    "invalidKey": "无效的 API 密钥",
+    "failed_stop": "无法停止 Core",
+    "failed_bootstrap": "无法引导启动",
+    "failed_delete": "无法删除数据库"
+  },
+  "status": {
+    "complete": "完成",
+    "inProgress": "进行中",
+    "pending": "待处理",
+    "error": "错误"
+  },
+  "recommendation": {
+    "title": "使用你的本地核心",
+    "description": "如果你愿意，可以继续使用公共节点，但我们强烈建议使用本地节点以获得最佳体验。",
+    "subTitle": "使用本地节点的优点：",
+    "point1": "完全去中心化访问",
+    "point2": "下载更快",
+    "point3": "用户控制的数据",
+    "publicExplanation": "你连接的公共节点实际上是一个对外开放的私人节点。虽然方便，但相比自己运行节点有一些限制。"
+  },
+  "invalidKey": {
+    "title": "无效的 API 密钥",
+    "description": "你的 API 密钥无效。请输入有效的密钥。",
+    "resetDescription": "你的 API 密钥无效。点击重置以继续。"
+  },
+  "messages": {
+    "001": "正在启动核心...请稍候。",
+    "002": "错误：无法启动存储库",
+    "003": "运行 Qortal Core 时出错",
+    "004": "解压 Qortal Core 出错",
+    "005": "正在下载 Qortal Core...请稍候。",
+    "006": "正在设置 Java...请稍候。",
+    "007": "下载 Java 出错。",
+    "008": "解压 Java 出错",
+    "009": "正在下载 Qortal Core...请稍候。",
+    "010": "错误：无法下载或安装核心"
+  },
+  "url": {
+    "title": "URL 无效",
+    "description": "URL 不正确或节点未运行"
+  },
+  "confirmations": {
+    "stop": "确定要停止 Core 吗？",
+    "bootstrap": "确定要引导启动吗？",
+    "delete": "确定要删除数据库吗？"
+  },
+  "stop": "停止 Core",
+  "bootstrap": "引导启动",
+  "delete": "删除数据库",
+  "more": "更多选项",
+  "less": "更少选项",
+  "enableAuthWhenSyncing": "同步时启用身份验证"
+}

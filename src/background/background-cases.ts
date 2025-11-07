@@ -949,9 +949,20 @@ export async function addTimestampEnterChatCase(request, event) {
   }
 }
 
+export async function setLocalApiKeyNotElectronCase(localApiKey) {
+  storeData('localApiKey', localApiKey);
+}
+
+export async function getLocalApiKeyNotElectronCase() {
+  return await getData('localApiKey').catch((error) => null);
+}
+
 export async function setApiKeyCase(request, event) {
   try {
     const payload = request.payload;
+    if (window?.walletStorage && payload?.url) {
+      await window.walletStorage.set('apiKey', payload);
+    }
     storeData('apiKey', payload);
     event.source.postMessage(
       {
@@ -977,7 +988,11 @@ export async function setApiKeyCase(request, event) {
 export async function setCustomNodesCase(request, event) {
   try {
     const nodes = request.payload;
-    storeData('customNodes', nodes);
+    if (window?.walletStorage) {
+      await window.walletStorage.set('customNodes', nodes);
+    } else {
+      storeData('customNodes', nodes);
+    }
 
     event.source.postMessage(
       {

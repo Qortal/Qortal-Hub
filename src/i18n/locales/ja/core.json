@@ -73,6 +73,7 @@
     "remove": "取り除く",
     "remove_reaction": "反応を取り除きます",
     "return_apps_dashboard": "アプリダッシュボードに戻ります",
+    "return": "戻る",
     "save": "保存",
     "save_disk": "ディスクに保存します",
     "search": "検索",
@@ -160,7 +161,6 @@
     "groups": "グループのリスト",
     "invites": "招待状のリスト",
     "join_request": "リクエストリストに参加します",
-    "member": "メンバーリスト",
     "members": "メンバーのリスト"
   },
   "loading": {
@@ -170,8 +170,6 @@
     "comments": "コメントの読み込み...待ってください。",
     "posts": "投稿の読み込み...待ってください。"
   },
-  "member": "メンバー",
-  "member_other": "メンバー",
   "message_us": "制限なしにチャットを開始するために4 QORTが必要な場合は、NextCloud（サインアップは不要）または不一致で私たちにメッセージを送ってください",
   "message": {
     "error": {
@@ -405,6 +403,11 @@
   "tutorial": "チュートリアル",
   "url": "URL",
   "user_lookup": "ユーザールックアップ",
+  "video_embed": "動画埋め込み",
+  "video_failed": "ダウンロードに失敗しました",
+  "retry": "再試行",
+  "video_fetching": "Qortalネットワークから動画を取得しています...",
+  "video_building": "ダウンロード完了：動画を構築中...",
   "vote": "投票する",
   "vote_other": "{{ count }} votes",
   "zip": "ジップ",

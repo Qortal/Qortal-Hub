@@ -1,7 +1,9 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   AppLibrarySubTitle,
   AppPublishTagsContainer,
+  AppsBackContainer,
+  AppsDesktopLibraryBody,
   AppsLibraryContainer,
   AppsWidthLimiter,
   PublishQAppCTAButton,
@@ -23,9 +25,17 @@ import { useDropzone } from 'react-dropzone';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { getFee } from '../../background/background.ts';
-import { fileToBase64 } from '../../utils/fileReading';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
+import {
+  ComposeP,
+  ShowMessageReturnButton,
+} from '../Group/Forum/Mail-styles.ts';
+import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
+
+const TITLE_MAX_CHARS = 80;
+const DESCRIPTION_MAX_CHARS = 240;
+const TAG_MAX_CHARS = 20;
 
 const CustomSelect = styled(Select)({
   border: '0.5px solid var(--50-white, #FFFFFF80)',
@@ -38,10 +48,10 @@ const CustomSelect = styled(Select)({
     padding: '0px',
   },
   '&:hover': {
-    borderColor: 'none', // Border color on hover
+    borderColor: 'none',
   },
   '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-    borderColor: 'none', // Border color when focused
+    borderColor: 'none',
   },
   '&.Mui-disabled': {
     opacity: 0.5, // Lower opacity when disabled
@@ -51,13 +61,18 @@ const CustomSelect = styled(Select)({
   },
 });
 
-const CustomMenuItem = styled(MenuItem)({
-  // backgroundColor: '#1f1f1f', // Background for dropdown items
-  // color: '#ccc',
-  // '&:hover': {
-  //   backgroundColor: '#333', // Darker background on hover
-  // },
+const LabelRow = styled('div')({
+  alignItems: 'center',
+  display: 'flex',
+  justifyContent: 'space-between',
+  marginBottom: '2px',
+  width: '100%',
 });
+
+const CounterText = styled('span')(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  fontSize: '12px',
+}));
 
 export const AppPublish = ({ categories, myAddress, myName }) => {
   const [names, setNames] = useState([]);
@@ -84,6 +99,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
   const [isLoading, setIsLoading] = useState('');
+  const [activeField, setActiveField] = useState<string | null>(null);
   const maxFileSize = appType === 'APP' ? 50 * 1024 * 1024 : 400 * 1024 * 1024; // 50MB or 400MB
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -113,7 +129,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
     },
   });
 
-  const getQapp = React.useCallback(async (name, appType) => {
+  const getQapp = useCallback(async (name, appType) => {
     try {
       setIsLoading('Loading app information');
       const url = `${getBaseApiReact()}/arbitrary/resources/search?service=${appType}&mode=ALL&name=${name}&includemetadata=true`;
@@ -129,14 +145,16 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
 
       if (responseData?.length > 0) {
         const myApp = responseData[0];
-        setTitle(myApp?.metadata?.title || '');
-        setDescription(myApp?.metadata?.description || '');
+        setTitle((myApp?.metadata?.title || '').slice(0, TITLE_MAX_CHARS));
+        setDescription(
+          (myApp?.metadata?.description || '').slice(0, DESCRIPTION_MAX_CHARS)
+        );
         setCategory(myApp?.metadata?.category || '');
-        setTag1(myApp?.metadata?.tags[0] || '');
-        setTag2(myApp?.metadata?.tags[1] || '');
-        setTag3(myApp?.metadata?.tags[2] || '');
-        setTag4(myApp?.metadata?.tags[3] || '');
-        setTag5(myApp?.metadata?.tags[4] || '');
+        setTag1((myApp?.metadata?.tags[0] || '').slice(0, TAG_MAX_CHARS));
+        setTag2((myApp?.metadata?.tags[1] || '').slice(0, TAG_MAX_CHARS));
+        setTag3((myApp?.metadata?.tags[2] || '').slice(0, TAG_MAX_CHARS));
+        setTag4((myApp?.metadata?.tags[3] || '').slice(0, TAG_MAX_CHARS));
+        setTag5((myApp?.metadata?.tags[4] || '').slice(0, TAG_MAX_CHARS));
       }
     } catch (error) {
       console.log(error);
@@ -170,6 +188,29 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
   }, [getNames]);
 
   const mySortedNames = useSortedMyNames(names, myName);
+  const activeTagInfo = useMemo(() => {
+    switch (activeField) {
+      case 'tag1':
+        return { label: 'Tag 1', length: tag1.length };
+      case 'tag2':
+        return { label: 'Tag 2', length: tag2.length };
+      case 'tag3':
+        return { label: 'Tag 3', length: tag3.length };
+      case 'tag4':
+        return { label: 'Tag 4', length: tag4.length };
+      case 'tag5':
+        return { label: 'Tag 5', length: tag5.length };
+      default:
+        return null;
+    }
+  }, [
+    activeField,
+    tag1.length,
+    tag2.length,
+    tag3.length,
+    tag4.length,
+    tag5.length,
+  ]);
 
   const publishApp = async () => {
     try {
@@ -292,6 +333,31 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
         paddingTop: '30px',
       }}
     >
+      <AppsBackContainer>
+        <Spacer height="20px" />
+
+        <ShowMessageReturnButton
+          sx={{
+            padding: '2px',
+          }}
+          onClick={() => {
+            executeEvent('navigateBack', {});
+          }}
+        >
+          <ReturnIcon />
+          <ComposeP
+            sx={{
+              fontSize: '18px',
+            }}
+          >
+            {t('core:action.return', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </ComposeP>
+        </ShowMessageReturnButton>
+
+        <Spacer height="20px" />
+      </AppsBackContainer>
       <AppsWidthLimiter
         sx={{
           width: 'auto',
@@ -328,7 +394,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
           value={name}
           onChange={(event) => setName(event?.target.value)}
         >
-          <CustomMenuItem value="">
+          <MenuItem value="">
             <em
               style={{
                 color: theme.palette.text.secondary,
@@ -339,9 +405,9 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               })}
             </em>
             {/* This is the placeholder item */}
-          </CustomMenuItem>
+          </MenuItem>
           {mySortedNames.map((name) => {
-            return <CustomMenuItem value={name}>{name}</CustomMenuItem>;
+            return <MenuItem value={name}>{name}</MenuItem>;
           })}
         </CustomSelect>
 
@@ -361,7 +427,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
           value={appType}
           onChange={(event) => setAppType(event?.target.value)}
         >
-          <CustomMenuItem value="">
+          <MenuItem value="">
             <em
               style={{
                 color: theme.palette.text.secondary,
@@ -371,32 +437,39 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
                 postProcess: 'capitalizeFirstChar',
               })}
             </em>
-          </CustomMenuItem>
+          </MenuItem>
 
-          <CustomMenuItem value={'APP'}>
+          <MenuItem value={'APP'}>
             {t('core:app', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </CustomMenuItem>
+          </MenuItem>
 
-          <CustomMenuItem value={'WEBSITE'}>
+          <MenuItem value={'WEBSITE'}>
             {t('core:website', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </CustomMenuItem>
+          </MenuItem>
         </CustomSelect>
 
         <Spacer height="15px" />
 
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:title', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
+        <LabelRow>
+          <InputLabel sx={{ fontSize: '14px' }}>
+            {t('core:title', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </InputLabel>
+          {activeField === 'title' && (
+            <CounterText>{`${title.length}/${TITLE_MAX_CHARS}`}</CounterText>
+          )}
+        </LabelRow>
 
         <InputBase
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onFocus={() => setActiveField('title')}
+          onBlur={() => setActiveField(null)}
+          onChange={(e) => setTitle(e.target.value.slice(0, TITLE_MAX_CHARS))}
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
@@ -410,20 +483,30 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
             'aria-label': 'Title',
             fontSize: '14px',
             fontWeight: 400,
+            maxLength: TITLE_MAX_CHARS,
           }}
         />
 
         <Spacer height="15px" />
 
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:description', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
+        <LabelRow>
+          <InputLabel sx={{ fontSize: '14px' }}>
+            {t('core:description', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </InputLabel>
+          {activeField === 'description' && (
+            <CounterText>{`${description.length}/${DESCRIPTION_MAX_CHARS}`}</CounterText>
+          )}
+        </LabelRow>
 
         <InputBase
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onFocus={() => setActiveField('description')}
+          onBlur={() => setActiveField(null)}
+          onChange={(e) =>
+            setDescription(e.target.value.slice(0, DESCRIPTION_MAX_CHARS))
+          }
           sx={{
             border: `0.5px solid ${theme.palette.action.disabled}`,
             padding: '0px 15px',
@@ -439,6 +522,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
             'aria-label': 'Description',
             fontSize: '14px',
             fontWeight: 400,
+            maxLength: DESCRIPTION_MAX_CHARS,
           }}
         />
 
@@ -458,7 +542,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
           value={category}
           onChange={(event) => setCategory(event?.target.value)}
         >
-          <CustomMenuItem value="">
+          <MenuItem value="">
             <em
               style={{
                 color: theme.palette.text.secondary,
@@ -468,28 +552,31 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
                 postProcess: 'capitalizeFirstChar',
               })}
             </em>
-          </CustomMenuItem>
+          </MenuItem>
           {categories?.map((category) => {
-            return (
-              <CustomMenuItem value={category?.id}>
-                {category?.name}
-              </CustomMenuItem>
-            );
+            return <MenuItem value={category?.id}>{category?.name}</MenuItem>;
           })}
         </CustomSelect>
 
         <Spacer height="15px" />
 
-        <InputLabel sx={{ fontSize: '14px', marginBottom: '2px' }}>
-          {t('core:tags', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </InputLabel>
+        <LabelRow>
+          <InputLabel sx={{ fontSize: '14px' }}>
+            {t('core:tags', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </InputLabel>
+          {activeTagInfo && (
+            <CounterText>{`${activeTagInfo.label}: ${activeTagInfo.length}/${TAG_MAX_CHARS}`}</CounterText>
+          )}
+        </LabelRow>
 
         <AppPublishTagsContainer>
           <InputBase
             value={tag1}
-            onChange={(e) => setTag1(e.target.value)}
+            onFocus={() => setActiveField('tag1')}
+            onBlur={() => setActiveField(null)}
+            onChange={(e) => setTag1(e.target.value.slice(0, TAG_MAX_CHARS))}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -502,11 +589,14 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               'aria-label': 'Tag 1',
               fontSize: '14px',
               fontWeight: 400,
+              maxLength: TAG_MAX_CHARS,
             }}
           />
           <InputBase
             value={tag2}
-            onChange={(e) => setTag2(e.target.value)}
+            onFocus={() => setActiveField('tag2')}
+            onBlur={() => setActiveField(null)}
+            onChange={(e) => setTag2(e.target.value.slice(0, TAG_MAX_CHARS))}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -519,11 +609,14 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               'aria-label': 'Tag 2',
               fontSize: '14px',
               fontWeight: 400,
+              maxLength: TAG_MAX_CHARS,
             }}
           />
           <InputBase
             value={tag3}
-            onChange={(e) => setTag3(e.target.value)}
+            onFocus={() => setActiveField('tag3')}
+            onBlur={() => setActiveField(null)}
+            onChange={(e) => setTag3(e.target.value.slice(0, TAG_MAX_CHARS))}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -536,11 +629,14 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               'aria-label': 'Tag 3',
               fontSize: '14px',
               fontWeight: 400,
+              maxLength: TAG_MAX_CHARS,
             }}
           />
           <InputBase
             value={tag4}
-            onChange={(e) => setTag4(e.target.value)}
+            onFocus={() => setActiveField('tag4')}
+            onBlur={() => setActiveField(null)}
+            onChange={(e) => setTag4(e.target.value.slice(0, TAG_MAX_CHARS))}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -553,11 +649,14 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               'aria-label': 'Tag 4',
               fontSize: '14px',
               fontWeight: 400,
+              maxLength: TAG_MAX_CHARS,
             }}
           />
           <InputBase
             value={tag5}
-            onChange={(e) => setTag5(e.target.value)}
+            onFocus={() => setActiveField('tag5')}
+            onBlur={() => setActiveField(null)}
+            onChange={(e) => setTag5(e.target.value.slice(0, TAG_MAX_CHARS))}
             sx={{
               border: `0.5px solid ${theme.palette.action.disabled}`,
               padding: '0px 15px',
@@ -570,6 +669,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
               'aria-label': 'Tag 5',
               fontSize: '14px',
               fontWeight: 400,
+              maxLength: TAG_MAX_CHARS,
             }}
           />
         </AppPublishTagsContainer>

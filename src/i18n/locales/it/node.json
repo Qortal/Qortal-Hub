@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "title": "Configurazione locale: Hub e Core funzionano sullo stesso sistema",
+    "advancedOptions": "opzioni avanzate",
+    "pickPath": "scegli un percorso di installazione personalizzato di Qortal se il tuo Core è installato in una posizione non predefinita.",
+    "removePath": "rimuovi percorso Qortal personalizzato"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal è una piattaforma decentralizzata che ti dà il pieno controllo sui tuoi dati, applicazioni e finanze. Per iniziare, ti consigliamo di installare il <strong>Qortal Core</strong>, che alimenta la rete e abilita tutte le funzionalità di Qortal.",
+    "paragraph2": "Questa procedura guidata ti accompagnerà nell’installazione e configurazione di Qortal Core sul tuo dispositivo. Fai clic su <strong>Avanti</strong> per continuare con l’installazione.",
+    "note": "nota per utenti avanzati",
+    "advanced": "se stai usando un nodo remoto, chiudi questa procedura guidata e fai clic su \"Scegli nodo personalizzato\""
+  },
+  "sync": {
+    "behind": "Sei indietro di {{count}} blocchi.",
+    "waiting": "Attendi fino a quando non sei sincronizzato.",
+    "not_syncronized": "non sincronizzato",
+    "syncronized": "sincronizzato",
+    "syncronized_desc": "ora sei sincronizzato. puoi continuare."
+  },
+  "steps": {
+    "java": "ha Java",
+    "downloaded": "Core scaricato",
+    "running": "core in esecuzione"
+  },
+  "actions": {
+    "finished": "completato",
+    "start": "avvia Qortal Core",
+    "install": "installa e avvia Qortal Core",
+    "continuePublic": "continua con nodo pubblico",
+    "openSetup": "apri configurazione locale",
+    "goToDownloads": "vai ai download",
+    "resetKey": "reimposta apikey",
+    "continue": "continua"
+  },
+  "error": {
+    "noJar": "la directory scelta non contiene un file qortal.jar",
+    "invalidKey": "apikey non valida",
+    "failed_stop": "impossibile fermare il Core",
+    "failed_bootstrap": "impossibile eseguire il bootstrap",
+    "failed_delete": "impossibile eliminare il database"
+  },
+  "status": {
+    "complete": "completo",
+    "inProgress": "in corso",
+    "pending": "in attesa",
+    "error": "errore"
+  },
+  "recommendation": {
+    "title": "utilizzo del tuo core locale",
+    "description": "puoi procedere con il nodo pubblico se lo desideri, ma consigliamo vivamente di utilizzare il tuo nodo locale per la migliore esperienza.",
+    "subTitle": "vantaggi dell'utilizzo di un nodo locale:",
+    "point1": "accesso completamente decentralizzato",
+    "point2": "download più veloci",
+    "point3": "dati controllati dall'utente",
+    "publicExplanation": "Il nodo pubblico a cui ti connetti è in realtà un nodo privato reso accessibile pubblicamente. Sebbene conveniente, ha alcune limitazioni rispetto all'esecuzione di uno proprio."
+  },
+  "invalidKey": {
+    "title": "apikey non valida",
+    "description": "La tua apikey non è valida. Inserisci una apikey valida.",
+    "resetDescription": "La tua apikey non è valida. Clicca su reimposta per procedere."
+  },
+  "messages": {
+    "001": "avvio del core... attendere.",
+    "002": "errore: impossibile avviare il repository",
+    "003": "errore durante l'esecuzione di Qortal Core",
+    "004": "errore durante l'estrazione di Qortal Core",
+    "005": "scaricamento di Qortal Core... attendere.",
+    "006": "configurazione di Java... attendere.",
+    "007": "errore durante il download di Java.",
+    "008": "errore durante l'estrazione di Java",
+    "009": "scaricamento di Qortal Core... attendere.",
+    "010": "errore: impossibile scaricare o installare il Core"
+  },
+  "url": {
+    "title": "URL non valido",
+    "description": "URL errato o nodo non in esecuzione"
+  },
+  "confirmations": {
+    "stop": "sei sicuro di voler fermare il Core?",
+    "bootstrap": "sei sicuro di voler eseguire il bootstrap?",
+    "delete": "sei sicuro di voler eliminare il database?"
+  },
+  "stop": "ferma Core",
+  "bootstrap": "bootstrap",
+  "delete": "elimina database",
+  "more": "più opzioni",
+  "less": "meno opzioni",
+  "enableAuthWhenSyncing": "abilita l'autenticazione durante la sincronizzazione"
+}

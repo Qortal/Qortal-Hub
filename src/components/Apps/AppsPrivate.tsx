@@ -27,7 +27,6 @@ import {
   memberGroupsAtom,
   myGroupsWhereIAmAdminAtom,
 } from '../../atoms/global';
-import { Label } from '../Group/AddGroup';
 import { Spacer } from '../../common/Spacer';
 import {
   AppCircle,
@@ -45,6 +44,7 @@ import { getFee } from '../../background/background.ts';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
+import { Label } from '../../styles/App-styles.ts';
 
 const maxFileSize = 50 * 1024 * 1024; // 50MB
 

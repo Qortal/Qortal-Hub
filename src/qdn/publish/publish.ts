@@ -7,6 +7,7 @@ import utils from '../../utils/utils';
 import { createEndpoint, getBaseApi } from '../../background/background';
 import { getData } from '../../utils/chromeStorage';
 import { executeEvent } from '../../utils/events';
+import { fileToBase64 } from '../../utils/fileReading';
 
 export async function reusableGet(endpoint) {
   const validApi = await getBaseApi();
@@ -375,6 +376,7 @@ export const publishData = async ({
       if (urlSuffix) {
         uploadDataUrl = uploadDataUrl + urlSuffix;
       }
+
       uploadDataUrl = uploadDataUrl + paramQueries;
       if (appInfo?.tabId) {
         executeEvent('receiveChunks', {
@@ -398,6 +400,32 @@ export const publishData = async ({
     }
 
     const file = data;
+
+    if (file?.size === 0) {
+      postBody = await fileToBase64(file);
+      uploadDataUrl = uploadDataUrl + '/base64';
+
+      uploadDataUrl = uploadDataUrl + paramQueries;
+      if (appInfo?.tabId) {
+        executeEvent('receiveChunks', {
+          tabId: appInfo.tabId,
+          publishLocation: {
+            name: registeredName,
+            identifier,
+            service,
+          },
+          chunksSubmitted: 1,
+          totalChunks: 1,
+          processed: false,
+          filename: filename || title || `${service}-${identifier || ''}`,
+        });
+      }
+      return await resuablePostRetry(uploadDataUrl, postBody, 3, appInfo, {
+        identifier,
+        name: registeredName,
+        service,
+      });
+    }
     const urlCheck = `/arbitrary/check/tmp?totalSize=${file.size}`;
 
     const checkEndpoint = await createEndpoint(urlCheck);

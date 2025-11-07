@@ -5,7 +5,6 @@ import { doInitWorkers, kdf } from '../../encryption/kdf';
 import PhraseWallet from './phrase-wallet';
 import * as WORDLISTS from './wordlists';
 import FileSaver from 'file-saver';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { mimeToExtensionMap } from '../memeTypes';
 
 export function generateRandomSentence(
@@ -24,7 +23,7 @@ export function generateRandomSentence(
     verbed: 'verbed',
   };
 
-  let _wordlists = WORDLISTS;
+  const _wordlists = WORDLISTS;
 
   function _RNG(entropy) {
     if (entropy > 1074) {
@@ -35,7 +34,7 @@ export function generateRandomSentence(
 
     if (crypto) {
       const entropy256 = Math.ceil(entropy / 8);
-      let buffer = new Uint8Array(entropy256);
+      const buffer = new Uint8Array(entropy256);
       crypto.getRandomValues(buffer);
       randNum =
         buffer.reduce((num, value) => num * 256 + value, 0) /

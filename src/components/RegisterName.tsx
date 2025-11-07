@@ -14,7 +14,6 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { Label } from './Group/AddGroup';
 import { Spacer } from '../common/Spacer';
 import { getBaseApiReact } from '../App';
 import { getFee } from '../background/background.ts';
@@ -26,8 +25,9 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { Label } from '../styles/App-styles.ts';
 
-enum Availability {
+enum NameAvailability {
   NULL = 'null',
   LOADING = 'loading',
   AVAILABLE = 'available',
@@ -46,8 +46,8 @@ export const RegisterName = ({
   const [isOpen, setIsOpen] = useState(false);
   const [registerNameValue, setRegisterNameValue] = useState('');
   const [isLoadingRegisterName, setIsLoadingRegisterName] = useState(false);
-  const [isNameAvailable, setIsNameAvailable] = useState<Availability>(
-    Availability.NULL
+  const [isNameAvailable, setIsNameAvailable] = useState<NameAvailability>(
+    NameAvailability.NULL
   );
   const [nameFee, setNameFee] = useState(null);
   const theme = useTheme();
@@ -60,21 +60,21 @@ export const RegisterName = ({
   ]);
   const checkIfNameExisits = async (name) => {
     if (!name?.trim()) {
-      setIsNameAvailable(Availability.NULL);
+      setIsNameAvailable(NameAvailability.NULL);
 
       return;
     }
-    setIsNameAvailable(Availability.LOADING);
+    setIsNameAvailable(NameAvailability.LOADING);
     try {
       const res = await fetch(`${getBaseApiReact()}/names/` + name);
       const data = await res.json();
       if (data?.message === 'name unknown' || data?.error) {
-        setIsNameAvailable(Availability.AVAILABLE);
+        setIsNameAvailable(NameAvailability.AVAILABLE);
       } else {
-        setIsNameAvailable(Availability.NOT_AVAILABLE);
+        setIsNameAvailable(NameAvailability.NOT_AVAILABLE);
       }
     } catch (error) {
-      setIsNameAvailable(Availability.AVAILABLE);
+      setIsNameAvailable(NameAvailability.AVAILABLE);
     }
   };
   // Debounce logic
@@ -290,7 +290,7 @@ export const RegisterName = ({
 
           <Spacer height="5px" />
 
-          {isNameAvailable === Availability.AVAILABLE && (
+          {isNameAvailable === NameAvailability.AVAILABLE && (
             <Box
               sx={{
                 alignItems: 'center',
@@ -312,7 +312,7 @@ export const RegisterName = ({
             </Box>
           )}
 
-          {isNameAvailable === Availability.NOT_AVAILABLE && (
+          {isNameAvailable === NameAvailability.NOT_AVAILABLE && (
             <Box
               sx={{
                 display: 'flex',
@@ -334,7 +334,7 @@ export const RegisterName = ({
             </Box>
           )}
 
-          {isNameAvailable === Availability.LOADING && (
+          {isNameAvailable === NameAvailability.LOADING && (
             <Box
               sx={{
                 display: 'flex',
@@ -419,7 +419,7 @@ export const RegisterName = ({
           disabled={
             !registerNameValue.trim() ||
             isLoadingRegisterName ||
-            isNameAvailable !== Availability.AVAILABLE ||
+            isNameAvailable !== NameAvailability.AVAILABLE ||
             !balance ||
             (balance && nameFee && +balance < +nameFee)
           }

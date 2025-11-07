@@ -185,9 +185,74 @@ export {
   DYNAMIC_FEE_TIMESTAMP,
 };
 
-export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS = 102;
+export const API_ENDPOINTS = [
+  'https://api.qortal.org',
+  'https://api2.qortal.org',
+  'https://appnode.qortal.org',
+  'https://apinode.qortalnodes.live',
+  'https://apinode1.qortalnodes.live',
+  'https://apinode2.qortalnodes.live',
+  'https://apinode3.qortalnodes.live',
+  'https://apinode4.qortalnodes.live',
+];
 
-export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY = '4001'; // Q for Qortal
+export const EXT_NODE_QORTAL_LINK: string = 'ext-node.qortal.link';
+export const HTTPS_EXT_NODE_QORTAL_LINK: string =
+  'https://ext-node.qortal.link';
 
-export const MAX_SIZE_PUBLIC_NODE = 500 * 1024 * 1024; // 500mb
-export const MAX_SIZE_PUBLISH = 2000 * 1024 * 1024; // 2GB
+export const HTTP_LOCALHOST_12391: string = 'http://127.0.0.1:12391';
+export const HTTPS_QORT_TRADE: string = 'https://www.qort.trade';
+export const HTTPS_TRADE_NODE: string = 'https://appnode.qortal.org';
+export const LOCALHOST: string = '127.0.0.1';
+export const LOCALHOST_12391: string = '127.0.0.1:12391';
+export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
+export const QORTAL_PROTOCOL: string = 'qortal://';
+
+// MIN-MAX section
+export const MAX_SIZE_AVATAR: number = 500;
+export const MAX_SIZE_PUBLIC_NODE: number = 500 * 1024 * 1024; // 500mb
+export const MAX_SIZE_PUBLISH: number = 2000 * 1024 * 1024; // 2GB
+export const MAX_SIZE_MESSAGE: number = 4000; // bytes
+export const MIN_REQUIRED_QORTS: number = 4;
+
+export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY: string = '4001'; // Q for Qortal
+export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
+export const SUGGESTED_QORTS: number = 6;
+
+// Time section
+// seconds
+export const TIME_SECONDS_1_IN_MILLISECONDS: number = 1000;
+export const TIME_SECONDS_10_IN_MILLISECONDS: number =
+  10 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_SECONDS_20_IN_MILLISECONDS: number =
+  20 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_SECONDS_40_IN_MILLISECONDS: number =
+  40 * TIME_SECONDS_1_IN_MILLISECONDS;
+
+// minutes
+export const TIME_MINUTES_1_IN_MILLISECONDS: number =
+  60 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_MINUTES_2_IN_MILLISECONDS: number =
+  2 * TIME_MINUTES_1_IN_MILLISECONDS;
+export const TIME_MINUTES_3_IN_MILLISECONDS: number =
+  3 * TIME_MINUTES_1_IN_MILLISECONDS;
+export const TIME_MINUTES_6_IN_MILLISECONDS: number =
+  6 * TIME_MINUTES_1_IN_MILLISECONDS;
+export const TIME_MINUTES_10_IN_MILLISECONDS: number =
+  10 * TIME_MINUTES_1_IN_MILLISECONDS;
+export const TIME_MINUTES_20_IN_MILLISECONDS: number =
+  20 * TIME_MINUTES_1_IN_MILLISECONDS;
+export const TIME_MINUTES_30_IN_MILLISECONDS: number =
+  30 * TIME_MINUTES_1_IN_MILLISECONDS;
+
+// hours
+export const TIME_HOURS_1_IN_MILLISECONDS: number =
+  60 * TIME_MINUTES_1_IN_MILLISECONDS;
+
+// days
+export const TIME_DAYS_1_IN_MILLISECONDS: number =
+  24 * TIME_HOURS_1_IN_MILLISECONDS;
+
+// weeks
+export const TIME_WEEKS_1_IN_MILLISECONDS: number =
+  7 * 24 * TIME_HOURS_1_IN_MILLISECONDS;

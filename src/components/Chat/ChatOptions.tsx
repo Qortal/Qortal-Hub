@@ -9,7 +9,7 @@ import {
   Tooltip,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SearchIcon from '@mui/icons-material/Search';
 import { Spacer } from '../../common/Spacer';
 import AlternateEmailIcon from '@mui/icons-material/AlternateEmail';
@@ -214,7 +214,7 @@ export const ChatOptions = ({
 
   const rowVirtualizer = useVirtualizer({
     count: searchedList.length,
-    getItemKey: React.useCallback(
+    getItemKey: useCallback(
       (index) => searchedList[index].signature,
       [searchedList]
     ),
@@ -225,7 +225,7 @@ export const ChatOptions = ({
 
   const rowVirtualizerMentions = useVirtualizer({
     count: mentionList.length,
-    getItemKey: React.useCallback(
+    getItemKey: useCallback(
       (index) => mentionList[index].signature,
       [mentionList]
     ),

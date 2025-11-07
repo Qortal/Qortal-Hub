@@ -73,6 +73,7 @@
     "remove": "retirer",
     "remove_reaction": "éliminer la réaction",
     "return_apps_dashboard": "Retour au tableau de bord Apps",
+    "return": "retour",
     "save": "sauvegarder",
     "save_disk": "Économiser sur le disque",
     "search": "recherche",
@@ -159,8 +160,7 @@
     "bans": "liste des interdictions",
     "groups": "liste des groupes",
     "invites": "liste des invitations",
-    "join_request": "JOINT LISTE DE REQUES",
-    "member": "liste des membres",
+    "join_request": "liste des demandes d'adhésion",
     "members": "liste des membres"
   },
   "loading": {
@@ -170,8 +170,6 @@
     "comments": "Chargement des commentaires ... Veuillez patienter.",
     "posts": "Chargement des messages ... Veuillez patienter."
   },
-  "member": "membre",
-  "member_other": "membres",
   "message_us": "Veuillez nous envoyer un message sur NextCloud (aucune inscription requise) ou Discord si vous avez besoin de 4 Qort pour commencer à discuter sans aucune limitation",
   "message": {
     "error": {
@@ -405,6 +403,11 @@
   "tutorial": "tutoriel",
   "url": "URL",
   "user_lookup": "recherche d'utilisateur",
+  "video_embed": "Vidéo intégrer",
+  "video_failed": "échec du téléchargement",
+  "retry": "réessayer",
+  "video_fetching": "récupération de la vidéo depuis le réseau Qortal...",
+  "video_building": "téléchargement terminé : construction de la vidéo...",
   "vote": "voter",
   "vote_other": "{{ count }} votes",
   "zip": "fermeture éclair",

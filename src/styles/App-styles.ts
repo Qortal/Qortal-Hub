@@ -233,3 +233,11 @@ export const CustomLabel = styled(InputLabel)(({ theme }) => ({
   fontWeight: 400,
   lineHeight: '24px',
 }));
+
+export const Label = styled('label')`
+  display: block;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  margin-bottom: 4px;
+`;

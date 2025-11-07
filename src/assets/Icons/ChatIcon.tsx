@@ -1,5 +1,3 @@
-import React from 'react';
-
 export const ChatIcon = ({ color = 'white', height = 15, width = 15 }) => {
   return (
     <svg

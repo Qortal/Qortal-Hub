@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "title": "Lokale Einrichtung: Hub und Core laufen auf demselben System",
+    "advancedOptions": "erweiterte Optionen",
+    "pickPath": "Wählen Sie einen benutzerdefinierten Qortal-Installationspfad, wenn Ihr Core an einem nicht standardmäßigen Ort installiert ist.",
+    "removePath": "benutzerdefinierten Qortal-Pfad entfernen"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal ist eine dezentrale Plattform, die Ihnen volle Kontrolle über Ihre Daten, Anwendungen und Finanzen gibt. Um zu beginnen, empfehlen wir die Installation von <strong>Qortal Core</strong>, das das Netzwerk betreibt und alle Funktionen von Qortal aktiviert.",
+    "paragraph2": "Dieser Einrichtungsassistent führt Sie durch die Installation und Konfiguration von Qortal Core auf Ihrem Gerät. Klicken Sie auf <strong>Weiter</strong>, um mit der Installation fortzufahren.",
+    "note": "Hinweis für fortgeschrittene Benutzer",
+    "advanced": "Wenn Sie einen Remote-Knoten verwenden, schließen Sie bitte diesen Einrichtungsassistenten und klicken Sie anschließend auf „Benutzerdefinierten Knoten auswählen“"
+  },
+  "sync": {
+    "behind": "Sie sind {{count}} Blöcke im Rückstand.",
+    "waiting": "Bitte warten Sie, bis Sie synchronisiert sind.",
+    "not_syncronized": "nicht synchronisiert",
+    "syncronized": "synchronisiert",
+    "syncronized_desc": "Sie sind jetzt synchronisiert. Sie können fortfahren."
+  },
+  "steps": {
+    "java": "Java vorhanden",
+    "downloaded": "Core heruntergeladen",
+    "running": "Core läuft"
+  },
+  "actions": {
+    "finished": "abgeschlossen",
+    "start": "Qortal Core starten",
+    "install": "Qortal Core installieren und starten",
+    "continuePublic": "mit öffentlichem Node fortfahren",
+    "openSetup": "lokale Einrichtung öffnen",
+    "goToDownloads": "zu Downloads gehen",
+    "resetKey": "API-Schlüssel zurücksetzen",
+    "continue": "fortfahren"
+  },
+  "error": {
+    "noJar": "gewähltes Verzeichnis enthält keine qortal.jar",
+    "invalidKey": "ungültiger API-Schlüssel",
+    "failed_stop": "Core konnte nicht gestoppt werden",
+    "failed_bootstrap": "Bootstrap konnte nicht ausgeführt werden",
+    "failed_delete": "Datenbank konnte nicht gelöscht werden"
+  },
+  "status": {
+    "complete": "abgeschlossen",
+    "inProgress": "in Bearbeitung",
+    "pending": "ausstehend",
+    "error": "Fehler"
+  },
+  "recommendation": {
+    "title": "lokalen Core verwenden",
+    "description": "Du kannst mit dem öffentlichen Node fortfahren, aber wir empfehlen dringend, deinen lokalen Node für das beste Erlebnis zu verwenden.",
+    "subTitle": "Vorteile eines lokalen Nodes:",
+    "point1": "vollständig dezentrierter Zugriff",
+    "point2": "schnellere Downloads",
+    "point3": "benutzerkontrollierte Daten",
+    "publicExplanation": "Der öffentliche Node, mit dem du dich verbindest, ist in Wirklichkeit ein privat betriebener Node. Er ist praktisch, hat aber Einschränkungen im Vergleich zum eigenen Node."
+  },
+  "invalidKey": {
+    "title": "ungültiger API-Schlüssel",
+    "description": "Dein API-Schlüssel ist ungültig. Bitte gib einen gültigen ein.",
+    "resetDescription": "Dein API-Schlüssel ist ungültig. Klicke auf 'Zurücksetzen', um fortzufahren."
+  },
+  "messages": {
+    "001": "Core wird gestartet... bitte warten.",
+    "002": "Fehler: Repository konnte nicht gestartet werden",
+    "003": "Fehler beim Starten von Qortal Core",
+    "004": "Fehler beim Entpacken von Qortal Core",
+    "005": "Qortal Core wird heruntergeladen... bitte warten.",
+    "006": "Java wird eingerichtet... bitte warten.",
+    "007": "Fehler beim Herunterladen von Java.",
+    "008": "Fehler beim Entpacken von Java",
+    "009": "Qortal Core wird heruntergeladen... bitte warten.",
+    "010": "Fehler: Core konnte nicht heruntergeladen oder installiert werden"
+  },
+  "url": {
+    "title": "ungültige URL",
+    "description": "falsche URL oder Knoten läuft nicht"
+  },
+  "confirmations": {
+    "stop": "Bist du sicher, dass du den Core stoppen möchtest?",
+    "bootstrap": "Bist du sicher, dass du den Bootstrap starten möchtest?",
+    "delete": "Bist du sicher, dass du die Datenbank löschen möchtest?"
+  },
+  "stop": "Core stoppen",
+  "bootstrap": "Bootstrap",
+  "delete": "Datenbank löschen",
+  "more": "mehr Optionen",
+  "less": "weniger Optionen",
+  "enableAuthWhenSyncing": "Authentifizierung beim Synchronisieren aktivieren"
+}

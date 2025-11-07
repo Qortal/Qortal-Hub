@@ -116,6 +116,7 @@ type MessageItemProps = {
   reactions: ReactionsMap | null;
   reply: string | null;
   replyIndex: number;
+  replyExpiredMeta?: any;
   scrollToItem: (index: number) => void;
 };
 
@@ -135,6 +136,7 @@ export const MessageItemComponent = ({
   reactions,
   reply,
   replyIndex,
+  replyExpiredMeta,
   scrollToItem,
 }: MessageItemProps) => {
   const { getIndividualUserInfo } = useContext(QORTAL_APP_CONTEXT);
@@ -184,6 +186,22 @@ export const MessageItemComponent = ({
       ]);
     }
   }, [reply?.editTimestamp]);
+
+  const htmlReplyExpired = useMemo(() => {
+    if (!replyExpiredMeta) return null;
+    if (replyExpiredMeta?.messageText) {
+      const isHtml = isHtmlString(replyExpiredMeta?.messageText);
+      if (isHtml) return replyExpiredMeta?.messageText;
+      return generateHTML(replyExpiredMeta?.messageText, [
+        StarterKit,
+        Underline,
+        Highlight,
+        Mention,
+        TextStyle,
+      ]);
+    }
+    return null;
+  }, [replyExpiredMeta?.editTimestamp]);
 
   const userAvatarUrl = useMemo(() => {
     return message?.senderName
@@ -411,6 +429,60 @@ export const MessageItemComponent = ({
                       />
                     ) : (
                       <MessageDisplay isReply htmlContent={reply.text} />
+                    )}
+                  </Box>
+                </Box>
+              </>
+            )}
+
+            {!reply && (replyExpiredMeta || message?.repliedTo) && (
+              <>
+                <Spacer height="20px" />
+
+                <Box
+                  sx={{
+                    backgroundColor: theme.palette.background.surface,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    gap: '20px',
+                    maxHeight: '90px',
+                    overflow: 'hidden',
+                    width: '100%',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      background: theme.palette.text.primary,
+                      height: '100%',
+                      width: '5px',
+                      flexShrink: 0,
+                    }}
+                  />
+
+                  <Box sx={{ padding: '5px' }}>
+                    <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>
+                      {replyExpiredMeta?.senderName || replyExpiredMeta?.sender
+                        ? t('core:message.generic.replied_to', {
+                            person:
+                              replyExpiredMeta?.senderName ||
+                              replyExpiredMeta?.sender,
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:message.generic.replied_to', {
+                            person:
+                              t('core:message.error.missing_fields', {
+                                fields: t('core:message.message')
+                              }),
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                    </Typography>
+
+                    {replyExpiredMeta?.messageText && (
+                      <MessageDisplay htmlContent={htmlReplyExpired} />
+                    )}
+
+                    {replyExpiredMeta?.text && (
+                      <MessageDisplay isReply htmlContent={replyExpiredMeta.text} />
                     )}
                   </Box>
                 </Box>

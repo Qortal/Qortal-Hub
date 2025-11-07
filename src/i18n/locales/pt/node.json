@@ -1,0 +1,90 @@
+{
+  "setup": {
+    "title": "Configuração local: Hub e Core executam no mesmo sistema",
+    "advancedOptions": "opções avançadas",
+    "pickPath": "escolha um caminho de instalação personalizado do Qortal se o seu Core estiver instalado em um local não padrão.",
+    "removePath": "remover caminho personalizado do Qortal"
+  },
+  "introSetup": {
+    "paragraph1": "Qortal é uma plataforma descentralizada que lhe dá controle total sobre seus dados, aplicativos e finanças. Para começar, recomendamos instalar o <strong>Qortal Core</strong>, que alimenta a rede e habilita todos os recursos do Qortal.",
+    "paragraph2": "Este assistente de configuração o guiará na instalação e configuração do Qortal Core em seu dispositivo. Clique em <strong>Próximo</strong> para continuar a instalação.",
+    "note": "nota para usuários avançados",
+    "advanced": "se você estiver usando um nó remoto, feche este assistente de configuração e clique em \"Escolher nó personalizado\""
+  },
+  "sync": {
+    "behind": "Você está {{count}} blocos atrasado.",
+    "waiting": "Por favor, aguarde até estar sincronizado.",
+    "not_syncronized": "não sincronizado",
+    "syncronized": "sincronizado",
+    "syncronized_desc": "você agora está sincronizado. pode continuar."
+  },
+  "steps": {
+    "java": "tem Java",
+    "downloaded": "Core baixado",
+    "running": "core em execução"
+  },
+  "actions": {
+    "finished": "concluído",
+    "start": "iniciar Qortal Core",
+    "install": "instalar e iniciar o Qortal Core",
+    "continuePublic": "continuar com nó público",
+    "openSetup": "abrir configuração local",
+    "goToDownloads": "ir para downloads",
+    "resetKey": "redefinir chave API",
+    "continue": "continuar"
+  },
+  "error": {
+    "noJar": "o diretório escolhido não contém um qortal.jar",
+    "invalidKey": "chave API inválida",
+    "failed_stop": "não foi possível parar o Core",
+    "failed_bootstrap": "não foi possível inicializar",
+    "failed_delete": "não foi possível excluir o banco de dados"
+  },
+  "status": {
+    "complete": "completo",
+    "inProgress": "em andamento",
+    "pending": "pendente",
+    "error": "erro"
+  },
+  "recommendation": {
+    "title": "usando seu nó local",
+    "description": "você pode continuar com o nó público se quiser, mas recomendamos fortemente usar seu próprio nó local para a melhor experiência.",
+    "subTitle": "vantagens de usar um nó local:",
+    "point1": "acesso totalmente descentralizado",
+    "point2": "downloads mais rápidos",
+    "point3": "dados controlados pelo usuário",
+    "publicExplanation": "O nó público ao qual você se conecta é, na verdade, um nó privado disponibilizado publicamente. Embora seja conveniente, possui certas limitações em comparação com executar o seu próprio."
+  },
+  "invalidKey": {
+    "title": "chave API inválida",
+    "description": "Sua chave API é inválida. Por favor, insira uma chave válida.",
+    "resetDescription": "Sua chave API é inválida. Clique em redefinir para continuar."
+  },
+  "messages": {
+    "001": "iniciando o core... por favor, aguarde.",
+    "002": "erro: não foi possível iniciar o repositório",
+    "003": "erro ao executar o Qortal Core",
+    "004": "erro ao descompactar o Qortal Core",
+    "005": "baixando o Qortal Core... por favor, aguarde.",
+    "006": "configurando Java... por favor, aguarde.",
+    "007": "erro ao baixar o Java.",
+    "008": "erro ao descompactar o Java",
+    "009": "baixando o Qortal Core... por favor, aguarde.",
+    "010": "erro: não foi possível baixar ou instalar o core"
+  },
+  "url": {
+    "title": "URL inválido",
+    "description": "URL incorreta ou nó não está em execução"
+  },
+  "confirmations": {
+    "stop": "tem certeza de que deseja parar o Core?",
+    "bootstrap": "tem certeza de que deseja inicializar?",
+    "delete": "tem certeza de que deseja excluir o banco de dados?"
+  },
+  "stop": "parar Core",
+  "bootstrap": "inicializar",
+  "delete": "excluir banco de dados",
+  "more": "mais opções",
+  "less": "menos opções",
+  "enableAuthWhenSyncing": "ativar autenticação ao sincronizar"
+}

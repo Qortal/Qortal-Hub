@@ -11,9 +11,9 @@ const getRandomValues = crypto
 export const generateSaveWalletData = async (wallet, password, kdfThreads) => {
   const threads = doInitWorkers(cryptoVals.kdfThreads);
 
-  let iv = new Uint8Array(16);
+  const iv = new Uint8Array(16);
   getRandomValues(iv);
-  let salt = new Uint8Array(32);
+  const salt = new Uint8Array(32);
   getRandomValues(salt);
   const key = await kdf(password, salt, threads);
   const encryptionKey = key.slice(0, 32);

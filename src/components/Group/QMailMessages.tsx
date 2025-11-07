@@ -14,19 +14,16 @@ import { CustomLoader } from '../../common/CustomLoader';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { TIME_WEEKS_1_IN_MILLISECONDS } from '../../constants/constants';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
   const now = Date.now();
 
-  // One week ago in milliseconds (7 days * 24 hours * 60 minutes * 60 seconds * 1000 milliseconds)
-  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
-
   // Check if the timestamp is newer than one week ago
-  return timestamp > oneWeekAgo;
+  return timestamp > TIME_WEEKS_1_IN_MILLISECONDS;
 };
 
 export function formatEmailDate(timestamp: number) {
@@ -165,14 +162,28 @@ export const QMailMessages = ({ userName, userAddress }) => {
         >
           {t('group:latest_mails', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
-
-        <MarkEmailUnreadIcon
-          sx={{
-            color: anyUnread
-              ? theme.palette.other.unread
-              : theme.palette.text.primary,
-          }}
-        />
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+          {anyUnread && (
+            <div
+              style={{
+                backgroundColor: theme.palette.other.unread,
+                borderRadius: '50%',
+                height: '15px',
+                outline: '1px solid white',
+                position: 'absolute',
+                right: '-7px',
+                top: '-7px',
+                width: '15px',
+                zIndex: 1,
+              }}
+            />
+          )}
+          <MailIcon
+            sx={{
+              color: theme.palette.text.secondary,
+            }}
+          />
+        </Box>
         {isExpanded ? (
           <ExpandLessIcon
             sx={{

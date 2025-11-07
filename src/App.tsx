@@ -19,12 +19,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import HubIcon from '@mui/icons-material/Hub';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
@@ -94,14 +96,20 @@ import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
+  authenticatePasswordAtom,
+  balanceAtom,
   canSaveSettingToQdnAtom,
+  enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
+  extStateAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
+  isLoadingAuthenticateAtom,
+  isOpenCoreSetup,
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
@@ -111,11 +119,16 @@ import {
   myGroupsWhereIAmAdminAtom,
   oldPinnedAppsAtom,
   qMailLastEnteredTimestampAtom,
+  qortBalanceLoadingAtom,
+  rawWalletAtom,
+  selectedNodeInfoAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
   timestampEnterDataAtom,
   txListAtom,
+  userInfoAtom,
+  walletToBeDecryptedErrorAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
 import { handleGetFileFromIndexedDB } from './utils/indexedDB';
@@ -144,8 +157,18 @@ import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
+import {
+  HTTP_LOCALHOST_12391,
+  TIME_SECONDS_10_IN_MILLISECONDS,
+  TIME_MINUTES_2_IN_MILLISECONDS,
+  TIME_SECONDS_40_IN_MILLISECONDS,
+} from './constants/constants.ts';
+import { CoreSetup } from './components/CoreSetup.tsx';
+import { ApiKey } from './types/auth.ts';
+import { useAuth } from './hooks/useAuth.tsx';
+import { nodeDisplay } from './utils/helpers.ts';
 
-type extStates =
+export type extStates =
   | 'authenticated'
   | 'buy-order-submitted'
   | 'create-wallet'
@@ -232,21 +255,18 @@ export const resumeAllQueues = () => {
   });
 };
 
-const defaultValuesGlobal = {
-  openTutorialModal: null,
-  setOpenTutorialModal: () => {},
-};
-
 export const QORTAL_APP_CONTEXT =
   createContext<MyContextInterface>(defaultValues);
 
-export let globalApiKey: string | null = null;
+export let globalApiKey: ApiKey | null = null;
 
+export const handleSetGlobalApikey = (data: ApiKey) => {
+  globalApiKey = data;
+};
 export const getBaseApiReact = (customApi?: string) => {
   if (customApi) {
     return customApi;
   }
-
   if (globalApiKey?.url) {
     return globalApiKey?.url;
   } else {
@@ -279,19 +299,21 @@ export const getBaseApiReactSocket = (customApi?: string) => {
 export const isMainWindow = true;
 
 function App() {
-  const [extState, setExtstate] = useState<extStates>('not-authenticated');
+  const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [backupjson, setBackupjson] = useState<any>(null);
-  const [rawWallet, setRawWallet] = useState<any>(null);
+  const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
   const [ltcBalanceLoading, setLtcBalanceLoading] = useState<boolean>(false);
-  const [qortBalanceLoading, setQortBalanceLoading] = useState<boolean>(false);
+  const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
+    qortBalanceLoadingAtom
+  );
   const [decryptedWallet, setdecryptedWallet] = useState<any>(null);
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
   const [authenticatedMode, setAuthenticatedMode] = useState('qort');
   const [requestAuthentication, setRequestAuthentication] = useState<any>(null);
-  const [userInfo, setUserInfo] = useState<any>(null);
-  const [balance, setBalance] = useState<any>(null);
+  const [userInfo, setUserInfo] = useAtom(userInfoAtom);
+  const [balance, setBalance] = useAtom(balanceAtom);
   const [ltcBalance, setLtcBalance] = useState<any>(null);
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -302,13 +324,16 @@ function App() {
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
+  const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useState<string>('');
+  const [authenticatePassword, setAuthenticatePassword] = useAtom(
+    authenticatePasswordAtom
+  );
   const [sendqortState, setSendqortState] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
+
   const { t } = useTranslation([
     'auth',
     'core',
@@ -326,8 +351,9 @@ function App() {
   const [walletToBeDownloadedError, setWalletToBeDownloadedError] =
     useState<string>('');
 
-  const [walletToBeDecryptedError, setWalletToBeDecryptedError] =
-    useState<string>('');
+  const [walletToBeDecryptedError, setWalletToBeDecryptedError] = useAtom(
+    walletToBeDecryptedErrorAtom
+  );
 
   const [isFocused, setIsFocused] = useState(true);
 
@@ -357,6 +383,7 @@ function App() {
     show: showUnsavedChanges,
     message: messageUnsavedChanges,
   } = useModal();
+  const confirmRef = useRef(null);
 
   const {
     isShow: isShowInfo,
@@ -389,10 +416,15 @@ function App() {
   const [hasLocalNode, setHasLocalNode] = useState(false);
   const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
-  const [apiKey, setApiKey] = useState('');
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
-
+  const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
+  const {
+    isNodeValid,
+    authenticate,
+    getBalanceFunc,
+    validateApiKeyFromRegistration,
+  } = useAuth();
   const {
     isUserBlocked,
     addToBlockList,
@@ -400,12 +432,8 @@ function App() {
     getAllBlockedUsers,
   } = useBlockedAddresses(extState === 'authenticated');
 
-  const [currentNode, setCurrentNode] = useState({
-    url: 'http://127.0.0.1:12391',
-  });
-
-  const [useLocalNode, setUseLocalNode] = useState(false);
-
+  // const [useLocalNode, setUseLocalNode] = useState(true);
+  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
   const [confirmRequestRead, setConfirmRequestRead] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
@@ -415,6 +443,7 @@ function App() {
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
 
   const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
 
@@ -439,6 +468,12 @@ function App() {
     if (isDevModeFromStorage) {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
     }
+    const enableAuthWhenSyncingFromStorage = localStorage.getItem(
+      'enableAuthWhenSyncing'
+    );
+    if (enableAuthWhenSyncingFromStorage) {
+      setEnableAuthWhenSyncing(JSON.parse(enableAuthWhenSyncingFromStorage));
+    }
   }, []);
 
   useEffect(() => {
@@ -450,17 +485,6 @@ function App() {
         console.error(error);
       });
   }, [extState]);
-
-  useEffect(() => {
-    if (!shownTutorialsInitiated) return;
-    if (extState === 'not-authenticated') {
-      showTutorial('create-account');
-    } else if (extState === 'create-wallet' && walletToBeDownloaded) {
-      showTutorial('important-information');
-    } else if (extState === 'authenticated') {
-      showTutorial('getting-started');
-    }
-  }, [extState, walletToBeDownloaded, shownTutorialsInitiated]);
 
   //resets for recoil
   const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
@@ -495,7 +519,7 @@ function App() {
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
   const resettxListAtomAtom = useResetAtom(txListAtom);
   const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
-
+  const [storeAccount, setStoredAccount] = useState<boolean>(true);
   const resetAllRecoil = () => {
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
@@ -566,19 +590,22 @@ function App() {
     ]
   );
 
-  const handleSetGlobalApikey = (key) => {
-    globalApiKey = key;
-  };
-
   useEffect(() => {
     try {
       setIsLoading(true);
       window
         .sendMessage('getApiKey')
         .then((response) => {
-          if (response) {
+          if (response?.url) {
             handleSetGlobalApikey(response);
-            setApiKey(response);
+            setSelectedNode(response);
+          } else {
+            const payload = {
+              url: HTTP_LOCALHOST_12391,
+              apikey: '',
+            };
+            handleSetGlobalApikey(response);
+            setSelectedNode(payload);
           }
         })
         .catch((error) => {
@@ -616,6 +643,7 @@ function App() {
       setIsLoading(false);
     }
   }, []);
+
   useEffect(() => {
     if (extState) {
       holdRefExtState.current = extState;
@@ -644,6 +672,7 @@ function App() {
     if (!rawWallet?.address0) return '';
     return rawWallet.address0;
   }, [rawWallet]);
+
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
       'application/json': ['.json'], // Only accept JSON files
@@ -746,30 +775,10 @@ function App() {
             console.error('Failed to get balance:', error);
             isCalling = false;
           });
-      }, 40000);
+      }, TIME_SECONDS_40_IN_MILLISECONDS);
     } catch (error) {
       console.error(error);
     }
-  };
-
-  const getBalanceFunc = () => {
-    setQortBalanceLoading(true);
-    window
-      .sendMessage('balance')
-      .then((response) => {
-        if (!response?.error && !isNaN(+response)) {
-          setBalance(response);
-        }
-
-        setQortBalanceLoading(false);
-      })
-      .catch((error) => {
-        console.error('Failed to get balance:', error);
-        setQortBalanceLoading(false);
-      })
-      .finally(() => {
-        balanceSetInterval();
-      });
   };
 
   const refetchUserInfo = () => {
@@ -789,6 +798,7 @@ function App() {
     getBalanceFunc();
     refetchUserInfo();
   };
+
   const getLtcBalanceFunc = () => {
     setLtcBalanceLoading(true);
     window
@@ -929,7 +939,7 @@ function App() {
         await new Promise((res) => {
           setTimeout(() => {
             res(null);
-          }, 10000);
+          }, TIME_SECONDS_10_IN_MILLISECONDS);
         });
       }
       window
@@ -1044,6 +1054,7 @@ function App() {
         crypto.kdfThreads,
         () => {}
       );
+      await validateApiKeyFromRegistration();
       window
         .sendMessage('decryptWallet', {
           password: walletToBeDownloadedPassword,
@@ -1052,7 +1063,9 @@ function App() {
         .then((response) => {
           if (response && !response.error) {
             setRawWallet(wallet);
-            saveWalletToLocalStorage(wallet);
+            if (storeAccount) {
+              saveWalletToLocalStorage(wallet);
+            }
             setWalletToBeDownloaded({
               wallet,
               qortAddress: wallet.address0,
@@ -1170,62 +1183,11 @@ function App() {
 
   const authenticateWallet = async () => {
     try {
-      setIsLoading(true);
-      setWalletToBeDecryptedError('');
-      await new Promise<void>((res) => {
-        setTimeout(() => {
-          res();
-        }, 250);
-      });
-      window
-        .sendMessage(
-          'decryptWallet',
-          {
-            password: authenticatePassword,
-            wallet: rawWallet,
-          },
-          120000
-        )
-        .then((response) => {
-          if (response && !response.error) {
-            setAuthenticatePassword('');
-            setExtstate('authenticated');
-            setWalletToBeDecryptedError('');
-
-            window
-              .sendMessage('userInfo')
-              .then((response) => {
-                setIsLoading(false);
-                if (response && !response.error) {
-                  setUserInfo(response);
-                }
-              })
-              .catch((error) => {
-                setIsLoading(false);
-                console.error('Failed to get user info:', error);
-              });
-
-            getBalanceFunc();
-
-            window
-              .sendMessage('getWalletInfo')
-              .then((response) => {
-                if (response && response.walletInfo) {
-                  setRawWallet(response.walletInfo);
-                }
-              })
-              .catch((error) => {
-                console.error('Failed to get wallet info:', error);
-              });
-          } else if (response?.error) {
-            setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
-          }
-        })
-        .catch((error) => {
-          setIsLoading(false);
-          console.error('Failed to decrypt wallet:', error);
-        });
+      const isValid = await isNodeValid();
+      if (!isValid) {
+        return;
+      }
+      await authenticate();
     } catch (error) {
       setWalletToBeDecryptedError(
         t('core:message.error.password_wrong', {
@@ -2049,19 +2011,12 @@ function App() {
       <PdfViewer />
 
       <QORTAL_APP_CONTEXT.Provider value={contextValue}>
+        <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
-            apiKey={apiKey}
-            currentNode={currentNode}
-            getInputProps={getInputProps}
-            getRootProps={getRootProps}
-            globalApiKey={globalApiKey}
             handleSetGlobalApikey={handleSetGlobalApikey}
-            setApiKey={setApiKey}
-            setCurrentNode={setCurrentNode}
             setExtstate={setExtstate}
-            setUseLocalNode={setUseLocalNode}
             useLocalNode={useLocalNode}
           />
         )}
@@ -2737,6 +2692,7 @@ function App() {
                 onClick={() => {
                   setRawWallet(null);
                   setExtstate('wallets');
+                  setAuthenticatePassword('');
                   logoutFunc();
                 }}
               />
@@ -2805,36 +2761,25 @@ function App() {
                 }}
                 ref={passwordRef}
               />
-              {useLocalNode ? (
-                <>
-                  <Spacer height="20px" />
 
-                  <Typography
-                    sx={{
-                      fontSize: '12px',
-                    }}
-                  >
-                    {t('auth:node.using', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    : {currentNode?.url}
-                  </Typography>
-                </>
-              ) : (
-                <>
-                  <Spacer height="20px" />
+              <>
+                <Spacer height="20px" />
 
-                  <Typography
-                    sx={{
-                      fontSize: '12px',
-                    }}
-                  >
-                    {t('auth:node.using_public', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </>
-              )}
+                <Typography
+                  sx={{
+                    fontSize: '12px',
+                    ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+                      fontWeight: 'bold',
+                      color: theme.palette.other.positive,
+                    }),
+                  }}
+                >
+                  {t('auth:node.using', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  : {nodeDisplay(selectedNode?.url)}
+                </Typography>
+              </>
 
               <Spacer height="20px" />
 
@@ -2884,6 +2829,8 @@ function App() {
                     onClick={() => {
                       if (creationStep === 2) {
                         setCreationStep(1);
+                        setWalletToBeDownloadedPasswordConfirm('');
+                        setWalletToBeDownloadedPassword('');
                         return;
                       }
                       setExtstate('not-authenticated');
@@ -3109,6 +3056,11 @@ function App() {
                     onChange={(e) =>
                       setWalletToBeDownloadedPassword(e.target.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        confirmRef.current?.focus();
+                      }
+                    }}
                   />
 
                   <Spacer height="5px" />
@@ -3122,11 +3074,17 @@ function App() {
                   <Spacer height="5px" />
 
                   <PasswordField
+                    inputRef={confirmRef}
                     id="standard-adornment-password"
                     value={walletToBeDownloadedPasswordConfirm}
                     onChange={(e) =>
                       setWalletToBeDownloadedPasswordConfirm(e.target.value)
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        createAccountFunc();
+                      }
+                    }}
                   />
                   <Spacer height="5px" />
 
@@ -3135,7 +3093,38 @@ function App() {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
-
+                  <Spacer height="5px" />
+                  <FormControlLabel
+                    sx={{
+                      margin: 0,
+                    }}
+                    control={
+                      <Checkbox
+                        onChange={(e) => setStoredAccount(e.target.checked)}
+                        checked={storeAccount}
+                        edge="start"
+                        tabIndex={-1}
+                        disableRipple
+                        sx={{
+                          '&.Mui-checked': {
+                            color: theme.palette.text.secondary,
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: theme.palette.text.secondary,
+                          },
+                        }}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography sx={{ fontSize: '14px' }}>
+                          {t('auth:store_account', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+                    }
+                  />
                   <Spacer height="17px" />
 
                   <CustomButton onClick={createAccountFunc}>
@@ -3987,6 +3976,14 @@ function App() {
             width: 'auto',
           }}
         >
+          {window?.coreSetup && (
+            <Box sx={{ alignSelf: 'center' }}>
+              <IconButton onClick={() => setOpenCoreSetup(true)}>
+                <HubIcon />
+              </IconButton>
+            </Box>
+          )}
+
           <Box sx={{ alignSelf: 'left' }}>
             <LanguageSelector />
           </Box>
