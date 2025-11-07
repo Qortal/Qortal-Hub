@@ -2720,7 +2720,7 @@ function App() {
               }}
             >
               <Typography>
-                {rawWallet?.name ? rawWallet?.name : rawWallet?.address0}
+                { rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
               </Typography>
 
               <Spacer height="10px" />
