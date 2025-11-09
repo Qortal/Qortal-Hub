@@ -730,7 +730,7 @@ async function startElectronUnix() {
   if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
-        console.log('Core is running, perfect !');
+        // Core is running, perfect !
       } else {
         startQortal();
       }
@@ -917,7 +917,6 @@ export async function findQortalJar(): Promise<{
  */
 async function stopViaAdminApi(apiKey: string): Promise<boolean> {
   try {
-    console.log('Sending /admin/stop request to Qortal Core...');
     const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/stop`, {
       method: 'GET',
       headers: {
@@ -931,22 +930,14 @@ async function stopViaAdminApi(apiKey: string): Promise<boolean> {
       return false;
     }
 
-    console.log(
-      'Stop command accepted. Waiting for Qortal Core to shut down...'
-    );
-
     // 🔁 Poll every 10s for up to 2 minutes
     const maxAttempts = 12;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       await delay(10_000);
       const stillRunning = await isCoreRunning();
       if (!stillRunning) {
-        console.log(
-          `✅ Qortal Core stopped successfully after ${attempt * 10}s.`
-        );
         return true;
       }
-      console.log(`⏳ Core still running... (${attempt * 10}s elapsed)`);
     }
 
     console.warn('⚠️ Timed out: Qortal Core did not stop after 2 minutes.');
@@ -1018,7 +1009,6 @@ export async function stopCore() {
     // Poll every 10s for up to 2 minutes to confirm shutdown
     const stopped = await waitForStop(120_000, 10_000);
     if (stopped) {
-      console.log('Qortal Core stopped successfully.');
       return true;
     }
 
@@ -1074,7 +1064,6 @@ async function unzipQortal() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Qortal complete');
   } catch (err) {
     broadcastProgress({
       step: 'downloadedCore',
@@ -1082,7 +1071,6 @@ async function unzipQortal() {
       progress: 0,
       message: '004',
     });
-    console.log('Unzip Qortal error', err);
   }
 
   await chmodQortal();
@@ -1095,7 +1083,7 @@ async function chmodQortal() {
       shell: true,
     });
   } catch (err) {
-    console.log('chmod error', err);
+    // ignore error
   }
 
   await removeQortalZip();
@@ -1105,7 +1093,7 @@ async function removeQortalZip() {
   try {
     await spawn('rm', ['-rf', zipfile], { cwd: HOME_PATH, shell: true });
   } catch (err) {
-    console.log('rm error', err);
+    //ignore error
   }
 
   await startCore();
@@ -1209,7 +1197,6 @@ async function downloadQortal() {
   try {
     if (isDownloadingQortal) return;
     isDownloadingQortal = true;
-    console.log('Starting Download Qortal');
     broadcastProgress({
       step: 'downloadedCore',
       status: 'active',
@@ -1237,7 +1224,6 @@ async function downloadQortal() {
       progress: 0,
       message: '005',
     });
-    console.log('Download Qortal error', err);
   } finally {
     isDownloadingQortal = false;
   }
@@ -1338,7 +1324,6 @@ let isDownloadingJava = false;
 async function downloadJavaArchive(url: string): Promise<string> {
   const dest = destPathForUrl(url);
 
-  console.log('Starting Download JAVA');
   try {
     if (isDownloadingJava) return null;
     isDownloadingJava = true;
@@ -1364,7 +1349,6 @@ async function downloadJavaArchive(url: string): Promise<string> {
     return null;
     // We still return dest so your unzip function can try (same behavior you had)
   }
-  console.log('Saved Java archive to:', dest);
 
   return dest;
 }
@@ -1420,7 +1404,6 @@ async function unzipJavaX64Linux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1428,7 +1411,6 @@ async function unzipJavaX64Linux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1443,7 +1425,6 @@ async function unzipJavaArm64Linux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1451,7 +1432,6 @@ async function unzipJavaArm64Linux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1466,7 +1446,6 @@ async function unzipJavaArmLinux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1474,7 +1453,6 @@ async function unzipJavaArmLinux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1489,7 +1467,6 @@ async function unzipJavaX64Mac() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1512,7 +1489,6 @@ async function unzipJavaAarch64Mac() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1520,7 +1496,6 @@ async function unzipJavaAarch64Mac() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1548,7 +1523,7 @@ async function checkQortal() {
   if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
-        console.log('Core is running, perfect !');
+        // core running
       } else {
         startQortal();
       }
@@ -1566,7 +1541,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1577,7 +1552,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1588,7 +1563,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1601,7 +1576,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1612,7 +1587,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1784,7 +1759,7 @@ async function removeQortalExe() {
   try {
     await fs.promises.rm(winexe, { force: true });
   } catch (err) {
-    console.log('remove error', err);
+    // ignore error
   }
 
   await startElectronWin();
@@ -1792,7 +1767,6 @@ async function removeQortalExe() {
 
 // --- main flow (matches your old API shape) ---
 export async function downloadCoreWindows() {
-  console.log('Starting Download Qortal Core Installer');
   try {
     await fs.promises.mkdir(DOWNLOAD_PATH, { recursive: true });
 
@@ -1807,7 +1781,7 @@ export async function downloadCoreWindows() {
             progress: percent,
             message: '009',
           });
-        } else console.log(`received ${received} / ${total || 0} bytes`);
+        }
       }
     );
 
@@ -1824,12 +1798,6 @@ export async function downloadCoreWindows() {
       args = ['/i', winexe, '/quiet', '/norestart'];
       await execFileAsync(msiexec, args);
     } else {
-      // Common EXE installer flags:
-      // NSIS: /S, Inno Setup: /VERYSILENT /NORESTART (depends on your installer)
-      // If you don't want silent install, keep args = []
-      // args = ['/S'];
-      const { stdout, stderr } = await execFileAsync(winexe, args);
-      console.log('Qortal Core Installation Done', stdout, stderr);
       broadcastProgress({
         step: 'downloadedCore',
         status: 'done',
@@ -1838,7 +1806,6 @@ export async function downloadCoreWindows() {
       });
     }
   } catch (e) {
-    console.log('Download/Install error', e);
     broadcastProgress({
       step: 'downloadedCore',
       status: 'error',
@@ -1927,7 +1894,6 @@ export async function getApiKey(): Promise<string> {
   const existing = await readApiKeyFile(filePath);
 
   if (existing) {
-    console.log(`Existing API key found at: ${filePath}`);
     return existing;
   }
 
@@ -2179,7 +2145,6 @@ export async function bootstrap(): Promise<boolean> {
     const logPath = path.join(qortalDirLocation, 'qortal.log');
     const success = await watchForBootstrap(logPath, startTimestamp);
     if (success) {
-      console.log('Bootstrap completed and node restarted successfully.');
       broadcastProgress({
         step: 'coreRunning',
         status: 'active',
@@ -2208,7 +2173,6 @@ export async function bootstrap(): Promise<boolean> {
       );
       return true;
     } else {
-      console.log('Bootstrap failed');
       return false;
     }
   } catch (error) {
@@ -2295,16 +2259,12 @@ export async function deleteDB(): Promise<boolean> {
         });
       }
 
-      console.log(`Deleting DB folder at: ${dbPath}`);
       await rmAsync(dbPath, { recursive: true, force: true });
-      console.log('DB folder deleted successfully');
       return true;
     } else {
-      console.log('ℹ No DB folder found to delete');
       return false;
     }
   } catch (error) {
-    console.error('❌ Failed to delete DB folder:', error);
     return false;
   }
 }
