@@ -55,6 +55,7 @@ import {
 } from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -143,6 +144,9 @@ export const MessageItemComponent = ({
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedReaction, setSelectedReaction] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
+  const [avatarPreviewSrc, setAvatarPreviewSrc] = useState(null);
+  const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
 
   useEffect(() => {
     const getInfo = async () => {
@@ -210,6 +214,26 @@ export const MessageItemComponent = ({
         }/qortal_avatar?async=true`
       : '';
   }, []);
+
+  useEffect(() => {
+    setIsAvatarLoaded(false);
+  }, [userAvatarUrl]);
+
+  const handleAvatarPreview = useCallback(
+    (event) => {
+      if (!userAvatarUrl || !isAvatarLoaded) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setAvatarPreviewSrc(userAvatarUrl);
+      setIsAvatarPreviewOpen(true);
+    },
+    [isAvatarLoaded, setAvatarPreviewSrc, setIsAvatarPreviewOpen, userAvatarUrl]
+  );
+
+  const closeAvatarPreview = useCallback(() => {
+    setIsAvatarPreviewOpen(false);
+    setAvatarPreviewSrc(null);
+  }, [setIsAvatarPreviewOpen, setAvatarPreviewSrc]);
 
   const onSeenFunc = useCallback(() => {
     onSeen(message.id);
@@ -284,9 +308,19 @@ export const MessageItemComponent = ({
                     color: theme.palette.text.primary,
                     height: '40px',
                     width: '40px',
+                    cursor: isAvatarLoaded ? 'pointer' : 'default',
                   }}
                   alt={message?.senderName}
                   src={userAvatarUrl}
+                  onClick={handleAvatarPreview}
+                  imgProps={{
+                    onLoad: () => {
+                      setIsAvatarLoaded(true);
+                    },
+                    onError: () => {
+                      setIsAvatarLoaded(false);
+                    },
+                  }}
                 >
                   {message?.senderName?.charAt(0)}
                 </Avatar>
@@ -737,6 +771,12 @@ export const MessageItemComponent = ({
             </Box>
           </Box>
         </Box>
+        <AvatarPreviewModal
+          open={isAvatarPreviewOpen}
+          src={avatarPreviewSrc}
+          alt={message?.senderName}
+          onClose={closeAvatarPreview}
+        />
       </MessageWragger>
     </>
   );

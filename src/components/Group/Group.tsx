@@ -83,6 +83,7 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -448,6 +449,13 @@ export const Group = ({
     groupChatTimestampsAtom
   );
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+  const [avatarPreviewData, setAvatarPreviewData] = useState<{
+    alt: string;
+    src: string;
+  } | null>(null);
+  const [directAvatarLoaded, setDirectAvatarLoaded] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     if (desktopViewMode === 'apps' || desktopViewMode === 'dev') {
@@ -1663,6 +1671,21 @@ export const Group = ({
       : '';
   }, []);
 
+  const openAvatarPreview = useCallback(
+    (src: string | null, alt?: string) => {
+      if (!src) return;
+      setAvatarPreviewData({
+        src,
+        alt: alt || '',
+      });
+    },
+    [setAvatarPreviewData]
+  );
+
+  const closeAvatarPreview = useCallback(() => {
+    setAvatarPreviewData(null);
+  }, [setAvatarPreviewData]);
+
   const goToHome = async () => {
     setDesktopViewMode('home');
 
@@ -1840,7 +1863,14 @@ export const Group = ({
             width: '100%',
           }}
         >
-          {directs.map((direct: any) => (
+          {directs.map((direct: any) => {
+            const avatarUrl = getUserAvatarUrl(direct?.name);
+            const avatarKey = direct?.address || direct?.name || `${direct?.timestamp}-${direct?.sender}`;
+            const isAvatarLoaded = Boolean(
+              avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
+            );
+
+            return (
             <List
               key={direct?.timestamp + direct?.sender}
               sx={{
@@ -1896,9 +1926,41 @@ export const Group = ({
                       sx={{
                         background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
+                        cursor: isAvatarLoaded ? 'pointer' : 'default',
                       }}
                       alt={direct?.name || direct?.address}
-                      src={getUserAvatarUrl(direct?.name)}
+                      src={avatarUrl}
+                      onClick={(event) => {
+                        if (!avatarUrl || !isAvatarLoaded) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openAvatarPreview(
+                          avatarUrl,
+                          direct?.name || direct?.address
+                        );
+                      }}
+                      imgProps={{
+                        onLoad: () => {
+                          if (!avatarKey) return;
+                          setDirectAvatarLoaded((prev) => {
+                            if (prev[avatarKey]) return prev;
+                            return {
+                              ...prev,
+                              [avatarKey]: true,
+                            };
+                          });
+                        },
+                        onError: () => {
+                          if (!avatarKey) return;
+                          setDirectAvatarLoaded((prev) => {
+                            if (prev[avatarKey] === false) return prev;
+                            return {
+                              ...prev,
+                              [avatarKey]: false,
+                            };
+                          });
+                        },
+                      }}
                     >
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>
@@ -1959,7 +2021,8 @@ export const Group = ({
                 </Box>
               </ListItem>
             </List>
-          ))}
+            );
+          })}
         </Box>
 
         <Box
@@ -2006,6 +2069,13 @@ export const Group = ({
             </CustomButton>
           )}
         </Box>
+
+        <AvatarPreviewModal
+          open={Boolean(avatarPreviewData)}
+          src={avatarPreviewData?.src || null}
+          alt={avatarPreviewData?.alt}
+          onClose={closeAvatarPreview}
+        />
       </Box>
     );
   };
