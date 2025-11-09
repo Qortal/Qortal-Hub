@@ -532,9 +532,10 @@ export const GroupMail = ({
     const sortedList = Array.from(uniqueItems.values()).sort((a, b) =>
       filterMode === 'Oldest'
         ? a.threadData?.createdAt - b.threadData?.createdAt
-        : b.threadData?.createdAt - a.threadData?.createdAt
+        : filterMode === 'Recently active'
+          ? b?.created - a?.created
+          : b.threadData?.createdAt - a.threadData?.createdAt
     );
-
     return sortedList;
   }, [tempPublishedList, listOfThreadsToDisplay, filterMode]);
 
