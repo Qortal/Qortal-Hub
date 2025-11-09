@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useCallback, useContext, useState, useRef, useMemo } from 'react';
 import {
   ListItemIcon,
   Menu,
@@ -8,12 +8,15 @@ import {
   useTheme,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import { executeEvent } from '../utils/events';
-import { mutedGroupsAtom } from '../atoms/global';
-import { useAtom } from 'jotai';
+import { mutedGroupsAtom, txListAtom } from '../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { QORTAL_APP_CONTEXT } from '../App';
+import { getFee } from '../background/background.ts';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -32,17 +35,83 @@ const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   },
 }));
 
-export const ContextMenu = ({ children, groupId, getUserSettings }) => {
+export const ContextMenu = ({
+  children,
+  groupId,
+  groupName,
+  getUserSettings,
+  isOwner,
+}) => {
   const [menuPosition, setMenuPosition] = useState(null);
   const longPressTimeout = useRef(null);
   const preventClick = useRef(false); // Flag to prevent click after long-press or right-click
   const theme = useTheme();
   const { t } = useTranslation(['group', 'core']);
   const [mutedGroups] = useAtom(mutedGroupsAtom);
+  const setTxList = useSetAtom(txListAtom);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const isMuted = useMemo(() => {
     return mutedGroups.includes(groupId);
   }, [mutedGroups, groupId]);
+
+  const handleLeaveGroup = useCallback(async () => {
+    if (!groupId) return;
+    try {
+      setIsLeaving(true);
+      const fee = await getFee('LEAVE_GROUP');
+      await show({
+        message: t('core:message.question.perform_transaction', {
+          action: 'LEAVE_GROUP',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: `${fee.fee} QORT`,
+      });
+      await new Promise((res, rej) => {
+        window
+          .sendMessage('leaveGroup', {
+            groupId,
+          })
+          .then((response) => {
+            if (!response?.error) {
+              setTxList((prev) => [
+                {
+                  ...response,
+                  type: 'leave-group',
+                  label: t('group:message.success.group_leave_name', {
+                    group_name: groupName || groupId,
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                  labelDone: t('group:message.success.group_leave_label', {
+                    group_name: groupName || groupId,
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                  done: false,
+                  groupId,
+                },
+                ...prev,
+              ]);
+              res(response);
+              return;
+            }
+            rej(response.error);
+          })
+          .catch((error) => {
+            rej(
+              error?.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeEachFirstChar',
+                })
+            );
+          });
+      });
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsLeaving(false);
+    }
+  }, [groupId, groupName, setTxList, show, t]);
 
   // Handle right-click (context menu) for desktop
   const handleContextMenu = (event) => {
@@ -205,6 +274,27 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
             </ListItemIcon>
             <Typography variant="inherit" sx={{ fontSize: '14px' }}>
               {t('group:join_link', { postProcess: 'capitalizeEachFirstChar' })}: {t(groupId)}
+            </Typography>
+          </MenuItem>
+        )}
+        {!(groupId === 0 || groupId === '0') && !isOwner && (
+          <MenuItem
+            disabled={isLeaving}
+            onClick={async (e) => {
+              handleClose(e);
+              await handleLeaveGroup();
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: '32px' }}>
+              <ExitToAppIcon
+                fontSize="small"
+                sx={{ color: theme.palette.text.primary }}
+              />
+            </ListItemIcon>
+            <Typography variant="inherit" sx={{ fontSize: '14px' }}>
+              {t('group:action.leave_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </MenuItem>
         )}
