@@ -59,28 +59,6 @@ import { broadcastProgress, getSharedSettingsFilePath } from './setup';
 import { promisify } from 'util';
 const execAsync = promisify(exec);
 
-const isRunning = (query, cb) => {
-  const platform = process.platform;
-  let cmd = '';
-  switch (platform) {
-    case 'win32':
-      cmd = `tasklist`;
-      break;
-    case 'darwin':
-      cmd = `ps -ax | grep [q]ortal.jar`;
-      break;
-    case 'linux':
-      cmd = `ps ax | grep [q]ortal.jar`;
-      break;
-    default:
-      break;
-  }
-
-  exec(cmd, (err, stdout, stderr) => {
-    cb(stdout.toLowerCase().indexOf(query.toLowerCase()) > -1);
-  });
-};
-
 function isPortOpen(
   host: string,
   port: number,
@@ -106,6 +84,53 @@ function isPortOpen(
     sock.connect(port, host);
   });
 }
+
+function escapeForRegex(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isRunningByProcess(query: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const platform = process.platform;
+    const q = escapeForRegex(query);
+
+    let cmd = '';
+    if (platform === 'win32') {
+      // Match full command line using PowerShell (no self-match issue)
+      cmd =
+        `powershell -NoProfile -Command ` +
+        `"Get-CimInstance Win32_Process | ` +
+        ` Where-Object { $_.CommandLine -match '${q}' } | ` +
+        ` Select-Object -First 1 -ExpandProperty ProcessId"`;
+    } else {
+      // Prefer pgrep (fast, won’t match itself). If pgrep missing, fallback to ps+grep safely.
+      // Try pgrep first:
+      cmd =
+        `command -v pgrep >/dev/null 2>&1 && pgrep -fa "${q}" || ` +
+        `(ps -eo pid=,args= | grep -E "${q}" | grep -v -E "(grep|pgrep)")`;
+    }
+
+    exec(cmd, (err, stdout) => {
+      // Any non-empty stdout means at least one PID matched
+      resolve(!err && !!stdout && stdout.trim().length > 0);
+    });
+  });
+}
+
+export const isRunning = (query: string, cb: (running: boolean) => void) => {
+  const HOST = '127.0.0.1';
+  const PORT = 12391;
+  const PORT_TIMEOUT_MS = 600;
+
+  // 1) First check the real signal: is anything listening?
+  isPortOpen(HOST, PORT, PORT_TIMEOUT_MS)
+    .then((listening) => {
+      if (listening) return cb(true);
+      // 2) If not listening, double-check processes (avoids rare race conditions)
+      return isRunningByProcess(query).then(cb);
+    })
+    .catch(() => cb(false));
+};
 
 export async function isCorePortRunning(): Promise<boolean> {
   const host = CORE_LOCALHOST;
