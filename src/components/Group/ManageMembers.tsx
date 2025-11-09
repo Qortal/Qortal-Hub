@@ -348,6 +348,11 @@ export const ManageMembers = ({
               </Typography>
 
               <Typography>
+                {t('group:group.description', { postProcess: 'capitalizeFirstChar' })}:{' '}
+                {groupInfo?.description}
+              </Typography>
+
+              <Typography>
                 {t('group:group.member_number', {
                   postProcess: 'capitalizeFirstChar',
                 })}

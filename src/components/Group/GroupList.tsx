@@ -238,6 +238,7 @@ const GroupItem = memo(
     const timestampEnterData = useAtomValue(
       timestampEnterDataSelector(group?.groupId)
     );
+    const isOwner = groupProperty?.owner === myAddress;
 
     const selectGroupHandler = useCallback(() => {
       selectGroupFunc(group);
@@ -261,7 +262,12 @@ const GroupItem = memo(
           },
         }}
       >
-        <ContextMenu getUserSettings={getUserSettings} groupId={group.groupId}>
+        <ContextMenu
+          getUserSettings={getUserSettings}
+          groupId={group.groupId}
+          groupName={group.groupName}
+          isOwner={isOwner}
+        >
           <Box
             sx={{
               alignItems: 'center',
