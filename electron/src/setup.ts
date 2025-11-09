@@ -676,9 +676,7 @@ ipcMain.handle('coreSetup:verifySteps', async () => {
         message: '',
       });
     }
-  } catch (error) {
-    console.log('error', error);
-  }
+  } catch (error) {}
 });
 
 ipcMain.handle('coreSetup:isCoreInstalled', async () => {
