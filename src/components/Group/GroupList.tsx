@@ -8,7 +8,7 @@ import {
   ListItemText,
   useTheme,
 } from '@mui/material';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
@@ -32,6 +32,8 @@ import {
 import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
 export const GroupList = ({
   selectGroupFunc,
@@ -238,10 +240,43 @@ const GroupItem = memo(
     const timestampEnterData = useAtomValue(
       timestampEnterDataSelector(group?.groupId)
     );
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [previewSrc, setPreviewSrc] = useState(null);
+    const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
+    const avatarUrl = useMemo(() => {
+      if (!ownerName) return null;
+      return `${getBaseApiReact()}/arbitrary/THUMBNAIL/${ownerName}/qortal_group_avatar_${group?.groupId}?async=true`;
+    }, [ownerName, group?.groupId]);
+    useEffect(() => {
+      setIsAvatarLoaded(false);
+    }, [avatarUrl]);
 
     const selectGroupHandler = useCallback(() => {
       selectGroupFunc(group);
     }, [group, selectGroupFunc]);
+
+    const stopEvent = useCallback((event) => {
+      event.stopPropagation();
+      if (event.nativeEvent?.stopImmediatePropagation) {
+        event.nativeEvent.stopImmediatePropagation();
+      }
+    }, []);
+
+    const handleAvatarClick = useCallback(
+      (event) => {
+        if (!avatarUrl || !isAvatarLoaded) return;
+        event.preventDefault();
+        stopEvent(event);
+        setPreviewSrc(avatarUrl);
+        setIsPreviewOpen(true);
+      },
+      [avatarUrl, isAvatarLoaded, stopEvent]
+    );
+
+    const handleClosePreview = useCallback(() => {
+      setIsPreviewOpen(false);
+      setPreviewSrc(null);
+    }, [setIsPreviewOpen, setPreviewSrc]);
 
     return (
       <ListItem
@@ -272,10 +307,30 @@ const GroupItem = memo(
             <ListItemAvatar>
               {ownerName ? (
                 <Avatar
+                  sx={{
+                    ...getClickableAvatarSx(theme, isAvatarLoaded),
+                  }}
                   alt={group?.groupName?.charAt(0)}
-                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                    ownerName
-                  }/qortal_group_avatar_${group?.groupId}?async=true`}
+                  src={avatarUrl || undefined}
+                  onClick={handleAvatarClick}
+                  onMouseDown={(event) => {
+                    if (isAvatarLoaded) {
+                      stopEvent(event);
+                    }
+                  }}
+                  onTouchStart={(event) => {
+                    if (isAvatarLoaded) {
+                      stopEvent(event);
+                    }
+                  }}
+                  imgProps={{
+                    onLoad: () => {
+                      setIsAvatarLoaded(true);
+                    },
+                    onError: () => {
+                      setIsAvatarLoaded(false);
+                    },
+                  }}
                 >
                   {group?.groupName?.charAt(0).toUpperCase()}
                 </Avatar>
@@ -365,6 +420,13 @@ const GroupItem = memo(
             </Box>
           </Box>
         </ContextMenu>
+
+        <AvatarPreviewModal
+          open={isPreviewOpen}
+          src={previewSrc}
+          alt={group?.groupName}
+          onClose={handleClosePreview}
+        />
       </ListItem>
     );
   }
