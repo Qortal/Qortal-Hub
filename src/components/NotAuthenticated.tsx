@@ -57,8 +57,8 @@ export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
   },
 }));
 
-function removeTrailingSlash(url) {
-  return url.replace(/\/+$/, '');
+function removeTrailingSlash(url: string) {
+  return url.trim().replace(/\/+$/, '');
 }
 
 export const NotAuthenticated = ({
