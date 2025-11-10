@@ -23,6 +23,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useTranslation } from 'react-i18next';
 import { MAX_SIZE_AVATAR } from '../../constants/constants.ts';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from './clickableAvatarStyles';
 
 export const GroupAvatar = ({
   myName,
@@ -42,6 +43,7 @@ export const GroupAvatar = ({
     'question',
     'tutorial',
   ]);
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -182,7 +184,7 @@ export const GroupAvatar = ({
           sx={{
             height: '138px',
             width: '138px',
-            cursor: tempAvatar ? 'pointer' : 'default',
+            ...getClickableAvatarSx(theme, Boolean(tempAvatar)),
           }}
           src={tempAvatar}
           alt={myName}
@@ -231,7 +233,7 @@ export const GroupAvatar = ({
           sx={{
             height: '138px',
             width: '138px',
-            cursor: groupAvatarUrl ? 'pointer' : 'default',
+            ...getClickableAvatarSx(theme, Boolean(groupAvatarUrl)),
           }}
           src={groupAvatarUrl || undefined}
           alt={myName}

@@ -33,6 +33,7 @@ import { timeDifferenceForNotificationChats } from './Group';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
 export const GroupList = ({
   selectGroupFunc,
@@ -307,7 +308,7 @@ const GroupItem = memo(
               {ownerName ? (
                 <Avatar
                   sx={{
-                    cursor: isAvatarLoaded ? 'pointer' : 'default',
+                    ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={group?.groupName?.charAt(0)}
                   src={avatarUrl || undefined}

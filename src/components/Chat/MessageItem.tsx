@@ -56,6 +56,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from './clickableAvatarStyles';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -308,7 +309,7 @@ export const MessageItemComponent = ({
                     color: theme.palette.text.primary,
                     height: '40px',
                     width: '40px',
-                    cursor: isAvatarLoaded ? 'pointer' : 'default',
+                    ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={message?.senderName}
                   src={userAvatarUrl}

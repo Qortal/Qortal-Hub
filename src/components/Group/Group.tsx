@@ -84,6 +84,7 @@ import {
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -1926,7 +1927,7 @@ export const Group = ({
                       sx={{
                         background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
-                        cursor: isAvatarLoaded ? 'pointer' : 'default',
+                        ...getClickableAvatarSx(theme, isAvatarLoaded),
                       }}
                       alt={direct?.name || direct?.address}
                       src={avatarUrl}
