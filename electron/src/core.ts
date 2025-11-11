@@ -85,51 +85,49 @@ function isPortOpen(
   });
 }
 
-function escapeForRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+const isRunning = (query, cb) => {
+  const platform = process.platform;
+  let cmd = '';
 
-function isRunningByProcess(query: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const platform = process.platform;
-    const q = escapeForRegex(query);
+  switch (platform) {
+    case 'win32':
+      cmd = 'tasklist';
+      break;
 
-    let cmd = '';
+    case 'darwin':
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+               pgrep -fl "java.*-jar.*qortal\\.jar";
+             else
+               ps -axo pid=,command=;
+             fi`;
+      break;
+
+    case 'linux':
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+               pgrep -fa "java.*-jar.*qortal\\.jar";
+             else
+               ps -Ao pid=,args=;
+             fi`;
+      break;
+
+    default:
+      return cb(false);
+  }
+
+  exec(cmd, (err, stdout = '') => {
+    if (err) return cb(false);
+
+    // Strict regex: only matches real java -jar qortal.jar processes
+    const re = /\bjava(\.exe)?\b.*\s-jar\s+\S*?qortal\.jar(\s|$)/i;
+
     if (platform === 'win32') {
-      // Match full command line using PowerShell (no self-match issue)
-      cmd =
-        `powershell -NoProfile -Command ` +
-        `"Get-CimInstance Win32_Process | ` +
-        ` Where-Object { $_.CommandLine -match '${q}' } | ` +
-        ` Select-Object -First 1 -ExpandProperty ProcessId"`;
-    } else {
-      // Prefer pgrep (fast, won’t match itself). If pgrep missing, fallback to ps+grep safely.
-      // Try pgrep first:
-      cmd =
-        `command -v pgrep >/dev/null 2>&1 && pgrep -fa "${q}" || ` +
-        `(ps -eo pid=,args= | grep -E "${q}" | grep -v -E "(grep|pgrep)")`;
+      // On Windows
+      return cb(stdout.toLowerCase().includes(query.toLowerCase()));
     }
 
-    exec(cmd, (err, stdout) => {
-      // Any non-empty stdout means at least one PID matched
-      resolve(!err && !!stdout && stdout.trim().length > 0);
-    });
+    // macOS / Linux: evaluate with strict regex
+    cb(re.test(stdout));
   });
-}
-
-export const isRunning = (query: string, cb: (running: boolean) => void) => {
-  const HOST = '127.0.0.1';
-  const PORT = 12391;
-  const PORT_TIMEOUT_MS = 600;
-
-  // 1) First check the real signal: is anything listening?
-  isPortOpen(HOST, PORT, PORT_TIMEOUT_MS)
-    .then((listening) => {
-      if (listening) return cb(true);
-      // 2) If not listening, double-check processes (avoids rare race conditions)
-      return isRunningByProcess(query).then(cb);
-    })
-    .catch(() => cb(false));
 };
 
 export async function isCorePortRunning(): Promise<boolean> {
