@@ -117,21 +117,54 @@ function isRunningByProcess(query: string): Promise<boolean> {
   });
 }
 
-export const isRunning = (query: string, cb: (running: boolean) => void) => {
-  const HOST = '127.0.0.1';
-  const PORT = 12391;
-  const PORT_TIMEOUT_MS = 600;
+const isRunning = (query, cb) => {
+  const platform = process.platform;
+  let cmd = '';
 
-  // 1) First check the real signal: is anything listening?
-  isPortOpen(HOST, PORT, PORT_TIMEOUT_MS)
-    .then((listening) => {
-      if (listening) return cb(true);
-      // 2) If not listening, double-check processes (avoids rare race conditions)
-      return isRunningByProcess(query).then(cb);
-    })
-    .catch(() => cb(false));
+  switch (platform) {
+    case 'win32':
+      cmd = `tasklist`;
+      break;
+
+    case 'darwin':
+    case 'linux':
+      // ✅ Only detect real processes, not files or shell matches
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+                pgrep -fa "java.*-jar.*qortal\\.jar";
+              else
+                ps -Ao pid=,args=;
+              fi`;
+      break;
+
+    default:
+      return cb(false);
+  }
+
+  exec(cmd, (err, stdout = '') => {
+    if (err) return cb(false);
+
+    // 🧠 If pgrep was used — its output is empty when no process found
+    if (stdout && stdout.trim().length > 0 && !stdout.includes('COMMAND')) {
+      // pgrep result — just check it’s not empty
+      if (stdout.toLowerCase().includes('qortal.jar')) return cb(true);
+    }
+
+    // 🧠 Fallback (ps output): manually scan process list
+    const lines = stdout.split('\n');
+    const running = lines.some((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return false;
+
+      const space = trimmed.indexOf(' ');
+      const args = space === -1 ? '' : trimmed.slice(space + 1);
+
+      // Strict regex: must be a java -jar ... qortal.jar command line
+      return /\bjava(\.exe)?\b.*\s-jar\s+\S*qortal\.jar\b/i.test(args);
+    });
+
+    cb(running);
+  });
 };
-
 export async function isCorePortRunning(): Promise<boolean> {
   const host = CORE_LOCALHOST;
   const port = 12391;
