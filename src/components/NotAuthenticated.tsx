@@ -162,18 +162,18 @@ export const NotAuthenticated = ({
     if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
       nodes.splice(customNodeToSaveIndex, 1, {
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     } else if (!isFullListOfNodes && url) {
       nodes.push({
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     }
     if (!isFullListOfNodes && url) {
       await handleSaveNodeInfo({
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     }
 
