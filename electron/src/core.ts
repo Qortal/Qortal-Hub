@@ -123,17 +123,23 @@ const isRunning = (query, cb) => {
 
   switch (platform) {
     case 'win32':
-      cmd = `tasklist`;
+      cmd = 'tasklist';
       break;
 
     case 'darwin':
-    case 'linux':
-      // ✅ Only detect real processes, not files or shell matches
       cmd = `if command -v pgrep >/dev/null 2>&1; then
-                pgrep -fa "java.*-jar.*qortal\\.jar";
-              else
-                ps -Ao pid=,args=;
-              fi`;
+               pgrep -fl "java.*-jar.*qortal\\.jar";
+             else
+               ps -axo pid=,command=;
+             fi`;
+      break;
+
+    case 'linux':
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+               pgrep -fa "java.*-jar.*qortal\\.jar";
+             else
+               ps -Ao pid=,args=;
+             fi`;
       break;
 
     default:
@@ -143,28 +149,19 @@ const isRunning = (query, cb) => {
   exec(cmd, (err, stdout = '') => {
     if (err) return cb(false);
 
-    // 🧠 If pgrep was used — its output is empty when no process found
-    if (stdout && stdout.trim().length > 0 && !stdout.includes('COMMAND')) {
-      // pgrep result — just check it’s not empty
-      if (stdout.toLowerCase().includes('qortal.jar')) return cb(true);
+    // Strict regex: only matches real java -jar qortal.jar processes
+    const re = /\bjava(\.exe)?\b.*\s-jar\s+\S*?qortal\.jar(\s|$)/i;
+
+    if (platform === 'win32') {
+      // On Windows, keep your original behavior
+      return cb(stdout.toLowerCase().includes(query.toLowerCase()));
     }
 
-    // 🧠 Fallback (ps output): manually scan process list
-    const lines = stdout.split('\n');
-    const running = lines.some((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return false;
-
-      const space = trimmed.indexOf(' ');
-      const args = space === -1 ? '' : trimmed.slice(space + 1);
-
-      // Strict regex: must be a java -jar ... qortal.jar command line
-      return /\bjava(\.exe)?\b.*\s-jar\s+\S*qortal\.jar\b/i.test(args);
-    });
-
-    cb(running);
+    // macOS / Linux: evaluate with strict regex
+    cb(re.test(stdout));
   });
 };
+
 export async function isCorePortRunning(): Promise<boolean> {
   const host = CORE_LOCALHOST;
   const port = 12391;
