@@ -85,38 +85,6 @@ function isPortOpen(
   });
 }
 
-function escapeForRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function isRunningByProcess(query: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const platform = process.platform;
-    const q = escapeForRegex(query);
-
-    let cmd = '';
-    if (platform === 'win32') {
-      // Match full command line using PowerShell (no self-match issue)
-      cmd =
-        `powershell -NoProfile -Command ` +
-        `"Get-CimInstance Win32_Process | ` +
-        ` Where-Object { $_.CommandLine -match '${q}' } | ` +
-        ` Select-Object -First 1 -ExpandProperty ProcessId"`;
-    } else {
-      // Prefer pgrep (fast, won’t match itself). If pgrep missing, fallback to ps+grep safely.
-      // Try pgrep first:
-      cmd =
-        `command -v pgrep >/dev/null 2>&1 && pgrep -fa "${q}" || ` +
-        `(ps -eo pid=,args= | grep -E "${q}" | grep -v -E "(grep|pgrep)")`;
-    }
-
-    exec(cmd, (err, stdout) => {
-      // Any non-empty stdout means at least one PID matched
-      resolve(!err && !!stdout && stdout.trim().length > 0);
-    });
-  });
-}
-
 const isRunning = (query, cb) => {
   const platform = process.platform;
   let cmd = '';
@@ -153,7 +121,7 @@ const isRunning = (query, cb) => {
     const re = /\bjava(\.exe)?\b.*\s-jar\s+\S*?qortal\.jar(\s|$)/i;
 
     if (platform === 'win32') {
-      // On Windows, keep your original behavior
+      // On Windows
       return cb(stdout.toLowerCase().includes(query.toLowerCase()));
     }
 
