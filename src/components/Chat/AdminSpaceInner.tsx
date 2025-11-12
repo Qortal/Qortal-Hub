@@ -194,6 +194,7 @@ export const AdminSpaceInner = ({
     getAdminGroupSecretKey();
     getGroupSecretKey();
   }, [getAdminGroupSecretKey, getGroupSecretKey]);
+
   return (
     <Box
       sx={{
@@ -318,6 +319,7 @@ export const AdminSpaceInner = ({
                 adminGroupSecretKeyPublishDetails?.updated ||
                   adminGroupSecretKeyPublishDetails?.created
               ),
+              name: adminGroupSecretKeyPublishDetails?.name,
               postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
