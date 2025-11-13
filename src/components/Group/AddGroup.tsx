@@ -337,7 +337,11 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     })}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    inputProps={{ maxLength: 32 }}
                   />
+                  <Typography variant="caption" color="text.secondary">
+                    {name?.length || 0}/32
+                  </Typography>
                 </Box>
 
                 <Box
@@ -359,7 +363,12 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     })}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    inputProps={{ maxLength: 120 }}
                   />
+
+                  <Typography variant="caption" color="text.secondary">
+                    {description?.length || 0}/120
+                  </Typography>
                 </Box>
 
                 <Box
