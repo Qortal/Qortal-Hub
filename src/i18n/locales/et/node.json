@@ -8,7 +8,7 @@
   "introSetup": {
     "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab sulle täieliku kontrolli oma andmete, rakenduste ja rahaasjade üle. Alustamiseks soovitame sul paigaldada **Qortal Core**'i, mis annab võrgule jõudu ja võimaldab kasutada kõiki Qortali funktsioone.",
     "paragraph2": "See seadistusviisard juhendab sind Qortal Core'i paigaldamisel ja seadistamisel sinu seadmes. Paigaldamisega jätkamiseks klõpsa **Järgmine**.",
-    "note": "märkus edasijõudnud kasutajatele",
+    "note": "märkus edasijõudnud kasutajale",
     "advanced": "kui sa kasutad kaughaaret (remote node), palun sulge see seadistusviisard ja klõpsa seejärel \"Vali kohandatud haare\""
   },
   "sync": {
