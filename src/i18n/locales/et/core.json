@@ -66,7 +66,7 @@
     "post": "postita",
     "post_message": "postita sõnum",
     "publish": "avalda",
-    "publish_app": "avalda oma rakendus",
+    "publish_app": "avalda oma rakendus või veebileht",
     "publish_comment": "avalda kommentaar",
     "refresh": "värskenda",
     "register_name": "registreeri nimi",
@@ -91,7 +91,7 @@
     "start_minting": "alusta mintimist",
     "start_typing": "alusta kirjutamist...",
     "trade_qort": "kauple QORT-iga",
-    "transfer_qort": "kanna QORT üle",
+    "transfer_qort": "saada QORT-e",
     "unpin": "eemalda kinnitamine",
     "unpin_app": "eemalda rakenduse kinnitamine",
     "unpin_from_dashboard": "eemalda juhtpaneelilt",
@@ -123,9 +123,9 @@
   "contact_other": "kontaktid",
   "core": {
     "block_height": "ploki kõrgus",
-    "information": "tuumainfo",
+    "information": "Sõlme info",
     "peers": "ühendatud sõlmed",
-    "version": "tuuma versioon"
+    "version": "Sõlme versioon"
   },
   "current_language": "praegune keel: {{ language }}",
   "dev": "arendus",
@@ -283,7 +283,7 @@
       "wait": "palun oota"
     },
     "message": "sõnum",
-    "promotion_text": "reklaamtekst",
+    "promotion_text": "Sisesta lühikene tutvustus",
     "question": {
       "accept_vote_on_poll": "kas kinnitad selle HÄÄLETUSE KÜSITLUSES? Küsitlused on avalikud!",
       "logout": "kas oled kindel, et soovid välja logida?",
@@ -314,17 +314,17 @@
   "minting": {
     "account_details": "mintimiskonto andmed",
     "actions": "mintimise toimingud",
-    "average_blocktime": "keskmine Qortal ploki aeg",
+    "average_blocktime": "keskmine ploki aeg",
     "average_blocks_per_day": "keskmine plokkide arv päevas",
     "average_created_qorts_per_day": "keskmine loodud QORTide arv päevas",
     "blockchain_statistics": "plokiahela statistika",
     "blocks_next_level": "plokke järgmise tasemeni",
     "current_level": "praegune tase",
     "current_status": "praegune olek",
-    "current_tier": "praegune aste",
+    "current_tier": "praegune tase",
     "current_tier_content": "{{ tier }} (tasemed {{ levels }})",
     "details": "mintimise üksikasjad",
-    "next_level": "24/7 mintimisega jõuad <strong>tasemele {{ level }}</strong> umbes <strong>{{ count }} päevaga</strong>",
+    "next_level": "24/7 mintimise jätkamisega jõuad <strong>tasemele {{ level }}</strong> umbes <strong>{{ count }} päevaga</strong>",
     "rewards_info": "mintimise preemiate info",
     "reward_per_block": "hinnanguline tasu ploki kohta",
     "reward_per_day": "hinnanguline tasu päevas",
@@ -335,9 +335,9 @@
       "synchronized": "sünkroonitud ({{ percent }}%)",
       "synchronizing": "sünkroonimine ({{ percent }}%)..."
     },
-    "status_title": "mintimise olek",
-    "tier_share_per_block": "astme osakaal ploki kohta",
-    "total_minter_in_tier": "mintijate koguarv selles astmes"
+    "status_title": "mintimis konto detailne info",
+    "tier_share_per_block": "Preemia protsent sellel tasemel",
+    "total_minter_in_tier": "mintijate koguarv sellel tasemel"
   },
   "name": "nimi",
   "name_app": "nimi/rakendus",
@@ -353,7 +353,7 @@
     "next": "järgmine",
     "previous": "eelmine"
   },
-  "payment_notification": "maketeade",
+  "payment_notification": "Saabunud maksed",
   "payment": "makse",
   "poll_embed": "küsitluse manustamine",
   "port": "port",
@@ -374,7 +374,7 @@
   "sort": {
     "by_member": "liikme järgi"
   },
-  "supply": "varu",
+  "supply": "Üldine QORT varu",
   "tags": "sildid",
   "theme": {
     "dark": "tume",
@@ -403,7 +403,7 @@
   "to": "kellele",
   "tutorial": "õpetus",
   "url": "url",
-  "user_lookup": "kasutaja otsing",
+  "user_lookup": "kasutaja info otsing",
   "vote": "hääleta",
   "vote_other": "{{ count }} häält",
   "zip": "zip",
