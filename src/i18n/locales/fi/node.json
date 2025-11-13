@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core -asetus",
+    "title": "Paikallinen asetus: Hub ja Core toimivat samassa järjestelmässä",
     "advancedOptions": "lisäasetukset",
     "pickPath": "valitse mukautettu Qortalin asennuspolku, jos Core on asennettu muuhun kuin oletussijaintiin.",
     "removePath": "poista mukautettu Qortal-polku"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "valittu hakemisto ei sisällä qortal.jar -tiedostoa",
-    "invalidKey": "virheellinen apikey"
+    "invalidKey": "virheellinen apikey",
+    "failed_stop": "Coren pysäyttäminen epäonnistui",
+    "failed_bootstrap": "bootstrap epäonnistui",
+    "failed_delete": "tietokannan poistaminen epäonnistui"
   },
   "status": {
     "complete": "valmis",
@@ -72,5 +75,16 @@
   "url": {
     "title": "url virheellinen",
     "description": "virheellinen url tai solmu ei ole käynnissä"
-  }
+  },
+  "confirmations": {
+    "stop": "oletko varma, että haluat pysäyttää Coren?",
+    "bootstrap": "oletko varma, että haluat käynnistää bootstrapin?",
+    "delete": "oletko varma, että haluat poistaa tietokannan?"
+  },
+  "stop": "pysäytä Core",
+  "bootstrap": "bootstrap",
+  "delete": "poista tietokanta",
+  "more": "lisää vaihtoehtoja",
+  "less": "vähemmän vaihtoehtoja",
+  "enableAuthWhenSyncing": "ota todennus käyttöön synkronoinnin aikana"
 }

@@ -79,10 +79,12 @@ import { useAtom, useSetAtom } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
-  TIME_SECONDS_120_IN_MILLISECONDS,
-  TIME_DAY_1_IN_MILLISECONDS,
+  TIME_MINUTES_2_IN_MILLISECONDS,
+  TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
 export const getPublishesFromAdmins = async (admins: string[], groupId) => {
   const queryString = admins.map((name) => `name=${name}`).join('&');
@@ -382,6 +384,7 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
+  const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
   const lastFetchedSecretKey = useRef(null);
@@ -447,6 +450,19 @@ export const Group = ({
     groupChatTimestampsAtom
   );
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+  const [avatarPreviewData, setAvatarPreviewData] = useState<{
+    alt: string;
+    src: string;
+  } | null>(null);
+  const [directAvatarLoaded, setDirectAvatarLoaded] = useState<
+    Record<string, boolean>
+  >({});
+
+  useEffect(() => {
+    if (desktopViewMode === 'apps' || desktopViewMode === 'dev') {
+      setLastQappViewMode(desktopViewMode);
+    }
+  }, [desktopViewMode]);
 
   const [appsMode, setAppsMode] = useState('home');
   const [appsModeDev, setAppsModeDev] = useState('home');
@@ -454,6 +470,7 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false);
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
+  const [disableGeneralChat, setDisableGeneralChat] = useState(false);
   const groupsOwnerNamesRef = useRef({});
   const { t } = useTranslation([
     'auth',
@@ -538,9 +555,39 @@ export const Group = ({
     }
   }, [setMutedGroups]);
 
+  const getDisableGeneralChatSetting = useCallback(async () => {
+    try {
+      return new Promise((res, rej) => {
+        window
+          .sendMessage('getUserSettings', {
+            key: 'disable-general-chat',
+          })
+          .then((response) => {
+            if (!response?.error) {
+              setDisableGeneralChat(response || false);
+              res(response);
+              return;
+            }
+            rej(response.error);
+          })
+          .catch((error) => {
+            rej(
+              error.message ||
+                t('core:message.error.generic', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+            );
+          });
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
   useEffect(() => {
     getUserSettings();
-  }, [getUserSettings]);
+    getDisableGeneralChatSetting();
+  }, [getUserSettings, getDisableGeneralChatSetting]);
 
   const getTimestampEnterChat = useCallback(async () => {
     try {
@@ -647,6 +694,9 @@ export const Group = ({
   const groupChatHasUnread = useMemo(() => {
     let hasUnread = false;
     groups.forEach((group) => {
+      if (group?.groupId === '0' && disableGeneralChat) {
+        return;
+      }
       if (
         group?.data &&
         group?.sender !== myAddress &&
@@ -660,7 +710,13 @@ export const Group = ({
       }
     });
     return hasUnread;
-  }, [timestampEnterData, groups, myAddress, groupChatTimestamps]);
+  }, [
+    timestampEnterData,
+    groups,
+    myAddress,
+    groupChatTimestamps,
+    disableGeneralChat,
+  ]);
 
   const groupsAnnHasUnread = useMemo(() => {
     let hasUnread = false;
@@ -734,7 +790,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_SECONDS_120_IN_MILLISECONDS);
+          }, TIME_MINUTES_2_IN_MILLISECONDS);
           return false;
         }
 
@@ -794,7 +850,7 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
-          }, TIME_SECONDS_120_IN_MILLISECONDS);
+          }, TIME_MINUTES_2_IN_MILLISECONDS);
         }
       } finally {
         setIsLoadingGroup(false);
@@ -872,7 +928,7 @@ export const Group = ({
           const hasMoreRecentMsg = await getCountNewMesg(
             group.groupId,
             timestampEnterDataRef.current[group?.groupId] ||
-              Date.now() - TIME_DAY_1_IN_MILLISECONDS
+              Date.now() - TIME_DAYS_1_IN_MILLISECONDS
           );
           if (hasMoreRecentMsg) {
             groupData[group.groupId] = hasMoreRecentMsg;
@@ -990,6 +1046,8 @@ export const Group = ({
         setMemberGroups(
           message.payload?.filter((item) => item?.groupId !== '0')
         );
+        // Refresh general chat visibility preference when groups update
+        getDisableGeneralChatSetting();
 
         if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
           window
@@ -1423,6 +1481,18 @@ export const Group = ({
     };
   }, []);
 
+  const openDevMode = () => {
+    setDesktopViewMode('dev');
+  };
+
+  useEffect(() => {
+    subscribeToEvent('open-dev-mode', openDevMode);
+
+    return () => {
+      unsubscribeFromEvent('open-dev-mode', openDevMode);
+    };
+  }, []);
+
   const openGroupChatFromNotification = (e) => {
     if (isLoadingOpenSectionFromNotification.current) return;
 
@@ -1602,6 +1672,21 @@ export const Group = ({
       : '';
   }, []);
 
+  const openAvatarPreview = useCallback(
+    (src: string | null, alt?: string) => {
+      if (!src) return;
+      setAvatarPreviewData({
+        src,
+        alt: alt || '',
+      });
+    },
+    [setAvatarPreviewData]
+  );
+
+  const closeAvatarPreview = useCallback(() => {
+    setAvatarPreviewData(null);
+  }, [setAvatarPreviewData]);
+
   const goToHome = async () => {
     setDesktopViewMode('home');
 
@@ -1779,7 +1864,14 @@ export const Group = ({
             width: '100%',
           }}
         >
-          {directs.map((direct: any) => (
+          {directs.map((direct: any) => {
+            const avatarUrl = getUserAvatarUrl(direct?.name);
+            const avatarKey = direct?.address || direct?.name || `${direct?.timestamp}-${direct?.sender}`;
+            const isAvatarLoaded = Boolean(
+              avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
+            );
+
+            return (
             <List
               key={direct?.timestamp + direct?.sender}
               sx={{
@@ -1835,9 +1927,41 @@ export const Group = ({
                       sx={{
                         background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
+                        ...getClickableAvatarSx(theme, isAvatarLoaded),
                       }}
                       alt={direct?.name || direct?.address}
-                      src={getUserAvatarUrl(direct?.name)}
+                      src={avatarUrl}
+                      onClick={(event) => {
+                        if (!avatarUrl || !isAvatarLoaded) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openAvatarPreview(
+                          avatarUrl,
+                          direct?.name || direct?.address
+                        );
+                      }}
+                      imgProps={{
+                        onLoad: () => {
+                          if (!avatarKey) return;
+                          setDirectAvatarLoaded((prev) => {
+                            if (prev[avatarKey]) return prev;
+                            return {
+                              ...prev,
+                              [avatarKey]: true,
+                            };
+                          });
+                        },
+                        onError: () => {
+                          if (!avatarKey) return;
+                          setDirectAvatarLoaded((prev) => {
+                            if (prev[avatarKey] === false) return prev;
+                            return {
+                              ...prev,
+                              [avatarKey]: false,
+                            };
+                          });
+                        },
+                      }}
                     >
                       {(direct?.name || direct?.address)?.charAt(0)}
                     </Avatar>
@@ -1898,7 +2022,8 @@ export const Group = ({
                 </Box>
               </ListItem>
             </List>
-          ))}
+            );
+          })}
         </Box>
 
         <Box
@@ -1945,6 +2070,13 @@ export const Group = ({
             </CustomButton>
           )}
         </Box>
+
+        <AvatarPreviewModal
+          open={Boolean(avatarPreviewData)}
+          src={avatarPreviewData?.src || null}
+          alt={avatarPreviewData?.alt}
+          onClose={closeAvatarPreview}
+        />
       </Box>
     );
   };
@@ -1978,6 +2110,33 @@ export const Group = ({
     }, 200);
   }, []);
 
+  // Apply general chat visibility changes immediately without app reload
+  useEffect(() => {
+    const onGeneralChatVisibilityChanged = (e) => {
+      const disabled = !!e.detail?.disabled;
+      setDisableGeneralChat(disabled);
+      if (disabled && selectedGroupRef.current?.groupId === '0') {
+        const next = groups.find((g) => g.groupId !== '0');
+        if (next) {
+          selectGroupFunc(next);
+        } else {
+          setSelectedGroup(null);
+        }
+      }
+    };
+
+    subscribeToEvent(
+      'generalChatVisibilityChanged',
+      onGeneralChatVisibilityChanged
+    );
+    return () => {
+      unsubscribeFromEvent(
+        'generalChatVisibilityChanged',
+        onGeneralChatVisibilityChanged
+      );
+    };
+  }, [groups, selectGroupFunc]);
+
   return (
     <>
       <WebSocketActive
@@ -2001,25 +2160,23 @@ export const Group = ({
           width: '100%',
         }}
       >
-        {((desktopViewMode !== 'apps' && desktopViewMode !== 'dev') ||
-          isOpenSideViewGroups) && (
-          <DesktopSideBar
-            desktopViewMode={desktopViewMode}
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
-            mode={appsMode}
-            setMode={setAppsMode}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
-            isApps={desktopViewMode === 'apps'}
-            myName={userInfo?.name}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            setDesktopViewMode={setDesktopViewMode}
-          />
-        )}
+        <DesktopSideBar
+          desktopViewMode={desktopViewMode}
+          toggleSideViewGroups={toggleSideViewGroups}
+          toggleSideViewDirects={toggleSideViewDirects}
+          goToHome={goToHome}
+          mode={appsMode}
+          setMode={setAppsMode}
+          setDesktopSideView={setDesktopSideView}
+          hasUnreadDirects={directChatHasUnread}
+          isApps={desktopViewMode === 'apps'}
+          myName={userInfo?.name}
+          isGroups={isOpenSideViewGroups}
+          isDirects={isOpenSideViewDirects}
+          hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
+          setDesktopViewMode={setDesktopViewMode}
+          lastQappViewMode={lastQappViewMode}
+        />
 
         {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
           <GroupList
@@ -2030,7 +2187,11 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={groups}
+            groups={
+              disableGeneralChat
+                ? groups.filter((g) => g.groupId !== '0')
+                : groups
+            }
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}

@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import ReactDOM from 'react-dom';
-import { Box, IconButton, Slider } from '@mui/material';
+import { Box, Button, IconButton, Slider } from '@mui/material';
 import { CircularProgress, Typography } from '@mui/material';
 import { Key } from 'ts-key-enum';
 import {
@@ -22,9 +22,13 @@ import {
 import { styled } from '@mui/system';
 import { Refresh } from '@mui/icons-material';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
-import { resourceKeySelector } from '../../atoms/global';
+import {
+  resourceDownloadControllerAtom,
+  resourceKeySelector,
+} from '../../atoms/global';
 
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 const VideoContainer = styled(Box)`
   align-items: center;
   display: flex;
@@ -79,6 +83,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
   poster,
   service,
 }) => {
+  const { t } = useTranslation(['core']);
   const keyIdentifier = useMemo(() => {
     if (name && identifier && service) {
       return `${service}-${name}-${identifier}`;
@@ -101,6 +106,7 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [anchorEl, setAnchorEl] = useState(null);
   const reDownload = useRef<boolean>(false);
+  const setResources = useSetAtom(resourceDownloadControllerAtom);
 
   const resetVideoState = () => {
     // Reset all states to their initial values
@@ -481,6 +487,14 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
     }
   };
 
+  const retry = () => {
+    downloadResource({
+      name,
+      service,
+      identifier,
+    });
+  };
+
   return (
     <VideoContainer
       tabIndex={0}
@@ -510,7 +524,9 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
             gap: '10px',
           }}
         >
-          <CircularProgress color="secondary" />
+          {resourceStatus?.status !== 'FAILED_TO_DOWNLOAD' && (
+            <CircularProgress color="secondary" />
+          )}
 
           <Typography
             variant="subtitle2"
@@ -521,7 +537,21 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
               textAlign: 'center',
             }}
           >
-            {resourceStatus?.status === 'REFETCHING' ? (
+            {resourceStatus?.status === 'FAILED_TO_DOWNLOAD' ? (
+              <>
+                <>
+                  {t('core:video_failed', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </>
+
+                <Button onClick={retry}>
+                  {t('core:retry', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
+              </>
+            ) : resourceStatus?.status === 'REFETCHING' ? (
               <>
                 <>
                   {getDownloadProgress(
@@ -533,7 +563,11 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
                 <> Refetching data in 25 seconds</>
               </>
             ) : resourceStatus?.status === 'DOWNLOADED' ? (
-              <>Download Completed: building tutorial video...</>
+              <>
+                {t('core:video_building', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </>
             ) : resourceStatus?.status !== 'READY' ? (
               <>
                 {getDownloadProgress(
@@ -542,7 +576,11 @@ export const VideoPlayer: FC<VideoPlayerProps> = ({
                 )}
               </>
             ) : (
-              <>Fetching tutorial from the Qortal Network...</>
+              <>
+                {t('core:video_fetching', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </>
             )}
           </Typography>
         </Box>

@@ -1,6 +1,6 @@
 {
   "name": "qortal-hub",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "A desktop app that gives you access to the Qortal network",
   "author": {
     "name": "",
@@ -21,7 +21,7 @@
       }
     ]
   },
-  "license": "MIT",
+  "license": "GPL-3.0",
   "main": "build/src/index.js",
   "scripts": {
     "build": "tsc && electron-rebuild",

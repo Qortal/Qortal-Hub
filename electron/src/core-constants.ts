@@ -13,7 +13,8 @@ export const winurl =
   GITHUB_QORTAL_RELEASES_URL + '/latest/download/qortal.exe';
 export const winexe = DOWNLOAD_PATH + '\\qortal.exe';
 export const startWinCore = 'C:\\Program Files\\Qortal\\qortal.exe';
-
+export const winGeneralSettings = 'C:\\Program Files\\Qortal\\settings.json';
+export const winDefaultDBLocation = '%localappdata%\\qortal';
 export const zipdir = HOME_PATH;
 export const zipfile = HOME_PATH + '/qortal.zip';
 export const zipurl =
@@ -22,6 +23,7 @@ export const zipurl =
 export const qortaldir = HOME_PATH + '/qortal/';
 export const qortalWindir = 'C:\\Program Files\\Qortal';
 export const qortaljar = HOME_PATH + '/qortal/qortal.jar';
+export const qortalStopScriptLocation = HOME_PATH + '/qortal/stop.sh';
 export const qortalsettings = HOME_PATH + '/qortal/settings.json';
 
 export const javadir = HOME_PATH + '/jdk-17.0.2/';

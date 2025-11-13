@@ -14,17 +14,16 @@ import { CustomLoader } from '../../common/CustomLoader';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../../atoms/global';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import MarkEmailUnreadIcon from '@mui/icons-material/MarkEmailUnread';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { TIME_WEEK_1_IN_MILLISECONDS } from '../../constants/constants';
+import { TIME_WEEKS_1_IN_MILLISECONDS } from '../../constants/constants';
 
 export const isLessThanOneWeekOld = (timestamp) => {
   // Current time in milliseconds
   const now = Date.now();
 
   // Check if the timestamp is newer than one week ago
-  return timestamp > TIME_WEEK_1_IN_MILLISECONDS;
+  return timestamp > TIME_WEEKS_1_IN_MILLISECONDS;
 };
 
 export function formatEmailDate(timestamp: number) {
@@ -163,14 +162,28 @@ export const QMailMessages = ({ userName, userAddress }) => {
         >
           {t('group:latest_mails', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
-
-        <MarkEmailUnreadIcon
-          sx={{
-            color: anyUnread
-              ? theme.palette.other.unread
-              : theme.palette.text.primary,
-          }}
-        />
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+          {anyUnread && (
+            <div
+              style={{
+                backgroundColor: theme.palette.other.unread,
+                borderRadius: '50%',
+                height: '15px',
+                outline: '1px solid white',
+                position: 'absolute',
+                right: '-7px',
+                top: '-7px',
+                width: '15px',
+                zIndex: 1,
+              }}
+            />
+          )}
+          <MailIcon
+            sx={{
+              color: theme.palette.text.secondary,
+            }}
+          />
+        </Box>
         {isExpanded ? (
           <ExpandLessIcon
             sx={{

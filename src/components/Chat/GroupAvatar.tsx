@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import Logo2 from '../../assets/svgs/Logo2.svg';
 import {
   QORTAL_APP_CONTEXT,
@@ -22,6 +22,8 @@ import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useTranslation } from 'react-i18next';
 import { MAX_SIZE_AVATAR } from '../../constants/constants.ts';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from './clickableAvatarStyles';
 
 export const GroupAvatar = ({
   myName,
@@ -41,8 +43,11 @@ export const GroupAvatar = ({
     'question',
     'tutorial',
   ]);
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState(null);
   // Handle child element click to open Popover
   const handleChildClick = (event) => {
     event.stopPropagation(); // Prevent parent onClick from firing
@@ -81,6 +86,34 @@ export const GroupAvatar = ({
     if (!myName || !groupId) return;
     checkIfAvatarExists(myName, groupId);
   }, [myName, groupId, checkIfAvatarExists]);
+
+  const groupAvatarUrl = useMemo(() => {
+    if (!myName || !groupId) return null;
+    return `${getBaseApiReact()}/arbitrary/THUMBNAIL/${myName}/qortal_group_avatar_${groupId}?async=true`;
+  }, [myName, groupId]);
+
+  const handleAvatarPreview = useCallback(
+    (src) => {
+      if (!src) return;
+      setPreviewSrc(src);
+      setIsPreviewOpen(true);
+    },
+    [setIsPreviewOpen, setPreviewSrc]
+  );
+
+  const closePreview = useCallback(() => {
+    setIsPreviewOpen(false);
+    setPreviewSrc(null);
+  }, [setIsPreviewOpen, setPreviewSrc]);
+
+  const avatarPreviewModal = (
+    <AvatarPreviewModal
+      open={isPreviewOpen}
+      src={previewSrc}
+      alt={myName}
+      onClose={closePreview}
+    />
+  );
 
   const publishAvatar = async () => {
     try {
@@ -151,9 +184,15 @@ export const GroupAvatar = ({
           sx={{
             height: '138px',
             width: '138px',
+            ...getClickableAvatarSx(theme, Boolean(tempAvatar)),
           }}
           src={tempAvatar}
           alt={myName}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleAvatarPreview(tempAvatar);
+          }}
         >
           {myName?.charAt(0)}
         </Avatar>
@@ -182,6 +221,7 @@ export const GroupAvatar = ({
           publishAvatar={publishAvatar}
           isLoading={isLoading}
         />
+        {avatarPreviewModal}
       </>
     );
   }
@@ -193,9 +233,15 @@ export const GroupAvatar = ({
           sx={{
             height: '138px',
             width: '138px',
+            ...getClickableAvatarSx(theme, Boolean(groupAvatarUrl)),
           }}
-          src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${myName}/qortal_group_avatar_${groupId}?async=true`}
+          src={groupAvatarUrl || undefined}
           alt={myName}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            handleAvatarPreview(groupAvatarUrl);
+          }}
         >
           {myName?.charAt(0)}
         </Avatar>
@@ -224,6 +270,7 @@ export const GroupAvatar = ({
           publishAvatar={publishAvatar}
           isLoading={isLoading}
         />
+        {avatarPreviewModal}
       </>
     );
   }
@@ -253,6 +300,7 @@ export const GroupAvatar = ({
         publishAvatar={publishAvatar}
         isLoading={isLoading}
       />
+      {avatarPreviewModal}
     </>
   );
 };

@@ -2,7 +2,7 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
-import { enabledDevModeAtom } from '../../atoms/global';
+import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
 import { CoreSyncStatus } from '../CoreSyncStatus';
@@ -10,6 +10,9 @@ import LanguageSelector from '../Language/LanguageSelector';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
+import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
+import { executeEvent } from '../../utils/events';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -24,7 +27,11 @@ export const DesktopSideBar = ({
   setDesktopViewMode,
   desktopViewMode,
   myName,
+  lastQappViewMode,
+  mode,
 }) => {
+  const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
+
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -79,15 +86,13 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         onClick={() => {
-          setDesktopViewMode('apps');
+          isApps
+            ? executeEvent('newTabWindow', {})
+            : setDesktopViewMode('apps');
         }}
       >
         <IconWrapper
-          color={
-            isApps ? theme.palette.text.primary : theme.palette.text.secondary
-          }
           label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
-          selected={isApps}
           disableWidth
         >
           <AppsIcon
@@ -133,21 +138,37 @@ export const DesktopSideBar = ({
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {
-            setDesktopViewMode('dev');
+            desktopViewMode === 'dev'
+              ? executeEvent('devModeNewTabWindow', {})
+              : setDesktopViewMode('dev');
           }}
         >
           <IconWrapper
-            color={
-              desktopViewMode === 'dev'
-                ? theme.palette.text.primary
-                : theme.palette.text.secondary
-            }
             label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
           >
-            <AppsIcon height={30} color={theme.palette.text.secondary} />
+            <AppsIcon
+              height={30}
+              color={
+                desktopViewMode === 'dev'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.secondary
+              }
+            />
           </IconWrapper>
         </ButtonBase>
+      )}
+
+      {lastQappViewMode === 'dev' ? (
+        <AppsDevModeNavBar
+          disableBack={desktopViewMode !== 'dev'}
+          isDev={desktopViewMode === 'dev'}
+        />
+      ) : (
+        <AppsNavBarDesktop
+          disableBack={!isApps || isNewTabWindow}
+          isApps={isApps}
+        />
       )}
 
       <Box

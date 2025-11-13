@@ -7,7 +7,7 @@ import {
   IconButton,
   useTheme,
 } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import PendingIcon from '@mui/icons-material/Pending';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import ExpandLess from '@mui/icons-material/ExpandLess';
@@ -17,7 +17,7 @@ import { executeEvent } from '../../utils/events';
 import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
-import { TIME_SECONDS_60_IN_MILLISECONDS } from '../../constants/constants';
+import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
 
 export const TaskManager = ({ getUserInfo }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
@@ -54,7 +54,7 @@ export const TaskManager = ({ getUserInfo }) => {
             await new Promise((res) =>
               setTimeout(() => {
                 res(null);
-              }, TIME_SECONDS_60_IN_MILLISECONDS)
+              }, TIME_MINUTES_1_IN_MILLISECONDS)
             );
             setTxList((prev) => {
               let previousData = [...prev];
@@ -81,7 +81,7 @@ export const TaskManager = ({ getUserInfo }) => {
 
     intervals.current[signature] = setInterval(
       getAnswer,
-      TIME_SECONDS_60_IN_MILLISECONDS
+      TIME_MINUTES_1_IN_MILLISECONDS
     );
   };
 
@@ -121,6 +121,41 @@ export const TaskManager = ({ getUserInfo }) => {
     });
   }, [memberGroups, getUserInfo]);
 
+  const checkForName = useCallback(async (address) => {
+    if (!address) return;
+    const startTime = Date.now();
+    const TIMEOUT = 5 * 60 * 1000; // 5 minutes
+    const INTERVAL = 5000; // every 5 seconds
+
+    async function fetchName() {
+      try {
+        const response = await fetch(
+          `${getBaseApiReact()}/names/primary/${address}`
+        );
+        const nameData = await response.json();
+
+        if (nameData?.name) {
+          getUserInfo();
+          return true;
+        }
+      } catch (err) {
+        console.error('Error checking name:', err);
+      }
+      return false;
+    }
+
+    const checkLoop = async () => {
+      const found = await fetchName();
+      if (found) return; // stop polling
+
+      if (Date.now() - startTime < TIMEOUT) {
+        setTimeout(checkLoop, INTERVAL);
+      }
+    };
+
+    checkLoop();
+  }, []);
+
   useEffect(() => {
     txList.forEach((tx) => {
       if (
@@ -138,7 +173,9 @@ export const TaskManager = ({ getUserInfo }) => {
       }
       if (tx?.type === 'register-name' && tx?.signature && !tx.done) {
         if (!intervals.current[tx.signature]) {
-          getStatus({ signature: tx.signature }, getUserInfo);
+          getStatus({ signature: tx.signature }, () =>
+            checkForName(tx?.creatorAddress)
+          );
         }
       }
       if (

@@ -51,7 +51,7 @@ import { CustomButton } from '../../../styles/App-styles';
 
 const filterOptions = ['Recently active', 'Newest', 'Oldest'];
 import CheckIcon from '@mui/icons-material/Check';
-import { TIME_SECONDS_120_IN_MILLISECONDS } from '../../../constants/constants';
+import { TIME_MINUTES_2_IN_MILLISECONDS } from '../../../constants/constants';
 export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
@@ -354,7 +354,7 @@ export const GroupMail = ({
                     },
                     isPrivate
                   ),
-                  delay(TIME_SECONDS_120_IN_MILLISECONDS),
+                  delay(TIME_MINUTES_2_IN_MILLISECONDS),
                 ]);
                 if (threadRes?.title) {
                   const fullObject = {
@@ -532,9 +532,10 @@ export const GroupMail = ({
     const sortedList = Array.from(uniqueItems.values()).sort((a, b) =>
       filterMode === 'Oldest'
         ? a.threadData?.createdAt - b.threadData?.createdAt
-        : b.threadData?.createdAt - a.threadData?.createdAt
+        : filterMode === 'Recently active'
+          ? b?.created - a?.created
+          : b.threadData?.createdAt - a.threadData?.createdAt
     );
-
     return sortedList;
   }, [tempPublishedList, listOfThreadsToDisplay, filterMode]);
 

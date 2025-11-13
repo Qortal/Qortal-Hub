@@ -18,6 +18,7 @@ const TabComponent = ({ isSelected, app }) => {
           });
           return;
         }
+        executeEvent('open-apps-mode', {});
         executeEvent('setSelectedTab', {
           data: app,
         });

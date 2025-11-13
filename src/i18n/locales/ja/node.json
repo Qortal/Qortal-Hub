@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core セットアップ",
+    "title": "ローカル設定：Hub と Core が同じシステム上で実行されます",
     "advancedOptions": "詳細オプション",
     "pickPath": "Core がデフォルト以外の場所にインストールされている場合は、カスタム Qortal インストールパスを選択してください。",
     "removePath": "カスタム Qortal パスを削除"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "選択されたディレクトリに qortal.jar が存在しません",
-    "invalidKey": "無効な APIキー"
+    "invalidKey": "無効な APIキー",
+    "failed_stop": "Core を停止できませんでした",
+    "failed_bootstrap": "ブートストラップできませんでした",
+    "failed_delete": "データベースを削除できませんでした"
   },
   "status": {
     "complete": "完了",
@@ -72,5 +75,16 @@
   "url": {
     "title": "無効なURL",
     "description": "URLが正しくないか、ノードが実行されていません"
-  }
+  },
+  "confirmations": {
+    "stop": "Core を停止してもよろしいですか？",
+    "bootstrap": "ブートストラップしてもよろしいですか？",
+    "delete": "データベースを削除してもよろしいですか？"
+  },
+  "stop": "Core を停止",
+  "bootstrap": "ブートストラップ",
+  "delete": "データベースを削除",
+  "more": "その他のオプション",
+  "less": "少ないオプション",
+  "enableAuthWhenSyncing": "同期時に認証を有効にする"
 }

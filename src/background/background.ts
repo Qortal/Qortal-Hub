@@ -32,7 +32,7 @@ import {
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
   TIME_MINUTES_3_IN_MILLISECONDS,
   TIME_MINUTES_10_IN_MILLISECONDS,
-  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_WEEKS_1_IN_MILLISECONDS,
   TIME_MINUTES_6_IN_MILLISECONDS,
 } from '../constants/constants';
 import {
@@ -608,7 +608,7 @@ export function updateThreadActivity({
     const lastResetTime = threads.lastResetTime || 0;
 
     // Check if a week has passed since the last reset
-    if (currentTime - lastResetTime > TIME_WEEK_1_IN_MILLISECONDS) {
+    if (currentTime - lastResetTime > TIME_WEEKS_1_IN_MILLISECONDS) {
       // Reset visit counts and update the last reset time
       threads.mostVisitedThreads.forEach((thread) => (thread.visitCount = 0));
       threads.lastResetTime = currentTime;
