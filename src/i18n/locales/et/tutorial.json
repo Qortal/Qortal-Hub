@@ -10,7 +10,7 @@
     "navigation": "2. Rakenduste navigeerimine"
   },
   "initial": {
-    "recommended_qort_qty": "hoia oma rahakotis vähemalt {{ quantity }} QORT'i",
+    "recommended_qort_qty": "soovituslik hoida rahakotis vähemalt {{ quantity }} QORT'i",
     "explore": "avasta",
     "general_chat": "üldine vestlus",
     "getting_started": "alustamine",

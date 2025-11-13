@@ -12,7 +12,7 @@
   "coin": "münt: {{ coin }}",
   "description": "kirjeldus: {{ description }}",
   "deploy_at": "kas sa soovid seda AT-d (automaatset tehingut) käivitada?",
-  "download_file": "kas sa soovid alla laadida:",
+  "download_file": "kas sa soovid allalaadida:",
   "message": {
     "error": {
       "add_to_list": "nimekirja lisamine ebaõnnestus",
