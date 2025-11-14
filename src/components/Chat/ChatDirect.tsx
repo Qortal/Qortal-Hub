@@ -34,9 +34,7 @@ import {
   TIME_MILLISECONDS_400,
   TIME_MILLISECONDS_50,
   TIME_SECONDS_10_IN_MILLISECONDS,
-  TIME_SECONDS_120_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
-  TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 
 const uid = new ShortUniqueId({ length: 5 });
@@ -84,7 +82,7 @@ export const ChatDirect = ({
     editorRef.current = editorInstance;
   };
   const publicKeyOfRecipientRef = useRef(null);
-  
+
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
       try {
@@ -109,7 +107,11 @@ export const ChatDirect = ({
 
         const sendMessageFunc = async () => {
           return await sendChatDirect(
-            { chatReference: chatMessage.signature, messageText: '', otherData },
+            {
+              chatReference: chatMessage.signature,
+              messageText: '',
+              otherData,
+            },
             selectedDirect?.address,
             publicKeyOfRecipient,
             false
@@ -126,7 +128,12 @@ export const ChatDirect = ({
           },
           chatReference: chatMessage.signature,
         };
-        addToQueue(sendMessageFunc, messageObj, 'chat-direct', selectedDirect?.address);
+        addToQueue(
+          sendMessageFunc,
+          messageObj,
+          'chat-direct',
+          selectedDirect?.address
+        );
       } catch (error) {
         const errorMsg = error?.message || error;
         setInfoSnack({
@@ -140,7 +147,14 @@ export const ChatDirect = ({
         resumeAllQueues();
       }
     },
-    [isSending, balance, selectedDirect?.address, publicKeyOfRecipient, myName, myAddress]
+    [
+      isSending,
+      balance,
+      selectedDirect?.address,
+      publicKeyOfRecipient,
+      myName,
+      myAddress,
+    ]
   );
 
   const getPublicKeyFunc = async (address) => {
@@ -320,7 +334,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction/edit item:', error, item);
+                        console.error(
+                          'Error processing reaction/edit item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -425,7 +443,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction item:', error, item);
+                        console.error(
+                          'Error processing reaction item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -490,7 +512,10 @@ export const ChatDirect = ({
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, TIME_SECONDS_40_IN_MILLISECONDS); // Ping every 40 seconds
+          groupSocketTimeoutRef.current = setTimeout(
+            pingWebSocket,
+            TIME_SECONDS_40_IN_MILLISECONDS
+          ); // Ping every 40 seconds
         } else {
           middletierFunc(
             JSON.parse(e.data),
@@ -510,7 +535,10 @@ export const ChatDirect = ({
       clearTimeout(timeoutIdRef.current);
       console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
       if (event.reason !== 'forced' && event.code !== 1000) {
-        setTimeout(() => initWebsocketMessageGroup(), TIME_SECONDS_10_IN_MILLISECONDS); // Retry after 10 seconds
+        setTimeout(
+          () => initWebsocketMessageGroup(),
+          TIME_SECONDS_10_IN_MILLISECONDS
+        ); // Retry after 10 seconds
       }
     };
 
