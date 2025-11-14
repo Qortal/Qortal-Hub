@@ -6,6 +6,7 @@ import {
   useRef,
 } from 'react';
 import ShortUniqueId from 'short-unique-id';
+import { TIME_MILLISECONDS_250 } from '../constants/constants';
 
 const MessageQueueContext = createContext(null);
 const uid = new ShortUniqueId({ length: 8 });
@@ -191,7 +192,7 @@ export const MessageQueueProvider = ({ children }) => {
           return updatedChats;
         });
       }
-    }, 300);
+    }, TIME_MILLISECONDS_250);
 
     return updatedNewMessages;
   };

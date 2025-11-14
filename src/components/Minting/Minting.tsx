@@ -58,6 +58,7 @@ import {
   countReward,
   countRewardDay,
 } from './MintingStats.tsx';
+import { TIME_MILLISECONDS_250, TIME_SECONDS_30_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 export type AddressLevelEntry = {
   level: number;
@@ -223,7 +224,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     } catch (error) {
       console.log(error);
     } finally {
-      timeoutAdminInfoRef.current = setTimeout(getAccountInfo, 30000);
+      timeoutAdminInfoRef.current = setTimeout(getAccountInfo, TIME_SECONDS_30_IN_MILLISECONDS);
     }
   }, []);
 
@@ -236,7 +237,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     } catch (error) {
       console.error('Request failed', error);
     } finally {
-      timeoutNodeStatusRef.current = setTimeout(getNodeStatus, 30000);
+      timeoutNodeStatusRef.current = setTimeout(getNodeStatus, TIME_SECONDS_30_IN_MILLISECONDS);
     }
   }, []);
 
@@ -311,7 +312,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
               setMintingKey('');
               setTimeout(() => {
                 getMintingAccounts();
-              }, 300);
+              }, TIME_MILLISECONDS_250);
               return;
             }
             rej({ message: response.error });
@@ -361,7 +362,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
 
               setTimeout(() => {
                 getMintingAccounts();
-              }, 300);
+              }, TIME_MILLISECONDS_250);
               return;
             }
             rej({ message: response.error });
@@ -562,7 +563,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     setOpenSnack(false);
     setTimeout(() => {
       setInfo(null);
-    }, 250);
+    }, TIME_MILLISECONDS_250);
   };
 
   const StatCard = ({ label, value }: { label: string; value: string }) => (

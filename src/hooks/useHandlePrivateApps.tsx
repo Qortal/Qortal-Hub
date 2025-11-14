@@ -11,6 +11,7 @@ import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_250 } from '../constants/constants.ts';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
@@ -194,7 +195,7 @@ export const useHandlePrivateApps = () => {
                 executeEvent('refreshApp', {
                   tabId: tabId,
                 });
-              }, 300);
+              }, TIME_MILLISECONDS_250);
             }
           };
 

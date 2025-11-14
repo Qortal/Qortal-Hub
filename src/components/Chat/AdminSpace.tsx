@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_250 } from '../../constants/constants';
 
 export const AdminSpace = ({
   selectedGroup,
@@ -29,7 +30,7 @@ export const AdminSpace = ({
 
   useEffect(() => {
     if (hide) {
-      setTimeout(() => setIsMoved(true), 300); // Wait for the fade-out to complete before moving
+      setTimeout(() => setIsMoved(true), TIME_MILLISECONDS_250); // Wait for the fade-out to complete before moving
     } else {
       setIsMoved(false); // Reset the position immediately when showing
     }

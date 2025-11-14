@@ -890,7 +890,7 @@ const WatchComponent = ({ onSeen, isLast, children }) => {
     if (inView && isLast && onSeen) {
       setTimeout(() => {
         onSeen();
-      }, 100);
+      }, TIME_MILLISECONDS_100);
     }
   }, [inView, isLast, onSeen]);
 

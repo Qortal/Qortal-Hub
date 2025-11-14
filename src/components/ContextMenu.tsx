@@ -12,6 +12,7 @@ import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import { executeEvent } from '../utils/events';
 import { mutedGroupsAtom } from '../atoms/global';
 import { useAtom } from 'jotai';
+import { TIME_MILLISECONDS_400, TIME_MILLISECONDS_500 } from '../constants/constants';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -64,7 +65,7 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
         mouseX: event.touches[0].clientX,
         mouseY: event.touches[0].clientY,
       });
-    }, 500); // Long press duration
+    }, TIME_MILLISECONDS_500); // Long press duration
   };
 
   const handleTouchEnd = (event) => {
@@ -108,7 +109,7 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
 
       setTimeout(() => {
         getUserSettings();
-      }, 400);
+      }, TIME_MILLISECONDS_400);
     } catch (error) {}
   };
 

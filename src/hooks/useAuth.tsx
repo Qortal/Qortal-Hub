@@ -330,7 +330,7 @@ export const useAuth = () => {
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
-        }, 250);
+        }, TIME_MILLISECONDS_250);
       });
       window
         .sendMessage(

@@ -13,6 +13,7 @@ import { getBaseApiReact } from '../../App';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_250 } from '../../constants/constants';
 
 export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
@@ -164,7 +165,7 @@ export const GroupInvites = ({ myAddress, setOpenAddGroup }) => {
                     setOpenAddGroup(true);
                     setTimeout(() => {
                       executeEvent('openGroupInvitesRequest', {});
-                    }, 300);
+                    }, TIME_MILLISECONDS_250);
                   }}
                   disablePadding
                   secondaryAction={

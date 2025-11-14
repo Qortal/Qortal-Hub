@@ -500,7 +500,7 @@ export const GroupMail = ({
       executeEvent('threadFetchMode', {
         mode: 'last-page',
       });
-    }, 300);
+    }, TIME_MILLISECONDS_250);
   };
 
   useEffect(() => {
@@ -781,7 +781,7 @@ export const GroupMail = ({
                       executeEvent('threadFetchMode', {
                         mode: 'last-page',
                       });
-                    }, 300);
+                    }, TIME_MILLISECONDS_250);
                   }}
                   sx={{
                     alignItems: 'center',

@@ -11,6 +11,7 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 import { saveToLocalStorage } from './Apps/AppsNavBarDesktop';
 import { sortablePinnedAppsAtom } from '../atoms/global';
 import { useSetAtom } from 'jotai';
+import { TIME_MILLISECONDS_1500, TIME_MILLISECONDS_500 } from '../constants/constants';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -64,12 +65,12 @@ export const ContextMenuPinnedApps = ({ children, app, isMine }) => {
         mouseX: clientX,
         mouseY: clientY,
       });
-    }, 500);
+    }, TIME_MILLISECONDS_500);
 
-    // Set a maximum hold duration (e.g., 1.5 seconds)
+    // Set a maximum hold duration
     maxHoldTimeout.current = setTimeout(() => {
       clearTimeout(longPressTimeout.current);
-    }, 1500);
+    }, TIME_MILLISECONDS_1500);
   };
 
   const handleTouchMove = (event) => {

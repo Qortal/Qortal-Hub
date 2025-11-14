@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getBaseApiReact } from '../App';
+import { TIME_MILLISECONDS_500 } from '../constants/constants';
 
 interface NameListItem {
   name: string;
@@ -42,7 +43,7 @@ export const useNameSearch = (value: string, limit = 20) => {
     setIsLoading(true);
     const handler = setTimeout(() => {
       checkIfNameExisits(value, limit);
-    }, 500);
+    }, TIME_MILLISECONDS_500);
 
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
