@@ -777,7 +777,7 @@ export const ChatGroup = ({
               chatReference,
               messageText,
             },
-            TIME_SECONDS_120_IN_MILLISECONDS
+            TIME_MINUTES_2_IN_MILLISECONDS
           )
           .then((response) => {
             if (!response?.error) {

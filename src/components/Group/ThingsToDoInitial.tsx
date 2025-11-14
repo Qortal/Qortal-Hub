@@ -161,6 +161,7 @@ export const ThingsToDoInitial = ({
                 disableRipple
                 role={undefined}
                 dense
+                disabled={!!userInfo?.name}
               >
                 <ListItemText
                   onClick={() => {

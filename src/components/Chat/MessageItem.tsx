@@ -55,7 +55,8 @@ import {
 } from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
-import { TIME_MILLISECONDS_100 } from '../../constants/constants';
+import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { getClickableAvatarSx } from './clickableAvatarStyles';
 
 const getBadgeImg = (level) => {
   switch (level?.toString()) {
@@ -117,6 +118,7 @@ type MessageItemProps = {
   reactions: ReactionsMap | null;
   reply: string | null;
   replyIndex: number;
+  replyExpiredMeta?: any;
   scrollToItem: (index: number) => void;
 };
 
@@ -136,12 +138,16 @@ export const MessageItemComponent = ({
   reactions,
   reply,
   replyIndex,
+  replyExpiredMeta,
   scrollToItem,
 }: MessageItemProps) => {
   const { getIndividualUserInfo } = useContext(QORTAL_APP_CONTEXT);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedReaction, setSelectedReaction] = useState(null);
   const [userInfo, setUserInfo] = useState(null);
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
+  const [avatarPreviewSrc, setAvatarPreviewSrc] = useState(null);
+  const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
 
   useEffect(() => {
     const getInfo = async () => {
@@ -186,6 +192,22 @@ export const MessageItemComponent = ({
     }
   }, [reply?.editTimestamp]);
 
+  const htmlReplyExpired = useMemo(() => {
+    if (!replyExpiredMeta) return null;
+    if (replyExpiredMeta?.messageText) {
+      const isHtml = isHtmlString(replyExpiredMeta?.messageText);
+      if (isHtml) return replyExpiredMeta?.messageText;
+      return generateHTML(replyExpiredMeta?.messageText, [
+        StarterKit,
+        Underline,
+        Highlight,
+        Mention,
+        TextStyle,
+      ]);
+    }
+    return null;
+  }, [replyExpiredMeta?.editTimestamp]);
+
   const userAvatarUrl = useMemo(() => {
     return message?.senderName
       ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
@@ -193,6 +215,26 @@ export const MessageItemComponent = ({
         }/qortal_avatar?async=true`
       : '';
   }, []);
+
+  useEffect(() => {
+    setIsAvatarLoaded(false);
+  }, [userAvatarUrl]);
+
+  const handleAvatarPreview = useCallback(
+    (event) => {
+      if (!userAvatarUrl || !isAvatarLoaded) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setAvatarPreviewSrc(userAvatarUrl);
+      setIsAvatarPreviewOpen(true);
+    },
+    [isAvatarLoaded, setAvatarPreviewSrc, setIsAvatarPreviewOpen, userAvatarUrl]
+  );
+
+  const closeAvatarPreview = useCallback(() => {
+    setIsAvatarPreviewOpen(false);
+    setAvatarPreviewSrc(null);
+  }, [setIsAvatarPreviewOpen, setAvatarPreviewSrc]);
 
   const onSeenFunc = useCallback(() => {
     onSeen(message.id);
@@ -267,9 +309,19 @@ export const MessageItemComponent = ({
                     color: theme.palette.text.primary,
                     height: '40px',
                     width: '40px',
+                    ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={message?.senderName}
                   src={userAvatarUrl}
+                  onClick={handleAvatarPreview}
+                  imgProps={{
+                    onLoad: () => {
+                      setIsAvatarLoaded(true);
+                    },
+                    onError: () => {
+                      setIsAvatarLoaded(false);
+                    },
+                  }}
                 >
                   {message?.senderName?.charAt(0)}
                 </Avatar>
@@ -412,6 +464,60 @@ export const MessageItemComponent = ({
                       />
                     ) : (
                       <MessageDisplay isReply htmlContent={reply.text} />
+                    )}
+                  </Box>
+                </Box>
+              </>
+            )}
+
+            {!reply && (replyExpiredMeta || message?.repliedTo) && (
+              <>
+                <Spacer height="20px" />
+
+                <Box
+                  sx={{
+                    backgroundColor: theme.palette.background.surface,
+                    borderRadius: '8px',
+                    display: 'flex',
+                    gap: '20px',
+                    maxHeight: '90px',
+                    overflow: 'hidden',
+                    width: '100%',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      background: theme.palette.text.primary,
+                      height: '100%',
+                      width: '5px',
+                      flexShrink: 0,
+                    }}
+                  />
+
+                  <Box sx={{ padding: '5px' }}>
+                    <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>
+                      {replyExpiredMeta?.senderName || replyExpiredMeta?.sender
+                        ? t('core:message.generic.replied_to', {
+                            person:
+                              replyExpiredMeta?.senderName ||
+                              replyExpiredMeta?.sender,
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:message.generic.replied_to', {
+                            person:
+                              t('core:message.error.missing_fields', {
+                                fields: t('core:message.message')
+                              }),
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                    </Typography>
+
+                    {replyExpiredMeta?.messageText && (
+                      <MessageDisplay htmlContent={htmlReplyExpired} />
+                    )}
+
+                    {replyExpiredMeta?.text && (
+                      <MessageDisplay isReply htmlContent={replyExpiredMeta.text} />
                     )}
                   </Box>
                 </Box>
@@ -666,6 +772,12 @@ export const MessageItemComponent = ({
             </Box>
           </Box>
         </Box>
+        <AvatarPreviewModal
+          open={isAvatarPreviewOpen}
+          src={avatarPreviewSrc}
+          alt={message?.senderName}
+          onClose={closeAvatarPreview}
+        />
       </MessageWragger>
     </>
   );

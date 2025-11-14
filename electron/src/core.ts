@@ -5,6 +5,7 @@ import fs from 'fs';
 import { spawn, exec, execFile } from 'child_process';
 import readline from 'readline';
 import { promises as fsPromise } from 'fs';
+import os from 'os';
 
 export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
 export const CORE_LOCALHOST = '127.0.0.1';
@@ -41,6 +42,7 @@ import {
   qortaldir,
   qortaljar,
   qortalsettings,
+  qortalStopScriptLocation,
   qortalWindir,
   startWinCore,
   winexe,
@@ -54,27 +56,8 @@ import extract from 'extract-zip';
 import net from 'net';
 
 import { broadcastProgress, getSharedSettingsFilePath } from './setup';
-const isRunning = (query, cb) => {
-  const platform = process.platform;
-  let cmd = '';
-  switch (platform) {
-    case 'win32':
-      cmd = `tasklist`;
-      break;
-    case 'darwin':
-      cmd = `ps -ax | grep [q]ortal.jar`;
-      break;
-    case 'linux':
-      cmd = `ps ax | grep [q]ortal.jar`;
-      break;
-    default:
-      break;
-  }
-
-  exec(cmd, (err, stdout, stderr) => {
-    cb(stdout.toLowerCase().indexOf(query.toLowerCase()) > -1);
-  });
-};
+import { promisify } from 'util';
+const execAsync = promisify(exec);
 
 function isPortOpen(
   host: string,
@@ -101,6 +84,51 @@ function isPortOpen(
     sock.connect(port, host);
   });
 }
+
+const isRunning = (query, cb) => {
+  const platform = process.platform;
+  let cmd = '';
+
+  switch (platform) {
+    case 'win32':
+      cmd = 'tasklist';
+      break;
+
+    case 'darwin':
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+               pgrep -fl "java.*-jar.*qortal\\.jar";
+             else
+               ps -axo pid=,command=;
+             fi`;
+      break;
+
+    case 'linux':
+      cmd = `if command -v pgrep >/dev/null 2>&1; then
+               pgrep -fa "java.*-jar.*qortal\\.jar";
+             else
+               ps -Ao pid=,args=;
+             fi`;
+      break;
+
+    default:
+      return cb(false);
+  }
+
+  exec(cmd, (err, stdout = '') => {
+    if (err) return cb(false);
+
+    // Strict regex: only matches real java -jar qortal.jar processes
+    const re = /\bjava(\.exe)?\b.*\s-jar\s+\S*?qortal\.jar(\s|$)/i;
+
+    if (platform === 'win32') {
+      // On Windows
+      return cb(stdout.toLowerCase().includes(query.toLowerCase()));
+    }
+
+    // macOS / Linux: evaluate with strict regex
+    cb(re.test(stdout));
+  });
+};
 
 export async function isCorePortRunning(): Promise<boolean> {
   const host = CORE_LOCALHOST;
@@ -700,7 +728,7 @@ async function startElectronUnix() {
   if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
-        console.log('Core is running, perfect !');
+        // Core is running, perfect !
       } else {
         startQortal();
       }
@@ -716,14 +744,17 @@ export async function checkOsPlatform() {
   }
 }
 
-export async function isCoreRunning() {
+export async function isCoreRunning(onSystem = false) {
   return new Promise(async (res, rej) => {
     if (process.platform === 'win32') {
-      const isPortRunning = await isCorePortRunning();
-      if (isPortRunning) {
-        res(true);
-        return;
+      if (!onSystem) {
+        const isPortRunning = await isCorePortRunning();
+        if (isPortRunning) {
+          res(true);
+          return;
+        }
       }
+
       isRunning('qortal.exe', (status) => {
         if (status == true) {
           res(true);
@@ -770,6 +801,225 @@ export async function removeCustomQortalPath() {
   await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+function parseJarFromCmdline(cmdline: string | null | undefined) {
+  if (!cmdline) return null;
+  // Matches: -jar "/path with spaces/qortal.jar"  OR  -jar C:\path\qortal.jar  OR  -jar /path/qortal.jar
+  const m = cmdline.match(/-jar\s+("([^"]+)"|(\S+))/i);
+  const jarPath = m ? m[2] || m[3] : null;
+  if (!jarPath) return null;
+  const jarDir = path.dirname(jarPath);
+  return { jarPath, jarDir };
+}
+
+async function findQortalJarWindows(): Promise<{
+  pid: string;
+  jarPath: string;
+  jarDir: string;
+} | null> {
+  // Try PowerShell first (modern & reliable)
+  try {
+    const psCmd = [
+      'powershell',
+      '-NoProfile',
+      '-Command',
+      // Find the first Java process whose CommandLine contains qortal.jar; return PID and CommandLine
+      "(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'qortal\\.jar' } | Select-Object -First 1 ProcessId,CommandLine | ConvertTo-Json -Compress)",
+    ].join(' ');
+
+    const { stdout } = await execAsync(psCmd, {
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    const obj = stdout ? JSON.parse(stdout) : null;
+    const cmdline: string | undefined = obj?.CommandLine;
+    const pid: number | undefined = obj?.ProcessId;
+    const parsed = parseJarFromCmdline(cmdline);
+    if (pid && parsed?.jarPath) {
+      return {
+        pid: String(pid),
+        jarPath: parsed.jarPath,
+        jarDir: parsed.jarDir,
+      };
+    }
+  } catch {
+    /* fall through to WMIC */
+  }
+
+  // Fallback to WMIC (deprecated but often present)
+  try {
+    const { stdout } = await execAsync(
+      'wmic process where "CommandLine like \'%qortal.jar%\'" get ProcessId,CommandLine /VALUE',
+      { windowsHide: true, maxBuffer: 10 * 1024 * 1024 }
+    );
+    const block = stdout.trim();
+    if (!block) return null;
+
+    // Pick the first match block
+    const cmdMatch = block.match(/CommandLine=(.+)/i);
+    const pidMatch = block.match(/ProcessId=(\d+)/i);
+    const cmdline = cmdMatch?.[1]?.trim();
+    const pid = pidMatch?.[1];
+    const parsed = parseJarFromCmdline(cmdline);
+    if (pid && parsed?.jarPath) {
+      return { pid, jarPath: parsed.jarPath, jarDir: parsed.jarDir };
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return null;
+}
+
+async function findQortalJarPosix(): Promise<{
+  pid: string;
+  jarPath: string;
+  jarDir: string;
+} | null> {
+  // Works on Linux and macOS
+  // -eo pid,command is portable enough; some macs prefer 'args' but 'command' usually works
+  const { stdout } = await execAsync(
+    'ps -eo pid,command | grep qortal.jar | grep -v grep',
+    { maxBuffer: 10 * 1024 * 1024 }
+  );
+  const line = stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .find(Boolean);
+  if (!line) return null;
+
+  // Example: "12345 java -jar /Users/me/qortal/qortal.jar ..."
+  const pidMatch = line.match(/^(\d+)\s+/);
+  const pid = pidMatch?.[1];
+  const cmdline = line.replace(/^(\d+)\s+/, '');
+  const parsed = parseJarFromCmdline(cmdline);
+  if (pid && parsed?.jarPath) {
+    return { pid, jarPath: parsed.jarPath, jarDir: parsed.jarDir };
+  }
+  return null;
+}
+
+export async function findQortalJar(): Promise<{
+  pid: string;
+  jarPath: string;
+  jarDir: string;
+} | null> {
+  if (process.platform === 'win32') {
+    return await findQortalJarWindows();
+  }
+  return await findQortalJarPosix();
+}
+
+/**
+ * Calls the Admin API to stop the core, then polls every 10s for up to 2 minutes
+ * to ensure it has fully stopped.
+ */
+async function stopViaAdminApi(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/stop`, {
+      method: 'GET',
+      headers: {
+        accept: 'text/plain',
+        'X-API-KEY': apiKey,
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`Stop request failed (status ${res.status})`);
+      return false;
+    }
+
+    // 🔁 Poll every 10s for up to 2 minutes
+    const maxAttempts = 12;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await delay(10_000);
+      const stillRunning = await isCoreRunning();
+      if (!stillRunning) {
+        return true;
+      }
+    }
+
+    console.warn('⚠️ Timed out: Qortal Core did not stop after 2 minutes.');
+    return false;
+  } catch (err) {
+    console.error('Failed to call /admin/stop:', err);
+    return false;
+  }
+}
+
+async function waitForStop(
+  maxMs = 120_000,
+  intervalMs = 10_000
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const still = await isCoreRunning();
+    if (!still) return true;
+  }
+  return false;
+}
+
+export async function stopCore() {
+  const running = await isCoreRunning();
+  if (!running) return true;
+
+  // Windows: use Admin API (assumes stopViaAdminApi already does its own 2-min polling)
+  if (process.platform === 'win32') {
+    const apiKey = await getApiKey();
+    if (!apiKey) return false;
+    return await stopViaAdminApi(apiKey);
+  }
+
+  const settings = await getSettings();
+  const apiKeyPath = (settings?.apiKeyPath ?? '').trim();
+
+  const stopScriptName = 'stop.sh';
+
+  // Prefer jarDir/stop.sh; else use your configured path (which may already be stop.sh); else selectedCustomDir
+  const selectedCustomDir = await customQortalInstalledDir();
+  const candidates: string[] = [
+    ...(apiKeyPath ? [path.join(apiKeyPath, stopScriptName)] : []),
+    qortalStopScriptLocation, // assume this may already be the absolute path to stop.sh
+    ...(selectedCustomDir
+      ? [path.join(selectedCustomDir, stopScriptName)]
+      : []),
+  ];
+  const stopPath = candidates.find((p) => p && fs.existsSync(p));
+
+  if (!stopPath) {
+    console.error(
+      'Stop script not found in expected locations. Falling back to Admin API if possible.'
+    );
+    const apiKey = await getApiKey();
+    if (!apiKey) return false;
+    return await stopViaAdminApi(apiKey); // this does the 2-min polling internally
+  }
+
+  try {
+    const cwd = path.dirname(stopPath);
+    // Ensure executable (no-op if already set)
+    try {
+      await execAsync(`chmod +x "${stopPath}"`);
+    } catch {}
+
+    await execFileAsync(stopPath, [], { cwd });
+
+    // Poll every 10s for up to 2 minutes to confirm shutdown
+    const stopped = await waitForStop(120_000, 10_000);
+    if (stopped) {
+      return true;
+    }
+
+    // As a last resort, try Admin API (maybe the script couldn’t reach the process)
+    const apiKey = await getApiKey();
+    if (!apiKey) return false;
+    return await stopViaAdminApi(apiKey); // includes its own polling
+  } catch (err) {
+    console.error('Failed to execute stop.sh:', err);
+    return false;
+  }
+}
+
 export async function isCoreInstalled(customDir?: string) {
   const selectedCustomDir = await customQortalInstalledDir();
 
@@ -812,7 +1062,6 @@ async function unzipQortal() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Qortal complete');
   } catch (err) {
     broadcastProgress({
       step: 'downloadedCore',
@@ -820,7 +1069,6 @@ async function unzipQortal() {
       progress: 0,
       message: '004',
     });
-    console.log('Unzip Qortal error', err);
   }
 
   await chmodQortal();
@@ -833,7 +1081,7 @@ async function chmodQortal() {
       shell: true,
     });
   } catch (err) {
-    console.log('chmod error', err);
+    // ignore error
   }
 
   await removeQortalZip();
@@ -843,7 +1091,7 @@ async function removeQortalZip() {
   try {
     await spawn('rm', ['-rf', zipfile], { cwd: HOME_PATH, shell: true });
   } catch (err) {
-    console.log('rm error', err);
+    //ignore error
   }
 
   await startCore();
@@ -947,7 +1195,6 @@ async function downloadQortal() {
   try {
     if (isDownloadingQortal) return;
     isDownloadingQortal = true;
-    console.log('Starting Download Qortal');
     broadcastProgress({
       step: 'downloadedCore',
       status: 'active',
@@ -975,7 +1222,6 @@ async function downloadQortal() {
       progress: 0,
       message: '005',
     });
-    console.log('Download Qortal error', err);
   } finally {
     isDownloadingQortal = false;
   }
@@ -1076,7 +1322,6 @@ let isDownloadingJava = false;
 async function downloadJavaArchive(url: string): Promise<string> {
   const dest = destPathForUrl(url);
 
-  console.log('Starting Download JAVA');
   try {
     if (isDownloadingJava) return null;
     isDownloadingJava = true;
@@ -1102,7 +1347,6 @@ async function downloadJavaArchive(url: string): Promise<string> {
     return null;
     // We still return dest so your unzip function can try (same behavior you had)
   }
-  console.log('Saved Java archive to:', dest);
 
   return dest;
 }
@@ -1158,7 +1402,6 @@ async function unzipJavaX64Linux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1166,7 +1409,6 @@ async function unzipJavaX64Linux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1181,7 +1423,6 @@ async function unzipJavaArm64Linux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1189,7 +1430,6 @@ async function unzipJavaArm64Linux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1204,7 +1444,6 @@ async function unzipJavaArmLinux() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1212,7 +1451,6 @@ async function unzipJavaArmLinux() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1227,7 +1465,6 @@ async function unzipJavaX64Mac() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1250,7 +1487,6 @@ async function unzipJavaAarch64Mac() {
       progress: 100,
       message: '',
     });
-    console.log('Unzip Java complete');
   } catch (err) {
     broadcastProgress({
       step: 'hasJava',
@@ -1258,7 +1494,6 @@ async function unzipJavaAarch64Mac() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1286,7 +1521,7 @@ async function checkQortal() {
   if (fs.existsSync(qortalJarLocation)) {
     isRunning('qortal.jar', (status) => {
       if (status == true) {
-        console.log('Core is running, perfect !');
+        // core running
       } else {
         startQortal();
       }
@@ -1304,7 +1539,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1315,7 +1550,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1326,7 +1561,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1339,7 +1574,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1350,7 +1585,7 @@ async function removeJavaZip() {
           shell: true,
         });
       } catch (err) {
-        console.log('rm error', err);
+        //ignore error
       }
 
       checkQortal();
@@ -1522,7 +1757,7 @@ async function removeQortalExe() {
   try {
     await fs.promises.rm(winexe, { force: true });
   } catch (err) {
-    console.log('remove error', err);
+    // ignore error
   }
 
   await startElectronWin();
@@ -1530,7 +1765,6 @@ async function removeQortalExe() {
 
 // --- main flow (matches your old API shape) ---
 export async function downloadCoreWindows() {
-  console.log('Starting Download Qortal Core Installer');
   try {
     await fs.promises.mkdir(DOWNLOAD_PATH, { recursive: true });
 
@@ -1545,7 +1779,7 @@ export async function downloadCoreWindows() {
             progress: percent,
             message: '009',
           });
-        } else console.log(`received ${received} / ${total || 0} bytes`);
+        }
       }
     );
 
@@ -1562,12 +1796,6 @@ export async function downloadCoreWindows() {
       args = ['/i', winexe, '/quiet', '/norestart'];
       await execFileAsync(msiexec, args);
     } else {
-      // Common EXE installer flags:
-      // NSIS: /S, Inno Setup: /VERYSILENT /NORESTART (depends on your installer)
-      // If you don't want silent install, keep args = []
-      // args = ['/S'];
-      const { stdout, stderr } = await execFileAsync(winexe, args);
-      console.log('Qortal Core Installation Done', stdout, stderr);
       broadcastProgress({
         step: 'downloadedCore',
         status: 'done',
@@ -1576,7 +1804,6 @@ export async function downloadCoreWindows() {
       });
     }
   } catch (e) {
-    console.log('Download/Install error', e);
     broadcastProgress({
       step: 'downloadedCore',
       status: 'error',
@@ -1665,7 +1892,6 @@ export async function getApiKey(): Promise<string> {
   const existing = await readApiKeyFile(filePath);
 
   if (existing) {
-    console.log(`Existing API key found at: ${filePath}`);
     return existing;
   }
 
@@ -1691,4 +1917,417 @@ export async function resetApikey(): Promise<boolean> {
   await generateApiKey();
 
   return true;
+}
+export async function watchForBootstrap(
+  logFilePath: string,
+  startTimestamp: number,
+  {
+    bootstrapStartTimeout = 60_000, // must see a "start" line within this window
+    restartGraceMs = 120_000, // after "Restarting node", if no failure in this window -> success
+  }: { bootstrapStartTimeout?: number; restartGraceMs?: number } = {}
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let stream: fs.ReadStream | null = null;
+    let rl: readline.Interface | null = null;
+    let dirWatcher: fs.FSWatcher | null = null;
+
+    let fileCreationTimeout: NodeJS.Timeout | null = null;
+    let bootstrapStartTimer: NodeJS.Timeout | null = null;
+    let restartGraceTimer: NodeJS.Timeout | null = null;
+
+    let done = false;
+    let seenBootstrapStart = false;
+
+    // ✅ Track the absolute file offset we’ve read up to
+    let readOffset = 0;
+
+    const START_MARKERS = [
+      'Bootstrapping node', // BootstrapNode: "... Bootstrapping node..."
+      'Bootstrapping...', // ApplyBootstrap: "Bootstrapping..."
+      'Applying bootstrap',
+      'Downloading full node bootstrap',
+      'Restarting node with:', // BootstrapNode/ApplyBootstrap
+    ];
+    const FAILURE_MARKERS = [
+      'Failed to restart node',
+      'Bootstrap failed',
+      'Unable to start repository',
+    ];
+    const RESTART_MARKER = 'Restarting node';
+    const API_START_MARKER = 'Starting API on port';
+
+    const cleanup = (result?: boolean) => {
+      if (done) return;
+      done = true;
+
+      if (fileCreationTimeout) clearTimeout(fileCreationTimeout);
+      if (bootstrapStartTimer) clearTimeout(bootstrapStartTimer);
+      if (restartGraceTimer) clearTimeout(restartGraceTimer);
+
+      rl?.close();
+      stream?.close();
+      fs.unwatchFile(logFilePath);
+      dirWatcher?.close();
+
+      if (typeof result === 'boolean') resolve(result);
+    };
+
+    const checkLine = (line: string) => {
+      const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+      if (!match) return;
+
+      const logDate = new Date(match[1]);
+      if (logDate.getTime() <= startTimestamp) return;
+
+      // 1) require a bootstrap "start" line first
+      if (!seenBootstrapStart) {
+        for (const s of START_MARKERS) {
+          if (line.includes(s)) {
+            seenBootstrapStart = true;
+            if (bootstrapStartTimer) clearTimeout(bootstrapStartTimer);
+            break;
+          }
+        }
+        if (!seenBootstrapStart) return;
+      }
+
+      // 2) fail fast on clear failures
+      for (const f of FAILURE_MARKERS) {
+        if (line.includes(f)) {
+          cleanup(false);
+          return;
+        }
+      }
+
+      // 4) immediate success if API starts after bootstrap began
+      if (line.includes(API_START_MARKER)) {
+        cleanup(true);
+        return;
+      }
+
+      // 5) "Restarting node" → arm grace; if no failure shows up in that time, succeed
+      if (line.includes(RESTART_MARKER)) {
+        if (restartGraceTimer) clearTimeout(restartGraceTimer);
+        restartGraceTimer = setTimeout(() => {
+          cleanup(true);
+        }, restartGraceMs);
+      }
+    };
+
+    // ---- Tail helpers (fixed offsets) ----
+
+    const attachLineReader = (s: fs.ReadStream) => {
+      rl = readline.createInterface({ input: s });
+      rl.on('line', (raw) => {
+        // readline strips \n; handle Windows \r\n safely
+        const line = raw.replace(/\r$/, '');
+        checkLine(line);
+      });
+    };
+
+    const openFromOffset = (offset: number) => {
+      stream = fs.createReadStream(logFilePath, {
+        encoding: 'utf8',
+        start: offset,
+      });
+      attachLineReader(stream);
+    };
+
+    const startWatchingFile = () => {
+      // keep a simple file watcher to notice growth
+      fs.watchFile(logFilePath, { interval: 500 }, (curr, prev) => {
+        if (done) return;
+        if (curr.size <= readOffset) return; // nothing new
+
+        // Read only the new region [readOffset, curr.size)
+        const newStream = fs.createReadStream(logFilePath, {
+          encoding: 'utf8',
+          start: readOffset,
+          end: curr.size - 1,
+        });
+
+        let bytes = 0;
+        let buffer = '';
+        newStream.on('data', (chunk: string) => {
+          bytes += Buffer.byteLength(chunk);
+          buffer += chunk;
+          // manually split, like readline
+          const parts = buffer.split(/\n/);
+          buffer = parts.pop() || '';
+          for (const part of parts) {
+            checkLine(part.replace(/\r$/, ''));
+          }
+        });
+        newStream.on('end', () => {
+          readOffset += bytes; // ✅ advance absolute offset
+          // flush last partial line if it actually ended with newline next time
+        });
+      });
+    };
+
+    const watch = () => {
+      if (fileCreationTimeout) clearTimeout(fileCreationTimeout);
+
+      // must see a start marker within bootstrapStartTimeout
+      bootstrapStartTimer = setTimeout(() => {
+        if (!seenBootstrapStart) cleanup(false);
+      }, bootstrapStartTimeout);
+
+      // initialize readOffset to EOF and tail from there
+      const stat = fs.statSync(logFilePath);
+      readOffset = stat.size;
+      openFromOffset(readOffset);
+      startWatchingFile();
+    };
+
+    if (fs.existsSync(logFilePath)) {
+      watch();
+    } else {
+      const dir = path.dirname(logFilePath);
+      const filename = path.basename(logFilePath);
+
+      fileCreationTimeout = setTimeout(() => {
+        dirWatcher?.close();
+        // If the log never appears, we can’t prove anything → fail
+        cleanup(false);
+      }, 60_000);
+
+      dirWatcher = fs.watch(dir, (eventType, createdFile) => {
+        if (createdFile === filename && fs.existsSync(logFilePath)) {
+          dirWatcher?.close();
+          watch();
+        }
+      });
+    }
+  });
+}
+
+async function bootstrapViaAdminApi(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/bootstrap`, {
+      method: 'GET',
+      headers: {
+        accept: 'text/plain',
+        'X-API-KEY': apiKey,
+      },
+    });
+
+    if (!res.ok) {
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function bootstrap(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+
+    if (!isInstalled) return false;
+    const apiKey = await getApiKey();
+    if (!apiKey) return false;
+    const response = await bootstrapViaAdminApi(apiKey);
+    if (!response) return false;
+    const startTimestamp = Date.now();
+    const selectedCustomDir = await customQortalInstalledDir();
+
+    const isWin = process.platform === 'win32';
+    let qortalDirLocation = isWin ? qortalWindir : qortaldir;
+
+    if (selectedCustomDir) {
+      qortalDirLocation = selectedCustomDir;
+    }
+    const logPath = path.join(qortalDirLocation, 'qortal.log');
+    const success = await watchForBootstrap(logPath, startTimestamp);
+    if (success) {
+      broadcastProgress({
+        step: 'coreRunning',
+        status: 'active',
+        progress: 10,
+        message: '001',
+      });
+      watchForApiStart(
+        logPath,
+        startTimestamp,
+        () => {
+          broadcastProgress({
+            step: 'coreRunning',
+            status: 'done',
+            progress: 100,
+            message: '',
+          });
+        },
+        () => {
+          broadcastProgress({
+            step: 'coreRunning',
+            status: 'error',
+            progress: 0,
+            message: '002',
+          });
+        }
+      );
+      return true;
+    } else {
+      return false;
+    }
+  } catch (error) {
+    return false;
+  }
+}
+
+const rmAsync = promisify(fs.rm ?? fs.rmdir); // Node 14+ supports fs.rm
+
+async function readJsonIfExists<T = any>(file: string): Promise<T | null> {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const raw = await fs.promises.readFile(file, 'utf8');
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteDB(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (!isInstalled) return false;
+
+    const selectedCustomDir = await customQortalInstalledDir();
+    const isWin = process.platform === 'win32';
+    let qortalDirLocation = isWin ? qortalWindir : qortaldir;
+
+    if (isWin) {
+      // Windows: get repositoryPath via Program Files + userPath + settings.json chain
+      const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+      const pfSettingsPath = path.join(programFiles, 'Qortal', 'settings.json');
+      const pfSettings = await readJsonIfExists<{ userPath?: string }>(
+        pfSettingsPath
+      );
+      const userPath = pfSettings?.userPath;
+
+      let repositoryPath: string | undefined;
+      if (userPath) {
+        const userSettingsPath = path.join(userPath, 'settings.json');
+        const userSettings = await readJsonIfExists<{
+          repositoryPath?: string;
+        }>(userSettingsPath);
+        repositoryPath = userSettings?.repositoryPath;
+      }
+
+      const defaultRepo = path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+        'Qortal'
+      );
+      qortalDirLocation = repositoryPath || defaultRepo;
+
+      qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+    } else {
+      // 🐧 macOS/Linux
+      if (selectedCustomDir) {
+        qortalDirLocation = selectedCustomDir;
+      }
+
+      // Check if qortalDirLocation has a settings.json with repositoryPath
+      const settingsPath = path.join(qortalDirLocation, 'settings.json');
+      const settings = await readJsonIfExists<{ repositoryPath?: string }>(
+        settingsPath
+      );
+      if (settings?.repositoryPath) {
+        qortalDirLocation = settings.repositoryPath;
+      }
+    }
+
+    qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+
+    const dbPath = path.join(qortalDirLocation, 'db');
+
+    if (fs.existsSync(dbPath)) {
+      const isRunning = await isCoreRunning();
+      if (isRunning) {
+        const isCoreStopped = await stopCore();
+        if (!isCoreStopped) return false;
+        broadcastProgress({
+          step: 'coreRunning',
+          status: 'off',
+          progress: 0,
+          message: '',
+        });
+      }
+
+      await rmAsync(dbPath, { recursive: true, force: true });
+      return true;
+    } else {
+      return false;
+    }
+  } catch (error) {
+    return false;
+  }
+}
+
+export async function dbExists(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (!isInstalled) return false;
+
+    const selectedCustomDir = await customQortalInstalledDir();
+    const isWin = process.platform === 'win32';
+    let qortalDirLocation = isWin ? qortalWindir : qortaldir;
+
+    if (isWin) {
+      // Windows: get repositoryPath via Program Files + userPath + settings.json chain
+      const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+      const pfSettingsPath = path.join(programFiles, 'Qortal', 'settings.json');
+      const pfSettings = await readJsonIfExists<{ userPath?: string }>(
+        pfSettingsPath
+      );
+      const userPath = pfSettings?.userPath;
+
+      let repositoryPath: string | undefined;
+      if (userPath) {
+        const userSettingsPath = path.join(userPath, 'settings.json');
+        const userSettings = await readJsonIfExists<{
+          repositoryPath?: string;
+        }>(userSettingsPath);
+        repositoryPath = userSettings?.repositoryPath;
+      }
+
+      const defaultRepo = path.join(
+        process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'),
+        'Qortal'
+      );
+      qortalDirLocation = repositoryPath || defaultRepo;
+
+      qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+    } else {
+      // 🐧 macOS/Linux
+      if (selectedCustomDir) {
+        qortalDirLocation = selectedCustomDir;
+      }
+
+      // Check if qortalDirLocation has a settings.json with repositoryPath
+      const settingsPath = path.join(qortalDirLocation, 'settings.json');
+      const settings = await readJsonIfExists<{ repositoryPath?: string }>(
+        settingsPath
+      );
+      if (settings?.repositoryPath) {
+        qortalDirLocation = settings.repositoryPath;
+      }
+    }
+
+    qortalDirLocation = qortalDirLocation.replace(/[\\/]+db[\\/]?$/i, '');
+
+    const dbPath = path.join(qortalDirLocation, 'db');
+
+    if (fs.existsSync(dbPath)) {
+      return true;
+    } else {
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Failed to delete DB folder:', error);
+    return false;
+  }
 }

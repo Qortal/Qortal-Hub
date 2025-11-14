@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core Einrichtung",
+    "title": "Lokale Einrichtung: Hub und Core laufen auf demselben System",
     "advancedOptions": "erweiterte Optionen",
     "pickPath": "Wählen Sie einen benutzerdefinierten Qortal-Installationspfad, wenn Ihr Core an einem nicht standardmäßigen Ort installiert ist.",
     "removePath": "benutzerdefinierten Qortal-Pfad entfernen"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "gewähltes Verzeichnis enthält keine qortal.jar",
-    "invalidKey": "ungültiger API-Schlüssel"
+    "invalidKey": "ungültiger API-Schlüssel",
+    "failed_stop": "Core konnte nicht gestoppt werden",
+    "failed_bootstrap": "Bootstrap konnte nicht ausgeführt werden",
+    "failed_delete": "Datenbank konnte nicht gelöscht werden"
   },
   "status": {
     "complete": "abgeschlossen",
@@ -72,5 +75,16 @@
   "url": {
     "title": "ungültige URL",
     "description": "falsche URL oder Knoten läuft nicht"
-  }
+  },
+  "confirmations": {
+    "stop": "Bist du sicher, dass du den Core stoppen möchtest?",
+    "bootstrap": "Bist du sicher, dass du den Bootstrap starten möchtest?",
+    "delete": "Bist du sicher, dass du die Datenbank löschen möchtest?"
+  },
+  "stop": "Core stoppen",
+  "bootstrap": "Bootstrap",
+  "delete": "Datenbank löschen",
+  "more": "mehr Optionen",
+  "less": "weniger Optionen",
+  "enableAuthWhenSyncing": "Authentifizierung beim Synchronisieren aktivieren"
 }

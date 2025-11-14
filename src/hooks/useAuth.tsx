@@ -1,14 +1,14 @@
 import { useCallback } from 'react';
 import {
   HTTP_LOCALHOST_12391,
-  TIME_MILLISECONDS_250,
-  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
+  enableAuthWhenSyncingAtom,
   extStateAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
@@ -50,7 +50,7 @@ export const useAuth = () => {
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
-
+  const [enableAuthWhenSyncing] = useAtom(enableAuthWhenSyncingAtom);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
   );
@@ -306,7 +306,7 @@ export const useAuth = () => {
       const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
-      if (data?.syncPercent !== 100) {
+      if (data?.syncPercent !== 100 && !enableAuthWhenSyncing) {
         setIsOpenSyncingDialog(true);
         return false;
       }
@@ -314,7 +314,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [useLocalNode, setIsOpenSyncingDialog]);
+  }, [useLocalNode, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean) => {
@@ -339,7 +339,7 @@ export const useAuth = () => {
             password: authenticatePassword,
             wallet: rawWallet,
           },
-          TIME_SECONDS_120_IN_MILLISECONDS
+          TIME_MINUTES_2_IN_MILLISECONDS
         )
         .then((response) => {
           if (response && !response.error) {

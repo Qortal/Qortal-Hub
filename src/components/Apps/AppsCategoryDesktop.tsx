@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppLibrarySubTitle,
+  AppsBackContainer,
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
   AppsLibraryContainer,
@@ -127,9 +128,31 @@ export const AppsCategoryDesktop = ({
       >
         <AppsWidthLimiter
           sx={{
-            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            aliginItems: 'center',
+            flexDirection: 'row',
           }}
         >
+          <ShowMessageReturnButton
+            sx={{
+              padding: '2px',
+            }}
+            onClick={() => {
+              executeEvent('navigateBack', {});
+              setSearchValue('');
+            }}
+          >
+            <ReturnIcon />
+            <ComposeP
+              sx={{
+                fontSize: '18px',
+              }}
+            >
+              {t('core:action.return', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </ComposeP>
+          </ShowMessageReturnButton>
           <AppsSearchContainer
             sx={{
               width: '412px',

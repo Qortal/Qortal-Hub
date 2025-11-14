@@ -1,39 +1,54 @@
 import { useCallback } from 'react';
-import { resourceDownloadControllerAtom } from '../atoms/global';
+import {
+  resourceDownloadControllerAtom,
+  useGetResourceStatus,
+} from '../atoms/global';
 import { getBaseApiReact } from '../App';
 import { useSetAtom } from 'jotai';
 import { TIME_SECONDS_30_IN_MILLISECONDS } from '../constants/constants';
 
 export const useFetchResources = () => {
   const setResources = useSetAtom(resourceDownloadControllerAtom);
+  const getResourceStatus = useGetResourceStatus();
 
   const downloadResource = useCallback(
-    ({ service, name, identifier }, build) => {
+    async ({ service, name, identifier }, build, triesFromBefore) => {
+      const existingValues = await getResourceStatus(
+        `${service}-${name}-${identifier}`
+      );
+      if (existingValues && existingValues?.isFetching) return;
       setResources((prev) => ({
         ...prev,
         [`${service}-${name}-${identifier}`]: {
           ...(prev[`${service}-${name}-${identifier}`] || {}),
+          isFetching: true,
           service,
           name,
           identifier,
         },
       }));
+      let shouldBuild = false;
+      let hasCalledBuild = false;
+      let isCalling = false;
+      let percentLoaded = 0;
+      let timer = 24;
+      let tries = triesFromBefore || 0;
+      let calledFirstTime = false;
+      let intervalId;
+      let timeoutId;
 
+      if (build && !hasCalledBuild) {
+        hasCalledBuild = true;
+        shouldBuild = true;
+      }
       try {
-        let isCalling = false;
-        let percentLoaded = 0;
-        let timer = 24;
-        let tries = 0;
-        let calledFirstTime = false;
-        let intervalId;
-        let timeoutId;
         const callFunction = async () => {
           if (isCalling) return;
           isCalling = true;
 
           let res;
 
-          if (!build) {
+          if (!shouldBuild) {
             const urlFirstTime = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}`;
             const resCall = await fetch(urlFirstTime, {
               method: 'GET',
@@ -53,6 +68,7 @@ export const useFetchResources = () => {
                 ...prev,
                 [`${service}-${name}-${identifier}`]: {
                   ...(prev[`${service}-${name}-${identifier}`] || {}),
+                  isFetching: false,
                   status: {
                     ...res,
                     status: 'FAILED_TO_DOWNLOAD',
@@ -64,7 +80,11 @@ export const useFetchResources = () => {
             tries = tries + 1;
           }
 
-          if (build || (calledFirstTime === false && res?.status !== 'READY')) {
+          if (
+            shouldBuild ||
+            (calledFirstTime === false && res?.status !== 'READY')
+          ) {
+            shouldBuild = false;
             const url = `${getBaseApiReact()}/arbitrary/resource/properties/${service}/${name}/${identifier}?build=true`;
             const resCall = await fetch(url, {
               method: 'GET',
@@ -76,7 +96,6 @@ export const useFetchResources = () => {
           }
           calledFirstTime = true;
           isCalling = false;
-
           if (res.localChunkCount) {
             if (res.percentLoaded) {
               if (
@@ -89,6 +108,12 @@ export const useFetchResources = () => {
               }
 
               if (timer < 0) {
+                if (intervalId) {
+                  clearInterval(intervalId);
+                }
+                if (timeoutId) {
+                  clearTimeout(timeoutId);
+                }
                 timer = 24;
                 isCalling = true;
 
@@ -97,6 +122,7 @@ export const useFetchResources = () => {
                   ...prev,
                   [`${service}-${name}-${identifier}`]: {
                     ...(prev[`${service}-${name}-${identifier}`] || {}),
+                    isFetching: false,
                     status: {
                       ...res,
                       status: 'REFETCHING',
@@ -105,9 +131,8 @@ export const useFetchResources = () => {
                 }));
 
                 timeoutId = setTimeout(() => {
-                  isCalling = false;
-                  downloadResource({ name, service, identifier }, true);
-                }, TIME_SECONDS_30_IN_MILLISECONDS);
+                  downloadResource({ name, service, identifier }, true, tries);
+                }, 25000);
 
                 return;
               }
@@ -120,6 +145,7 @@ export const useFetchResources = () => {
               ...prev,
               [`${service}-${name}-${identifier}`]: {
                 ...(prev[`${service}-${name}-${identifier}`] || {}),
+                isFetching: true,
                 status: res,
               },
             }));
@@ -138,9 +164,12 @@ export const useFetchResources = () => {
               ...prev,
               [`${service}-${name}-${identifier}`]: {
                 ...(prev[`${service}-${name}-${identifier}`] || {}),
+                isFetching: false,
                 status: res,
               },
             }));
+
+            return;
           }
           if (res?.status === 'DOWNLOADED') {
             const url = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
@@ -158,10 +187,11 @@ export const useFetchResources = () => {
           callFunction();
         }, 5000);
       } catch (error) {
+        isCalling = false;
         console.error('Error during resource fetch:', error);
       }
     },
-    [setResources]
+    [setResources, getResourceStatus]
   );
 
   return downloadResource;

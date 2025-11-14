@@ -1,6 +1,6 @@
 {
   "setup": {
-    "title": "Qortal Core setup",
+    "title": "Local setup: Hub and Core run on the same system",
     "advancedOptions": "advanced options",
     "pickPath": "pick a custom Qortal installation path if your Core is installed in a non-default location.",
     "removePath": "remove custom Qortal path"
@@ -35,7 +35,10 @@
   },
   "error": {
     "noJar": "chosen directory does not contain a qortal.jar",
-    "invalidKey": "invalid apikey"
+    "invalidKey": "invalid apikey",
+    "failed_stop": "unable to stop the Core",
+    "failed_bootstrap": "unable to bootstrap",
+    "failed_delete": "unable to delete db"
   },
   "status": {
     "complete": "complete",
@@ -72,5 +75,16 @@
   "url": {
     "title": "url invalid",
     "description": "incorrect url or node not running"
-  }
+  },
+  "confirmations": {
+    "stop": "Are you sure you want to stop the core?",
+    "bootstrap": "Are you sure you want to bootstrap?",
+    "delete": "Are you sure you want to delete the db?"
+  },
+  "stop": "stop Core",
+  "bootstrap": "bootstrap",
+  "delete": "delete db",
+  "more": "more options",
+  "less": "less options",
+  "enableAuthWhenSyncing": "enable auth when syncing"
 }

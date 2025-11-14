@@ -19,12 +19,14 @@ import {
   DialogContentText,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
 import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
 import 'react-json-view-lite/dist/index.css';
+import HubIcon from '@mui/icons-material/Hub';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
@@ -97,6 +99,7 @@ import {
   authenticatePasswordAtom,
   balanceAtom,
   canSaveSettingToQdnAtom,
+  enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
   groupAnnouncementsAtom,
@@ -106,6 +109,7 @@ import {
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
+  isOpenCoreSetup,
   isRunningPublicNodeAtom,
   isUsingImportExportSettingsAtom,
   lastPaymentSeenTimestampAtom,
@@ -157,7 +161,7 @@ import {
   HTTP_LOCALHOST_12391,
   TIME_MILLISECONDS_250,
   TIME_SECONDS_10_IN_MILLISECONDS,
-  TIME_SECONDS_120_IN_MILLISECONDS,
+  TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
@@ -321,6 +325,7 @@ function App() {
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
+  const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
@@ -439,6 +444,7 @@ function App() {
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
 
   const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
 
@@ -463,6 +469,12 @@ function App() {
     if (isDevModeFromStorage) {
       setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
     }
+    const enableAuthWhenSyncingFromStorage = localStorage.getItem(
+      'enableAuthWhenSyncing'
+    );
+    if (enableAuthWhenSyncingFromStorage) {
+      setEnableAuthWhenSyncing(JSON.parse(enableAuthWhenSyncingFromStorage));
+    }
   }, []);
 
   useEffect(() => {
@@ -474,18 +486,6 @@ function App() {
         console.error(error);
       });
   }, [extState]);
-
-  useEffect(() => {
-    if (!shownTutorialsInitiated) return;
-    if (extState === 'not-authenticated') {
-      // TODO update tutorial
-      // showTutorial('create-account');
-    } else if (extState === 'create-wallet' && walletToBeDownloaded) {
-      showTutorial('important-information');
-    } else if (extState === 'authenticated') {
-      showTutorial('getting-started');
-    }
-  }, [extState, walletToBeDownloaded, shownTutorialsInitiated]);
 
   //resets for recoil
   const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
@@ -2721,7 +2721,7 @@ function App() {
               }}
             >
               <Typography>
-                {rawWallet?.name ? rawWallet?.name : rawWallet?.address0}
+                { rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
               </Typography>
 
               <Spacer height="10px" />
@@ -3977,6 +3977,14 @@ function App() {
             width: 'auto',
           }}
         >
+          {window?.coreSetup && (
+            <Box sx={{ alignSelf: 'center' }}>
+              <IconButton onClick={() => setOpenCoreSetup(true)}>
+                <HubIcon />
+              </IconButton>
+            </Box>
+          )}
+
           <Box sx={{ alignSelf: 'left' }}>
             <LanguageSelector />
           </Box>

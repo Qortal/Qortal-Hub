@@ -56,7 +56,6 @@ const officialAppList = [
   'q-fund',
   'q-shop',
   'q-trade',
-  'q-support',
   'q-manager',
   'q-mintership',
   'q-wallets',
@@ -64,6 +63,7 @@ const officialAppList = [
   'q-node',
   'names',
   'q-follow',
+  'q-assets',
 ];
 
 const StyledVirtuosoContainer = styled('div')({
@@ -269,7 +269,7 @@ export const AppsLibraryDesktop = ({
             width: '90%',
           }}
         >
-          <Spacer height="70px" />
+          <Spacer height="20px" />
 
           <ShowMessageReturnButton
             sx={{
@@ -280,14 +280,17 @@ export const AppsLibraryDesktop = ({
             }}
           >
             <ReturnIcon />
-            <ComposeP>
+            <ComposeP
+              sx={{
+                fontSize: '18px',
+              }}
+            >
               {t('core:action.return_apps_dashboard', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </ComposeP>
           </ShowMessageReturnButton>
-
-          <Spacer height="20px" />
+          <Spacer height="70px" />
 
           {searchedList?.length > 0 ? (
             <AppsWidthLimiter>

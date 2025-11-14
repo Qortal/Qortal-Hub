@@ -1,76 +1,90 @@
 {
   "setup": {
-    "title": "Qortal Core seadistus",
-    "advancedOptions": "täpsemad valikud",
-    "pickPath": "vali kohandatud Qortali installitee, kui Core on paigaldatud mittevaikimisi asukohta.",
+    "title": "Kohalik seadistus: Hub ja Core töötavad samas süsteemis",
+    "advancedOptions": "lisavalikud",
+    "pickPath": "vali kohandatud Qortali paigaldustee, kui sinu Core on paigaldatud mitte-vaikimisi asukohta.",
     "removePath": "eemalda kohandatud Qortali tee"
   },
   "introSetup": {
-    "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab teile täieliku kontrolli oma andmete, rakenduste ja rahanduse üle. Alustamiseks soovitame paigaldada <strong>Qortal Core</strong>, mis töötab võrgu ja võimaldab kõiki Qortali funktsioone.",
-    "paragraph2": "See seadistusviisard juhendab teid Qortal Core’i installimisel ja seadistamisel teie seadmes. Jätkamiseks klõpsake <strong>Järgmine</strong>.",
-    "note": "märkus edasijõudnud kasutajatele",
-    "advanced": "kui kasutate kaug-sõlme, sulgege see seadistusviisard ja klõpsake \"Vali kohandatud sõlm\""
+    "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab sulle täieliku kontrolli oma andmete, rakenduste ja rahaasjade üle. Alustamiseks soovitame sul paigaldada **Qortal Core**'i, mis annab võrgule jõudu ja võimaldab kasutada kõiki Qortali funktsioone.",
+    "paragraph2": "See seadistusviisard juhendab sind Qortal Core'i paigaldamisel ja seadistamisel sinu seadmes. Paigaldamisega jätkamiseks klõpsa **Järgmine**.",
+    "note": "märkus edasijõudnud kasutajale",
+    "advanced": "kui sa kasutad kaughaaret (remote node), palun sulge see seadistusviisard ja klõpsa seejärel \"Vali kohandatud haare\""
   },
   "sync": {
-    "behind": "Te olete {{count}} plokki maas.",
-    "waiting": "Palun oodake kuni sünkroonimine on lõpule viidud.",
-    "not_syncronized": "sünkroonimata",
+    "behind": "Sa oled {{count}} plokki maas.",
+    "waiting": "Palun oota, kuni oled sünkroonitud.",
+    "not_syncronized": "ei ole sünkroonitud",
     "syncronized": "sünkroonitud",
-    "syncronized_desc": "te olete nüüd sünkroonitud. võite jätkata."
+    "syncronized_desc": "sa oled nüüd sünkroonitud. võid jätkata."
   },
   "steps": {
-    "java": "Java olemas",
-    "downloaded": "Core alla laaditud",
+    "java": "Java on olemas",
+    "downloaded": "Core on alla laaditud",
     "running": "Core töötab"
   },
   "actions": {
-    "finished": "valmis",
+    "finished": "lõpetatud",
     "start": "käivita Qortal Core",
-    "install": "installi ja käivita Qortal Core",
-    "continuePublic": "jätka avaliku noodiga",
+    "install": "paigalda ja käivita Qortal Core",
+    "continuePublic": "jätka avaliku haardega",
     "openSetup": "ava kohalik seadistus",
-    "goToDownloads": "mine allalaadimistele",
-    "resetKey": "lähtesta API võti",
+    "goToDownloads": "mine allalaadimistesse",
+    "resetKey": "lähtesta API-võti",
     "continue": "jätka"
   },
   "error": {
-    "noJar": "valitud kaustas puudub qortal.jar",
-    "invalidKey": "kehtetu API võti"
+    "noJar": "valitud kaust ei sisalda qortal.jar-faili",
+    "invalidKey": "sobimatu API-võti",
+    "failed_stop": "Core'i peatamine ebaõnnestus",
+    "failed_bootstrap": "bootstrap ebaõnnestus",
+    "failed_delete": "andmebaasi kustutamine ebaõnnestus"
   },
   "status": {
     "complete": "valmis",
-    "inProgress": "töös",
+    "inProgress": "pooleli",
     "pending": "ootel",
     "error": "viga"
   },
   "recommendation": {
-    "title": "kasuta oma lokaalset node’i",
-    "description": "Võid jätkata avaliku noodiga, kuid soovitame tungivalt kasutada lokaalset node’i parima kogemuse jaoks.",
-    "subTitle": "Lokaalse node’i eelised:",
-    "point1": "täielikult detsentraliseeritud ligipääs",
-    "point2": "kiirem allalaadimine",
+    "title": "kohaliku Core'i kasutamine",
+    "description": "sa võid soovi korral jätkata avaliku haardega, kuid parima kogemuse saamiseks soovitame tungivalt kasutada oma kohalikku haaret.",
+    "subTitle": "kohaliku haarde kasutamise eelised:",
+    "point1": "täielik detsentraliseeritud juurdepääs",
+    "point2": "kiiremad allalaadimised",
     "point3": "kasutaja kontrollitud andmed",
-    "publicExplanation": "Avalik node, millega ühendud, on tegelikult eraviisiliselt hallatav node, mis on tehtud avalikkusele kättesaadavaks. Kuigi mugav, on sellel piiranguid võrreldes enda node’i käitamisega."
+    "publicExplanation": "Avalik haare, millega sa ühendud, on tegelikult eraviisiliselt hallatav haare, mis on tehtud avalikult kättesaadavaks. Kuigi see on mugav, kaasnevad sellega teatud piirangud võrreldes oma haarde käitamisega."
   },
   "invalidKey": {
-    "title": "kehtetu API võti",
-    "description": "Sinu API võti on kehtetu. Palun sisesta korrektne võti.",
-    "resetDescription": "Sinu API võti on kehtetu. Klõpsa lähtesta, et jätkata."
+    "title": "sobimatu API-võti",
+    "description": "Sinu API-võti on sobimatu. Palun sisesta kehtiv API-võti.",
+    "resetDescription": "Sinu API-võti on sobimatu. Jätkamiseks klõpsa 'Lähtesta'."
   },
   "messages": {
-    "001": "Core käivitamine... palun oota.",
-    "002": "viga: ei saa hoidlaga alustada",
-    "003": "viga Qortal Core käivitamisel",
-    "004": "viga Qortal Core lahtipakkimisel",
-    "005": "Qortal Core allalaadimine... palun oota.",
-    "006": "Java seadistamine... palun oota.",
+    "001": "käivitan Core'i... palun oota.",
+    "002": "viga: hoidlat ei õnnestu käivitada",
+    "003": "viga Qortal Core'i käitamisel",
+    "004": "viga Qortal Core'i lahti pakkimisel",
+    "005": "laadin Qortal Core'i alla... palun oota.",
+    "006": "seadistan Java't... palun oota.",
     "007": "viga Java allalaadimisel.",
-    "008": "viga Java lahtipakkimisel",
-    "009": "Qortal Core allalaadimine... palun oota.",
-    "010": "viga: ei saa Core’i alla laadida või installida"
+    "008": "viga Java lahti pakkimisel",
+    "009": "laadin Qortal Core'i alla... palun oota.",
+    "010": "viga: Core'i ei õnnestu alla laadida ega paigaldada"
   },
   "url": {
-    "title": "vigane URL",
-    "description": "vale URL või sõlm ei tööta"
-  }
+    "title": "sobimatu URL",
+    "description": "sobimatu URL või haare ei tööta"
+  },
+  "confirmations": {
+    "stop": "kas oled kindel, et soovid Core peatada?",
+    "bootstrap": "kas oled kindel, et soovid bootstrapi käivitada?",
+    "delete": "kas oled kindel, et soovid andmebaasi kustutada?"
+  },
+  "stop": "peata Core",
+  "bootstrap": "bootstrap",
+  "delete": "kustuta andmebaas",
+  "more": "rohkem valikuid",
+  "less": "vähem valikuid",
+  "enableAuthWhenSyncing": "luba autentimine sünkroonimisel"
 }

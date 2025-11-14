@@ -46,7 +46,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Label } from '../../styles/App-styles.ts';
 import {
-  TIME_WEEK_1_IN_MILLISECONDS,
+  TIME_WEEKS_1_IN_MILLISECONDS,
   TIME_MINUTES_30_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 
@@ -138,7 +138,7 @@ export const ListOfGroupPromotions = () => {
       const responseData = await response.json();
       const data: any[] = [];
       const uniqueGroupIds = new Set();
-      const oneWeekAgo = Date.now() - TIME_WEEK_1_IN_MILLISECONDS;
+      const oneWeekAgo = Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
 
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {

@@ -1,8 +1,8 @@
 {
   "1_getting_started": "1. Alustamine",
   "2_overview": "2. Ülevaade",
-  "3_groups": "3. Qortali grupid",
-  "4_obtain_qort": "4. Qorti saamine",
+  "3_groups": "3. Qortali rühmad",
+  "4_obtain_qort": "4. QORT'i hankimine",
   "account_creation": "konto loomine",
   "important_info": "oluline teave",
   "apps": {
@@ -10,12 +10,12 @@
     "navigation": "2. Rakenduste navigeerimine"
   },
   "initial": {
-    "recommended_qort_qty": "rahakotis peaks olema vähemalt {{ quantity }} QORT",
-    "explore": "Õpi tundma",
-    "general_chat": "Peamine chät",
+    "recommended_qort_qty": "soovituslik hoida rahakotis vähemalt {{ quantity }} QORT'i",
+    "explore": "avasta",
+    "general_chat": "üldine vestlus",
     "getting_started": "alustamine",
     "register_name": "registreeri nimi",
-    "see_apps": "vaata rakendusi kõiki",
-    "trade_qort": "kauple QORT"
+    "see_apps": "vaata rakendusi",
+    "trade_qort": "kauple QORT'iga"
   }
 }

@@ -42,7 +42,7 @@ import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.5.4',
+  version: '0.5.6',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -57,8 +57,8 @@ export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
   },
 }));
 
-function removeTrailingSlash(url) {
-  return url.replace(/\/+$/, '');
+function removeTrailingSlash(url: string) {
+  return url.trim().replace(/\/+$/, '');
 }
 
 export const NotAuthenticated = ({
@@ -162,18 +162,18 @@ export const NotAuthenticated = ({
     if (!isFullListOfNodes && customNodeToSaveIndex !== null) {
       nodes.splice(customNodeToSaveIndex, 1, {
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     } else if (!isFullListOfNodes && url) {
       nodes.push({
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     }
     if (!isFullListOfNodes && url) {
       await handleSaveNodeInfo({
         url: removeTrailingSlash(url),
-        apikey: customApikey,
+        apikey: customApikey?.trim() || '',
       });
     }
 
