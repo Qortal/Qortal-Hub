@@ -121,35 +121,6 @@ class Semaphore {
 let semaphore = new Semaphore(1);
 let reader = new FileReader();
 
-const fileToBase64 = (file) =>
-  new Promise(async (resolve, reject) => {
-    if (!reader) {
-      reader = new FileReader();
-    }
-    await semaphore.acquire();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      if (typeof dataUrl === 'string') {
-        const base64String = dataUrl.split(',')[1];
-        reader.onload = null;
-        reader.onerror = null;
-        resolve(base64String);
-      } else {
-        reader.onload = null;
-        reader.onerror = null;
-        reject(new Error('Invalid data URL'));
-      }
-      semaphore.release();
-    };
-    reader.onerror = (error) => {
-      reader.onload = null;
-      reader.onerror = null;
-      reject(error);
-      semaphore.release();
-    };
-  });
-
 export function openIndexedDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('fileStorageDB', 1);
