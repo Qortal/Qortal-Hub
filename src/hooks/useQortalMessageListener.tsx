@@ -212,6 +212,7 @@ export const listOfAllQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_PRICE',
+  'GET_PRIMARY_NAME',
   'GET_QDN_RESOURCE_METADATA',
   'GET_QDN_RESOURCE_PROPERTIES',
   'GET_QDN_RESOURCE_STATUS',
@@ -257,7 +258,6 @@ export const listOfAllQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
 ];
 
 export const UIQortalRequests = [
@@ -291,6 +291,7 @@ export const UIQortalRequests = [
   'GET_LIST_ITEMS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
+  'GET_PRIMARY_NAME',
   'GET_SERVER_CONNECTION_HISTORY',
   'GET_TX_ACTIVITY_SUMMARY',
   'GET_USER_ACCOUNT',
@@ -321,7 +322,6 @@ export const UIQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
