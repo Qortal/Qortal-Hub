@@ -94,33 +94,6 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-class Semaphore {
-  constructor(count) {
-    this.count = count;
-    this.waiting = [];
-  }
-  acquire() {
-    return new Promise((resolve) => {
-      if (this.count > 0) {
-        this.count--;
-        resolve();
-      } else {
-        this.waiting.push(resolve);
-      }
-    });
-  }
-  release() {
-    if (this.waiting.length > 0) {
-      const resolve = this.waiting.shift();
-      resolve();
-    } else {
-      this.count++;
-    }
-  }
-}
-let semaphore = new Semaphore(1);
-let reader = new FileReader();
-
 export function openIndexedDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('fileStorageDB', 1);
