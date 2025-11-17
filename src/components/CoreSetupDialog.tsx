@@ -755,31 +755,6 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                   </Button>
                   <Typography>{errorDeleteDB}</Typography>
                 </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <FormControlLabel
-                    control={
-                      <LocalNodeSwitch
-                        checked={enableAuthWhenSyncing}
-                        onChange={(e) => {
-                          setEnableAuthWhenSyncing(e.target.checked);
-                          localStorage.setItem(
-                            'enableAuthWhenSyncing',
-                            JSON.stringify(e.target.checked)
-                          );
-                        }}
-                      />
-                    }
-                    label={t('node:enableAuthWhenSyncing', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  />
-                </Box>
               </Box>
             </Collapse>
           </DialogContent>
