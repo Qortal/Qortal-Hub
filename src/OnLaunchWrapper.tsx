@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TIME_MILLISECONDS_250 } from './constants/constants';
 
 export const OnLaunchWrapper = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -10,7 +11,7 @@ export const OnLaunchWrapper = ({ children }) => {
           const res = await window.walletStorage.get('apiKey');
           if (res) {
             await window.sendMessage('setApiKey', res);
-            setTimeout(() => setIsLoaded(true), 250);
+            setTimeout(() => setIsLoaded(true), TIME_MILLISECONDS_250);
           } else {
             setIsLoaded(true);
           }

@@ -159,8 +159,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
+  TIME_MILLISECONDS_250,
   TIME_SECONDS_10_IN_MILLISECONDS,
-  TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
@@ -1045,7 +1045,7 @@ function App() {
       await new Promise<void>((res) => {
         setTimeout(() => {
           res();
-        }, 250);
+        }, TIME_MILLISECONDS_250);
       });
 
       const res = await createAccount(generatorRef.current.parsedString);
@@ -2720,7 +2720,7 @@ function App() {
               }}
             >
               <Typography>
-                { rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
+                {rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
               </Typography>
 
               <Spacer height="10px" />

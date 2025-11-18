@@ -19,6 +19,7 @@ import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
+import { TIME_SECONDS_1_IN_MILLISECONDS } from '../../constants/constants.ts';
 
 export const CreateCommonSecret = ({
   groupId,
@@ -196,7 +197,7 @@ export const CreateCommonSecret = ({
           setIsLoading(false);
           setTimeout(() => {
             setIsForceShowCreationKeyPopup(false);
-          }, 1000);
+          }, TIME_SECONDS_1_IN_MILLISECONDS);
         })
         .catch((error) => {
           console.error(

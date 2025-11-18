@@ -7,7 +7,10 @@ import { mimeToExtensionMap } from '../utils/memeTypes';
 import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
-import { TIME_MINUTES_20_IN_MILLISECONDS } from '../constants/constants';
+import {
+  TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_MINUTES_5_IN_MILLISECONDS,
+} from '../constants/constants';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -91,62 +94,6 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
-class Semaphore {
-  constructor(count) {
-    this.count = count;
-    this.waiting = [];
-  }
-  acquire() {
-    return new Promise((resolve) => {
-      if (this.count > 0) {
-        this.count--;
-        resolve();
-      } else {
-        this.waiting.push(resolve);
-      }
-    });
-  }
-  release() {
-    if (this.waiting.length > 0) {
-      const resolve = this.waiting.shift();
-      resolve();
-    } else {
-      this.count++;
-    }
-  }
-}
-let semaphore = new Semaphore(1);
-let reader = new FileReader();
-
-const fileToBase64 = (file) =>
-  new Promise(async (resolve, reject) => {
-    if (!reader) {
-      reader = new FileReader();
-    }
-    await semaphore.acquire();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      if (typeof dataUrl === 'string') {
-        const base64String = dataUrl.split(',')[1];
-        reader.onload = null;
-        reader.onerror = null;
-        resolve(base64String);
-      } else {
-        reader.onload = null;
-        reader.onerror = null;
-        reject(new Error('Invalid data URL'));
-      }
-      semaphore.release();
-    };
-    reader.onerror = (error) => {
-      reader.onload = null;
-      reader.onerror = null;
-      reject(error);
-      semaphore.release();
-    };
-  });
-
 export function openIndexedDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('fileStorageDB', 1);
@@ -212,6 +159,7 @@ export const listOfAllQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_PRICE',
+  'GET_PRIMARY_NAME',
   'GET_QDN_RESOURCE_METADATA',
   'GET_QDN_RESOURCE_PROPERTIES',
   'GET_QDN_RESOURCE_STATUS',
@@ -257,7 +205,6 @@ export const listOfAllQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
 ];
 
 export const UIQortalRequests = [
@@ -291,6 +238,7 @@ export const UIQortalRequests = [
   'GET_LIST_ITEMS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
+  'GET_PRIMARY_NAME',
   'GET_SERVER_CONNECTION_HISTORY',
   'GET_TX_ACTIVITY_SUMMARY',
   'GET_USER_ACCOUNT',
@@ -321,7 +269,6 @@ export const UIQortalRequests = [
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
@@ -567,7 +514,7 @@ export const useQortalMessageListener = (
       if (event?.data?.requestedHandler !== 'UI') return;
 
       const sendMessageToRuntime = (message, eventPort) => {
-        let timeout: number = 300000;
+        let timeout: number = TIME_MINUTES_5_IN_MILLISECONDS;
         if (
           message?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' &&
           message?.payload?.resources?.length > 0

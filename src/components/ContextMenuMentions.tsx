@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Menu, MenuItem, Typography, styled } from '@mui/material';
+import { TIME_MILLISECONDS_500 } from '../constants/constants';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
@@ -50,7 +51,7 @@ export const ContextMenuMentions = ({
         mouseX: event.touches[0].clientX,
         mouseY: event.touches[0].clientY,
       });
-    }, 500); // Long press duration
+    }, TIME_MILLISECONDS_500); // Long press duration
   };
 
   const handleTouchEnd = (event) => {

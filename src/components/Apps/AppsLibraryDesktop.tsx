@@ -42,6 +42,10 @@ import { executeEvent } from '../../utils/events';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
 import { useTranslation } from 'react-i18next';
+import {
+  TIME_MILLISECONDS_400,
+  TIME_MILLISECONDS_500,
+} from '../../constants/constants.ts';
 
 const officialAppList = [
   'q-tube',
@@ -61,20 +65,6 @@ const officialAppList = [
   'q-follow',
   'q-assets',
 ];
-
-const ScrollerStyled = styled('div')({
-  // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-
-  // Hide scrollbar for Firefox
-  scrollbarWidth: 'none',
-
-  // Hide scrollbar for IE and older Edge
-  msOverflowStyle: 'none',
-});
 
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
@@ -129,12 +119,12 @@ export const AppsLibraryDesktop = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
-    }, 350);
+    }, TIME_MILLISECONDS_400);
     setTimeout(() => {
       if (virtuosoRef.current) {
         virtuosoRef.current.scrollToIndex({ index: 0 });
       }
-    }, 500);
+    }, TIME_MILLISECONDS_500);
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);

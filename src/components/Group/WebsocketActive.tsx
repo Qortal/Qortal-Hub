@@ -5,6 +5,7 @@ import {
   resumeAllQueues,
 } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { TIME_MILLISECONDS_50, TIME_SECONDS_10_IN_MILLISECONDS, TIME_SECONDS_40_IN_MILLISECONDS, TIME_SECONDS_5_IN_MILLISECONDS } from '../../constants/constants';
 
 export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   const socketRef = useRef(null); // WebSocket reference
@@ -44,7 +45,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
               socketRef.current.close();
               clearTimeout(groupSocketTimeoutRef.current);
             }
-          }, 5000); // Close if no pong in 5 seconds
+          }, TIME_SECONDS_5_IN_MILLISECONDS); // Close if no pong in 5 seconds
         }
       } catch (error) {
         console.error('Error during ping:', error);
@@ -64,14 +65,14 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
         socketRef.current = new WebSocket(socketLink);
 
         socketRef.current.onopen = () => {
-          setTimeout(pingHeads, 50); // Initial ping
+          setTimeout(pingHeads, TIME_MILLISECONDS_50); // Initial ping
         };
 
         socketRef.current.onmessage = (e) => {
           try {
             if (e.data === 'pong') {
               clearTimeout(timeoutIdRef.current);
-              groupSocketTimeoutRef.current = setTimeout(pingHeads, 45000); // Ping every 45 seconds
+              groupSocketTimeoutRef.current = setTimeout(pingHeads, TIME_SECONDS_40_IN_MILLISECONDS); // Ping every 40 seconds
             } else {
               if (!initiateRef.current) {
                 setIsLoadingGroups(false);
@@ -123,7 +124,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
           clearTimeout(timeoutIdRef.current);
           console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
           if (event.reason !== 'forced' && event.code !== 1000) {
-            setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
+            setTimeout(() => initWebsocketMessageGroup(), TIME_SECONDS_10_IN_MILLISECONDS); // Retry after 10 seconds
           }
         };
 

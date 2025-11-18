@@ -20,6 +20,7 @@ import {
 import { Avatar, Box, useTheme } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
+import DefaultAppImage from '../../assets/qortal-grey.png';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
 import { AppRating } from './AppRating';

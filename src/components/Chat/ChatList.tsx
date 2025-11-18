@@ -6,6 +6,7 @@ import { Box, Button, Typography, useTheme } from '@mui/material';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
+import { TIME_MILLISECONDS_250, TIME_MILLISECONDS_500 } from '../../constants/constants';
 
 type ReactionItem = {
   sender: string;
@@ -81,7 +82,7 @@ export const ChatList = ({
     if (!atBottom) {
       scrollingIntervalRef.current = setTimeout(() => {
         setShowScrollDownButton(true);
-      }, 250);
+      }, TIME_MILLISECONDS_250);
     } else {
       setShowScrollDownButton(false);
     }
@@ -136,7 +137,7 @@ export const ChatList = ({
         scrollToBottom(totalMessages, divideIndex);
         hasLoadedInitialRef.current = true;
       }
-    }, 500);
+    }, TIME_MILLISECONDS_500);
   }, [initialMessages, tempMessages]);
 
   const scrollToBottom = (initialMsgs, divideIndex) => {

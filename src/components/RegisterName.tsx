@@ -26,6 +26,7 @@ import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { Label } from '../styles/App-styles.ts';
+import { TIME_MILLISECONDS_500 } from '../constants/constants.ts';
 
 enum NameAvailability {
   NULL = 'null',
@@ -81,7 +82,7 @@ export const RegisterName = ({
   useEffect(() => {
     const handler = setTimeout(() => {
       checkIfNameExisits(registerNameValue);
-    }, 500);
+    }, TIME_MILLISECONDS_500);
 
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {

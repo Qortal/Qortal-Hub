@@ -6,7 +6,7 @@ import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_PROTOCOL } from '../../constants/constants';
+import { QORTAL_PROTOCOL, TIME_MILLISECONDS_250 } from '../../constants/constants';
 
 type AppViewerProps = {
   app: any;
@@ -248,7 +248,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
           frameWindow.addEventListener('message', handleNavigationSuccess);
 
-          // Timeout after 200ms if no response
+          // Timeout if no response
           setTimeout(() => {
             window.removeEventListener('message', handleNavigationSuccess);
             reject(
@@ -258,7 +258,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
                 })
               )
             );
-          }, 200);
+          }, TIME_MILLISECONDS_250);
           const targetOrigin = iframeRef.current
             ? new URL(iframeRef.current.src).origin
             : '*';
