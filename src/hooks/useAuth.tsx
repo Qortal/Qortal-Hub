@@ -15,7 +15,7 @@ import {
   isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
-  isOpenSyncingDialogAtom,
+  isOpenSettingUpLocalCoreAtom,
   isOpenUrlInvalidAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
@@ -29,19 +29,21 @@ import {
   setLocalApiKeyNotElectronCase,
 } from '../background/background-cases';
 import { ApiKey } from '../types/auth';
+import { useModalGlobal } from './useModalGlobal';
 
 let balanceSetIntervalRef: null | NodeJS.Timeout = null;
 
 export const useAuth = () => {
   const setIsOpenResetApikey = useSetAtom(isOpenDialogResetApikey);
   const setIsOpenCustomApikeyDialog = useSetAtom(isOpenDialogCustomApikey);
-
   const setBalance = useSetAtom(balanceAtom);
   const setQortBalanceLoading = useSetAtom(qortBalanceLoadingAtom);
   const setIsOpenRecommendation = useSetAtom(
     isOpenDialogCoreRecommendationAtom
   );
-  const setIsOpenSyncingDialog = useSetAtom(isOpenSyncingDialogAtom);
+  const setIsOpenSettingUpCore = useSetAtom(isOpenSettingUpLocalCoreAtom);
+  const actions = useModalGlobal({ setGlobalOpen: setIsOpenSettingUpCore });
+
   const setIsOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
@@ -100,7 +102,15 @@ export const useAuth = () => {
             setIsOpenRecommendation(true);
             return { isValid: false, validatedNodeInfo };
           }
-          //
+          if (isLocal && isElectron && !disablePopup) {
+            const statusAvailable = await checkIfLocalIsRunning();
+            if (!statusAvailable) {
+              const endpointsReady = await actions.show();
+              if (!endpointsReady) {
+                return;
+              }
+            }
+          }
           const apiKey = isElectron
             ? await window.coreSetup.getApiKey()
             : await getLocalApiKeyNotElectronCase();
@@ -300,101 +310,74 @@ export const useAuth = () => {
     }
   }, []);
 
-  const isSyncedLocal = useCallback(async () => {
-    try {
-      if (!useLocalNode) return true;
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
-      if (!res?.ok) return false;
-      const data = await res.json();
-      if (data?.syncPercent !== 100 && !enableAuthWhenSyncing) {
-        setIsOpenSyncingDialog(true);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }, [useLocalNode, setIsOpenSyncingDialog, enableAuthWhenSyncing]);
+  const authenticate = useCallback(async () => {
+    setIsLoading(true);
+    setWalletToBeDecryptedError('');
+    await new Promise<void>((res) => {
+      setTimeout(() => {
+        res();
+      }, 250);
+    });
+    window
+      .sendMessage(
+        'decryptWallet',
+        {
+          password: authenticatePassword,
+          wallet: rawWallet,
+        },
+        TIME_MINUTES_2_IN_MILLISECONDS
+      )
+      .then((response) => {
+        if (response && !response.error) {
+          setAuthenticatePassword('');
+          setExtstate('authenticated');
+          setWalletToBeDecryptedError('');
 
-  const authenticate = useCallback(
-    async (skipToPublic?: boolean) => {
-      if (!skipToPublic) {
-        const isInSync = await isSyncedLocal();
-        if (!isInSync) {
-          return;
-        }
-      }
+          window
+            .sendMessage('userInfo')
+            .then((response) => {
+              setIsLoading(false);
+              if (response && !response.error) {
+                setUserInfo(response);
+              }
+            })
+            .catch((error) => {
+              setIsLoading(false);
+              console.error('Failed to get user info:', error);
+            });
 
-      setIsLoading(true);
-      setWalletToBeDecryptedError('');
-      await new Promise<void>((res) => {
-        setTimeout(() => {
-          res();
-        }, TIME_MILLISECONDS_250);
-      });
-      window
-        .sendMessage(
-          'decryptWallet',
-          {
-            password: authenticatePassword,
-            wallet: rawWallet,
-          },
-          TIME_MINUTES_2_IN_MILLISECONDS
-        )
-        .then((response) => {
-          if (response && !response.error) {
-            setAuthenticatePassword('');
-            setExtstate('authenticated');
-            setWalletToBeDecryptedError('');
+          getBalanceFunc();
 
-            window
-              .sendMessage('userInfo')
-              .then((response) => {
-                setIsLoading(false);
-                if (response && !response.error) {
-                  setUserInfo(response);
-                }
-              })
-              .catch((error) => {
-                setIsLoading(false);
-                console.error('Failed to get user info:', error);
-              });
-
-            getBalanceFunc();
-
-            window
-              .sendMessage('getWalletInfo')
-              .then((response) => {
-                if (response && response.walletInfo) {
-                  setRawWallet(response.walletInfo);
-                }
-              })
-              .catch((error) => {
-                console.error('Failed to get wallet info:', error);
-              });
-          } else if (response?.error) {
-            setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
-          }
-        })
-        .catch((error) => {
+          window
+            .sendMessage('getWalletInfo')
+            .then((response) => {
+              if (response && response.walletInfo) {
+                setRawWallet(response.walletInfo);
+              }
+            })
+            .catch((error) => {
+              console.error('Failed to get wallet info:', error);
+            });
+        } else if (response?.error) {
           setIsLoading(false);
-          console.error('Failed to decrypt wallet:', error);
-        });
-    },
-    [
-      setIsLoading,
-      setAuthenticatePassword,
-      setExtstate,
-      authenticatePassword,
-      setUserInfo,
-      setRawWallet,
-      setWalletToBeDecryptedError,
-      rawWallet,
-      getBalanceFunc,
-      isSyncedLocal,
-    ]
-  );
+          setWalletToBeDecryptedError(response.error);
+        }
+      })
+      .catch((error) => {
+        setIsLoading(false);
+        console.error('Failed to decrypt wallet:', error);
+      });
+  }, [
+    setIsLoading,
+    setAuthenticatePassword,
+    setExtstate,
+    authenticatePassword,
+    setUserInfo,
+    setRawWallet,
+    setWalletToBeDecryptedError,
+    rawWallet,
+    getBalanceFunc,
+  ]);
 
   const saveCustomNodes = useCallback(async (updatedNode: ApiKey) => {
     let nodes = [];
@@ -438,7 +421,6 @@ export const useAuth = () => {
     resetApikey,
     validateLocalApiKey,
     validateApiKeyFromRegistration,
-    isSyncedLocal,
     saveCustomNodes,
   };
 };

@@ -86,5 +86,11 @@
   "delete": "eliminar base de datos",
   "more": "más opciones",
   "less": "menos opciones",
-  "enableAuthWhenSyncing": "activar autenticación al sincronizar"
+  "enableAuthWhenSyncing": "activar autenticación al sincronizar",
+  "NotFullyStarted": {
+    "titleNotReady": "Core no se ha iniciado completamente",
+    "descNotReady": "Qortal Core aún no se ha iniciado por completo. Por favor, espera.",
+    "titleReady": "Qortal Core está listo",
+    "descReady": "Todo listo para continuar"
+  }
 }

@@ -86,5 +86,11 @@
   "delete": "kustuta andmebaas",
   "more": "rohkem valikuid",
   "less": "vähem valikuid",
-  "enableAuthWhenSyncing": "luba autentimine sünkroonimisel"
+  "enableAuthWhenSyncing": "luba autentimine sünkroonimisel",
+  "NotFullyStarted": {
+    "titleNotReady": "Core pole täielikult käivitatud",
+    "descNotReady": "Qortal Core pole veel täielikult käivitatud. Palun oodake.",
+    "titleReady": "Qortal Core on valmis",
+    "descReady": "Kõik on valmis jätkamiseks"
+  }
 }
