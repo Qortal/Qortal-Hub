@@ -86,5 +86,11 @@
   "delete": "Datenbank löschen",
   "more": "mehr Optionen",
   "less": "weniger Optionen",
-  "enableAuthWhenSyncing": "Authentifizierung beim Synchronisieren aktivieren"
+  "enableAuthWhenSyncing": "Authentifizierung beim Synchronisieren aktivieren",
+  "NotFullyStarted": {
+    "titleNotReady": "Core ist noch nicht vollständig gestartet",
+    "descNotReady": "Qortal Core wurde noch nicht vollständig gestartet. Bitte warten.",
+    "titleReady": "Qortal Core ist bereit",
+    "descReady": "Alles bereit zum Fortfahren"
+  }
 }
