@@ -1500,16 +1500,16 @@ function App() {
             <Spacer height="35px" />
 
             {userInfo && !userInfo?.name && (
-              <TextP
+              <Button
+                variant={'contained'}
                 sx={{
-                  color: 'red',
+                  backgroundColor: 'red',
                   cursor: 'pointer',
                   fontSize: '16px',
                   fontWeight: 500,
                   lineHeight: 1.2,
                   marginTop: '10px',
                   textAlign: 'center',
-                  textDecoration: 'underline',
                 }}
                 onClick={() => {
                   executeEvent('openRegisterName', {});
@@ -1518,7 +1518,7 @@ function App() {
                 {t('core:action.register_name', {
                   postProcess: 'capitalizeAll',
                 })}
-              </TextP>
+              </Button>
             )}
 
             <Spacer height="20px" />
