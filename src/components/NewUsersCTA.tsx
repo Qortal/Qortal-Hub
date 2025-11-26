@@ -1,4 +1,4 @@
-import { Box, Button, ButtonBase, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
@@ -66,7 +66,7 @@ export const NewUsersCTA = ({ balance }) => {
           <Button
             variant={'contained'}
             sx={{
-              backgroundColor: buttonColor,
+              backgroundColor: '#4297E2',
             }}
             onClick={() => {
               if (window?.electronAPI?.openExternal) {
@@ -84,7 +84,7 @@ export const NewUsersCTA = ({ balance }) => {
           <Button
             variant={'contained'}
             sx={{
-              backgroundColor: buttonColor,
+              backgroundColor: '#4297E2',
             }}
             onClick={() => {
               if (window?.electronAPI?.openExternal) {
