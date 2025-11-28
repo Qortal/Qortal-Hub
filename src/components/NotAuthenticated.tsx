@@ -42,7 +42,7 @@ import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.5.6',
+  version: '0.5.7',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -256,7 +256,7 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                {t('auth:tips.digital_id', {
+                {t('auth:tips.qortal_account', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
