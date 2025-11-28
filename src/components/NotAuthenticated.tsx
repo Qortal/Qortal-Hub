@@ -256,7 +256,7 @@ export const NotAuthenticated = ({
                   fontSize: '16px',
                 }}
               >
-                {t('auth:tips.digital_id', {
+                {t('auth:tips.qortal_account', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
