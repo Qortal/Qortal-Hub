@@ -1,4 +1,4 @@
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
@@ -63,9 +63,10 @@ export const NewUsersCTA = ({ balance }) => {
             justifyContent: 'center',
           }}
         >
-          <ButtonBase
+          <Button
+            variant={'contained'}
             sx={{
-              textDecoration: 'underline',
+              backgroundColor: '#4297E2',
             }}
             onClick={() => {
               if (window?.electronAPI?.openExternal) {
@@ -78,11 +79,12 @@ export const NewUsersCTA = ({ balance }) => {
             }}
           >
             Nextcloud
-          </ButtonBase>
+          </Button>
 
-          <ButtonBase
+          <Button
+            variant={'contained'}
             sx={{
-              textDecoration: 'underline',
+              backgroundColor: '#4297E2',
             }}
             onClick={() => {
               if (window?.electronAPI?.openExternal) {
@@ -95,7 +97,7 @@ export const NewUsersCTA = ({ balance }) => {
             }}
           >
             Discord
-          </ButtonBase>
+          </Button>
         </Box>
       </Box>
     </Box>
