@@ -1796,6 +1796,10 @@ export async function downloadCoreWindows() {
       args = ['/i', winexe, '/quiet', '/norestart'];
       await execFileAsync(msiexec, args);
     } else {
+      // Common EXE installer flags:
+      // NSIS: /S, Inno Setup: /VERYSILENT /NORESTART (depends on your installer)
+      // If you don't want silent install, keep args = []
+      // args = ['/S'];
       const { stdout, stderr } = await execFileAsync(winexe, args);
       console.log('Qortal Core Installation Done', stdout, stderr);
       broadcastProgress({
