@@ -1796,6 +1796,8 @@ export async function downloadCoreWindows() {
       args = ['/i', winexe, '/quiet', '/norestart'];
       await execFileAsync(msiexec, args);
     } else {
+      const { stdout, stderr } = await execFileAsync(winexe, args);
+      console.log('Qortal Core Installation Done', stdout, stderr);
       broadcastProgress({
         step: 'downloadedCore',
         status: 'done',
