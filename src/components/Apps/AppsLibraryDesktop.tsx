@@ -60,6 +60,7 @@ const officialAppList = [
   'names',
   'q-follow',
   'q-assets',
+  'quitter',
 ];
 
 const ScrollerStyled = styled('div')({
