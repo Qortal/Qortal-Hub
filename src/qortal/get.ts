@@ -58,7 +58,12 @@ import {
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
+  TIME_MINUTES_1_IN_MILLISECONDS,
   TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_SECONDS_10_IN_MILLISECONDS,
+  TIME_SECONDS_1_IN_MILLISECONDS,
+  TIME_SECONDS_2_IN_MILLISECONDS,
+  TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -169,7 +174,9 @@ export async function retryTransaction(
           );
         }
       }
-      await new Promise((res) => setTimeout(res, 10000));
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_10_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -443,7 +450,7 @@ function getFileFromContentScript(fileId) {
         );
         fileRequestResolvers.delete(requestId); // Clean up on timeout
       }
-    }, 10000); // 10-second timeout
+    }, TIME_SECONDS_10_IN_MILLISECONDS);
   });
 }
 
@@ -488,7 +495,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 60-second timeout
+    }, TIME_MINUTES_1_IN_MILLISECONDS);
   });
 }
 
@@ -1527,7 +1534,9 @@ export const checkArrrSyncStatus = async (seed) => {
 
     if (res.indexOf('<') > -1 || res !== 'Synchronized') {
       // Wait 2 seconds before trying again
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, TIME_SECONDS_2_IN_MILLISECONDS)
+      );
       tries += 1;
     } else {
       // If the response doesn't meet the two conditions, exit the function
@@ -1921,7 +1930,7 @@ export const publishMultipleQDNResources = async (
         await new Promise((res) => {
           setTimeout(() => {
             res();
-          }, 1000);
+          }, TIME_SECONDS_1_IN_MILLISECONDS);
         });
       } catch (error) {
         const errorMsg =
@@ -4829,7 +4838,7 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
   await new Promise((res) => {
     setTimeout(() => {
       res(null);
-    }, 5000);
+    }, TIME_SECONDS_5_IN_MILLISECONDS);
   });
   const url = await createEndpoint(
     `/crosschain/tradebot?foreignBlockchain=LITECOIN`
@@ -4842,9 +4851,6 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     },
   });
   const data = await tradeBotsReponse.json();
-  const latestItem2 = data
-    .filter((item) => item.creatorAddress === address)
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
   const latestItem = data
     .filter(
       (item) =>
@@ -4854,7 +4860,8 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (
     latestItem &&
-    createBotCreationTimestamp - latestItem.timestamp <= 5000 &&
+    createBotCreationTimestamp - latestItem.timestamp <=
+      TIME_SECONDS_5_IN_MILLISECONDS &&
     createBotCreationTimestamp > latestItem.timestamp // Ensure latestItem's timestamp is before createBotCreationTimestamp
   ) {
     return latestItem;
