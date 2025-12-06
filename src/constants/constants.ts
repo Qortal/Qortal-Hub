@@ -222,6 +222,10 @@ export const SUGGESTED_QORTS: number = 6;
 // Time section
 // seconds
 export const TIME_SECONDS_1_IN_MILLISECONDS: number = 1000;
+export const TIME_SECONDS_2_IN_MILLISECONDS: number =
+  2 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_SECONDS_5_IN_MILLISECONDS: number =
+  5 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_10_IN_MILLISECONDS: number =
   10 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_20_IN_MILLISECONDS: number =
