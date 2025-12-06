@@ -1358,6 +1358,16 @@ export const publishQDNResource = async (
   const tags = data?.tags || [];
   const result = {};
   const isMultiFileZip = data?.isMultiFileZip === true;
+  const encryption = data?.encryption;
+  const encryptionType = encryption?.encryptionType || 'standard';
+  const isStreamedEncryption = encryptionType === 'streamed-v1';
+  if (isStreamedEncryption && (!encryption?.iv || !encryption?.key)) {
+    throw new Error('Missing IV or Key');
+  }
+
+  if (isStreamedEncryption && !file) {
+    throw new Error('File required for encryption streamed-v1');
+  }
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
     throw new Error(
@@ -1470,7 +1480,13 @@ export const publishQDNResource = async (
         data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: isMultiFileZip ? 'zip' : data64 ? 'base64' : 'file',
+        uploadType: isStreamedEncryption
+          ? 'file'
+          : isMultiFileZip
+            ? 'zip'
+            : data64
+              ? 'base64'
+              : 'file',
         filename: filename,
         title,
         description,
@@ -1482,6 +1498,7 @@ export const publishQDNResource = async (
         tag5,
         apiVersion: 2,
         withFee: true,
+        encryption: isStreamedEncryption ? encryption : null,
       });
       if (resPublish?.signature && hasAppFee && checkbox1) {
         sendCoinFunc(
