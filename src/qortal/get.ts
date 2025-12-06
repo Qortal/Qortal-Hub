@@ -53,11 +53,17 @@ import {
   validateSecretKey,
 } from '../components/Group/Group.tsx';
 import {
+  BTC_FEE_PER_BYTE,
+  DGB_FEE_PER_BYTE,
+  DOGE_FEE_PER_BYTE,
+  LTC_FEE_PER_BYTE,
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
+  RVN_FEE_PER_BYTE,
+  SELLER_FOREIGN_FEE,
   TIME_MINUTES_1_IN_MILLISECONDS,
   TIME_MINUTES_20_IN_MILLISECONDS,
   TIME_SECONDS_10_IN_MILLISECONDS,
@@ -103,39 +109,6 @@ import i18n from 'i18next';
 const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
-
-const sellerForeignFee = {
-  LITECOIN: {
-    value: '~0.00005',
-    ticker: 'LTC',
-  },
-  DOGECOIN: {
-    value: '~0.005',
-    ticker: 'DOGE',
-  },
-  BITCOIN: {
-    value: '~0.0001',
-    ticker: 'BTC',
-  },
-  DIGIBYTE: {
-    value: '~0.0005',
-    ticker: 'DGB',
-  },
-  RAVENCOIN: {
-    value: '~0.006',
-    ticker: 'RVN',
-  },
-  PIRATECHAIN: {
-    value: '~0.0002',
-    ticker: 'ARRR',
-  },
-};
-
-const btcFeePerByte = 0.000001;
-const ltcFeePerByte = 0.0000003;
-const dogeFeePerByte = 0.00001;
-const dgbFeePerByte = 0.0000001;
-const rvnFeePerByte = 0.00001125;
 
 const MAX_RETRIES = 3; // Set max number of retries
 
@@ -4148,7 +4121,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.btcPrivateKey;
-    const feePerByte = data.fee ? data.fee : btcFeePerByte;
+    const feePerByte = data.fee ? data.fee : BTC_FEE_PER_BYTE;
 
     const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
@@ -4228,7 +4201,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.ltcPrivateKey;
-    const feePerByte = data.fee ? data.fee : ltcFeePerByte;
+    const feePerByte = data.fee ? data.fee : LTC_FEE_PER_BYTE;
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
@@ -4304,7 +4277,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dogePrivateKey;
-    const feePerByte = data.fee ? data.fee : dogeFeePerByte;
+    const feePerByte = data.fee ? data.fee : DOGE_FEE_PER_BYTE;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4380,7 +4353,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dgbPrivateKey;
-    const feePerByte = data.fee ? data.fee : dgbFeePerByte;
+    const feePerByte = data.fee ? data.fee : DGB_FEE_PER_BYTE;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4453,7 +4426,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.rvnPrivateKey;
-    const feePerByte = data.fee ? data.fee : rvnFeePerByte;
+    const feePerByte = data.fee ? data.fee : RVN_FEE_PER_BYTE;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4603,7 +4576,7 @@ function calculateFeeFromRate(feePerKb, sizeInBytes) {
 }
 
 const getBuyingFees = async (foreignBlockchain) => {
-  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  const ticker = SELLER_FOREIGN_FEE[foreignBlockchain].ticker;
   if (!ticker) throw new Error('invalid foreign blockchain');
   const unlockFee = await getForeignFee({
     coin: ticker,
