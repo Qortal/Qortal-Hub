@@ -517,6 +517,80 @@ ipcMain.handle(
   }
 );
 
+// Handler for initiating a streaming file save
+ipcMain.handle(
+  'file:startStreamSave',
+  async (_event, options: { filename: string; mimeType?: string }) => {
+    try {
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        defaultPath: options.filename,
+        filters: options.mimeType
+          ? [
+              {
+                name: 'File',
+                extensions: [options.filename.split('.').pop() || '*'],
+              },
+            ]
+          : undefined,
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { canceled: true };
+      }
+
+      return {
+        canceled: false,
+        filePath: result.filePath,
+      };
+    } catch (err) {
+      console.error('Error in file:startStreamSave', err);
+      throw err;
+    }
+  }
+);
+
+// Handler for writing chunks to a file
+ipcMain.handle(
+  'file:writeChunk',
+  async (_event, filePath: string, chunk: Uint8Array, append: boolean) => {
+    try {
+      const buffer = Buffer.from(chunk);
+      const mode = append ? 'append' : 'write';
+      console.log(
+        `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
+      );
+
+      if (append) {
+        await fs.promises.appendFile(filePath, buffer);
+      } else {
+        await fs.promises.writeFile(filePath, buffer);
+      }
+
+      // Get file size after write to verify
+      const stats = await fs.promises.stat(filePath);
+      console.log(`[IPC] File size after write: ${stats.size} bytes`);
+
+      return true;
+    } catch (err) {
+      console.error('[IPC] Error writing chunk to', filePath, ':', err);
+      throw err;
+    }
+  }
+);
+
+// Handler for cleaning up failed downloads
+ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
+  try {
+    await fs.promises.unlink(filePath);
+    return true;
+  } catch (err) {
+    console.error('Error deleting file', filePath, err);
+    // Don't throw - file might not exist
+    return false;
+  }
+});
+
 const progressSubscribers = new Set<Electron.WebContents>();
 
 ipcMain.on('coreSetup:progress:subscribe', (e) => {
