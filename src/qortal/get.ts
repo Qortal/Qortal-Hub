@@ -92,7 +92,10 @@ import { mimeToExtensionMap } from '../utils/memeTypes.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 import utils from '../utils/utils.ts';
 import ShortUniqueId from 'short-unique-id';
-import { isValidBase64WithDecode } from '../utils/decode.ts';
+import {
+  isValidBase64WithDecode,
+  validateAesCtrIvAndKey,
+} from '../utils/decode.ts';
 import i18n from 'i18next';
 
 const uid = new ShortUniqueId({ length: 6 });
@@ -1358,7 +1361,11 @@ export const publishQDNResource = async (
   const tags = data?.tags || [];
   const result = {};
   const isMultiFileZip = data?.isMultiFileZip === true;
-  const encryption = data?.encryption;
+  let encryption: any = null;
+  if (data?.encryption) {
+    encryption = structuredClone(data?.encryption);
+  }
+
   const encryptionType = encryption?.encryptionType || 'standard';
   const isStreamedEncryption = encryptionType === 'streamed-v1';
   if (isStreamedEncryption && (!encryption?.iv || !encryption?.key)) {
@@ -1367,6 +1374,14 @@ export const publishQDNResource = async (
 
   if (isStreamedEncryption && !file) {
     throw new Error('File required for encryption streamed-v1');
+  }
+  if (isStreamedEncryption && encryption?.iv && encryption?.key) {
+    const { isValid } = validateAesCtrIvAndKey(encryption.iv, encryption.key);
+    if (!isValid) {
+      throw new Error('Invalid IV or Key');
+    }
+    encryption.iv = base64ToUint8Array(encryption.iv);
+    encryption.key = base64ToUint8Array(encryption.key);
   }
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
@@ -1664,6 +1679,32 @@ export const publishMultipleQDNResources = async (
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
+    } else {
+      const encryption = resource?.encryption;
+
+      const encryptionType = encryption?.encryptionType || 'standard';
+      const isStreamedEncryption = encryptionType === 'streamed-v1';
+      if (encryption && !isStreamedEncryption) {
+        throw new Error('Encryption type not supported');
+      }
+      if (isStreamedEncryption && (!encryption?.iv || !encryption?.key)) {
+        throw new Error('Missing IV or Key');
+      }
+
+      if (isStreamedEncryption && !resource?.file) {
+        throw new Error('File required for encryption streamed-v1');
+      }
+
+      // Decode base64 iv and key to Uint8Array
+      if (isStreamedEncryption && encryption?.iv && encryption?.key) {
+        const { isValid } = validateAesCtrIvAndKey(
+          encryption.iv,
+          encryption.key
+        );
+        if (!isValid) {
+          throw new Error('Invalid IV or Key');
+        }
+      }
     }
   }
 
@@ -1907,11 +1948,23 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
-        const dataType = isMultiFileZip
-          ? 'zip'
-          : resource?.base64 || resource?.data64 || resourceEncrypt
-            ? 'base64'
-            : 'file';
+        const preEncryption = resource?.encryption;
+        let encryption: any = null;
+        if (preEncryption) {
+          encryption = structuredClone(preEncryption);
+        }
+        if (encryption) {
+          encryption.iv = base64ToUint8Array(encryption.iv);
+          encryption.key = base64ToUint8Array(encryption.key);
+        }
+
+        const dataType = encryption
+          ? 'file'
+          : isMultiFileZip
+            ? 'zip'
+            : resource?.base64 || resource?.data64 || resourceEncrypt
+              ? 'base64'
+              : 'file';
 
         const response = await publishData({
           apiVersion: 2,
@@ -1931,6 +1984,7 @@ export const publishMultipleQDNResources = async (
           uploadType: dataType,
           withFee: true,
           appInfo,
+          encryption: encryption || null,
         });
         if (response?.signature) {
           publishedResponses.push(response);
