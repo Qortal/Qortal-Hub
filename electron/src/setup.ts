@@ -21,7 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
-import { myCapacitorApp } from '.';
+import { myCapacitorApp, isQuitting } from '.';
 import {
   bootstrap,
   customQortalInstalledDir,
@@ -191,6 +191,14 @@ export class ElectronCapacitorApp {
       );
     }
 
+    // Prevent window close, hide it instead (minimize to tray)
+    this.MainWindow.on('close', (event) => {
+      if (!isQuitting) {
+        event.preventDefault();
+        this.MainWindow.hide();
+      }
+    });
+
     // If we close the main window with the splashscreen enabled we need to destory the ref.
     this.MainWindow.on('closed', () => {
       if (
@@ -204,6 +212,23 @@ export class ElectronCapacitorApp {
     // When the tray icon is enabled, setup the options.
     if (this.CapacitorFileConfig.electron?.trayIconAndMenuEnabled) {
       this.TrayIcon = new Tray(icon);
+
+      // On Windows, single-click shows context menu (handled automatically by the OS)
+      // On macOS and Linux, single-click toggles window visibility
+      if (process.platform !== 'win32') {
+        this.TrayIcon.on('click', () => {
+          if (this.MainWindow) {
+            if (this.MainWindow.isVisible()) {
+              this.MainWindow.hide();
+            } else {
+              this.MainWindow.show();
+              this.MainWindow.focus();
+            }
+          }
+        });
+      }
+
+      // Double-click toggles window visibility on all platforms
       this.TrayIcon.on('double-click', () => {
         if (this.MainWindow) {
           if (this.MainWindow.isVisible()) {
@@ -214,16 +239,7 @@ export class ElectronCapacitorApp {
           }
         }
       });
-      this.TrayIcon.on('click', () => {
-        if (this.MainWindow) {
-          if (this.MainWindow.isVisible()) {
-            this.MainWindow.hide();
-          } else {
-            this.MainWindow.show();
-            this.MainWindow.focus();
-          }
-        }
-      });
+
       this.TrayIcon.setToolTip(app.getName());
       this.TrayIcon.setContextMenu(
         Menu.buildFromTemplate(this.TrayMenuTemplate)
