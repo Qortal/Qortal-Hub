@@ -53,12 +53,23 @@ import {
   validateSecretKey,
 } from '../components/Group/Group.tsx';
 import {
+  BTC_FEE_PER_BYTE,
+  DGB_FEE_PER_BYTE,
+  DOGE_FEE_PER_BYTE,
+  LTC_FEE_PER_BYTE,
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
+  RVN_FEE_PER_BYTE,
+  SELLER_FOREIGN_FEE,
+  TIME_MINUTES_1_IN_MILLISECONDS,
   TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_SECONDS_10_IN_MILLISECONDS,
+  TIME_SECONDS_1_IN_MILLISECONDS,
+  TIME_SECONDS_2_IN_MILLISECONDS,
+  TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -99,39 +110,6 @@ const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
 
-const sellerForeignFee = {
-  LITECOIN: {
-    value: '~0.00005',
-    ticker: 'LTC',
-  },
-  DOGECOIN: {
-    value: '~0.005',
-    ticker: 'DOGE',
-  },
-  BITCOIN: {
-    value: '~0.0001',
-    ticker: 'BTC',
-  },
-  DIGIBYTE: {
-    value: '~0.0005',
-    ticker: 'DGB',
-  },
-  RAVENCOIN: {
-    value: '~0.006',
-    ticker: 'RVN',
-  },
-  PIRATECHAIN: {
-    value: '~0.0002',
-    ticker: 'ARRR',
-  },
-};
-
-const btcFeePerByte = 0.000001;
-const ltcFeePerByte = 0.0000003;
-const dogeFeePerByte = 0.00001;
-const dgbFeePerByte = 0.0000001;
-const rvnFeePerByte = 0.00001125;
-
 const MAX_RETRIES = 3; // Set max number of retries
 
 export async function retryTransaction(
@@ -169,7 +147,9 @@ export async function retryTransaction(
           );
         }
       }
-      await new Promise((res) => setTimeout(res, 10000));
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_10_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -443,7 +423,7 @@ function getFileFromContentScript(fileId) {
         );
         fileRequestResolvers.delete(requestId); // Clean up on timeout
       }
-    }, 10000); // 10-second timeout
+    }, TIME_SECONDS_10_IN_MILLISECONDS);
   });
 }
 
@@ -488,7 +468,7 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 60-second timeout
+    }, TIME_MINUTES_1_IN_MILLISECONDS);
   });
 }
 
@@ -1527,7 +1507,9 @@ export const checkArrrSyncStatus = async (seed) => {
 
     if (res.indexOf('<') > -1 || res !== 'Synchronized') {
       // Wait 2 seconds before trying again
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, TIME_SECONDS_2_IN_MILLISECONDS)
+      );
       tries += 1;
     } else {
       // If the response doesn't meet the two conditions, exit the function
@@ -1921,7 +1903,7 @@ export const publishMultipleQDNResources = async (
         await new Promise((res) => {
           setTimeout(() => {
             res();
-          }, 1000);
+          }, TIME_SECONDS_1_IN_MILLISECONDS);
         });
       } catch (error) {
         const errorMsg =
@@ -4139,7 +4121,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.btcPrivateKey;
-    const feePerByte = data.fee ? data.fee : btcFeePerByte;
+    const feePerByte = data.fee ? data.fee : BTC_FEE_PER_BYTE;
 
     const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
@@ -4219,7 +4201,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.ltcPrivateKey;
-    const feePerByte = data.fee ? data.fee : ltcFeePerByte;
+    const feePerByte = data.fee ? data.fee : LTC_FEE_PER_BYTE;
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
@@ -4295,7 +4277,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dogePrivateKey;
-    const feePerByte = data.fee ? data.fee : dogeFeePerByte;
+    const feePerByte = data.fee ? data.fee : DOGE_FEE_PER_BYTE;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4371,7 +4353,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dgbPrivateKey;
-    const feePerByte = data.fee ? data.fee : dgbFeePerByte;
+    const feePerByte = data.fee ? data.fee : DGB_FEE_PER_BYTE;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4444,7 +4426,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.rvnPrivateKey;
-    const feePerByte = data.fee ? data.fee : rvnFeePerByte;
+    const feePerByte = data.fee ? data.fee : RVN_FEE_PER_BYTE;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4594,7 +4576,7 @@ function calculateFeeFromRate(feePerKb, sizeInBytes) {
 }
 
 const getBuyingFees = async (foreignBlockchain) => {
-  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  const ticker = SELLER_FOREIGN_FEE[foreignBlockchain].ticker;
   if (!ticker) throw new Error('invalid foreign blockchain');
   const unlockFee = await getForeignFee({
     coin: ticker,
@@ -4829,7 +4811,7 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
   await new Promise((res) => {
     setTimeout(() => {
       res(null);
-    }, 5000);
+    }, TIME_SECONDS_5_IN_MILLISECONDS);
   });
   const url = await createEndpoint(
     `/crosschain/tradebot?foreignBlockchain=LITECOIN`
@@ -4842,9 +4824,6 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     },
   });
   const data = await tradeBotsReponse.json();
-  const latestItem2 = data
-    .filter((item) => item.creatorAddress === address)
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
   const latestItem = data
     .filter(
       (item) =>
@@ -4854,7 +4833,8 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (
     latestItem &&
-    createBotCreationTimestamp - latestItem.timestamp <= 5000 &&
+    createBotCreationTimestamp - latestItem.timestamp <=
+      TIME_SECONDS_5_IN_MILLISECONDS &&
     createBotCreationTimestamp > latestItem.timestamp // Ensure latestItem's timestamp is before createBotCreationTimestamp
   ) {
     return latestItem;

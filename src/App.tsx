@@ -815,12 +815,7 @@ function App() {
       });
   };
 
-  const clearAllStates = () => {
-    setRequestConnection(null);
-    setRequestAuthentication(null);
-  };
-
-  const qortalRequestPermissonFromExtension = async (message, event) => {
+  const qortalRequestPermissionFromExtension = async (message, event) => {
     if (message.action === 'QORTAL_REQUEST_PERMISSION') {
       try {
         if (message?.payload?.checkbox1) {
@@ -902,7 +897,7 @@ function App() {
         message.action === 'QORTAL_REQUEST_PERMISSION' &&
         message?.isFromExtension
       ) {
-        qortalRequestPermissonFromExtension(message, event);
+        qortalRequestPermissionFromExtension(message, event);
       } else if (message?.action === 'getFileFromIndexedDB') {
         handleGetFileFromIndexedDB(event);
       }
@@ -2720,7 +2715,7 @@ function App() {
               }}
             >
               <Typography>
-                { rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
+                {rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
               </Typography>
 
               <Spacer height="10px" />

@@ -208,6 +208,40 @@ export const LOCALHOST_12391: string = '127.0.0.1:12391';
 export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
 export const QORTAL_PROTOCOL: string = 'qortal://';
 
+// Foreign Fees
+export const SELLER_FOREIGN_FEE = {
+  LITECOIN: {
+    value: '~0.00005',
+    ticker: 'LTC',
+  },
+  DOGECOIN: {
+    value: '~0.005',
+    ticker: 'DOGE',
+  },
+  BITCOIN: {
+    value: '~0.0001',
+    ticker: 'BTC',
+  },
+  DIGIBYTE: {
+    value: '~0.0005',
+    ticker: 'DGB',
+  },
+  RAVENCOIN: {
+    value: '~0.006',
+    ticker: 'RVN',
+  },
+  PIRATECHAIN: {
+    value: '~0.0002',
+    ticker: 'ARRR',
+  },
+};
+
+export const BTC_FEE_PER_BYTE: number = 0.000001;
+export const LTC_FEE_PER_BYTE: number = 0.0000003;
+export const DOGE_FEE_PER_BYTE: number = 0.00001;
+export const DGB_FEE_PER_BYTE: number = 0.0000001;
+export const RVN_FEE_PER_BYTE: number = 0.00001125;
+
 // MIN-MAX section
 export const MAX_SIZE_AVATAR: number = 500;
 export const MAX_SIZE_PUBLIC_NODE: number = 500 * 1024 * 1024; // 500mb
@@ -222,6 +256,10 @@ export const SUGGESTED_QORTS: number = 6;
 // Time section
 // seconds
 export const TIME_SECONDS_1_IN_MILLISECONDS: number = 1000;
+export const TIME_SECONDS_2_IN_MILLISECONDS: number =
+  2 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_SECONDS_5_IN_MILLISECONDS: number =
+  5 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_10_IN_MILLISECONDS: number =
   10 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_20_IN_MILLISECONDS: number =
