@@ -42,10 +42,12 @@ import {
   getUserWalletInfo,
   getUserWalletTransactions,
   getWalletBalance,
+  getWhichUI,
   inviteToGroupRequest,
   joinGroup,
   kickFromGroupRequest,
   leaveGroupRequest,
+  lockTab,
   openNewTab,
   publishMultipleQDNResources,
   publishQDNResource,
@@ -55,7 +57,9 @@ import {
   sendChatMessage,
   sendCoin,
   setCurrentForeignServer,
+  sessionPermissions,
   signTransaction,
+  unlockTab,
   updateForeignFee,
   updateNameRequest,
   voteOnPoll,
@@ -130,6 +134,141 @@ export async function getPermission(key) {
   }
 }
 
+// In-memory storage for session permissions
+const sessionPermissionsStore = new Map<
+  string,
+  {
+    permissions: string[];
+    timestamp: number;
+  }
+>();
+
+// Valid permissions that can be granted in a session
+export const VALID_SESSION_PERMISSIONS = [
+  'JOIN_GROUP',
+  'GET_USER_WALLET',
+  'GET_WALLET_BALANCE',
+  'GET_USER_WALLET_TRANSACTIONS',
+  'GET_USER_WALLET_INFO',
+  'UPDATE_FOREIGN_FEE',
+  'GET_SERVER_CONNECTION_HISTORY',
+  'SET_CURRENT_FOREIGN_SERVER',
+  'ADD_FOREIGN_SERVER',
+  'REMOVE_FOREIGN_SERVER',
+  'LOCK_TAB',
+  'INVITE_TO_GROUP',
+  'KICK_FROM_GROUP',
+  'BAN_FROM_GROUP',
+  'CANCEL_GROUP_BAN',
+  'REMOVE_GROUP_ADMIN',
+  'ADD_GROUP_ADMIN',
+  'CREATE_GROUP',
+  'PUBLISH_QDN_RESOURCE',
+  'PUBLISH_MULTIPLE_QDN_RESOURCES',
+  'GET_USER_ACCOUNT',
+  'GET_LIST_ITEMS',
+  'SIGN_FOREIGN_FEES',
+];
+
+// Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
+// These are read-only, low-risk permissions
+export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
+  'GET_USER_ACCOUNT',
+  'GET_USER_WALLET',
+  'GET_WALLET_BALANCE',
+  'GET_USER_WALLET_INFO',
+  'GET_USER_WALLET_TRANSACTIONS',
+  'GET_LIST_ITEMS',
+  'SIGN_FOREIGN_FEES',
+];
+
+export function setSessionPermissions(tabId, qapName, permissions) {
+  try {
+    const key = `${tabId}-${qapName}`;
+
+    // Get existing permissions for this tab+app
+    const existing = sessionPermissionsStore.get(key);
+    const existingPermissions = existing?.permissions || [];
+
+    // Validate new permissions
+    const validPermissions = permissions.filter((permission) =>
+      VALID_SESSION_PERMISSIONS.includes(permission)
+    );
+
+    // Merge with existing permissions (deduplicate using Set)
+    const mergedPermissions = [
+      ...new Set([...existingPermissions, ...validPermissions]),
+    ];
+
+    sessionPermissionsStore.set(key, {
+      permissions: mergedPermissions,
+      timestamp: Date.now(),
+    });
+
+    return mergedPermissions;
+  } catch (error) {
+    console.error('Error setting session permissions:', error);
+    throw error;
+  }
+}
+
+export function getSessionPermissions(tabId, qapName) {
+  try {
+    const key = `${tabId}-${qapName}`;
+    const sessionData = sessionPermissionsStore.get(key);
+
+    return sessionData?.permissions || [];
+  } catch (error) {
+    console.error('Error getting session permissions:', error);
+    return [];
+  }
+}
+
+export function hasSessionPermission(tabId, qapName, requestType) {
+  try {
+    const permissions = getSessionPermissions(tabId, qapName);
+    return permissions.includes(requestType);
+  } catch (error) {
+    console.error('Error checking session permission:', error);
+    return false;
+  }
+}
+
+export function clearSessionPermissions(tabId, qapName) {
+  try {
+    const key = `${tabId}-${qapName}`;
+    sessionPermissionsStore.delete(key);
+  } catch (error) {
+    console.error('Error clearing session permissions:', error);
+    throw error;
+  }
+}
+
+export function clearAllSessionPermissions() {
+  try {
+    sessionPermissionsStore.clear();
+  } catch (error) {
+    console.error('Error clearing all session permissions:', error);
+    throw error;
+  }
+}
+
+export function clearSessionPermissionsByTabId(tabId) {
+  try {
+    // Find all keys that start with this tabId and remove them
+    const keysToDelete = [];
+    for (const key of sessionPermissionsStore.keys()) {
+      if (key.startsWith(`${tabId}-`)) {
+        keysToDelete.push(key);
+      }
+    }
+    keysToDelete.forEach((key) => sessionPermissionsStore.delete(key));
+  } catch (error) {
+    console.error('Error clearing session permissions by tabId:', error);
+    throw error;
+  }
+}
+
 // TODO: feature: add call to GET_FRIENDS_LIST
 // NOT SURE IF TO IMPLEMENT: LINK_TO_QDN_RESOURCE, QDN_RESOURCE_DISPLAYED, SET_TAB_NOTIFICATIONS
 
@@ -167,6 +306,32 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: 'Unable to get user account',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'WHICH_UI': {
+        try {
+          const res = await getWhichUI();
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: 'Unable to determine UI type',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -287,7 +452,11 @@ function setupMessageListenerQortalRequest() {
 
       case 'GET_LIST_ITEMS': {
         try {
-          const res = await getListItems(request.payload, isFromExtension);
+          const res = await getListItems(
+            request.payload,
+            appInfo,
+            isFromExtension
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -368,7 +537,8 @@ function setupMessageListenerQortalRequest() {
           const res = await publishQDNResource(
             request.payload,
             event.source,
-            isFromExtension
+            isFromExtension,
+            appInfo
           );
           event.source.postMessage(
             {
@@ -508,7 +678,11 @@ function setupMessageListenerQortalRequest() {
 
       case 'JOIN_GROUP': {
         try {
-          const res = await joinGroup(request.payload, isFromExtension);
+          const res = await joinGroup(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -759,7 +933,11 @@ function setupMessageListenerQortalRequest() {
 
       case 'UPDATE_FOREIGN_FEE': {
         try {
-          const res = await updateForeignFee(request.payload, isFromExtension);
+          const res = await updateForeignFee(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -813,7 +991,8 @@ function setupMessageListenerQortalRequest() {
         try {
           const res = await setCurrentForeignServer(
             request.payload,
-            isFromExtension
+            isFromExtension,
+            appInfo
           );
           event.source.postMessage(
             {
@@ -840,7 +1019,11 @@ function setupMessageListenerQortalRequest() {
 
       case 'ADD_FOREIGN_SERVER': {
         try {
-          const res = await addForeignServer(request.payload, isFromExtension);
+          const res = await addForeignServer(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -868,7 +1051,8 @@ function setupMessageListenerQortalRequest() {
         try {
           const res = await removeForeignServer(
             request.payload,
-            isFromExtension
+            isFromExtension,
+            appInfo
           );
           event.source.postMessage(
             {
@@ -1156,6 +1340,62 @@ function setupMessageListenerQortalRequest() {
       case 'OPEN_NEW_TAB': {
         try {
           const res = await openNewTab(request.payload, isFromExtension);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'LOCK_TAB': {
+        try {
+          const res = await lockTab(request.payload, isFromExtension, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'UNLOCK_TAB': {
+        try {
+          const res = await unlockTab(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1912,7 +2152,11 @@ function setupMessageListenerQortalRequest() {
 
       case 'SIGN_FOREIGN_FEES': {
         try {
-          const res = await signForeignFees(request.payload, isFromExtension);
+          const res = await signForeignFees(
+            request.payload,
+            appInfo,
+            isFromExtension
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,
@@ -1945,6 +2189,36 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               payload: resData,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'SESSION_PERMISSIONS': {
+        try {
+          const res = await sessionPermissions(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
               type: 'backgroundMessageResponse',
             },
             event.origin

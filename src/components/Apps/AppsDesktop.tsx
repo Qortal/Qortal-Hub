@@ -16,6 +16,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
+import { clearSessionPermissionsByTabId } from '../../qortal/qortal-requests';
 import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
@@ -23,7 +24,17 @@ import { AppPublish } from './AppPublish';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import { AppsNavBarDesktop } from './AppsNavBarDesktop';
-import { Box, ButtonBase, useTheme } from '@mui/material';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  useTheme,
+} from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from '../Desktop/DesktopFooter';
@@ -62,6 +73,8 @@ export const AppsDesktop = ({
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const { showTutorial } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
+  const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
+  const [pendingTabToRemove, setPendingTabToRemove] = useState(null);
   const { t } = useTranslation([
     'auth',
     'core',
@@ -302,9 +315,68 @@ export const AppsDesktop = ({
     };
   }, [tabs, isNewTabWindow]);
 
+  const addLockFunc = (e) => {
+    const data = e.detail?.data;
+    const { tabId, lockMessage = '' } = data;
+
+    setTabs((prevTabs) =>
+      prevTabs.map((tab) =>
+        tab?.tabId === tabId ? { ...tab, lock: true, lockMessage } : tab
+      )
+    );
+  };
+
+  useEffect(() => {
+    subscribeToEvent('addLock', addLockFunc);
+
+    return () => {
+      unsubscribeFromEvent('addLock', addLockFunc);
+    };
+  }, []);
+
+  const removeLockFunc = (e) => {
+    const data = e.detail?.data;
+    const { tabId } = data;
+
+    setTabs((prevTabs) =>
+      prevTabs.map((tab) => {
+        if (tab?.tabId === tabId) {
+          const { lock, lockMessage, ...rest } = tab;
+          return rest;
+        }
+        return tab;
+      })
+    );
+  };
+
+  useEffect(() => {
+    subscribeToEvent('removeLock', removeLockFunc);
+
+    return () => {
+      unsubscribeFromEvent('removeLock', removeLockFunc);
+    };
+  }, []);
+
   const removeTabFunc = (e) => {
     const data = e.detail?.data;
-    const copyTabs = [...tabs].filter((tab) => tab?.tabId !== data?.tabId);
+    const tabToRemove = tabs.find((tab) => tab?.tabId === data?.tabId);
+
+    // Check if the tab has a lock
+    if (tabToRemove?.lock) {
+      setPendingTabToRemove(tabToRemove);
+      setShowCloseTabDialog(true);
+      return;
+    }
+
+    // Proceed with removal if no lock
+    performTabRemoval(data?.tabId);
+  };
+
+  const performTabRemoval = (tabId) => {
+    // Clear session permissions for this tab
+    clearSessionPermissionsByTabId(tabId);
+    
+    const copyTabs = [...tabs].filter((tab) => tab?.tabId !== tabId);
     if (copyTabs?.length === 0) {
       setMode('home');
     } else {
@@ -320,6 +392,19 @@ export const AppsDesktop = ({
         },
       });
     }, 400);
+  };
+
+  const handleCloseTabDialogConfirm = () => {
+    if (pendingTabToRemove) {
+      performTabRemoval(pendingTabToRemove.tabId);
+    }
+    setShowCloseTabDialog(false);
+    setPendingTabToRemove(null);
+  };
+
+  const handleCloseTabDialogCancel = () => {
+    setShowCloseTabDialog(false);
+    setPendingTabToRemove(null);
   };
 
   useEffect(() => {
@@ -447,6 +532,46 @@ export const AppsDesktop = ({
           </Box>
         </>
       )}
+
+      <Dialog
+        open={showCloseTabDialog}
+        onClose={handleCloseTabDialogCancel}
+        aria-labelledby="close-tab-dialog-title"
+        aria-describedby="close-tab-dialog-description"
+      >
+        <DialogTitle id="close-tab-dialog-title">
+          Close Tab Confirmation
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="close-tab-dialog-description">
+            Are you sure you want to close this tab?
+          </DialogContentText>
+          {pendingTabToRemove?.lockMessage && (
+            <DialogContentText
+              sx={{
+                marginTop: 2,
+                fontWeight: 500,
+                color: theme.palette.text.primary,
+              }}
+            >
+              {pendingTabToRemove.lockMessage}
+            </DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTabDialogCancel} color="primary">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCloseTabDialogConfirm}
+            color="error"
+            variant="contained"
+            autoFocus
+          >
+            Close Tab
+          </Button>
+        </DialogActions>
+      </Dialog>
     </AppsParent>
   );
 };

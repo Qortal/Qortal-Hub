@@ -72,6 +72,7 @@ import {
   decryptSingle,
   encryptDataGroup,
   encryptSingle,
+  hasPrivateString,
   objectToBase64,
   uint8ArrayStartsWith,
   uint8ArrayToBase64,
@@ -81,6 +82,10 @@ import {
   getPermission,
   isRunningGateway,
   setPermission,
+  setSessionPermissions,
+  hasSessionPermission,
+  VALID_SESSION_PERMISSIONS,
+  AUTO_GRANTED_PERMISSIONS_ON_AUTH,
 } from './qortal-requests.ts';
 import TradeBotCreateRequest from '../transactions/TradeBotCreateRequest.ts';
 import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest.ts';
@@ -495,6 +500,17 @@ async function getUserPermission(payload, isFromExtension) {
   });
 }
 
+export const getWhichUI = async () => {
+  try {
+    // Check if we're running in Electron
+    const isElectron = !!window?.electronAPI;
+    return isElectron ? 'HUB_ELECTRON' : 'HUB_WEB';
+  } catch (error) {
+    // Default to web if detection fails
+    return 'HUB_WEB';
+  }
+};
+
 export const getUserAccount = async ({
   isFromExtension,
   appInfo,
@@ -510,6 +526,17 @@ export const getUserAccount = async ({
     if (skipAuth) {
       skip = true;
     }
+
+    // Check for session permission
+    if (
+      !skip &&
+      appInfo?.tabId &&
+      appInfo?.name &&
+      hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_ACCOUNT')
+    ) {
+      skip = true;
+    }
+
     let resPermission;
     if (!skip) {
       resPermission = await getUserPermission(
@@ -533,6 +560,15 @@ export const getUserAccount = async ({
       setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
     }
     if (accepted || skip) {
+      // Auto-grant read-only permissions for authenticated session
+      if (accepted && appInfo?.tabId && appInfo?.name) {
+        setSessionPermissions(
+          appInfo.tabId,
+          appInfo.name,
+          AUTO_GRANTED_PERMISSIONS_ON_AUTH
+        );
+      }
+
       const wallet = await getSaveWallet();
       const address = wallet.address0;
       const publicKey = wallet.publicKey;
@@ -553,6 +589,128 @@ export const getUserAccount = async ({
         postProcess: 'capitalizeFirstChar',
       })
     );
+  }
+};
+
+export const sessionPermissions = async (data, isFromExtension, appInfo) => {
+  try {
+    console.log('data', data);
+    const { permissions = [] } = data;
+
+    if (!appInfo?.tabId) {
+      throw new Error('tabId is required from appInfo');
+    }
+
+    if (!appInfo?.name) {
+      throw new Error('App name is required');
+    }
+
+    if (!Array.isArray(permissions) || permissions.length === 0) {
+      throw new Error('permissions array is required and must not be empty');
+    }
+
+    const tabId = appInfo.tabId;
+
+    // Validate all permissions are valid
+    const invalidPermissions = permissions.filter(
+      (permission) => !VALID_SESSION_PERMISSIONS.includes(permission)
+    );
+
+    if (invalidPermissions.length > 0) {
+      throw new Error(
+        `Invalid permissions: ${invalidPermissions.join(', ')}. Valid permissions are: ${VALID_SESSION_PERMISSIONS.join(', ')}`
+      );
+    }
+
+    // Show permission modal with the list of permissions
+    const permissionsListHtml = permissions
+      .map(
+        (permission) => `
+      <div style="
+        background-color: var(--background-paper);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin: 4px 0;
+        font-family: monospace;
+        font-size: 14px;
+        color: var(--text-primary);
+      ">
+        ${permission}
+      </div>
+    `
+      )
+      .join('');
+
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.session_permissions', {
+          defaultValue: `${appInfo.name} is requesting session permissions`,
+          appName: appInfo.name,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission.session_permissions_description', {
+          defaultValue:
+            'The following permissions will be automatically granted for this session:',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        html: `
+  <div style="
+    max-height: 40vh;
+    overflow-y: auto;
+    font-family: sans-serif;
+    padding: 10px;
+    background-color: var(--background-default);
+    border-radius: 8px;
+  ">
+    ${permissionsListHtml}
+  </div>
+`,
+        confirmCheckbox: true,
+        confirmCheckboxLabel:
+          'I trust this app and understand these permissions will auto-execute',
+        isSessionPermission: true,
+      },
+      isFromExtension
+    );
+
+    const { accepted = false } = resPermission || {};
+    console.log('accepted', accepted);
+    if (!accepted) {
+      throw new Error(
+        i18n.t('question:message.generic.must_accept_checkbox', {
+          defaultValue: 'You must accept the checkbox to grant permissions',
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+
+    if (accepted) {
+      const validPermissions = setSessionPermissions(
+        tabId,
+        appInfo.name,
+        permissions
+      );
+      return {
+        success: true,
+        permissions: validPermissions,
+        message: i18n.t(
+          'question:message.generic.session_permissions_granted',
+          {
+            defaultValue: 'Session permissions granted successfully',
+            postProcess: 'capitalizeFirstChar',
+          }
+        ),
+      };
+    } else {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  } catch (error) {
+    throw new Error(error?.message || 'Failed to set session permissions');
   }
 };
 
@@ -1070,7 +1228,7 @@ export const decryptData = async (data) => {
   );
 };
 
-export const getListItems = async (data, isFromExtension) => {
+export const getListItems = async (data, appInfo, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1098,6 +1256,15 @@ export const getListItems = async (data, isFromExtension) => {
 
   let skip = false;
   if (value) {
+    skip = true;
+  }
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_LIST_ITEMS')
+  ) {
+    console.log('skipping list items because of session permission');
     skip = true;
   }
   let resPermission;
@@ -1309,7 +1476,8 @@ export const deleteListItems = async (data, isFromExtension) => {
 export const publishQDNResource = async (
   data: any,
   sender,
-  isFromExtension
+  isFromExtension,
+  appInfo?
 ) => {
   const requiredFields = ['service'];
   const missingFields: string[] = [];
@@ -1474,20 +1642,34 @@ export const publishQDNResource = async (
   if (!!data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.publish_qdn', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: `service: ${service}`,
-      text3: `identifier: ${identifier || null}`,
-      text4: `name: ${registeredName}`,
-      fee: fee.fee,
-      ...handleDynamicValues,
-    },
-    isFromExtension
-  );
-  const { accepted, checkbox1 = false } = resPermission;
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'PUBLISH_QDN_RESOURCE');
+
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.publish_qdn', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: `service: ${service}`,
+        text3: `identifier: ${identifier || null}`,
+        text4: `name: ${registeredName}`,
+        fee: fee.fee,
+        ...handleDynamicValues,
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted, checkbox1 = false } = resPermission || {
+    accepted: true,
+    checkbox1: false,
+  };
   if (accepted) {
     try {
       const resPublish = await publishData({
@@ -1668,8 +1850,15 @@ export const publishMultipleQDNResources = async (
 
   for (const resource of resources) {
     const resourceEncrypt = encrypt && resource?.disableEncrypt !== true;
-
-    if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
+    const base64Data = resource?.data64 || resource?.base64;
+    if (
+      !resourceEncrypt &&
+      !!base64Data &&
+      resource?.service.endsWith('_PRIVATE') &&
+      hasPrivateString(base64Data)
+    ) {
+      continue;
+    } else if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
       const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
         postProcess: 'capitalizeFirstChar',
       });
@@ -1752,12 +1941,25 @@ export const publishMultipleQDNResources = async (
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.publish_qdn', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      html: `
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'PUBLISH_MULTIPLE_QDN_RESOURCES'
+    );
+
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.publish_qdn', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
       .resource-container {
@@ -1814,13 +2016,17 @@ export const publishMultipleQDNResources = async (
   </div>
   
       `,
-      fee: +fee.fee * resources.length,
-      ...handleDynamicValues,
-    },
-    isFromExtension
-  );
+        fee: +fee.fee * resources.length,
+        ...handleDynamicValues,
+      },
+      isFromExtension
+    );
+  }
 
-  const { accepted, checkbox1 = false } = resPermission;
+  const { accepted, checkbox1 = false } = resPermission || {
+    accepted: true,
+    checkbox1: false,
+  };
   if (!accepted) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
@@ -1897,7 +2103,16 @@ export const publishMultipleQDNResources = async (
       if (resource.identifier == null) {
         identifier = 'default';
       }
-      if (!resourceEncrypt && service.endsWith('_PRIVATE')) {
+
+      const skipEncryptIfAlreadyEncrypted =
+        !resourceEncrypt &&
+        service.endsWith('_PRIVATE') &&
+        hasPrivateString(rawData);
+      if (
+        !resourceEncrypt &&
+        service.endsWith('_PRIVATE') &&
+        !skipEncryptIfAlreadyEncrypted
+      ) {
         const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
           postProcess: 'capitalizeFirstChar',
         });
@@ -2429,7 +2644,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   }
 };
 
-export const joinGroup = async (data, isFromExtension) => {
+export const joinGroup = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -2467,17 +2682,27 @@ export const joinGroup = async (data, isFromExtension) => {
   }
   const fee = await getFee('JOIN_GROUP');
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:message.generic.confirm_join_group', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: `${groupInfo.groupName}`,
-      fee: fee.fee,
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'JOIN_GROUP');
+
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:message.generic.confirm_join_group', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: `${groupInfo.groupName}`,
+        fee: fee.fee,
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted } = resPermission || { accepted: true };
 
   if (accepted) {
     const groupId = data.groupId;
@@ -3153,6 +3378,16 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     skip = true;
   }
 
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_WALLET')
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!skip) {
@@ -3293,6 +3528,17 @@ export const getWalletBalance = async (
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_WALLET_BALANCE')
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!bypassPermission && !skip) {
@@ -3538,6 +3784,17 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_WALLET_INFO')
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!skip) {
@@ -3643,6 +3900,21 @@ export const getUserWalletTransactions = async (
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'GET_USER_WALLET_TRANSACTIONS'
+    )
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!skip) {
@@ -3896,7 +4168,7 @@ function calculateRateFromFee(totalFee, sizeInBytes) {
   return fee.toFixed(0);
 }
 
-export const updateForeignFee = async (data, isFromExtension) => {
+export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3943,25 +4215,35 @@ export const updateForeignFee = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         })
       : '';
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.update_foreign_fee', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
-      text3: i18n.t('question:value', {
-        value: text3,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
 
-  const { accepted } = resPermission;
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'UPDATE_FOREIGN_FEE');
+
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.update_foreign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+        text3: i18n.t('question:value', {
+          value: text3,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted } = resPermission || { accepted: true };
   if (!accepted) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
@@ -4062,7 +4344,11 @@ export const getServerConnectionHistory = async (data) => {
   }
 };
 
-export const setCurrentForeignServer = async (data, isFromExtension) => {
+export const setCurrentForeignServer = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -4092,28 +4378,41 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.set_current_server', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'SET_CURRENT_FOREIGN_SERVER'
+    );
 
-  const { accepted } = resPermission;
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.set_current_server', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted } = resPermission || { accepted: true };
   if (!accepted) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
@@ -4160,7 +4459,7 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
   return res; // Return the full response
 };
 
-export const addForeignServer = async (data, isFromExtension) => {
+export const addForeignServer = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -4190,28 +4489,37 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.server_add', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'ADD_FOREIGN_SERVER');
 
-  const { accepted } = resPermission;
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.server_add', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted } = resPermission || { accepted: true };
   if (!accepted) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
@@ -4258,7 +4566,7 @@ export const addForeignServer = async (data, isFromExtension) => {
   return res; // Return the full response
 };
 
-export const removeForeignServer = async (data, isFromExtension) => {
+export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -4288,28 +4596,37 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.server_remove', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'REMOVE_FOREIGN_SERVER');
 
-  const { accepted } = resPermission;
+  let resPermission;
+  if (!hasPermission) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.server_remove', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+  }
+
+  const { accepted } = resPermission || { accepted: true };
   if (!accepted) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
@@ -5612,6 +5929,70 @@ export const openNewTab = async (data, isFromExtension) => {
       })
     );
   }
+};
+
+export const lockTab = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['lockMessage'];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(', ');
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
+    throw new Error(errorMsg);
+  }
+
+  const { lockMessage } = data;
+  const tabId = appInfo?.tabId;
+
+  if (!tabId) {
+    throw new Error('Tab ID not found');
+  }
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'LOCK_TAB');
+
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: 'Lock tab',
+        text2: `Do you give permission for this app's tab to be locked?`,
+      },
+      isFromExtension
+    );
+
+    const { accepted } = resPermission || { accepted: false };
+    if (!accepted) {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  }
+
+  executeEvent('addLock', { data: { tabId, lockMessage } });
+  return true;
+};
+
+export const unlockTab = async (data, isFromExtension, appInfo) => {
+  const tabId = appInfo?.tabId;
+
+  if (!tabId) {
+    throw new Error('Tab ID not found');
+  }
+
+  executeEvent('removeLock', { data: { tabId } });
+  return true;
 };
 
 export const adminAction = async (data, isFromExtension) => {
@@ -7113,17 +7494,32 @@ export const buyNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const signForeignFees = async (data, isFromExtension) => {
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.sign_fee', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
-  if (accepted) {
+export const signForeignFees = async (data, appInfo, isFromExtension) => {
+  let skip = false;
+  let acceptedVar = false;
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'SIGN_FOREIGN_FEES')
+  ) {
+    skip = true;
+  }
+  let resPermission;
+  if (!skip) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.sign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    acceptedVar = accepted;
+  }
+  if (acceptedVar || skip) {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
