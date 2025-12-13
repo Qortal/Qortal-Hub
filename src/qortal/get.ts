@@ -102,6 +102,7 @@ import {
   validateAesCtrIvAndKey,
 } from '../utils/decode.ts';
 import i18n from 'i18next';
+import aesjs from 'aes-js';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -3281,7 +3282,6 @@ function deriveCtrCounter(iv, blockOffset) {
 }
 
 function fallbackDecryptCtr(keyBytes, ivBytes, blockOffset, ciphertext) {
-  const aesjs = require('aes-js');
   const counter = deriveCtrCounter(ivBytes, blockOffset);
   const aesCtr = new aesjs.ModeOfOperation.ctr(
     keyBytes,
