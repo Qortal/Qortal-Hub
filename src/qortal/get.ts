@@ -595,7 +595,6 @@ export const getUserAccount = async ({
 
 export const sessionPermissions = async (data, isFromExtension, appInfo) => {
   try {
-    console.log('data', data);
     const { permissions = [] } = data;
 
     if (!appInfo?.tabId) {
@@ -1650,9 +1649,10 @@ export const publishQDNResource = async (
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'PUBLISH_QDN_RESOURCE');
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
+  let checkbox1Var = false;
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
@@ -1665,13 +1665,19 @@ export const publishQDNResource = async (
       },
       isFromExtension
     );
+    const { accepted, checkbox1 = false } = resPermission || {
+      accepted: false,
+      checkbox1: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+    if (checkbox1) {
+      checkbox1Var = checkbox1;
+    }
   }
 
-  const { accepted, checkbox1 = false } = resPermission || {
-    accepted: true,
-    checkbox1: false,
-  };
-  if (accepted) {
+  if (acceptVar) {
     try {
       const resPublish = await publishData({
         registeredName: encodeURIComponent(name),
@@ -1698,7 +1704,7 @@ export const publishQDNResource = async (
         withFee: true,
         encryption: isStreamedEncryption ? encryption : null,
       });
-      if (resPublish?.signature && hasAppFee && checkbox1) {
+      if (resPublish?.signature && hasAppFee && checkbox1Var) {
         sendCoinFunc(
           {
             amount: appFee,
@@ -1953,9 +1959,10 @@ export const publishMultipleQDNResources = async (
       'PUBLISH_MULTIPLE_QDN_RESOURCES'
     );
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
+  let checkbox1Var = false;
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
@@ -2022,13 +2029,19 @@ export const publishMultipleQDNResources = async (
       },
       isFromExtension
     );
+    const { accepted, checkbox1 = false } = resPermission || {
+      accepted: false,
+      checkbox1: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+    if (checkbox1) {
+      checkbox1Var = checkbox1;
+    }
   }
 
-  const { accepted, checkbox1 = false } = resPermission || {
-    accepted: true,
-    checkbox1: false,
-  };
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -2247,7 +2260,7 @@ export const publishMultipleQDNResources = async (
     };
     return obj;
   }
-  if (hasAppFee && checkbox1) {
+  if (hasAppFee && checkbox1Var) {
     sendCoinFunc(
       {
         amount: appFee,
@@ -2689,9 +2702,10 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'JOIN_GROUP');
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
+
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:message.generic.confirm_join_group', {
           postProcess: 'capitalizeFirstChar',
@@ -2701,11 +2715,15 @@ export const joinGroup = async (data, isFromExtension, appInfo?) => {
       },
       isFromExtension
     );
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
   }
 
-  const { accepted } = resPermission || { accepted: true };
-
-  if (accepted) {
+  if (acceptVar) {
     const groupId = data.groupId;
 
     if (!groupInfo || groupInfo.error) {
@@ -4222,9 +4240,10 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'UPDATE_FOREIGN_FEE');
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
+
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.update_foreign_fee', {
           postProcess: 'capitalizeFirstChar',
@@ -4241,10 +4260,15 @@ export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
       },
       isFromExtension
     );
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
   }
 
-  const { accepted } = resPermission || { accepted: true };
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -4388,9 +4412,9 @@ export const setCurrentForeignServer = async (
       'SET_CURRENT_FOREIGN_SERVER'
     );
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.set_current_server', {
           postProcess: 'capitalizeFirstChar',
@@ -4410,10 +4434,16 @@ export const setCurrentForeignServer = async (
       },
       isFromExtension
     );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
   }
 
-  const { accepted } = resPermission || { accepted: true };
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -4495,9 +4525,9 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'ADD_FOREIGN_SERVER');
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.server_add', {
           postProcess: 'capitalizeFirstChar',
@@ -4517,10 +4547,16 @@ export const addForeignServer = async (data, isFromExtension, appInfo?) => {
       },
       isFromExtension
     );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
   }
 
-  const { accepted } = resPermission || { accepted: true };
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -4602,9 +4638,9 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'REMOVE_FOREIGN_SERVER');
 
-  let resPermission;
+  let acceptVar = hasPermission || false;
   if (!hasPermission) {
-    resPermission = await getUserPermission(
+    const resPermission = await getUserPermission(
       {
         text1: i18n.t('question:permission.server_remove', {
           postProcess: 'capitalizeFirstChar',
@@ -4624,10 +4660,16 @@ export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
       },
       isFromExtension
     );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
   }
 
-  const { accepted } = resPermission || { accepted: true };
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',

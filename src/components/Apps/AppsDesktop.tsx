@@ -357,25 +357,10 @@ export const AppsDesktop = ({
     };
   }, []);
 
-  const removeTabFunc = (e) => {
-    const data = e.detail?.data;
-    const tabToRemove = tabs.find((tab) => tab?.tabId === data?.tabId);
-
-    // Check if the tab has a lock
-    if (tabToRemove?.lock) {
-      setPendingTabToRemove(tabToRemove);
-      setShowCloseTabDialog(true);
-      return;
-    }
-
-    // Proceed with removal if no lock
-    performTabRemoval(data?.tabId);
-  };
-
   const performTabRemoval = (tabId) => {
     // Clear session permissions for this tab
     clearSessionPermissionsByTabId(tabId);
-    
+
     const copyTabs = [...tabs].filter((tab) => tab?.tabId !== tabId);
     if (copyTabs?.length === 0) {
       setMode('home');
@@ -392,6 +377,21 @@ export const AppsDesktop = ({
         },
       });
     }, 400);
+  };
+
+  const removeTabFunc = (e) => {
+    const data = e.detail?.data;
+    const tabToRemove = tabs.find((tab) => tab?.tabId === data?.tabId);
+
+    // Check if the tab has a lock
+    if (tabToRemove?.lock) {
+      setPendingTabToRemove(tabToRemove);
+      setShowCloseTabDialog(true);
+      return;
+    }
+
+    // Proceed with removal if no lock
+    performTabRemoval(data?.tabId);
   };
 
   const handleCloseTabDialogConfirm = () => {
