@@ -16,7 +16,8 @@
     "waiting": "Veuillez patienter jusqu’à la synchronisation.",
     "not_syncronized": "non synchronisé",
     "syncronized": "synchronisé",
-    "syncronized_desc": "vous êtes maintenant synchronisé. vous pouvez continuer."
+    "syncronized_desc": "vous êtes maintenant synchronisé. vous pouvez continuer.",
+    "description": "Si vous ne souhaitez pas attendre que votre Local Node se synchronise, continuez pour l’instant avec public. (Si vous savez que votre node est en retard/éteint, vous pouvez tout de même continuer avec local ou passer au public node.)"
   },
   "steps": {
     "java": "Java installé",
@@ -31,7 +32,8 @@
     "openSetup": "ouvrir la configuration locale",
     "goToDownloads": "aller aux téléchargements",
     "resetKey": "réinitialiser la clé API",
-    "continue": "continuer"
+    "continue": "continuer",
+    "continueLocal": "continuer avec Local"
   },
   "error": {
     "noJar": "le répertoire choisi ne contient pas de qortal.jar",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "utiliser votre nœud local",
-    "description": "vous pouvez continuer avec le nœud public si vous le souhaitez, mais nous vous recommandons vivement d’utiliser votre propre nœud local pour une meilleure expérience.",
+    "description": "Vous pouvez continuer avec le public node si vous le souhaitez, mais nous recommandons fortement d’utiliser votre local node pour une meilleure expérience. (Si vous tentez d’accéder sans connectivité, vous pouvez continuer avec public sans connexion.)",
     "subTitle": "avantages d’un nœud local :",
     "point1": "accès totalement décentralisé",
     "point2": "téléchargements plus rapides",

@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   CircularProgress,
   Dialog,
@@ -16,14 +17,13 @@ import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function CoreSyncing() {
-  const { authenticate } = useAuth();
+  const { authenticate, handleSaveNodeInfo } = useAuth();
   const { t } = useTranslation(['node', 'core']);
   const [canContinue, setCanContinue] = useState(false);
   const [open, setOpen] = useAtom(isOpenSyncingDialogAtom);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isCallingRef = useRef<boolean>(false);
   const [blocksBehind, setBlocksBehind] = useState(0);
-
   const cleanUp = useCallback(() => {
     setBlocksBehind(0);
     setCanContinue(false);
@@ -73,13 +73,19 @@ export function CoreSyncing() {
   useEffect(() => {
     if (intervalRef.current) return;
     if (open) {
+      getStatus();
       intervalRef.current = setInterval(() => getStatus(), 5000);
     }
   }, [getStatus, open]);
 
-  const handleContinue = async () => {
+  const handleContinue = async (isPublic = false) => {
     try {
-      await authenticate();
+      if (isPublic) {
+        await handleSaveNodeInfo(null);
+        await authenticate(isPublic);
+      } else {
+        await authenticate(isPublic, true);
+      }
 
       setOpen(false);
       return;
@@ -112,6 +118,27 @@ export function CoreSyncing() {
               {t('node:sync.waiting')}{' '}
               <CircularProgress size="1.2rem" color="primary" />
             </Typography>
+            <Typography>{t('node:sync.description')}</Typography>
+            <Box
+              sx={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                marginTop: '15px',
+              }}
+            >
+              <Button
+                onClick={() => {
+                  handleContinue(true);
+                }}
+                color="primary"
+                variant="contained"
+              >
+                {t('node:actions.continuePublic', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            </Box>
           </DialogContent>
         </>
       )}
@@ -150,11 +177,10 @@ export function CoreSyncing() {
           onClick={() => {
             handleContinue();
           }}
-          disabled={!canContinue}
           color="success"
           variant="contained"
         >
-          {t('node:actions.continue', {
+          {t('node:actions.continueLocal', {
             postProcess: 'capitalizeFirstChar',
           })}
         </Button>

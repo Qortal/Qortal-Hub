@@ -16,7 +16,8 @@
     "waiting": "Palun oota, kuni oled sünkroonitud.",
     "not_syncronized": "ei ole sünkroonitud",
     "syncronized": "sünkroonitud",
-    "syncronized_desc": "sa oled nüüd sünkroonitud. võid jätkata."
+    "syncronized_desc": "sa oled nüüd sünkroonitud. võid jätkata.",
+    "description": "Kui sa ei soovi oodata, kuni sinu Local Node sünkroonib, jätka praegu public abil. (Kui tead, et sinu node on maas/maha jäänud, võid siiski jätkata local kaudu või lülituda public node peale.)"
   },
   "steps": {
     "java": "Java on olemas",
@@ -31,7 +32,8 @@
     "openSetup": "ava kohalik seadistus",
     "goToDownloads": "mine allalaadimistesse",
     "resetKey": "lähtesta API-võti",
-    "continue": "jätka"
+    "continue": "jätka",
+    "continueLocal": "jätka Local’iga"
   },
   "error": {
     "noJar": "valitud kaust ei sisalda qortal.jar-faili",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "kohaliku Core'i kasutamine",
-    "description": "sa võid soovi korral jätkata avaliku haardega, kuid parima kogemuse saamiseks soovitame tungivalt kasutada oma kohalikku haaret.",
+    "description": "Sa võid soovi korral jätkata public node’iga, kuid soovitame tungivalt kasutada oma local node’i parima kogemuse saamiseks. (Kui üritad ligi pääseda ilma ühenduseta, võid jätkata public kaudu ka ilma ühenduseta.)",
     "subTitle": "kohaliku haarde kasutamise eelised:",
     "point1": "täielik detsentraliseeritud juurdepääs",
     "point2": "kiiremad allalaadimised",

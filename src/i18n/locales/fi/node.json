@@ -16,7 +16,8 @@
     "waiting": "Odota, kunnes synkronointi on valmis.",
     "not_syncronized": "ei synkronoitu",
     "syncronized": "synkronoitu",
-    "syncronized_desc": "olet nyt synkronoitu. voit jatkaa."
+    "syncronized_desc": "olet nyt synkronoitu. voit jatkaa.",
+    "description": "Jos et halua odottaa, että Local Node synkronoituu, jatka toistaiseksi publicin avulla. (Jos tiedät, että node on jäljessä/pois päältä, voit silti jatkaa localin kautta tai vaihtaa public nodeen.)"
   },
   "steps": {
     "java": "java on asennettu",
@@ -31,7 +32,8 @@
     "openSetup": "avaa paikallinen asetus",
     "goToDownloads": "siirry latauksiin",
     "resetKey": "nollaa apikey",
-    "continue": "jatka"
+    "continue": "jatka",
+    "continueLocal": "jatka Localilla"
   },
   "error": {
     "noJar": "valittu hakemisto ei sisällä qortal.jar -tiedostoa",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "paikallisen core-ytimen käyttö",
-    "description": "voit jatkaa julkisella solmulla halutessasi, mutta suosittelemme vahvasti käyttämään paikallista solmua parhaan käyttökokemuksen saavuttamiseksi.",
+    "description": "Voit halutessasi jatkaa public nodella, mutta suosittelemme vahvasti käyttämään local nodea parhaan käyttökokemuksen saamiseksi. (Jos yrität käyttää ilman yhteyttä, voit jatkaa publicilla ilman yhteyttä.)",
     "subTitle": "paikallisen solmun käytön edut:",
     "point1": "täysi hajautettu pääsy",
     "point2": "nopeammat lataukset",
