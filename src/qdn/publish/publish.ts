@@ -537,7 +537,7 @@ export const publishData = async ({
         //  ENCRYPTION ENABLED — AES-CTR encrypt this chunk
         const rawBytes = new Uint8Array(await rawChunkBlob.arrayBuffer());
 
-        const blockOffset = BigInt(Math.floor(bytesProcessed / 16));
+        const blockOffset = BigInt(bytesProcessed >> 4);
 
         const encryptedBytes = await encryptAesCtrChunkWithFallback(
           keyBytes,

@@ -3545,19 +3545,6 @@ function App() {
             open={isShowQortalRequestExtension}
             aria-labelledby="alert-dialog-title"
             aria-describedby="alert-dialog-description"
-            PaperProps={{
-              sx: {
-                backgroundColor:
-                  messageQortalRequestExtension?.isSessionPermission
-                    ? theme.palette.mode === 'dark'
-                      ? theme.palette.warning.dark
-                      : theme.palette.warning.light
-                    : theme.palette.background.paper,
-                border: messageQortalRequestExtension?.isSessionPermission
-                  ? `2px solid ${theme.palette.warning.main}`
-                  : 'none',
-              },
-            }}
           >
             <CountdownCircleTimer
               isPlaying

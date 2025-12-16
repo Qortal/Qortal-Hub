@@ -527,15 +527,15 @@ export const getUserAccount = async ({
     if (skipAuth) {
       skip = true;
     }
-
+    let hadSessionPermissions = false;
     // Check for session permission
     if (
-      !skip &&
       appInfo?.tabId &&
       appInfo?.name &&
       hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_ACCOUNT')
     ) {
       skip = true;
+      hadSessionPermissions = true;
     }
 
     let resPermission;
@@ -562,7 +562,7 @@ export const getUserAccount = async ({
     }
     if (accepted || skip) {
       // Auto-grant read-only permissions for authenticated session
-      if (accepted && appInfo?.tabId && appInfo?.name) {
+      if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
         setSessionPermissions(
           appInfo.tabId,
           appInfo.name,
@@ -2852,7 +2852,12 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
  * Uses streaming to avoid loading entire file into memory
  */
 async function saveFileFromLocation(data, isFromExtension, snackMethods) {
-  const { filename, location, encryption, mimeType } = data;
+  const {
+    filename,
+    location,
+    encryption = undefined,
+    mimeType = undefined,
+  } = data;
 
   // Validate location
   const requiredFieldsLocation = ['service', 'name'];
@@ -2938,7 +2943,11 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
     const filePath = saveResult.filePath;
 
     try {
-      const endpoint = await createEndpoint(locationUrl);
+      const endpoint = isEncrypted
+        ? await createEndpoint(locationUrl)
+        : await createEndpoint(
+            locationUrl + `?attachment=true&attachmentFilename=${filename}`
+          );
       const response = await fetch(endpoint);
 
       if (!response.ok) {
@@ -2981,7 +2990,7 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
           // Decrypt chunk if encrypted
           if (isEncrypted) {
             try {
-              const blockOffset = BigInt(Math.floor(bytesProcessed / 16));
+              const blockOffset = BigInt(bytesProcessed >> 4);
               chunkToWrite = await decryptAesCtrChunk(
                 keyBytes,
                 ivBytes,
@@ -3027,12 +3036,15 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
         throw streamError;
       }
 
-      if (snackMethods?.success) {
-        snackMethods.success(
-          i18n.t('core:message.success.file_saved', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
+      if (
+        snackMethods?.setOpenSnackGlobal &&
+        snackMethods?.setInfoSnackCustom
+      ) {
+        snackMethods.setInfoSnackCustom({
+          type: 'success',
+          message: 'Saving file success!',
+        });
+        snackMethods.setOpenSnackGlobal(true);
       }
 
       return true;
@@ -3108,7 +3120,7 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
               break;
             }
 
-            const blockOffset = BigInt(Math.floor(bytesProcessed / 16));
+            const blockOffset = BigInt(bytesProcessed >> 4);
             const decryptedChunk = await decryptAesCtrChunk(
               keyBytes,
               ivBytes,
@@ -3122,12 +3134,15 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
 
           await writable.close();
 
-          if (snackMethods?.success) {
-            snackMethods.success(
-              i18n.t('core:message.success.file_saved', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            );
+          if (
+            snackMethods?.setOpenSnackGlobal &&
+            snackMethods?.setInfoSnackCustom
+          ) {
+            snackMethods.setInfoSnackCustom({
+              type: 'success',
+              message: 'Saving file success!',
+            });
+            snackMethods.setOpenSnackGlobal(true);
           }
         } catch (error) {
           await writable.abort();
@@ -3154,7 +3169,7 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const blockOffset = BigInt(Math.floor(bytesProcessed / 16));
+          const blockOffset = BigInt(bytesProcessed >> 4);
           const decryptedChunk = await decryptAesCtrChunk(
             keyBytes,
             ivBytes,
@@ -3208,7 +3223,11 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
         const writable = await fileHandle.createWritable();
 
         try {
-          const response = await fetch(await createEndpoint(locationUrl));
+          const response = await fetch(
+            await createEndpoint(
+              locationUrl + `?attachment=true&attachmentFilename=${filename}`
+            )
+          );
 
           if (!response.ok) {
             throw new Error('Failed to download file');
@@ -3221,12 +3240,15 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
           // For non-encrypted files, we can pipe directly
           await response.body.pipeTo(writable);
 
-          if (snackMethods?.success) {
-            snackMethods.success(
-              i18n.t('core:message.success.file_saved', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            );
+          if (
+            snackMethods?.setOpenSnackGlobal &&
+            snackMethods?.setInfoSnackCustom
+          ) {
+            snackMethods.setInfoSnackCustom({
+              type: 'success',
+              message: 'Saving file success!',
+            });
+            snackMethods.setOpenSnackGlobal(true);
           }
         } catch (error) {
           await writable.abort();
