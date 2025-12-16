@@ -37,8 +37,11 @@ import {
   getAssetInfo,
   getPublicKey,
   transferAsset,
+  sendChatNotification,
+  sendChatGroup,
 } from '../background/background.ts';
 import {
+  encryptAndPublishSymmetricKeyGroupChat,
   getAllUserNames,
   getNameInfo,
   uint8ArrayToObject,
@@ -56,6 +59,7 @@ import {
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
+  PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
   TIME_MINUTES_20_IN_MILLISECONDS,
@@ -918,6 +922,19 @@ export const decryptQortalGroupData = async (data, sender) => {
         TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
+    }
+
+    if (secretKeyObject) {
+      const decodeForNumber = atob(data64);
+
+      // Extract the key (assuming it's always the first 10 characters)
+      const keyStr = decodeForNumber.slice(0, 10);
+
+      // Convert the key string back to a number
+      const highestKey = parseInt(keyStr, 10);
+      if (!secretKeyObject[highestKey]) {
+        secretKeyObject = null;
+      }
     }
     if (!secretKeyObject) {
       const { names } = await getGroupAdmins(groupId);
@@ -8137,4 +8154,148 @@ export const transferAssetRequest = async (data, isFromExtension) => {
     assetId,
   });
   return res;
+};
+
+// Track last re-encryption timestamp per groupId
+const lastReEncryptionTime = new Map<number, number>();
+const RE_ENCRYPTION_COOLDOWN_MS = 150000; // 2.5 minutes in milliseconds
+
+export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['groupId'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Check if re-encryption was done recently for this groupId
+  const groupId = data.groupId;
+  const lastTime = lastReEncryptionTime.get(groupId);
+  const currentTime = Date.now();
+
+  if (lastTime && currentTime - lastTime < RE_ENCRYPTION_COOLDOWN_MS) {
+    const remainingTime = Math.ceil(
+      (RE_ENCRYPTION_COOLDOWN_MS - (currentTime - lastTime)) / 1000
+    );
+    throw new Error(
+      `Re-encryption cooldown in effect. Please wait ${remainingTime} seconds before re-encrypting keys for this group again.`
+    );
+  }
+
+  const urlGroupInfo = await createEndpoint(`/groups/${data?.groupId}`);
+  const response = await fetch(urlGroupInfo);
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.fetch_group', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+
+  const groupInfo = await response.json();
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (groupInfo?.owner !== address) {
+    throw new Error('Only the group owner can perform this request');
+  }
+  let skip = false;
+  let acceptedVar = false;
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'REENCRYPT_GROUP_KEYS')
+  ) {
+    skip = true;
+  }
+  let resPermission;
+  if (!skip) {
+    const groupName = groupInfo?.groupName;
+    resPermission = await getUserPermission(
+      {
+        text1:
+          'Do you give this application permission to re-encrypt group keys?',
+        highlightedText: `Group: ${groupName}`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    acceptedVar = accepted;
+  }
+  if (acceptedVar || skip) {
+    const groupId = data.groupId;
+    const addKey = data?.addKey || false;
+
+    const { names } = await getGroupAdmins(groupId);
+
+    const publish = await getPublishesFromAdmins(names, groupId);
+    if (publish === false) {
+      // create new key
+
+      await encryptAndPublishSymmetricKeyGroupChat({
+        groupId,
+        previousData: null,
+        addKey: true,
+      });
+
+      sendChatGroup({
+        groupId,
+        typeMessage: undefined,
+        chatReference: undefined,
+        messageText: PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
+      });
+
+      // Update last re-encryption timestamp
+      lastReEncryptionTime.set(groupId, Date.now());
+      return true;
+    }
+
+    const url = await createEndpoint(
+      `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+        publish.identifier
+      }?encoding=base64&rebuild=true`
+    );
+
+    const res = await fetch(url);
+    const resData = await res.text();
+
+    const decryptedKey: any = await decryptResource(resData, true);
+
+    const dataint8Array = base64ToUint8Array(decryptedKey.data);
+    const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+    if (!validateSecretKey(decryptedKeyToObject))
+      throw new Error(
+        i18n.t('auth:message.error.invalid_secret_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    const { data: responseData, numberOfMembers } =
+      await encryptAndPublishSymmetricKeyGroupChat({
+        groupId,
+        previousData: decryptedKeyToObject,
+        addKey: addKey,
+      });
+
+    sendChatNotification(
+      responseData,
+      groupId,
+      decryptedKeyToObject,
+      numberOfMembers
+    );
+
+    // Update last re-encryption timestamp
+    lastReEncryptionTime.set(groupId, Date.now());
+    return true;
+  } else {
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
 };

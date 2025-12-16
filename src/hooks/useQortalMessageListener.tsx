@@ -262,6 +262,7 @@ export const listOfAllQortalRequests = [
   'LOCK_TAB',
   'UNLOCK_TAB',
   'WHICH_UI',
+  'REENCRYPT_GROUP_KEYS',
 ];
 
 export const UIQortalRequests = [
@@ -330,6 +331,7 @@ export const UIQortalRequests = [
   'LOCK_TAB',
   'UNLOCK_TAB',
   'WHICH_UI',
+  'REENCRYPT_GROUP_KEYS',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {

@@ -71,6 +71,7 @@ import {
   signForeignFees,
   multiPaymentWithPrivateData,
   transferAssetRequest,
+  reEncryptQortalKeys,
 } from './get.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
@@ -168,6 +169,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'GET_USER_ACCOUNT',
   'GET_LIST_ITEMS',
   'SIGN_FOREIGN_FEES',
+  'REENCRYPT_GROUP_KEYS',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -2210,6 +2212,36 @@ function setupMessageListenerQortalRequest() {
       case 'SESSION_PERMISSIONS': {
         try {
           const res = await sessionPermissions(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'REENCRYPT_GROUP_KEYS': {
+        try {
+          const res = await reEncryptQortalKeys(
             request.payload,
             isFromExtension,
             appInfo
