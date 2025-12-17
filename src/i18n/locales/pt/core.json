@@ -170,7 +170,7 @@
     "comments": "carregando comentários... favor agurdar.",
     "posts": "carregando postagens... favor agurdar."
   },
-  "message_us": "envie-nos uma mensagem no Nextcloud (não é necessário cadastro) ou no Discord se precisar de 4 QORTs para começar a conversar sem limitações",
+  "message_us": "Por favor, envie-nos uma mensagem no Nextcloud (não é necessário cadastro) se precisar de 4 QORT para começar a conversar sem nenhuma limitação.",
   "message": {
     "error": {
       "address_not_found": "seu endereço não foi encontrado",
@@ -234,7 +234,7 @@
       "get_qort_trade_portal": "obtenha QORTs usando o portal de troca crosschain do Qortal",
       "mentioned": "mencionado",
       "message_with_image": "esta mensagem já possui uma imagem",
-      "minimal_qort_balance": "ter pelo menos {{ quantity }} QORTs no seu saldo (4 QORTs para conversar, 1.25 para nome, 0.75 para algumas transações)",
+      "minimal_qort_balance": "Ter pelo menos {{ quantity }} QORT no seu saldo permite enviar mensagens de chat a uma velocidade quase instantânea.",
       "most_recent_payment": "{{ count }} pagamento mais recente",
       "name_available": "{{ name }} está disponível",
       "name_benefits": "benefícios de um nome",

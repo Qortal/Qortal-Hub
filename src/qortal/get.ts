@@ -671,41 +671,26 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
   </div>
 `,
         confirmCheckbox: true,
-        confirmCheckboxLabel:
-          'I trust this app and understand these permissions will auto-execute',
+        confirmCheckboxLabel: i18n.t('question:permission.session_understand', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         isSessionPermission: true,
       },
       isFromExtension
     );
 
     const { accepted = false } = resPermission || {};
-    console.log('accepted', accepted);
     if (!accepted) {
       throw new Error(
-        i18n.t('question:message.generic.must_accept_checkbox', {
-          defaultValue: 'You must accept the checkbox to grant permissions',
+        i18n.t('question:message.generic.user_declined_request', {
           postProcess: 'capitalizeFirstChar',
         })
       );
     }
 
     if (accepted) {
-      const validPermissions = setSessionPermissions(
-        tabId,
-        appInfo.name,
-        permissions
-      );
-      return {
-        success: true,
-        permissions: validPermissions,
-        message: i18n.t(
-          'question:message.generic.session_permissions_granted',
-          {
-            defaultValue: 'Session permissions granted successfully',
-            postProcess: 'capitalizeFirstChar',
-          }
-        ),
-      };
+      setSessionPermissions(tabId, appInfo.name, permissions);
+      return true;
     } else {
       throw new Error(
         i18n.t('question:message.generic.user_declined_request', {
@@ -1281,7 +1266,6 @@ export const getListItems = async (data, appInfo, isFromExtension) => {
     appInfo?.name &&
     hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_LIST_ITEMS')
   ) {
-    console.log('skipping list items because of session permission');
     skip = true;
   }
   let resPermission;
@@ -6046,7 +6030,9 @@ export const lockTab = async (data, isFromExtension, appInfo) => {
     const resPermission = await getUserPermission(
       {
         text1: 'Lock tab',
-        text2: `Do you give permission for this app's tab to be locked?`,
+        text2: i18n.t('question:permission.lock_tab', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       },
       isFromExtension
     );
@@ -8217,8 +8203,9 @@ export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
     const groupName = groupInfo?.groupName;
     resPermission = await getUserPermission(
       {
-        text1:
-          'Do you give this application permission to re-encrypt group keys?',
+        text1: i18n.t('question:permission.reencrypt_keys', {
+          postProcess: 'capitalizeFirstChar',
+        }),
         highlightedText: `Group: ${groupName}`,
       },
       isFromExtension

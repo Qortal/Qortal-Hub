@@ -176,7 +176,15 @@
     "transfer_asset": "kas sa annad sellele rakendusele loa kanda üle järgmine vara?",
     "update_foreign_fee": "kas sa annad sellele rakendusele loa uuendada välismaiseid tasusid sinu haardel?",
     "update_group_detail": "uus omanik: {{ owner }}",
-    "update_group": "kas sa annad sellele rakendusele loa seda rühma uuendada?"
+    "update_group": "kas sa annad sellele rakendusele loa seda rühma uuendada?",
+    "lock_tab": "Kas annad loa selle rakenduse vahelehe lukustamiseks?",
+    "session_permissions": "{{appName}} taotleb seansi õigusi",
+    "session_permissions_description": "Järgmised õigused antakse selle seansi jaoks automaatselt:",
+    "session_understand": "Ma usaldan seda rakendust ja mõistan, et need õigused käivitatakse automaatselt",
+    "reencrypt_keys": "Kas annad sellele rakendusele loa grupivõtmete uuesti krüptimiseks?",
+    "close_tab_confirmation": "Vahelehe sulgemise kinnitus",
+    "close_tab": "Sulge vaheleht",
+    "close_tab_permission": "Kas oled kindel, et soovid selle vahelehe sulgeda?"
   },
   "poll": "küsitlus: {{ name }}",
   "provide_recipient_group_id": "palun anna vastuvõtja või rühma ID (groupId)",

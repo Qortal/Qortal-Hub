@@ -170,7 +170,7 @@
     "comments": "コメントの読み込み...待ってください。",
     "posts": "投稿の読み込み...待ってください。"
   },
-  "message_us": "制限なしにチャットを開始するために4 QORTが必要な場合は、NextCloud（サインアップは不要）または不一致で私たちにメッセージを送ってください",
+  "message_us": "制限なくチャットを開始するために 4 QORT が必要な場合は、Nextcloud（登録不要）からご連絡ください。",
   "message": {
     "error": {
       "address_not_found": "あなたの住所は見つかりませんでした",
@@ -232,7 +232,7 @@
       "fetching_data": "アプリデータを取得します",
       "foreign_fee": "foreign fee: {{ message }}",
       "get_qort_trade_portal": "QORTALのCrossChain Tradeポータルを使用してQORTを取得します",
-      "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance (4 qort balance for chat, 1.25 for name, 0.75 for some transactions)",
+      "minimal_qort_balance": "残高に少なくとも {{ quantity }} QORT があると、ほぼ即時の速度でチャットメッセージを送信できます。",
       "mentioned": "言及された",
       "message_with_image": "このメッセージにはすでに画像があります",
       "most_recent_payment": "{{ count }} most recent payment",

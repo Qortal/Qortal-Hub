@@ -176,7 +176,15 @@
     "transfer_asset": "Möchten Sie dieser Anwendung die Berechtigung geben, das folgende Asset zu übertragen?",
     "update_foreign_fee": "Möchten Sie dieser Anwendung die Berechtigung geben, die externen Gebühren auf Ihrem Node zu aktualisieren?",
     "update_group_detail": "neuer Besitzer: {{ owner }}",
-    "update_group": "Möchten Sie dieser Anwendung die Berechtigung geben, diese Gruppe zu aktualisieren?"
+    "update_group": "Möchten Sie dieser Anwendung die Berechtigung geben, diese Gruppe zu aktualisieren?",
+    "lock_tab": "Erlauben Sie, dass der Tab dieser App gesperrt wird?",
+    "session_permissions": "{{appName}} fordert Sitzungsberechtigungen an",
+    "session_permissions_description": "Die folgenden Berechtigungen werden für diese Sitzung automatisch erteilt:",
+    "session_understand": "Ich vertraue dieser App und verstehe, dass diese Berechtigungen automatisch ausgeführt werden",
+    "reencrypt_keys": "Erlauben Sie dieser Anwendung, Gruppenschlüssel erneut zu verschlüsseln?",
+    "close_tab_confirmation": "Bestätigung zum Schließen des Tabs",
+    "close_tab": "Tab schließen",
+    "close_tab_permission": "Sind Sie sicher, dass Sie diesen Tab schließen möchten?"
   },
   "poll": "Abstimmung: {{ name }}",
   "provide_recipient_group_id": "Bitte geben Sie einen Empfänger oder groupId an",

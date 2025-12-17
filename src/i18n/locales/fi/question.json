@@ -176,7 +176,15 @@
     "transfer_asset": "annatko tälle sovellukselle luvan siirtää seuraavan omaisuuden?",
     "update_foreign_fee": "annatko tälle sovellukselle luvan päivittää ulkomaan maksut solmussasi?",
     "update_group_detail": "uusi omistaja: {{ owner }}",
-    "update_group": "annatko tälle sovellukselle luvan päivittää tämän ryhmän?"
+    "update_group": "annatko tälle sovellukselle luvan päivittää tämän ryhmän?",
+    "lock_tab": "Sallitko tämän sovelluksen välilehden lukitsemisen?",
+    "session_permissions": "{{appName}} pyytää istuntokohtaisia oikeuksia",
+    "session_permissions_description": "Seuraavat oikeudet myönnetään automaattisesti tälle istunnolle:",
+    "session_understand": "Luotan tähän sovellukseen ja ymmärrän, että nämä oikeudet suoritetaan automaattisesti",
+    "reencrypt_keys": "Sallitko tämän sovelluksen ryhmäavainten uudelleensalauksen?",
+    "close_tab_confirmation": "Välilehden sulkemisen vahvistus",
+    "close_tab": "Sulje välilehti",
+    "close_tab_permission": "Haluatko varmasti sulkea tämän välilehden?"
   },
   "poll": "kysely: {{ name }}",
   "provide_recipient_group_id": "anna vastaanottaja tai groupId",

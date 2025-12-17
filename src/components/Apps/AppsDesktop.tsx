@@ -540,11 +540,15 @@ export const AppsDesktop = ({
         aria-describedby="close-tab-dialog-description"
       >
         <DialogTitle id="close-tab-dialog-title">
-          Close Tab Confirmation
+          {t('question:permission.close_tab_confirmation', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </DialogTitle>
         <DialogContent>
           <DialogContentText id="close-tab-dialog-description">
-            Are you sure you want to close this tab?
+            {t('question:permission.close_tab_permission', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </DialogContentText>
           {pendingTabToRemove?.lockMessage && (
             <DialogContentText
@@ -560,7 +564,9 @@ export const AppsDesktop = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseTabDialogCancel} color="primary">
-            Cancel
+            {t('core:action.cancel', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
           <Button
             onClick={handleCloseTabDialogConfirm}
@@ -568,7 +574,9 @@ export const AppsDesktop = ({
             variant="contained"
             autoFocus
           >
-            Close Tab
+            {t('question:permission.close_tab', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </Button>
         </DialogActions>
       </Dialog>
