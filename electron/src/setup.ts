@@ -211,7 +211,22 @@ export class ElectronCapacitorApp {
 
     // When the tray icon is enabled, setup the options.
     if (this.CapacitorFileConfig.electron?.trayIconAndMenuEnabled) {
-      this.TrayIcon = new Tray(icon);
+      // On macOS, we need to use a template image for the tray icon
+      let trayIcon = icon;
+      if (process.platform === 'darwin') {
+        // Try to load a dedicated tray icon template first
+        const trayIconPath = join(
+          app.getAppPath(),
+          'assets',
+          'trayIconTemplate.png'
+        );
+        if (fs.existsSync(trayIconPath)) {
+          trayIcon = nativeImage.createFromPath(trayIconPath);
+        }
+        // Mark as template image for macOS menu bar
+        trayIcon.setTemplateImage(true);
+      }
+      this.TrayIcon = new Tray(trayIcon);
 
       // On Windows, single-click shows context menu (handled automatically by the OS)
       // On macOS and Linux, single-click toggles window visibility
