@@ -211,27 +211,28 @@ export class ElectronCapacitorApp {
 
     // When the tray icon is enabled, setup the options.
     if (this.CapacitorFileConfig.electron?.trayIconAndMenuEnabled) {
-      // On macOS, we need to use a template image for the tray icon
-      let trayIcon = icon;
-      if (process.platform === 'darwin') {
-        // Try to load a dedicated tray icon template first
-        const trayIconPath = join(
-          app.getAppPath(),
-          'assets',
-          'trayIconTemplate.png'
-        );
-        if (fs.existsSync(trayIconPath)) {
-          trayIcon = nativeImage.createFromPath(trayIconPath);
-        }
-        // Mark as template image for macOS menu bar
-        trayIcon.setTemplateImage(true);
-      }
-      this.TrayIcon = new Tray(trayIcon);
+      // On macOS, use dock instead of menu bar tray icon (more conventional)
+      // On Windows and Linux, use the system tray icon
+      if (process.platform !== 'darwin') {
+        this.TrayIcon = new Tray(icon);
 
-      // On Windows, single-click shows context menu (handled automatically by the OS)
-      // On macOS and Linux, single-click toggles window visibility
-      if (process.platform !== 'win32') {
-        this.TrayIcon.on('click', () => {
+        // On Windows, single-click shows context menu (handled automatically by the OS)
+        // On Linux, single-click toggles window visibility
+        if (process.platform !== 'win32') {
+          this.TrayIcon.on('click', () => {
+            if (this.MainWindow) {
+              if (this.MainWindow.isVisible()) {
+                this.MainWindow.hide();
+              } else {
+                this.MainWindow.show();
+                this.MainWindow.focus();
+              }
+            }
+          });
+        }
+
+        // Double-click toggles window visibility on all platforms
+        this.TrayIcon.on('double-click', () => {
           if (this.MainWindow) {
             if (this.MainWindow.isVisible()) {
               this.MainWindow.hide();
@@ -241,24 +242,12 @@ export class ElectronCapacitorApp {
             }
           }
         });
+
+        this.TrayIcon.setToolTip(app.getName());
+        this.TrayIcon.setContextMenu(
+          Menu.buildFromTemplate(this.TrayMenuTemplate)
+        );
       }
-
-      // Double-click toggles window visibility on all platforms
-      this.TrayIcon.on('double-click', () => {
-        if (this.MainWindow) {
-          if (this.MainWindow.isVisible()) {
-            this.MainWindow.hide();
-          } else {
-            this.MainWindow.show();
-            this.MainWindow.focus();
-          }
-        }
-      });
-
-      this.TrayIcon.setToolTip(app.getName());
-      this.TrayIcon.setContextMenu(
-        Menu.buildFromTemplate(this.TrayMenuTemplate)
-      );
     }
 
     // Setup the main manu bar at the top of our window.
