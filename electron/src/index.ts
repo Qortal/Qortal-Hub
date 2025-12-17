@@ -45,12 +45,12 @@ const trayMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
     click: async () => {
       const mainWindow = myCapacitorApp.getMainWindow();
       const wasHidden = !mainWindow.isVisible();
-      
+
       // Show the window if it's hidden so the dialog appears properly
       if (wasHidden) {
         mainWindow.show();
       }
-      
+
       const choice = await dialog.showMessageBox(mainWindow, {
         type: 'question',
         buttons: ['Cancel', 'Quit'],
@@ -180,8 +180,14 @@ app.on('window-all-closed', function () {
 app.on('activate', async function () {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  if (myCapacitorApp.getMainWindow().isDestroyed()) {
+  const mainWindow = myCapacitorApp.getMainWindow();
+
+  if (mainWindow.isDestroyed()) {
     await myCapacitorApp.init();
+  } else if (!mainWindow.isVisible()) {
+    // If the window is hidden, show it when dock icon is clicked
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 
