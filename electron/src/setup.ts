@@ -21,7 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
-import { myCapacitorApp, isQuitting } from '.';
+import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
   customQortalInstalledDir,
@@ -191,11 +191,40 @@ export class ElectronCapacitorApp {
       );
     }
 
-    // Prevent window close, hide it instead (minimize to tray)
-    this.MainWindow.on('close', (event) => {
+    // Ask user how they want to close the window
+    this.MainWindow.on('close', async (event) => {
       if (!isQuitting) {
         event.preventDefault();
-        this.MainWindow.hide();
+
+        // Determine platform-specific text
+        const backgroundText =
+          process.platform === 'darwin'
+            ? 'Minimize to Dock'
+            : 'Minimize to Tray';
+        const backgroundDetail =
+          process.platform === 'darwin'
+            ? 'Keep the app running in the dock'
+            : 'Keep the app running in the system tray';
+
+        const choice = await dialog.showMessageBox(this.MainWindow, {
+          type: 'question',
+          buttons: [backgroundText, 'Quit Completely', 'Cancel'],
+          defaultId: 0,
+          title: 'Close Qortal Hub',
+          message: 'What would you like to do?',
+          detail: `${backgroundText}: ${backgroundDetail}\n\nQuit Completely: Stop the application entirely`,
+          cancelId: 2,
+        });
+
+        if (choice.response === 0) {
+          // Minimize to background
+          this.MainWindow.hide();
+        } else if (choice.response === 1) {
+          // Quit completely
+          setIsQuitting(true);
+          app.quit();
+        }
+        // If response === 2 (Cancel), do nothing
       }
     });
 
