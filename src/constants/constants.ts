@@ -251,7 +251,7 @@ export const MIN_REQUIRED_QORTS: number = 4;
 
 export const PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY: string = '4001'; // Q for Qortal
 export const RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS: number = 102;
-export const SUGGESTED_QORTS: number = 6;
+export const SUGGESTED_QORTS: string = '4.50';
 
 // Time section
 // seconds

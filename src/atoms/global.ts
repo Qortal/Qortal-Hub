@@ -24,6 +24,7 @@ export const sortablePinnedAppsAtom = atomWithReset([
   { name: 'Names', service: 'APP' },
   { name: 'Q-Follow', service: 'APP' },
   { name: 'Q-Assets', service: 'APP' },
+  { name: 'Quitter', service: 'APP' },
 ]);
 
 export const addressInfoControllerAtom = atomWithReset({});

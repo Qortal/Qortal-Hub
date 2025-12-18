@@ -3821,9 +3821,10 @@ function App() {
                   label={
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography sx={{ fontSize: '14px' }}>
-                        {t('core:message.success.request_read', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
+                        {messageQortalRequestExtension?.confirmCheckboxLabel ||
+                          t('core:message.success.request_read', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                       </Typography>
                       <PriorityHighIcon color="warning" />
                     </Box>

@@ -24,7 +24,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         iframeRef,
         app?.tabId,
         isDevMode,
-        app?.name,
+        isDevMode ? 'devapp' : app?.name,
         app?.service,
         skipAuth
       );

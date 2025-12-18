@@ -176,7 +176,15 @@
     "transfer_asset": "このアプリに以下の資産を転送することを許可しますか？",
     "update_foreign_fee": "このアプリにノードの外部手数料を更新することを許可しますか？",
     "update_group_detail": "新しい所有者：{{ owner }}",
-    "update_group": "このアプリにこのグループを更新することを許可しますか？"
+    "update_group": "このアプリにこのグループを更新することを許可しますか？",
+    "lock_tab": "このアプリのタブをロックすることを許可しますか？",
+    "session_permissions": "{{appName}} がセッション権限を要求しています",
+    "session_permissions_description": "以下の権限はこのセッション中に自動的に付与されます：",
+    "session_understand": "このアプリを信頼しており、これらの権限が自動的に実行されることを理解しています",
+    "reencrypt_keys": "このアプリにグループキーの再暗号化を許可しますか？",
+    "close_tab_confirmation": "タブを閉じる確認",
+    "close_tab": "タブを閉じる",
+    "close_tab_permission": "このタブを閉じてもよろしいですか？"
   },
   "poll": "投票：{{ name }}",
   "provide_recipient_group_id": "受信者または groupId を入力してください",

@@ -176,7 +176,15 @@
     "transfer_asset": "consenti a questa applicazione di trasferire il seguente asset?",
     "update_foreign_fee": "consenti a questa applicazione di aggiornare le commissioni estere sul tuo nodo?",
     "update_group_detail": "nuovo proprietario: {{ owner }}",
-    "update_group": "consenti a questa applicazione di aggiornare questo gruppo?"
+    "update_group": "consenti a questa applicazione di aggiornare questo gruppo?",
+    "lock_tab": "Dai il permesso di bloccare la scheda di questa applicazione?",
+    "session_permissions": "{{appName}} richiede autorizzazioni di sessione",
+    "session_permissions_description": "Le seguenti autorizzazioni verranno concesse automaticamente per questa sessione:",
+    "session_understand": "Mi fido di questa applicazione e comprendo che queste autorizzazioni verranno eseguite automaticamente",
+    "reencrypt_keys": "Dai a questa applicazione il permesso di ricrittografare le chiavi di gruppo?",
+    "close_tab_confirmation": "Conferma chiusura scheda",
+    "close_tab": "Chiudi scheda",
+    "close_tab_permission": "Sei sicuro di voler chiudere questa scheda?"
   },
   "poll": "sondaggio: {{ name }}",
   "provide_recipient_group_id": "fornisci un destinatario o un groupId",

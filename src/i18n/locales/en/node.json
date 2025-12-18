@@ -16,7 +16,8 @@
     "waiting": "Please wait until you are synchronized.",
     "not_syncronized": "not syncronized",
     "syncronized": "syncronized",
-    "syncronized_desc": "you are now Syncronized. you may continue."
+    "syncronized_desc": "you are now Syncronized. you may continue.",
+    "description": "If you do not want to wait until your Local Node is synced, continue with public for now. (If you are aware that your node is behind/off, you can can continue with local anyway, or switch to public node.)"
   },
   "steps": {
     "java": "has java",
@@ -28,6 +29,7 @@
     "start": "start Qortal Core",
     "install": "install and start Qortal Core",
     "continuePublic": "continue with public node",
+    "continueLocal": "continue with Local",
     "openSetup": "open local setup",
     "goToDownloads": "go to downloads",
     "resetKey": "reset apikey",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience.",
+    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience. (If you are attempting to access with no connectivity, you may continue with public without a connection.)",
     "subTitle": "advantages of using a local node:",
     "point1": "full decentralized access",
     "point2": "faster downloads",

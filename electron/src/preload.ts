@@ -24,6 +24,13 @@ try {
     readFile: async (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
     selectAndZipDirectory: async (filePath) =>
       ipcRenderer.invoke('fs:selectAndZip', filePath),
+    // Streaming file save methods
+    startStreamSave: async (options: { filename: string; mimeType?: string }) =>
+      ipcRenderer.invoke('file:startStreamSave', options),
+    writeChunk: async (filePath: string, chunk: Uint8Array, append: boolean) =>
+      ipcRenderer.invoke('file:writeChunk', filePath, chunk, append),
+    deleteFile: async (filePath: string) =>
+      ipcRenderer.invoke('file:deleteFile', filePath),
   });
 
   // Expose it

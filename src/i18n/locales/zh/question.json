@@ -176,7 +176,15 @@
     "transfer_asset": "是否允许该应用转移以下资产？",
     "update_foreign_fee": "是否允许该应用更新节点上的外部费用？",
     "update_group_detail": "新所有者：{{ owner }}",
-    "update_group": "是否允许该应用更新该群组？"
+    "update_group": "是否允许该应用更新该群组？",
+    "lock_tab": "是否允许锁定此应用的标签页？",
+    "session_permissions": "{{appName}} 正在请求会话权限",
+    "session_permissions_description": "以下权限将自动授予本次会话：",
+    "session_understand": "我信任此应用，并理解这些权限将自动执行",
+    "reencrypt_keys": "是否允许此应用重新加密群组密钥？",
+    "close_tab_confirmation": "关闭标签页确认",
+    "close_tab": "关闭标签页",
+    "close_tab_permission": "确定要关闭此标签页吗？"
   },
   "poll": "投票：{{ name }}",
   "provide_recipient_group_id": "请提供接收人或群组ID",

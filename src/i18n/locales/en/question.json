@@ -176,7 +176,15 @@
     "transfer_asset": "do you give this application permission to transfer the following asset?",
     "update_foreign_fee": "do you give this application permission to update foreign fees on your node?",
     "update_group_detail": "new owner: {{ owner }}",
-    "update_group": "do you give this application permission to update this group?"
+    "update_group": "do you give this application permission to update this group?",
+    "lock_tab": "do you give permission for this app's tab to be locked?",
+    "session_permissions": "{{appName}} is requesting session permissions",
+    "session_permissions_description": "The following permissions will be automatically granted for this session:",
+    "session_understand": "I trust this app and understand these permissions will auto-execute",
+    "reencrypt_keys": "Do you give this application permission to re-encrypt group keys?",
+    "close_tab_confirmation": "Close Tab Confirmation",
+    "close_tab": "Close Tab",
+    "close_tab_permission": "Are you sure you want to close this tab?"
   },
   "poll": "poll: {{ name }}",
   "provide_recipient_group_id": "please provide a recipient or groupId",

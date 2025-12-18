@@ -16,7 +16,8 @@
     "waiting": "请等待同步完成。",
     "not_syncronized": "未同步",
     "syncronized": "已同步",
-    "syncronized_desc": "您现在已同步，可以继续。"
+    "syncronized_desc": "您现在已同步，可以继续。",
+    "description": "如果你不想等待你的 Local Node 完成同步，可以先使用 public 继续。 (如果你知道你的 node 落后/离线，你仍然可以继续使用 local，或切换到 public node。)"
   },
   "steps": {
     "java": "已安装 Java",
@@ -31,7 +32,8 @@
     "openSetup": "打开本地设置",
     "goToDownloads": "前往下载",
     "resetKey": "重置 API 密钥",
-    "continue": "继续"
+    "continue": "继续",
+    "continueLocal": "继续使用 Local"
   },
   "error": {
     "noJar": "所选目录不包含 qortal.jar",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "使用你的本地核心",
-    "description": "如果你愿意，可以继续使用公共节点，但我们强烈建议使用本地节点以获得最佳体验。",
+    "description": "如果你愿意，你可以继续使用 public node，但我们强烈建议使用你的 local node 以获得最佳体验。 (如果你在没有连接的情况下尝试访问，你可以在无连接时继续使用 public。)",
     "subTitle": "使用本地节点的优点：",
     "point1": "完全去中心化访问",
     "point2": "下载更快",

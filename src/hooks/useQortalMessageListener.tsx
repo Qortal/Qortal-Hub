@@ -258,6 +258,11 @@ export const listOfAllQortalRequests = [
   'UPDATE_NAME',
   'VOTE_ON_POLL',
   'GET_PRIMARY_NAME',
+  'SESSION_PERMISSIONS',
+  'LOCK_TAB',
+  'UNLOCK_TAB',
+  'WHICH_UI',
+  'REENCRYPT_GROUP_KEYS',
 ];
 
 export const UIQortalRequests = [
@@ -322,6 +327,11 @@ export const UIQortalRequests = [
   'UPDATE_NAME',
   'VOTE_ON_POLL',
   'GET_PRIMARY_NAME',
+  'SESSION_PERMISSIONS',
+  'LOCK_TAB',
+  'UNLOCK_TAB',
+  'WHICH_UI',
+  'REENCRYPT_GROUP_KEYS',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {

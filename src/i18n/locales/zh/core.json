@@ -170,7 +170,7 @@
     "comments": "加载评论...请等待。",
     "posts": "加载帖子...请等待。"
   },
-  "message_us": "如果您需要4个Qort开始聊天而无需任何限制，请在NextCloud（无需注册）或不符合",
+  "message_us": "如果您需要 4 QORT 来无限制地开始聊天，请通过 Nextcloud 联系我们（无需注册）。",
   "message": {
     "error": {
       "address_not_found": "找不到您的地址",
@@ -232,7 +232,7 @@
       "fetching_data": "获取应用程序数据",
       "foreign_fee": "foreign fee: {{ message }}",
       "get_qort_trade_portal": "使用Qortal的交叉链贸易门户网站获取Qort",
-      "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance (4 qort balance for chat, 1.25 for name, 0.75 for some transactions)",
+      "minimal_qort_balance": "账户中至少拥有 {{ quantity }} QORT，可让您以接近即时的速度发送聊天消息。",
       "mentioned": "提及",
       "message_with_image": "此消息已经有一个图像",
       "most_recent_payment": "{{ count }} most recent payment",

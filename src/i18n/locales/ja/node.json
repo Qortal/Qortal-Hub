@@ -16,7 +16,8 @@
     "waiting": "同期が完了するまでお待ちください。",
     "not_syncronized": "未同期",
     "syncronized": "同期済み",
-    "syncronized_desc": "現在同期されています。続行できます。"
+    "syncronized_desc": "現在同期されています。続行できます。",
+    "description": "Local Node の同期を待ちたくない場合は、とりあえず public で続行できます。 (node が遅れている／オフになっていると分かっている場合でも、local で続行するか、public node に切り替えることができます。)"
   },
   "steps": {
     "java": "Java がある",
@@ -31,7 +32,8 @@
     "openSetup": "ローカルセットアップを開く",
     "goToDownloads": "ダウンロードに移動",
     "resetKey": "APIキーをリセット",
-    "continue": "続行"
+    "continue": "続行",
+    "continueLocal": "Local で続行"
   },
   "error": {
     "noJar": "選択されたディレクトリに qortal.jar が存在しません",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "ローカルノードの使用",
-    "description": "希望する場合はパブリックノードを使用できますが、最良の体験のためにはローカルノードの使用を強く推奨します。",
+    "description": "public node で続行することもできますが、最高の体験のためには local node を使用することを強く推奨します。 (接続がない状態でアクセスしようとしている場合は、public で接続なしのまま続行できます。)",
     "subTitle": "ローカルノードを使用する利点：",
     "point1": "完全に分散化されたアクセス",
     "point2": "高速なダウンロード",

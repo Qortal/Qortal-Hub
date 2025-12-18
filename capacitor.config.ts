@@ -1,14 +1,21 @@
-import type { CapacitorConfig } from "@capacitor/cli";
+import type { CapacitorConfig } from '@capacitor/cli';
 
-const config: CapacitorConfig = {
-  appId: "org.Qortal.Qortal-Hub",
-  appName: "Qortal-Hub",
-  webDir: "dist",
+const config: CapacitorConfig & {
+  electron?: {
+    trayIconAndMenuEnabled?: boolean;
+  };
+} = {
+  appId: 'org.Qortal.Qortal-Hub',
+  appName: 'Qortal-Hub',
+  webDir: 'dist',
   plugins: {
     LocalNotifications: {
-      smallIcon: "qort",
-      iconColor: "#09b6e8",
+      smallIcon: 'qort',
+      iconColor: '#09b6e8',
     },
+  },
+  electron: {
+    trayIconAndMenuEnabled: true,
   },
 };
 

@@ -24,7 +24,7 @@ export const ThingsToDoInitial = ({
   const theme = useTheme();
 
   useEffect(() => {
-    if (balance && +balance >= 6) {
+    if (balance && +balance >= 4.5) {
       setChecked1(true);
     }
   }, [balance]);
