@@ -188,19 +188,12 @@ const routes: Record<string, RouteHandler> = {
         end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
       }
 
-      const chunkSize = end - start + 1;
-      console.log(
-        `[Stream] Request for ${videoId}: ${start}-${end} (${chunkSize} bytes)`
-      );
-
       // Fetch encrypted data
       const encryptedData = await fetchRange(resourceUrl, start, end);
-      console.log(`[Stream] Fetched ${encryptedData.length} encrypted bytes`);
 
       // Decrypt
       const blockOffset = BigInt(start >> 4);
       const decryptedData = decryptChunk(key, iv, blockOffset, encryptedData);
-      console.log(`[Stream] Decrypted ${decryptedData.length} bytes`);
 
       // Send response
       const statusCode = range ? 206 : 200;
