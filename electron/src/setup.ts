@@ -38,6 +38,12 @@ import {
   startCore,
   stopCore,
 } from './core';
+import {
+  startVideoServer,
+  stopVideoServer,
+  getVideoServerPort,
+  isVideoServerRunning,
+} from './video-server';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -954,4 +960,33 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
   } catch (error) {
     return false;
   }
+});
+
+// Video Server IPC Handlers
+ipcMain.handle('videoServer:start', async (_event, port?: number) => {
+  try {
+    const serverPort = await startVideoServer(port);
+    return { success: true, port: serverPort };
+  } catch (error) {
+    console.error('Failed to start video server:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('videoServer:stop', async () => {
+  try {
+    await stopVideoServer();
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to stop video server:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('videoServer:getPort', async () => {
+  return getVideoServerPort();
+});
+
+ipcMain.handle('videoServer:isRunning', async () => {
+  return isVideoServerRunning();
 });

@@ -8146,6 +8146,9 @@ export const transferAssetRequest = async (data, isFromExtension) => {
 const lastReEncryptionTime = new Map<number, number>();
 const RE_ENCRYPTION_COOLDOWN_MS = 150000; // 2.5 minutes in milliseconds
 
+// Track which mediaIds belong to which tabId for automatic cleanup
+const mediaIdsByTabId = new Map<string, Set<string>>();
+
 export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
   const requiredFields = ['groupId'];
   requiredFields.forEach((field) => {
@@ -8284,5 +8287,296 @@ export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
         postProcess: 'capitalizeFirstChar',
       })
     );
+  }
+};
+
+export const playEncryptedMedia = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['mediaId', 'key', 'iv', 'location'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Validate location object structure
+  if (
+    !data.location.service ||
+    !data.location.name ||
+    !data.location.identifier
+  ) {
+    throw new Error('Location must include service, name, and identifier');
+  }
+
+  // Construct resourceUrl from location object
+  const resourceUrl = await createEndpoint(
+    `/arbitrary/${data.location.service}/${data.location.name}/${data.location.identifier}`
+  );
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    throw new Error(
+      'Media server is not available. This feature only works in Electron.'
+    );
+  }
+
+  // Helper to convert base64 to Uint8Array (browser-compatible)
+  const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  // Validate key and iv lengths
+  const keyBuffer = base64ToUint8Array(data.key);
+  const ivBuffer = base64ToUint8Array(data.iv);
+
+  if (keyBuffer.length !== 32) {
+    throw new Error('Key must be 32 bytes');
+  }
+  if (ivBuffer.length !== 16) {
+    throw new Error('IV must be 16 bytes');
+  }
+
+  // Get totalSize - either from data or fetch via HEAD request
+  let totalSize = data.totalSize;
+  if (!totalSize) {
+    try {
+      const headResponse = await fetch(resourceUrl, { method: 'HEAD' });
+      const contentLength = headResponse.headers.get('content-length');
+      if (contentLength) {
+        totalSize = parseInt(contentLength, 10);
+        console.log(
+          `[playEncryptedMedia] Auto-detected totalSize: ${totalSize}`
+        );
+      } else {
+        throw new Error(
+          'Could not determine file size. Please provide totalSize parameter.'
+        );
+      }
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch file size: ${error.message}. Please provide totalSize parameter manually.`
+      );
+    }
+  }
+
+  // No permission required - play media directly
+  try {
+    // Start media server if not running
+    const isRunning = await window.videoServer.isRunning();
+    let serverPort: number;
+
+    if (!isRunning) {
+      const startResult = await window.videoServer.start();
+      if (!startResult.success) {
+        throw new Error(`Failed to start media server: ${startResult.error}`);
+      }
+      serverPort = startResult.port!;
+    } else {
+      const port = await window.videoServer.getPort();
+      if (!port) {
+        throw new Error('Media server is running but port is unknown');
+      }
+      serverPort = port;
+    }
+
+    // Register media with server
+    const registerUrl = `http://127.0.0.1:${serverPort}/api/video/register`;
+    const registerResponse = await fetch(registerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        videoId: data.mediaId,
+        key: Array.from(keyBuffer),
+        iv: Array.from(ivBuffer),
+        resourceUrl: resourceUrl,
+        totalSize: totalSize,
+        mimeType: data.mimeType || 'video/mp4',
+      }),
+    });
+
+    if (!registerResponse.ok) {
+      const error = await registerResponse.json();
+      throw new Error(`Failed to register media: ${error.error}`);
+    }
+
+    const registerResult = await registerResponse.json();
+
+    // Return stream URL
+    const streamUrl = `http://127.0.0.1:${serverPort}/api/video/${data.mediaId}/stream`;
+
+    // Track this mediaId by tabId for automatic cleanup
+    if (appInfo?.tabId) {
+      if (!mediaIdsByTabId.has(appInfo.tabId)) {
+        mediaIdsByTabId.set(appInfo.tabId, new Set());
+      }
+      mediaIdsByTabId.get(appInfo.tabId)!.add(data.mediaId);
+      console.log(
+        `[playEncryptedMedia] Tracking mediaId ${data.mediaId} for tabId ${appInfo.tabId}`
+      );
+    }
+
+    return {
+      success: true,
+      mediaId: registerResult.videoId,
+      streamUrl: streamUrl,
+      serverPort: serverPort,
+    };
+  } catch (error) {
+    console.error('[playEncryptedMedia] Error:', error);
+    throw error;
+  }
+};
+
+export const cleanupEncryptedMedia = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['mediaId'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    throw new Error(
+      'Media server is not available. This feature only works in Electron.'
+    );
+  }
+
+  try {
+    const isRunning = await window.videoServer.isRunning();
+    if (!isRunning) {
+      return { success: true, message: 'Media server not running' };
+    }
+
+    const serverPort = await window.videoServer.getPort();
+    if (!serverPort) {
+      return { success: true, message: 'Media server port unknown' };
+    }
+
+    const deleteUrl = `http://127.0.0.1:${serverPort}/api/video/${data.mediaId}`;
+    const deleteResponse = await fetch(deleteUrl, {
+      method: 'DELETE',
+    });
+
+    if (!deleteResponse.ok) {
+      const error = await deleteResponse.json();
+      throw new Error(`Failed to cleanup media: ${error.error}`);
+    }
+
+    // Remove from tracking
+    if (appInfo?.tabId && mediaIdsByTabId.has(appInfo.tabId)) {
+      mediaIdsByTabId.get(appInfo.tabId)!.delete(data.mediaId);
+      if (mediaIdsByTabId.get(appInfo.tabId)!.size === 0) {
+        mediaIdsByTabId.delete(appInfo.tabId);
+      }
+    }
+
+    const result = await deleteResponse.json();
+    return {
+      success: true,
+      existed: result.existed,
+    };
+  } catch (error) {
+    console.error('[cleanupEncryptedMedia] Error:', error);
+    throw error;
+  }
+};
+
+// Cleanup all media for a specific tabId (called when tab closes)
+export const cleanupEncryptedMediaByTabId = async (tabId: string) => {
+  const mediaIds = mediaIdsByTabId.get(tabId);
+  if (!mediaIds || mediaIds.size === 0) {
+    console.log(
+      `[cleanupEncryptedMediaByTabId] No media to cleanup for tabId ${tabId}`
+    );
+    return { success: true, cleanedCount: 0 };
+  }
+
+  console.log(
+    `[cleanupEncryptedMediaByTabId] Cleaning up ${mediaIds.size} media items for tabId ${tabId}`
+  );
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    console.warn('[cleanupEncryptedMediaByTabId] Video server not available');
+    mediaIdsByTabId.delete(tabId);
+    return { success: true, cleanedCount: 0 };
+  }
+
+  try {
+    const isRunning = await window.videoServer.isRunning();
+    if (!isRunning) {
+      mediaIdsByTabId.delete(tabId);
+      return {
+        success: true,
+        cleanedCount: 0,
+        message: 'Media server not running',
+      };
+    }
+
+    const serverPort = await window.videoServer.getPort();
+    if (!serverPort) {
+      mediaIdsByTabId.delete(tabId);
+      return {
+        success: true,
+        cleanedCount: 0,
+        message: 'Media server port unknown',
+      };
+    }
+
+    let cleanedCount = 0;
+    const mediaIdsArray = Array.from(mediaIds);
+
+    // Cleanup each media
+    for (const mediaId of mediaIdsArray) {
+      try {
+        const deleteUrl = `http://127.0.0.1:${serverPort}/api/video/${mediaId}`;
+        const deleteResponse = await fetch(deleteUrl, {
+          method: 'DELETE',
+        });
+
+        if (deleteResponse.ok) {
+          cleanedCount++;
+          console.log(
+            `[cleanupEncryptedMediaByTabId] Cleaned up mediaId: ${mediaId}`
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[cleanupEncryptedMediaByTabId] Error cleaning mediaId ${mediaId}:`,
+          error
+        );
+      }
+    }
+
+    // Remove all tracking for this tab
+    mediaIdsByTabId.delete(tabId);
+
+    return {
+      success: true,
+      cleanedCount: cleanedCount,
+      totalAttempted: mediaIdsArray.length,
+    };
+  } catch (error) {
+    console.error('[cleanupEncryptedMediaByTabId] Error:', error);
+    // Still remove tracking even if cleanup failed
+    mediaIdsByTabId.delete(tabId);
+    return { success: false, error: error.message };
   }
 };

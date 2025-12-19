@@ -263,6 +263,7 @@ export const listOfAllQortalRequests = [
   'UNLOCK_TAB',
   'WHICH_UI',
   'REENCRYPT_GROUP_KEYS',
+  'PLAY_ENCRYPTED_MEDIA',
 ];
 
 export const UIQortalRequests = [
@@ -332,6 +333,7 @@ export const UIQortalRequests = [
   'UNLOCK_TAB',
   'WHICH_UI',
   'REENCRYPT_GROUP_KEYS',
+  'PLAY_ENCRYPTED_MEDIA',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
