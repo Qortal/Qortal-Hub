@@ -176,7 +176,15 @@
     "transfer_asset": "¿Deseas permitir que esta aplicación transfiera el siguiente activo?",
     "update_foreign_fee": "¿Deseas permitir que esta aplicación actualice las tarifas externas en tu nodo?",
     "update_group_detail": "nuevo propietario: {{ owner }}",
-    "update_group": "¿Deseas permitir que esta aplicación actualice este grupo?"
+    "update_group": "¿Deseas permitir que esta aplicación actualice este grupo?",
+    "lock_tab": "¿Das permiso para que la pestaña de esta aplicación sea bloqueada?",
+    "session_permissions": "{{appName}} solicita permisos de sesión",
+    "session_permissions_description": "Los siguientes permisos se concederán automáticamente para esta sesión:",
+    "session_understand": "Confío en esta aplicación y entiendo que estos permisos se ejecutarán automáticamente",
+    "reencrypt_keys": "¿Das permiso a esta aplicación para volver a cifrar las claves del grupo?",
+    "close_tab_confirmation": "Confirmación de cierre de pestaña",
+    "close_tab": "Cerrar pestaña",
+    "close_tab_permission": "¿Estás seguro de que deseas cerrar esta pestaña?"
   },
   "poll": "votación: {{ name }}",
   "provide_recipient_group_id": "por favor proporciona un destinatario o groupId",

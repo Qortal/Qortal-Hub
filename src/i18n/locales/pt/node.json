@@ -16,7 +16,8 @@
     "waiting": "Por favor, aguarde até estar sincronizado.",
     "not_syncronized": "não sincronizado",
     "syncronized": "sincronizado",
-    "syncronized_desc": "você agora está sincronizado. pode continuar."
+    "syncronized_desc": "você agora está sincronizado. pode continuar.",
+    "description": "Se você não quiser esperar até que seu Local Node esteja sincronizado, continue com public por enquanto. (Se você sabe que seu node está atrasado/desligado, pode continuar com local mesmo assim ou mudar para um public node.)"
   },
   "steps": {
     "java": "tem Java",
@@ -31,7 +32,8 @@
     "openSetup": "abrir configuração local",
     "goToDownloads": "ir para downloads",
     "resetKey": "redefinir chave API",
-    "continue": "continuar"
+    "continue": "continuar",
+    "continueLocal": "continuar com Local"
   },
   "error": {
     "noJar": "o diretório escolhido não contém um qortal.jar",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "usando seu nó local",
-    "description": "você pode continuar com o nó público se quiser, mas recomendamos fortemente usar seu próprio nó local para a melhor experiência.",
+    "description": "Você pode prosseguir com o public node se desejar, mas recomendamos fortemente usar seu local node para a melhor experiência. (Se você estiver tentando acessar sem conectividade, pode continuar com public sem conexão.)",
     "subTitle": "vantagens de usar um nó local:",
     "point1": "acesso totalmente descentralizado",
     "point2": "downloads mais rápidos",

@@ -140,7 +140,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
             if (!response?.error) {
               setInfoSnack({
                 type: 'success',
-                message: t('group:message.success.join_group', {
+                message: t('group:message.success.group_join', {
                   postProcess: 'capitalizeFirstChar',
                 }),
               });

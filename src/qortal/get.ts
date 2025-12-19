@@ -37,8 +37,11 @@ import {
   getAssetInfo,
   getPublicKey,
   transferAsset,
+  sendChatNotification,
+  sendChatGroup,
 } from '../background/background.ts';
 import {
+  encryptAndPublishSymmetricKeyGroupChat,
   getAllUserNames,
   getNameInfo,
   uint8ArrayToObject,
@@ -53,12 +56,24 @@ import {
   validateSecretKey,
 } from '../components/Group/Group.tsx';
 import {
+  BTC_FEE_PER_BYTE,
+  DGB_FEE_PER_BYTE,
+  DOGE_FEE_PER_BYTE,
+  LTC_FEE_PER_BYTE,
   MAX_SIZE_PUBLIC_NODE,
   MAX_SIZE_PUBLISH,
   MIN_REQUIRED_QORTS,
+  PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
   QORT_DECIMALS,
   QORTAL_PROTOCOL,
+  RVN_FEE_PER_BYTE,
+  SELLER_FOREIGN_FEE,
+  TIME_MINUTES_1_IN_MILLISECONDS,
   TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_SECONDS_10_IN_MILLISECONDS,
+  TIME_SECONDS_1_IN_MILLISECONDS,
+  TIME_SECONDS_2_IN_MILLISECONDS,
+  TIME_SECONDS_5_IN_MILLISECONDS,
 } from '../constants/constants.ts';
 import Base58 from '../encryption/Base58.ts';
 import ed2curve from '../encryption/ed2curve.ts';
@@ -72,6 +87,7 @@ import {
   decryptSingle,
   encryptDataGroup,
   encryptSingle,
+  hasPrivateString,
   objectToBase64,
   uint8ArrayStartsWith,
   uint8ArrayToBase64,
@@ -81,6 +97,10 @@ import {
   getPermission,
   isRunningGateway,
   setPermission,
+  setSessionPermissions,
+  hasSessionPermission,
+  VALID_SESSION_PERMISSIONS,
+  AUTO_GRANTED_PERMISSIONS_ON_AUTH,
 } from './qortal-requests.ts';
 import TradeBotCreateRequest from '../transactions/TradeBotCreateRequest.ts';
 import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest.ts';
@@ -92,45 +112,16 @@ import { mimeToExtensionMap } from '../utils/memeTypes.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 import utils from '../utils/utils.ts';
 import ShortUniqueId from 'short-unique-id';
-import { isValidBase64WithDecode } from '../utils/decode.ts';
+import {
+  isValidBase64WithDecode,
+  validateAesCtrIvAndKey,
+} from '../utils/decode.ts';
 import i18n from 'i18next';
+import aesjs from 'aes-js';
 
 const uid = new ShortUniqueId({ length: 6 });
 
 export const requestQueueGetAtAddresses = new RequestQueueWithPromise(10);
-
-const sellerForeignFee = {
-  LITECOIN: {
-    value: '~0.00005',
-    ticker: 'LTC',
-  },
-  DOGECOIN: {
-    value: '~0.005',
-    ticker: 'DOGE',
-  },
-  BITCOIN: {
-    value: '~0.0001',
-    ticker: 'BTC',
-  },
-  DIGIBYTE: {
-    value: '~0.0005',
-    ticker: 'DGB',
-  },
-  RAVENCOIN: {
-    value: '~0.006',
-    ticker: 'RVN',
-  },
-  PIRATECHAIN: {
-    value: '~0.0002',
-    ticker: 'ARRR',
-  },
-};
-
-const btcFeePerByte = 0.000001;
-const ltcFeePerByte = 0.0000003;
-const dogeFeePerByte = 0.00001;
-const dgbFeePerByte = 0.0000001;
-const rvnFeePerByte = 0.00001125;
 
 const MAX_RETRIES = 3; // Set max number of retries
 
@@ -169,7 +160,9 @@ export async function retryTransaction(
           );
         }
       }
-      await new Promise((res) => setTimeout(res, 10000));
+      await new Promise((res) =>
+        setTimeout(res, TIME_SECONDS_10_IN_MILLISECONDS)
+      );
     }
   }
 }
@@ -443,7 +436,7 @@ function getFileFromContentScript(fileId) {
         );
         fileRequestResolvers.delete(requestId); // Clean up on timeout
       }
-    }, 10000); // 10-second timeout
+    }, TIME_SECONDS_10_IN_MILLISECONDS);
   });
 }
 
@@ -488,9 +481,20 @@ async function getUserPermission(payload, isFromExtension) {
         responseResolvers.get(requestId)(false); // Resolve with `false` if no response
         responseResolvers.delete(requestId);
       }
-    }, 60000); // 60-second timeout
+    }, TIME_MINUTES_1_IN_MILLISECONDS);
   });
 }
+
+export const getWhichUI = async () => {
+  try {
+    // Check if we're running in Electron
+    const isElectron = !!window?.electronAPI;
+    return isElectron ? 'HUB_ELECTRON' : 'HUB_WEB';
+  } catch (error) {
+    // Default to web if detection fails
+    return 'HUB_WEB';
+  }
+};
 
 export const getUserAccount = async ({
   isFromExtension,
@@ -507,6 +511,17 @@ export const getUserAccount = async ({
     if (skipAuth) {
       skip = true;
     }
+    let hadSessionPermissions = false;
+    // Check for session permission
+    if (
+      appInfo?.tabId &&
+      appInfo?.name &&
+      hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_ACCOUNT')
+    ) {
+      skip = true;
+      hadSessionPermissions = true;
+    }
+
     let resPermission;
     if (!skip) {
       resPermission = await getUserPermission(
@@ -530,6 +545,15 @@ export const getUserAccount = async ({
       setPermission(`qAPPAutoAuth-${appInfo?.name}`, checkbox1);
     }
     if (accepted || skip) {
+      // Auto-grant read-only permissions for authenticated session
+      if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
+        setSessionPermissions(
+          appInfo.tabId,
+          appInfo.name,
+          AUTO_GRANTED_PERMISSIONS_ON_AUTH
+        );
+      }
+
       const wallet = await getSaveWallet();
       const address = wallet.address0;
       const publicKey = wallet.publicKey;
@@ -550,6 +574,112 @@ export const getUserAccount = async ({
         postProcess: 'capitalizeFirstChar',
       })
     );
+  }
+};
+
+export const sessionPermissions = async (data, isFromExtension, appInfo) => {
+  try {
+    const { permissions = [] } = data;
+
+    if (!appInfo?.tabId) {
+      throw new Error('tabId is required from appInfo');
+    }
+
+    if (!appInfo?.name) {
+      throw new Error('App name is required');
+    }
+
+    if (!Array.isArray(permissions) || permissions.length === 0) {
+      throw new Error('permissions array is required and must not be empty');
+    }
+
+    const tabId = appInfo.tabId;
+
+    // Validate all permissions are valid
+    const invalidPermissions = permissions.filter(
+      (permission) => !VALID_SESSION_PERMISSIONS.includes(permission)
+    );
+
+    if (invalidPermissions.length > 0) {
+      throw new Error(
+        `Invalid permissions: ${invalidPermissions.join(', ')}. Valid permissions are: ${VALID_SESSION_PERMISSIONS.join(', ')}`
+      );
+    }
+
+    // Show permission modal with the list of permissions
+    const permissionsListHtml = permissions
+      .map(
+        (permission) => `
+      <div style="
+        background-color: var(--background-paper);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin: 4px 0;
+        font-family: monospace;
+        font-size: 14px;
+        color: var(--text-primary);
+      ">
+        ${permission}
+      </div>
+    `
+      )
+      .join('');
+
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.session_permissions', {
+          defaultValue: `${appInfo.name} is requesting session permissions`,
+          appName: appInfo.name,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:permission.session_permissions_description', {
+          defaultValue:
+            'The following permissions will be automatically granted for this session:',
+          postProcess: 'capitalizeFirstChar',
+        }),
+        html: `
+  <div style="
+    max-height: 40vh;
+    overflow-y: auto;
+    font-family: sans-serif;
+    padding: 10px;
+    background-color: var(--background-default);
+    border-radius: 8px;
+  ">
+    ${permissionsListHtml}
+  </div>
+`,
+        confirmCheckbox: true,
+        confirmCheckboxLabel: i18n.t('question:permission.session_understand', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        isSessionPermission: true,
+      },
+      isFromExtension
+    );
+
+    const { accepted = false } = resPermission || {};
+    if (!accepted) {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+
+    if (accepted) {
+      setSessionPermissions(tabId, appInfo.name, permissions);
+      return true;
+    } else {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  } catch (error) {
+    throw new Error(error?.message || 'Failed to set session permissions');
   }
 };
 
@@ -757,6 +887,19 @@ export const decryptQortalGroupData = async (data, sender) => {
         TIME_MINUTES_20_IN_MILLISECONDS
     ) {
       secretKeyObject = groupSecretkeys[groupId].secretKeyObject;
+    }
+
+    if (secretKeyObject) {
+      const decodeForNumber = atob(data64);
+
+      // Extract the key (assuming it's always the first 10 characters)
+      const keyStr = decodeForNumber.slice(0, 10);
+
+      // Convert the key string back to a number
+      const highestKey = parseInt(keyStr, 10);
+      if (!secretKeyObject[highestKey]) {
+        secretKeyObject = null;
+      }
     }
     if (!secretKeyObject) {
       const { names } = await getGroupAdmins(groupId);
@@ -1067,7 +1210,7 @@ export const decryptData = async (data) => {
   );
 };
 
-export const getListItems = async (data, isFromExtension) => {
+export const getListItems = async (data, appInfo, isFromExtension) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -1095,6 +1238,14 @@ export const getListItems = async (data, isFromExtension) => {
 
   let skip = false;
   if (value) {
+    skip = true;
+  }
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_LIST_ITEMS')
+  ) {
     skip = true;
   }
   let resPermission;
@@ -1306,7 +1457,8 @@ export const deleteListItems = async (data, isFromExtension) => {
 export const publishQDNResource = async (
   data: any,
   sender,
-  isFromExtension
+  isFromExtension,
+  appInfo?
 ) => {
   const requiredFields = ['service'];
   const missingFields: string[] = [];
@@ -1358,6 +1510,28 @@ export const publishQDNResource = async (
   const tags = data?.tags || [];
   const result = {};
   const isMultiFileZip = data?.isMultiFileZip === true;
+  let encryption: any = null;
+  if (data?.encryption) {
+    encryption = structuredClone(data?.encryption);
+  }
+
+  const encryptionType = encryption?.encryptionType || 'standard';
+  const isStreamedEncryption = encryptionType === 'streamed-v1';
+  if (isStreamedEncryption && (!encryption?.iv || !encryption?.key)) {
+    throw new Error('Missing IV or Key');
+  }
+
+  if (isStreamedEncryption && !file) {
+    throw new Error('File required for encryption streamed-v1');
+  }
+  if (isStreamedEncryption && encryption?.iv && encryption?.key) {
+    const { isValid } = validateAesCtrIvAndKey(encryption.iv, encryption.key);
+    if (!isValid) {
+      throw new Error('Invalid IV or Key');
+    }
+    encryption.iv = base64ToUint8Array(encryption.iv);
+    encryption.key = base64ToUint8Array(encryption.key);
+  }
 
   if (file && file.size > MAX_SIZE_PUBLISH) {
     throw new Error(
@@ -1449,28 +1623,55 @@ export const publishQDNResource = async (
   if (!!data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.publish_qdn', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: `service: ${service}`,
-      text3: `identifier: ${identifier || null}`,
-      text4: `name: ${registeredName}`,
-      fee: fee.fee,
-      ...handleDynamicValues,
-    },
-    isFromExtension
-  );
-  const { accepted, checkbox1 = false } = resPermission;
-  if (accepted) {
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'PUBLISH_QDN_RESOURCE');
+
+  let acceptVar = hasPermission || false;
+  let checkbox1Var = false;
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.publish_qdn', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: `service: ${service}`,
+        text3: `identifier: ${identifier || null}`,
+        text4: `name: ${registeredName}`,
+        fee: fee.fee,
+        ...handleDynamicValues,
+      },
+      isFromExtension
+    );
+    const { accepted, checkbox1 = false } = resPermission || {
+      accepted: false,
+      checkbox1: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+    if (checkbox1) {
+      checkbox1Var = checkbox1;
+    }
+  }
+
+  if (acceptVar) {
     try {
       const resPublish = await publishData({
         registeredName: encodeURIComponent(name),
         data: data64 ? data64 : file,
         service: service,
         identifier: encodeURIComponent(identifier),
-        uploadType: isMultiFileZip ? 'zip' : data64 ? 'base64' : 'file',
+        uploadType: isStreamedEncryption
+          ? 'file'
+          : isMultiFileZip
+            ? 'zip'
+            : data64
+              ? 'base64'
+              : 'file',
         filename: filename,
         title,
         description,
@@ -1482,8 +1683,9 @@ export const publishQDNResource = async (
         tag5,
         apiVersion: 2,
         withFee: true,
+        encryption: isStreamedEncryption ? encryption : null,
       });
-      if (resPublish?.signature && hasAppFee && checkbox1) {
+      if (resPublish?.signature && hasAppFee && checkbox1Var) {
         sendCoinFunc(
           {
             amount: appFee,
@@ -1527,7 +1729,9 @@ export const checkArrrSyncStatus = async (seed) => {
 
     if (res.indexOf('<') > -1 || res !== 'Synchronized') {
       // Wait 2 seconds before trying again
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, TIME_SECONDS_2_IN_MILLISECONDS)
+      );
       tries += 1;
     } else {
       // If the response doesn't meet the two conditions, exit the function
@@ -1636,8 +1840,15 @@ export const publishMultipleQDNResources = async (
 
   for (const resource of resources) {
     const resourceEncrypt = encrypt && resource?.disableEncrypt !== true;
-
-    if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
+    const base64Data = resource?.data64 || resource?.base64;
+    if (
+      !resourceEncrypt &&
+      !!base64Data &&
+      resource?.service.endsWith('_PRIVATE') &&
+      hasPrivateString(base64Data)
+    ) {
+      continue;
+    } else if (!resourceEncrypt && resource?.service.endsWith('_PRIVATE')) {
       const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
         postProcess: 'capitalizeFirstChar',
       });
@@ -1647,6 +1858,32 @@ export const publishMultipleQDNResources = async (
         postProcess: 'capitalizeFirstChar',
       });
       throw new Error(errorMsg);
+    } else {
+      const encryption = resource?.encryption;
+
+      const encryptionType = encryption?.encryptionType || 'standard';
+      const isStreamedEncryption = encryptionType === 'streamed-v1';
+      if (encryption && !isStreamedEncryption) {
+        throw new Error('Encryption type not supported');
+      }
+      if (isStreamedEncryption && (!encryption?.iv || !encryption?.key)) {
+        throw new Error('Missing IV or Key');
+      }
+
+      if (isStreamedEncryption && !resource?.file) {
+        throw new Error('File required for encryption streamed-v1');
+      }
+
+      // Decode base64 iv and key to Uint8Array
+      if (isStreamedEncryption && encryption?.iv && encryption?.key) {
+        const { isValid } = validateAesCtrIvAndKey(
+          encryption.iv,
+          encryption.key
+        );
+        if (!isValid) {
+          throw new Error('Invalid IV or Key');
+        }
+      }
     }
   }
 
@@ -1694,12 +1931,26 @@ export const publishMultipleQDNResources = async (
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
   }
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.publish_qdn', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      html: `
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'PUBLISH_MULTIPLE_QDN_RESOURCES'
+    );
+
+  let acceptVar = hasPermission || false;
+  let checkbox1Var = false;
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.publish_qdn', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
       .resource-container {
@@ -1756,14 +2007,24 @@ export const publishMultipleQDNResources = async (
   </div>
   
       `,
-      fee: +fee.fee * resources.length,
-      ...handleDynamicValues,
-    },
-    isFromExtension
-  );
+        fee: +fee.fee * resources.length,
+        ...handleDynamicValues,
+      },
+      isFromExtension
+    );
+    const { accepted, checkbox1 = false } = resPermission || {
+      accepted: false,
+      checkbox1: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+    if (checkbox1) {
+      checkbox1Var = checkbox1;
+    }
+  }
 
-  const { accepted, checkbox1 = false } = resPermission;
-  if (!accepted) {
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -1839,7 +2100,16 @@ export const publishMultipleQDNResources = async (
       if (resource.identifier == null) {
         identifier = 'default';
       }
-      if (!resourceEncrypt && service.endsWith('_PRIVATE')) {
+
+      const skipEncryptIfAlreadyEncrypted =
+        !resourceEncrypt &&
+        service.endsWith('_PRIVATE') &&
+        hasPrivateString(rawData);
+      if (
+        !resourceEncrypt &&
+        service.endsWith('_PRIVATE') &&
+        !skipEncryptIfAlreadyEncrypted
+      ) {
         const errorMsg = i18n.t('question:message.error.only_encrypted_data', {
           postProcess: 'capitalizeFirstChar',
         });
@@ -1890,11 +2160,23 @@ export const publishMultipleQDNResources = async (
       }
 
       try {
-        const dataType = isMultiFileZip
-          ? 'zip'
-          : resource?.base64 || resource?.data64 || resourceEncrypt
-            ? 'base64'
-            : 'file';
+        const preEncryption = resource?.encryption;
+        let encryption: any = null;
+        if (preEncryption) {
+          encryption = structuredClone(preEncryption);
+        }
+        if (encryption) {
+          encryption.iv = base64ToUint8Array(encryption.iv);
+          encryption.key = base64ToUint8Array(encryption.key);
+        }
+
+        const dataType = encryption
+          ? 'file'
+          : isMultiFileZip
+            ? 'zip'
+            : resource?.base64 || resource?.data64 || resourceEncrypt
+              ? 'base64'
+              : 'file';
 
         const response = await publishData({
           apiVersion: 2,
@@ -1914,6 +2196,7 @@ export const publishMultipleQDNResources = async (
           uploadType: dataType,
           withFee: true,
           appInfo,
+          encryption: encryption || null,
         });
         if (response?.signature) {
           publishedResponses.push(response);
@@ -1921,7 +2204,7 @@ export const publishMultipleQDNResources = async (
         await new Promise((res) => {
           setTimeout(() => {
             res();
-          }, 1000);
+          }, TIME_SECONDS_1_IN_MILLISECONDS);
         });
       } catch (error) {
         const errorMsg =
@@ -1960,7 +2243,7 @@ export const publishMultipleQDNResources = async (
     };
     return obj;
   }
-  if (hasAppFee && checkbox1) {
+  if (hasAppFee && checkbox1Var) {
     sendCoinFunc(
       {
         amount: appFee,
@@ -2358,7 +2641,7 @@ export const sendChatMessage = async (data, isFromExtension, appInfo) => {
   }
 };
 
-export const joinGroup = async (data, isFromExtension) => {
+export const joinGroup = async (data, isFromExtension, appInfo?) => {
   const requiredFields = ['groupId'];
   const missingFields: string[] = [];
   requiredFields.forEach((field) => {
@@ -2396,19 +2679,34 @@ export const joinGroup = async (data, isFromExtension) => {
   }
   const fee = await getFee('JOIN_GROUP');
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:message.generic.confirm_join_group', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: `${groupInfo.groupName}`,
-      fee: fee.fee,
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'JOIN_GROUP');
 
-  if (accepted) {
+  let acceptVar = hasPermission || false;
+
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:message.generic.confirm_join_group', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: `${groupInfo.groupName}`,
+        fee: fee.fee,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+  }
+
+  if (acceptVar) {
     const groupId = data.groupId;
 
     if (!groupInfo || groupInfo.error) {
@@ -2442,42 +2740,10 @@ export const joinGroup = async (data, isFromExtension) => {
 export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   try {
     if (!data?.filename) throw new Error('Missing filename');
+
+    // Handle location-based downloads (streaming approach)
     if (data?.location) {
-      const requiredFieldsLocation = ['service', 'name'];
-      const missingFieldsLocation: string[] = [];
-      requiredFieldsLocation.forEach((field) => {
-        if (!data?.location[field]) {
-          missingFieldsLocation.push(field);
-        }
-      });
-      if (missingFieldsLocation.length > 0) {
-        const missingFieldsString = missingFieldsLocation.join(', ');
-        const errorMsg = `Missing fields: ${missingFieldsString}`;
-        throw new Error(errorMsg);
-      }
-      const resPermission = await getUserPermission(
-        {
-          text1: 'Would you like to download:',
-          highlightedText: `${data?.filename}`,
-        },
-        isFromExtension
-      );
-      const { accepted } = resPermission;
-      if (!accepted) throw new Error('User declined to save file');
-      const a = document.createElement('a');
-      let locationUrl = `/arbitrary/${data.location.service}/${data.location.name}`;
-      if (data.location.identifier) {
-        locationUrl = locationUrl + `/${data.location.identifier}`;
-      }
-      const endpoint = await createEndpoint(
-        locationUrl + `?attachment=true&attachmentFilename=${data?.filename}`
-      );
-      a.href = endpoint;
-      a.download = encodeURIComponent(data.filename);
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return true;
+      return await saveFileFromLocation(data, isFromExtension, snackMethods);
     }
     const requiredFields = ['filename', 'blob'];
     const missingFields: string[] = [];
@@ -2564,6 +2830,490 @@ export const saveFile = async (data, sender, isFromExtension, snackMethods) => {
   }
 };
 
+/**
+ * Downloads a file from QDN location with optional decryption
+ * Uses streaming to avoid loading entire file into memory
+ */
+async function saveFileFromLocation(data, isFromExtension, snackMethods) {
+  const {
+    filename,
+    location,
+    encryption = undefined,
+    mimeType = undefined,
+  } = data;
+
+  // Validate location
+  const requiredFieldsLocation = ['service', 'name'];
+  const missingFieldsLocation: string[] = [];
+  requiredFieldsLocation.forEach((field) => {
+    if (!location[field]) {
+      missingFieldsLocation.push(field);
+    }
+  });
+  if (missingFieldsLocation.length > 0) {
+    const missingFieldsString = missingFieldsLocation.join(', ');
+    throw new Error(`Missing location fields: ${missingFieldsString}`);
+  }
+
+  const { service, name, identifier } = location;
+  const isEncrypted = encryption?.encryptionType === 'streamed-v1';
+
+  // Validate encryption if present
+  let ivBytes, keyBytes;
+  if (isEncrypted) {
+    if (!encryption?.iv || !encryption?.key) {
+      throw new Error('Missing encryption IV or key');
+    }
+
+    ivBytes = base64ToUint8Array(encryption.iv);
+    keyBytes = base64ToUint8Array(encryption.key);
+
+    if (ivBytes.length !== 16) {
+      throw new Error(
+        `Invalid IV length: ${ivBytes.length} bytes, expected 16 bytes`
+      );
+    }
+    if (keyBytes.length !== 32) {
+      throw new Error(
+        `Invalid key length: ${keyBytes.length} bytes, expected 32 bytes`
+      );
+    }
+  }
+
+  // Get user permission
+  const resPermission: any = await getUserPermission(
+    {
+      text1: i18n.t('question:download_file', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: isEncrypted ? `${filename} (encrypted)` : filename,
+    },
+    isFromExtension
+  );
+
+  if (!resPermission.accepted) {
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_save_file', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
+  // Build the download URL
+  let locationUrl = `/arbitrary/${service}/${name}`;
+  if (identifier) {
+    locationUrl += `/${identifier}`;
+  }
+
+  // Check if we're in Electron
+  const isElectron = !!window?.electron?.startStreamSave;
+
+  if (isElectron) {
+    // Use Electron streaming approach
+    const saveResult = await window?.electron.startStreamSave({
+      filename,
+      mimeType,
+    });
+
+    if (saveResult.canceled) {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_save_file', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+
+    const filePath = saveResult.filePath;
+
+    try {
+      const endpoint = isEncrypted
+        ? await createEndpoint(locationUrl)
+        : await createEndpoint(
+            locationUrl + `?attachment=true&attachmentFilename=${filename}`
+          );
+      const response = await fetch(endpoint);
+
+      if (!response.ok) {
+        throw new Error('Failed to download file');
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is empty');
+      }
+
+      // Get expected file size
+      const contentLength = response.headers.get('Content-Length');
+      const expectedSize = contentLength ? parseInt(contentLength, 10) : null;
+
+      // Process the response body as a stream
+      const reader = response.body.getReader();
+      let bytesProcessed = 0;
+      let bytesWritten = 0;
+      let isFirstChunk = true;
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            if (expectedSize && bytesProcessed !== expectedSize) {
+              console.warn(
+                `Size mismatch! Expected ${expectedSize} bytes but got ${bytesProcessed} bytes`
+              );
+            }
+            break;
+          }
+
+          if (!value || value.length === 0) {
+            console.warn('Received empty chunk, skipping');
+            continue;
+          }
+
+          let chunkToWrite = value;
+
+          // Decrypt chunk if encrypted
+          if (isEncrypted) {
+            try {
+              const blockOffset = BigInt(bytesProcessed >> 4);
+              chunkToWrite = await decryptAesCtrChunk(
+                keyBytes,
+                ivBytes,
+                blockOffset,
+                value
+              );
+            } catch (decryptError: any) {
+              console.error(
+                'Decryption failed for chunk at offset',
+                bytesProcessed,
+                decryptError
+              );
+              throw new Error(
+                `Decryption failed at byte ${bytesProcessed}: ${decryptError?.message || 'Unknown error'}`
+              );
+            }
+          }
+
+          // Write chunk to disk via Electron IPC
+          try {
+            await window?.electron.writeChunk(
+              filePath,
+              chunkToWrite,
+              !isFirstChunk
+            );
+            bytesWritten += chunkToWrite.length;
+          } catch (writeError: any) {
+            console.error(
+              'Failed to write chunk at offset',
+              bytesWritten,
+              writeError
+            );
+            throw new Error(
+              `Write failed at byte ${bytesWritten}: ${writeError?.message || 'Unknown error'}`
+            );
+          }
+
+          bytesProcessed += value.length;
+          isFirstChunk = false;
+        }
+      } catch (streamError) {
+        console.error('Stream processing error:', streamError);
+        throw streamError;
+      }
+
+      if (
+        snackMethods?.setOpenSnackGlobal &&
+        snackMethods?.setInfoSnackCustom
+      ) {
+        snackMethods.setInfoSnackCustom({
+          type: 'success',
+          message: 'Saving file success!',
+        });
+        snackMethods.setOpenSnackGlobal(true);
+      }
+
+      return true;
+    } catch (error) {
+      // Clean up partial file on error
+      try {
+        await window?.electron.deleteFile(filePath);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup partial file:', cleanupError);
+      }
+      throw error;
+    }
+  } else {
+    // Fallback for non-Electron (browser)
+    // Check if File System Access API is available
+    const hasFileSystemAccess = 'showSaveFilePicker' in window;
+
+    if (isEncrypted) {
+      // For encrypted files, we need to decrypt while streaming
+      if (hasFileSystemAccess) {
+        // Use File System Access API with streaming
+
+        let fileHandle;
+        try {
+          fileHandle = await (window as any).showSaveFilePicker({
+            suggestedName: filename,
+            types: mimeType
+              ? [
+                  {
+                    description: 'File',
+                    accept: {
+                      [mimeType]: [`.${filename.split('.').pop() || '*'}`],
+                    },
+                  },
+                ]
+              : undefined,
+          });
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            throw new Error(
+              i18n.t('question:message.generic.user_declined_save_file', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
+          }
+          throw error;
+        }
+
+        const writable = await fileHandle.createWritable();
+
+        try {
+          const response = await fetch(await createEndpoint(locationUrl));
+
+          if (!response.ok) {
+            throw new Error('Failed to download encrypted file');
+          }
+
+          if (!response.body) {
+            throw new Error('Response body is empty');
+          }
+
+          const contentLength = response.headers.get('Content-Length');
+          const expectedSize = contentLength
+            ? parseInt(contentLength, 10)
+            : null;
+
+          const reader = response.body.getReader();
+          let bytesProcessed = 0;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            const blockOffset = BigInt(bytesProcessed >> 4);
+            const decryptedChunk = await decryptAesCtrChunk(
+              keyBytes,
+              ivBytes,
+              blockOffset,
+              value
+            );
+
+            await writable.write(decryptedChunk);
+            bytesProcessed += value.length;
+          }
+
+          await writable.close();
+
+          if (
+            snackMethods?.setOpenSnackGlobal &&
+            snackMethods?.setInfoSnackCustom
+          ) {
+            snackMethods.setInfoSnackCustom({
+              type: 'success',
+              message: 'Saving file success!',
+            });
+            snackMethods.setOpenSnackGlobal(true);
+          }
+        } catch (error) {
+          await writable.abort();
+          throw error;
+        }
+      } else {
+        // Fallback to memory-based decryption (not ideal for large files)
+
+        const response = await fetch(await createEndpoint(locationUrl));
+
+        if (!response.ok) {
+          throw new Error('Failed to download encrypted file');
+        }
+
+        if (!response.body) {
+          throw new Error('Response body is empty');
+        }
+
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let bytesProcessed = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const blockOffset = BigInt(bytesProcessed >> 4);
+          const decryptedChunk = await decryptAesCtrChunk(
+            keyBytes,
+            ivBytes,
+            blockOffset,
+            value
+          );
+
+          chunks.push(decryptedChunk);
+          bytesProcessed += value.length;
+        }
+
+        const decryptedBlob = new Blob(chunks as BlobPart[]);
+        const blobUrl = URL.createObjectURL(decryptedBlob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(blobUrl);
+      }
+    } else {
+      // Non-encrypted files - try streaming first, fallback to direct download
+      if (hasFileSystemAccess) {
+        let fileHandle;
+        try {
+          fileHandle = await (window as any).showSaveFilePicker({
+            suggestedName: filename,
+            types: mimeType
+              ? [
+                  {
+                    description: 'File',
+                    accept: {
+                      [mimeType]: [`.${filename.split('.').pop() || '*'}`],
+                    },
+                  },
+                ]
+              : undefined,
+          });
+        } catch (error: any) {
+          if (error.name === 'AbortError') {
+            throw new Error(
+              i18n.t('question:message.generic.user_declined_save_file', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
+          }
+          throw error;
+        }
+
+        const writable = await fileHandle.createWritable();
+
+        try {
+          const response = await fetch(
+            await createEndpoint(
+              locationUrl + `?attachment=true&attachmentFilename=${filename}`
+            )
+          );
+
+          if (!response.ok) {
+            throw new Error('Failed to download file');
+          }
+
+          if (!response.body) {
+            throw new Error('Response body is empty');
+          }
+
+          // For non-encrypted files, we can pipe directly
+          await response.body.pipeTo(writable);
+
+          if (
+            snackMethods?.setOpenSnackGlobal &&
+            snackMethods?.setInfoSnackCustom
+          ) {
+            snackMethods.setInfoSnackCustom({
+              type: 'success',
+              message: 'Saving file success!',
+            });
+            snackMethods.setOpenSnackGlobal(true);
+          }
+        } catch (error) {
+          await writable.abort();
+          throw error;
+        }
+      } else {
+        // Direct download using anchor tag
+        const endpoint = await createEndpoint(
+          locationUrl + `?attachment=true&attachmentFilename=${filename}`
+        );
+        const a = document.createElement('a');
+        a.href = endpoint;
+        a.download = encodeURIComponent(filename);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    }
+
+    return true;
+  }
+}
+
+/**
+ * Decrypts a single chunk using AES-CTR
+ */
+async function decryptAesCtrChunk(keyBytes, ivBytes, blockOffset, ciphertext) {
+  // Try WebCrypto first
+  if (crypto?.subtle) {
+    try {
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'AES-CTR' },
+        false,
+        ['decrypt']
+      );
+
+      const counter = deriveCtrCounter(ivBytes, blockOffset);
+
+      const decrypted = await crypto.subtle.decrypt(
+        {
+          name: 'AES-CTR',
+          counter,
+          length: 128,
+        },
+        cryptoKey,
+        ciphertext
+      );
+
+      return new Uint8Array(decrypted);
+    } catch (e) {
+      console.warn('WebCrypto AES-CTR decrypt failed, falling back:', e);
+    }
+  }
+
+  // Fallback using aes-js
+  return fallbackDecryptCtr(keyBytes, ivBytes, blockOffset, ciphertext);
+}
+
+function deriveCtrCounter(iv, blockOffset) {
+  const counter = new Uint8Array(iv);
+  let carry = blockOffset;
+
+  for (let i = 15; i >= 0 && carry > 0n; i--) {
+    const sum = BigInt(counter[i]) + (carry & 0xffn);
+    counter[i] = Number(sum & 0xffn);
+    carry = (carry >> 8n) + (sum >> 8n);
+  }
+  return counter;
+}
+
+function fallbackDecryptCtr(keyBytes, ivBytes, blockOffset, ciphertext) {
+  const counter = deriveCtrCounter(ivBytes, blockOffset);
+  const aesCtr = new aesjs.ModeOfOperation.ctr(
+    keyBytes,
+    new aesjs.Counter(counter)
+  );
+  const decrypted = aesCtr.decrypt(ciphertext);
+  return new Uint8Array(decrypted);
+}
+
 export const deployAt = async (data, isFromExtension) => {
   const requiredFields = [
     'name',
@@ -2648,6 +3398,16 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
     )) || false;
   let skip = false;
   if (value) {
+    skip = true;
+  }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_WALLET')
+  ) {
     skip = true;
   }
 
@@ -2791,6 +3551,17 @@ export const getWalletBalance = async (
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_WALLET_BALANCE')
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!bypassPermission && !skip) {
@@ -3036,6 +3807,17 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'GET_USER_WALLET_INFO')
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!skip) {
@@ -3141,6 +3923,21 @@ export const getUserWalletTransactions = async (
   if (value) {
     skip = true;
   }
+
+  // Check for session permission
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'GET_USER_WALLET_TRANSACTIONS'
+    )
+  ) {
+    skip = true;
+  }
+
   let resPermission;
 
   if (!skip) {
@@ -3394,7 +4191,7 @@ function calculateRateFromFee(totalFee, sizeInBytes) {
   return fee.toFixed(0);
 }
 
-export const updateForeignFee = async (data, isFromExtension) => {
+export const updateForeignFee = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3441,26 +4238,42 @@ export const updateForeignFee = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         })
       : '';
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.update_foreign_fee', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
-      text3: i18n.t('question:value', {
-        value: text3,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
 
-  const { accepted } = resPermission;
-  if (!accepted) {
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'UPDATE_FOREIGN_FEE');
+
+  let acceptVar = hasPermission || false;
+
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.update_foreign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: `type: ${type === 'feerequired' ? 'unlocking' : 'locking'}`,
+        text3: i18n.t('question:value', {
+          value: text3,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+  }
+
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -3560,7 +4373,11 @@ export const getServerConnectionHistory = async (data) => {
   }
 };
 
-export const setCurrentForeignServer = async (data, isFromExtension) => {
+export const setCurrentForeignServer = async (
+  data,
+  isFromExtension,
+  appInfo?
+) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3590,29 +4407,48 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.set_current_server', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'SET_CURRENT_FOREIGN_SERVER'
+    );
 
-  const { accepted } = resPermission;
-  if (!accepted) {
+  let acceptVar = hasPermission || false;
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.set_current_server', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+  }
+
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -3658,7 +4494,7 @@ export const setCurrentForeignServer = async (data, isFromExtension) => {
   return res; // Return the full response
 };
 
-export const addForeignServer = async (data, isFromExtension) => {
+export const addForeignServer = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3688,29 +4524,44 @@ export const addForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.server_add', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'ADD_FOREIGN_SERVER');
 
-  const { accepted } = resPermission;
-  if (!accepted) {
+  let acceptVar = hasPermission || false;
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.server_add', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+  }
+
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -3756,7 +4607,7 @@ export const addForeignServer = async (data, isFromExtension) => {
   return res; // Return the full response
 };
 
-export const removeForeignServer = async (data, isFromExtension) => {
+export const removeForeignServer = async (data, isFromExtension, appInfo?) => {
   const isGateway = await isRunningGateway();
   if (isGateway) {
     throw new Error(
@@ -3786,29 +4637,44 @@ export const removeForeignServer = async (data, isFromExtension) => {
 
   const { coin, host, port, type } = data;
 
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.server_remove', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text2: i18n.t('question:server_type', {
-        type: type,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      text3: i18n.t('question:server_host', {
-        host: host,
-        postProcess: 'capitalizeFirstChar',
-      }),
-      highlightedText: i18n.t('question:coin', {
-        coin: coin,
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'REMOVE_FOREIGN_SERVER');
 
-  const { accepted } = resPermission;
-  if (!accepted) {
+  let acceptVar = hasPermission || false;
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.server_remove', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text2: i18n.t('question:server_type', {
+          type: type,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        text3: i18n.t('question:server_host', {
+          host: host,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: i18n.t('question:coin', {
+          coin: coin,
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+
+    const { accepted } = resPermission || {
+      accepted: false,
+    };
+    if (accepted) {
+      acceptVar = accepted;
+    }
+  }
+
+  if (!acceptVar) {
     throw new Error(
       i18n.t('question:message.generic.user_declined_request', {
         postProcess: 'capitalizeFirstChar',
@@ -4139,7 +5005,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.btcPrivateKey;
-    const feePerByte = data.fee ? data.fee : btcFeePerByte;
+    const feePerByte = data.fee ? data.fee : BTC_FEE_PER_BYTE;
 
     const btcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
@@ -4219,7 +5085,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.ltcPrivateKey;
-    const feePerByte = data.fee ? data.fee : ltcFeePerByte;
+    const feePerByte = data.fee ? data.fee : LTC_FEE_PER_BYTE;
     const ltcWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
 
     if (isNaN(Number(ltcWalletBalance))) {
@@ -4295,7 +5161,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dogePrivateKey;
-    const feePerByte = data.fee ? data.fee : dogeFeePerByte;
+    const feePerByte = data.fee ? data.fee : DOGE_FEE_PER_BYTE;
     const dogeWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dogeWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4371,7 +5237,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.dgbPrivateKey;
-    const feePerByte = data.fee ? data.fee : dgbFeePerByte;
+    const feePerByte = data.fee ? data.fee : DGB_FEE_PER_BYTE;
     const dgbWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(dgbWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4444,7 +5310,7 @@ export const sendCoin = async (data, isFromExtension) => {
     const amount = Number(data.amount);
     const recipient = data?.recipient || data.destinationAddress;
     const xprv58 = parsedData.rvnPrivateKey;
-    const feePerByte = data.fee ? data.fee : rvnFeePerByte;
+    const feePerByte = data.fee ? data.fee : RVN_FEE_PER_BYTE;
     const rvnWalletBalance = await getWalletBalance({ coin: checkCoin }, true);
     if (isNaN(Number(rvnWalletBalance))) {
       const errorMsg = i18n.t('question:message.error.fetch_balance_token', {
@@ -4594,7 +5460,7 @@ function calculateFeeFromRate(feePerKb, sizeInBytes) {
 }
 
 const getBuyingFees = async (foreignBlockchain) => {
-  const ticker = sellerForeignFee[foreignBlockchain].ticker;
+  const ticker = SELLER_FOREIGN_FEE[foreignBlockchain].ticker;
   if (!ticker) throw new Error('invalid foreign blockchain');
   const unlockFee = await getForeignFee({
     coin: ticker,
@@ -4829,7 +5695,7 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
   await new Promise((res) => {
     setTimeout(() => {
       res(null);
-    }, 5000);
+    }, TIME_SECONDS_5_IN_MILLISECONDS);
   });
   const url = await createEndpoint(
     `/crosschain/tradebot?foreignBlockchain=LITECOIN`
@@ -4842,9 +5708,6 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     },
   });
   const data = await tradeBotsReponse.json();
-  const latestItem2 = data
-    .filter((item) => item.creatorAddress === address)
-    .sort((a, b) => b.timestamp - a.timestamp)[0];
   const latestItem = data
     .filter(
       (item) =>
@@ -4854,7 +5717,8 @@ const findFailedTradebot = async (createBotCreationTimestamp, body) => {
     .sort((a, b) => b.timestamp - a.timestamp)[0];
   if (
     latestItem &&
-    createBotCreationTimestamp - latestItem.timestamp <= 5000 &&
+    createBotCreationTimestamp - latestItem.timestamp <=
+      TIME_SECONDS_5_IN_MILLISECONDS &&
     createBotCreationTimestamp > latestItem.timestamp // Ensure latestItem's timestamp is before createBotCreationTimestamp
   ) {
     return latestItem;
@@ -5110,6 +5974,72 @@ export const openNewTab = async (data, isFromExtension) => {
       })
     );
   }
+};
+
+export const lockTab = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['lockMessage'];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(', ');
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
+    throw new Error(errorMsg);
+  }
+
+  const { lockMessage } = data;
+  const tabId = appInfo?.tabId;
+
+  if (!tabId) {
+    throw new Error('Tab ID not found');
+  }
+
+  // Check for session permission
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'LOCK_TAB');
+
+  if (!hasPermission) {
+    const resPermission = await getUserPermission(
+      {
+        text1: 'Lock tab',
+        text2: i18n.t('question:permission.lock_tab', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+
+    const { accepted } = resPermission || { accepted: false };
+    if (!accepted) {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  }
+
+  executeEvent('addLock', { data: { tabId, lockMessage } });
+  return true;
+};
+
+export const unlockTab = async (data, isFromExtension, appInfo) => {
+  const tabId = appInfo?.tabId;
+
+  if (!tabId) {
+    throw new Error('Tab ID not found');
+  }
+
+  executeEvent('removeLock', { data: { tabId } });
+  return true;
 };
 
 export const adminAction = async (data, isFromExtension) => {
@@ -6611,17 +7541,32 @@ export const buyNameRequest = async (data, isFromExtension) => {
   }
 };
 
-export const signForeignFees = async (data, isFromExtension) => {
-  const resPermission = await getUserPermission(
-    {
-      text1: i18n.t('question:permission.sign_fee', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-    },
-    isFromExtension
-  );
-  const { accepted } = resPermission;
-  if (accepted) {
+export const signForeignFees = async (data, appInfo, isFromExtension) => {
+  let skip = false;
+  let acceptedVar = false;
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'SIGN_FOREIGN_FEES')
+  ) {
+    skip = true;
+  }
+  let resPermission;
+  if (!skip) {
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.sign_fee', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    acceptedVar = accepted;
+  }
+  if (acceptedVar || skip) {
     const wallet = await getSaveWallet();
     const address = wallet.address0;
     const resKeyPair = await getKeyPair();
@@ -7175,4 +8120,443 @@ export const transferAssetRequest = async (data, isFromExtension) => {
     assetId,
   });
   return res;
+};
+
+// Track last re-encryption timestamp per groupId
+const lastReEncryptionTime = new Map<number, number>();
+const RE_ENCRYPTION_COOLDOWN_MS = 150000; // 2.5 minutes in milliseconds
+
+// Track which mediaIds belong to which tabId for automatic cleanup
+const mediaIdsByTabId = new Map<string, Set<string>>();
+
+export const reEncryptQortalKeys = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['groupId'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Check if re-encryption was done recently for this groupId
+  const groupId = data.groupId;
+  const lastTime = lastReEncryptionTime.get(groupId);
+  const currentTime = Date.now();
+
+  if (lastTime && currentTime - lastTime < RE_ENCRYPTION_COOLDOWN_MS) {
+    const remainingTime = Math.ceil(
+      (RE_ENCRYPTION_COOLDOWN_MS - (currentTime - lastTime)) / 1000
+    );
+    throw new Error(
+      `Re-encryption cooldown in effect. Please wait ${remainingTime} seconds before re-encrypting keys for this group again.`
+    );
+  }
+
+  const urlGroupInfo = await createEndpoint(`/groups/${data?.groupId}`);
+  const response = await fetch(urlGroupInfo);
+  if (!response.ok)
+    throw new Error(
+      i18n.t('question:message.error.fetch_group', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+
+  const groupInfo = await response.json();
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  if (groupInfo?.owner !== address) {
+    throw new Error('Only the group owner can perform this request');
+  }
+  let skip = false;
+  let acceptedVar = false;
+  if (
+    !skip &&
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(appInfo.tabId, appInfo.name, 'REENCRYPT_GROUP_KEYS')
+  ) {
+    skip = true;
+  }
+  let resPermission;
+  if (!skip) {
+    const groupName = groupInfo?.groupName;
+    resPermission = await getUserPermission(
+      {
+        text1: i18n.t('question:permission.reencrypt_keys', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        highlightedText: `Group: ${groupName}`,
+      },
+      isFromExtension
+    );
+    const { accepted } = resPermission;
+
+    acceptedVar = accepted;
+  }
+  if (acceptedVar || skip) {
+    const groupId = data.groupId;
+    const addKey = data?.addKey || false;
+
+    const { names } = await getGroupAdmins(groupId);
+
+    const publish = await getPublishesFromAdmins(names, groupId);
+    if (publish === false) {
+      // create new key
+
+      await encryptAndPublishSymmetricKeyGroupChat({
+        groupId,
+        previousData: null,
+        addKey: true,
+      });
+
+      sendChatGroup({
+        groupId,
+        typeMessage: undefined,
+        chatReference: undefined,
+        messageText: PUBLIC_NOTIFICATION_CODE_FIRST_SECRET_KEY,
+      });
+
+      // Update last re-encryption timestamp
+      lastReEncryptionTime.set(groupId, Date.now());
+      return true;
+    }
+
+    const url = await createEndpoint(
+      `/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${
+        publish.identifier
+      }?encoding=base64&rebuild=true`
+    );
+
+    const res = await fetch(url);
+    const resData = await res.text();
+
+    const decryptedKey: any = await decryptResource(resData, true);
+
+    const dataint8Array = base64ToUint8Array(decryptedKey.data);
+    const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+    if (!validateSecretKey(decryptedKeyToObject))
+      throw new Error(
+        i18n.t('auth:message.error.invalid_secret_key', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    const { data: responseData, numberOfMembers } =
+      await encryptAndPublishSymmetricKeyGroupChat({
+        groupId,
+        previousData: decryptedKeyToObject,
+        addKey: addKey,
+      });
+
+    sendChatNotification(
+      responseData,
+      groupId,
+      decryptedKeyToObject,
+      numberOfMembers
+    );
+
+    // Update last re-encryption timestamp
+    lastReEncryptionTime.set(groupId, Date.now());
+    return true;
+  } else {
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+};
+
+export const playEncryptedMedia = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['mediaId', 'key', 'iv', 'location'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Validate location object structure
+  if (
+    !data.location.service ||
+    !data.location.name ||
+    !data.location.identifier
+  ) {
+    throw new Error('Location must include service, name, and identifier');
+  }
+
+  // Construct resourceUrl from location object
+  const resourceUrl = await createEndpoint(
+    `/arbitrary/${data.location.service}/${data.location.name}/${data.location.identifier}`
+  );
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    throw new Error(
+      'Media server is not available. This feature only works in Electron.'
+    );
+  }
+
+  // Helper to convert base64 to Uint8Array (browser-compatible)
+  const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  // Validate key and iv lengths
+  const keyBuffer = base64ToUint8Array(data.key);
+  const ivBuffer = base64ToUint8Array(data.iv);
+
+  if (keyBuffer.length !== 32) {
+    throw new Error('Key must be 32 bytes');
+  }
+  if (ivBuffer.length !== 16) {
+    throw new Error('IV must be 16 bytes');
+  }
+
+  // Get totalSize - either from data or fetch via HEAD request
+  let totalSize = data.totalSize;
+  if (!totalSize) {
+    try {
+      const headResponse = await fetch(resourceUrl, { method: 'HEAD' });
+      const contentLength = headResponse.headers.get('content-length');
+      if (contentLength) {
+        totalSize = parseInt(contentLength, 10);
+        console.log(
+          `[playEncryptedMedia] Auto-detected totalSize: ${totalSize}`
+        );
+      } else {
+        throw new Error(
+          'Could not determine file size. Please provide totalSize parameter.'
+        );
+      }
+    } catch (error) {
+      throw new Error(
+        `Failed to fetch file size: ${error.message}. Please provide totalSize parameter manually.`
+      );
+    }
+  }
+
+  // No permission required - play media directly
+  try {
+    // Start media server if not running
+    const isRunning = await window.videoServer.isRunning();
+    let serverPort: number;
+
+    if (!isRunning) {
+      const startResult = await window.videoServer.start();
+      if (!startResult.success) {
+        throw new Error(`Failed to start media server: ${startResult.error}`);
+      }
+      serverPort = startResult.port!;
+    } else {
+      const port = await window.videoServer.getPort();
+      if (!port) {
+        throw new Error('Media server is running but port is unknown');
+      }
+      serverPort = port;
+    }
+
+    // Register media with server
+    const registerUrl = `http://127.0.0.1:${serverPort}/api/video/register`;
+    const registerResponse = await fetch(registerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        videoId: data.mediaId,
+        key: Array.from(keyBuffer),
+        iv: Array.from(ivBuffer),
+        resourceUrl: resourceUrl,
+        totalSize: totalSize,
+        mimeType: data.mimeType || 'video/mp4',
+      }),
+    });
+
+    if (!registerResponse.ok) {
+      const error = await registerResponse.json();
+      throw new Error(`Failed to register media: ${error.error}`);
+    }
+
+    const registerResult = await registerResponse.json();
+
+    // Return stream URL
+    const streamUrl = `http://127.0.0.1:${serverPort}/api/video/${data.mediaId}/stream`;
+
+    // Track this mediaId by tabId for automatic cleanup
+    if (appInfo?.tabId) {
+      if (!mediaIdsByTabId.has(appInfo.tabId)) {
+        mediaIdsByTabId.set(appInfo.tabId, new Set());
+      }
+      mediaIdsByTabId.get(appInfo.tabId)!.add(data.mediaId);
+      console.log(
+        `[playEncryptedMedia] Tracking mediaId ${data.mediaId} for tabId ${appInfo.tabId}`
+      );
+    }
+
+    return {
+      success: true,
+      mediaId: registerResult.videoId,
+      streamUrl: streamUrl,
+      serverPort: serverPort,
+    };
+  } catch (error) {
+    console.error('[playEncryptedMedia] Error:', error);
+    throw error;
+  }
+};
+
+export const cleanupEncryptedMedia = async (data, isFromExtension, appInfo) => {
+  const requiredFields = ['mediaId'];
+  requiredFields.forEach((field) => {
+    if (data[field] === undefined || data[field] === null) {
+      throw new Error(
+        i18n.t('question:message.error.missing_fields', {
+          fields: field,
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  });
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    throw new Error(
+      'Media server is not available. This feature only works in Electron.'
+    );
+  }
+
+  try {
+    const isRunning = await window.videoServer.isRunning();
+    if (!isRunning) {
+      return { success: true, message: 'Media server not running' };
+    }
+
+    const serverPort = await window.videoServer.getPort();
+    if (!serverPort) {
+      return { success: true, message: 'Media server port unknown' };
+    }
+
+    const deleteUrl = `http://127.0.0.1:${serverPort}/api/video/${data.mediaId}`;
+    const deleteResponse = await fetch(deleteUrl, {
+      method: 'DELETE',
+    });
+
+    if (!deleteResponse.ok) {
+      const error = await deleteResponse.json();
+      throw new Error(`Failed to cleanup media: ${error.error}`);
+    }
+
+    // Remove from tracking
+    if (appInfo?.tabId && mediaIdsByTabId.has(appInfo.tabId)) {
+      mediaIdsByTabId.get(appInfo.tabId)!.delete(data.mediaId);
+      if (mediaIdsByTabId.get(appInfo.tabId)!.size === 0) {
+        mediaIdsByTabId.delete(appInfo.tabId);
+      }
+    }
+
+    const result = await deleteResponse.json();
+    return {
+      success: true,
+      existed: result.existed,
+    };
+  } catch (error) {
+    console.error('[cleanupEncryptedMedia] Error:', error);
+    throw error;
+  }
+};
+
+// Cleanup all media for a specific tabId (called when tab closes)
+export const cleanupEncryptedMediaByTabId = async (tabId: string) => {
+  const mediaIds = mediaIdsByTabId.get(tabId);
+  if (!mediaIds || mediaIds.size === 0) {
+    console.log(
+      `[cleanupEncryptedMediaByTabId] No media to cleanup for tabId ${tabId}`
+    );
+    return { success: true, cleanedCount: 0 };
+  }
+
+  console.log(
+    `[cleanupEncryptedMediaByTabId] Cleaning up ${mediaIds.size} media items for tabId ${tabId}`
+  );
+
+  // Check if we're in Electron
+  if (!window?.videoServer) {
+    console.warn('[cleanupEncryptedMediaByTabId] Video server not available');
+    mediaIdsByTabId.delete(tabId);
+    return { success: true, cleanedCount: 0 };
+  }
+
+  try {
+    const isRunning = await window.videoServer.isRunning();
+    if (!isRunning) {
+      mediaIdsByTabId.delete(tabId);
+      return {
+        success: true,
+        cleanedCount: 0,
+        message: 'Media server not running',
+      };
+    }
+
+    const serverPort = await window.videoServer.getPort();
+    if (!serverPort) {
+      mediaIdsByTabId.delete(tabId);
+      return {
+        success: true,
+        cleanedCount: 0,
+        message: 'Media server port unknown',
+      };
+    }
+
+    let cleanedCount = 0;
+    const mediaIdsArray = Array.from(mediaIds);
+
+    // Cleanup each media
+    for (const mediaId of mediaIdsArray) {
+      try {
+        const deleteUrl = `http://127.0.0.1:${serverPort}/api/video/${mediaId}`;
+        const deleteResponse = await fetch(deleteUrl, {
+          method: 'DELETE',
+        });
+
+        if (deleteResponse.ok) {
+          cleanedCount++;
+          console.log(
+            `[cleanupEncryptedMediaByTabId] Cleaned up mediaId: ${mediaId}`
+          );
+        }
+      } catch (error) {
+        console.error(
+          `[cleanupEncryptedMediaByTabId] Error cleaning mediaId ${mediaId}:`,
+          error
+        );
+      }
+    }
+
+    // Remove all tracking for this tab
+    mediaIdsByTabId.delete(tabId);
+
+    return {
+      success: true,
+      cleanedCount: cleanedCount,
+      totalAttempted: mediaIdsArray.length,
+    };
+  } catch (error) {
+    console.error('[cleanupEncryptedMediaByTabId] Error:', error);
+    // Still remove tracking even if cleanup failed
+    mediaIdsByTabId.delete(tabId);
+    return { success: false, error: error.message };
+  }
 };

@@ -106,11 +106,14 @@ export const getPublicKeysByAddress = async (admins: string[]) => {
 export const encryptAndPublishSymmetricKeyGroupChat = async ({
   groupId,
   previousData,
+  addKey = true,
 }: {
   groupId: number;
   previousData: Object;
+  addKey?: boolean;
 }) => {
   try {
+    let shouldAddKey = addKey || false;
     let highestKey = 0;
     if (previousData) {
       highestKey = Math.max(
@@ -120,6 +123,10 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
       );
     }
 
+    if (!previousData) {
+      shouldAddKey = true;
+    }
+
     const resKeyPair = await getKeyPair();
     const parsedData = resKeyPair;
     const privateKey = parsedData.privateKey;
@@ -127,10 +134,12 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
     const groupmemberPublicKeys = await getPublicKeys(groupId);
     const symmetricKey = createSymmetricKeyAndNonce();
     const nextNumber = highestKey + 1;
-    const objectToSave = {
-      ...previousData,
-      [nextNumber]: symmetricKey,
-    };
+    const objectToSave = shouldAddKey
+      ? {
+          ...(previousData || {}),
+          [nextNumber]: symmetricKey,
+        }
+      : previousData;
 
     const symmetricKeyAndNonceBase64 = await objectToBase64(objectToSave);
 

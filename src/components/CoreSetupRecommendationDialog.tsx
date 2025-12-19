@@ -36,7 +36,7 @@ export function CoreSetupRecommendationDialog(
   const proceedWithPublic = async () => {
     try {
       await handleSaveNodeInfo(null);
-      await authenticate();
+      await authenticate(true);
     } catch (error) {
       console.error(error);
     } finally {

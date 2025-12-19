@@ -21,7 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
-import { myCapacitorApp } from '.';
+import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
   customQortalInstalledDir,
@@ -38,6 +38,12 @@ import {
   startCore,
   stopCore,
 } from './core';
+import {
+  startVideoServer,
+  stopVideoServer,
+  getVideoServerPort,
+  isVideoServerRunning,
+} from './video-server';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -191,6 +197,43 @@ export class ElectronCapacitorApp {
       );
     }
 
+    // Ask user how they want to close the window
+    this.MainWindow.on('close', async (event) => {
+      if (!isQuitting) {
+        event.preventDefault();
+
+        // Determine platform-specific text
+        const backgroundText =
+          process.platform === 'darwin'
+            ? 'Minimize to Dock'
+            : 'Minimize to Tray';
+        const backgroundDetail =
+          process.platform === 'darwin'
+            ? 'Keep the app running in the dock'
+            : 'Keep the app running in the system tray';
+
+        const choice = await dialog.showMessageBox(this.MainWindow, {
+          type: 'question',
+          buttons: [backgroundText, 'Quit Completely', 'Cancel'],
+          defaultId: 0,
+          title: 'Close Qortal Hub',
+          message: 'What would you like to do?',
+          detail: `${backgroundText}: ${backgroundDetail}\n\nQuit Completely: Stop the application entirely`,
+          cancelId: 2,
+        });
+
+        if (choice.response === 0) {
+          // Minimize to background
+          this.MainWindow.hide();
+        } else if (choice.response === 1) {
+          // Quit completely
+          setIsQuitting(true);
+          app.quit();
+        }
+        // If response === 2 (Cancel), do nothing
+      }
+    });
+
     // If we close the main window with the splashscreen enabled we need to destory the ref.
     this.MainWindow.on('closed', () => {
       if (
@@ -203,31 +246,43 @@ export class ElectronCapacitorApp {
 
     // When the tray icon is enabled, setup the options.
     if (this.CapacitorFileConfig.electron?.trayIconAndMenuEnabled) {
-      this.TrayIcon = new Tray(icon);
-      this.TrayIcon.on('double-click', () => {
-        if (this.MainWindow) {
-          if (this.MainWindow.isVisible()) {
-            this.MainWindow.hide();
-          } else {
-            this.MainWindow.show();
-            this.MainWindow.focus();
-          }
+      // On macOS, use dock instead of menu bar tray icon (more conventional)
+      // On Windows and Linux, use the system tray icon
+      if (process.platform !== 'darwin') {
+        this.TrayIcon = new Tray(icon);
+
+        // On Windows, single-click shows context menu (handled automatically by the OS)
+        // On Linux, single-click toggles window visibility
+        if (process.platform !== 'win32') {
+          this.TrayIcon.on('click', () => {
+            if (this.MainWindow) {
+              if (this.MainWindow.isVisible()) {
+                this.MainWindow.hide();
+              } else {
+                this.MainWindow.show();
+                this.MainWindow.focus();
+              }
+            }
+          });
         }
-      });
-      this.TrayIcon.on('click', () => {
-        if (this.MainWindow) {
-          if (this.MainWindow.isVisible()) {
-            this.MainWindow.hide();
-          } else {
-            this.MainWindow.show();
-            this.MainWindow.focus();
+
+        // Double-click toggles window visibility on all platforms
+        this.TrayIcon.on('double-click', () => {
+          if (this.MainWindow) {
+            if (this.MainWindow.isVisible()) {
+              this.MainWindow.hide();
+            } else {
+              this.MainWindow.show();
+              this.MainWindow.focus();
+            }
           }
-        }
-      });
-      this.TrayIcon.setToolTip(app.getName());
-      this.TrayIcon.setContextMenu(
-        Menu.buildFromTemplate(this.TrayMenuTemplate)
-      );
+        });
+
+        this.TrayIcon.setToolTip(app.getName());
+        this.TrayIcon.setContextMenu(
+          Menu.buildFromTemplate(this.TrayMenuTemplate)
+        );
+      }
     }
 
     // Setup the main manu bar at the top of our window.
@@ -516,6 +571,80 @@ ipcMain.handle(
     }
   }
 );
+
+// Handler for initiating a streaming file save
+ipcMain.handle(
+  'file:startStreamSave',
+  async (_event, options: { filename: string; mimeType?: string }) => {
+    try {
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        defaultPath: options.filename,
+        filters: options.mimeType
+          ? [
+              {
+                name: 'File',
+                extensions: [options.filename.split('.').pop() || '*'],
+              },
+            ]
+          : undefined,
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { canceled: true };
+      }
+
+      return {
+        canceled: false,
+        filePath: result.filePath,
+      };
+    } catch (err) {
+      console.error('Error in file:startStreamSave', err);
+      throw err;
+    }
+  }
+);
+
+// Handler for writing chunks to a file
+ipcMain.handle(
+  'file:writeChunk',
+  async (_event, filePath: string, chunk: Uint8Array, append: boolean) => {
+    try {
+      const buffer = Buffer.from(chunk);
+      const mode = append ? 'append' : 'write';
+      console.log(
+        `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
+      );
+
+      if (append) {
+        await fs.promises.appendFile(filePath, buffer);
+      } else {
+        await fs.promises.writeFile(filePath, buffer);
+      }
+
+      // Get file size after write to verify
+      const stats = await fs.promises.stat(filePath);
+      console.log(`[IPC] File size after write: ${stats.size} bytes`);
+
+      return true;
+    } catch (err) {
+      console.error('[IPC] Error writing chunk to', filePath, ':', err);
+      throw err;
+    }
+  }
+);
+
+// Handler for cleaning up failed downloads
+ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
+  try {
+    await fs.promises.unlink(filePath);
+    return true;
+  } catch (err) {
+    console.error('Error deleting file', filePath, err);
+    // Don't throw - file might not exist
+    return false;
+  }
+});
 
 const progressSubscribers = new Set<Electron.WebContents>();
 
@@ -831,4 +960,33 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
   } catch (error) {
     return false;
   }
+});
+
+// Video Server IPC Handlers
+ipcMain.handle('videoServer:start', async (_event, port?: number) => {
+  try {
+    const serverPort = await startVideoServer(port);
+    return { success: true, port: serverPort };
+  } catch (error) {
+    console.error('Failed to start video server:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('videoServer:stop', async () => {
+  try {
+    await stopVideoServer();
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to stop video server:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('videoServer:getPort', async () => {
+  return getVideoServerPort();
+});
+
+ipcMain.handle('videoServer:isRunning', async () => {
+  return isVideoServerRunning();
 });

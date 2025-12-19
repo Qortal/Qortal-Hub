@@ -16,7 +16,8 @@
     "waiting": "Por favor espera hasta que estés sincronizado.",
     "not_syncronized": "no sincronizado",
     "syncronized": "sincronizado",
-    "syncronized_desc": "ahora estás sincronizado. puedes continuar."
+    "syncronized_desc": "ahora estás sincronizado. puedes continuar.",
+    "description": "Si no deseas esperar a que tu Local Node se sincronice, continúa con public por ahora. (Si sabes que tu node está atrasado/apagado, puedes continuar con local igualmente o cambiar a un public node.)"
   },
   "steps": {
     "java": "tiene Java",
@@ -31,7 +32,8 @@
     "openSetup": "abrir configuración local",
     "goToDownloads": "ir a descargas",
     "resetKey": "restablecer clave API",
-    "continue": "continuar"
+    "continue": "continuar",
+    "continueLocal": "continuar con Local"
   },
   "error": {
     "noJar": "el directorio seleccionado no contiene un qortal.jar",
@@ -48,7 +50,7 @@
   },
   "recommendation": {
     "title": "usar tu núcleo local",
-    "description": "puedes continuar con el nodo público si lo deseas, pero recomendamos encarecidamente usar tu nodo local para una mejor experiencia.",
+    "description": "Puedes continuar con el public node si lo deseas, pero recomendamos encarecidamente usar tu local node para la mejor experiencia. (Si estás intentando acceder sin conectividad, puedes continuar con public sin conexión.)",
     "subTitle": "ventajas de usar un nodo local:",
     "point1": "acceso completamente descentralizado",
     "point2": "descargas más rápidas",

@@ -145,7 +145,13 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
 
       <Spacer height="35px" />
 
-      <Box>
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <CustomLabel htmlFor="standard-adornment-name">
           {t('core:to', {
             postProcess: 'capitalizeFirstChar',

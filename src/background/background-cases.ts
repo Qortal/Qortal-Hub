@@ -1428,12 +1428,11 @@ export async function encryptAndPublishSymmetricKeyGroupChatCase(
   event
 ) {
   try {
-    const { groupId, previousData, previousNumber } = request.payload;
+    const { groupId, previousData } = request.payload;
     const { data, numberOfMembers } =
       await encryptAndPublishSymmetricKeyGroupChat({
         groupId,
         previousData,
-        previousNumber,
       });
 
     event.source.postMessage(

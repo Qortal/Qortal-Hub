@@ -80,24 +80,6 @@ export const NewUsersCTA = ({ balance }) => {
           >
             Nextcloud
           </Button>
-
-          <Button
-            variant={'contained'}
-            sx={{
-              backgroundColor: '#4297E2',
-            }}
-            onClick={() => {
-              if (window?.electronAPI?.openExternal) {
-                window.electronAPI.openExternal(
-                  'https://link.qortal.dev/discord-invite'
-                );
-              } else {
-                window.open('https://link.qortal.dev/discord-invite', '_blank');
-              }
-            }}
-          >
-            Discord
-          </Button>
         </Box>
       </Box>
     </Box>

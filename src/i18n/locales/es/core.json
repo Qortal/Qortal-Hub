@@ -170,7 +170,7 @@
     "comments": "Cargando comentarios ... por favor espere.",
     "posts": "Cargando publicaciones ... por favor espere."
   },
-  "message_us": "Envíenos un mensaje en NextCloud (no se requiere registro) o discordia si necesita 4 Qort para comenzar a chatear sin limitaciones",
+  "message_us": "Por favor, envíanos un mensaje en Nextcloud (no se requiere registro) si necesitas 4 QORT para comenzar a chatear sin ninguna limitación.",
   "message": {
     "error": {
       "address_not_found": "No se encontró su dirección",
@@ -232,7 +232,7 @@
       "fetching_data": "Obtener datos de aplicaciones",
       "foreign_fee": "foreign fee: {{ message }}",
       "get_qort_trade_portal": "Obtenga Qort usando el portal de comercio Crosschain de Qortalal",
-      "minimal_qort_balance": "having at least {{ quantity }} QORT in your balance (4 qort balance for chat, 1.25 for name, 0.75 for some transactions)",
+      "minimal_qort_balance": "Tener al menos {{ quantity }} QORT en tu saldo te permite enviar mensajes de chat a una velocidad casi instantánea.",
       "mentioned": "mencionado",
       "message_with_image": "Este mensaje ya tiene una imagen",
       "most_recent_payment": "{{ count }} most recent payment",

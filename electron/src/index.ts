@@ -4,7 +4,7 @@ import {
   setupElectronDeepLinking,
 } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem } from 'electron';
+import { app, MenuItem, dialog } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -20,9 +20,55 @@ import * as net from 'net';
 // Graceful handling of unhandled errors.
 unhandled();
 
+// Flag to track if the app is quitting
+export let isQuitting = false;
+
+// Function to set the quitting flag
+export function setIsQuitting(value: boolean) {
+  isQuitting = value;
+}
+
 // Define our menu templates (these are optional)
 const trayMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
-  new MenuItem({ label: 'Quit App', role: 'quit' }),
+  new MenuItem({
+    label: 'Show App',
+    click: () => {
+      const mainWindow = myCapacitorApp.getMainWindow();
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    },
+  }),
+  new MenuItem({
+    label: 'Quit App',
+    click: async () => {
+      const mainWindow = myCapacitorApp.getMainWindow();
+      const wasHidden = !mainWindow.isVisible();
+
+      // Show the window if it's hidden so the dialog appears properly
+      if (wasHidden) {
+        mainWindow.show();
+      }
+
+      const choice = await dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: ['Cancel', 'Quit'],
+        defaultId: 0,
+        title: 'Confirm Quit',
+        message: 'Are you sure you want to quit Qortal Hub?',
+        detail: 'The application will close completely.',
+      });
+
+      if (choice.response === 1) {
+        setIsQuitting(true);
+        app.quit();
+      } else if (wasHidden) {
+        // Hide the window again if user cancelled and it was hidden
+        mainWindow.hide();
+      }
+    },
+  }),
 ];
 const appMenuBarMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
   { role: process.platform === 'darwin' ? 'appMenu' : 'fileMenu' },
@@ -119,21 +165,29 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   setInterval(checkForUpdates, 24 * 60 * 60 * 1000);
 })();
 
+// Set isQuitting flag before the app quits
+app.on('before-quit', () => {
+  setIsQuitting(true);
+});
+
 // Handle when all of our windows are close (platforms have their own expectations).
 app.on('window-all-closed', function () {
-  // On OS X it is common for applications and their menu bar
-  // to stay active until the user quits explicitly with Cmd + Q
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // Don't quit the app when all windows are closed - let it run in the tray
+  // The app will only quit when the user explicitly selects "Quit" from the tray menu
 });
 
 // When the dock icon is clicked.
 app.on('activate', async function () {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  if (myCapacitorApp.getMainWindow().isDestroyed()) {
+  const mainWindow = myCapacitorApp.getMainWindow();
+
+  if (mainWindow.isDestroyed()) {
     await myCapacitorApp.init();
+  } else if (!mainWindow.isVisible()) {
+    // If the window is hidden, show it when dock icon is clicked
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 

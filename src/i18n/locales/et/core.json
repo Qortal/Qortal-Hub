@@ -170,7 +170,7 @@
     "comments": "kommentaaride laadimine... palun oota.",
     "posts": "postituste laadimine... palun oota."
   },
-  "message_us": "palun kirjuta meile Nextcloudis (registreerimine pole vajalik) või Discordis, kui vajad 4 QORTi, et alustada vestlemist piiranguteta",
+  "message_us": "Palun saada meile sõnum Nextcloudis (registreerimine pole vajalik), kui vajad 4 QORTi, et alustada vestlemist ilma piiranguteta.",
   "message": {
     "error": {
       "address_not_found": "sinu aadressi ei leitud",
@@ -234,7 +234,7 @@
       "get_qort_trade_portal": "hanki QORT Qortali rist-ahela kaubandusportaali kaudu",
       "mentioned": "mainitud",
       "message_with_image": "selles sõnumis on juba pilt",
-      "minimal_qort_balance": "sul peab olema vähemalt {{ quantity }} QORT saldos (4 QORT vestluseks, 1.25 nime jaoks, 0.75 mõne tehingu jaoks)",
+      "minimal_qort_balance": "Vähemalt {{ quantity }} QORTi sinu saldol võimaldab saata vestlussõnumeid peaaegu hetkega.",
       "most_recent_payment": "{{ count }} viimast makset",
       "name_available": "{{ name }} on saadaval",
       "name_benefits": "nime eelised",

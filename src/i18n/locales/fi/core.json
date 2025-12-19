@@ -170,7 +170,7 @@
     "comments": "ladataan kommentteja... odota hetki.",
     "posts": "ladataan julkaisuja... odota hetki."
   },
-  "message_us": "Jos tarvitset 4 QORT:ia aloittaaksesi keskustelun ilman rajoituksia, ota meihin yhteyttä Nextcloudissa (ei rekisteröintiä) tai Discordissa.",
+  "message_us": "Lähetä meille viesti Nextcloudissa (rekisteröitymistä ei vaadita), jos tarvitset 4 QORT aloittaaksesi chattaamisen ilman rajoituksia.",
   "message": {
     "error": {
       "address_not_found": "osoitettasi ei löytynyt",
@@ -237,7 +237,8 @@
       "settings": "käytät vienti/tuontiasetuksia",
       "unread_messages": "lukemattomat viestit alla",
       "updating": "päivitetään",
-      "wait": "odota hetki"
+      "wait": "odota hetki",
+      "minimal_qort_balance": "Vähintään {{ quantity }} QORTin saldo mahdollistaa chat-viestien lähettämisen lähes välittömästi."
     }
   },
   "minting": {
