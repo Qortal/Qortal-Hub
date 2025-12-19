@@ -145,6 +145,22 @@ try {
     },
   });
 
+  // Video Server API
+  contextBridge.exposeInMainWorld('videoServer', {
+    start: async (port?: number) => {
+      return await ipcRenderer.invoke('videoServer:start', port);
+    },
+    stop: async () => {
+      return await ipcRenderer.invoke('videoServer:stop');
+    },
+    getPort: async () => {
+      return await ipcRenderer.invoke('videoServer:getPort');
+    },
+    isRunning: async () => {
+      return await ipcRenderer.invoke('videoServer:isRunning');
+    },
+  });
+
   ipcRenderer.send('test-ipc');
 } catch (error) {
   console.log('error', error);

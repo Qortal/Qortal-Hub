@@ -72,6 +72,9 @@ import {
   multiPaymentWithPrivateData,
   transferAssetRequest,
   reEncryptQortalKeys,
+  playEncryptedMedia,
+  cleanupEncryptedMedia,
+  cleanupEncryptedMediaByTabId,
 } from './get.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
@@ -265,6 +268,15 @@ export function clearSessionPermissionsByTabId(tabId) {
       }
     }
     keysToDelete.forEach((key) => sessionPermissionsStore.delete(key));
+
+    // Also cleanup any encrypted media associated with this tab
+    cleanupEncryptedMediaByTabId(tabId).catch((error) => {
+      console.error(
+        'Error cleaning up encrypted media for tabId:',
+        tabId,
+        error
+      );
+    });
   } catch (error) {
     console.error('Error clearing session permissions by tabId:', error);
     throw error;
@@ -2242,6 +2254,36 @@ function setupMessageListenerQortalRequest() {
       case 'REENCRYPT_GROUP_KEYS': {
         try {
           const res = await reEncryptQortalKeys(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'PLAY_ENCRYPTED_MEDIA': {
+        try {
+          const res = await playEncryptedMedia(
             request.payload,
             isFromExtension,
             appInfo
