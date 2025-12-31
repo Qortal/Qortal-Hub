@@ -277,15 +277,26 @@ export const getDataPublishesFunc = async (groupId, type) => {
   }
 };
 
+const getFirstNameFromNamesResponse = (namesData) => {
+  if (Array.isArray(namesData) && namesData.length > 0) {
+    return namesData[0]?.name || '';
+  }
+  return '';
+};
+
 export async function getNameInfo(address: string) {
   const response = await fetch(`${getBaseApiReact()}/names/primary/` + address);
-  const nameData = await response.json();
+  const nameData = await response.json().catch(() => null);
 
   if (nameData?.name) {
     return nameData?.name;
-  } else {
-    return '';
   }
+
+  const fallbackResponse = await fetch(
+    `${getBaseApiReact()}/names/address/` + address + '?limit=0'
+  );
+  const names = await fallbackResponse.json().catch(() => null);
+  return getFirstNameFromNamesResponse(names);
 }
 
 export const getGroupAdmins = async (groupNumber: number) => {

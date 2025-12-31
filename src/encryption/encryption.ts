@@ -12,6 +12,13 @@ import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
 
 export const requestQueueGetPublicKeys = new RequestQueueWithPromise(10);
 
+const getFirstNameFromNamesResponse = (namesData) => {
+  if (Array.isArray(namesData) && namesData.length > 0) {
+    return namesData[0]?.name || '';
+  }
+  return '';
+};
+
 async function getSaveWallet() {
   const res = await getData<any>('walletInfo').catch(() => null);
 
@@ -27,12 +34,16 @@ export async function getNameInfo() {
   const address = wallet.address0;
   const validApi = await getBaseApi();
   const response = await fetch(validApi + '/names/primary/' + address);
-  const nameData = await response.json();
+  const nameData = await response.json().catch(() => null);
   if (nameData?.name) {
     return nameData?.name;
-  } else {
-    return '';
   }
+
+  const fallbackResponse = await fetch(
+    validApi + '/names/address/' + address + '?limit=0'
+  );
+  const names = await fallbackResponse.json().catch(() => null);
+  return getFirstNameFromNamesResponse(names);
 }
 
 export async function getAllUserNames() {

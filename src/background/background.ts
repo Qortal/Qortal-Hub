@@ -807,29 +807,37 @@ const forceCloseWebSocket = () => {
   }
 };
 
+const getFirstNameFromNamesResponse = (namesData) => {
+  if (Array.isArray(namesData) && namesData.length > 0) {
+    return namesData[0]?.name || '';
+  }
+  return '';
+};
+
+const getNameFromPrimaryOrFirst = async (address: string) => {
+  const validApi = await getBaseApi();
+  const response = await fetch(validApi + '/names/primary/' + address);
+  const nameData = await response.json().catch(() => null);
+  if (nameData?.name) {
+    return nameData.name;
+  }
+
+  const fallbackResponse = await fetch(
+    validApi + '/names/address/' + address + '?limit=0'
+  );
+  const names = await fallbackResponse.json().catch(() => null);
+  return getFirstNameFromNamesResponse(names);
+};
+
 export async function getNameInfo() {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
-  const validApi = await getBaseApi();
-  const response = await fetch(validApi + '/names/primary/' + address);
-  const nameData = await response.json();
-  if (nameData?.name) {
-    return nameData.name;
-  } else {
-    return '';
-  }
+  return getNameFromPrimaryOrFirst(address);
 }
 
 export async function getNameInfoForOthers(address) {
   if (!address) return '';
-  const validApi = await getBaseApi();
-  const response = await fetch(validApi + '/names/primary/' + address);
-  const nameData = await response.json();
-  if (nameData?.name) {
-    return nameData?.name;
-  } else {
-    return '';
-  }
+  return getNameFromPrimaryOrFirst(address);
 }
 
 export async function getAddressInfo(address) {

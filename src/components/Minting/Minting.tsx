@@ -128,7 +128,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     try {
       const url = `${getBaseApiReact()}/names/primary/${address}`;
       const response = await fetch(url);
-      const nameData = await response.json();
+      const nameData = await response.json().catch(() => null);
       if (nameData?.name) {
         setNames((prev) => {
           return {
@@ -137,10 +137,18 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
           };
         });
       } else {
+        const fallbackResponse = await fetch(
+          `${getBaseApiReact()}/names/address/${address}?limit=0`
+        );
+        const names = await fallbackResponse.json().catch(() => null);
+        const fallbackName =
+          Array.isArray(names) && names.length > 0
+            ? names[0]?.name || null
+            : null;
         setNames((prev) => {
           return {
             ...prev,
-            [address]: null,
+            [address]: fallbackName,
           };
         });
       }

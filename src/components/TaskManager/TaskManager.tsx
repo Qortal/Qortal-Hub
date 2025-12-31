@@ -132,9 +132,20 @@ export const TaskManager = ({ getUserInfo }) => {
         const response = await fetch(
           `${getBaseApiReact()}/names/primary/${address}`
         );
-        const nameData = await response.json();
+        const nameData = await response.json().catch(() => null);
 
         if (nameData?.name) {
+          getUserInfo();
+          return true;
+        }
+
+        const fallbackResponse = await fetch(
+          `${getBaseApiReact()}/names/address/${address}?limit=0`
+        );
+        const names = await fallbackResponse.json().catch(() => null);
+        const fallbackName =
+          Array.isArray(names) && names.length > 0 ? names[0]?.name || '' : '';
+        if (fallbackName) {
           getUserInfo();
           return true;
         }
