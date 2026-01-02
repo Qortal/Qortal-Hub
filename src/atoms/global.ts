@@ -1,6 +1,9 @@
 import { atom } from 'jotai';
 import { atomWithReset, atomFamily, useAtomCallback } from 'jotai/utils';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import {
+  HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
+} from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
@@ -82,7 +85,7 @@ export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
 export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({
-  url: HTTP_LOCALHOST_12391,
+  url: HTTPS_EXT_NODE_QORTAL_LINK,
   apikey: '',
 });
 export const statusesAtom = atomWithReset<Steps>({
