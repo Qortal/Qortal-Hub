@@ -159,6 +159,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   TIME_SECONDS_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
@@ -601,10 +602,10 @@ function App() {
             setSelectedNode(response);
           } else {
             const payload = {
-              url: HTTP_LOCALHOST_12391,
+              url: HTTPS_EXT_NODE_QORTAL_LINK,
               apikey: '',
             };
-            handleSetGlobalApikey(response);
+            handleSetGlobalApikey(payload);
             setSelectedNode(payload);
           }
         })
