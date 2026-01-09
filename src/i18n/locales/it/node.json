@@ -14,9 +14,9 @@
   "sync": {
     "behind": "Sei indietro di {{count}} blocchi.",
     "waiting": "Attendi fino a quando non sei sincronizzato.",
-    "not_syncronized": "non sincronizzato",
-    "syncronized": "sincronizzato",
-    "syncronized_desc": "ora sei sincronizzato. puoi continuare.",
+    "not_synchronized": "non sincronizzato",
+    "synchronized": "sincronizzato",
+    "synchronized_desc": "ora sei sincronizzato. puoi continuare.",
     "description": "Se non vuoi aspettare che il tuo Local Node sia sincronizzato, continua con public per ora. (Se sai che il tuo node è indietro/spento, puoi comunque continuare con local oppure passare a un public node.)"
   },
   "steps": {

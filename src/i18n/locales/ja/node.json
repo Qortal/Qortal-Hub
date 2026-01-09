@@ -14,9 +14,9 @@
   "sync": {
     "behind": "{{count}} ブロック遅れています。",
     "waiting": "同期が完了するまでお待ちください。",
-    "not_syncronized": "未同期",
-    "syncronized": "同期済み",
-    "syncronized_desc": "現在同期されています。続行できます。",
+    "not_synchronized": "未同期",
+    "synchronized": "同期済み",
+    "synchronized_desc": "現在同期されています。続行できます。",
     "description": "Local Node の同期を待ちたくない場合は、とりあえず public で続行できます。 (node が遅れている／オフになっていると分かっている場合でも、local で続行するか、public node に切り替えることができます。)"
   },
   "steps": {

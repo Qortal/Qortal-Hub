@@ -14,9 +14,9 @@
   "sync": {
     "behind": "Sa oled {{count}} plokki maas.",
     "waiting": "Palun oota, kuni oled sünkroonitud.",
-    "not_syncronized": "ei ole sünkroonitud",
-    "syncronized": "sünkroonitud",
-    "syncronized_desc": "sa oled nüüd sünkroonitud. võid jätkata.",
+    "not_synchronized": "ei ole sünkroonitud",
+    "synchronized": "sünkroonitud",
+    "synchronized_desc": "sa oled nüüd sünkroonitud. võid jätkata.",
     "description": "Kui sa ei soovi oodata, kuni sinu Local Node sünkroonib, jätka praegu public abil. (Kui tead, et sinu node on maas/maha jäänud, võid siiski jätkata local kaudu või lülituda public node peale.)"
   },
   "steps": {

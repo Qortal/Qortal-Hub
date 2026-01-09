@@ -14,9 +14,9 @@
   "sync": {
     "behind": "Olet {{count}} lohkoa jäljessä.",
     "waiting": "Odota, kunnes synkronointi on valmis.",
-    "not_syncronized": "ei synkronoitu",
-    "syncronized": "synkronoitu",
-    "syncronized_desc": "olet nyt synkronoitu. voit jatkaa.",
+    "not_synchronized": "ei synkronoitu",
+    "synchronized": "synkronoitu",
+    "synchronized_desc": "olet nyt synkronoitu. voit jatkaa.",
     "description": "Jos et halua odottaa, että Local Node synkronoituu, jatka toistaiseksi publicin avulla. (Jos tiedät, että node on jäljessä/pois päältä, voit silti jatkaa localin kautta tai vaihtaa public nodeen.)"
   },
   "steps": {

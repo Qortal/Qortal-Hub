@@ -14,9 +14,9 @@
   "sync": {
     "behind": "Você está {{count}} blocos atrasado.",
     "waiting": "Por favor, aguarde até estar sincronizado.",
-    "not_syncronized": "não sincronizado",
-    "syncronized": "sincronizado",
-    "syncronized_desc": "você agora está sincronizado. pode continuar.",
+    "not_synchronized": "não sincronizado",
+    "synchronized": "sincronizado",
+    "synchronized_desc": "você agora está sincronizado. pode continuar.",
     "description": "Se você não quiser esperar até que seu Local Node esteja sincronizado, continue com public por enquanto. (Se você sabe que seu node está atrasado/desligado, pode continuar com local mesmo assim ou mudar para um public node.)"
   },
   "steps": {
