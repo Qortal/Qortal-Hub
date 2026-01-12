@@ -95,6 +95,7 @@ import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
+import { isNodeSelectionExplicit } from './utils/nodeSelection';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -594,20 +595,30 @@ function App() {
   useEffect(() => {
     try {
       setIsLoading(true);
+      const hasExplicitNodeSelection = isNodeSelectionExplicit();
       window
         .sendMessage('getApiKey')
         .then((response) => {
-          if (response?.url) {
-            handleSetGlobalApikey(response);
-            setSelectedNode(response);
-          } else {
-            const payload = {
-              url: HTTPS_EXT_NODE_QORTAL_LINK,
-              apikey: '',
-            };
-            handleSetGlobalApikey(payload);
-            setSelectedNode(payload);
+          const shouldUseStoredNode =
+            hasExplicitNodeSelection && Boolean(response?.url);
+          const payload = shouldUseStoredNode
+            ? response
+            : {
+                url: HTTPS_EXT_NODE_QORTAL_LINK,
+                apikey: '',
+              };
+
+          if (!shouldUseStoredNode) {
+            window.sendMessage('setApiKey', payload).catch((error) => {
+              console.error(
+                'Failed to set default API key:',
+                error?.message || 'An error occurred'
+              );
+            });
           }
+
+          handleSetGlobalApikey(payload);
+          setSelectedNode(payload);
         })
         .catch((error) => {
           console.error(
