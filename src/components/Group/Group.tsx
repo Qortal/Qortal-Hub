@@ -1017,8 +1017,6 @@ export const Group = ({
         setMemberGroups(
           message.payload?.filter((item) => item?.groupId !== '0')
         );
-        // Refresh general chat visibility preference when groups update
-
 
         if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
           window
