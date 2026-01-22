@@ -305,12 +305,12 @@
 
     "success": {
       "order_submitted": "your buy order was submitted",
-      "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
+      "published": "successfully published. Please wait a couple minutes for the network to propagate the changes.",
       "published_qdn": "successfully published to QDN",
-      "rated_app": "successfully rated. Please wait a couple minutes for the network to propogate the changes.",
+      "rated_app": "successfully rated. Please wait a couple minutes for the network to propagate the changes.",
       "request_read": "i have read this request",
-      "transfer": "the transfer was succesful!",
-      "voted": "successfully voted. Please wait a couple minutes for the network to propogate the changes."
+      "transfer": "the transfer was successful!",
+      "voted": "successfully voted. Please wait a couple minutes for the network to propagate the changes."
     }
   },
   "minting": {

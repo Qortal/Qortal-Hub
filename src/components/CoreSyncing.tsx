@@ -105,7 +105,7 @@ export function CoreSyncing() {
       {!canContinue && (
         <>
           <DialogTitle id="core-setup-title">
-            {t('node:sync.not_syncronized', {
+            {t('node:sync.not_synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
@@ -146,13 +146,13 @@ export function CoreSyncing() {
       {canContinue && (
         <>
           <DialogTitle id="core-setup-title">
-            {t('node:sync.syncronized', {
+            {t('node:sync.synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
           <DialogContent dividers>
             <Typography variant="body1" gutterBottom>
-              {t('node:sync.syncronized_desc', {
+              {t('node:sync.synchronized_desc', {
                 postProcess: 'capitalizeFirstWord',
               })}
             </Typography>

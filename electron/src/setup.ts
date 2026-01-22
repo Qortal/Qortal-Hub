@@ -234,7 +234,7 @@ export class ElectronCapacitorApp {
       }
     });
 
-    // If we close the main window with the splashscreen enabled we need to destory the ref.
+    // If we close the main window with the splashscreen enabled we need to destroy the ref.
     this.MainWindow.on('closed', () => {
       if (
         this.SplashScreen?.getSplashWindow() &&
