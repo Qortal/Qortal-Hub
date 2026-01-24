@@ -367,13 +367,51 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "q-walletid"
   },
+  "app_detail": {
+    "about": "teave",
+    "by_developer": "@{{developer}} poolt",
+    "category": "kategooria",
+    "details": "üksikasjad",
+    "published": "avaldatud",
+    "ratings_count": "{{count}} hinnangut",
+    "ratings_reviews": "hinnangud ja arvustused",
+    "rate_this_app": "hinda seda rakendust",
+    "service": "teenus",
+    "status": "olek",
+    "status_ready": "valmis (paigaldatud)",
+    "status_not_installed": "paigaldamata",
+    "tags": "sildid"
+  },
+  "filter": {
+    "all": "kõik",
+    "category": "kategooria",
+    "installed": "paigaldatud",
+    "not_installed": "paigaldamata",
+    "showing_apps": "kuvatakse {{count}} rakendust",
+    "sort_by": "sorteeri",
+    "status": "olek"
+  },
   "receiver": "saaja",
   "sender": "saatja",
   "server": "server",
   "service_type": "teenuse tüüp",
   "settings": "seaded",
   "sort": {
-    "by_member": "liikme järgi"
+    "alphabetical": "tähestikuline",
+    "by_member": "liikme järgi",
+    "highest_rated": "kõrgeima hinnanguga",
+    "most_rated": "enim arvustatud",
+    "newest": "uusimad",
+    "recently_updated": "hiljuti uuendatud"
+  },
+  "tabs": {
+    "categories": "kategooriad",
+    "community_apps": "kogukonna rakendused",
+    "my_apps": "minu rakendused",
+    "official_apps": "ametlikud rakendused"
+  },
+  "aria": {
+    "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed"
   },
   "supply": "Üldine QORT varu",
   "tags": "sildid",

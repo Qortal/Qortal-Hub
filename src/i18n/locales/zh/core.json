@@ -367,13 +367,51 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "Q-WALLETS"
   },
+  "app_detail": {
+    "about": "关于",
+    "by_developer": "由 @{{developer}}",
+    "category": "分类",
+    "details": "详情",
+    "published": "发布于",
+    "ratings_count": "{{count}} 个评分",
+    "ratings_reviews": "评分与评论",
+    "rate_this_app": "为此应用评分",
+    "service": "服务",
+    "status": "状态",
+    "status_ready": "就绪（已安装）",
+    "status_not_installed": "未安装",
+    "tags": "标签"
+  },
+  "filter": {
+    "all": "全部",
+    "category": "分类",
+    "installed": "已安装",
+    "not_installed": "未安装",
+    "showing_apps": "显示 {{count}} 个应用",
+    "sort_by": "排序方式",
+    "status": "状态"
+  },
   "receiver": "接收者",
   "sender": "发件人",
   "server": "服务器",
   "service_type": "服务类型",
   "settings": "设置",
   "sort": {
-    "by_member": "由会员"
+    "alphabetical": "按字母顺序",
+    "by_member": "由会员",
+    "highest_rated": "评分最高",
+    "most_rated": "评论最多",
+    "newest": "最新",
+    "recently_updated": "最近更新"
+  },
+  "tabs": {
+    "categories": "分类",
+    "community_apps": "社区应用",
+    "my_apps": "我的应用",
+    "official_apps": "官方应用"
+  },
+  "aria": {
+    "apps_library_tabs": "应用库导航标签"
   },
   "supply": "供应",
   "tags": "标签",

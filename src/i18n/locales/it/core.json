@@ -366,13 +366,51 @@
     "q_sandbox": "Q-Sandbox",
     "q_wallets": "Q-Wallets"
   },
+  "app_detail": {
+    "about": "informazioni",
+    "by_developer": "di @{{developer}}",
+    "category": "categoria",
+    "details": "dettagli",
+    "published": "pubblicato",
+    "ratings_count": "{{count}} valutazioni",
+    "ratings_reviews": "valutazioni e recensioni",
+    "rate_this_app": "valuta questa app",
+    "service": "servizio",
+    "status": "stato",
+    "status_ready": "pronto (installato)",
+    "status_not_installed": "non installato",
+    "tags": "tag"
+  },
+  "filter": {
+    "all": "tutti",
+    "category": "categoria",
+    "installed": "installato",
+    "not_installed": "non installato",
+    "showing_apps": "{{count}} app visualizzate",
+    "sort_by": "ordina per",
+    "status": "stato"
+  },
   "receiver": "ricevitore",
   "sender": "mittente",
   "server": "server",
   "service_type": "tipo di servizio",
   "settings": "impostazioni",
   "sort": {
-    "by_member": "per membro"
+    "alphabetical": "alfabetico",
+    "by_member": "per membro",
+    "highest_rated": "più votate",
+    "most_rated": "più recensite",
+    "newest": "più recenti",
+    "recently_updated": "aggiornate di recente"
+  },
+  "tabs": {
+    "categories": "categorie",
+    "community_apps": "app della community",
+    "my_apps": "le mie app",
+    "official_apps": "app ufficiali"
+  },
+  "aria": {
+    "apps_library_tabs": "schede di navigazione della libreria app"
   },
   "supply": "offerta monetaria",
   "tags": "tag",

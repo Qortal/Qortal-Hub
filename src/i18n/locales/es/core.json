@@ -367,13 +367,51 @@
     "q_sandbox": "Q-Sandbox",
     "q_wallets": "Medillas Q"
   },
+  "app_detail": {
+    "about": "acerca de",
+    "by_developer": "por @{{developer}}",
+    "category": "categoría",
+    "details": "detalles",
+    "published": "publicado",
+    "ratings_count": "{{count}} valoraciones",
+    "ratings_reviews": "valoraciones y reseñas",
+    "rate_this_app": "valorar esta app",
+    "service": "servicio",
+    "status": "estado",
+    "status_ready": "listo (instalado)",
+    "status_not_installed": "no instalado",
+    "tags": "etiquetas"
+  },
+  "filter": {
+    "all": "todos",
+    "category": "categoría",
+    "installed": "instalado",
+    "not_installed": "no instalado",
+    "showing_apps": "mostrando {{count}} apps",
+    "sort_by": "ordenar por",
+    "status": "estado"
+  },
   "receiver": "receptor",
   "sender": "remitente",
   "server": "servidor",
   "service_type": "tipo de servicio",
   "settings": "ajustes",
   "sort": {
-    "by_member": "por miembro"
+    "alphabetical": "alfabético",
+    "by_member": "por miembro",
+    "highest_rated": "mejor valoradas",
+    "most_rated": "más reseñadas",
+    "newest": "más recientes",
+    "recently_updated": "actualizadas recientemente"
+  },
+  "tabs": {
+    "categories": "categorías",
+    "community_apps": "apps de la comunidad",
+    "my_apps": "mis apps",
+    "official_apps": "apps oficiales"
+  },
+  "aria": {
+    "apps_library_tabs": "pestañas de navegación de la biblioteca de apps"
   },
   "supply": "suministrar",
   "tags": "etiquetas",

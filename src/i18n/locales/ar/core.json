@@ -368,13 +368,51 @@
     "q_sandbox": "ساحة تطوير Q",
     "q_wallets": "محافظ Q"
   },
+  "app_detail": {
+    "about": "حول",
+    "by_developer": "بواسطة @{{developer}}",
+    "category": "الفئة",
+    "details": "التفاصيل",
+    "published": "تم النشر",
+    "ratings_count": "{{count}} تقييمات",
+    "ratings_reviews": "التقييمات والمراجعات",
+    "rate_this_app": "قيم هذا التطبيق",
+    "service": "الخدمة",
+    "status": "الحالة",
+    "status_ready": "جاهز (مثبت)",
+    "status_not_installed": "غير مثبت",
+    "tags": "الوسوم"
+  },
+  "filter": {
+    "all": "الكل",
+    "category": "الفئة",
+    "installed": "مثبت",
+    "not_installed": "غير مثبت",
+    "showing_apps": "عرض {{count}} تطبيقات",
+    "sort_by": "ترتيب حسب",
+    "status": "الحالة"
+  },
   "receiver": "المستقبِل",
   "sender": "المرسِل",
   "server": "الخادم",
   "service_type": "نوع الخدمة",
   "settings": "الإعدادات",
   "sort": {
-    "by_member": "بواسطة العضو"
+    "alphabetical": "أبجدي",
+    "by_member": "بواسطة العضو",
+    "highest_rated": "الأعلى تقييماً",
+    "most_rated": "الأكثر مراجعة",
+    "newest": "الأحدث",
+    "recently_updated": "تم تحديثها مؤخراً"
+  },
+  "tabs": {
+    "categories": "الفئات",
+    "community_apps": "تطبيقات المجتمع",
+    "my_apps": "تطبيقاتي",
+    "official_apps": "التطبيقات الرسمية"
+  },
+  "aria": {
+    "apps_library_tabs": "علامات تبويب التنقل في مكتبة التطبيقات"
   },
   "supply": "العرض",
   "tags": "الوسوم",

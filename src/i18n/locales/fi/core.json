@@ -295,13 +295,51 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "q-lompakot"
   },
+  "app_detail": {
+    "about": "tietoja",
+    "by_developer": "tekijä @{{developer}}",
+    "category": "kategoria",
+    "details": "tiedot",
+    "published": "julkaistu",
+    "ratings_count": "{{count}} arvostelua",
+    "ratings_reviews": "arvostelut ja arviot",
+    "rate_this_app": "arvostele tämä sovellus",
+    "service": "palvelu",
+    "status": "tila",
+    "status_ready": "valmis (asennettu)",
+    "status_not_installed": "ei asennettu",
+    "tags": "tagit"
+  },
+  "filter": {
+    "all": "kaikki",
+    "category": "kategoria",
+    "installed": "asennettu",
+    "not_installed": "ei asennettu",
+    "showing_apps": "näytetään {{count}} sovellusta",
+    "sort_by": "lajittele",
+    "status": "tila"
+  },
   "receiver": "vastaanottaja",
   "sender": "lähettäjä",
   "server": "palvelin",
   "service_type": "palvelutyyppi",
   "settings": "asetukset",
   "sort": {
-    "by_member": "jäsenen mukaan"
+    "alphabetical": "aakkosjärjestys",
+    "by_member": "jäsenen mukaan",
+    "highest_rated": "parhaiten arvioidut",
+    "most_rated": "eniten arvioidut",
+    "newest": "uusimmat",
+    "recently_updated": "äskettäin päivitetyt"
+  },
+  "tabs": {
+    "categories": "kategoriat",
+    "community_apps": "yhteisösovellukset",
+    "my_apps": "omat sovellukset",
+    "official_apps": "viralliset sovellukset"
+  },
+  "aria": {
+    "apps_library_tabs": "sovelluskirjaston navigointivälilehdet"
   },
   "supply": "tarjonta",
   "tags": "tunnisteet",

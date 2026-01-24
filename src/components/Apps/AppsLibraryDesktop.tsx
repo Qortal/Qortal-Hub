@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
-  AppLibrarySubTitle,
-  AppsContainer,
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
   AppsLibraryContainer,
@@ -12,14 +7,8 @@ import {
   AppsSearchLeft,
   AppsSearchRight,
   AppsWidthLimiter,
-  PublishQAppCTAButton,
-  PublishQAppCTALeft,
-  PublishQAppCTAParent,
-  PublishQAppCTARight,
-  PublishQAppDotsBG,
 } from './Apps-styles';
 import {
-  Avatar,
   Box,
   ButtonBase,
   InputBase,
@@ -27,14 +16,10 @@ import {
   styled,
   useTheme,
 } from '@mui/material';
-import { getBaseApiReact } from '../../App';
-import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
-import { QappDevelopText } from '../../assets/Icons/QappDevelopText.tsx';
 import { QappLibraryText } from '../../assets/Icons/QappLibraryText.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import AppsIcon from '@mui/icons-material/Apps';
 import { Spacer } from '../../common/Spacer';
 import { AppInfoSnippet } from './AppInfoSnippet';
 import { Virtuoso } from 'react-virtuoso';
@@ -42,40 +27,14 @@ import { executeEvent } from '../../utils/events';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon.tsx';
 import { useTranslation } from 'react-i18next';
-
-const officialAppList = [
-  'q-tube',
-  'q-blog',
-  'q-share',
-  'q-support',
-  'q-mail',
-  'q-fund',
-  'q-shop',
-  'q-trade',
-  'q-manager',
-  'q-mintership',
-  'q-wallets',
-  'q-search',
-  'q-node',
-  'names',
-  'q-follow',
-  'q-assets',
-  'quitter',
-];
-
-const ScrollerStyled = styled('div')({
-  // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-
-  // Hide scrollbar for Firefox
-  scrollbarWidth: 'none',
-
-  // Hide scrollbar for IE and older Edge
-  msOverflowStyle: 'none',
-});
+import {
+  AppsTabs,
+  AppsLibraryTabValue,
+  OfficialAppsTab,
+  CommunityAppsTab,
+  CategoriesTab,
+  MyAppsTab,
+} from './AppsLibrary';
 
 const StyledVirtuosoContainer = styled('div')({
   position: 'relative',
@@ -106,6 +65,7 @@ export const AppsLibraryDesktop = ({
   getQapps,
 }) => {
   const [searchValue, setSearchValue] = useState('');
+  const [currentTab, setCurrentTab] = useState<AppsLibraryTabValue>('official');
   const virtuosoRef = useRef(null);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -115,14 +75,6 @@ export const AppsLibraryDesktop = ({
     'question',
     'tutorial',
   ]);
-
-  const officialApps = useMemo(() => {
-    return availableQapps.filter(
-      (app) =>
-        app.service === 'APP' &&
-        officialAppList.includes(app?.name?.toLowerCase())
-    );
-  }, [availableQapps]);
 
   const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
 
@@ -142,8 +94,6 @@ export const AppsLibraryDesktop = ({
     };
   }, [searchValue]); // Runs effect when searchValue changes
 
-  // Example: Perform search or other actions based on debouncedValue
-
   const searchedList = useMemo(() => {
     if (!debouncedValue) return [];
     return availableQapps.filter(
@@ -154,7 +104,7 @@ export const AppsLibraryDesktop = ({
             ?.toLowerCase()
             .includes(debouncedValue.toLowerCase()))
     );
-  }, [debouncedValue]);
+  }, [debouncedValue, availableQapps]);
 
   const rowRenderer = (index) => {
     let app = searchedList[index];
@@ -168,6 +118,40 @@ export const AppsLibraryDesktop = ({
         }}
       />
     );
+  };
+
+  const handleTabChange = (tab: AppsLibraryTabValue) => {
+    setCurrentTab(tab);
+    // Clear search when changing tabs
+    setSearchValue('');
+  };
+
+  const renderTabContent = () => {
+    switch (currentTab) {
+      case 'official':
+        return <OfficialAppsTab availableQapps={availableQapps} />;
+      case 'community':
+        return (
+          <CommunityAppsTab availableQapps={availableQapps} myName={myName} />
+        );
+      case 'categories':
+        return (
+          <CategoriesTab
+            categories={categories}
+            availableQapps={availableQapps}
+          />
+        );
+      case 'my-apps':
+        return (
+          <MyAppsTab
+            myName={myName}
+            hasPublishApp={hasPublishApp}
+            setMode={setMode}
+          />
+        );
+      default:
+        return <OfficialAppsTab availableQapps={availableQapps} />;
+    }
   };
 
   return (
@@ -301,13 +285,20 @@ export const AppsLibraryDesktop = ({
               })}
             </ComposeP>
           </ShowMessageReturnButton>
-          <Spacer height="70px" />
 
+          <Spacer height="20px" />
+
+          {/* Tab Navigation */}
+          <AppsTabs currentTab={currentTab} onTabChange={handleTabChange} />
+
+          <Spacer height="30px" />
+
+          {/* Search Results or Tab Content */}
           {searchedList?.length > 0 ? (
             <AppsWidthLimiter>
               <StyledVirtuosoContainer
                 sx={{
-                  height: `calc(100vh - 36px - 90px - 90px)`,
+                  height: `calc(100vh - 36px - 200px)`,
                 }}
               >
                 <Virtuoso
@@ -316,9 +307,6 @@ export const AppsLibraryDesktop = ({
                   itemContent={rowRenderer}
                   atBottomThreshold={50}
                   followOutput="smooth"
-                  // components={{
-                  //   Scroller: ScrollerStyled, // Use the styled scroller component
-                  // }}
                 />
               </StyledVirtuosoContainer>
             </AppsWidthLimiter>
@@ -331,237 +319,7 @@ export const AppsLibraryDesktop = ({
               </Typography>
             </AppsWidthLimiter>
           ) : (
-            <>
-              <AppLibrarySubTitle
-                sx={{
-                  fontSize: '30px',
-                }}
-              >
-                {t('core:apps_official', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </AppLibrarySubTitle>
-
-              <Spacer height="45px" />
-
-              <AppsContainer
-                sx={{
-                  gap: '15px',
-                  justifyContent: 'center',
-                }}
-              >
-                {officialApps?.map((qapp) => {
-                  return (
-                    <ButtonBase
-                      key={`${qapp?.service}-${qapp?.name}`}
-                      sx={{
-                        width: '80px',
-                      }}
-                      onClick={() => {
-                        executeEvent('selectedAppInfo', {
-                          data: qapp,
-                        });
-                      }}
-                    >
-                      <AppCircleContainer
-                        sx={{
-                          gap: '10px',
-                        }}
-                      >
-                        <AppCircle
-                          sx={{
-                            border: 'none',
-                          }}
-                        >
-                          <Avatar
-                            sx={{
-                              height: '42px',
-                              width: '42px',
-                            }}
-                            alt={qapp?.name}
-                            src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                              qapp?.name
-                            }/qortal_avatar?async=true`}
-                          >
-                            <img
-                              style={{
-                                width: '31px',
-                                height: 'auto',
-                              }}
-                              src={LogoSelected}
-                              alt="center-icon"
-                            />
-                          </Avatar>
-                        </AppCircle>
-
-                        <AppCircleLabel>
-                          {qapp?.metadata?.title || qapp?.name}
-                        </AppCircleLabel>
-                      </AppCircleContainer>
-                    </ButtonBase>
-                  );
-                })}
-              </AppsContainer>
-
-              <Spacer height="80px" />
-
-              <Box
-                sx={{
-                  width: '100%',
-                  gap: '250px',
-                  display: 'flex',
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <AppLibrarySubTitle
-                    sx={{
-                      fontSize: '30px',
-                      width: '100%',
-                      textAlign: 'start',
-                    }}
-                  >
-                    {hasPublishApp
-                      ? t('core:action.update_app', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                      : t('core:action.publish_app', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                  </AppLibrarySubTitle>
-
-                  <Spacer height="18px" />
-
-                  <PublishQAppCTAParent
-                    sx={{
-                      gap: '25px',
-                    }}
-                  >
-                    <PublishQAppCTALeft>
-                      <PublishQAppDotsBG>
-                        <AppsIcon fontSize="large" />
-                      </PublishQAppDotsBG>
-
-                      <Spacer width="29px" />
-
-                      <QappDevelopText />
-                    </PublishQAppCTALeft>
-
-                    <PublishQAppCTARight
-                      onClick={() => {
-                        setMode('publish');
-                      }}
-                    >
-                      <PublishQAppCTAButton>
-                        {hasPublishApp
-                          ? t('core:action.update', {
-                              postProcess: 'capitalizeFirstChar',
-                            })
-                          : t('core:action.publish', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                      </PublishQAppCTAButton>
-
-                      <Spacer width="20px" />
-                    </PublishQAppCTARight>
-                  </PublishQAppCTAParent>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  <AppLibrarySubTitle
-                    sx={{
-                      fontSize: '30px',
-                    }}
-                  >
-                    {t('core:category_other', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </AppLibrarySubTitle>
-
-                  <Spacer height="18px" />
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '20px',
-                      width: '100%',
-                    }}
-                  >
-                    <ButtonBase
-                      onClick={() => {
-                        executeEvent('selectedCategory', {
-                          data: {
-                            id: 'all',
-                            name: 'All',
-                          },
-                        });
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          alignItems: 'center',
-                          borderColor: theme.palette.background.paper,
-                          borderRadius: '6px',
-                          borderStyle: 'solid',
-                          borderWidth: '4px',
-                          display: 'flex',
-                          height: '50px',
-                          justifyContent: 'center',
-                          padding: '0px 20px',
-                          '&:hover': {
-                            backgroundColor: 'action.hover', // background on hover
-                          },
-                        }}
-                      >
-                        {t('core:all', { postProcess: 'capitalizeFirstChar' })}
-                      </Box>
-                    </ButtonBase>
-
-                    {categories?.map((category) => {
-                      return (
-                        <ButtonBase
-                          key={category?.id}
-                          onClick={() => {
-                            executeEvent('selectedCategory', {
-                              data: category,
-                            });
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              alignItems: 'center',
-                              borderColor: theme.palette.background.paper,
-                              borderRadius: '6px',
-                              borderStyle: 'solid',
-                              borderWidth: '4px',
-                              display: 'flex',
-                              height: '50px',
-                              justifyContent: 'center',
-                              padding: '0px 20px',
-                              '&:hover': {
-                                backgroundColor: 'action.hover', // background on hover
-                              },
-                            }}
-                          >
-                            {category?.name}
-                          </Box>
-                        </ButtonBase>
-                      );
-                    })}
-                  </Box>
-                </Box>
-              </Box>
-            </>
+            renderTabContent()
           )}
         </AppsDesktopLibraryBody>
       </AppsDesktopLibraryBody>

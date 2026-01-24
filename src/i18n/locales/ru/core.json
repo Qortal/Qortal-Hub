@@ -367,13 +367,51 @@
     "q_sandbox": "Q-SANDBOX",
     "q_wallets": "Q-Wallet"
   },
+  "app_detail": {
+    "about": "о приложении",
+    "by_developer": "от @{{developer}}",
+    "category": "категория",
+    "details": "подробности",
+    "published": "опубликовано",
+    "ratings_count": "{{count}} оценок",
+    "ratings_reviews": "оценки и отзывы",
+    "rate_this_app": "оценить это приложение",
+    "service": "сервис",
+    "status": "статус",
+    "status_ready": "готово (установлено)",
+    "status_not_installed": "не установлено",
+    "tags": "теги"
+  },
+  "filter": {
+    "all": "все",
+    "category": "категория",
+    "installed": "установлено",
+    "not_installed": "не установлено",
+    "showing_apps": "показано {{count}} приложений",
+    "sort_by": "сортировать по",
+    "status": "статус"
+  },
   "receiver": "приемник",
   "sender": "отправитель",
   "server": "сервер",
   "service_type": "тип обслуживания",
   "settings": "настройки",
   "sort": {
-    "by_member": "членом"
+    "alphabetical": "по алфавиту",
+    "by_member": "членом",
+    "highest_rated": "с высоким рейтингом",
+    "most_rated": "с наибольшим количеством отзывов",
+    "newest": "новейшие",
+    "recently_updated": "недавно обновлённые"
+  },
+  "tabs": {
+    "categories": "категории",
+    "community_apps": "приложения сообщества",
+    "my_apps": "мои приложения",
+    "official_apps": "официальные приложения"
+  },
+  "aria": {
+    "apps_library_tabs": "вкладки навигации библиотеки приложений"
   },
   "supply": "поставлять",
   "tags": "теги",

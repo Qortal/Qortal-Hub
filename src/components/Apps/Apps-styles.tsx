@@ -1,4 +1,4 @@
-import { Typography, Box, ButtonBase } from '@mui/material';
+import { Typography, Box, ButtonBase, Chip } from '@mui/material';
 import { styled } from '@mui/system';
 
 export const AppsParent = styled(Box)(({ theme }) => ({
@@ -398,3 +398,137 @@ export const AppsInfoDescription = styled(Typography)(({ theme }) => ({
   backgroundColor: theme.palette.background.default,
   color: theme.palette.text.primary,
 }));
+
+// Enhanced App Card Styles
+export const AppCardEnhancedContainer = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  padding: '16px',
+  borderRadius: '12px',
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
+  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+  cursor: 'pointer',
+  width: '100%',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: theme.shadows[4],
+  },
+}));
+
+export const AppCardHeader = styled(Box)({
+  display: 'flex',
+  gap: '12px',
+  marginBottom: '12px',
+  alignItems: 'flex-start',
+});
+
+export const AppCardHeaderInfo = styled(Box)({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+  flex: 1,
+  minWidth: 0,
+});
+
+export const AppCardTitle = styled(Typography)(({ theme }) => ({
+  fontSize: '16px',
+  fontWeight: 600,
+  color: theme.palette.text.primary,
+  lineHeight: 1.3,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}));
+
+export const AppCardDeveloper = styled(Typography)(({ theme }) => ({
+  fontSize: '13px',
+  fontWeight: 400,
+  color: theme.palette.text.secondary,
+  lineHeight: 1.2,
+}));
+
+export const AppCardRatingRow = styled(Box)({
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+});
+
+export const AppCardRatingText = styled(Typography)(({ theme }) => ({
+  fontSize: '12px',
+  fontWeight: 500,
+  color: theme.palette.text.secondary,
+}));
+
+export const AppCardDescription = styled(Typography)(({ theme }) => ({
+  fontSize: '13px',
+  fontWeight: 400,
+  color: theme.palette.text.secondary,
+  lineHeight: 1.4,
+  marginBottom: '12px',
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+}));
+
+export const AppCardTagsContainer = styled(Box)({
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '6px',
+  marginBottom: '12px',
+});
+
+export const AppCardActions = styled(Box)({
+  display: 'flex',
+  gap: '8px',
+  marginTop: 'auto',
+  justifyContent: 'flex-end',
+});
+
+export const CategoryChip = styled(Chip)(({ theme }) => ({
+  height: '24px',
+  fontSize: '0.75rem',
+  fontWeight: 500,
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
+  '& .MuiChip-label': {
+    padding: '0 8px',
+  },
+}));
+
+export const TagChip = styled(Chip)(({ theme }) => ({
+  height: '20px',
+  fontSize: '0.7rem',
+  fontWeight: 400,
+  backgroundColor: theme.palette.action.hover,
+  color: theme.palette.text.secondary,
+  '& .MuiChip-label': {
+    padding: '0 6px',
+  },
+}));
+
+export const StatusBadge = styled(Box)<{ isReady?: boolean }>(
+  ({ theme, isReady }) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 500,
+    backgroundColor: isReady
+      ? theme.palette.success.light
+      : theme.palette.warning.light,
+    color: isReady
+      ? theme.palette.success.contrastText
+      : theme.palette.warning.contrastText,
+  })
+);
+
+export const AppCardsGrid = styled(Box)({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+  gap: '16px',
+  width: '100%',
+});

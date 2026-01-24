@@ -367,13 +367,51 @@
     "q_sandbox": "q-Sandbox",
     "q_wallets": "q-Casteiras"
   },
+  "app_detail": {
+    "about": "sobre",
+    "by_developer": "por @{{developer}}",
+    "category": "categoria",
+    "details": "detalhes",
+    "published": "publicado",
+    "ratings_count": "{{count}} avaliações",
+    "ratings_reviews": "avaliações e resenhas",
+    "rate_this_app": "avaliar este app",
+    "service": "serviço",
+    "status": "status",
+    "status_ready": "pronto (instalado)",
+    "status_not_installed": "não instalado",
+    "tags": "tags"
+  },
+  "filter": {
+    "all": "todos",
+    "category": "categoria",
+    "installed": "instalado",
+    "not_installed": "não instalado",
+    "showing_apps": "mostrando {{count}} apps",
+    "sort_by": "ordenar por",
+    "status": "status"
+  },
   "receiver": "destinatário",
   "sender": "remetente",
   "server": "servidor",
   "service_type": "tipo de serviço",
   "settings": "configurações",
   "sort": {
-    "by_member": "por membro"
+    "alphabetical": "alfabético",
+    "by_member": "por membro",
+    "highest_rated": "melhor avaliados",
+    "most_rated": "mais avaliados",
+    "newest": "mais recentes",
+    "recently_updated": "atualizados recentemente"
+  },
+  "tabs": {
+    "categories": "categorias",
+    "community_apps": "apps da comunidade",
+    "my_apps": "meus apps",
+    "official_apps": "apps oficiais"
+  },
+  "aria": {
+    "apps_library_tabs": "abas de navegação da biblioteca de apps"
   },
   "supply": "fornecer",
   "tags": "tags",
