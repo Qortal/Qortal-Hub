@@ -136,6 +136,18 @@
   "current_language": "current language: {{ language }}",
   "dev": "dev",
   "dev_mode": "dev Mode",
+  "developer": {
+    "my_apps": "my apps",
+    "no_apps_yet": "you haven't published any apps yet",
+    "no_sites_yet": "you haven't published any websites yet",
+    "publish_app": "publish app",
+    "publish_new": "publish new",
+    "publish_site": "publish website",
+    "update": "update",
+    "view_stats": "view stats",
+    "your_published_apps": "your published apps",
+    "your_published_websites": "your published websites"
+  },
   "domain": "domain",
   "ui": {
     "version": "uI version"
@@ -379,6 +391,7 @@
     "category": "category",
     "details": "details",
     "published": "published",
+    "ratings": "ratings",
     "ratings_count": "{{count}} ratings",
     "ratings_reviews": "ratings & reviews",
     "rate_this_app": "rate this app",
@@ -448,6 +461,7 @@
   "title": "title",
   "to": "to",
   "tutorial": "tutorial",
+  "unknown": "unknown",
   "url": "url",
   "user_lookup": "user lookup",
   "video_embed": "video embed",

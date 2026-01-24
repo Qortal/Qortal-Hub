@@ -136,6 +136,18 @@
   "current_language": "nykyinen kieli: {{ language }}",
   "dev": "kehittäjä",
   "dev_mode": "kehittäjätila",
+  "developer": {
+    "my_apps": "sovellukseni",
+    "no_apps_yet": "et ole vielä julkaissut sovelluksia",
+    "no_sites_yet": "et ole vielä julkaissut verkkosivustoja",
+    "publish_app": "julkaise sovellus",
+    "publish_new": "julkaise uusi",
+    "publish_site": "julkaise verkkosivusto",
+    "update": "päivitä",
+    "view_stats": "näytä tilastot",
+    "your_published_apps": "julkaistut sovelluksesi",
+    "your_published_websites": "julkaistut verkkosivustosi"
+  },
   "domain": "verkkotunnus",
   "ui": {
     "version": "käyttöliittymän versio"
@@ -306,6 +318,7 @@
     "category": "kategoria",
     "details": "tiedot",
     "published": "julkaistu",
+    "ratings": "arvostelut",
     "ratings_count": "{{count}} arvostelua",
     "ratings_reviews": "arvostelut ja arviot",
     "rate_this_app": "arvostele tämä sovellus",
@@ -374,6 +387,7 @@
   "title": "otsikko",
   "to": "vastaanottajalle",
   "tutorial": "opas",
+  "unknown": "tuntematon",
   "url": "URL",
   "user_lookup": "käyttäjähaku",
   "video_embed": "videon upotus",

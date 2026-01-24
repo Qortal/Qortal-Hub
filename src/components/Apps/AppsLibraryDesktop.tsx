@@ -59,7 +59,6 @@ export const AppsLibraryDesktop = ({
   availableQapps,
   setMode,
   myName,
-  hasPublishApp,
   isShow,
   categories,
   getQapps,
@@ -151,7 +150,7 @@ export const AppsLibraryDesktop = ({
         return (
           <MyAppsTab
             myName={myName}
-            hasPublishApp={hasPublishApp}
+            availableQapps={availableQapps}
             setMode={setMode}
           />
         );

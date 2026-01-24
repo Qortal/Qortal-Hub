@@ -131,6 +131,18 @@
   "current_language": "current language: {{ language }}",
   "dev": "девчонка",
   "dev_mode": "разработчик режим",
+  "developer": {
+    "my_apps": "мои приложения",
+    "no_apps_yet": "вы ещё не опубликовали ни одного приложения",
+    "no_sites_yet": "вы ещё не опубликовали ни одного сайта",
+    "publish_app": "опубликовать приложение",
+    "publish_new": "опубликовать новое",
+    "publish_site": "опубликовать сайт",
+    "update": "обновить",
+    "view_stats": "посмотреть статистику",
+    "your_published_apps": "ваши опубликованные приложения",
+    "your_published_websites": "ваши опубликованные сайты"
+  },
   "domain": "домен",
   "ui": {
     "version": "версия пользовательского интерфейса"
@@ -373,6 +385,7 @@
     "category": "категория",
     "details": "подробности",
     "published": "опубликовано",
+    "ratings": "оценки",
     "ratings_count": "{{count}} оценок",
     "ratings_reviews": "оценки и отзывы",
     "rate_this_app": "оценить это приложение",
@@ -439,6 +452,7 @@
   "title": "заголовок",
   "to": "к",
   "tutorial": "Учебник",
+  "unknown": "неизвестно",
   "url": "URL",
   "user_lookup": "Посмотреть пользователя",
   "video_embed": "Видео встроено",

@@ -131,6 +131,18 @@
   "current_language": "current language: {{ language }}",
   "dev": "开发",
   "dev_mode": "开发模式",
+  "developer": {
+    "my_apps": "我的应用",
+    "no_apps_yet": "您还没有发布任何应用",
+    "no_sites_yet": "您还没有发布任何网站",
+    "publish_app": "发布应用",
+    "publish_new": "发布新项目",
+    "publish_site": "发布网站",
+    "update": "更新",
+    "view_stats": "查看统计",
+    "your_published_apps": "您发布的应用",
+    "your_published_websites": "您发布的网站"
+  },
   "domain": "领域",
   "ui": {
     "version": "UI版本"
@@ -373,6 +385,7 @@
     "category": "分类",
     "details": "详情",
     "published": "发布于",
+    "ratings": "评分",
     "ratings_count": "{{count}} 个评分",
     "ratings_reviews": "评分与评论",
     "rate_this_app": "为此应用评分",
@@ -439,6 +452,7 @@
   "title": "标题",
   "to": "到",
   "tutorial": "教程",
+  "unknown": "未知",
   "url": "URL",
   "user_lookup": "用户查找",
   "video_embed": "嵌入视频",

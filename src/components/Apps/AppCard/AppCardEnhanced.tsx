@@ -98,8 +98,15 @@ export const AppCardEnhanced = ({
         postProcess: 'capitalizeFirstChar',
       });
 
-  // Get tags (max 3)
-  const tags = app?.metadata?.tags?.slice(0, 3) || [];
+  // Get tags (max 3) - tags can be a string or an array
+  const rawTags = app?.metadata?.tags;
+  const tags: string[] = rawTags
+    ? typeof rawTags === 'string'
+      ? rawTags.split(',').map((t: string) => t.trim()).filter(Boolean).slice(0, 3)
+      : Array.isArray(rawTags)
+        ? rawTags.slice(0, 3)
+        : []
+    : [];
 
   return (
     <AppCardEnhancedContainer onClick={handleCardClick}>

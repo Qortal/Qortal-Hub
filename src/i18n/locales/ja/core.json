@@ -131,6 +131,18 @@
   "current_language": "current language: {{ language }}",
   "dev": "開発者",
   "dev_mode": "開発モード",
+  "developer": {
+    "my_apps": "マイアプリ",
+    "no_apps_yet": "まだアプリを公開していません",
+    "no_sites_yet": "まだサイトを公開していません",
+    "publish_app": "アプリを公開",
+    "publish_new": "新規公開",
+    "publish_site": "サイトを公開",
+    "update": "更新",
+    "view_stats": "統計を見る",
+    "your_published_apps": "公開済みアプリ",
+    "your_published_websites": "公開済みサイト"
+  },
   "domain": "ドメイン",
   "ui": {
     "version": "UIバージョン"
@@ -373,6 +385,7 @@
     "category": "カテゴリ",
     "details": "詳細",
     "published": "公開日",
+    "ratings": "評価",
     "ratings_count": "{{count}}件の評価",
     "ratings_reviews": "評価とレビュー",
     "rate_this_app": "このアプリを評価",
@@ -439,6 +452,7 @@
   "title": "タイトル",
   "to": "に",
   "tutorial": "チュートリアル",
+  "unknown": "不明",
   "url": "URL",
   "user_lookup": "ユーザールックアップ",
   "video_embed": "動画埋め込み",

@@ -136,6 +136,18 @@
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
   "dev_mode": "modalità Dev",
+  "developer": {
+    "my_apps": "le mie app",
+    "no_apps_yet": "non hai ancora pubblicato nessuna app",
+    "no_sites_yet": "non hai ancora pubblicato nessun sito web",
+    "publish_app": "pubblica app",
+    "publish_new": "pubblica nuovo",
+    "publish_site": "pubblica sito web",
+    "update": "aggiorna",
+    "view_stats": "vedi statistiche",
+    "your_published_apps": "le tue app pubblicate",
+    "your_published_websites": "i tuoi siti web pubblicati"
+  },
   "domain": "dominio",
   "ui": {
     "version": "versione UI"
@@ -377,6 +389,7 @@
     "category": "categoria",
     "details": "dettagli",
     "published": "pubblicato",
+    "ratings": "valutazioni",
     "ratings_count": "{{count}} valutazioni",
     "ratings_reviews": "valutazioni e recensioni",
     "rate_this_app": "valuta questa app",
@@ -443,6 +456,7 @@
   "title": "titolo",
   "to": "a",
   "tutorial": "tutorial",
+  "unknown": "sconosciuto",
   "url": "uRL",
   "user_lookup": "ricerca utente",
   "video_embed": "video incorporato",

@@ -131,6 +131,18 @@
   "current_language": "praegune keel: {{ language }}",
   "dev": "arendus",
   "dev_mode": "arendusrežiim",
+  "developer": {
+    "my_apps": "minu rakendused",
+    "no_apps_yet": "te pole veel ühtegi rakendust avaldanud",
+    "no_sites_yet": "te pole veel ühtegi veebilehte avaldanud",
+    "publish_app": "avalda rakendus",
+    "publish_new": "avalda uus",
+    "publish_site": "avalda veebileht",
+    "update": "uuenda",
+    "view_stats": "vaata statistikat",
+    "your_published_apps": "teie avaldatud rakendused",
+    "your_published_websites": "teie avaldatud veebilehed"
+  },
   "domain": "domeen",
   "ui": {
     "version": "UI versioon"
@@ -373,6 +385,7 @@
     "category": "kategooria",
     "details": "üksikasjad",
     "published": "avaldatud",
+    "ratings": "hinnangud",
     "ratings_count": "{{count}} hinnangut",
     "ratings_reviews": "hinnangud ja arvustused",
     "rate_this_app": "hinda seda rakendust",
@@ -441,6 +454,7 @@
   "title": "pealkiri",
   "to": "kellele",
   "tutorial": "õpetus",
+  "unknown": "tundmatu",
   "url": "url",
   "user_lookup": "kasutaja info otsing",
   "user_lookup": "kasutaja otsing",
