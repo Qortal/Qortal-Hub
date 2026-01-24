@@ -115,6 +115,11 @@
   "app_service_type": "aplicativo tipo serviço",
   "apps_dashboard": "apps no Dashboard",
   "apps_official": "Apps oficiais",
+  "official_apps": {
+    "featured": "destaque",
+    "all_apps": "todos os apps oficiais",
+    "view_all": "ver todos"
+  },
   "attachment": "anexo",
   "balance": "balanço:",
   "category": "categoria",
@@ -402,6 +407,7 @@
     "highest_rated": "melhor avaliados",
     "most_rated": "mais avaliados",
     "newest": "mais recentes",
+    "oldest": "mais antigos",
     "recently_updated": "atualizados recentemente"
   },
   "tabs": {

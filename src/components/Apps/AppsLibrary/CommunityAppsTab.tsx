@@ -1,44 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Box,
-  InputBase,
-  ButtonBase,
-  Typography,
-  styled,
-  useTheme,
-} from '@mui/material';
+import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
-import SearchIcon from '@mui/icons-material/Search';
-import IconClearInput from '../../../assets/svgs/ClearInput.svg';
-import {
-  AppsSearchContainer,
-  AppsSearchLeft,
-  AppsSearchRight,
-  AppsWidthLimiter,
-} from '../Apps-styles';
+import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
-import { Spacer } from '../../../common/Spacer';
-
-const officialAppList = [
-  'q-tube',
-  'q-blog',
-  'q-share',
-  'q-support',
-  'q-mail',
-  'q-fund',
-  'q-shop',
-  'q-trade',
-  'q-manager',
-  'q-mintership',
-  'q-wallets',
-  'q-search',
-  'q-node',
-  'names',
-  'q-follow',
-  'q-assets',
-  'quitter',
-];
+import { FilterBar, SortOption, StatusFilterOption } from '../Filters';
+import { officialAppList } from '../config/officialApps';
 
 const GridContainer = styled('div')({
   display: 'grid',
@@ -68,14 +35,53 @@ const StyledVirtuosoContainer = styled('div')({
 interface CommunityAppsTabProps {
   availableQapps: any[];
   myName: string;
+  categories?: Array<{ id: string; name: string }>;
 }
+
+// Sorting functions
+const sortApps = (apps: any[], sortOption: SortOption): any[] => {
+  const sorted = [...apps];
+
+  switch (sortOption) {
+    case 'newest':
+      return sorted.sort((a, b) => (b.created || 0) - (a.created || 0));
+    case 'oldest':
+      return sorted.sort((a, b) => (a.created || 0) - (b.created || 0));
+    case 'alphabetical':
+      return sorted.sort((a, b) => {
+        const titleA = (a.metadata?.title || a.name || '').toLowerCase();
+        const titleB = (b.metadata?.title || b.name || '').toLowerCase();
+        return titleA.localeCompare(titleB);
+      });
+    case 'highest_rated':
+      // Apps with ratings come first, sorted by rating
+      return sorted.sort((a, b) => {
+        const ratingA = a.averageRating || 0;
+        const ratingB = b.averageRating || 0;
+        return ratingB - ratingA;
+      });
+    case 'most_rated':
+      // Apps with most ratings come first
+      return sorted.sort((a, b) => {
+        const countA = a.ratingCount || 0;
+        const countB = b.ratingCount || 0;
+        return countB - countA;
+      });
+    default:
+      return sorted;
+  }
+};
 
 export const CommunityAppsTab = ({
   availableQapps,
   myName,
+  categories = [],
 }: CommunityAppsTabProps) => {
   const [searchValue, setSearchValue] = useState('');
   const [debouncedValue, setDebouncedValue] = useState('');
+  const [sortOption, setSortOption] = useState<SortOption>('newest');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('all');
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
@@ -96,102 +102,89 @@ export const CommunityAppsTab = ({
     };
   }, [searchValue]);
 
-  const filteredApps = useMemo(() => {
-    if (!debouncedValue) return communityApps;
-    return communityApps.filter(
-      (app) =>
-        app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
-        (app?.metadata?.title &&
-          app?.metadata?.title
-            ?.toLowerCase()
-            .includes(debouncedValue.toLowerCase()))
-    );
-  }, [debouncedValue, communityApps]);
+  // Apply all filters and sorting
+  const filteredAndSortedApps = useMemo(() => {
+    let result = [...communityApps];
+
+    // Apply search filter
+    if (debouncedValue) {
+      const searchLower = debouncedValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Apply category filter
+    if (categoryFilter !== 'all') {
+      result = result.filter(
+        (app) => app?.metadata?.category === categoryFilter
+      );
+    }
+
+    // Apply status filter
+    if (statusFilter === 'installed') {
+      result = result.filter((app) => app?.status?.status === 'READY');
+    } else if (statusFilter === 'not_installed') {
+      result = result.filter((app) => app?.status?.status !== 'READY');
+    }
+
+    // Apply sorting
+    result = sortApps(result, sortOption);
+
+    return result;
+  }, [communityApps, debouncedValue, categoryFilter, statusFilter, sortOption]);
 
   return (
     <AppsWidthLimiter>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          width: '100%',
-          marginBottom: '20px',
-        }}
-      >
+      {/* Filter Bar */}
+      <FilterBar
+        searchValue={searchValue}
+        onSearchChange={setSearchValue}
+        sortValue={sortOption}
+        onSortChange={setSortOption}
+        categoryValue={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+        categories={categories}
+        statusValue={statusFilter}
+        onStatusChange={setStatusFilter}
+      />
+
+      {/* Results Count */}
+      <Box sx={{ marginBottom: '16px' }}>
         <Typography
           sx={{
-            fontSize: '16px',
+            fontSize: '14px',
             color: theme.palette.text.secondary,
           }}
         >
           {t('core:filter.showing_apps', {
-            count: filteredApps.length,
+            count: filteredAndSortedApps.length,
             postProcess: 'capitalizeFirstChar',
             defaultValue: 'Showing {{count}} apps',
           })}
         </Typography>
-
-        <AppsSearchContainer
-          sx={{
-            width: '300px',
-          }}
-        >
-          <AppsSearchLeft>
-            <SearchIcon />
-            <InputBase
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              sx={{
-                background: theme.palette.background.paper,
-                borderRadius: '6px',
-                flex: 1,
-                ml: 1,
-                paddingLeft: '12px',
-              }}
-              placeholder={t('core:action.search_apps', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              inputProps={{
-                'aria-label': t('core:action.search_apps', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-                fontSize: '16px',
-                fontWeight: 400,
-              }}
-            />
-          </AppsSearchLeft>
-
-          <AppsSearchRight>
-            {searchValue && (
-              <ButtonBase
-                onClick={() => {
-                  setSearchValue('');
-                }}
-              >
-                <img src={IconClearInput} />
-              </ButtonBase>
-            )}
-          </AppsSearchRight>
-        </AppsSearchContainer>
       </Box>
 
-      <Spacer height="20px" />
-
-      {filteredApps.length > 0 ? (
+      {/* Apps Grid */}
+      {filteredAndSortedApps.length > 0 ? (
         <StyledVirtuosoContainer
           sx={{
-            height: 'calc(100vh - 350px)',
+            height: 'calc(100vh - 380px)',
           }}
         >
           <VirtuosoGrid
-            totalCount={filteredApps.length}
+            totalCount={filteredAndSortedApps.length}
             components={{
               List: GridContainer as any,
               Item: GridItemWrapper,
             }}
             itemContent={(index) => {
-              const app = filteredApps[index];
+              const app = filteredAndSortedApps[index];
               return (
                 <AppCardEnhanced
                   key={`${app?.service}-${app?.name}`}
@@ -203,11 +196,19 @@ export const CommunityAppsTab = ({
           />
         </StyledVirtuosoContainer>
       ) : (
-        <Typography>
-          {t('core:message.generic.no_results', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            padding: '40px',
+          }}
+        >
+          <Typography sx={{ color: theme.palette.text.secondary }}>
+            {t('core:message.generic.no_results', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
       )}
     </AppsWidthLimiter>
   );

@@ -129,10 +129,16 @@ export const AppsLibraryDesktop = ({
   const renderTabContent = () => {
     switch (currentTab) {
       case 'official':
-        return <OfficialAppsTab availableQapps={availableQapps} />;
+        return (
+          <OfficialAppsTab availableQapps={availableQapps} myName={myName} />
+        );
       case 'community':
         return (
-          <CommunityAppsTab availableQapps={availableQapps} myName={myName} />
+          <CommunityAppsTab
+            availableQapps={availableQapps}
+            myName={myName}
+            categories={categories}
+          />
         );
       case 'categories':
         return (
@@ -150,7 +156,9 @@ export const AppsLibraryDesktop = ({
           />
         );
       default:
-        return <OfficialAppsTab availableQapps={availableQapps} />;
+        return (
+          <OfficialAppsTab availableQapps={availableQapps} myName={myName} />
+        );
     }
   };
 

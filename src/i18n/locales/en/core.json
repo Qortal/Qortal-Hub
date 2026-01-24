@@ -115,6 +115,11 @@
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
+  "official_apps": {
+    "featured": "featured",
+    "all_apps": "all official apps",
+    "view_all": "view all"
+  },
   "attachment": "attachment",
   "balance": "balance:",
   "category": "category",
@@ -403,6 +408,7 @@
     "highest_rated": "highest rated",
     "most_rated": "most reviewed",
     "newest": "newest",
+    "oldest": "oldest",
     "recently_updated": "recently updated"
   },
   "tabs": {

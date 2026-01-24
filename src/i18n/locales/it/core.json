@@ -115,6 +115,11 @@
   "app_service_type": "tipo di servizio app",
   "apps_dashboard": "dashboard delle app",
   "apps_official": "app ufficiali",
+  "official_apps": {
+    "featured": "in evidenza",
+    "all_apps": "tutte le app ufficiali",
+    "view_all": "vedi tutte"
+  },
   "attachment": "allegato",
   "balance": "bilancio:",
   "category": "categoria",

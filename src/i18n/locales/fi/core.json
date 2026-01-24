@@ -115,6 +115,11 @@
   "app_service_type": "sovelluksen palvelutyyppi",
   "apps_dashboard": "sovellusten hallintapaneeli",
   "apps_official": "viralliset sovellukset",
+  "official_apps": {
+    "featured": "suositellut",
+    "all_apps": "kaikki viralliset sovellukset",
+    "view_all": "näytä kaikki"
+  },
   "attachment": "liite",
   "balance": "saldo:",
   "category": "kategoria",

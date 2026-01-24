@@ -1,47 +1,42 @@
 import { useMemo } from 'react';
-import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
+import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import {
-  AppCircle,
-  AppCircleContainer,
-  AppCircleLabel,
-  AppLibrarySubTitle,
-  AppsContainer,
-  AppsWidthLimiter,
-} from '../Apps-styles';
+import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
-import { getBaseApiReact } from '../../../App';
-import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
-import { executeEvent } from '../../../utils/events';
+import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
+import {
+  officialAppList,
+  officialAppsConfig,
+} from '../config/officialApps';
 
-const officialAppList = [
-  'q-tube',
-  'q-blog',
-  'q-share',
-  'q-support',
-  'q-mail',
-  'q-fund',
-  'q-shop',
-  'q-trade',
-  'q-manager',
-  'q-mintership',
-  'q-wallets',
-  'q-search',
-  'q-node',
-  'names',
-  'q-follow',
-  'q-assets',
-  'quitter',
-];
+const AppsGrid = styled(Box)({
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+  gap: '16px',
+  width: '100%',
+});
+
+const SectionHeader = styled(Box)({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  width: '100%',
+  marginBottom: '20px',
+});
 
 interface OfficialAppsTabProps {
   availableQapps: any[];
+  myName?: string;
 }
 
-export const OfficialAppsTab = ({ availableQapps }: OfficialAppsTabProps) => {
+export const OfficialAppsTab = ({
+  availableQapps,
+  myName = '',
+}: OfficialAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
+  // Filter to get only official apps
   const officialApps = useMemo(() => {
     return availableQapps.filter(
       (app) =>
@@ -50,78 +45,68 @@ export const OfficialAppsTab = ({ availableQapps }: OfficialAppsTabProps) => {
     );
   }, [availableQapps]);
 
+  // Get featured apps for the carousel
+  const featuredApps = useMemo(() => {
+    return officialApps.filter((app) =>
+      officialAppsConfig.featured.includes(app?.name?.toLowerCase())
+    );
+  }, [officialApps]);
+
   return (
     <AppsWidthLimiter>
-      <AppLibrarySubTitle
-        sx={{
-          fontSize: '30px',
-        }}
-      >
-        {t('core:apps_official', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </AppLibrarySubTitle>
+      {/* Featured Apps Carousel */}
+      {featuredApps.length > 0 && (
+        <>
+          <AppLibrarySubTitle
+            sx={{
+              fontSize: '20px',
+              marginBottom: '24px',
+            }}
+          >
+            {t('core:official_apps.featured', {
+              postProcess: 'capitalizeFirstChar',
+              defaultValue: 'Featured',
+            })}
+          </AppLibrarySubTitle>
 
-      <Spacer height="45px" />
+          <FeaturedAppBanner featuredApps={featuredApps} />
 
-      <AppsContainer
-        sx={{
-          gap: '15px',
-          justifyContent: 'flex-start',
-        }}
-      >
-        {officialApps?.map((qapp) => {
-          return (
-            <ButtonBase
-              key={`${qapp?.service}-${qapp?.name}`}
-              sx={{
-                width: '80px',
-              }}
-              onClick={() => {
-                executeEvent('selectedAppInfo', {
-                  data: qapp,
-                });
-              }}
-            >
-              <AppCircleContainer
-                sx={{
-                  gap: '10px',
-                }}
-              >
-                <AppCircle
-                  sx={{
-                    border: 'none',
-                  }}
-                >
-                  <Avatar
-                    sx={{
-                      height: '42px',
-                      width: '42px',
-                    }}
-                    alt={qapp?.name}
-                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                      qapp?.name
-                    }/qortal_avatar?async=true`}
-                  >
-                    <img
-                      style={{
-                        width: '31px',
-                        height: 'auto',
-                      }}
-                      src={LogoSelected}
-                      alt="center-icon"
-                    />
-                  </Avatar>
-                </AppCircle>
+          <Spacer height="40px" />
+        </>
+      )}
 
-                <AppCircleLabel>
-                  {qapp?.metadata?.title || qapp?.name}
-                </AppCircleLabel>
-              </AppCircleContainer>
-            </ButtonBase>
-          );
-        })}
-      </AppsContainer>
+      {/* All Official Apps Grid */}
+      <SectionHeader>
+        <AppLibrarySubTitle
+          sx={{
+            fontSize: '20px',
+          }}
+        >
+          {t('core:apps_official', {
+            postProcess: 'capitalizeFirstChar',
+          })}{' '}
+          <Typography
+            component="span"
+            sx={{
+              fontSize: '16px',
+              color: theme.palette.text.secondary,
+              fontWeight: 400,
+            }}
+          >
+            ({officialApps.length})
+          </Typography>
+        </AppLibrarySubTitle>
+      </SectionHeader>
+
+      <AppsGrid>
+        {officialApps.map((app) => (
+          <AppCardEnhanced
+            key={`${app?.service}-${app?.name}`}
+            app={app}
+            myName={myName}
+          />
+        ))}
+      </AppsGrid>
     </AppsWidthLimiter>
   );
 };
