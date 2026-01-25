@@ -153,7 +153,7 @@ export const MyAppsTab = ({
               })}
             </SectionTitle>
             <Spacer height="16px" />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
               {myApps.map((app) => (
                 <PublishedAppCard
                   key={`${app.service}-${app.name}`}
@@ -175,7 +175,7 @@ export const MyAppsTab = ({
               })}
             </SectionTitle>
             <Spacer height="16px" />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
               {myWebsites.map((site) => (
                 <PublishedAppCard
                   key={`${site.service}-${site.name}`}

@@ -17,13 +17,13 @@ interface PublishedAppCardProps {
 const CardContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  padding: '20px',
+  padding: '16px',
   borderRadius: '12px',
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
-  gap: '16px',
-  maxWidth: '500px',
-  width: '100%',
+  gap: '12px',
+  width: '320px',
+  minHeight: '220px',
 }));
 
 const HeaderRow = styled(Box)({
