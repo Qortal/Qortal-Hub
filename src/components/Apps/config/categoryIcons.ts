@@ -2,50 +2,56 @@
 // Maps category IDs to emoji icons for visual display
 
 export const categoryIcons: Record<string, string> = {
-  // Entertainment
-  games: '🎮',
-  entertainment: '🎬',
-  music: '🎵',
-  sports: '⚽',
-
-  // Productivity
-  productivity: '📊',
-  tools: '🔧',
-  utilities: '⚙️',
-  education: '📚',
-
-  // Social & Communication
-  social: '📱',
-  communication: '💬',
-  news: '📰',
-
-  // Commerce & Finance
-  finance: '💰',
-  shopping: '🛒',
-  business: '💼',
-
-  // Media
-  photography: '📷',
-  video: '🎥',
-  art: '🎨',
-
-  // Lifestyle
-  lifestyle: '🌟',
-  health: '❤️',
-  food: '🍕',
-  travel: '✈️',
-  weather: '🌤️',
-
-  // Technology
-  technology: '💻',
-  development: '👨‍💻',
-  security: '🔒',
-  blockchain: '⛓️',
-  crypto: '₿',
-
-  // Special
   all: '🌐',
+  art: '🎨',
+  automotive: '🚗',
+  beauty: '💄',
+  blockchain: '⛓️',
+  business: '💼',
+  communication: '💬',
+  communications: '📡',
+  crypto: '₿',
+  culture: '🎭',
+  dating: '❤️',
+  design: '🎨',
+  development: '👨‍💻',
+  education: '📚',
+  entertainment: '🎬',
+  events: '📅',
+  fashion: '👠',
+  finance: '💰',
+  food: '🍕',
+  games: '🎮',
+  geography: '🌎',
+  health: '⚕️',
+  history: '🏛️',
+  home: '🏠',
+  language: '💬',
+  lifestyle: '🌟',
+  manufactoring: '🏭',
+  music: '🎵',
+  news: '📰',
   other: '📦',
+  pets: '🐕',
+  philosophy: '🤔',
+  photography: '📷',
+  politics: '🗳️',
+  productivity: '📊',
+  psychology: '🧠',
+  science: '🔬',
+  security: '🔒',
+  shopping: '🛒',
+  social: '📱',
+  software: '💻',
+  spirituality: '🧘',
+  sports: '⚽',
+  storytelling: '📖',
+  technology: '💻',
+  tools: '🔧',
+  travel: '✈️',
+  utilities: '⚙️',
+  video: '🎥',
+  weather: '🌤️',
 };
 
 /**
