@@ -47,6 +47,8 @@ const EmptyStateBox = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
   border: `1px dashed ${theme.palette.divider}`,
   textAlign: 'center',
+  width: '320px',
+  minHeight: '220px',
 }));
 
 const PublishNewContainer = styled(Box)(({ theme }) => ({
