@@ -228,6 +228,8 @@ export const AppsDesktop = ({
         'appInfo',
         'library',
         'publish',
+        'publish-app',
+        'publish-website',
       ].includes(mode)
     ) {
       // Handle the various modes as needed
@@ -244,7 +246,7 @@ export const AppsDesktop = ({
         } else {
           setMode('home');
         }
-      } else if (mode === 'publish') {
+      } else if (mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') {
         setMode('library');
       }
     } else if (selectedTab?.tabId) {
@@ -474,11 +476,13 @@ export const AppsDesktop = ({
         myName={myName}
       />
 
-      {mode === 'publish' && !selectedTab && (
+      {(mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') && !selectedTab && (
         <AppPublish
           categories={categories}
           myAddress={myAddress}
           myName={myName}
+          initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
+          isAppTypeLocked={mode === 'publish-app' || mode === 'publish-website'}
         />
       )}
 

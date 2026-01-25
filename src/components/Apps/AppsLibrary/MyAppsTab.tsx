@@ -255,7 +255,7 @@ export const MyAppsTab = ({
           </SectionTitle>
           <Spacer height="16px" />
           <PublishNewContainer>
-            <PublishButton onClick={() => setMode('publish')}>
+            <PublishButton onClick={() => setMode('publish-app')}>
               <AppsIcon
                 sx={{ fontSize: '32px', color: theme.palette.primary.main }}
               />
@@ -271,7 +271,7 @@ export const MyAppsTab = ({
                 })}
               </Typography>
             </PublishButton>
-            <PublishButton onClick={() => setMode('publish')}>
+            <PublishButton onClick={() => setMode('publish-website')}>
               <LanguageIcon
                 sx={{ fontSize: '32px', color: theme.palette.secondary.main }}
               />

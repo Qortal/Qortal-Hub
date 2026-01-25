@@ -74,13 +74,27 @@ const CounterText = styled('span')(({ theme }) => ({
   fontSize: '12px',
 }));
 
-export const AppPublish = ({ categories, myAddress, myName }) => {
+interface AppPublishProps {
+  categories: any;
+  myAddress: any;
+  myName: any;
+  initialAppType?: 'APP' | 'WEBSITE';
+  isAppTypeLocked?: boolean;
+}
+
+export const AppPublish = ({
+  categories,
+  myAddress,
+  myName,
+  initialAppType = 'APP',
+  isAppTypeLocked = false,
+}: AppPublishProps) => {
   const [names, setNames] = useState([]);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
-  const [appType, setAppType] = useState('APP');
+  const [appType, setAppType] = useState(initialAppType);
   const [file, setFile] = useState(null);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
@@ -364,10 +378,13 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
         }}
       >
         <AppLibrarySubTitle>
-          {t('core:action.create_apps', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-          !
+          {appType === 'WEBSITE'
+            ? t('core:developer.publish_site', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:developer.publish_app', {
+                postProcess: 'capitalizeFirstChar',
+              })}
         </AppLibrarySubTitle>
 
         <Spacer height="18px" />
@@ -426,6 +443,7 @@ export const AppPublish = ({ categories, myAddress, myName }) => {
           displayEmpty
           value={appType}
           onChange={(event) => setAppType(event?.target.value)}
+          disabled={isAppTypeLocked}
         >
           <MenuItem value="">
             <em
