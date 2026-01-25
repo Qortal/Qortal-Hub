@@ -186,20 +186,20 @@ export const AppInfoSnippetRight = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
-export const AppDownloadButton = styled(ButtonBase)(({ theme }) => ({
+export const AppButton = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
   alignSelf: 'center',
   backgroundColor: theme.palette.background.default,
   borderRadius: '25px',
   color: theme.palette.text.primary,
   display: 'flex',
-  height: '29px',
+  height: '25px',
   justifyContent: 'center',
-  width: '101px',
+  width: '95px',
 }));
 
-export const AppDownloadButtonText = styled(Typography)({
-  fontSize: '14px',
+export const AppButtonText = styled(Typography)({
+  fontSize: '12px',
   fontWeight: 500,
   lineHeight: 1.2,
 });

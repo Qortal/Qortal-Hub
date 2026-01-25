@@ -2,8 +2,8 @@ import { useContext } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
-  AppDownloadButton,
-  AppDownloadButtonText,
+  AppButton,
+  AppButtonText,
   AppInfoAppName,
   AppInfoSnippetContainer,
   AppInfoSnippetLeft,
@@ -14,7 +14,14 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Avatar, Box, Divider, styled, Typography, useTheme } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Divider,
+  styled,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
@@ -60,9 +67,14 @@ export const AppInfo = ({ app, myName }) => {
   );
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const [openSnack, setOpenSnack] = useState(false);
-  const [infoSnack, setInfoSnack] = useState<{ type: string; message: string } | null>(null);
+  const [infoSnack, setInfoSnack] = useState<{
+    type: string;
+    message: string;
+  } | null>(null);
   const [pollInfo, setPollInfo] = useState<any>(null);
-  const [hasPublishedRating, setHasPublishedRating] = useState<boolean | null>(null);
+  const [hasPublishedRating, setHasPublishedRating] = useState<boolean | null>(
+    null
+  );
   const hasCalledRef = useRef(false);
 
   const theme = useTheme();
@@ -366,7 +378,7 @@ export const AppInfo = ({ app, myName }) => {
               width: '100%',
             }}
           >
-            <AppDownloadButton
+            <AppButton
               onClick={() => {
                 setSortablePinnedApps((prev) => {
                   let updatedApps;
@@ -405,7 +417,7 @@ export const AppInfo = ({ app, myName }) => {
                 opacity: isSelectedAppPinned ? 0.6 : 1,
               }}
             >
-              <AppDownloadButtonText>
+              <AppButtonText>
                 {isSelectedAppPinned
                   ? t('core:action.unpin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
@@ -413,10 +425,10 @@ export const AppInfo = ({ app, myName }) => {
                   : t('core:action.pin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-              </AppDownloadButtonText>
-            </AppDownloadButton>
+              </AppButtonText>
+            </AppButton>
 
-            <AppDownloadButton
+            <AppButton
               onClick={() => {
                 executeEvent('addTab', {
                   data: app,
@@ -430,7 +442,7 @@ export const AppInfo = ({ app, myName }) => {
                 flex: 1,
               }}
             >
-              <AppDownloadButtonText>
+              <AppButtonText>
                 {isInstalled
                   ? t('core:action.open', {
                       postProcess: 'capitalizeFirstChar',
@@ -438,8 +450,8 @@ export const AppInfo = ({ app, myName }) => {
                   : t('core:action.download', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-              </AppDownloadButtonText>
-            </AppDownloadButton>
+              </AppButtonText>
+            </AppButton>
           </Box>
         </AppsWidthLimiter>
 
@@ -486,11 +498,7 @@ export const AppInfo = ({ app, myName }) => {
               postProcess: 'capitalizeFirstChar',
             })}
           </SectionTitle>
-          <AppRatingBreakdown
-            app={app}
-            myName={myName}
-            onRate={handleRate}
-          />
+          <AppRatingBreakdown app={app} myName={myName} onRate={handleRate} />
         </SectionContainer>
       </Box>
 

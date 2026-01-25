@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../../utils/events';
-import { AppDownloadButton, AppDownloadButtonText } from '../Apps-styles';
+import { AppButton, AppButtonText } from '../Apps-styles';
 
 const CarouselContainer = styled(Box)({
   display: 'flex',
@@ -201,7 +201,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
                   })}
               </CardDescription>
 
-              <AppDownloadButton
+              <AppButton
                 onClick={(e) => handleOpenApp(app, e)}
                 sx={{
                   backgroundColor: theme.palette.primary.main,
@@ -211,7 +211,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
                   marginTop: 'auto',
                 }}
               >
-                <AppDownloadButtonText>
+                <AppButtonText>
                   {isInstalled
                     ? t('core:action.open', {
                         postProcess: 'capitalizeFirstChar',
@@ -219,8 +219,8 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
                     : t('core:action.download', {
                         postProcess: 'capitalizeFirstChar',
                       })}
-                </AppDownloadButtonText>
-              </AppDownloadButton>
+                </AppButtonText>
+              </AppButton>
             </FeaturedCard>
           );
         })}

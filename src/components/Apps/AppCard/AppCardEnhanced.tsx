@@ -1,4 +1,4 @@
-import { Avatar, ButtonBase, useTheme } from '@mui/material';
+import { Avatar, useTheme } from '@mui/material';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
@@ -19,8 +19,8 @@ import {
   AppCardDescription,
   AppCardTagsContainer,
   AppCardActions,
-  AppDownloadButton,
-  AppDownloadButtonText,
+  AppButton,
+  AppButtonText,
   CategoryChip,
   TagChip,
   AppCircle,
@@ -78,7 +78,11 @@ export const AppCardEnhanced = ({
         ];
       }
 
-      saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', updatedApps);
+      saveToLocalStorage(
+        'ext_saved_settings',
+        'sortablePinnedApps',
+        updatedApps
+      );
       return updatedApps;
     });
     setSettingsLocalLastUpdated(Date.now());
@@ -102,7 +106,11 @@ export const AppCardEnhanced = ({
   const rawTags = app?.metadata?.tags;
   const tags: string[] = rawTags
     ? typeof rawTags === 'string'
-      ? rawTags.split(',').map((t: string) => t.trim()).filter(Boolean).slice(0, 3)
+      ? rawTags
+          .split(',')
+          .map((t: string) => t.trim())
+          .filter(Boolean)
+          .slice(0, 3)
       : Array.isArray(rawTags)
         ? rawTags.slice(0, 3)
         : []
@@ -175,21 +183,21 @@ export const AppCardEnhanced = ({
       </AppCardTagsContainer>
 
       <AppCardActions>
-        <AppDownloadButton
+        <AppButton
           onClick={handlePinClick}
           sx={{
             backgroundColor: theme.palette.background.default,
             opacity: isSelectedAppPinned ? 0.6 : 1,
           }}
         >
-          <AppDownloadButtonText>
+          <AppButtonText>
             {isSelectedAppPinned
               ? t('core:action.unpin', { postProcess: 'capitalizeFirstChar' })
               : t('core:action.pin', { postProcess: 'capitalizeFirstChar' })}
-          </AppDownloadButtonText>
-        </AppDownloadButton>
+          </AppButtonText>
+        </AppButton>
 
-        <AppDownloadButton
+        <AppButton
           onClick={handleOpenClick}
           sx={{
             backgroundColor: isInstalled
@@ -197,14 +205,14 @@ export const AppCardEnhanced = ({
               : theme.palette.background.default,
           }}
         >
-          <AppDownloadButtonText>
+          <AppButtonText>
             {isInstalled
               ? t('core:action.open', { postProcess: 'capitalizeFirstChar' })
               : t('core:action.download', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-          </AppDownloadButtonText>
-        </AppDownloadButton>
+          </AppButtonText>
+        </AppButton>
       </AppCardActions>
     </AppCardEnhancedContainer>
   );

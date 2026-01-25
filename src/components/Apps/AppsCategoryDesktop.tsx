@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AppLibrarySubTitle,
-  AppsBackContainer,
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
   AppsLibraryContainer,
