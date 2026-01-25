@@ -35,14 +35,14 @@ const FeaturedCard = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '12px',
-  padding: '20px',
+  gap: '10px',
+  padding: '16px',
   borderRadius: '12px',
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
-  width: '280px',
-  minWidth: '280px',
-  minHeight: '200px',
+  width: '220px',
+  minWidth: '220px',
+  minHeight: '190px',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
   '&:hover': {
@@ -102,26 +102,30 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
-  const VISIBLE_COUNT = 3;
+  const FEATURED_APPS_MAX: number = 4;
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
   }
 
   // Get the visible apps (3 at a time)
-  const visibleApps = featuredApps.slice(startIndex, startIndex + VISIBLE_COUNT);
+  const visibleApps = featuredApps.slice(
+    startIndex,
+    startIndex + FEATURED_APPS_MAX
+  );
 
   // Fill remaining slots if we have fewer than 3 apps at the end
   const displayApps =
-    visibleApps.length < VISIBLE_COUNT && featuredApps.length >= VISIBLE_COUNT
+    visibleApps.length < FEATURED_APPS_MAX &&
+    featuredApps.length >= FEATURED_APPS_MAX
       ? [
           ...visibleApps,
-          ...featuredApps.slice(0, VISIBLE_COUNT - visibleApps.length),
+          ...featuredApps.slice(0, FEATURED_APPS_MAX - visibleApps.length),
         ]
       : visibleApps;
 
   const canGoBack = startIndex > 0;
-  const canGoForward = startIndex + VISIBLE_COUNT < featuredApps.length;
+  const canGoForward = startIndex + FEATURED_APPS_MAX < featuredApps.length;
 
   const handlePrev = () => {
     setStartIndex((prev) => Math.max(0, prev - 1));
@@ -129,7 +133,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
 
   const handleNext = () => {
     setStartIndex((prev) =>
-      Math.min(featuredApps.length - VISIBLE_COUNT, prev + 1)
+      Math.min(featuredApps.length - FEATURED_APPS_MAX, prev + 1)
     );
   };
 
@@ -148,7 +152,10 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
         onClick={handlePrev}
         size="small"
         disabled={!canGoBack}
-        sx={{ visibility: featuredApps.length <= VISIBLE_COUNT ? 'hidden' : 'visible' }}
+        sx={{
+          visibility:
+            featuredApps.length <= FEATURED_APPS_MAX ? 'hidden' : 'visible',
+        }}
       >
         <ChevronLeftIcon />
       </NavButton>
@@ -223,7 +230,10 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
         onClick={handleNext}
         size="small"
         disabled={!canGoForward}
-        sx={{ visibility: featuredApps.length <= VISIBLE_COUNT ? 'hidden' : 'visible' }}
+        sx={{
+          visibility:
+            featuredApps.length <= FEATURED_APPS_MAX ? 'hidden' : 'visible',
+        }}
       >
         <ChevronRightIcon />
       </NavButton>
