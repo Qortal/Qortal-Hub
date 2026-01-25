@@ -123,7 +123,6 @@
   "attachment": "allegato",
   "balance": "bilancio:",
   "category": "categoria",
-  "category_other": "categorie",
   "chat": "chat",
   "comment_other": "commenti",
   "contact_other": "contatti",
@@ -137,7 +136,6 @@
   "dev": "dev",
   "dev_mode": "modalità Dev",
   "developer": {
-    "my_apps": "le mie app",
     "no_apps_yet": "non hai ancora pubblicato nessuna app",
     "no_sites_yet": "non hai ancora pubblicato nessun sito web",
     "publish_app": "pubblica app",

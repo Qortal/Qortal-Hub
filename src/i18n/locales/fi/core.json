@@ -123,7 +123,6 @@
   "attachment": "liite",
   "balance": "saldo:",
   "category": "kategoria",
-  "category_other": "kategoriat",
   "chat": "keskustelu",
   "comment_other": "kommentit",
   "contact_other": "yhteystiedot",
@@ -137,7 +136,6 @@
   "dev": "kehittäjä",
   "dev_mode": "kehittäjätila",
   "developer": {
-    "my_apps": "sovellukseni",
     "no_apps_yet": "et ole vielä julkaissut sovelluksia",
     "no_sites_yet": "et ole vielä julkaissut verkkosivustoja",
     "publish_app": "julkaise sovellus",

@@ -123,7 +123,6 @@
   "attachment": "Anhang",
   "balance": "Gleichgewicht:",
   "category": "Kategorie",
-  "category_other": "Kategorien",
   "chat": "Chat",
   "comment_other": "Kommentare",
   "contact_other": "Kontakte",
@@ -137,7 +136,6 @@
   "dev": "Dev",
   "dev_mode": "Dev -Modus",
   "developer": {
-    "my_apps": "meine Apps",
     "no_apps_yet": "Sie haben noch keine Apps veröffentlicht",
     "no_sites_yet": "Sie haben noch keine Websites veröffentlicht",
     "publish_app": "App veröffentlichen",

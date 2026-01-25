@@ -49,18 +49,6 @@ export const CategoriesTab = ({
 
   return (
     <AppsWidthLimiter>
-      <AppLibrarySubTitle
-        sx={{
-          fontSize: '30px',
-        }}
-      >
-        {t('core:category_other', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </AppLibrarySubTitle>
-
-      <Spacer height="30px" />
-
       <CategoriesGrid>
         {/* All category */}
         <CategoryCard

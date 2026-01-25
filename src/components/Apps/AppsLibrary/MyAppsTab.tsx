@@ -1,5 +1,12 @@
 import { useMemo } from 'react';
-import { Box, Button, Divider, Typography, styled, useTheme } from '@mui/material';
+import {
+  Box,
+  Button,
+  Divider,
+  Typography,
+  styled,
+  useTheme,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
@@ -132,17 +139,6 @@ export const MyAppsTab = ({
   return (
     <AppsWidthLimiter>
       <SectionContainer>
-        {/* Page Title */}
-        <AppLibrarySubTitle
-          sx={{
-            fontSize: '28px',
-          }}
-        >
-          {t('core:developer.my_apps', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </AppLibrarySubTitle>
-
         {/* Published Apps Section */}
         {myApps.length > 0 && (
           <Box>

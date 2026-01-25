@@ -123,7 +123,6 @@
   "attachment": "attachment",
   "balance": "balance:",
   "category": "category",
-  "category_other": "categories",
   "chat": "chat",
   "comment_other": "comments",
   "contact_other": "contacts",
@@ -137,7 +136,6 @@
   "dev": "dev",
   "dev_mode": "dev Mode",
   "developer": {
-    "my_apps": "my apps",
     "no_apps_yet": "you haven't published any apps yet",
     "no_sites_yet": "you haven't published any websites yet",
     "publish_app": "publish app",

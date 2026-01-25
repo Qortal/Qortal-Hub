@@ -123,7 +123,6 @@
   "attachment": "添付ファイル",
   "balance": "バランス：",
   "category": "カテゴリ",
-  "category_other": "カテゴリ",
   "chat": "チャット",
   "comment_other": "コメント",
   "contact_other": "連絡先",
@@ -137,7 +136,6 @@
   "dev": "開発者",
   "dev_mode": "開発モード",
   "developer": {
-    "my_apps": "マイアプリ",
     "no_apps_yet": "まだアプリを公開していません",
     "no_sites_yet": "まだサイトを公開していません",
     "publish_app": "アプリを公開",

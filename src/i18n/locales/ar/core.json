@@ -123,7 +123,6 @@
   "attachment": "مرفق",
   "balance": "الرصيد:",
   "category": "فئة",
-  "category_other": "فئات",
   "chat": "دردشة",
   "comment_other": "تعليقات",
   "contact_other": "اتصالات",
@@ -137,7 +136,6 @@
   "dev": "ديف",
   "dev_mode": "وضع المطور",
   "developer": {
-    "my_apps": "تطبيقاتي",
     "no_apps_yet": "لم تنشر أي تطبيقات بعد",
     "no_sites_yet": "لم تنشر أي مواقع بعد",
     "publish_app": "نشر تطبيق",

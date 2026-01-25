@@ -123,7 +123,6 @@
   "attachment": "anexo",
   "balance": "balanço:",
   "category": "categoria",
-  "category_other": "categorias",
   "chat": "conversa",
   "comment_other": "comentarios",
   "contact_other": "contatos",
@@ -137,7 +136,6 @@
   "dev": "desenvolvedor",
   "dev_mode": "Modo desenvolvedor",
   "developer": {
-    "my_apps": "meus apps",
     "no_apps_yet": "você ainda não publicou nenhum app",
     "no_sites_yet": "você ainda não publicou nenhum site",
     "publish_app": "publicar app",

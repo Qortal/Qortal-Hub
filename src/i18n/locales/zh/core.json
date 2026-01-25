@@ -123,7 +123,6 @@
   "attachment": "依恋",
   "balance": "平衡：",
   "category": "类别",
-  "category_other": "类别",
   "chat": "聊天",
   "comment_other": "评论",
   "contact_other": "联系人",
@@ -137,7 +136,6 @@
   "dev": "开发",
   "dev_mode": "开发模式",
   "developer": {
-    "my_apps": "我的应用",
     "no_apps_yet": "您还没有发布任何应用",
     "no_sites_yet": "您还没有发布任何网站",
     "publish_app": "发布应用",

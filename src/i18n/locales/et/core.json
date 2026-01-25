@@ -123,7 +123,6 @@
   "attachment": "manus",
   "balance": "saldo:",
   "category": "kategooria",
-  "category_other": "kategooriad",
   "chat": "vestlus",
   "comment_other": "kommentaarid",
   "contact_other": "kontaktid",
@@ -137,7 +136,6 @@
   "dev": "arendus",
   "dev_mode": "arendusrežiim",
   "developer": {
-    "my_apps": "minu rakendused",
     "no_apps_yet": "te pole veel ühtegi rakendust avaldanud",
     "no_sites_yet": "te pole veel ühtegi veebilehte avaldanud",
     "publish_app": "avalda rakendus",
