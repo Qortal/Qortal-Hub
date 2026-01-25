@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  AppCardsGrid,
   AppLibrarySubTitle,
   AppsDesktopLibraryBody,
   AppsDesktopLibraryHeader,
@@ -9,35 +10,15 @@ import {
   AppsSearchRight,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { ButtonBase, InputBase, styled, useTheme } from '@mui/material';
+import { ButtonBase, InputBase, useTheme } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
-import { AppInfoSnippet } from './AppInfoSnippet';
-import { Virtuoso } from 'react-virtuoso';
+import { AppCardEnhanced } from './AppCard';
 import { useTranslation } from 'react-i18next';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { executeEvent } from '../../utils/events';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
-
-const StyledVirtuosoContainer = styled('div')({
-  position: 'relative',
-  width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-
-  // Hide scrollbar for WebKit browsers (Chrome, Safari)
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-
-  // Hide scrollbar for Firefox
-  scrollbarWidth: 'none',
-
-  // Hide scrollbar for IE and older Edge
-  msOverflowStyle: 'none',
-});
 
 export const AppsCategoryDesktop = ({
   availableQapps,
@@ -46,7 +27,6 @@ export const AppsCategoryDesktop = ({
   isShow,
 }) => {
   const [searchValue, setSearchValue] = useState('');
-  const virtuosoRef = useRef(null);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -63,25 +43,17 @@ export const AppsCategoryDesktop = ({
     );
   }, [availableQapps, category]);
 
-  const [debouncedValue, setDebouncedValue] = useState(''); // Debounced value
+  const [debouncedValue, setDebouncedValue] = useState('');
 
   // Debounce logic
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedValue(searchValue);
     }, 350);
-    setTimeout(() => {
-      if (virtuosoRef.current) {
-        virtuosoRef.current.scrollToIndex({ index: 0 });
-      }
-    }, 500);
-    // Cleanup timeout if searchValue changes before the timeout completes
     return () => {
       clearTimeout(handler);
     };
-  }, [searchValue]); // Runs effect when searchValue changes
-
-  // Example: Perform search or other actions based on debouncedValue
+  }, [searchValue]);
 
   const searchedList = useMemo(() => {
     if (!debouncedValue) return categoryList;
@@ -94,22 +66,6 @@ export const AppsCategoryDesktop = ({
             .includes(debouncedValue.toLowerCase()))
     );
   }, [debouncedValue, categoryList]);
-
-  const rowRenderer = (index) => {
-    const app = searchedList[index];
-
-    return (
-      <AppInfoSnippet
-        key={`${app?.service}-${app?.name}`}
-        app={app}
-        myName={myName}
-        isFromCategory={true}
-        parentStyles={{
-          padding: '0px 10px',
-        }}
-      />
-    );
-  };
 
   return (
     <AppsLibraryContainer
@@ -206,7 +162,8 @@ export const AppsCategoryDesktop = ({
           height: `calc(100vh - 36px)`,
           overflow: 'auto',
           padding: '0px',
-          width: '70%',
+          width: '90%',
+          maxWidth: '1200px',
         }}
       >
         <Spacer height="25px" />
@@ -218,19 +175,17 @@ export const AppsCategoryDesktop = ({
         </AppsWidthLimiter>
 
         <AppsWidthLimiter>
-          <StyledVirtuosoContainer
-            sx={{
-              height: `calc(100vh - 36px - 90px - 25px)`,
-            }}
-          >
-            <Virtuoso
-              ref={virtuosoRef}
-              data={searchedList}
-              itemContent={rowRenderer}
-              atBottomThreshold={50}
-              followOutput="smooth"
-            />
-          </StyledVirtuosoContainer>
+          <AppCardsGrid>
+            {searchedList.map((app) => (
+              <AppCardEnhanced
+                key={`${app?.service}-${app?.name}`}
+                app={app}
+                myName={myName}
+                isFromCategory={true}
+              />
+            ))}
+          </AppCardsGrid>
+          <Spacer height="25px" />
         </AppsWidthLimiter>
       </AppsDesktopLibraryBody>
     </AppsLibraryContainer>
