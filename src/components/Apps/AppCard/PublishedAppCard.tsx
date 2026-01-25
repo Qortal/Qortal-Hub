@@ -22,6 +22,8 @@ const CardContainer = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
   gap: '16px',
+  maxWidth: '500px',
+  width: '100%',
 }));
 
 const HeaderRow = styled(Box)({

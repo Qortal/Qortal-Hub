@@ -203,6 +203,9 @@ export const AppCardEnhanced = ({
             backgroundColor: isInstalled
               ? theme.palette.primary.main
               : theme.palette.background.default,
+            color: isInstalled
+              ? theme.palette.primary.contrastText
+              : theme.palette.text.primary,
           }}
         >
           <AppButtonText>

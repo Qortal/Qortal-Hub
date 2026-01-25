@@ -190,16 +190,21 @@ export const AppButton = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
   alignSelf: 'center',
   backgroundColor: theme.palette.background.default,
-  borderRadius: '25px',
+  borderRadius: '20px',
   color: theme.palette.text.primary,
   display: 'flex',
-  height: '25px',
+  height: '22px',
   justifyContent: 'center',
-  width: '95px',
+  width: '72px',
+  transition: 'filter 0.2s ease, transform 0.1s ease',
+  '&:hover': {
+    filter: 'brightness(1.2)',
+    transform: 'scale(1.05)',
+  },
 }));
 
 export const AppButtonText = styled(Typography)({
-  fontSize: '12px',
+  fontSize: '11px',
   fontWeight: 500,
   lineHeight: 1.2,
 });
@@ -479,10 +484,11 @@ export const AppCardDescription = styled(Typography)(({ theme }) => ({
 
 export const AppCardTagsContainer = styled(Box)({
   display: 'flex',
-  flexWrap: 'wrap',
+  flexWrap: 'nowrap',
   gap: '6px',
-  marginBottom: '12px',
-  minHeight: '24px',
+  marginBottom: '8px',
+  height: '24px',
+  overflow: 'hidden',
 });
 
 export const AppCardActions = styled(Box)({

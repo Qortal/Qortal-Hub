@@ -5,6 +5,7 @@ import {
   IconButton,
   Typography,
   styled,
+  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -20,15 +21,16 @@ const CarouselContainer = styled(Box)({
   alignItems: 'center',
   justifyContent: 'center',
   width: '100%',
-  gap: '16px',
+  gap: '8px',
 });
 
 const CardsContainer = styled(Box)({
   display: 'flex',
-  gap: '16px',
+  gap: '12px',
   overflow: 'hidden',
   flex: 1,
   justifyContent: 'center',
+  flexWrap: 'nowrap',
 });
 
 const FeaturedCard = styled(Box)(({ theme }) => ({
@@ -41,13 +43,22 @@ const FeaturedCard = styled(Box)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
   width: '220px',
-  minWidth: '220px',
+  minWidth: '180px',
+  maxWidth: '220px',
+  flex: '1 1 180px',
   minHeight: '190px',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
   '&:hover': {
     transform: 'translateY(-2px)',
     boxShadow: theme.shadows[4],
+  },
+  [theme.breakpoints.down('sm')]: {
+    width: '160px',
+    minWidth: '140px',
+    maxWidth: '180px',
+    padding: '12px',
+    minHeight: '170px',
   },
 }));
 
@@ -60,6 +71,10 @@ const CardAvatar = styled(Box)(({ theme }) => ({
   borderRadius: '12px',
   backgroundColor: theme.palette.background.default,
   flexShrink: 0,
+  [theme.breakpoints.down('sm')]: {
+    width: '55px',
+    height: '55px',
+  },
 }));
 
 const CardTitle = styled(Typography)(({ theme }) => ({
@@ -67,6 +82,13 @@ const CardTitle = styled(Typography)(({ theme }) => ({
   fontWeight: 600,
   color: theme.palette.text.primary,
   textAlign: 'center',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  width: '100%',
+  [theme.breakpoints.down('sm')]: {
+    fontSize: '14px',
+  },
 }));
 
 const CardDescription = styled(Typography)(({ theme }) => ({
@@ -80,6 +102,10 @@ const CardDescription = styled(Typography)(({ theme }) => ({
   WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
   minHeight: '34px',
+  [theme.breakpoints.down('sm')]: {
+    fontSize: '11px',
+    minHeight: '30px',
+  },
 }));
 
 const NavButton = styled(IconButton)(({ theme }) => ({
@@ -102,30 +128,39 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
-  const FEATURED_APPS_MAX: number = 4;
+  // Responsive breakpoints
+  const isXSmall = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
+  const isSmall = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600-900px
+  const isMedium = useMediaQuery(theme.breakpoints.between('md', 'lg')); // 900-1200px
+
+  // Determine number of visible cards based on screen size
+  const getVisibleCount = () => {
+    if (isXSmall) return 1;
+    if (isSmall) return 2;
+    if (isMedium) return 3;
+    return 4; // Large screens
+  };
+
+  const visibleCount = getVisibleCount();
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
   }
 
-  // Get the visible apps (3 at a time)
-  const visibleApps = featuredApps.slice(
-    startIndex,
-    startIndex + FEATURED_APPS_MAX
-  );
+  // Get the visible apps based on screen size
+  const visibleApps = featuredApps.slice(startIndex, startIndex + visibleCount);
 
-  // Fill remaining slots if we have fewer than 3 apps at the end
+  // Fill remaining slots if we have fewer apps at the end
   const displayApps =
-    visibleApps.length < FEATURED_APPS_MAX &&
-    featuredApps.length >= FEATURED_APPS_MAX
+    visibleApps.length < visibleCount && featuredApps.length >= visibleCount
       ? [
           ...visibleApps,
-          ...featuredApps.slice(0, FEATURED_APPS_MAX - visibleApps.length),
+          ...featuredApps.slice(0, visibleCount - visibleApps.length),
         ]
       : visibleApps;
 
   const canGoBack = startIndex > 0;
-  const canGoForward = startIndex + FEATURED_APPS_MAX < featuredApps.length;
+  const canGoForward = startIndex + visibleCount < featuredApps.length;
 
   const handlePrev = () => {
     setStartIndex((prev) => Math.max(0, prev - 1));
@@ -133,7 +168,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
 
   const handleNext = () => {
     setStartIndex((prev) =>
-      Math.min(featuredApps.length - FEATURED_APPS_MAX, prev + 1)
+      Math.min(featuredApps.length - visibleCount, prev + 1)
     );
   };
 
@@ -154,7 +189,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
         disabled={!canGoBack}
         sx={{
           visibility:
-            featuredApps.length <= FEATURED_APPS_MAX ? 'hidden' : 'visible',
+            featuredApps.length <= visibleCount ? 'hidden' : 'visible',
         }}
       >
         <ChevronLeftIcon />
@@ -172,8 +207,8 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
               <CardAvatar>
                 <Avatar
                   sx={{
-                    height: '50px',
-                    width: '50px',
+                    height: { xs: '40px', sm: '50px' },
+                    width: { xs: '40px', sm: '50px' },
                     '& img': {
                       objectFit: 'fill',
                     },
@@ -204,10 +239,12 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
               <AppButton
                 onClick={(e) => handleOpenApp(app, e)}
                 sx={{
-                  backgroundColor: theme.palette.primary.main,
-                  color: theme.palette.primary.contrastText,
-                  width: 'auto',
-                  padding: '0 24px',
+                  backgroundColor: isInstalled
+                    ? theme.palette.primary.main
+                    : theme.palette.background.default,
+                  color: isInstalled
+                    ? theme.palette.primary.contrastText
+                    : theme.palette.text.primary,
                   marginTop: 'auto',
                 }}
               >
@@ -232,7 +269,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
         disabled={!canGoForward}
         sx={{
           visibility:
-            featuredApps.length <= FEATURED_APPS_MAX ? 'hidden' : 'visible',
+            featuredApps.length <= visibleCount ? 'hidden' : 'visible',
         }}
       >
         <ChevronRightIcon />
