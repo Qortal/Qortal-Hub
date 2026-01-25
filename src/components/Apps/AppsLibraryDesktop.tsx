@@ -87,38 +87,41 @@ export const AppsLibraryDesktop = ({
         paddingTop: '30px',
       }}
     >
-      <AppsDesktopLibraryHeader
+      {/* Fixed Header Section */}
+      <Box
         sx={{
-          maxWidth: '1500px',
-          width: '90%',
-        }}
-      >
-        <AppsWidthLimiter>
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              justifyContent: 'flex-start',
-              width: '100%',
-            }}
-          >
-            <QappLibraryText />
-          </Box>
-        </AppsWidthLimiter>
-      </AppsDesktopLibraryHeader>
-
-      <AppsDesktopLibraryBody
-        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+          backgroundColor: 'background.default',
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
-          height: `calc(100vh - 36px)`,
-          overflow: 'auto',
-          padding: '0px',
         }}
       >
-        <AppsDesktopLibraryBody
+        <AppsDesktopLibraryHeader
           sx={{
-            height: `calc(100vh - 36px)`,
-            flexGrow: 'unset',
+            maxWidth: '1500px',
+            width: '90%',
+          }}
+        >
+          <AppsWidthLimiter>
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                justifyContent: 'flex-start',
+                width: '100%',
+              }}
+            >
+              <QappLibraryText />
+            </Box>
+          </AppsWidthLimiter>
+        </AppsDesktopLibraryHeader>
+
+        <Box
+          sx={{
             maxWidth: '1500px',
             width: '90%',
           }}
@@ -147,13 +150,31 @@ export const AppsLibraryDesktop = ({
 
           <Spacer height="20px" />
 
-          {/* Tab Navigation */}
+          {/* Tab Navigation - Fixed */}
           <AppsWidthLimiter>
             <AppsTabs currentTab={currentTab} onTabChange={handleTabChange} />
           </AppsWidthLimiter>
 
           <Spacer height="30px" />
+        </Box>
+      </Box>
 
+      {/* Scrollable Content Section */}
+      <AppsDesktopLibraryBody
+        sx={{
+          alignItems: 'center',
+          flex: 1,
+          overflow: 'auto',
+          padding: '0px',
+        }}
+      >
+        <AppsDesktopLibraryBody
+          sx={{
+            flexGrow: 'unset',
+            maxWidth: '1500px',
+            width: '90%',
+          }}
+        >
           {/* Tab Content */}
           {renderTabContent()}
         </AppsDesktopLibraryBody>

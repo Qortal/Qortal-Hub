@@ -32,6 +32,7 @@ const FiltersRow = styled(Box)({
   alignItems: 'center',
   gap: '12px',
   flexWrap: 'wrap',
+  paddingTop: '8px',
 });
 
 interface FilterBarProps {
