@@ -9,6 +9,7 @@ import { StatusFilter, StatusFilterOption } from './StatusFilter';
 const FilterBarContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: '16px',
   width: '100%',
   flexWrap: 'wrap',
@@ -22,9 +23,8 @@ const SearchContainer = styled(Box)(({ theme }) => ({
   borderRadius: '8px',
   padding: '0 12px',
   height: '36px',
-  flex: 1,
+  width: '300px',
   minWidth: '200px',
-  maxWidth: '350px',
 }));
 
 const FiltersRow = styled(Box)({
