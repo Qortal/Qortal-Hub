@@ -100,15 +100,18 @@ describe('AppsTabs', () => {
 
     // Click categories tab
     await user.click(screen.getByText(/categories/i));
-    expect(mockOnTabChange).toHaveBeenCalledWith('categories');
+    expect(mockOnTabChange).toHaveBeenLastCalledWith('categories');
 
     // Click my apps tab
     await user.click(screen.getByText(/my apps/i));
-    expect(mockOnTabChange).toHaveBeenCalledWith('my-apps');
+    expect(mockOnTabChange).toHaveBeenLastCalledWith('my-apps');
 
-    // Click official tab
-    await user.click(screen.getByText(/official apps/i));
-    expect(mockOnTabChange).toHaveBeenCalledWith('official');
+    // Click community tab (not clicking official since it's already selected and won't trigger onChange)
+    await user.click(screen.getByText(/community apps/i));
+    expect(mockOnTabChange).toHaveBeenLastCalledWith('community');
+
+    // Verify total call count
+    expect(mockOnTabChange).toHaveBeenCalledTimes(3);
   });
 
   it('supports all valid tab values', () => {
