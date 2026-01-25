@@ -115,6 +115,11 @@
   "app_service_type": "Tipo de servicio de aplicaciones",
   "apps_dashboard": "Panel de aplicaciones",
   "apps_official": "aplicaciones oficiales",
+  "official_apps": {
+    "featured": "destacadas",
+    "all_apps": "todas las aplicaciones oficiales",
+    "view_all": "ver todas"
+  },
   "attachment": "adjunto",
   "balance": "balance:",
   "category": "categoría",

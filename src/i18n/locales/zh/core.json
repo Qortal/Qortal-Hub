@@ -115,6 +115,11 @@
   "app_service_type": "应用服务类型",
   "apps_dashboard": "应用仪表板",
   "apps_official": "官方应用程序",
+  "official_apps": {
+    "featured": "精选",
+    "all_apps": "所有官方应用",
+    "view_all": "查看全部"
+  },
   "attachment": "依恋",
   "balance": "平衡：",
   "category": "类别",

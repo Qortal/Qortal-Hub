@@ -115,6 +115,11 @@
   "app_service_type": "Тип службы приложений",
   "apps_dashboard": "приложения панель панели",
   "apps_official": "официальные приложения",
+  "official_apps": {
+    "featured": "рекомендуемые",
+    "all_apps": "все официальные приложения",
+    "view_all": "показать все"
+  },
   "attachment": "вложение",
   "balance": "баланс:",
   "category": "категория",

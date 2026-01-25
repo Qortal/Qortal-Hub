@@ -115,6 +115,11 @@
   "app_service_type": "نوع خدمة التطبيق",
   "apps_dashboard": "لوحة التطبيقات",
   "apps_official": "تطبيقات رسمية",
+  "official_apps": {
+    "featured": "مميزة",
+    "all_apps": "جميع التطبيقات الرسمية",
+    "view_all": "عرض الكل"
+  },
   "attachment": "مرفق",
   "balance": "الرصيد:",
   "category": "فئة",

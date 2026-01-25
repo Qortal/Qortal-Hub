@@ -115,6 +115,11 @@
   "app_service_type": "rakenduse teenuse tüüp",
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
+  "official_apps": {
+    "featured": "esiletõstetud",
+    "all_apps": "kõik ametlikud rakendused",
+    "view_all": "vaata kõiki"
+  },
   "attachment": "manus",
   "balance": "saldo:",
   "category": "kategooria",

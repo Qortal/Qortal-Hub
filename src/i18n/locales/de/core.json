@@ -115,6 +115,11 @@
   "app_service_type": "App -Service -Typ",
   "apps_dashboard": "Apps Dashboard",
   "apps_official": "offizielle Apps",
+  "official_apps": {
+    "featured": "Empfohlen",
+    "all_apps": "alle offiziellen Apps",
+    "view_all": "alle anzeigen"
+  },
   "attachment": "Anhang",
   "balance": "Gleichgewicht:",
   "category": "Kategorie",

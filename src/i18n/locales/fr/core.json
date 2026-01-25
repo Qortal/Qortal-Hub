@@ -115,6 +115,11 @@
   "app_service_type": "type de service d'application",
   "apps_dashboard": "Tableau de bord Apps",
   "apps_official": "Applications officielles",
+  "official_apps": {
+    "featured": "en vedette",
+    "all_apps": "toutes les applications officielles",
+    "view_all": "voir tout"
+  },
   "attachment": "pièce jointe",
   "balance": "équilibre:",
   "category": "catégorie",

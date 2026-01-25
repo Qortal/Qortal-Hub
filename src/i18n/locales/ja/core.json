@@ -115,6 +115,11 @@
   "app_service_type": "アプリサービスタイプ",
   "apps_dashboard": "アプリダッシュボード",
   "apps_official": "公式アプリ",
+  "official_apps": {
+    "featured": "おすすめ",
+    "all_apps": "すべての公式アプリ",
+    "view_all": "すべて表示"
+  },
   "attachment": "添付ファイル",
   "balance": "バランス：",
   "category": "カテゴリ",
