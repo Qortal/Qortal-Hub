@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Avatar,
   Box,
-  ButtonBase,
   IconButton,
   Typography,
   styled,
@@ -16,62 +15,71 @@ import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../../utils/events';
 import { AppDownloadButton, AppDownloadButtonText } from '../Apps-styles';
 
-const CarouselContainer = styled(Box)(({ theme }) => ({
+const CarouselContainer = styled(Box)({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   width: '100%',
   gap: '16px',
-  marginBottom: '40px',
-}));
+});
 
-const BannerCard = styled(Box)(({ theme }) => ({
+const CardsContainer = styled(Box)({
   display: 'flex',
+  gap: '16px',
+  overflow: 'hidden',
+  flex: 1,
+  justifyContent: 'center',
+});
+
+const FeaturedCard = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
-  gap: '24px',
-  padding: '32px',
-  borderRadius: '16px',
+  gap: '12px',
+  padding: '20px',
+  borderRadius: '12px',
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
-  width: '100%',
-  maxWidth: '700px',
-  minHeight: '160px',
-  transition: 'all 0.3s ease',
+  width: '280px',
+  minWidth: '280px',
+  minHeight: '200px',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: theme.shadows[4],
+  },
 }));
 
-const BannerAvatar = styled(Box)(({ theme }) => ({
+const CardAvatar = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  width: '100px',
-  height: '100px',
-  borderRadius: '16px',
+  width: '70px',
+  height: '70px',
+  borderRadius: '12px',
   backgroundColor: theme.palette.background.default,
   flexShrink: 0,
 }));
 
-const BannerContent = styled(Box)({
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px',
-  flex: 1,
-});
-
-const BannerTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '24px',
+const CardTitle = styled(Typography)(({ theme }) => ({
+  fontSize: '16px',
   fontWeight: 600,
   color: theme.palette.text.primary,
+  textAlign: 'center',
 }));
 
-const BannerDescription = styled(Typography)(({ theme }) => ({
-  fontSize: '14px',
+const CardDescription = styled(Typography)(({ theme }) => ({
+  fontSize: '12px',
   fontWeight: 400,
   color: theme.palette.text.secondary,
-  lineHeight: 1.5,
+  lineHeight: 1.4,
+  textAlign: 'center',
   display: '-webkit-box',
   WebkitLineClamp: 2,
   WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
+  minHeight: '34px',
 }));
 
 const NavButton = styled(IconButton)(({ theme }) => ({
@@ -85,110 +93,115 @@ const NavButton = styled(IconButton)(({ theme }) => ({
   },
 }));
 
-const DotsContainer = styled(Box)({
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '8px',
-  marginTop: '16px',
-});
-
-const Dot = styled(Box)<{ active?: boolean }>(({ theme, active }) => ({
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  backgroundColor: active
-    ? theme.palette.primary.main
-    : theme.palette.action.disabled,
-  cursor: 'pointer',
-  transition: 'all 0.2s ease',
-}));
-
 interface FeaturedAppBannerProps {
   featuredApps: any[];
 }
 
 export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [startIndex, setStartIndex] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+
+  const VISIBLE_COUNT = 3;
 
   if (!featuredApps || featuredApps.length === 0) {
     return null;
   }
 
-  const currentApp = featuredApps[currentIndex];
-  const isInstalled = currentApp?.status?.status === 'READY';
+  // Get the visible apps (3 at a time)
+  const visibleApps = featuredApps.slice(startIndex, startIndex + VISIBLE_COUNT);
+
+  // Fill remaining slots if we have fewer than 3 apps at the end
+  const displayApps =
+    visibleApps.length < VISIBLE_COUNT && featuredApps.length >= VISIBLE_COUNT
+      ? [
+          ...visibleApps,
+          ...featuredApps.slice(0, VISIBLE_COUNT - visibleApps.length),
+        ]
+      : visibleApps;
+
+  const canGoBack = startIndex > 0;
+  const canGoForward = startIndex + VISIBLE_COUNT < featuredApps.length;
 
   const handlePrev = () => {
-    setCurrentIndex((prev) =>
-      prev === 0 ? featuredApps.length - 1 : prev - 1
-    );
+    setStartIndex((prev) => Math.max(0, prev - 1));
   };
 
   const handleNext = () => {
-    setCurrentIndex((prev) =>
-      prev === featuredApps.length - 1 ? 0 : prev + 1
+    setStartIndex((prev) =>
+      Math.min(featuredApps.length - VISIBLE_COUNT, prev + 1)
     );
   };
 
-  const handleOpenApp = () => {
-    executeEvent('addTab', { data: currentApp });
+  const handleOpenApp = (app: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    executeEvent('addTab', { data: app });
   };
 
-  const handleViewDetails = () => {
-    executeEvent('selectedAppInfo', { data: currentApp });
+  const handleViewDetails = (app: any) => {
+    executeEvent('selectedAppInfo', { data: app });
   };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <CarouselContainer>
-        <NavButton onClick={handlePrev} size="small">
-          <ChevronLeftIcon />
-        </NavButton>
+    <CarouselContainer>
+      <NavButton
+        onClick={handlePrev}
+        size="small"
+        disabled={!canGoBack}
+        sx={{ visibility: featuredApps.length <= VISIBLE_COUNT ? 'hidden' : 'visible' }}
+      >
+        <ChevronLeftIcon />
+      </NavButton>
 
-        <BannerCard>
-          <BannerAvatar>
-            <Avatar
-              sx={{
-                height: '80px',
-                width: '80px',
-                '& img': {
-                  objectFit: 'fill',
-                },
-              }}
-              alt={currentApp?.name}
-              src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${currentApp?.name}/qortal_avatar?async=true`}
+      <CardsContainer>
+        {displayApps.map((app, index) => {
+          const isInstalled = app?.status?.status === 'READY';
+
+          return (
+            <FeaturedCard
+              key={`${app?.name}-${index}`}
+              onClick={() => handleViewDetails(app)}
             >
-              <img
-                style={{
-                  width: '50px',
-                  height: 'auto',
-                }}
-                src={LogoSelected}
-                alt="app-icon"
-              />
-            </Avatar>
-          </BannerAvatar>
+              <CardAvatar>
+                <Avatar
+                  sx={{
+                    height: '50px',
+                    width: '50px',
+                    '& img': {
+                      objectFit: 'fill',
+                    },
+                  }}
+                  alt={app?.name}
+                  src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${app?.name}/qortal_avatar?async=true`}
+                >
+                  <img
+                    style={{
+                      width: '35px',
+                      height: 'auto',
+                    }}
+                    src={LogoSelected}
+                    alt="app-icon"
+                  />
+                </Avatar>
+              </CardAvatar>
 
-          <BannerContent>
-            <BannerTitle>
-              {currentApp?.metadata?.title || currentApp?.name}
-            </BannerTitle>
-            <BannerDescription>
-              {currentApp?.metadata?.description ||
-                t('core:message.generic.no_description', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-            </BannerDescription>
+              <CardTitle>{app?.metadata?.title || app?.name}</CardTitle>
 
-            <Box sx={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <CardDescription>
+                {app?.metadata?.description ||
+                  t('core:message.generic.no_description', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+              </CardDescription>
+
               <AppDownloadButton
-                onClick={handleOpenApp}
+                onClick={(e) => handleOpenApp(app, e)}
                 sx={{
                   backgroundColor: theme.palette.primary.main,
                   color: theme.palette.primary.contrastText,
                   width: 'auto',
-                  padding: '0 20px',
+                  padding: '0 24px',
+                  marginTop: 'auto',
                 }}
               >
                 <AppDownloadButtonText>
@@ -201,39 +214,19 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
                       })}
                 </AppDownloadButtonText>
               </AppDownloadButton>
+            </FeaturedCard>
+          );
+        })}
+      </CardsContainer>
 
-              <ButtonBase
-                onClick={handleViewDetails}
-                sx={{
-                  fontSize: '14px',
-                  color: theme.palette.text.secondary,
-                  '&:hover': {
-                    color: theme.palette.text.primary,
-                  },
-                }}
-              >
-                {t('core:q_apps.about', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </ButtonBase>
-            </Box>
-          </BannerContent>
-        </BannerCard>
-
-        <NavButton onClick={handleNext} size="small">
-          <ChevronRightIcon />
-        </NavButton>
-      </CarouselContainer>
-
-      <DotsContainer>
-        {featuredApps.map((_, index) => (
-          <Dot
-            key={index}
-            active={index === currentIndex}
-            onClick={() => setCurrentIndex(index)}
-          />
-        ))}
-      </DotsContainer>
-    </Box>
+      <NavButton
+        onClick={handleNext}
+        size="small"
+        disabled={!canGoForward}
+        sx={{ visibility: featuredApps.length <= VISIBLE_COUNT ? 'hidden' : 'visible' }}
+      >
+        <ChevronRightIcon />
+      </NavButton>
+    </CarouselContainer>
   );
 };

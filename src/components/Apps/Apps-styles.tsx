@@ -410,6 +410,8 @@ export const AppCardEnhancedContainer = styled(Box)(({ theme }) => ({
   transition: 'transform 0.2s ease, box-shadow 0.2s ease',
   cursor: 'pointer',
   width: '100%',
+  minHeight: '220px',
+  height: '220px',
   '&:hover': {
     transform: 'translateY(-2px)',
     boxShadow: theme.shadows[4],
@@ -471,6 +473,8 @@ export const AppCardDescription = styled(Typography)(({ theme }) => ({
   WebkitBoxOrient: 'vertical',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
+  minHeight: '36px',
+  height: '36px',
 }));
 
 export const AppCardTagsContainer = styled(Box)({
@@ -478,6 +482,7 @@ export const AppCardTagsContainer = styled(Box)({
   flexWrap: 'wrap',
   gap: '6px',
   marginBottom: '12px',
+  minHeight: '24px',
 });
 
 export const AppCardActions = styled(Box)({

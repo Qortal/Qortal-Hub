@@ -9,17 +9,8 @@ import {
 import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
-import { Box, ButtonBase, useTheme } from '@mui/material';
-import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { Save } from '../Save/Save';
-import { AppsDevModeNavBar } from './AppsDevModeNavBar';
-import { AppsIcon } from '../../assets/Icons/AppsIcon';
-import { IconWrapper } from '../Desktop/DesktopFooter';
-import { CoreSyncStatus } from '../CoreSyncStatus';
-import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
+import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import LanguageSelector from '../Language/LanguageSelector';
-import ThemeSelector from '../Theme/ThemeSelector';
 
 const uid = new ShortUniqueId({ length: 8 });
 

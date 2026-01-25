@@ -23,11 +23,9 @@ import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
-import { AppsNavBarDesktop } from './AppsNavBarDesktop';
 import {
   Box,
   Button,
-  ButtonBase,
   Dialog,
   DialogActions,
   DialogContent,
@@ -35,17 +33,9 @@ import {
   DialogTitle,
   useTheme,
 } from '@mui/material';
-import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { Save } from '../Save/Save';
-import { IconWrapper } from '../Desktop/DesktopFooter';
 import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
-import { AppsIcon } from '../../assets/Icons/AppsIcon';
-import { CoreSyncStatus } from '../CoreSyncStatus';
-import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import LanguageSelector from '../Language/LanguageSelector';
-import ThemeSelector from '../Theme/ThemeSelector';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
