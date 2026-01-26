@@ -7106,11 +7106,9 @@ export const cancelGroupInviteRequest = async (data, isFromExtension) => {
 export const createGroupRequest = async (data, isFromExtension) => {
   const requiredFields = [
     'approvalThreshold',
-    'groupId',
     'groupName',
     'maxBlock',
     'minBlock',
-    'qortalAddress',
     'type',
   ];
   const missingFields: string[] = [];
