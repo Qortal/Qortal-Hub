@@ -52,7 +52,7 @@ export const DesktopSideBar = ({
         flexDirection: 'column',
         gap: '25px',
         height: '100vh',
-        width: 'auto', // must adapt to the choosen language
+        width: 'auto', // must adapt to the chosen language
       }}
     >
       <ButtonBase
