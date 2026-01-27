@@ -17,6 +17,11 @@ import {
 
 import * as net from 'net';
 
+app.commandLine.appendSwitch(
+  'disable-features',
+  'BlockInsecurePrivateNetworkRequests'
+);
+
 // Graceful handling of unhandled errors.
 unhandled();
 
