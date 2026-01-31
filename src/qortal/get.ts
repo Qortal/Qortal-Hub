@@ -6052,9 +6052,11 @@ export const adminAction = async (data, isFromExtension) => {
   });
   // For actions that require a value, check for 'value' field
   const actionsRequiringValue = [
+    'adddatapeer',
     'addmintingaccount',
     'addpeer',
     'forcesync',
+    'removedatapeer',
     'removemintingaccount',
     'removepeer',
   ];
@@ -6119,6 +6121,16 @@ export const adminAction = async (data, isFromExtension) => {
       break;
     case 'removepeer':
       apiEndpoint = await createEndpoint('/peers');
+      method = 'DELETE';
+      includeValueInBody = true;
+      break;
+    case 'adddatapeer':
+      apiEndpoint = await createEndpoint('/peers/data');
+      method = 'POST';
+      includeValueInBody = true;
+      break;
+    case 'removedatapeer':
+      apiEndpoint = await createEndpoint('/peers/data');
       method = 'DELETE';
       includeValueInBody = true;
       break;
