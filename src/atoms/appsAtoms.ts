@@ -2,12 +2,7 @@ import { atom } from 'jotai';
 import { atomWithReset } from 'jotai/utils';
 
 // Types
-export type SortOption =
-  | 'alphabetical'
-  | 'highest_rated'
-  | 'most_rated'
-  | 'newest'
-  | 'oldest';
+export type SortOption = 'alphabetical' | 'newest' | 'oldest';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
@@ -77,22 +72,6 @@ export const filterAndSortApps = (
         const nameA = a?.metadata?.title || a.name || '';
         const nameB = b?.metadata?.title || b.name || '';
         return nameA.localeCompare(nameB);
-      });
-      break;
-    case 'highest_rated':
-      // Sort by average rating (requires rating data to be passed)
-      filtered.sort((a, b) => {
-        const ratingA = a?.averageRating || 0;
-        const ratingB = b?.averageRating || 0;
-        return ratingB - ratingA;
-      });
-      break;
-    case 'most_rated':
-      // Sort by number of ratings (requires rating data to be passed)
-      filtered.sort((a, b) => {
-        const countA = a?.ratingCount || 0;
-        const countB = b?.ratingCount || 0;
-        return countB - countA;
       });
       break;
     default:

@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
 import AddIcon from '@mui/icons-material/Add';
-import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
+import { AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { PublishedAppCard } from '../AppCard';
 
@@ -105,8 +105,6 @@ export const MyAppsTab = ({
         (app.service === 'WEBSITE' || app.service?.includes('WEBSITE'))
     );
   }, [myName, availableQapps]);
-
-  const hasPublishedContent = myApps.length > 0 || myWebsites.length > 0;
 
   if (!myName) {
     return (

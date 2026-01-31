@@ -53,20 +53,6 @@ const sortApps = (apps: any[], sortOption: SortOption): any[] => {
         const titleB = (b.metadata?.title || b.name || '').toLowerCase();
         return titleA.localeCompare(titleB);
       });
-    case 'highest_rated':
-      // Apps with ratings come first, sorted by rating
-      return sorted.sort((a, b) => {
-        const ratingA = a.averageRating || 0;
-        const ratingB = b.averageRating || 0;
-        return ratingB - ratingA;
-      });
-    case 'most_rated':
-      // Apps with most ratings come first
-      return sorted.sort((a, b) => {
-        const countA = a.ratingCount || 0;
-        const countB = b.ratingCount || 0;
-        return countB - countA;
-      });
     default:
       return sorted;
   }

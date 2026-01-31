@@ -8,12 +8,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
-export type SortOption =
-  | 'newest'
-  | 'oldest'
-  | 'highest_rated'
-  | 'most_rated'
-  | 'alphabetical';
+export type SortOption = 'newest' | 'oldest' | 'alphabetical';
 
 interface SortDropdownProps {
   value: SortOption;
@@ -66,14 +61,6 @@ export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
             postProcess: 'capitalizeFirstChar',
             defaultValue: 'Oldest',
           })}
-        </MenuItem>
-        <MenuItem value="highest_rated">
-          {t('core:sort.highest_rated', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </MenuItem>
-        <MenuItem value="most_rated">
-          {t('core:sort.most_rated', { postProcess: 'capitalizeFirstChar' })}
         </MenuItem>
         <MenuItem value="alphabetical">
           {t('core:sort.alphabetical', {

@@ -416,8 +416,6 @@
   "sort": {
     "alphabetical": "alphabetical",
     "by_member": "by member",
-    "highest_rated": "highest rated",
-    "most_rated": "most reviewed",
     "newest": "newest",
     "oldest": "oldest",
     "recently_updated": "recently updated"

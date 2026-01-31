@@ -415,8 +415,6 @@
   "sort": {
     "alphabetical": "tähestikuline",
     "by_member": "liikme järgi",
-    "highest_rated": "kõrgeima hinnanguga",
-    "most_rated": "enim arvustatud",
     "newest": "uusimad",
     "recently_updated": "hiljuti uuendatud"
   },

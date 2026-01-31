@@ -415,8 +415,6 @@
   "sort": {
     "alphabetical": "按字母顺序",
     "by_member": "由会员",
-    "highest_rated": "评分最高",
-    "most_rated": "评论最多",
     "newest": "最新",
     "recently_updated": "最近更新"
   },

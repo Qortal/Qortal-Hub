@@ -47,7 +47,6 @@ const fetchAppRating = async (
       return { name: appName, averageRating: 0, ratingCount: 0 };
     }
 
-    const pollData = await response.json();
     const voteCountsUrl = `${getBaseApiReact()}/polls/votes/${pollName}`;
     const votesResponse = await fetch(voteCountsUrl);
 

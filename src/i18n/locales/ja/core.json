@@ -415,8 +415,6 @@
   "sort": {
     "alphabetical": "アルファベット順",
     "by_member": "メンバーによって",
-    "highest_rated": "評価が高い順",
-    "most_rated": "レビューが多い順",
     "newest": "新着順",
     "recently_updated": "最近更新された順"
   },

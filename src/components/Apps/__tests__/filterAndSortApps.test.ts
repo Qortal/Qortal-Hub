@@ -95,32 +95,6 @@ describe('filterAndSortApps', () => {
       expect(result[2].name).toBe('CharlieApp');
       expect(result[3].name).toBe('DaveApp');
     });
-
-    it('sorts by highest rated', () => {
-      const result = filterAndSortApps(mockApps, {
-        sort: 'highest_rated',
-        category: 'all',
-        status: 'all',
-        search: '',
-      });
-      expect(result[0].name).toBe('CharlieApp'); // 5.0
-      expect(result[1].name).toBe('AliceApp'); // 4.5
-      expect(result[2].name).toBe('DaveApp'); // 4.0
-      expect(result[3].name).toBe('BobApp'); // 3.0
-    });
-
-    it('sorts by most rated (rating count)', () => {
-      const result = filterAndSortApps(mockApps, {
-        sort: 'most_rated',
-        category: 'all',
-        status: 'all',
-        search: '',
-      });
-      expect(result[0].name).toBe('DaveApp'); // 200
-      expect(result[1].name).toBe('AliceApp'); // 100
-      expect(result[2].name).toBe('BobApp'); // 50
-      expect(result[3].name).toBe('CharlieApp'); // 25
-    });
   });
 
   describe('filtering by category', () => {
