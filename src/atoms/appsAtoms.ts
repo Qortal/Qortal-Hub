@@ -3,11 +3,11 @@ import { atomWithReset } from 'jotai/utils';
 
 // Types
 export type SortOption =
-  | 'newest'
-  | 'oldest'
+  | 'alphabetical'
   | 'highest_rated'
   | 'most_rated'
-  | 'alphabetical';
+  | 'newest'
+  | 'oldest';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
@@ -18,7 +18,11 @@ export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
 
 // Current tab atom
-export type AppsLibraryTab = 'official' | 'community' | 'categories' | 'my-apps';
+export type AppsLibraryTab =
+  | 'categories'
+  | 'community'
+  | 'my-apps'
+  | 'official';
 export const currentAppsTabAtom = atomWithReset<AppsLibraryTab>('official');
 
 // Helper function to filter and sort apps
@@ -49,9 +53,7 @@ export const filterAndSortApps = (
 
   // Filter by category
   if (category && category !== 'all') {
-    filtered = filtered.filter(
-      (app) => app?.metadata?.category === category
-    );
+    filtered = filtered.filter((app) => app?.metadata?.category === category);
   }
 
   // Filter by status
