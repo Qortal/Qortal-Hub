@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
+import { useAtom } from 'jotai';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
 import { FilterBar, SortOption, StatusFilterOption } from '../Filters';
 import { officialAppList } from '../config/officialApps';
+import { appSortAtom } from '../../../atoms/appsAtoms';
 
 const GridContainer = styled('div')({
   display: 'grid',
@@ -65,7 +67,7 @@ export const CommunityAppsTab = ({
 }: CommunityAppsTabProps) => {
   const [searchValue, setSearchValue] = useState('');
   const [debouncedValue, setDebouncedValue] = useState('');
-  const [sortOption, setSortOption] = useState<SortOption>('newest');
+  const [sortOption, setSortOption] = useAtom(appSortAtom);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('all');
   const theme = useTheme();

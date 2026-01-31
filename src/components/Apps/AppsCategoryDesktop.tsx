@@ -10,7 +10,7 @@ import {
   AppsSearchRight,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { ButtonBase, InputBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, InputBase, useTheme } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { Spacer } from '../../common/Spacer';
@@ -19,6 +19,29 @@ import { useTranslation } from 'react-i18next';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { executeEvent } from '../../utils/events';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
+import { useAtom } from 'jotai';
+import { appSortAtom } from '../../atoms/appsAtoms';
+import { SortDropdown, SortOption } from './Filters';
+
+// Sorting function (same as CommunityAppsTab)
+const sortApps = (apps: any[], sortOption: SortOption): any[] => {
+  const sorted = [...apps];
+
+  switch (sortOption) {
+    case 'newest':
+      return sorted.sort((a, b) => (b.created || 0) - (a.created || 0));
+    case 'oldest':
+      return sorted.sort((a, b) => (a.created || 0) - (b.created || 0));
+    case 'alphabetical':
+      return sorted.sort((a, b) => {
+        const titleA = (a.metadata?.title || a.name || '').toLowerCase();
+        const titleB = (b.metadata?.title || b.name || '').toLowerCase();
+        return titleA.localeCompare(titleB);
+      });
+    default:
+      return sorted;
+  }
+};
 
 export const AppsCategoryDesktop = ({
   availableQapps,
@@ -27,6 +50,7 @@ export const AppsCategoryDesktop = ({
   isShow,
 }) => {
   const [searchValue, setSearchValue] = useState('');
+  const [sortOption, setSortOption] = useAtom(appSortAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -55,17 +79,22 @@ export const AppsCategoryDesktop = ({
     };
   }, [searchValue]);
 
-  const searchedList = useMemo(() => {
-    if (!debouncedValue) return categoryList;
-    return categoryList.filter(
-      (app) =>
-        app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
-        (app?.metadata?.title &&
-          app?.metadata?.title
-            ?.toLowerCase()
-            .includes(debouncedValue.toLowerCase()))
-    );
-  }, [debouncedValue, categoryList]);
+  const searchedAndSortedList = useMemo(() => {
+    let result = categoryList;
+
+    if (debouncedValue) {
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(debouncedValue.toLowerCase()) ||
+          (app?.metadata?.title &&
+            app?.metadata?.title
+              ?.toLowerCase()
+              .includes(debouncedValue.toLowerCase()))
+      );
+    }
+
+    return sortApps(result, sortOption);
+  }, [debouncedValue, categoryList, sortOption]);
 
   return (
     <AppsLibraryContainer
@@ -169,14 +198,24 @@ export const AppsCategoryDesktop = ({
         <Spacer height="25px" />
 
         <AppsWidthLimiter>
-          <AppLibrarySubTitle>{`Category: ${category?.name}`}</AppLibrarySubTitle>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            <AppLibrarySubTitle>{`Category: ${category?.name}`}</AppLibrarySubTitle>
+            <SortDropdown value={sortOption} onChange={setSortOption} />
+          </Box>
 
           <Spacer height="25px" />
         </AppsWidthLimiter>
 
         <AppsWidthLimiter>
           <AppCardsGrid>
-            {searchedList.map((app) => (
+            {searchedAndSortedList.map((app) => (
               <AppCardEnhanced
                 key={`${app?.service}-${app?.name}`}
                 app={app}

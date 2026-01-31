@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -30,12 +31,24 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   },
 }));
 
+const SORT_OPTIONS: SortOption[] = ['alphabetical', 'newest', 'oldest'];
+
 export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
   const { t } = useTranslation(['core']);
 
   const handleChange = (event: SelectChangeEvent) => {
     onChange(event.target.value as SortOption);
   };
+
+  // Sort options alphabetically based on translated labels
+  const sortedOptions = useMemo(() => {
+    return SORT_OPTIONS.map((option) => ({
+      value: option,
+      label: t(`core:sort.${option}`, {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [t]);
 
   return (
     <StyledFormControl size="small">
@@ -53,20 +66,11 @@ export const SortDropdown = ({ value, onChange }: SortDropdownProps) => {
         })}
         onChange={handleChange}
       >
-        <MenuItem value="newest">
-          {t('core:sort.newest', { postProcess: 'capitalizeFirstChar' })}
-        </MenuItem>
-        <MenuItem value="oldest">
-          {t('core:sort.oldest', {
-            postProcess: 'capitalizeFirstChar',
-            defaultValue: 'Oldest',
-          })}
-        </MenuItem>
-        <MenuItem value="alphabetical">
-          {t('core:sort.alphabetical', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </MenuItem>
+        {sortedOptions.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
       </Select>
     </StyledFormControl>
   );
