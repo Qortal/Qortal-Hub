@@ -491,10 +491,10 @@ export const AppInfo = ({ app, myName }) => {
 
         <StyledDivider sx={{ my: 2 }} />
 
-        {/* Ratings & Reviews Section */}
+        {/* Ratings Section */}
         <SectionContainer>
           <SectionTitle>
-            {t('core:app_detail.ratings_reviews', {
+            {t('core:app_detail.ratings', {
               postProcess: 'capitalizeFirstChar',
             })}
           </SectionTitle>

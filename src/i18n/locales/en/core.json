@@ -391,7 +391,6 @@
     "published": "published",
     "ratings": "ratings",
     "ratings_count": "{{count}} ratings",
-    "ratings_reviews": "ratings & reviews",
     "rate_this_app": "rate this app",
     "service": "service",
     "status": "status",

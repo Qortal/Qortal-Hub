@@ -318,7 +318,6 @@
     "published": "julkaistu",
     "ratings": "arvostelut",
     "ratings_count": "{{count}} arvostelua",
-    "ratings_reviews": "arvostelut ja arviot",
     "rate_this_app": "arvostele tämä sovellus",
     "service": "palvelu",
     "status": "tila",
