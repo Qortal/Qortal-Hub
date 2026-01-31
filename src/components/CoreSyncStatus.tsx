@@ -60,6 +60,7 @@ export const CoreSyncStatus = () => {
       isMintingPossible = false,
       height = 0,
       numberOfConnections = 0,
+      numberOfDataConnections = 0,
     } = nodeInfos;
     const buildVersion = coreInfos?.buildVersion
       ? coreInfos?.buildVersion.substring(0, 20)
@@ -138,6 +139,13 @@ export const CoreSyncStatus = () => {
             {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
             <span style={{ color: '#03a9f4' }}>
               {numberOfConnections || ''}
+            </span>
+          </h4>
+
+          <h4 className="lineHeight">
+            {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+            <span style={{ color: '#03a9f4' }}>
+              {numberOfDataConnections || ''}
             </span>
           </h4>
 

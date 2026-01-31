@@ -124,6 +124,7 @@
   "contact_other": "contacts",
   "core": {
     "block_height": "hauteur de blocage",
+    "data_peers": "pairs QDN (données)",
     "information": "Informations de base",
     "peers": "pairs connectés",
     "version": "version de base"

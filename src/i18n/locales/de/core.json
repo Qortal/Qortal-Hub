@@ -124,6 +124,7 @@
   "contact_other": "Kontakte",
   "core": {
     "block_height": "Blockhöhe",
+    "data_peers": "QDN (Daten) Peers",
     "information": "Kerninformationen",
     "peers": "Gefahrene Kollegen",
     "version": "Kernversion"

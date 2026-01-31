@@ -124,6 +124,7 @@
   "contact_other": "contatti",
   "core": {
     "block_height": "altezza del blocco",
+    "data_peers": "peer QDN (dati)",
     "information": "informazioni di base",
     "peers": "peer connessi",
     "version": "versione core"

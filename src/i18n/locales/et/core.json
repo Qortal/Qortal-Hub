@@ -124,6 +124,7 @@
   "contact_other": "kontaktid",
   "core": {
     "block_height": "ploki kõrgus",
+    "data_peers": "QDN (andmed) sõlmed",
     "information": "Sõlme info",
     "peers": "ühendatud sõlmed",
     "version": "Sõlme versioon"

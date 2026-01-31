@@ -124,6 +124,7 @@
   "contact_other": "联系人",
   "core": {
     "block_height": "块高度",
+    "data_peers": "QDN (数据) 节点",
     "information": "核心信息",
     "peers": "连接的同行",
     "version": "核心版本"

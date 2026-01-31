@@ -124,6 +124,7 @@
   "contact_other": "連絡先",
   "core": {
     "block_height": "ブロックの高さ",
+    "data_peers": "QDN (データ) ピア",
     "information": "コア情報",
     "peers": "コネクテッドピア",
     "version": "コアバージョン"
