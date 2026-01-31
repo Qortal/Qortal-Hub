@@ -1,7 +1,16 @@
 // ------------------- User Preload starts here -------------------
 require('./rt/electron-rt');
 
-console.log('User Preload!');
+// Safe console wrapper for preload context
+const safeLog = (...args: any[]) => {
+  try {
+    console.log(...args);
+  } catch (e) {
+    // Silently ignore console errors
+  }
+};
+
+safeLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 
 try {
@@ -163,5 +172,9 @@ try {
 
   ipcRenderer.send('test-ipc');
 } catch (error) {
-  console.log('error', error);
+  try {
+    console.log('error', error);
+  } catch (e) {
+    // Silently ignore console errors
+  }
 }

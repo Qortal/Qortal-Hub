@@ -17,6 +17,10 @@ import {
 
 import * as net from 'net';
 
+// Import and initialize safe console FIRST to prevent EIO errors
+import { replaceGlobalConsole } from './safe-console';
+replaceGlobalConsole();
+
 app.commandLine.appendSwitch(
   'disable-features',
   'BlockInsecurePrivateNetworkRequests'
@@ -111,6 +115,7 @@ const checkForUpdates = async () => {
   try {
     await autoUpdater.checkForUpdatesAndNotify();
   } catch (error) {
+    // Safe console already initialized by this point
     console.error('Error checking for updates:', error);
   }
 };
@@ -133,6 +138,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     if (!(await isPortTaken(port))) {
       // First instance — use default Electron behavior
       if (i === 0) {
+        // Safe console already initialized by this point
         console.log(
           `🟢 Using default userData path: ${app.getPath('userData')}`
         );
@@ -149,6 +155,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     }
   }
 
+  // Safe console already initialized by this point
   console.error('❌ Too many instances already running.');
   app.quit();
 }

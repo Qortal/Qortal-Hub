@@ -6,6 +6,7 @@ import { spawn, exec, execFile } from 'child_process';
 import readline from 'readline';
 import { promises as fsPromise } from 'fs';
 import os from 'os';
+import { safeConsole } from './safe-console';
 
 export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
 export const CORE_LOCALHOST = '127.0.0.1';
@@ -383,7 +384,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         } else {
           try {
@@ -417,7 +418,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         }
         break;
@@ -454,7 +455,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         } else {
           try {
@@ -488,7 +489,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         }
         break;
@@ -525,7 +526,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         } else {
           try {
@@ -559,7 +560,7 @@ async function startQortal() {
               progress: 0,
               message: '003',
             });
-            console.error('Start qortal error', err);
+            safeConsole.error('Start qortal error', err);
           }
         }
         break;
@@ -598,7 +599,7 @@ async function startQortal() {
             progress: 0,
             message: '003',
           });
-          console.error('Start qortal error', err);
+          safeConsole.error('Start qortal error', err);
         }
       } else {
         try {
@@ -632,7 +633,7 @@ async function startQortal() {
             progress: 0,
             message: '003',
           });
-          console.error('Start qortal error', err);
+          safeConsole.error('Start qortal error', err);
         }
       }
     } else {
@@ -668,7 +669,7 @@ async function startQortal() {
             progress: 0,
             message: '003',
           });
-          console.error('Start qortal error', err);
+          safeConsole.error('Start qortal error', err);
         }
       } else {
         try {
@@ -702,7 +703,7 @@ async function startQortal() {
             progress: 0,
             message: '003',
           });
-          console.error('Start qortal error', err);
+          safeConsole.error('Start qortal error', err);
         }
       }
     }
@@ -924,7 +925,7 @@ async function stopViaAdminApi(apiKey: string): Promise<boolean> {
     });
 
     if (!res.ok) {
-      console.warn(`Stop request failed (status ${res.status})`);
+      safeConsole.warn(`Stop request failed (status ${res.status})`);
       return false;
     }
 
@@ -938,10 +939,10 @@ async function stopViaAdminApi(apiKey: string): Promise<boolean> {
       }
     }
 
-    console.warn('⚠️ Timed out: Qortal Core did not stop after 2 minutes.');
+    safeConsole.warn('⚠️ Timed out: Qortal Core did not stop after 2 minutes.');
     return false;
   } catch (err) {
-    console.error('Failed to call /admin/stop:', err);
+    safeConsole.error('Failed to call /admin/stop:', err);
     return false;
   }
 }
@@ -987,7 +988,7 @@ export async function stopCore() {
   const stopPath = candidates.find((p) => p && fs.existsSync(p));
 
   if (!stopPath) {
-    console.error(
+    safeConsole.error(
       'Stop script not found in expected locations. Falling back to Admin API if possible.'
     );
     const apiKey = await getApiKey();
@@ -1015,7 +1016,7 @@ export async function stopCore() {
     if (!apiKey) return false;
     return await stopViaAdminApi(apiKey); // includes its own polling
   } catch (err) {
-    console.error('Failed to execute stop.sh:', err);
+    safeConsole.error('Failed to execute stop.sh:', err);
     return false;
   }
 }
@@ -1343,7 +1344,7 @@ async function downloadJavaArchive(url: string): Promise<string> {
       progress: 0,
       message: '007',
     });
-    console.error('Download JAVA error', err);
+    safeConsole.error('Download JAVA error', err);
     return null;
     // We still return dest so your unzip function can try (same behavior you had)
   }
@@ -1472,7 +1473,7 @@ async function unzipJavaX64Mac() {
       progress: 0,
       message: '008',
     });
-    console.error('Unzip Java error', err);
+    safeConsole.error('Unzip Java error', err);
   }
 
   await chmodJava();
@@ -1506,7 +1507,7 @@ async function chmodJava() {
       shell: true,
     });
   } catch (err) {
-    console.error('chmod error', err);
+    safeConsole.error('chmod error', err);
   }
 
   await removeJavaZip();
@@ -1801,7 +1802,7 @@ export async function downloadCoreWindows() {
       // If you don't want silent install, keep args = []
       // args = ['/S'];
       const { stdout, stderr } = await execFileAsync(winexe, args);
-      console.log('Qortal Core Installation Done', stdout, stderr);
+      safeConsole.log('Qortal Core Installation Done', stdout, stderr);
       broadcastProgress({
         step: 'downloadedCore',
         status: 'done',
@@ -2333,7 +2334,7 @@ export async function dbExists(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error('❌ Failed to delete DB folder:', error);
+    safeConsole.error('❌ Failed to delete DB folder:', error);
     return false;
   }
 }
