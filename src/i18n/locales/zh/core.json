@@ -115,10 +115,14 @@
   "app_service_type": "应用服务类型",
   "apps_dashboard": "应用仪表板",
   "apps_official": "官方应用程序",
+  "official_apps": {
+    "featured": "精选",
+    "all_apps": "所有官方应用",
+    "view_all": "查看全部"
+  },
   "attachment": "依恋",
   "balance": "平衡：",
   "category": "类别",
-  "category_other": "类别",
   "chat": "聊天",
   "comment_other": "评论",
   "contact_other": "联系人",
@@ -131,6 +135,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "开发",
   "dev_mode": "开发模式",
+  "developer": {
+    "no_apps_yet": "您还没有发布任何应用",
+    "no_sites_yet": "您还没有发布任何网站",
+    "publish_app": "发布应用",
+    "publish_new": "发布新项目",
+    "publish_site": "发布网站",
+    "update": "更新",
+    "view_stats": "查看统计",
+    "your_published_apps": "您发布的应用",
+    "your_published_websites": "您发布的网站"
+  },
   "domain": "领域",
   "ui": {
     "version": "UI版本"
@@ -367,13 +382,50 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "Q-WALLETS"
   },
+  "app_detail": {
+    "about": "关于",
+    "by_developer": "由 @{{developer}}",
+    "category": "分类",
+    "details": "详情",
+    "published": "发布于",
+    "ratings": "评分",
+    "ratings_count": "{{count}} 个评分",
+    "rate_this_app": "为此应用评分",
+    "service": "服务",
+    "status": "状态",
+    "status_ready": "就绪（已安装）",
+    "status_not_installed": "未安装",
+    "tags": "标签"
+  },
+  "filter": {
+    "all": "全部",
+    "category": "分类",
+    "installed": "已安装",
+    "not_installed": "未安装",
+    "showing_apps": "显示 {{count}} 个应用",
+    "sort_by": "排序方式",
+    "status": "状态"
+  },
   "receiver": "接收者",
   "sender": "发件人",
   "server": "服务器",
   "service_type": "服务类型",
   "settings": "设置",
   "sort": {
-    "by_member": "由会员"
+    "alphabetical": "按字母顺序",
+    "by_member": "由会员",
+    "newest": "最新",
+    "oldest": "最旧",
+    "recently_updated": "最近更新"
+  },
+  "tabs": {
+    "categories": "分类",
+    "community_apps": "社区应用",
+    "my_apps": "我的应用",
+    "official_apps": "官方应用"
+  },
+  "aria": {
+    "apps_library_tabs": "应用库导航标签"
   },
   "supply": "供应",
   "tags": "标签",
@@ -401,6 +453,7 @@
   "title": "标题",
   "to": "到",
   "tutorial": "教程",
+  "unknown": "未知",
   "url": "URL",
   "user_lookup": "用户查找",
   "video_embed": "嵌入视频",

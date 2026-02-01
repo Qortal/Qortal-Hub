@@ -115,10 +115,14 @@
   "app_service_type": "App -Service -Typ",
   "apps_dashboard": "Apps Dashboard",
   "apps_official": "offizielle Apps",
+  "official_apps": {
+    "featured": "Empfohlen",
+    "all_apps": "alle offiziellen Apps",
+    "view_all": "alle anzeigen"
+  },
   "attachment": "Anhang",
   "balance": "Gleichgewicht:",
   "category": "Kategorie",
-  "category_other": "Kategorien",
   "chat": "Chat",
   "comment_other": "Kommentare",
   "contact_other": "Kontakte",
@@ -131,6 +135,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "Dev",
   "dev_mode": "Dev -Modus",
+  "developer": {
+    "no_apps_yet": "Sie haben noch keine Apps veröffentlicht",
+    "no_sites_yet": "Sie haben noch keine Websites veröffentlicht",
+    "publish_app": "App veröffentlichen",
+    "publish_new": "Neu veröffentlichen",
+    "publish_site": "Website veröffentlichen",
+    "update": "aktualisieren",
+    "view_stats": "Statistiken ansehen",
+    "your_published_apps": "Ihre veröffentlichten Apps",
+    "your_published_websites": "Ihre veröffentlichten Websites"
+  },
   "domain": "Domain",
   "ui": {
     "version": "UI -Version"
@@ -366,13 +381,50 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "q-wallets"
   },
+  "app_detail": {
+    "about": "über",
+    "by_developer": "von @{{developer}}",
+    "category": "Kategorie",
+    "details": "Details",
+    "published": "veröffentlicht",
+    "ratings": "Bewertungen",
+    "ratings_count": "{{count}} Bewertungen",
+    "rate_this_app": "diese App bewerten",
+    "service": "Dienst",
+    "status": "Status",
+    "status_ready": "bereit (installiert)",
+    "status_not_installed": "nicht installiert",
+    "tags": "Tags"
+  },
+  "filter": {
+    "all": "alle",
+    "category": "Kategorie",
+    "installed": "installiert",
+    "not_installed": "nicht installiert",
+    "showing_apps": "{{count}} Apps werden angezeigt",
+    "sort_by": "sortieren nach",
+    "status": "Status"
+  },
   "receiver": "Empfänger",
   "sender": "Absender",
   "server": "Server",
   "service_type": "Service -Typ",
   "settings": "Einstellungen",
   "sort": {
-    "by_member": "von Mitglied"
+    "alphabetical": "alphabetisch",
+    "by_member": "von Mitglied",
+    "newest": "neueste",
+    "oldest": "älteste",
+    "recently_updated": "kürzlich aktualisiert"
+  },
+  "tabs": {
+    "categories": "Kategorien",
+    "community_apps": "Community-Apps",
+    "my_apps": "meine Apps",
+    "official_apps": "offizielle Apps"
+  },
+  "aria": {
+    "apps_library_tabs": "Apps-Bibliothek Navigationsreiter"
   },
   "supply": "liefern",
   "tags": "Tags",
@@ -400,6 +452,7 @@
   "title": "Titel",
   "to": "Zu",
   "tutorial": "Tutorial",
+  "unknown": "unbekannt",
   "url": "URL",
   "user_lookup": "Benutzer suchen",
   "video_embed": "Videoeinbettung",

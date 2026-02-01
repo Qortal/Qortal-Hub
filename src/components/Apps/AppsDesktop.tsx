@@ -23,11 +23,9 @@ import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
-import { AppsNavBarDesktop } from './AppsNavBarDesktop';
 import {
   Box,
   Button,
-  ButtonBase,
   Dialog,
   DialogActions,
   DialogContent,
@@ -35,17 +33,9 @@ import {
   DialogTitle,
   useTheme,
 } from '@mui/material';
-import { HomeIcon } from '../../assets/Icons/HomeIcon';
-import { Save } from '../Save/Save';
-import { IconWrapper } from '../Desktop/DesktopFooter';
 import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
-import { AppsIcon } from '../../assets/Icons/AppsIcon';
-import { CoreSyncStatus } from '../CoreSyncStatus';
-import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import LanguageSelector from '../Language/LanguageSelector';
-import ThemeSelector from '../Theme/ThemeSelector';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
@@ -238,6 +228,8 @@ export const AppsDesktop = ({
         'appInfo',
         'library',
         'publish',
+        'publish-app',
+        'publish-website',
       ].includes(mode)
     ) {
       // Handle the various modes as needed
@@ -254,7 +246,7 @@ export const AppsDesktop = ({
         } else {
           setMode('home');
         }
-      } else if (mode === 'publish') {
+      } else if (mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') {
         setMode('library');
       }
     } else if (selectedTab?.tabId) {
@@ -484,11 +476,13 @@ export const AppsDesktop = ({
         myName={myName}
       />
 
-      {mode === 'publish' && !selectedTab && (
+      {(mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') && !selectedTab && (
         <AppPublish
           categories={categories}
           myAddress={myAddress}
           myName={myName}
+          initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
+          isAppTypeLocked={mode === 'publish-app' || mode === 'publish-website'}
         />
       )}
 

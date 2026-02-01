@@ -1,8 +1,8 @@
 import {
   AppCircle,
   AppCircleContainer,
-  AppDownloadButton,
-  AppDownloadButtonText,
+  AppButton,
+  AppButtonText,
   AppInfoAppName,
   AppInfoSnippetContainer,
   AppInfoSnippetLeft,
@@ -137,7 +137,7 @@ export const AppInfoSnippet = ({
           gap: '10px',
         }}
       >
-        <AppDownloadButton
+        <AppButton
           onClick={() => {
             setSortablePinnedApps((prev) => {
               let updatedApps;
@@ -175,7 +175,7 @@ export const AppInfoSnippet = ({
             opacity: isSelectedAppPinned ? 0.6 : 1,
           }}
         >
-          <AppDownloadButtonText>
+          <AppButtonText>
             {isSelectedAppPinned
               ? t('core:action.unpin', {
                   postProcess: 'capitalizeFirstChar',
@@ -183,10 +183,10 @@ export const AppInfoSnippet = ({
               : t('core:action.pin', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-          </AppDownloadButtonText>
-        </AppDownloadButton>
+          </AppButtonText>
+        </AppButton>
 
-        <AppDownloadButton
+        <AppButton
           onClick={() => {
             executeEvent('addTab', {
               data: app,
@@ -198,7 +198,7 @@ export const AppInfoSnippet = ({
               : theme.palette.background.paper,
           }}
         >
-          <AppDownloadButtonText>
+          <AppButtonText>
             {isInstalled
               ? t('core:action.open', {
                   postProcess: 'capitalizeFirstChar',
@@ -206,8 +206,8 @@ export const AppInfoSnippet = ({
               : t('core:action.download', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-          </AppDownloadButtonText>
-        </AppDownloadButton>
+          </AppButtonText>
+        </AppButton>
       </AppInfoSnippetRight>
     </AppInfoSnippetContainer>
   );

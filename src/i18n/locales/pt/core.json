@@ -115,10 +115,14 @@
   "app_service_type": "aplicativo tipo serviço",
   "apps_dashboard": "apps no Dashboard",
   "apps_official": "Apps oficiais",
+  "official_apps": {
+    "featured": "destaque",
+    "all_apps": "todos os apps oficiais",
+    "view_all": "ver todos"
+  },
   "attachment": "anexo",
   "balance": "balanço:",
   "category": "categoria",
-  "category_other": "categorias",
   "chat": "conversa",
   "comment_other": "comentarios",
   "contact_other": "contatos",
@@ -131,6 +135,17 @@
   "current_language": "lingua atual: {{ language }}",
   "dev": "desenvolvedor",
   "dev_mode": "Modo desenvolvedor",
+  "developer": {
+    "no_apps_yet": "você ainda não publicou nenhum app",
+    "no_sites_yet": "você ainda não publicou nenhum site",
+    "publish_app": "publicar app",
+    "publish_new": "publicar novo",
+    "publish_site": "publicar site",
+    "update": "atualizar",
+    "view_stats": "ver estatísticas",
+    "your_published_apps": "seus apps publicados",
+    "your_published_websites": "seus sites publicados"
+  },
   "domain": "dominio",
   "ui": {
     "version": "versão da interface"
@@ -367,13 +382,50 @@
     "q_sandbox": "q-Sandbox",
     "q_wallets": "q-Casteiras"
   },
+  "app_detail": {
+    "about": "sobre",
+    "by_developer": "por @{{developer}}",
+    "category": "categoria",
+    "details": "detalhes",
+    "published": "publicado",
+    "ratings": "avaliações",
+    "ratings_count": "{{count}} avaliações",
+    "rate_this_app": "avaliar este app",
+    "service": "serviço",
+    "status": "status",
+    "status_ready": "pronto (instalado)",
+    "status_not_installed": "não instalado",
+    "tags": "tags"
+  },
+  "filter": {
+    "all": "todos",
+    "category": "categoria",
+    "installed": "instalado",
+    "not_installed": "não instalado",
+    "showing_apps": "mostrando {{count}} apps",
+    "sort_by": "ordenar por",
+    "status": "status"
+  },
   "receiver": "destinatário",
   "sender": "remetente",
   "server": "servidor",
   "service_type": "tipo de serviço",
   "settings": "configurações",
   "sort": {
-    "by_member": "por membro"
+    "alphabetical": "alfabético",
+    "by_member": "por membro",
+    "newest": "mais recentes",
+    "oldest": "mais antigos",
+    "recently_updated": "atualizados recentemente"
+  },
+  "tabs": {
+    "categories": "categorias",
+    "community_apps": "apps da comunidade",
+    "my_apps": "meus apps",
+    "official_apps": "apps oficiais"
+  },
+  "aria": {
+    "apps_library_tabs": "abas de navegação da biblioteca de apps"
   },
   "supply": "fornecer",
   "tags": "tags",
@@ -403,6 +455,7 @@
   "title": "título",
   "to": "para",
   "tutorial": "tutorial",
+  "unknown": "desconhecido",
   "url": "url",
   "user_lookup": "pesquisa de usuário",
   "video_embed": "vídeo incorporado",
