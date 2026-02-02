@@ -4,9 +4,8 @@ on:
   pull_request:
     branches:
       - master
-      - 'feature/**'
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+      - develop
+      - feature/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -25,8 +24,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
