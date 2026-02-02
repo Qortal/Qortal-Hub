@@ -42,7 +42,7 @@ import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.6.0',
+  version: '0.6.1',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (

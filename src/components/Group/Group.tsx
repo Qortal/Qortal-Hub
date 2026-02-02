@@ -525,6 +525,79 @@ export const Group = ({
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
 
+  // Track view modes to prevent marking messages as read when not viewing chat
+  const desktopViewModeRef = useRef(desktopViewMode);
+  const mobileViewModeRef = useRef(mobileViewMode);
+
+  useEffect(() => {
+    desktopViewModeRef.current = desktopViewMode;
+  }, [desktopViewMode]);
+
+  useEffect(() => {
+    mobileViewModeRef.current = mobileViewMode;
+  }, [mobileViewMode]);
+
+  // Track previous view mode to detect when user returns to chat
+  const prevDesktopViewModeRef = useRef(desktopViewMode);
+  const prevMobileViewModeRef = useRef(mobileViewMode);
+
+  // Mark messages as read when user returns to chat view
+  useEffect(() => {
+    const wasInChatMode =
+      prevDesktopViewModeRef.current === 'chat' ||
+      prevMobileViewModeRef.current === 'chat';
+    const isNowInChatMode = desktopViewMode === 'chat' || mobileViewMode === 'chat';
+
+    // Only update timestamp when user RETURNS to chat (wasn't in chat, now is in chat)
+    if (!wasInChatMode && isNowInChatMode) {
+      // Update timestamp for selected group chat
+      if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: selectedGroupRef.current.groupId,
+          })
+          .then(() => {
+            // Refresh the timestamp data to update UI
+            setTimeout(() => {
+              getTimestampEnterChat();
+            }, 600);
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+      }
+
+      // Update timestamp for selected direct chat
+      if (selectedDirectRef.current) {
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: selectedDirectRef.current.address,
+          })
+          .then(() => {
+            // Refresh the timestamp data to update UI
+            setTimeout(() => {
+              getTimestampEnterChat();
+            }, 600);
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+      }
+    }
+
+    // Update previous view mode refs
+    prevDesktopViewModeRef.current = desktopViewMode;
+    prevMobileViewModeRef.current = mobileViewMode;
+  }, [desktopViewMode, mobileViewMode]);
+
   const getUserSettings = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
@@ -1018,7 +1091,13 @@ export const Group = ({
           message.payload?.filter((item) => item?.groupId !== '0')
         );
 
-        if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
+        // Only mark messages as read if user is actually viewing the chat
+        if (
+          selectedGroupRef.current &&
+          groupSectionRef.current === 'chat' &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'chat')
+        ) {
           window
             .sendMessage('addTimestampEnterChat', {
               timestamp: Date.now(),
@@ -1032,7 +1111,12 @@ export const Group = ({
             });
         }
 
-        if (selectedDirectRef.current) {
+        // Only mark direct messages as read if user is actually viewing the chat
+        if (
+          selectedDirectRef.current &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'chat')
+        ) {
           window
             .sendMessage('addTimestampEnterChat', {
               timestamp: Date.now(),
@@ -1055,9 +1139,12 @@ export const Group = ({
         // Update the component state with the received 'sendqort' state
         setGroupAnnouncements(message.payload);
 
+        // Only mark announcements as read if user is actually viewing the announcement section
         if (
           selectedGroupRef.current &&
-          groupSectionRef.current === 'announcement'
+          groupSectionRef.current === 'announcement' &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'group')
         ) {
           window
             .sendMessage('addGroupNotificationTimestamp', {
