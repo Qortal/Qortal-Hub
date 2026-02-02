@@ -115,10 +115,14 @@
   "app_service_type": "type de service d'application",
   "apps_dashboard": "Tableau de bord Apps",
   "apps_official": "Applications officielles",
+  "official_apps": {
+    "featured": "en vedette",
+    "all_apps": "toutes les applications officielles",
+    "view_all": "voir tout"
+  },
   "attachment": "pièce jointe",
   "balance": "équilibre:",
   "category": "catégorie",
-  "category_other": "catégories",
   "chat": "chat",
   "comment_other": "commentaires",
   "contact_other": "contacts",
@@ -132,6 +136,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "dev",
   "dev_mode": "mode de développement",
+  "developer": {
+    "no_apps_yet": "vous n'avez pas encore publié d'app",
+    "no_sites_yet": "vous n'avez pas encore publié de site web",
+    "publish_app": "publier une app",
+    "publish_new": "publier nouveau",
+    "publish_site": "publier un site web",
+    "update": "mettre à jour",
+    "view_stats": "voir les statistiques",
+    "your_published_apps": "vos apps publiées",
+    "your_published_websites": "vos sites web publiés"
+  },
   "domain": "domaine",
   "ui": {
     "version": "version d'interface utilisateur"
@@ -368,13 +383,50 @@
     "q_sandbox": "Q-sandbox",
     "q_wallets": "porte-à-tête"
   },
+  "app_detail": {
+    "about": "à propos",
+    "by_developer": "par @{{developer}}",
+    "category": "catégorie",
+    "details": "détails",
+    "published": "publié",
+    "ratings": "évaluations",
+    "ratings_count": "{{count}} évaluations",
+    "rate_this_app": "évaluer cette app",
+    "service": "service",
+    "status": "statut",
+    "status_ready": "prêt (installé)",
+    "status_not_installed": "non installé",
+    "tags": "tags"
+  },
+  "filter": {
+    "all": "tous",
+    "category": "catégorie",
+    "installed": "installé",
+    "not_installed": "non installé",
+    "showing_apps": "{{count}} apps affichées",
+    "sort_by": "trier par",
+    "status": "statut"
+  },
   "receiver": "récepteur",
   "sender": "expéditeur",
   "server": "serveur",
   "service_type": "type de service",
   "settings": "paramètres",
   "sort": {
-    "by_member": "par membre"
+    "alphabetical": "alphabétique",
+    "by_member": "par membre",
+    "newest": "plus récentes",
+    "oldest": "plus anciennes",
+    "recently_updated": "mises à jour récemment"
+  },
+  "tabs": {
+    "categories": "catégories",
+    "community_apps": "apps communautaires",
+    "my_apps": "mes apps",
+    "official_apps": "apps officielles"
+  },
+  "aria": {
+    "apps_library_tabs": "onglets de navigation de la bibliothèque d'apps"
   },
   "supply": "fournir",
   "tags": "balises",
@@ -402,6 +454,7 @@
   "title": "titre",
   "to": "à",
   "tutorial": "tutoriel",
+  "unknown": "inconnu",
   "url": "URL",
   "user_lookup": "recherche d'utilisateur",
   "video_embed": "Vidéo intégrer",

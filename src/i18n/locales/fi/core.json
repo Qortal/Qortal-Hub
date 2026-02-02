@@ -115,10 +115,14 @@
   "app_service_type": "sovelluksen palvelutyyppi",
   "apps_dashboard": "sovellusten hallintapaneeli",
   "apps_official": "viralliset sovellukset",
+  "official_apps": {
+    "featured": "suositellut",
+    "all_apps": "kaikki viralliset sovellukset",
+    "view_all": "näytä kaikki"
+  },
   "attachment": "liite",
   "balance": "saldo:",
   "category": "kategoria",
-  "category_other": "kategoriat",
   "chat": "keskustelu",
   "comment_other": "kommentit",
   "contact_other": "yhteystiedot",
@@ -132,6 +136,17 @@
   "current_language": "nykyinen kieli: {{ language }}",
   "dev": "kehittäjä",
   "dev_mode": "kehittäjätila",
+  "developer": {
+    "no_apps_yet": "et ole vielä julkaissut sovelluksia",
+    "no_sites_yet": "et ole vielä julkaissut verkkosivustoja",
+    "publish_app": "julkaise sovellus",
+    "publish_new": "julkaise uusi",
+    "publish_site": "julkaise verkkosivusto",
+    "update": "päivitä",
+    "view_stats": "näytä tilastot",
+    "your_published_apps": "julkaistut sovelluksesi",
+    "your_published_websites": "julkaistut verkkosivustosi"
+  },
   "domain": "verkkotunnus",
   "ui": {
     "version": "käyttöliittymän versio"
@@ -296,13 +311,50 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "q-lompakot"
   },
+  "app_detail": {
+    "about": "tietoja",
+    "by_developer": "tekijä @{{developer}}",
+    "category": "kategoria",
+    "details": "tiedot",
+    "published": "julkaistu",
+    "ratings": "arvostelut",
+    "ratings_count": "{{count}} arvostelua",
+    "rate_this_app": "arvostele tämä sovellus",
+    "service": "palvelu",
+    "status": "tila",
+    "status_ready": "valmis (asennettu)",
+    "status_not_installed": "ei asennettu",
+    "tags": "tagit"
+  },
+  "filter": {
+    "all": "kaikki",
+    "category": "kategoria",
+    "installed": "asennettu",
+    "not_installed": "ei asennettu",
+    "showing_apps": "näytetään {{count}} sovellusta",
+    "sort_by": "lajittele",
+    "status": "tila"
+  },
   "receiver": "vastaanottaja",
   "sender": "lähettäjä",
   "server": "palvelin",
   "service_type": "palvelutyyppi",
   "settings": "asetukset",
   "sort": {
-    "by_member": "jäsenen mukaan"
+    "alphabetical": "aakkosjärjestys",
+    "by_member": "jäsenen mukaan",
+    "newest": "uusimmat",
+    "oldest": "vanhimmat",
+    "recently_updated": "äskettäin päivitetyt"
+  },
+  "tabs": {
+    "categories": "kategoriat",
+    "community_apps": "yhteisösovellukset",
+    "my_apps": "omat sovellukset",
+    "official_apps": "viralliset sovellukset"
+  },
+  "aria": {
+    "apps_library_tabs": "sovelluskirjaston navigointivälilehdet"
   },
   "supply": "tarjonta",
   "tags": "tunnisteet",
@@ -332,6 +384,7 @@
   "title": "otsikko",
   "to": "vastaanottajalle",
   "tutorial": "opas",
+  "unknown": "tuntematon",
   "url": "URL",
   "user_lookup": "käyttäjähaku",
   "video_embed": "videon upotus",

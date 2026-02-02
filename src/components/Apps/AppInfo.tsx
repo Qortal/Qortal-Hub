@@ -1,24 +1,28 @@
+import { useContext } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
-  AppDownloadButton,
-  AppDownloadButtonText,
+  AppButton,
+  AppButtonText,
   AppInfoAppName,
   AppInfoSnippetContainer,
   AppInfoSnippetLeft,
   AppInfoSnippetMiddle,
   AppInfoUserName,
   AppsBackContainer,
-  AppsCategoryInfo,
-  AppsCategoryInfoLabel,
-  AppsCategoryInfoSub,
-  AppsCategoryInfoValue,
   AppsInfoDescription,
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Avatar, Box, useTheme } from '@mui/material';
-import { getBaseApiReact } from '../../App';
+import {
+  Avatar,
+  Box,
+  Divider,
+  styled,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
@@ -32,12 +36,46 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { ComposeP, ShowMessageReturnButton } from '../Group/Forum/Mail-styles';
 import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
+import { AppRatingBreakdown } from './AppInfo/AppRatingBreakdown';
+import { AppDetailsSection } from './AppInfo/AppDetailsSection';
+import { getFee } from '../../background/background';
+import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
+import { useState, useCallback, useEffect, useRef } from 'react';
+
+const SectionTitle = styled(Typography)(({ theme }) => ({
+  fontSize: '18px',
+  fontWeight: 600,
+  color: theme.palette.text.primary,
+  marginBottom: '16px',
+}));
+
+const SectionContainer = styled(Box)(({ theme }) => ({
+  width: '100%',
+  padding: '20px 0',
+}));
+
+const StyledDivider = styled(Divider)(({ theme }) => ({
+  margin: '8px 0',
+  backgroundColor: theme.palette.divider,
+}));
 
 export const AppInfo = ({ app, myName }) => {
   const isInstalled = app?.status?.status === 'READY';
   const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
     sortablePinnedAppsAtom
   );
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState<{
+    type: string;
+    message: string;
+  } | null>(null);
+  const [pollInfo, setPollInfo] = useState<any>(null);
+  const [hasPublishedRating, setHasPublishedRating] = useState<boolean | null>(
+    null
+  );
+  const hasCalledRef = useRef(false);
 
   const theme = useTheme();
   const { t } = useTranslation([
@@ -53,11 +91,162 @@ export const AppInfo = ({ app, myName }) => {
   );
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
+  // Check if rating poll exists
+  const checkRatingPoll = useCallback(async (name: string, service: string) => {
+    try {
+      hasCalledRef.current = true;
+      const pollName = `app-library-${service}-rating-${name}`;
+      const url = `${getBaseApiReact()}/polls/${pollName}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const responseData = await response.json();
+      if (responseData?.message?.includes('POLL_NO_EXISTS')) {
+        setHasPublishedRating(false);
+      } else if (responseData?.pollName) {
+        setPollInfo(responseData);
+        setHasPublishedRating(true);
+      }
+    } catch (error) {
+      if ((error as any)?.message?.includes('POLL_NO_EXISTS')) {
+        setHasPublishedRating(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasCalledRef.current) return;
+    if (!app?.name || !app?.service) return;
+    checkRatingPoll(app.name, app.service);
+  }, [checkRatingPoll, app?.name, app?.service]);
+
+  const handleRate = async (rating: number) => {
+    try {
+      if (!myName) {
+        throw new Error(
+          t('core:message.generic.name_rate', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
+      }
+      if (!app?.name) return;
+
+      const fee = await getFee('CREATE_POLL');
+
+      await show({
+        message: t('core:message.question.rate_app', {
+          rate: rating,
+          postProcess: 'capitalizeFirstChar',
+        }),
+        publishFee: fee.fee + ' QORT',
+      });
+
+      if (hasPublishedRating === false) {
+        const pollName = `app-library-${app.service}-rating-${app.name}`;
+        const pollOptions = [`1, 2, 3, 4, 5, initialValue-${rating}`];
+        const pollDescription = t('core:message.error.generic', {
+          name: app.name,
+          service: app.service,
+          postProcess: 'capitalizeFirstChar',
+        });
+
+        await new Promise((res, rej) => {
+          window
+            .sendMessage(
+              'createPoll',
+              {
+                pollName: pollName,
+                pollDescription: pollDescription,
+                pollOptions: pollOptions,
+                pollOwnerAddress: myName,
+              },
+              TIME_MINUTES_1_IN_MILLISECONDS
+            )
+            .then((response: any) => {
+              if (response.error) {
+                rej(response?.message);
+                return;
+              } else {
+                res(response);
+                setInfoSnack({
+                  type: 'success',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                });
+                setOpenSnack(true);
+              }
+            })
+            .catch((error: any) => {
+              console.error('Failed qortalRequest', error);
+            });
+        });
+      } else {
+        const pollName = `app-library-${app.service}-rating-${app.name}`;
+
+        const optionIndex = pollInfo?.pollOptions.findIndex(
+          (option: any) => +option.optionName === +rating
+        );
+        if (isNaN(optionIndex) || optionIndex === -1) {
+          throw new Error(
+            t('core:message.error.rating_option', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          );
+        }
+
+        await new Promise((res, rej) => {
+          window
+            .sendMessage(
+              'voteOnPoll',
+              {
+                pollName: pollName,
+                optionIndex,
+              },
+              TIME_MINUTES_1_IN_MILLISECONDS
+            )
+            .then((response: any) => {
+              if (response.error) {
+                rej(response?.message);
+                return;
+              } else {
+                res(response);
+                setInfoSnack({
+                  type: 'success',
+                  message: t('core:message.success.rated_app', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                });
+                setOpenSnack(true);
+              }
+            })
+            .catch((error: any) => {
+              console.error('Failed qortalRequest', error);
+            });
+        });
+      }
+    } catch (error: any) {
+      setInfoSnack({
+        type: 'error',
+        message:
+          error?.message ||
+          t('core:message.error.rate', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+      });
+      setOpenSnack(true);
+    }
+  };
+
   return (
     <AppsLibraryContainer
       sx={{
         height: '100%',
         justifyContent: 'flex-start',
+        overflow: 'auto',
       }}
     >
       <AppsBackContainer>
@@ -91,16 +280,19 @@ export const AppInfo = ({ app, myName }) => {
         </AppsWidthLimiter>
         <Spacer height="20px" />
       </AppsBackContainer>
+
       <Box
         sx={{
           display: 'flex',
           flexDirection: 'column',
-          maxWidth: '500px',
+          maxWidth: '600px',
           width: '90%',
+          pb: 4,
         }}
       >
         <Spacer height="30px" />
 
+        {/* App Header */}
         <AppsWidthLimiter>
           <AppInfoSnippetContainer>
             <AppInfoSnippetLeft
@@ -123,8 +315,8 @@ export const AppInfo = ({ app, myName }) => {
                 >
                   <Avatar
                     sx={{
-                      height: '43px',
-                      width: '43px',
+                      height: '50px',
+                      width: '50px',
                       '& img': {
                         objectFit: 'fill',
                       },
@@ -136,7 +328,7 @@ export const AppInfo = ({ app, myName }) => {
                   >
                     <img
                       style={{
-                        width: '43px',
+                        width: '50px',
                         height: 'auto',
                       }}
                       src={LogoSelected}
@@ -147,36 +339,51 @@ export const AppInfo = ({ app, myName }) => {
               </AppCircleContainer>
 
               <AppInfoSnippetMiddle>
-                <AppInfoAppName>
+                <AppInfoAppName
+                  sx={{
+                    fontSize: '24px',
+                  }}
+                >
                   {app?.metadata?.title || app?.name}
                 </AppInfoAppName>
 
                 <Spacer height="6px" />
 
-                <AppInfoUserName>{app?.name}</AppInfoUserName>
+                <AppInfoUserName
+                  sx={{
+                    fontSize: '14px',
+                  }}
+                >
+                  {t('core:app_detail.by_developer', {
+                    developer: app?.name,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </AppInfoUserName>
 
-                <Spacer height="3px" />
+                <Spacer height="8px" />
+
+                <AppRating app={app} myName={myName} />
               </AppInfoSnippetMiddle>
             </AppInfoSnippetLeft>
           </AppInfoSnippetContainer>
 
-          <Spacer height="11px" />
+          <Spacer height="20px" />
 
+          {/* Action Buttons */}
           <Box
             sx={{
               alignItems: 'center',
               display: 'flex',
-              gap: '20px',
+              gap: '16px',
               width: '100%',
             }}
           >
-            <AppDownloadButton
+            <AppButton
               onClick={() => {
                 setSortablePinnedApps((prev) => {
                   let updatedApps;
 
                   if (isSelectedAppPinned) {
-                    // Remove the selected app if it is pinned
                     updatedApps = prev.filter(
                       (item) =>
                         !(
@@ -185,7 +392,6 @@ export const AppInfo = ({ app, myName }) => {
                         )
                     );
                   } else {
-                    // Add the selected app if it is not pinned
                     updatedApps = [
                       ...prev,
                       {
@@ -206,13 +412,12 @@ export const AppInfo = ({ app, myName }) => {
               }}
               sx={{
                 backgroundColor: theme.palette.background.paper,
-                height: '29px',
-                maxWidth: '320px',
+                height: '40px',
+                flex: 1,
                 opacity: isSelectedAppPinned ? 0.6 : 1,
-                width: '100%',
               }}
             >
-              <AppDownloadButtonText>
+              <AppButtonText>
                 {isSelectedAppPinned
                   ? t('core:action.unpin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
@@ -220,10 +425,10 @@ export const AppInfo = ({ app, myName }) => {
                   : t('core:action.pin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-              </AppDownloadButtonText>
-            </AppDownloadButton>
+              </AppButtonText>
+            </AppButton>
 
-            <AppDownloadButton
+            <AppButton
               onClick={() => {
                 executeEvent('addTab', {
                   data: app,
@@ -233,12 +438,11 @@ export const AppInfo = ({ app, myName }) => {
                 backgroundColor: isInstalled
                   ? theme.palette.primary.main
                   : theme.palette.background.paper,
-                height: '29px',
-                maxWidth: '320px',
-                width: '100%',
+                height: '40px',
+                flex: 1,
               }}
             >
-              <AppDownloadButtonText>
+              <AppButtonText>
                 {isInstalled
                   ? t('core:action.open', {
                       postProcess: 'capitalizeFirstChar',
@@ -246,64 +450,65 @@ export const AppInfo = ({ app, myName }) => {
                   : t('core:action.download', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-              </AppDownloadButtonText>
-            </AppDownloadButton>
+              </AppButtonText>
+            </AppButton>
           </Box>
         </AppsWidthLimiter>
 
-        <Spacer height="20px" />
+        <StyledDivider sx={{ my: 3 }} />
 
-        <AppsWidthLimiter>
-          <AppsCategoryInfo>
-            <AppRating ratingCountPosition="top" myName={myName} app={app} />
-
-            <Spacer width="16px" />
-
-            <Spacer
-              backgroundColor={theme.palette.background.paper}
-              height="40px"
-              width="1px"
-            />
-
-            <Spacer width="16px" />
-
-            <AppsCategoryInfoSub>
-              <AppsCategoryInfoLabel>
-                {t('core:category', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                :
-              </AppsCategoryInfoLabel>
-
-              <Spacer height="4px" />
-
-              <AppsCategoryInfoValue>
-                {app?.metadata?.categoryName ||
-                  t('core:none', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-              </AppsCategoryInfoValue>
-            </AppsCategoryInfoSub>
-          </AppsCategoryInfo>
-
-          <Spacer height="30px" />
-
-          <AppInfoAppName>
-            {t('core:q_apps.about', {
+        {/* About Section */}
+        <SectionContainer>
+          <SectionTitle>
+            {t('core:app_detail.about', {
               postProcess: 'capitalizeFirstChar',
             })}
-          </AppInfoAppName>
-        </AppsWidthLimiter>
+          </SectionTitle>
+          <AppsInfoDescription
+            sx={{
+              fontSize: '14px',
+              lineHeight: 1.6,
+            }}
+          >
+            {app?.metadata?.description ||
+              t('core:message.generic.no_description', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+          </AppsInfoDescription>
+        </SectionContainer>
 
-        <Spacer height="20px" />
+        <StyledDivider sx={{ my: 2 }} />
 
-        <AppsInfoDescription>
-          {app?.metadata?.description ||
-            t('core:message.generic.no_description', {
+        {/* Details Section */}
+        <SectionContainer>
+          <SectionTitle>
+            {t('core:app_detail.details', {
               postProcess: 'capitalizeFirstChar',
             })}
-        </AppsInfoDescription>
+          </SectionTitle>
+          <AppDetailsSection app={app} />
+        </SectionContainer>
+
+        <StyledDivider sx={{ my: 2 }} />
+
+        {/* Ratings Section */}
+        <SectionContainer>
+          <SectionTitle>
+            {t('core:app_detail.ratings', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </SectionTitle>
+          <AppRatingBreakdown app={app} myName={myName} onRate={handleRate} />
+        </SectionContainer>
       </Box>
+
+      <CustomizedSnackbars
+        duration={3000}
+        open={openSnack}
+        setOpen={setOpenSnack}
+        info={infoSnack}
+        setInfo={setInfoSnack}
+      />
     </AppsLibraryContainer>
   );
 };
