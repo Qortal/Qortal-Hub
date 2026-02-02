@@ -8,13 +8,17 @@ import {
   ButtonBase,
   Divider,
   CircularProgress,
+  LinearProgress,
   useTheme,
+  Chip,
 } from '@mui/material';
 import { base64ToBlobUrl } from '../../utils/fileReading';
 import { saveFileToDiskGeneric } from '../../utils/generateWallet/generateWallet';
 import AttachmentIcon from '@mui/icons-material/Attachment';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PeopleIcon from '@mui/icons-material/People';
 import { CustomLoader } from '../../common/CustomLoader';
 import { Spacer } from '../../common/Spacer';
 import { FileAttachmentContainer, FileAttachmentFont } from './Embed-styles';
@@ -22,12 +26,12 @@ import DownloadIcon from '@mui/icons-material/Download';
 import SaveIcon from '@mui/icons-material/Save';
 import { decodeIfEncoded } from '../../utils/decode';
 import { useTranslation } from 'react-i18next';
+import { downloadFromLocation } from '../../utils/downloadFromLocation';
 
 export const AttachmentCard = ({
   resourceData,
   resourceDetails,
   owner,
-  refresh,
   openExternal,
   external,
   isLoadingParent,
@@ -46,18 +50,34 @@ export const AttachmentCard = ({
     'tutorial',
   ]);
 
+  const formatETA = (seconds: number | undefined) => {
+    if (!seconds || seconds <= 0) return null;
+
+    if (seconds < 60) {
+      return `${Math.round(seconds)}s`;
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.round(seconds % 60);
+      return `${minutes}m ${secs}s`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${minutes}m`;
+    }
+  };
+
   const saveToDisk = async () => {
     const { name, service, identifier } = resourceData;
 
-    const url = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
-    fetch(url)
-      .then((response) => response.blob())
-      .then(async (blob) => {
-        await saveFileToDiskGeneric(blob, resourceData?.fileName);
-      })
-      .catch((error) => {
-        console.error('Error fetching the video:', error);
-      });
+    downloadFromLocation({
+      location: {
+        name,
+        service,
+        identifier,
+      },
+      filename: resourceData?.fileName,
+      mimeType: resourceData?.mimeType,
+    });
   };
 
   const saveToDiskEncrypted = async () => {
@@ -155,15 +175,17 @@ export const AttachmentCard = ({
             gap: '10px',
           }}
         >
-          <ButtonBase>
-            <RefreshIcon
-              onClick={refresh}
-              sx={{
-                fontSize: '24px',
-                color: theme.palette.text.primary,
-              }}
-            />
-          </ButtonBase>
+          {resourceDetails?.status?.status === 'FAILED_TO_DOWNLOAD' && (
+            <ButtonBase>
+              <RefreshIcon
+                onClick={() => downloadResource(resourceData)}
+                sx={{
+                  fontSize: '24px',
+                  color: theme.palette.text.primary,
+                }}
+              />
+            </ButtonBase>
+          )}
 
           {external && (
             <ButtonBase>
@@ -212,6 +234,55 @@ export const AttachmentCard = ({
                   postProcess: 'capitalizeFirstChar',
                 })}
         </Typography>
+
+        {/* Show peer count and ETA during download */}
+        {resourceDetails?.status?.status &&
+          !['READY', 'FAILED_TO_DOWNLOAD'].includes(
+            resourceDetails.status.status
+          ) && (
+            <Box
+              sx={{
+                display: 'flex',
+                gap: '8px',
+                marginTop: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
+              {resourceDetails?.status?.numberOfPeers !== undefined && (
+                <Chip
+                  icon={<PeopleIcon sx={{ fontSize: '14px' }} />}
+                  label={`${resourceDetails.status.numberOfPeers} pending peer${resourceDetails.status.numberOfPeers !== 1 ? 's' : ''}`}
+                  size="small"
+                  sx={{
+                    height: '20px',
+                    fontSize: '11px',
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(255, 255, 255, 0.08)'
+                        : 'rgba(0, 0, 0, 0.08)',
+                  }}
+                />
+              )}
+              {resourceDetails?.status?.estimatedTimeRemaining != null &&
+                formatETA(resourceDetails.status.estimatedTimeRemaining) && (
+                  <Chip
+                    icon={<AccessTimeIcon sx={{ fontSize: '14px' }} />}
+                    label={formatETA(
+                      resourceDetails.status.estimatedTimeRemaining
+                    )}
+                    size="small"
+                    sx={{
+                      height: '20px',
+                      fontSize: '11px',
+                      backgroundColor:
+                        theme.palette.mode === 'dark'
+                          ? 'rgba(255, 255, 255, 0.08)'
+                          : 'rgba(0, 0, 0, 0.08)',
+                    }}
+                  />
+                )}
+            </Box>
+          )}
       </Box>
 
       <Divider sx={{ borderColor: 'rgb(255 255 255 / 10%)' }} />
@@ -262,10 +333,17 @@ export const AttachmentCard = ({
               <Typography
                 sx={{
                   fontSize: '14px',
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '100%',
                 }}
+                title={resourceData?.fileName}
               >
                 {resourceData?.fileName}
               </Typography>
+
               <Spacer height="10px" />
             </>
           )}
@@ -287,14 +365,6 @@ export const AttachmentCard = ({
             }}
           >
             <FileAttachmentContainer>
-              <Typography>
-                {resourceDetails?.status?.status === 'DOWNLOADED'
-                  ? t('core:message.error.generic.building', {
-                      postProcess: 'capitalizeAll',
-                    })
-                  : resourceDetails?.status?.status}
-              </Typography>
-
               {!resourceDetails && (
                 <>
                   <DownloadIcon />
@@ -310,18 +380,58 @@ export const AttachmentCard = ({
                 resourceDetails?.status?.status !== 'READY' &&
                 resourceDetails?.status?.status !== 'FAILED_TO_DOWNLOAD' && (
                   <>
-                    <CircularProgress
-                      size={20}
+                    <Box
                       sx={{
-                        color: theme.palette.text.primary,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        width: '100%',
+                        gap: '8px',
                       }}
-                    />
-                    <FileAttachmentFont>
-                      {t('core:message.generic.downloading', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      : {resourceDetails?.status?.percentLoaded || '0'}%
-                    </FileAttachmentFont>
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                        }}
+                      >
+                        <CircularProgress
+                          size={20}
+                          sx={{
+                            color: theme.palette.text.primary,
+                          }}
+                        />
+                        <FileAttachmentFont>
+                          {t('core:message.generic.downloading', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                          :{' '}
+                          {Number(
+                            resourceDetails?.status?.percentLoaded || 0
+                          ).toFixed(2)}
+                          %
+                        </FileAttachmentFont>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Number(
+                          resourceDetails?.status?.percentLoaded || 0
+                        )}
+                        sx={{
+                          width: '100%',
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(255, 255, 255, 0.1)'
+                              : 'rgba(0, 0, 0, 0.1)',
+                          '& .MuiLinearProgress-bar': {
+                            borderRadius: 3,
+                          },
+                        }}
+                      />
+                    </Box>
                   </>
                 )}
 
@@ -331,6 +441,22 @@ export const AttachmentCard = ({
                     <SaveIcon />
                     <FileAttachmentFont>
                       {t('core:action.save_disk', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </FileAttachmentFont>
+                  </>
+                )}
+
+              {resourceDetails &&
+                resourceDetails?.status?.status === 'FAILED_TO_DOWNLOAD' && (
+                  <>
+                    <DownloadIcon />
+                    <FileAttachmentFont
+                      sx={{
+                        color: theme.palette.other.danger,
+                      }}
+                    >
+                      {t('core:video_failed', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </FileAttachmentFont>

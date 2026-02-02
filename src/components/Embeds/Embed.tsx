@@ -419,7 +419,6 @@ export const Embed = ({ embedLink }) => {
           resourceData={resourceData}
           resourceDetails={resourceDetails}
           owner={parsedData?.name}
-          refresh={fetchImage}
           setInfoSnack={setInfoSnack}
           setOpenSnack={setOpenSnack}
           external={external}

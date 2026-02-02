@@ -133,8 +133,6 @@ export const DesktopSideBar = ({
         </IconWrapper>
       </ButtonBase>
 
-      <Save isDesktop disableWidth myName={myName} />
-
       {isEnabledDevMode && (
         <ButtonBase
           onClick={() => {

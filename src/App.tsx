@@ -102,6 +102,7 @@ import {
   enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
+  globalDownloadsAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
@@ -121,6 +122,7 @@ import {
   qMailLastEnteredTimestampAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
+  resourceDownloadControllerAtom,
   selectedNodeInfoAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
@@ -155,7 +157,8 @@ import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
-import { useAtom, useSetAtom } from 'jotai';
+import { Save } from './components/Save/Save';
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
@@ -363,6 +366,7 @@ function App() {
 
   const balanceSetIntervalRef = useRef(null);
   const downloadResource = useFetchResources();
+  const globalDownloadsValue = useAtomValue(globalDownloadsAtom);
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
 
@@ -519,8 +523,22 @@ function App() {
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
   const resettxListAtomAtom = useResetAtom(txListAtom);
   const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
+  const resetResourceDownloadControllerAtom = useResetAtom(
+    resourceDownloadControllerAtom
+  );
+  const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
   const resetAllRecoil = () => {
+    // First, clean up any active download intervals/timeouts
+    if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
+      Object.values(globalDownloadsValue).forEach((entry: any) => {
+        if (entry?.interval) clearInterval(entry.interval);
+        if (entry?.timeout) clearTimeout(entry.timeout);
+        if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
+      });
+    }
+
+    // Reset all atoms
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
     resetAtomSettingsQDNLastUpdatedAtom();
@@ -539,6 +557,8 @@ function App() {
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
     resetMyGroupsWhereIAmAdminAtom();
+    resetResourceDownloadControllerAtom();
+    resetGlobalDownloadsAtom();
   };
 
   const contextValue = useMemo(
@@ -1820,6 +1840,10 @@ function App() {
             {extState === 'authenticated' && (
               <GeneralNotifications address={userInfo?.address} />
             )}
+
+            <Spacer height="20px" />
+
+            <Save isDesktop disableWidth={false} myName={userInfo?.name} />
           </Box>
 
           <Box

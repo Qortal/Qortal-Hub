@@ -197,6 +197,31 @@ export const AppsNavBarDesktop = ({
               <NavBack />
             </ButtonBase>
 
+            <ButtonBase
+              onClick={() => {
+                if (selectedTab?.refreshFunc) {
+                  selectedTab.refreshFunc(selectedTab?.tabId);
+                } else {
+                  executeEvent('refreshApp', {
+                    tabId: selectedTab?.tabId,
+                  });
+                }
+              }}
+              disabled={!selectedTab || !isApps}
+              sx={{
+                marginTop: '20px',
+                opacity: selectedTab && isApps ? 1 : 0.1,
+                cursor: selectedTab && isApps ? 'pointer' : 'default',
+              }}
+            >
+              <RefreshIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '34px',
+                }}
+              />
+            </ButtonBase>
+
             <Tabs
               orientation="vertical"
               ref={tabsRef}
@@ -408,46 +433,6 @@ export const AppsNavBarDesktop = ({
                     postProcess: 'capitalizeFirstChar',
                   })
             }
-          />
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            if (selectedTab?.refreshFunc) {
-              selectedTab.refreshFunc(selectedTab?.tabId);
-            } else {
-              executeEvent('refreshApp', {
-                tabId: selectedTab?.tabId,
-              });
-            }
-            handleClose();
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: '24px !important',
-              marginRight: '5px',
-            }}
-          >
-            <RefreshIcon
-              height={20}
-              sx={{
-                color: theme.palette.text.primary,
-              }}
-            />
-          </ListItemIcon>
-
-          <ListItemText
-            sx={{
-              '& .MuiTypography-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                color: theme.palette.text.primary,
-              },
-            }}
-            primary={t('core:action.refresh', {
-              postProcess: 'capitalizeFirstChar',
-            })}
           />
         </MenuItem>
 
