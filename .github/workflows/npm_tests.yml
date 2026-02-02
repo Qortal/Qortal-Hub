@@ -9,7 +9,12 @@ on:
     branches:
       - master
       - develop
+<<<<<<< HEAD
       - "feature/**"
+=======
+      - feature/**
+
+>>>>>>> 28ab543 (Refactor trigger condition)
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
