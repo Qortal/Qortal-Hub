@@ -139,9 +139,11 @@ export const Embed = ({ embedLink }) => {
       }
       let numberOfTries = 0;
       let imageFinalUrl = null;
+      let hasTriggeredDownload = false;
 
       const tryToGetImageStatus = async () => {
-        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
+        // First, check status WITHOUT build parameter
+        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}`;
 
         const responseStatus = await fetch(urlStatus, {
           method: 'GET',
@@ -151,7 +153,27 @@ export const Embed = ({ embedLink }) => {
         });
 
         const responseData = await responseStatus.json();
-        if (responseData?.status === 'READY') {
+
+        // If not ready and haven't triggered download yet, trigger it ONCE with async=true
+        if (responseData?.status !== 'READY' && !hasTriggeredDownload) {
+          hasTriggeredDownload = true;
+          const urlAsync = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
+
+          // Trigger download but don't wait for response
+          fetch(urlAsync, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }).catch((error) => {
+            console.debug('Failed to trigger async download:', error);
+          });
+        }
+
+        if (
+          responseData?.status === 'READY' ||
+          responseData?.status === 'DOWNLOADED'
+        ) {
           if (parsedData?.encryptionType) {
             const urlData = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?encoding=base64`;
 
@@ -222,14 +244,13 @@ export const Embed = ({ embedLink }) => {
               );
             }
           } else {
-            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
-            // If parsedData is used here, it must be defined somewhere
+            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
           }
         }
       };
 
       // Retry logic
-      while (!imageFinalUrl && numberOfTries < 3) {
+      while (!imageFinalUrl && numberOfTries < 5) {
         await tryToGetImageStatus();
         if (!imageFinalUrl) {
           numberOfTries++;
