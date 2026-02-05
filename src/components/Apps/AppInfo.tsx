@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -41,7 +41,7 @@ import { AppDetailsSection } from './AppInfo/AppDetailsSection';
 import { getFee } from '../../background/background';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useAppRating } from '../../hooks/useAppRatings';
 
 const SectionTitle = styled(Typography)(({ theme }) => ({
   fontSize: '18px',
@@ -71,11 +71,6 @@ export const AppInfo = ({ app, myName }) => {
     type: string;
     message: string;
   } | null>(null);
-  const [pollInfo, setPollInfo] = useState<any>(null);
-  const [hasPublishedRating, setHasPublishedRating] = useState<boolean | null>(
-    null
-  );
-  const hasCalledRef = useRef(false);
 
   const theme = useTheme();
   const { t } = useTranslation([
@@ -86,42 +81,15 @@ export const AppInfo = ({ app, myName }) => {
     'tutorial',
   ]);
 
+  // Use centralized rating store
+  const { rating, refresh } = useAppRating(app?.name, app?.service);
+  const hasPublishedRating = rating?.hasPublishedRating ?? null;
+  const pollInfo = rating?.pollInfo ?? null;
+
   const isSelectedAppPinned = !!sortablePinnedApps?.find(
     (item) => item?.name === app?.name && item?.service === app?.service
   );
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
-
-  // Check if rating poll exists
-  const checkRatingPoll = useCallback(async (name: string, service: string) => {
-    try {
-      hasCalledRef.current = true;
-      const pollName = `app-library-${service}-rating-${name}`;
-      const url = `${getBaseApiReact()}/polls/${pollName}`;
-
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const responseData = await response.json();
-      if (responseData?.message?.includes('POLL_NO_EXISTS')) {
-        setHasPublishedRating(false);
-      } else if (responseData?.pollName) {
-        setPollInfo(responseData);
-        setHasPublishedRating(true);
-      }
-    } catch (error) {
-      if ((error as any)?.message?.includes('POLL_NO_EXISTS')) {
-        setHasPublishedRating(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasCalledRef.current) return;
-    if (!app?.name || !app?.service) return;
-    checkRatingPoll(app.name, app.service);
-  }, [checkRatingPoll, app?.name, app?.service]);
 
   const handleRate = async (rating: number) => {
     try {
@@ -178,6 +146,7 @@ export const AppInfo = ({ app, myName }) => {
                   }),
                 });
                 setOpenSnack(true);
+                refresh();
               }
             })
             .catch((error: any) => {
@@ -221,6 +190,7 @@ export const AppInfo = ({ app, myName }) => {
                   }),
                 });
                 setOpenSnack(true);
+                refresh();
               }
             })
             .catch((error: any) => {

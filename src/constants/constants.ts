@@ -294,3 +294,7 @@ export const TIME_DAYS_1_IN_MILLISECONDS: number =
 // weeks
 export const TIME_WEEKS_1_IN_MILLISECONDS: number =
   7 * 24 * TIME_HOURS_1_IN_MILLISECONDS;
+
+// Rating cache
+export const RATING_CACHE_TTL: number = TIME_MINUTES_30_IN_MILLISECONDS;
+export const RATING_CACHE_STORAGE_KEY: string = 'qortal_app_ratings_cache';
