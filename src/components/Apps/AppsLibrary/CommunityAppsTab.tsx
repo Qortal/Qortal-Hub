@@ -1,37 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { VirtuosoGrid } from 'react-virtuoso';
 import { useAtom } from 'jotai';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
-import { FilterBar, SortOption, StatusFilterOption } from '../Filters';
+import {
+  FilterBar,
+  SortOption,
+  StatusFilterOption,
+  Pagination,
+  PageSize,
+} from '../Filters';
 import { officialAppList } from '../config/officialApps';
-import { appSortAtom } from '../../../atoms/appsAtoms';
+import { appSortAtom, communityPageSizeAtom } from '../../../atoms/appsAtoms';
 
-const GridContainer = styled('div')({
+const AppsGrid = styled(Box)({
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
   gap: '16px',
   width: '100%',
   paddingBottom: '20px',
-});
-
-const GridItemWrapper = styled('div')({
-  display: 'flex',
-});
-
-const StyledVirtuosoContainer = styled('div')({
-  position: 'relative',
-  width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-  scrollbarWidth: 'none',
-  msOverflowStyle: 'none',
 });
 
 interface CommunityAppsTabProps {
@@ -70,6 +58,8 @@ export const CommunityAppsTab = ({
   const [sortOption, setSortOption] = useAtom(appSortAtom);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useAtom(communityPageSizeAtom);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
@@ -89,6 +79,11 @@ export const CommunityAppsTab = ({
       clearTimeout(handler);
     };
   }, [searchValue]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedValue, categoryFilter, statusFilter, sortOption, pageSize]);
 
   // Apply all filters and sorting
   const filteredAndSortedApps = useMemo(() => {
@@ -127,6 +122,24 @@ export const CommunityAppsTab = ({
     return result;
   }, [communityApps, debouncedValue, categoryFilter, statusFilter, sortOption]);
 
+  // Get apps for current page only
+  const paginatedApps = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredAndSortedApps.slice(startIndex, endIndex);
+  }, [filteredAndSortedApps, currentPage, pageSize]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top of the list when changing pages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (size: PageSize) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  };
+
   return (
     <AppsWidthLimiter>
       {/* Filter Bar */}
@@ -142,47 +155,28 @@ export const CommunityAppsTab = ({
         onStatusChange={setStatusFilter}
       />
 
-      {/* Results Count */}
-      <Box sx={{ marginBottom: '16px' }}>
-        <Typography
-          sx={{
-            fontSize: '14px',
-            color: theme.palette.text.secondary,
-          }}
-        >
-          {t('core:filter.showing_apps', {
-            count: filteredAndSortedApps.length,
-            postProcess: 'capitalizeFirstChar',
-            defaultValue: 'Showing {{count}} apps',
-          })}
-        </Typography>
-      </Box>
-
       {/* Apps Grid */}
-      {filteredAndSortedApps.length > 0 ? (
-        <StyledVirtuosoContainer
-          sx={{
-            height: 'calc(100vh - 380px)',
-          }}
-        >
-          <VirtuosoGrid
-            totalCount={filteredAndSortedApps.length}
-            components={{
-              List: GridContainer as any,
-              Item: GridItemWrapper,
-            }}
-            itemContent={(index) => {
-              const app = filteredAndSortedApps[index];
-              return (
-                <AppCardEnhanced
-                  key={`${app?.service}-${app?.name}`}
-                  app={app}
-                  myName={myName}
-                />
-              );
-            }}
+      {paginatedApps.length > 0 ? (
+        <>
+          <AppsGrid>
+            {paginatedApps.map((app) => (
+              <AppCardEnhanced
+                key={`${app?.service}-${app?.name}`}
+                app={app}
+                myName={myName}
+              />
+            ))}
+          </AppsGrid>
+
+          {/* Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredAndSortedApps.length}
+            pageSize={pageSize}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
           />
-        </StyledVirtuosoContainer>
+        </>
       ) : (
         <Box
           sx={{

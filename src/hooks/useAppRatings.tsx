@@ -208,6 +208,9 @@ const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
 export const useAppRatings = () => {
   const [ratingsStore, setRatingsStore] = useAtom(ratingsStoreAtom);
   const initializedRef = useRef(false);
+  // Use ref to access current store value without causing callback recreation
+  const ratingsStoreRef = useRef(ratingsStore);
+  ratingsStoreRef.current = ratingsStore;
 
   // Initialize: load cache from localStorage
   useEffect(() => {
@@ -220,13 +223,13 @@ export const useAppRatings = () => {
     }
   }, [setRatingsStore]);
 
-  // Fetch a single rating
+  // Fetch a single rating - stable callback that doesn't change on store updates
   const fetchRating = useCallback(
     async (name: string, service: string, forceRefresh = false) => {
       const key = getCacheKey(name, service);
 
-      // Check if already in store and not expired
-      const existing = ratingsStore.get(key);
+      // Check if already in store and not expired (use ref to avoid dependency)
+      const existing = ratingsStoreRef.current.get(key);
       if (
         existing &&
         !forceRefresh &&
@@ -256,14 +259,14 @@ export const useAppRatings = () => {
 
       return null;
     },
-    [ratingsStore, setRatingsStore]
+    [setRatingsStore]
   );
 
-  // Batch fetch multiple ratings
+  // Batch fetch multiple ratings - stable callback
   const batchFetchRatings = useCallback(
     async (keys: string[]) => {
       const keysToFetch = keys.filter((key) => {
-        const existing = ratingsStore.get(key);
+        const existing = ratingsStoreRef.current.get(key);
         // Fetch if not in store, expired, or not currently fetching
         return (
           !pendingRequests.has(key) &&
@@ -300,7 +303,7 @@ export const useAppRatings = () => {
         return next;
       });
     },
-    [ratingsStore, setRatingsStore]
+    [setRatingsStore]
   );
 
   // Initialize observer with batch fetch callback
@@ -368,9 +371,17 @@ export const useAppRating = (name?: string, service?: string) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const registeredRef = useRef(false);
 
-  // Register for visibility-based fetching (or fetch immediately if IO unavailable)
+  const rating = name && service ? getRating(name, service) : null;
+
+  // Register for visibility-based fetching only if not already cached
   useEffect(() => {
     if (!name || !service || registeredRef.current) return;
+
+    // Skip registration if rating is already cached and valid
+    if (rating && Date.now() - rating.lastFetched < RATING_CACHE_TTL) {
+      return;
+    }
+
     registeredRef.current = true;
 
     const cleanup = registerVisibility(containerRef.current, name, service);
@@ -384,9 +395,7 @@ export const useAppRating = (name?: string, service?: string) => {
       cleanup?.();
       registeredRef.current = false;
     };
-  }, [name, service, registerVisibility, fetchRating]);
-
-  const rating = name && service ? getRating(name, service) : null;
+  }, [name, service, rating, registerVisibility, fetchRating]);
 
   const refresh = useCallback(() => {
     if (name && service) {
