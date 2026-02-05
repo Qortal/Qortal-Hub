@@ -93,7 +93,8 @@ export const AppDetailsSection = ({ app }: AppDetailsSectionProps) => {
 
   // Format published date
   const formatDate = (timestamp: number | undefined) => {
-    if (!timestamp) return t('core:unknown', { postProcess: 'capitalizeFirstChar' });
+    if (!timestamp)
+      return t('core:unknown', { postProcess: 'capitalizeFirstChar' });
     const date = new Date(timestamp);
     return date.toLocaleDateString(undefined, {
       year: 'numeric',
@@ -136,7 +137,7 @@ export const AppDetailsSection = ({ app }: AppDetailsSectionProps) => {
 
       <DetailRow>
         <DetailLabel>
-          {t('core:status', { postProcess: 'capitalizeFirstChar' })}
+          {t('core:app_detail.status', { postProcess: 'capitalizeFirstChar' })}
         </DetailLabel>
         <StatusBadge status={statusKey}>
           <StatusDot status={statusKey} />
