@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { atom, useAtom } from 'jotai';
 import { getBaseApiReact } from '../App';
+import { RATING_CACHE_TTL } from '../constants/constants';
+import type { AppRatingData, VoteCount } from '../types/ratings';
 import {
-  RATING_CACHE_TTL,
-  RATING_CACHE_STORAGE_KEY,
-} from '../constants/constants';
-import type {
-  AppRatingData,
-  RatingsCacheStorage,
-  VoteCount,
-} from '../types/ratings';
+  loadRatingsCacheFromDB,
+  saveRatingsCacheToDB,
+} from '../utils/ratingsIndexedDB';
 
 // Jotai atom for centralized ratings store
 const ratingsStoreAtom = atom<Map<string, AppRatingData>>(new Map());
@@ -27,47 +24,6 @@ let batchFetchCallback: ((keys: string[]) => void) | null = null;
 // Generate cache key for an app
 const getCacheKey = (name: string, service: string): string => {
   return `${service.toLowerCase()}-${name.toLowerCase()}`;
-};
-
-// Load cache from localStorage
-const loadCacheFromStorage = (): Map<string, AppRatingData> => {
-  try {
-    const stored = localStorage.getItem(RATING_CACHE_STORAGE_KEY);
-    if (!stored) return new Map();
-
-    const parsed: RatingsCacheStorage = JSON.parse(stored);
-    const now = Date.now();
-    const map = new Map<string, AppRatingData>();
-
-    Object.entries(parsed.ratings).forEach(([key, data]) => {
-      // Only load non-expired entries
-      if (now - data.lastFetched < RATING_CACHE_TTL) {
-        map.set(key, data);
-      }
-    });
-
-    return map;
-  } catch (error) {
-    console.error('Error loading ratings cache:', error);
-    return new Map();
-  }
-};
-
-// Save cache to localStorage (debounced)
-let saveTimeout: ReturnType<typeof setTimeout> | null = null;
-const saveCacheToStorage = (ratings: Map<string, AppRatingData>) => {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    try {
-      const storage: RatingsCacheStorage = {
-        version: 1,
-        ratings: Object.fromEntries(ratings.entries()),
-      };
-      localStorage.setItem(RATING_CACHE_STORAGE_KEY, JSON.stringify(storage));
-    } catch (error) {
-      console.error('Error saving ratings cache:', error);
-    }
-  }, 1000);
 };
 
 // Calculate average rating from vote counts
@@ -212,15 +168,16 @@ export const useAppRatings = () => {
   const ratingsStoreRef = useRef(ratingsStore);
   ratingsStoreRef.current = ratingsStore;
 
-  // Initialize: load cache from localStorage
+  // Initialize: load cache from IndexedDB
   useEffect(() => {
     if (initializedRef.current) return;
     initializedRef.current = true;
 
-    const cached = loadCacheFromStorage();
-    if (cached.size > 0) {
-      setRatingsStore(cached);
-    }
+    loadRatingsCacheFromDB().then((cached) => {
+      if (cached.size > 0) {
+        setRatingsStore(cached);
+      }
+    });
   }, [setRatingsStore]);
 
   // Fetch a single rating - stable callback that doesn't change on store updates
@@ -248,7 +205,7 @@ export const useAppRatings = () => {
           setRatingsStore((prev) => {
             const next = new Map(prev);
             next.set(key, data);
-            saveCacheToStorage(next);
+            saveRatingsCacheToDB(next);
             return next;
           });
           return data;
@@ -299,7 +256,7 @@ export const useAppRatings = () => {
             next.set(key, data);
           }
         });
-        saveCacheToStorage(next);
+        saveRatingsCacheToDB(next);
         return next;
       });
     },
@@ -348,7 +305,7 @@ export const useAppRatings = () => {
       setRatingsStore((prev) => {
         const next = new Map(prev);
         next.delete(key);
-        saveCacheToStorage(next);
+        saveRatingsCacheToDB(next);
         return next;
       });
     },
