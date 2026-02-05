@@ -367,9 +367,7 @@
     "first": "первый",
     "last": "последний",
     "next": "следующий",
-    "per_page": "на странице",
-    "previous": "предыдущий",
-    "showing_range": "показано {{start}}-{{end}} из {{total}}"
+    "previous": "предыдущий"
   },
   "payment_notification": "уведомление о платеже",
   "payment": "оплата",

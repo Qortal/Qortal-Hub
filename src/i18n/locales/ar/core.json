@@ -368,9 +368,7 @@
     "first": "أول",
     "last": "آخر",
     "next": "تالي",
-    "per_page": "لكل صفحة",
-    "previous": "سابق",
-    "showing_range": "عرض {{start}}-{{end}} من {{total}}"
+    "previous": "سابق"
   },
   "payment_notification": "إشعار الدفع",
   "payment": "دفع",

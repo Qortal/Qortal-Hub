@@ -367,9 +367,7 @@
     "first": "primero",
     "last": "último",
     "next": "próximo",
-    "per_page": "por página",
-    "previous": "anterior",
-    "showing_range": "mostrando {{start}}-{{end}} de {{total}}"
+    "previous": "anterior"
   },
   "payment_notification": "notificación de pago",
   "payment": "pago",

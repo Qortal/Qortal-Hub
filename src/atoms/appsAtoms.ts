@@ -6,16 +6,12 @@ export type SortOption = 'alphabetical' | 'newest' | 'oldest';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
-export type PageSize = 10 | 25 | 50;
-
 // Filter atoms
 export const appSortAtom = atomWithReset<SortOption>('newest');
 export const appCategoryFilterAtom = atomWithReset<string>('all');
 export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
 
-// Pagination atoms
-export const communityPageSizeAtom = atomWithReset<PageSize>(10);
 
 // Current tab atom
 export type AppsLibraryTab =
