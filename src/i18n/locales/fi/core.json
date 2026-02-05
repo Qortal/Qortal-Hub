@@ -291,11 +291,13 @@
   "option": "vaihtoehto",
   "option_no": "ei vaihtoehtoja",
   "option_other": "vaihtoehdot",
-  "page": {
-    "last": "viimeinen",
+  "pagination": {
     "first": "ensimmäinen",
+    "last": "viimeinen",
     "next": "seuraava",
-    "previous": "edellinen"
+    "per_page": "per sivu",
+    "previous": "edellinen",
+    "showing_range": "näytetään {{start}}-{{end}} / {{total}}"
   },
   "payment_notification": "maksuilmoitus",
   "payment": "maksu",

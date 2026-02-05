@@ -363,11 +363,13 @@
   "option": "вариант",
   "option_no": "Нет вариантов",
   "option_other": "параметры",
-  "page": {
-    "last": "последний",
+  "pagination": {
     "first": "первый",
+    "last": "последний",
     "next": "следующий",
-    "previous": "предыдущий"
+    "per_page": "на странице",
+    "previous": "предыдущий",
+    "showing_range": "показано {{start}}-{{end}} из {{total}}"
   },
   "payment_notification": "уведомление о платеже",
   "payment": "оплата",
