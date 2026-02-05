@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
-export type PageSize = 10 | 25 | 50;
+export type PageSize = 12 | 24 | 48;
 
 interface PageSizeSelectorProps {
   value: PageSize;
@@ -30,9 +30,12 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   },
 }));
 
-const PAGE_SIZES: PageSize[] = [10, 25, 50];
+const PAGE_SIZES: PageSize[] = [12, 24, 48];
 
-export const PageSizeSelector = ({ value, onChange }: PageSizeSelectorProps) => {
+export const PageSizeSelector = ({
+  value,
+  onChange,
+}: PageSizeSelectorProps) => {
   const { t } = useTranslation(['core']);
 
   const handleChange = (event: SelectChangeEvent<number>) => {
@@ -44,7 +47,6 @@ export const PageSizeSelector = ({ value, onChange }: PageSizeSelectorProps) => 
       <InputLabel id="page-size-select-label">
         {t('core:pagination.per_page', {
           postProcess: 'capitalizeFirstChar',
-          defaultValue: 'Per page',
         })}
       </InputLabel>
       <Select
@@ -53,7 +55,6 @@ export const PageSizeSelector = ({ value, onChange }: PageSizeSelectorProps) => 
         value={value}
         label={t('core:pagination.per_page', {
           postProcess: 'capitalizeFirstChar',
-          defaultValue: 'Per page',
         })}
         onChange={handleChange}
       >
