@@ -364,11 +364,13 @@
   "option": "خيار",
   "option_no": "لا توجد خيارات",
   "option_other": "خيارات",
-  "page": {
-    "last": "آخر",
+  "pagination": {
     "first": "أول",
+    "last": "آخر",
     "next": "تالي",
-    "previous": "سابق"
+    "per_page": "لكل صفحة",
+    "previous": "سابق",
+    "showing_range": "عرض {{start}}-{{end}} من {{total}}"
   },
   "payment_notification": "إشعار الدفع",
   "payment": "دفع",

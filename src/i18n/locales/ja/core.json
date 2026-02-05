@@ -363,11 +363,13 @@
   "option": "オプション",
   "option_no": "オプションはありません",
   "option_other": "オプション",
-  "page": {
+  "pagination": {
+    "first": "最初",
     "last": "最後",
-    "first": "初め",
-    "next": "次",
-    "previous": "前の"
+    "next": "次へ",
+    "per_page": "ページあたり",
+    "previous": "前へ",
+    "showing_range": "{{start}}-{{end}} / {{total}}件を表示"
   },
   "payment_notification": "支払い通知",
   "payment": "支払い",

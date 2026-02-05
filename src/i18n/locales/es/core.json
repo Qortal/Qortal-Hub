@@ -363,11 +363,13 @@
   "option": "opción",
   "option_no": "No hay opciones",
   "option_other": "opción",
-  "page": {
-    "last": "último",
+  "pagination": {
     "first": "primero",
+    "last": "último",
     "next": "próximo",
-    "previous": "anterior"
+    "per_page": "por página",
+    "previous": "anterior",
+    "showing_range": "mostrando {{start}}-{{end}} de {{total}}"
   },
   "payment_notification": "notificación de pago",
   "payment": "pago",

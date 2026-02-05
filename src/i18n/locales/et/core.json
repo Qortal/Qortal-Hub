@@ -363,11 +363,13 @@
   "option": "valik",
   "option_no": "valikuid ei ole",
   "option_other": "valikud",
-  "page": {
-    "last": "viimane",
+  "pagination": {
     "first": "esimene",
+    "last": "viimane",
     "next": "järgmine",
-    "previous": "eelmine"
+    "per_page": "lehe kohta",
+    "previous": "eelmine",
+    "showing_range": "kuvatakse {{start}}-{{end}} / {{total}}"
   },
   "payment_notification": "Saabunud maksed",
   "payment": "makse",
