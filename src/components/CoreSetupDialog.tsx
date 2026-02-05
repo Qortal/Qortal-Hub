@@ -533,7 +533,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
               color="success"
               variant="contained"
             >
-              {t('core:page.next', {
+              {t('core:pagination.next', {
                 postProcess: 'capitalizeFirstChar',
               })}
             </Button>

@@ -57,25 +57,25 @@ const AppTitle = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-const ServiceBadge = styled(Box)<{ serviceType: 'app' | 'website' }>(
-  ({ theme, serviceType }) => ({
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '2px 8px',
-    borderRadius: '4px',
-    fontSize: '12px',
-    fontWeight: 500,
-    backgroundColor:
-      serviceType === 'app'
-        ? theme.palette.primary.main + '20'
-        : theme.palette.secondary.main + '20',
-    color:
-      serviceType === 'app'
-        ? theme.palette.primary.main
-        : theme.palette.secondary.main,
-  })
-);
+const ServiceBadge = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'serviceType',
+})<{ serviceType: 'app' | 'website' }>(({ theme, serviceType }) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  fontSize: '12px',
+  fontWeight: 500,
+  backgroundColor:
+    serviceType === 'app'
+      ? theme.palette.primary.main + '20'
+      : theme.palette.secondary.main + '20',
+  color:
+    serviceType === 'app'
+      ? theme.palette.primary.main
+      : theme.palette.secondary.main,
+}));
 
 const MetaRow = styled(Box)({
   display: 'flex',
@@ -105,12 +105,12 @@ const ActionsRow = styled(Box)({
   borderColor: 'divider',
 });
 
-const ActionButton = styled(Button)(({ theme }) => ({
+const ActionButton = styled(Button)({
   textTransform: 'none',
   fontSize: '13px',
   padding: '6px 16px',
   borderRadius: '8px',
-}));
+});
 
 export const PublishedAppCard = ({
   app,

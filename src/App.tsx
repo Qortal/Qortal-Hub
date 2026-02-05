@@ -2947,7 +2947,7 @@ function App() {
                         setCreationStep(2);
                       }}
                     >
-                      {t('core:page.next', {
+                      {t('core:pagination.next', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </CustomButton>
