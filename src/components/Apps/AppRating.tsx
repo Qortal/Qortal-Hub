@@ -1,7 +1,7 @@
 import { Box, Rating } from '@mui/material';
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useState } from 'react';
 import { getFee } from '../../background/background.ts';
-import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
+import { QORTAL_APP_CONTEXT } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { StarFilledIcon } from '../../assets/Icons/StarFilled';
 import { StarEmptyIcon } from '../../assets/Icons/StarEmpty';
@@ -9,18 +9,12 @@ import { AppInfoUserName } from './Apps-styles';
 import { Spacer } from '../../common/Spacer';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { useAppRating } from '../../hooks/useAppRatings';
 
 export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
-  const [value, setValue] = useState(0);
   const { show } = useContext(QORTAL_APP_CONTEXT);
-  const [hasPublishedRating, setHasPublishedRating] = useState<null | boolean>(
-    null
-  );
-  const [pollInfo, setPollInfo] = useState(null);
-  const [votesInfo, setVotesInfo] = useState(null);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
-  const hasCalledRef = useRef(false);
   const { t } = useTranslation([
     'auth',
     'core',
@@ -29,83 +23,18 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
     'tutorial',
   ]);
 
-  const getRating = useCallback(async (name, service) => {
-    try {
-      hasCalledRef.current = true;
-      const pollName = `app-library-${service}-rating-${name}`;
-      const url = `${getBaseApiReact()}/polls/${pollName}`;
+  // Use centralized rating store with visibility-based fetching
+  const { rating, containerRef, refresh } = useAppRating(
+    app?.name,
+    app?.service
+  );
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const responseData = await response.json();
-      if (responseData?.message?.includes('POLL_NO_EXISTS')) {
-        setHasPublishedRating(false);
-      } else if (responseData?.pollName) {
-        setPollInfo(responseData);
-        setHasPublishedRating(true);
-        const urlVotes = `${getBaseApiReact()}/polls/votes/${pollName}`;
-
-        const responseVotes = await fetch(urlVotes, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const responseDataVotes = await responseVotes.json();
-        setVotesInfo(responseDataVotes);
-        const voteCount = responseDataVotes.voteCounts;
-        // Include initial value vote in the calculation
-        const ratingVotes = voteCount.filter(
-          (vote) => !vote.optionName.startsWith('initialValue-')
-        );
-        const initialValueVote = voteCount.find((vote) =>
-          vote.optionName.startsWith('initialValue-')
-        );
-        if (initialValueVote) {
-          // Convert "initialValue-X" to just "X" and add it to the ratingVotes array
-          const initialRating = parseInt(
-            initialValueVote.optionName.split('-')[1],
-            10
-          );
-          ratingVotes.push({
-            optionName: initialRating.toString(),
-            voteCount: 1,
-          });
-        }
-
-        // Calculate the weighted average
-        let totalScore = 0;
-        let totalVotes = 0;
-
-        ratingVotes.forEach((vote) => {
-          const rating = parseInt(vote.optionName, 10); // Extract rating value (1-5)
-          const count = vote.voteCount;
-          totalScore += rating * count; // Weighted score
-          totalVotes += count; // Total number of votes
-        });
-
-        // Calculate average rating (ensure no division by zero)
-        const averageRating = totalVotes > 0 ? totalScore / totalVotes : 0;
-        setValue(averageRating);
-      }
-    } catch (error) {
-      if (error?.message?.includes('POLL_NO_EXISTS')) {
-        setHasPublishedRating(false);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasCalledRef.current) return;
-    if (!app) return;
-    getRating(app?.name, app?.service);
-  }, [getRating, app?.name]);
+  const value = rating?.averageRating ?? 0;
+  const hasPublishedRating = rating?.hasPublishedRating ?? null;
+  const pollInfo = rating?.pollInfo ?? null;
+  const votesInfo = rating
+    ? { totalVotes: rating.totalVotes, voteCounts: rating.voteCounts }
+    : null;
 
   const rateFunc = async (event, chosenValue, currentValue) => {
     try {
@@ -161,6 +90,8 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                   }),
                 });
                 setOpenSnack(true);
+                // Refresh rating after successful submission
+                refresh();
               }
             })
             .catch((error) => {
@@ -202,6 +133,8 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
                   }),
                 });
                 setOpenSnack(true);
+                // Refresh rating after successful submission
+                refresh();
               }
             })
             .catch((error) => {
@@ -224,7 +157,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   };
 
   return (
-    <div>
+    <div ref={containerRef}>
       <Box
         sx={{
           alignItems: 'center',
