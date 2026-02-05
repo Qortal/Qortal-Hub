@@ -367,9 +367,7 @@
     "first": "esimene",
     "last": "viimane",
     "next": "järgmine",
-    "per_page": "lehe kohta",
-    "previous": "eelmine",
-    "showing_range": "kuvatakse {{start}}-{{end}} / {{total}}"
+    "previous": "eelmine"
   },
   "payment_notification": "Saabunud maksed",
   "payment": "makse",

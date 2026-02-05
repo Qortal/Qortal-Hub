@@ -367,9 +367,7 @@
     "first": "最初",
     "last": "最後",
     "next": "次へ",
-    "per_page": "ページあたり",
-    "previous": "前へ",
-    "showing_range": "{{start}}-{{end}} / {{total}}件を表示"
+    "previous": "前へ"
   },
   "payment_notification": "支払い通知",
   "payment": "支払い",

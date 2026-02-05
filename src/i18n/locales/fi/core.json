@@ -295,9 +295,7 @@
     "first": "ensimmäinen",
     "last": "viimeinen",
     "next": "seuraava",
-    "per_page": "per sivu",
-    "previous": "edellinen",
-    "showing_range": "näytetään {{start}}-{{end}} / {{total}}"
+    "previous": "edellinen"
   },
   "payment_notification": "maksuilmoitus",
   "payment": "maksu",
