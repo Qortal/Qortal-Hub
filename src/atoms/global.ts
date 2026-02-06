@@ -5,28 +5,9 @@ import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
 import { LOCALHOST } from '../constants/constants';
+import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 
-// Atoms (resettable)
-export const sortablePinnedAppsAtom = atomWithReset([
-  { name: 'Q-Tube', service: 'APP' },
-  { name: 'Q-Mail', service: 'APP' },
-  { name: 'Q-Share', service: 'APP' },
-  { name: 'Q-Fund', service: 'APP' },
-  { name: 'Q-Shop', service: 'APP' },
-  { name: 'Q-Trade', service: 'APP' },
-  { name: 'Q-Support', service: 'APP' },
-  { name: 'Q-Manager', service: 'APP' },
-  { name: 'Q-Blog', service: 'APP' },
-  { name: 'Q-Mintership', service: 'APP' },
-  { name: 'Q-Wallets', service: 'APP' },
-  { name: 'Q-Search', service: 'APP' },
-  { name: 'Q-Node', service: 'APP' },
-  { name: 'Names', service: 'APP' },
-  { name: 'Q-Follow', service: 'APP' },
-  { name: 'Q-Assets', service: 'APP' },
-  { name: 'Quitter', service: 'APP' },
-]);
-
+export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 export const addressInfoControllerAtom = atomWithReset({});
 export const blobControllerAtom = atomWithReset({});
 export const canSaveSettingToQdnAtom = atomWithReset(false);
@@ -57,16 +38,13 @@ export const settingsLocalLastUpdatedAtom = atomWithReset(0);
 export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
 export const txListAtom = atomWithReset([]);
-
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
-
 export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');
 export const extStateAtom = atomWithReset<extStates>('not-authenticated');
 export const userInfoAtom = atomWithReset<any>(null);
 export const rawWalletAtom = atomWithReset<any>(null);
 export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
-
 export const balanceAtom = atomWithReset<any>(null);
 export const qortBalanceLoadingAtom = atomWithReset<boolean>(false);
 export const isOpenDialogResetApikey = atomWithReset<boolean>(false);
