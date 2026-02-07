@@ -164,13 +164,16 @@ export const AppsLibraryDesktop = ({
         sx={{
           alignItems: 'center',
           flex: 1,
+          overflow: 'hidden',
           padding: '0px',
         }}
       >
         <AppsDesktopLibraryBody
           sx={{
-            flexGrow: 'unset',
+            flex: 1,
             maxWidth: '1500px',
+            minHeight: 0,
+            overflow: 'auto',
             width: '90%',
           }}
         >

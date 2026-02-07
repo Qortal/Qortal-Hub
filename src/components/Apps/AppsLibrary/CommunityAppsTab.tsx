@@ -136,7 +136,7 @@ export const CommunityAppsTab = ({
   }, [communityApps, debouncedValue, categoryFilter, statusFilter, sortOption]);
 
   return (
-    <AppsWidthLimiter>
+    <AppsWidthLimiter sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Filter Bar */}
       <FilterBar
         searchValue={searchValue}
@@ -153,7 +153,7 @@ export const CommunityAppsTab = ({
       {/* Apps Grid with Virtualization */}
       {filteredAndSortedApps.length > 0 ? (
         <VirtuosoGrid
-          style={{ height: 'calc(100vh - 250px)', width: '100%' }}
+          style={{ flex: 1, minHeight: 0, width: '100%' }}
           totalCount={filteredAndSortedApps.length}
           components={gridComponents}
           itemContent={(index) => {
