@@ -21,6 +21,9 @@ const pendingFetches = new Set<string>();
 let batchTimeout: ReturnType<typeof setTimeout> | null = null;
 let batchFetchCallback: ((keys: string[]) => void) | null = null;
 
+// Map from lowercased cache key to original name/service (preserves casing for API calls)
+const keyToOriginalCase = new Map<string, { name: string; service: string }>();
+
 // Generate cache key for an app
 const getCacheKey = (name: string, service: string): string => {
   return `${service.toLowerCase()}-${name.toLowerCase()}`;
@@ -184,6 +187,7 @@ export const useAppRatings = () => {
   const fetchRating = useCallback(
     async (name: string, service: string, forceRefresh = false) => {
       const key = getCacheKey(name, service);
+      keyToOriginalCase.set(key, { name, service });
 
       // Check if already in store and not expired (use ref to avoid dependency)
       const existing = ratingsStoreRef.current.get(key);
@@ -236,8 +240,9 @@ export const useAppRatings = () => {
       // Fetch all in parallel
       const results = await Promise.all(
         keysToFetch.map(async (key) => {
-          const [service, ...nameParts] = key.split('-');
-          const name = nameParts.join('-');
+          const original = keyToOriginalCase.get(key);
+          if (!original) return { key, data: null };
+          const { name, service } = original;
           pendingRequests.add(key);
           try {
             const data = await fetchRatingFromAPI(name, service);
@@ -278,6 +283,7 @@ export const useAppRatings = () => {
       if (!element || !sharedObserver) return undefined;
 
       const key = getCacheKey(name, service);
+      keyToOriginalCase.set(key, { name, service });
       observedElements.set(element, key);
       sharedObserver.observe(element);
 
