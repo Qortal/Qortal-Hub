@@ -153,7 +153,14 @@ export const CommunityAppsTab = ({
       {/* Apps Grid with Virtualization */}
       {filteredAndSortedApps.length > 0 ? (
         <VirtuosoGrid
-          style={{ flex: 1, minHeight: 0, width: '100%' }}
+          style={{
+            flex: 1,
+            minHeight: 0,
+            width: '100%',
+            msOverflowStyle: 'none',
+            overflow: 'auto',
+            scrollbarWidth: 'none',
+          }}
           totalCount={filteredAndSortedApps.length}
           components={gridComponents}
           itemContent={(index) => {
