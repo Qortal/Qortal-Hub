@@ -164,7 +164,6 @@ export const AppsLibraryDesktop = ({
         sx={{
           alignItems: 'center',
           flex: 1,
-          overflow: 'auto',
           padding: '0px',
         }}
       >
