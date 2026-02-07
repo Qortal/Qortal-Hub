@@ -364,9 +364,9 @@
   "option": "خيار",
   "option_no": "لا توجد خيارات",
   "option_other": "خيارات",
-  "page": {
-    "last": "آخر",
+  "pagination": {
     "first": "أول",
+    "last": "آخر",
     "next": "تالي",
     "previous": "سابق"
   },

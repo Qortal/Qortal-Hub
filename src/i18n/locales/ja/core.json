@@ -363,11 +363,11 @@
   "option": "オプション",
   "option_no": "オプションはありません",
   "option_other": "オプション",
-  "page": {
+  "pagination": {
+    "first": "最初",
     "last": "最後",
-    "first": "初め",
-    "next": "次",
-    "previous": "前の"
+    "next": "次へ",
+    "previous": "前へ"
   },
   "payment_notification": "支払い通知",
   "payment": "支払い",

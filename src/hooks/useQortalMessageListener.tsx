@@ -695,7 +695,7 @@ export const useQortalMessageListener = (
         setPath(pathUrl);
         if (appName?.toLowerCase() === 'q-mail') {
           window.sendMessage('addEnteredQmailTimestamp').catch((error) => {
-            // TODO print error
+            console.error(error);
           });
         } else if (appName?.toLowerCase() === 'q-wallets') {
           executeEvent('setLastEnteredTimestampPaymentEvent', {});

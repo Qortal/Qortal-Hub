@@ -362,9 +362,9 @@
   "option": "opzione",
   "option_no": "nessuna opzione",
   "option_other": "opzioni",
-  "page": {
-    "last": "ultima",
+  "pagination": {
     "first": "prima",
+    "last": "ultima",
     "next": "prossima",
     "previous": "precedente"
   },

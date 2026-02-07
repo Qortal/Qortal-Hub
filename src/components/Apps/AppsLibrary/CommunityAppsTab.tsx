@@ -1,38 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, styled, useTheme } from '@mui/material';
+import { useEffect, useMemo, useState, forwardRef, ComponentType } from 'react';
+import { Box, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { VirtuosoGrid } from 'react-virtuoso';
 import { useAtom } from 'jotai';
+import { VirtuosoGrid, GridComponents } from 'react-virtuoso';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
 import { FilterBar, SortOption, StatusFilterOption } from '../Filters';
 import { officialAppList } from '../config/officialApps';
 import { appSortAtom } from '../../../atoms/appsAtoms';
 
-const GridContainer = styled('div')({
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-  gap: '16px',
-  width: '100%',
-  paddingBottom: '20px',
-});
-
-const GridItemWrapper = styled('div')({
-  display: 'flex',
-});
-
-const StyledVirtuosoContainer = styled('div')({
-  position: 'relative',
-  width: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  '::-webkit-scrollbar': {
-    width: '0px',
-    height: '0px',
-  },
-  scrollbarWidth: 'none',
-  msOverflowStyle: 'none',
-});
+const CARD_MIN_WIDTH = 320;
+const GRID_GAP = 16;
 
 interface CommunityAppsTabProps {
   availableQapps: any[];
@@ -58,6 +36,36 @@ const sortApps = (apps: any[], sortOption: SortOption): any[] => {
     default:
       return sorted;
   }
+};
+
+// Virtuoso grid components
+const gridComponents: GridComponents = {
+  List: forwardRef(({ style, children, ...props }, ref) => (
+    <Box
+      ref={ref}
+      {...props}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: `repeat(auto-fill, minmax(${CARD_MIN_WIDTH}px, 1fr))`,
+        gap: `${GRID_GAP}px`,
+        width: '100%',
+        paddingBottom: '20px',
+        ...style,
+      }}
+    >
+      {children}
+    </Box>
+  )) as ComponentType,
+  Item: ({ children, ...props }) => (
+    <Box
+      {...props}
+      style={{
+        width: '100%',
+      }}
+    >
+      {children}
+    </Box>
+  ),
 };
 
 export const CommunityAppsTab = ({
@@ -142,47 +150,24 @@ export const CommunityAppsTab = ({
         onStatusChange={setStatusFilter}
       />
 
-      {/* Results Count */}
-      <Box sx={{ marginBottom: '16px' }}>
-        <Typography
-          sx={{
-            fontSize: '14px',
-            color: theme.palette.text.secondary,
-          }}
-        >
-          {t('core:filter.showing_apps', {
-            count: filteredAndSortedApps.length,
-            postProcess: 'capitalizeFirstChar',
-            defaultValue: 'Showing {{count}} apps',
-          })}
-        </Typography>
-      </Box>
-
-      {/* Apps Grid */}
+      {/* Apps Grid with Virtualization */}
       {filteredAndSortedApps.length > 0 ? (
-        <StyledVirtuosoContainer
-          sx={{
-            height: 'calc(100vh - 380px)',
+        <VirtuosoGrid
+          style={{ height: 'calc(100vh - 250px)', width: '100%' }}
+          totalCount={filteredAndSortedApps.length}
+          components={gridComponents}
+          itemContent={(index) => {
+            const app = filteredAndSortedApps[index];
+            return (
+              <AppCardEnhanced
+                key={`${app?.service}-${app?.name}`}
+                app={app}
+                myName={myName}
+              />
+            );
           }}
-        >
-          <VirtuosoGrid
-            totalCount={filteredAndSortedApps.length}
-            components={{
-              List: GridContainer as any,
-              Item: GridItemWrapper,
-            }}
-            itemContent={(index) => {
-              const app = filteredAndSortedApps[index];
-              return (
-                <AppCardEnhanced
-                  key={`${app?.service}-${app?.name}`}
-                  app={app}
-                  myName={myName}
-                />
-              );
-            }}
-          />
-        </StyledVirtuosoContainer>
+          overscan={200}
+        />
       ) : (
         <Box
           sx={{
