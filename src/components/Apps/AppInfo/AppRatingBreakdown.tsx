@@ -125,17 +125,21 @@ export const AppRatingBreakdown = ({
     // Build counts for ratings 1-5
     const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
 
+    // Process regular votes first, then add initial value on top
+    // (order matters: initialValue uses +=, regular uses =)
     voteCounts.forEach((vote) => {
-      if (vote.optionName.startsWith('initialValue-')) {
-        // Add initial value as a vote
-        const initialRating = parseInt(vote.optionName.split('-')[1], 10);
-        if (initialRating >= 1 && initialRating <= 5) {
-          counts[initialRating] += 1;
-        }
-      } else {
+      if (!vote.optionName.startsWith('initialValue-')) {
         const ratingValue = parseInt(vote.optionName, 10);
         if (ratingValue >= 1 && ratingValue <= 5) {
           counts[ratingValue] = vote.voteCount;
+        }
+      }
+    });
+    voteCounts.forEach((vote) => {
+      if (vote.optionName.startsWith('initialValue-')) {
+        const initialRating = parseInt(vote.optionName.split('-')[1], 10);
+        if (initialRating >= 1 && initialRating <= 5) {
+          counts[initialRating] += 1;
         }
       }
     });
