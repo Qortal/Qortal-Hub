@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "develop"
+  pull_request_target:
+    branches:
+      - "**"
   pull_request:
     branches:
       - master
