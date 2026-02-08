@@ -1,16 +1,16 @@
 name: NPM Tests
 
 on:
+  push:
+    branches:
+      - "develop"
   pull_request:
     branches:
       - master
       - develop
       - "feature/**"
-  pull_request_target:
-    types: [opened, synchronize, reopened]
-
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
