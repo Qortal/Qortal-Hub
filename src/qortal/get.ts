@@ -8492,9 +8492,6 @@ export const cleanupEncryptedMedia = async (data, isFromExtension, appInfo) => {
 export const cleanupEncryptedMediaByTabId = async (tabId: string) => {
   const mediaIds = mediaIdsByTabId.get(tabId);
   if (!mediaIds || mediaIds.size === 0) {
-    console.log(
-      `[cleanupEncryptedMediaByTabId] No media to cleanup for tabId ${tabId}`
-    );
     return { success: true, cleanedCount: 0 };
   }
 
