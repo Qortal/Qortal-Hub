@@ -159,7 +159,7 @@ export const CommunityAppsTab = ({
             width: '100%',
             msOverflowStyle: 'none',
             overflow: 'auto',
-            scrollbarWidth: 'none',
+            scrollbarWidth: 'auto',
           }}
           totalCount={filteredAndSortedApps.length}
           components={gridComponents}
