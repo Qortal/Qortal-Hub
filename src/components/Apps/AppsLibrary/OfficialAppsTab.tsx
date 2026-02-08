@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
-import { officialAppList } from '../config/officialApps';
+import { isFeaturedApp, officialAppList } from '../config/officialApps';
 import { useAppRatings } from '../../../hooks/useAppRatings';
 
 const AppsGrid = styled(Box)({
@@ -56,28 +56,25 @@ export const OfficialAppsTab = ({
     });
   }, [officialApps, fetchRating]);
 
-  // Get top 4 apps by rating for the featured section
+  // Get featured apps sorted by rating
   const featuredApps = useMemo(() => {
-    // Sort by average rating (highest first), then by rating count
-    const sortedApps = [...officialApps].sort((a, b) => {
-      const ratingA = getRating(a.name, a.service);
-      const ratingB = getRating(b.name, b.service);
+    return officialApps
+      .filter((app) => isFeaturedApp(app.name))
+      .sort((a, b) => {
+        const ratingA = getRating(a.name, a.service);
+        const ratingB = getRating(b.name, b.service);
 
-      const avgA = ratingA?.averageRating || 0;
-      const avgB = ratingB?.averageRating || 0;
+        const avgA = ratingA?.averageRating || 0;
+        const avgB = ratingB?.averageRating || 0;
 
-      // Primary sort by average rating
-      if (avgB !== avgA) {
-        return avgB - avgA;
-      }
+        if (avgB !== avgA) {
+          return avgB - avgA;
+        }
 
-      // Secondary sort by rating count
-      const countA = ratingA?.totalVotes || 0;
-      const countB = ratingB?.totalVotes || 0;
-      return countB - countA;
-    });
-
-    return sortedApps.slice(0, 4);
+        const countA = ratingA?.totalVotes || 0;
+        const countB = ratingB?.totalVotes || 0;
+        return countB - countA;
+      });
   }, [officialApps, getRating, ratingsStore]);
 
   return (
