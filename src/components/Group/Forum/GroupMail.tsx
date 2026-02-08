@@ -801,7 +801,7 @@ export const GroupMail = ({
                       fontSize: '12px',
                     }}
                   >
-                    {t('core:page.last', {
+                    {t('core:pagination.last', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>

@@ -364,9 +364,9 @@
   "option": "opção",
   "option_no": "sem opção",
   "option_other": "opções",
-  "page": {
-    "last": "última",
+  "pagination": {
     "first": "primeira",
+    "last": "última",
     "next": "próxima",
     "previous": "anterior"
   },

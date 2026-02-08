@@ -3,6 +3,7 @@ export {
   officialAppList,
   isOfficialApp,
   isFeaturedApp,
+  defaultPinnedApps,
 } from './officialApps';
 
 export {

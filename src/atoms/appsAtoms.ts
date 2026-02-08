@@ -12,6 +12,7 @@ export const appCategoryFilterAtom = atomWithReset<string>('all');
 export const appStatusFilterAtom = atomWithReset<StatusFilterOption>('all');
 export const appSearchQueryAtom = atomWithReset<string>('');
 
+
 // Current tab atom
 export type AppsLibraryTab =
   | 'categories'

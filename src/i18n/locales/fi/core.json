@@ -292,9 +292,9 @@
   "option": "vaihtoehto",
   "option_no": "ei vaihtoehtoja",
   "option_other": "vaihtoehdot",
-  "page": {
-    "last": "viimeinen",
+  "pagination": {
     "first": "ensimmäinen",
+    "last": "viimeinen",
     "next": "seuraava",
     "previous": "edellinen"
   },

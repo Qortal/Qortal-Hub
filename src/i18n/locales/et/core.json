@@ -364,9 +364,9 @@
   "option": "valik",
   "option_no": "valikuid ei ole",
   "option_other": "valikud",
-  "page": {
-    "last": "viimane",
+  "pagination": {
     "first": "esimene",
+    "last": "viimane",
     "next": "järgmine",
     "previous": "eelmine"
   },

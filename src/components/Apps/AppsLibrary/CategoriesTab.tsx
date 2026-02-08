@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { Box, styled } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
-import { Spacer } from '../../../common/Spacer';
+import { AppsWidthLimiter } from '../Apps-styles';
 import { executeEvent } from '../../../utils/events';
 import { CategoryCard } from '../Categories';
 
