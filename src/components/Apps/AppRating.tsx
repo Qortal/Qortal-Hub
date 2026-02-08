@@ -168,8 +168,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         {ratingCountPosition === 'top' && (
           <>
             <AppInfoUserName>
-              {(votesInfo?.totalVotes ?? 0) +
-                (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}{' '}
+              {votesInfo?.totalVotes ?? 0}
               {' RATINGS'}
             </AppInfoUserName>
 
@@ -195,8 +194,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
         />
         {ratingCountPosition === 'right' && (
           <AppInfoUserName>
-            {(votesInfo?.totalVotes ?? 0) +
-              (votesInfo?.voteCounts?.length === 6 ? 1 : 0)}
+            {votesInfo?.totalVotes ?? 0}
           </AppInfoUserName>
         )}
       </Box>

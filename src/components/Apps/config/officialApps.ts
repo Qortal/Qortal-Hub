@@ -15,23 +15,23 @@ export const officialAppsConfig = {
 
   // All official apps with metadata
   all: [
-    { name: 'Q-Tube', icon: 'video', featured: true },
     { name: 'Q-Blog', icon: 'article', featured: true },
     { name: 'Q-Mail', icon: 'mail', featured: true },
     { name: 'Q-Trade', icon: 'swap', featured: true },
-    { name: 'Q-Shop', icon: 'shopping', featured: true },
-    { name: 'Q-Share', icon: 'share' },
-    { name: 'Q-Support', icon: 'support' },
+    { name: 'Q-Tube', icon: 'video', featured: true },
+    { name: 'Q-Wallets', icon: 'wallet', featured: true },
+    { name: 'Quitter', icon: 'social', featured: true },
+    { name: 'Names', icon: 'badge' },
+    { name: 'Q-Assets', icon: 'assets' },
+    { name: 'Q-Follow', icon: 'follow' },
     { name: 'Q-Fund', icon: 'fund' },
     { name: 'Q-Manager', icon: 'settings' },
     { name: 'Q-Mintership', icon: 'mint' },
-    { name: 'Q-Wallets', icon: 'wallet' },
-    { name: 'Q-Search', icon: 'search' },
     { name: 'Q-Node', icon: 'node' },
-    { name: 'Names', icon: 'badge' },
-    { name: 'Q-Follow', icon: 'follow' },
-    { name: 'Q-Assets', icon: 'assets' },
-    { name: 'Quitter', icon: 'social' },
+    { name: 'Q-Search', icon: 'search' },
+    { name: 'Q-Share', icon: 'share' },
+    { name: 'Q-Shop', icon: 'shopping' },
+    { name: 'Q-Support', icon: 'support' },
   ] as OfficialAppConfig[],
 };
 

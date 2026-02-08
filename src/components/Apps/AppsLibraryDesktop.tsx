@@ -164,15 +164,22 @@ export const AppsLibraryDesktop = ({
         sx={{
           alignItems: 'center',
           flex: 1,
-          overflow: 'auto',
+          overflow: 'hidden',
           padding: '0px',
         }}
       >
         <AppsDesktopLibraryBody
           sx={{
-            flexGrow: 'unset',
+            flex: 1,
             maxWidth: '1500px',
+            minHeight: 0,
+            msOverflowStyle: 'none',
+            overflow: 'auto',
+            scrollbarWidth: 'none',
             width: '90%',
+            '&::-webkit-scrollbar': {
+              display: 'none',
+            },
           }}
         >
           {/* Tab Content */}
