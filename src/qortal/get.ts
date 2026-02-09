@@ -4071,6 +4071,83 @@ export const getCrossChainServerInfo = async (data) => {
   }
 };
 
+export const startCrossChainServer = async (
+  data,
+  isFromExtension?: boolean,
+  appInfo?: { tabId?: number; name?: string }
+) => {
+  const isGateway = await isRunningGateway();
+  if (isGateway) {
+    throw new Error(
+      i18n.t('question:message.generic.no_action_public_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+  // Require authenticated session (START_CROSSCHAIN_SERVER is in AUTO_GRANTED_PERMISSIONS_ON_AUTH)
+  const hasPermission =
+    appInfo?.tabId &&
+    appInfo?.name &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'START_CROSSCHAIN_SERVER'
+    );
+  if (!hasPermission) {
+    throw new Error('User not authenticated');
+  }
+  const requiredFields = ['coin'];
+  const missingFields: string[] = [];
+  requiredFields.forEach((field) => {
+    if (!data[field]) {
+      missingFields.push(field);
+    }
+  });
+  if (missingFields.length > 0) {
+    const missingFieldsString = missingFields.join(', ');
+    const errorMsg = i18n.t('question:message.error.missing_fields', {
+      fields: missingFieldsString,
+      postProcess: 'capitalizeFirstChar',
+    });
+    throw new Error(errorMsg);
+  }
+  const coin = data.coin.toLowerCase();
+  const url = `/crosschain/${coin}/start`;
+  try {
+    const endpoint = await createEndpoint(url);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Accept: '*/*',
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok)
+      throw new Error(
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    let res;
+    try {
+      res = await response.clone().json();
+    } catch (e) {
+      res = await response.text();
+    }
+    if (res?.error && res?.message) {
+      throw new Error(res.message);
+    }
+    return res;
+  } catch (error) {
+    throw new Error(
+      error?.message ||
+        i18n.t('question:message.error.fetch_generic', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
+  }
+};
+
 export const getTxActivitySummary = async (data) => {
   const requiredFields = ['coin'];
   const missingFields: string[] = [];
