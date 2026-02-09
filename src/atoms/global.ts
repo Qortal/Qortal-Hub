@@ -5,6 +5,7 @@ import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
 import { LOCALHOST } from '../constants/constants';
+import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
@@ -33,6 +34,9 @@ export const promotionsAtom = atomWithReset([]);
 export const promotionTimeIntervalAtom = atomWithReset(0);
 export const qMailLastEnteredTimestampAtom = atomWithReset(null);
 export const resourceDownloadControllerAtom = atomWithReset({});
+export const globalDownloadsAtom = atomWithReset<
+  Record<string, GlobalDownloadEntry>
+>({});
 export const selectedGroupIdAtom = atomWithReset(null);
 export const settingsLocalLastUpdatedAtom = atomWithReset(0);
 export const settingsQDNLastUpdatedAtom = atomWithReset(-100);

@@ -128,6 +128,7 @@
   "contact_other": "yhteystiedot",
   "core": {
     "block_height": "lohkon korkeus",
+    "data_peers": "QDN (data) vertaiset",
     "information": "ytimen tiedot",
     "peers": "yhdistetyt vertaiset",
     "version": "ytimen versio"

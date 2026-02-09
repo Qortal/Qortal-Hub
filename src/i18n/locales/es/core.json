@@ -128,6 +128,7 @@
   "contact_other": "contactos",
   "core": {
     "block_height": "altura de bloque",
+    "data_peers": "compañeros QDN (datos)",
     "information": "información central",
     "peers": "compañeros conectados",
     "version": "versión central"
