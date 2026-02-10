@@ -115,15 +115,20 @@
   "app_service_type": "Тип службы приложений",
   "apps_dashboard": "приложения панель панели",
   "apps_official": "официальные приложения",
+  "official_apps": {
+    "featured": "рекомендуемые",
+    "all_apps": "все официальные приложения",
+    "view_all": "показать все"
+  },
   "attachment": "вложение",
   "balance": "баланс:",
   "category": "категория",
-  "category_other": "категории",
   "chat": "чат",
   "comment_other": "Комментарии",
   "contact_other": "контакты",
   "core": {
     "block_height": "высота блока",
+    "data_peers": "QDN (данные) узлы",
     "information": "Основная информация",
     "peers": "Подключенные сверстники",
     "version": "Основная версия"
@@ -131,6 +136,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "девчонка",
   "dev_mode": "разработчик режим",
+  "developer": {
+    "no_apps_yet": "вы ещё не опубликовали ни одного приложения",
+    "no_sites_yet": "вы ещё не опубликовали ни одного сайта",
+    "publish_app": "опубликовать приложение",
+    "publish_new": "опубликовать новое",
+    "publish_site": "опубликовать сайт",
+    "update": "обновить",
+    "view_stats": "посмотреть статистику",
+    "your_published_apps": "ваши опубликованные приложения",
+    "your_published_websites": "ваши опубликованные сайты"
+  },
   "domain": "домен",
   "ui": {
     "version": "версия пользовательского интерфейса"
@@ -348,9 +364,9 @@
   "option": "вариант",
   "option_no": "Нет вариантов",
   "option_other": "параметры",
-  "page": {
-    "last": "последний",
+  "pagination": {
     "first": "первый",
+    "last": "последний",
     "next": "следующий",
     "previous": "предыдущий"
   },
@@ -367,13 +383,50 @@
     "q_sandbox": "Q-SANDBOX",
     "q_wallets": "Q-Wallet"
   },
+  "app_detail": {
+    "about": "о приложении",
+    "by_developer": "от @{{developer}}",
+    "category": "категория",
+    "details": "подробности",
+    "published": "опубликовано",
+    "ratings": "оценки",
+    "ratings_count": "{{count}} оценок",
+    "rate_this_app": "оценить это приложение",
+    "service": "сервис",
+    "status": "статус",
+    "status_ready": "готово (установлено)",
+    "status_not_installed": "не установлено",
+    "tags": "теги"
+  },
+  "filter": {
+    "all": "все",
+    "category": "категория",
+    "installed": "установлено",
+    "not_installed": "не установлено",
+    "showing_apps": "показано {{count}} приложений",
+    "sort_by": "сортировать по",
+    "status": "статус"
+  },
   "receiver": "приемник",
   "sender": "отправитель",
   "server": "сервер",
   "service_type": "тип обслуживания",
   "settings": "настройки",
   "sort": {
-    "by_member": "членом"
+    "alphabetical": "по алфавиту",
+    "by_member": "членом",
+    "newest": "новейшие",
+    "oldest": "старейшие",
+    "recently_updated": "недавно обновлённые"
+  },
+  "tabs": {
+    "categories": "категории",
+    "community_apps": "приложения сообщества",
+    "my_apps": "мои приложения",
+    "official_apps": "официальные приложения"
+  },
+  "aria": {
+    "apps_library_tabs": "вкладки навигации библиотеки приложений"
   },
   "supply": "поставлять",
   "tags": "теги",
@@ -401,6 +454,7 @@
   "title": "заголовок",
   "to": "к",
   "tutorial": "Учебник",
+  "unknown": "неизвестно",
   "url": "URL",
   "user_lookup": "Посмотреть пользователя",
   "video_embed": "Видео встроено",

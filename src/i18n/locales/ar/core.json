@@ -115,15 +115,20 @@
   "app_service_type": "نوع خدمة التطبيق",
   "apps_dashboard": "لوحة التطبيقات",
   "apps_official": "تطبيقات رسمية",
+  "official_apps": {
+    "featured": "مميزة",
+    "all_apps": "جميع التطبيقات الرسمية",
+    "view_all": "عرض الكل"
+  },
   "attachment": "مرفق",
   "balance": "الرصيد:",
   "category": "فئة",
-  "category_other": "فئات",
   "chat": "دردشة",
   "comment_other": "تعليقات",
   "contact_other": "اتصالات",
   "core": {
     "block_height": "رقم البلوك",
+    "data_peers": "أقران QDN (البيانات)",
     "information": "معلومات السرفر",
     "peers": "السيرفرات المتصلة",
     "version": "نسخة السرفر"
@@ -131,6 +136,17 @@
   "current_language": "اللغة الحالية: {{ language }}",
   "dev": "ديف",
   "dev_mode": "وضع المطور",
+  "developer": {
+    "no_apps_yet": "لم تنشر أي تطبيقات بعد",
+    "no_sites_yet": "لم تنشر أي مواقع بعد",
+    "publish_app": "نشر تطبيق",
+    "publish_new": "نشر جديد",
+    "publish_site": "نشر موقع",
+    "update": "تحديث",
+    "view_stats": "عرض الإحصائيات",
+    "your_published_apps": "تطبيقاتك المنشورة",
+    "your_published_websites": "مواقعك المنشورة"
+  },
   "domain": "دومين",
   "ui": {
     "version": "نسخة الواجهة"
@@ -349,9 +365,9 @@
   "option": "خيار",
   "option_no": "لا توجد خيارات",
   "option_other": "خيارات",
-  "page": {
-    "last": "آخر",
+  "pagination": {
     "first": "أول",
+    "last": "آخر",
     "next": "تالي",
     "previous": "سابق"
   },
@@ -368,13 +384,50 @@
     "q_sandbox": "ساحة تطوير Q",
     "q_wallets": "محافظ Q"
   },
+  "app_detail": {
+    "about": "حول",
+    "by_developer": "بواسطة @{{developer}}",
+    "category": "الفئة",
+    "details": "التفاصيل",
+    "published": "تم النشر",
+    "ratings": "تقييمات",
+    "ratings_count": "{{count}} تقييمات",
+    "rate_this_app": "قيم هذا التطبيق",
+    "service": "الخدمة",
+    "status": "الحالة",
+    "status_ready": "جاهز (مثبت)",
+    "status_not_installed": "غير مثبت",
+    "tags": "الوسوم"
+  },
+  "filter": {
+    "all": "الكل",
+    "category": "الفئة",
+    "installed": "مثبت",
+    "not_installed": "غير مثبت",
+    "showing_apps": "عرض {{count}} تطبيقات",
+    "sort_by": "ترتيب حسب",
+    "status": "الحالة"
+  },
   "receiver": "المستقبِل",
   "sender": "المرسِل",
   "server": "الخادم",
   "service_type": "نوع الخدمة",
   "settings": "الإعدادات",
   "sort": {
-    "by_member": "بواسطة العضو"
+    "alphabetical": "أبجدي",
+    "by_member": "بواسطة العضو",
+    "newest": "الأحدث",
+    "oldest": "الأقدم",
+    "recently_updated": "تم تحديثها مؤخراً"
+  },
+  "tabs": {
+    "categories": "الفئات",
+    "community_apps": "تطبيقات المجتمع",
+    "my_apps": "تطبيقاتي",
+    "official_apps": "التطبيقات الرسمية"
+  },
+  "aria": {
+    "apps_library_tabs": "علامات تبويب التنقل في مكتبة التطبيقات"
   },
   "supply": "العرض",
   "tags": "الوسوم",
@@ -404,6 +457,7 @@
   "title": "العنوان",
   "to": "إلى",
   "tutorial": "برنامج تعليمي",
+  "unknown": "غير معروف",
   "url": "رابط",
   "user_lookup": "بحث عن المستخدم",
   "video_embed": "تضمين فيديو",

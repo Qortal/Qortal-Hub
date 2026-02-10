@@ -115,15 +115,20 @@
   "app_service_type": "rakenduse teenuse tüüp",
   "apps_dashboard": "rakenduste juhtpaneel",
   "apps_official": "ametlikud rakendused",
+  "official_apps": {
+    "featured": "esiletõstetud",
+    "all_apps": "kõik ametlikud rakendused",
+    "view_all": "vaata kõiki"
+  },
   "attachment": "manus",
   "balance": "saldo:",
   "category": "kategooria",
-  "category_other": "kategooriad",
   "chat": "vestlus",
   "comment_other": "kommentaarid",
   "contact_other": "kontaktid",
   "core": {
     "block_height": "ploki kõrgus",
+    "data_peers": "QDN (andmed) sõlmed",
     "information": "Sõlme info",
     "peers": "ühendatud sõlmed",
     "version": "Sõlme versioon"
@@ -131,6 +136,17 @@
   "current_language": "praegune keel: {{ language }}",
   "dev": "arendus",
   "dev_mode": "arendusrežiim",
+  "developer": {
+    "no_apps_yet": "te pole veel ühtegi rakendust avaldanud",
+    "no_sites_yet": "te pole veel ühtegi veebilehte avaldanud",
+    "publish_app": "avalda rakendus",
+    "publish_new": "avalda uus",
+    "publish_site": "avalda veebileht",
+    "update": "uuenda",
+    "view_stats": "vaata statistikat",
+    "your_published_apps": "teie avaldatud rakendused",
+    "your_published_websites": "teie avaldatud veebilehed"
+  },
   "domain": "domeen",
   "ui": {
     "version": "UI versioon"
@@ -348,9 +364,9 @@
   "option": "valik",
   "option_no": "valikuid ei ole",
   "option_other": "valikud",
-  "page": {
-    "last": "viimane",
+  "pagination": {
     "first": "esimene",
+    "last": "viimane",
     "next": "järgmine",
     "previous": "eelmine"
   },
@@ -367,13 +383,50 @@
     "q_sandbox": "q-sandbox",
     "q_wallets": "q-walletid"
   },
+  "app_detail": {
+    "about": "teave",
+    "by_developer": "@{{developer}} poolt",
+    "category": "kategooria",
+    "details": "üksikasjad",
+    "published": "avaldatud",
+    "ratings": "hinnangud",
+    "ratings_count": "{{count}} hinnangut",
+    "rate_this_app": "hinda seda rakendust",
+    "service": "teenus",
+    "status": "olek",
+    "status_ready": "valmis (paigaldatud)",
+    "status_not_installed": "paigaldamata",
+    "tags": "sildid"
+  },
+  "filter": {
+    "all": "kõik",
+    "category": "kategooria",
+    "installed": "paigaldatud",
+    "not_installed": "paigaldamata",
+    "showing_apps": "kuvatakse {{count}} rakendust",
+    "sort_by": "sorteeri",
+    "status": "olek"
+  },
   "receiver": "saaja",
   "sender": "saatja",
   "server": "server",
   "service_type": "teenuse tüüp",
   "settings": "seaded",
   "sort": {
-    "by_member": "liikme järgi"
+    "alphabetical": "tähestikuline",
+    "by_member": "liikme järgi",
+    "newest": "uusimad",
+    "oldest": "vanimad",
+    "recently_updated": "hiljuti uuendatud"
+  },
+  "tabs": {
+    "categories": "kategooriad",
+    "community_apps": "kogukonna rakendused",
+    "my_apps": "minu rakendused",
+    "official_apps": "ametlikud rakendused"
+  },
+  "aria": {
+    "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed"
   },
   "supply": "Üldine QORT varu",
   "tags": "sildid",
@@ -403,6 +456,7 @@
   "title": "pealkiri",
   "to": "kellele",
   "tutorial": "õpetus",
+  "unknown": "tundmatu",
   "url": "url",
   "user_lookup": "kasutaja info otsing",
   "user_lookup": "kasutaja otsing",
