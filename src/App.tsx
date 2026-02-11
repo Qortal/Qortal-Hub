@@ -93,6 +93,7 @@ import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
+import { isNodeSelectionExplicit } from './utils/nodeSelection';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -160,6 +161,7 @@ import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   TIME_SECONDS_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
@@ -609,20 +611,30 @@ function App() {
   useEffect(() => {
     try {
       setIsLoading(true);
+      const hasExplicitNodeSelection = isNodeSelectionExplicit();
       window
         .sendMessage('getApiKey')
         .then((response) => {
-          if (response?.url) {
-            handleSetGlobalApikey(response);
-            setSelectedNode(response);
-          } else {
-            const payload = {
-              url: HTTP_LOCALHOST_12391,
-              apikey: '',
-            };
-            handleSetGlobalApikey(response);
-            setSelectedNode(payload);
+          const shouldUseStoredNode =
+            hasExplicitNodeSelection && Boolean(response?.url);
+          const payload = shouldUseStoredNode
+            ? response
+            : {
+                url: HTTPS_EXT_NODE_QORTAL_LINK,
+                apikey: '',
+              };
+
+          if (!shouldUseStoredNode) {
+            window.sendMessage('setApiKey', payload).catch((error) => {
+              console.error(
+                'Failed to set default API key:',
+                error?.message || 'An error occurred'
+              );
+            });
           }
+
+          handleSetGlobalApikey(payload);
+          setSelectedNode(payload);
         })
         .catch((error) => {
           console.error(
