@@ -78,7 +78,7 @@ export const sendMessageBackground = (
     } else if (response?.error) {
       return {
         error: response.error,
-        message: response?.message || 'An error occurred',
+        message: response?.message || response?.error || 'An error occurred',
       };
     }
   });

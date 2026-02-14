@@ -95,7 +95,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
               }
             })
             .catch((error) => {
-              console.error('Failed qortalRequest', error);
+              rej(error);
             });
         });
       } else {
@@ -138,7 +138,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
               }
             })
             .catch((error) => {
-              console.error('Failed qortalRequest', error);
+              rej(error);
             });
         });
       }
@@ -146,9 +146,9 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       console.log('error', error);
       const errorMessage =
         typeof error === 'string' ? error : error?.message || '';
-      let snackMessage;
+      let snackMessage: string;
       if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
-        snackMessage = t('core:message.error.already_voted', {
+        snackMessage = t('core:message.error.app_already_voted', {
           postProcess: 'capitalizeFirstChar',
         });
       } else {
@@ -203,9 +203,7 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
           }}
         />
         {ratingCountPosition === 'right' && (
-          <AppInfoUserName>
-            {votesInfo?.totalVotes ?? 0}
-          </AppInfoUserName>
+          <AppInfoUserName>{votesInfo?.totalVotes ?? 0}</AppInfoUserName>
         )}
       </Box>
 
