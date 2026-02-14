@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "No se encontró su dirección",
+      "app_already_voted": "Ya has votado por esta aplicación",
       "app_need_name": "Tu aplicación necesita un nombre",
       "build_app": "Incapaz de crear una aplicación privada",
       "decrypt_app": "No se puede descifrar la aplicación privada '",
@@ -221,6 +222,7 @@
       "password_wrong": "incapaz de autenticarse. Contraseña incorrecta",
       "publish_app": "Incapaz de publicar la aplicación",
       "publish_image": "Incapaz de publicar imagen",
+      "already_voted": "you have already voted for this option",
       "rate": "incapaz de calificar",
       "rating_option": "No se puede encontrar la opción de calificación",
       "save_qdn": "No se puede guardar en QDN",

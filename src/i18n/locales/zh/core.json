@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "找不到您的地址",
+      "app_already_voted": "您已经为此应用投过票了",
       "app_need_name": "您的应用需要一个名称",
       "build_app": "无法构建私人应用",
       "decrypt_app": "无法解密私人应用程序'",
