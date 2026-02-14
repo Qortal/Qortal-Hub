@@ -144,13 +144,23 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       }
     } catch (error) {
       console.log('error', error);
-      setInfoSnack({
-        type: 'error',
-        message:
-          error?.message ||
+      const errorMessage =
+        typeof error === 'string' ? error : error?.message || '';
+      let snackMessage;
+      if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
+        snackMessage = t('core:message.error.already_voted', {
+          postProcess: 'capitalizeFirstChar',
+        });
+      } else {
+        snackMessage =
+          errorMessage ||
           t('core:message.error.rate', {
             postProcess: 'capitalizeFirstChar',
-          }),
+          });
+      }
+      setInfoSnack({
+        type: 'error',
+        message: snackMessage,
       });
       setOpenSnack(true);
     }

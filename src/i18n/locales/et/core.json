@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "sinu aadressi ei leitud",
+      "app_already_voted": "Oled selle rakenduse poolt juba hääletanud",
       "app_need_name": "sinu rakendus vajab nime",
       "build_app": "privaatset rakendust ei saa koostada",
       "decrypt_app": "privaatset rakendust ei saa dekrüpteerida",

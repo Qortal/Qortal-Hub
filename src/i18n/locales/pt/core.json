@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "seu endereço não foi encontrado",
+      "app_already_voted": "Você já votou neste aplicativo",
       "app_need_name": "seu aplicativo precisa de um nome",
       "build_app": "não foi possível construir o aplicativo privado",
       "decrypt_app": "não foi possível descriptografar o aplicativo privado",

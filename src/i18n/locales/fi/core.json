@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "osoitettasi ei löytynyt",
+      "app_already_voted": "Olet jo äänestänyt tätä sovellusta",
       "app_need_name": "sovelluksella täytyy olla nimi",
       "build_app": "yksityisen sovelluksen luonti epäonnistui",
       "decrypt_app": "sovelluksen salauksen purku epäonnistui",

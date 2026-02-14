@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "your address was not found",
+      "app_already_voted": "you have already voted for this app",
       "app_need_name": "your app needs a name",
       "build_app": "unable to build private app",
       "decrypt_app": "unable to decrypt private app'",
