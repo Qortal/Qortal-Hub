@@ -643,14 +643,14 @@ export const useQortalMessageListener = (
         }
 
         // Build deduplication key for read-only actions
-        const isDedupable = deduplicableActions.has(message?.action);
+        const isDeduplicable = deduplicableActions.has(message?.action);
         let requestKey = '';
-        if (isDedupable) {
+        if (isDeduplicable) {
           requestKey = `${message.action}-${JSON.stringify(message.payload || {})}`;
         }
 
         // If an identical request is already in-flight, reuse its result
-        if (isDedupable && pendingRequests.has(requestKey)) {
+        if (isDeduplicable && pendingRequests.has(requestKey)) {
           pendingRequests
             .get(requestKey)
             .then((response) => {
@@ -700,7 +700,7 @@ export const useQortalMessageListener = (
         );
 
         // Store the promise for deduplication
-        if (isDedupable) {
+        if (isDeduplicable) {
           pendingRequests.set(requestKey, requestPromise);
           requestPromise.finally(() => {
             pendingRequests.delete(requestKey);
