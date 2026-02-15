@@ -21,7 +21,14 @@ import {
 import { CustomButton, Label } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
+import ImageUploader from '../common/ImageUploader.tsx';
 import { Spacer } from '../common/Spacer.tsx';
+import {
+  deleteAvatar,
+  loadAvatar,
+  resizeImageToAvatar,
+  saveAvatar,
+} from '../utils/avatarStorage.ts';
 import {
   getWallets,
   storeWallets,
@@ -542,6 +549,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
+  const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -559,6 +567,25 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
       setNote(wallet.note);
     }
   }, [wallet]);
+
+  useEffect(() => {
+    if (wallet?.address0) {
+      loadAvatar(wallet.address0).then(setAvatarSrc);
+    }
+  }, [wallet?.address0]);
+
+  const handleAvatarPick = async (file: File) => {
+    if (!wallet?.address0) return;
+    const resizedBase64 = await resizeImageToAvatar(file, 150);
+    await saveAvatar(wallet.address0, resizedBase64);
+    setAvatarSrc(`data:image/webp;base64,${resizedBase64}`);
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!wallet?.address0) return;
+    await deleteAvatar(wallet.address0);
+    setAvatarSrc(null);
+  };
   return (
     <>
       <ButtonBase
@@ -583,7 +610,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           alignItems="flex-start"
         >
           <ListItemAvatar>
-            <Avatar alt="" src="/static/images/avatar/1.jpg" />
+            <Avatar alt={wallet?.name || ''} src={avatarSrc || undefined} />
           </ListItemAvatar>
 
           <ListItemText
@@ -648,6 +675,37 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
             padding: '8px',
           }}
         >
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              gap: '12px',
+              mb: 1,
+            }}
+          >
+            <Avatar
+              alt={wallet?.name || ''}
+              src={avatarSrc || undefined}
+              sx={{ height: 56, width: 56 }}
+            />
+            <ImageUploader onPick={handleAvatarPick}>
+              <Button size="small" variant="outlined">
+                {t('auth:action.change_avatar', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            </ImageUploader>
+            {avatarSrc && (
+              <Button size="small" color="error" onClick={handleAvatarRemove}>
+                {t('core:action.remove', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </Button>
+            )}
+          </Box>
+
+          <Spacer height="10px" />
+
           <Label>
             {t('core:name', {
               postProcess: 'capitalizeFirstChar',
@@ -712,7 +770,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               }}
               size="small"
               variant="contained"
-              onClick={() => updateWalletItem(idx, null)}
+              onClick={async () => {
+                if (wallet?.address0) {
+                  await deleteAvatar(wallet.address0);
+                }
+                updateWalletItem(idx, null);
+              }}
             >
               {t('core:action.remove', {
                 postProcess: 'capitalizeFirstChar',
