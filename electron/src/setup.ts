@@ -39,6 +39,11 @@ import {
   stopCore,
 } from './core';
 import {
+  ensureCertForBase,
+  persistedLocalNodeCaExists,
+  setLocalNodeHttpsReady,
+} from './local-https-cert';
+import {
   startVideoServer,
   stopVideoServer,
   getVideoServerPort,
@@ -52,7 +57,9 @@ const path = require('path');
 const defaultDomains = [
   'capacitor-electron://-',
   'http://127.0.0.1:12391',
+  'https://127.0.0.1:12391',
   'ws://127.0.0.1:12391',
+  'wss://127.0.0.1:12391',
   'https://ext-node.qortal.link',
   'wss://ext-node.qortal.link',
   'https://appnode.qortal.org',
@@ -315,6 +322,25 @@ export class ElectronCapacitorApp {
         return { action: 'allow' };
       }
     });
+
+    // this.MainWindow.webContents.on(
+    //   'certificate-error',
+    //   async (event, url, error, certificate, callback) => {
+    //     console.log('certificate-error', error, url);
+
+    //     event.preventDefault(); // prevent Chromium default rejection
+
+    //     const result = await ensureCertForBase(url);
+
+    //     if (result.success) {
+    //       console.log('Retrying after trusting CA...');
+    //       callback(true); // allow this request
+    //     } else {
+    //       callback(false); // reject
+    //     }
+    //   }
+    // );
+
     this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
       if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
         event.preventDefault();
@@ -896,6 +922,19 @@ ipcMain.handle('coreSetup:getApiKey', async () => {
     const running = await getApiKey();
     return running;
   } catch (error) {}
+});
+
+ipcMain.handle('cert:ensureForBase', async (_event, baseUrl: string) => {
+  const result = await ensureCertForBase(baseUrl);
+  if (result.success) {
+    setLocalNodeHttpsReady(true);
+    session.defaultSession.clearCache().catch(() => {});
+    const win = myCapacitorApp.getMainWindow();
+    if (win && !win.isDestroyed()) {
+      win.webContents.session.clearCache().catch(() => {});
+    }
+  }
+  return result;
 });
 ipcMain.handle('coreSetup:resetApikey', async () => {
   try {

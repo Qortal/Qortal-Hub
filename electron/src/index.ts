@@ -4,11 +4,16 @@ import {
   setupElectronDeepLinking,
 } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem, dialog } from 'electron';
+import { app, MenuItem, dialog, session } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
+import {
+  installCertificateVerification,
+  installLocalNodeHttpsBlock,
+  loadPersistedLocalNodeCa,
+} from './local-https-cert';
 import {
   ElectronCapacitorApp,
   setupContentSecurityPolicy,
@@ -21,6 +26,8 @@ app.commandLine.appendSwitch(
   'disable-features',
   'BlockInsecurePrivateNetworkRequests'
 );
+
+// app.commandLine.appendSwitch('ignore-certificate-errors');
 
 // Graceful handling of unhandled errors.
 unhandled();
@@ -162,8 +169,20 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
 
-  // Initialize the app
+  // Install cert verify proc and block HTTPS to local node until ensureCertForBase has run (default session).
+  installCertificateVerification(session.defaultSession);
+  installLocalNodeHttpsBlock(session.defaultSession);
+
+  // Apply persisted local node CA (if any) so first request has the CA and Chromium doesn't cache a failure.
+  loadPersistedLocalNodeCa();
+
   await myCapacitorApp.init();
+
+  // Also set on main window session (same as default when no partition; ensures activate/recreate path is covered)
+  const mainWindow = myCapacitorApp.getMainWindow();
+  if (mainWindow) {
+    installCertificateVerification(mainWindow.webContents.session);
+  }
 
   // Start update checks
   checkForUpdates();
@@ -185,10 +204,15 @@ app.on('window-all-closed', function () {
 app.on('activate', async function () {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
-  const mainWindow = myCapacitorApp.getMainWindow();
+  let mainWindow = myCapacitorApp.getMainWindow();
 
   if (mainWindow.isDestroyed()) {
     await myCapacitorApp.init();
+    mainWindow = myCapacitorApp.getMainWindow();
+    if (mainWindow) {
+      installCertificateVerification(mainWindow.webContents.session);
+      installLocalNodeHttpsBlock(mainWindow.webContents.session);
+    }
   } else if (!mainWindow.isVisible()) {
     // If the window is hidden, show it when dock icon is clicked
     mainWindow.show();
