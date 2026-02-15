@@ -91,6 +91,8 @@ import { DrawerComponent } from './components/Drawer/Drawer';
 import { AddressQRCode } from './components/AddressQRCode';
 import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
+import Avatar from '@mui/material/Avatar';
+import { loadAvatar } from './utils/avatarStorage.ts';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
@@ -334,6 +336,15 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
+  const [walletAvatarSrc, setWalletAvatarSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (rawWallet?.address0 && extState === 'wallet-dropped') {
+      loadAvatar(rawWallet.address0).then(setWalletAvatarSrc);
+    } else {
+      setWalletAvatarSrc(null);
+    }
+  }, [rawWallet?.address0, extState]);
 
   const { t } = useTranslation([
     'auth',
@@ -2562,9 +2573,24 @@ function App() {
                 flexDirection: 'column',
               }}
             >
-              <Typography>
-                {rawWallet?.name || rawWallet?.filename || rawWallet?.address0}
-              </Typography>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: '10px',
+                }}
+              >
+                <Avatar
+                  alt={rawWallet?.name || ''}
+                  src={walletAvatarSrc || undefined}
+                  sx={{ width: 40, height: 40 }}
+                />
+                <Typography>
+                  {rawWallet?.name ||
+                    rawWallet?.filename ||
+                    rawWallet?.address0}
+                </Typography>
+              </Box>
 
               <Spacer height="10px" />
 
