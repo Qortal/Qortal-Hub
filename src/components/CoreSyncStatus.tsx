@@ -10,7 +10,7 @@ import { manifestData } from './NotAuthenticated';
 import { useAtom } from 'jotai';
 import { nodeInfosAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { isLocalNodeUrl } from '../constants/constants';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
@@ -157,7 +157,7 @@ export const CoreSyncStatus = () => {
             <span
               style={{
                 color: '#03a9f4',
-                ...(nodeBase === HTTP_LOCALHOST_12391 && {
+                ...(isLocalNodeUrl(nodeBase) && {
                   fontWeight: 'bold',
                   color: theme.palette.other.positive,
                 }),

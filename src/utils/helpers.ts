@@ -1,6 +1,6 @@
 import {
-  HTTP_LOCALHOST_12391,
   HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
 } from '../constants/constants';
 
 export const delay = (time: number) =>
@@ -33,13 +33,7 @@ export function updateMessageDetails(
 }
 
 export const nodeDisplay = (url) => {
-  switch (url) {
-    case HTTP_LOCALHOST_12391:
-      // code block
-      return 'Local';
-    case HTTPS_EXT_NODE_QORTAL_LINK:
-      return 'Public';
-    default:
-      return url;
-  }
+  if (isLocalNodeUrl(url)) return 'Local';
+  if (url === HTTPS_EXT_NODE_QORTAL_LINK) return 'Public';
+  return url;
 };

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
+  isLocalNodeUrl,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
@@ -60,11 +61,11 @@ export const useAuth = () => {
   );
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
 
-  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
+  const useLocalNode = isLocalNodeUrl(selectedNode?.url);
 
   const checkIfLocalIsRunning = useCallback(async () => {
     try {
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
       if (res?.ok) return true;
       return false;
     } catch (error) {
@@ -74,7 +75,7 @@ export const useAuth = () => {
 
   const generateApiKey = useCallback(async () => {
     try {
-      const res = await fetch(`${HTTP_LOCALHOST_12391}/admin/apikey/generate`, {
+      const res = await fetch(`${getDefaultLocalNodeUrl()}/admin/apikey/generate`, {
         method: 'POST',
       });
       if (!res.ok) {
@@ -94,7 +95,7 @@ export const useAuth = () => {
       const validatedNodeInfo = currentNode;
 
       try {
-        const isLocal = validatedNodeInfo?.url === HTTP_LOCALHOST_12391;
+        const isLocal = isLocalNodeUrl(validatedNodeInfo?.url);
         if (isLocal) {
           const runningRes = isElectron
             ? await window.coreSetup.isCoreRunning()
@@ -197,7 +198,7 @@ export const useAuth = () => {
 
   const validateLocalApiKey = useCallback(async (apiKey) => {
     try {
-      const url2 = `${HTTP_LOCALHOST_12391}/admin/apikey/test?apiKey=${apiKey}`;
+      const url2 = `${getDefaultLocalNodeUrl()}/admin/apikey/test?apiKey=${apiKey}`;
       const response2 = await fetch(url2);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
@@ -229,7 +230,7 @@ export const useAuth = () => {
       if (useLocalNode) {
         const payload = {
           apikey: '',
-          url: HTTP_LOCALHOST_12391,
+          url: getDefaultLocalNodeUrl(),
         };
         const { isValid, validatedNodeInfo } = await validateApiKey(payload);
 
@@ -315,7 +316,7 @@ export const useAuth = () => {
   const isSyncedLocal = useCallback(async () => {
     try {
       if (!useLocalNode) return true;
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
       if (data?.syncPercent !== 100) {

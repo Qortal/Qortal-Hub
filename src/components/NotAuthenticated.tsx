@@ -32,8 +32,9 @@ import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_APP_CONTEXT } from '../App';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
   LOCALHOST_12391,
 } from '../constants/constants.ts';
 import { useAtom } from 'jotai';
@@ -101,16 +102,16 @@ export const NotAuthenticated = ({
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
             const findLocalIndex = copyPrev?.findIndex(
-              (item) => item?.url === HTTP_LOCALHOST_12391
+              (item) => isLocalNodeUrl(item?.url)
             );
             if (findLocalIndex === -1) {
               copyPrev.unshift({
-                url: HTTP_LOCALHOST_12391,
+                url: getDefaultLocalNodeUrl(),
                 apikey: text,
               });
             } else {
               copyPrev[findLocalIndex] = {
-                url: HTTP_LOCALHOST_12391,
+                url: getDefaultLocalNodeUrl(),
                 apikey: text,
               };
             }
@@ -337,7 +338,7 @@ export const NotAuthenticated = ({
       <Typography
         sx={{
           fontSize: '12px',
-          ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+          ...(isLocalNodeUrl(selectedNode?.url) && {
             fontWeight: 'bold',
             color: theme.palette.other.positive,
           }),
@@ -393,7 +394,7 @@ export const NotAuthenticated = ({
                         validateApiKey(currentNode);
                       } else {
                         setCurrentNode({
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                         });
                         setUseLocalNode(false);
                         window
@@ -431,7 +432,7 @@ export const NotAuthenticated = ({
                 }
               />
             </Box> */}
-            {/* {currentNode?.url === HTTP_LOCALHOST_12391 && (
+            {/* {currentNode?.url === getDefaultLocalNodeUrl() && (
               <>
                 <Button
                   onClick={() => setShowSelectApiKey(true)}
@@ -537,7 +538,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      {HTTP_LOCALHOST_12391} (Local node)
+                      {getDefaultLocalNodeUrl()} (Local node)
                     </Typography>
 
                     <Box
@@ -549,13 +550,13 @@ export const NotAuthenticated = ({
                       }}
                     >
                       <Button
-                        disabled={selectedNode?.url === HTTP_LOCALHOST_12391}
+                        disabled={isLocalNodeUrl(selectedNode?.url)}
                         size="small"
                         onClick={() => {
                           setMode('list');
                           setShow(false);
                           const payload = {
-                            url: HTTP_LOCALHOST_12391,
+                            url: getDefaultLocalNodeUrl(),
                             apikey: '',
                           };
                           window
@@ -735,7 +736,7 @@ export const NotAuthenticated = ({
                             onClick={async () => {
                               if (node?.url === selectedNode?.url) {
                                 await handleSaveNodeInfo({
-                                  url: HTTP_LOCALHOST_12391,
+                                  url: getDefaultLocalNodeUrl(),
                                   apikey: '',
                                 });
                               }
@@ -899,16 +900,16 @@ export const NotAuthenticated = ({
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
                       const findLocalIndex = copyPrev?.findIndex(
-                        (item) => item?.url === HTTP_LOCALHOST_12391
+                        (item) => isLocalNodeUrl(item?.url)
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                           apikey: enteredApiKey,
                         });
                       } else {
                         copyPrev[findLocalIndex] = {
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                           apikey: enteredApiKey,
                         };
                       }

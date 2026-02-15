@@ -8,6 +8,7 @@ import { promises as fsPromise } from 'fs';
 import os from 'os';
 
 export const CORE_HTTP_LOCALHOST = 'http://127.0.0.1:12391';
+export const CORE_HTTPS_LOCALHOST = 'https://127.0.0.1:12391';
 export const CORE_LOCALHOST = '127.0.0.1';
 
 import {
@@ -257,7 +258,7 @@ function watchForApiStart(
           onError();
           return;
         }
-        const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/info`);
+        const res = await fetch(`${CORE_HTTPS_LOCALHOST}/admin/info`);
         if (res.ok) {
           cleanup();
           onDetected();
@@ -915,7 +916,7 @@ export async function findQortalJar(): Promise<{
  */
 async function stopViaAdminApi(apiKey: string): Promise<boolean> {
   try {
-    const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/stop`, {
+    const res = await fetch(`${CORE_HTTPS_LOCALHOST}/admin/stop`, {
       method: 'GET',
       headers: {
         accept: 'text/plain',
@@ -1842,7 +1843,7 @@ type SettingsResponse = {
 };
 
 async function getSettings(): Promise<SettingsResponse> {
-  const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/settings`);
+  const res = await fetch(`${CORE_HTTPS_LOCALHOST}/admin/settings`);
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(
@@ -1873,7 +1874,7 @@ async function deleteIfExists(filePath: string): Promise<void> {
 }
 
 async function generateApiKey(): Promise<string> {
-  const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/apikey/generate`, {
+  const res = await fetch(`${CORE_HTTPS_LOCALHOST}/admin/apikey/generate`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -2110,7 +2111,7 @@ export async function watchForBootstrap(
 
 async function bootstrapViaAdminApi(apiKey: string): Promise<boolean> {
   try {
-    const res = await fetch(`${CORE_HTTP_LOCALHOST}/admin/bootstrap`, {
+    const res = await fetch(`${CORE_HTTPS_LOCALHOST}/admin/bootstrap`, {
       method: 'GET',
       headers: {
         accept: 'text/plain',

@@ -11,7 +11,7 @@ import { useAtom } from 'jotai';
 import { isOpenSettingUpLocalCoreAtom } from '../atoms/global';
 
 import { useTranslation } from 'react-i18next';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { getDefaultLocalNodeUrl } from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export function CoreSettingUp() {
@@ -34,7 +34,7 @@ export function CoreSettingUp() {
     try {
       if (isCallingRef.current) return;
       isCallingRef.current = true;
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
       if (!res?.ok) return false;
 
       cleanUp();

@@ -159,7 +159,8 @@ import { Save } from './components/Save/Save';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
+  isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
@@ -168,6 +169,7 @@ import { CoreSetup } from './components/CoreSetup.tsx';
 import { ApiKey } from './types/auth.ts';
 import { useAuth } from './hooks/useAuth.tsx';
 import { nodeDisplay } from './utils/helpers.ts';
+import { isElectron } from './utils/platform';
 
 export type extStates =
   | 'authenticated'
@@ -433,7 +435,7 @@ function App() {
   } = useBlockedAddresses(extState === 'authenticated');
 
   // const [useLocalNode, setUseLocalNode] = useState(true);
-  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
+  const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [confirmRequestRead, setConfirmRequestRead] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
@@ -617,7 +619,7 @@ function App() {
             setSelectedNode(response);
           } else {
             const payload = {
-              url: HTTP_LOCALHOST_12391,
+              url: getDefaultLocalNodeUrl(),
               apikey: '',
             };
             handleSetGlobalApikey(response);
@@ -1166,6 +1168,47 @@ function App() {
   }
 
   const authenticateWallet = async () => {
+    const baseUrl = getDefaultLocalNodeUrl();
+    console.log(
+      'isElectron',
+      isElectron(),
+      baseUrl,
+      baseUrl?.startsWith('https://')
+    );
+    if (isElectron() && baseUrl?.startsWith('https://')) {
+      let isLikelyCertError = true;
+      try {
+        const statusRes = await fetch(`${baseUrl}/admin/status`);
+        if (!statusRes.ok) {
+          // Got a response: TLS worked, so not a cert error (e.g. 404, 502)
+          isLikelyCertError = false;
+        }
+      } catch (err) {
+        console.log('err', err.code);
+        const msg = err instanceof Error ? err.message : String(err);
+        const endpointUnavailable =
+          /connection refused|ECONNREFUSED|ETIMEDOUT|timeout|network error|load failed/i.test(
+            msg
+          );
+        const certRelated =
+          /certificate|SSL|TLS|CERT|ERR_CERT|secure/i.test(msg) ||
+          (msg === 'Failed to fetch' && !endpointUnavailable);
+        isLikelyCertError = true;
+      }
+      if (isLikelyCertError) {
+        const result = await window.electronAPI?.ensureCertForBase?.(baseUrl);
+        console.log('result', result);
+        if (!result?.success) {
+          setWalletToBeDecryptedError(
+            result?.error ??
+              t('core:message.error.password_wrong', {
+                postProcess: 'capitalizeFirstChar',
+              })
+          );
+          return;
+        }
+      }
+    }
     try {
       const isValid = await isNodeValid();
       if (!isValid) {
@@ -1263,117 +1306,115 @@ function App() {
         <Spacer height="48px" />
 
         <>
-            <MainAvatar
-              setOpenSnack={setOpenSnack}
-              setInfoSnack={setInfoSnack}
-              myName={userInfo?.name}
-              balance={balance}
-            />
+          <MainAvatar
+            setOpenSnack={setOpenSnack}
+            setInfoSnack={setInfoSnack}
+            myName={userInfo?.name}
+            balance={balance}
+          />
 
-            <Spacer height="32px" />
+          <Spacer height="32px" />
 
-            <TextP
+          <TextP
+            sx={{
+              fontSize: '20px',
+              lineHeight: '24px',
+              textAlign: 'center',
+            }}
+          >
+            {userInfo?.name}
+          </TextP>
+
+          <Spacer height="10px" />
+
+          <ButtonBase
+            onClick={() => {
+              if (rawWallet?.address0) {
+                navigator.clipboard
+                  .writeText(rawWallet.address0)
+                  .catch((err) => {
+                    console.error('Failed to copy address:', err);
+                  });
+              }
+            }}
+          >
+            <AddressBox>
+              {rawWallet?.address0?.slice(0, 6)}...
+              {rawWallet?.address0?.slice(-4)}{' '}
+              <CopyIcon color={theme.palette.text.primary} />
+            </AddressBox>
+          </ButtonBase>
+
+          <Spacer height="10px" />
+
+          {qortBalanceLoading && <CircularProgress color="success" size={16} />}
+
+          {!qortBalanceLoading && balance >= 0 && (
+            <Box
               sx={{
-                fontSize: '20px',
-                lineHeight: '24px',
-                textAlign: 'center',
+                alignItems: 'center',
+                display: 'flex',
+                gap: '10px',
               }}
             >
-              {userInfo?.name}
-            </TextP>
-
-            <Spacer height="10px" />
-
-            <ButtonBase
-              onClick={() => {
-                if (rawWallet?.address0) {
-                  navigator.clipboard
-                    .writeText(rawWallet.address0)
-                    .catch((err) => {
-                      console.error('Failed to copy address:', err);
-                    });
-                }
-              }}
-            >
-              <AddressBox>
-                {rawWallet?.address0?.slice(0, 6)}...
-                {rawWallet?.address0?.slice(-4)}{' '}
-                <CopyIcon color={theme.palette.text.primary} />
-              </AddressBox>
-            </ButtonBase>
-
-            <Spacer height="10px" />
-
-            {qortBalanceLoading && (
-              <CircularProgress color="success" size={16} />
-            )}
-
-            {!qortBalanceLoading && balance >= 0 && (
-              <Box
+              <TextP
                 sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <TextP
-                  sx={{
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                  }}
-                >
-                  {balance?.toFixed(2)} QORT
-                </TextP>
-
-                <RefreshIcon
-                  onClick={getBalanceAndUserInfoFunc}
-                  sx={{
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                  }}
-                />
-              </Box>
-            )}
-
-            <Spacer height="35px" />
-
-            {userInfo && !userInfo?.name && (
-              <Button
-                variant={'contained'}
-                sx={{
-                  backgroundColor: 'red',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 500,
-                  lineHeight: 1.2,
-                  marginTop: '10px',
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  lineHeight: '24px',
                   textAlign: 'center',
                 }}
-                onClick={() => {
-                  executeEvent('openRegisterName', {});
-                }}
               >
-                {t('core:action.register_name', {
-                  postProcess: 'capitalizeAll',
-                })}
-              </Button>
-            )}
+                {balance?.toFixed(2)} QORT
+              </TextP>
 
-            <Spacer height="20px" />
+              <RefreshIcon
+                onClick={getBalanceAndUserInfoFunc}
+                sx={{
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                }}
+              />
+            </Box>
+          )}
 
-            <CustomButton
+          <Spacer height="35px" />
+
+          {userInfo && !userInfo?.name && (
+            <Button
+              variant={'contained'}
+              sx={{
+                backgroundColor: 'red',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 500,
+                lineHeight: 1.2,
+                marginTop: '10px',
+                textAlign: 'center',
+              }}
               onClick={() => {
-                setIsOpenSendQort(true);
-                setIsOpenDrawerProfile(false);
+                executeEvent('openRegisterName', {});
               }}
             >
-              {t('core:action.transfer_qort', {
-                postProcess: 'capitalizeFirstChar',
+              {t('core:action.register_name', {
+                postProcess: 'capitalizeAll',
               })}
-            </CustomButton>
-            <AddressQRCode targetAddress={rawWallet?.address0} />
+            </Button>
+          )}
+
+          <Spacer height="20px" />
+
+          <CustomButton
+            onClick={() => {
+              setIsOpenSendQort(true);
+              setIsOpenDrawerProfile(false);
+            }}
+          >
+            {t('core:action.transfer_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </CustomButton>
+          <AddressQRCode targetAddress={rawWallet?.address0} />
         </>
 
         <TextP
@@ -2611,7 +2652,7 @@ function App() {
                 <Typography
                   sx={{
                     fontSize: '12px',
-                    ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+                    ...(isLocalNodeUrl(selectedNode?.url) && {
                       fontWeight: 'bold',
                       color: theme.palette.other.positive,
                     }),
