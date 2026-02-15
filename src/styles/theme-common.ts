@@ -1,3 +1,51 @@
+import { Theme } from '@mui/material/styles';
+
+/**
+ * Returns the common MuiCssBaseline global styles shared by both themes.
+ * Each theme should merge its own `:root` CSS variables with this result.
+ */
+export const getCommonGlobalStyles = (theme: Theme) => ({
+  '*, *::before, *::after': {
+    boxSizing: 'border-box',
+  },
+
+  html: {
+    padding: 0,
+    margin: 0,
+  },
+
+  body: {
+    padding: 0,
+    margin: 0,
+    wordBreak: 'break-word',
+  },
+
+  '::-webkit-scrollbar-track': {
+    backgroundColor: 'transparent',
+  },
+
+  '::-webkit-scrollbar-track:hover': {
+    backgroundColor: 'transparent',
+  },
+
+  '::-webkit-scrollbar': {
+    width: '16px',
+    height: '10px',
+  },
+
+  '::-webkit-scrollbar-thumb': {
+    backgroundColor: theme.palette.primary.main,
+    borderRadius: '8px',
+    backgroundClip: 'content-box',
+    border: '4px solid transparent',
+    transition: '0.3s background-color',
+  },
+
+  '::-webkit-scrollbar-thumb:hover': {
+    backgroundColor: theme.palette.primary.light,
+  },
+});
+
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
@@ -75,10 +123,10 @@ const commonThemeOptions = {
 
     MuiDialog: {
       styleOverrides: {
-        paper: {
-          backgroundColor: 'background.paper',
-          color: 'text.primary',
-        },
+        paper: ({ theme }: { theme: Theme }) => ({
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+        }),
       },
     },
 
