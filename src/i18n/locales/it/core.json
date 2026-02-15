@@ -397,7 +397,9 @@
     "status": "stato",
     "status_ready": "pronta (installata)",
     "status_not_installed": "non installata",
-    "tags": "tag"
+    "tags": "tag",
+    "size": "dimensione",
+    "updated": "aggiornata"
   },
   "filter": {
     "all": "tutti",

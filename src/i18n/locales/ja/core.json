@@ -398,7 +398,9 @@
     "status": "ステータス",
     "status_ready": "準備完了（インストール済み）",
     "status_not_installed": "未インストール",
-    "tags": "タグ"
+    "tags": "タグ",
+    "size": "サイズ",
+    "updated": "更新日"
   },
   "filter": {
     "all": "すべて",

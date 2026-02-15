@@ -326,7 +326,9 @@
     "status": "tila",
     "status_ready": "valmis (asennettu)",
     "status_not_installed": "ei asennettu",
-    "tags": "tagit"
+    "tags": "tagit",
+    "size": "koko",
+    "updated": "päivitetty"
   },
   "filter": {
     "all": "kaikki",

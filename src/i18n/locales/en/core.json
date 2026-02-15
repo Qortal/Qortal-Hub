@@ -396,10 +396,12 @@
     "ratings_count": "{{count}} ratings",
     "rate_this_app": "rate this app",
     "service": "service",
+    "size": "size",
     "status": "status",
     "status_ready": "ready (installed)",
     "status_not_installed": "not installed",
-    "tags": "tags"
+    "tags": "tags",
+    "updated": "updated"
   },
   "filter": {
     "all": "all",

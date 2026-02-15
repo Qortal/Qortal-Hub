@@ -398,7 +398,9 @@
     "status": "状态",
     "status_ready": "就绪（已安装）",
     "status_not_installed": "未安装",
-    "tags": "标签"
+    "tags": "标签",
+    "size": "大小",
+    "updated": "更新时间"
   },
   "filter": {
     "all": "全部",
