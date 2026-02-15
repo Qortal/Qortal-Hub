@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "Ihre Adresse wurde nicht gefunden",
+      "app_already_voted": "Du hast bereits für diese App abgestimmt",
       "app_need_name": "Ihre App benötigt einen Namen",
       "build_app": "Private App kann nicht erstellen",
       "decrypt_app": "Private App kann nicht entschlüsseln '",
@@ -395,7 +396,9 @@
     "status": "Status",
     "status_ready": "bereit (installiert)",
     "status_not_installed": "nicht installiert",
-    "tags": "Tags"
+    "tags": "Tags",
+    "size": "Größe",
+    "updated": "aktualisiert"
   },
   "filter": {
     "all": "alle",

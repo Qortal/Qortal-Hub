@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "لم يتم العثور على عنوانك",
+      "app_already_voted": "لقد قمت بالتصويت لهذا التطبيق بالفعل",
       "app_need_name": "تطبيقك يحتاج إلى اسم",
       "build_app": "غير قادر على بناء تطبيق خاص",
       "decrypt_app": "غير قادر على فك تشفير التطبيق الخاص",
@@ -397,7 +398,9 @@
     "status": "الحالة",
     "status_ready": "جاهز (مثبت)",
     "status_not_installed": "غير مثبت",
-    "tags": "الوسوم"
+    "tags": "الوسوم",
+    "size": "الحجم",
+    "updated": "تم التحديث"
   },
   "filter": {
     "all": "الكل",

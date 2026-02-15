@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "osoitettasi ei löytynyt",
+      "app_already_voted": "Olet jo äänestänyt tätä sovellusta",
       "app_need_name": "sovelluksella täytyy olla nimi",
       "build_app": "yksityisen sovelluksen luonti epäonnistui",
       "decrypt_app": "sovelluksen salauksen purku epäonnistui",
@@ -324,7 +325,9 @@
     "status": "tila",
     "status_ready": "valmis (asennettu)",
     "status_not_installed": "ei asennettu",
-    "tags": "tagit"
+    "tags": "tagit",
+    "size": "koko",
+    "updated": "päivitetty"
   },
   "filter": {
     "all": "kaikki",
