@@ -397,7 +397,9 @@
     "status": "статус",
     "status_ready": "готово (установлено)",
     "status_not_installed": "не установлено",
-    "tags": "теги"
+    "tags": "теги",
+    "size": "размер",
+    "updated": "обновлено"
   },
   "filter": {
     "all": "все",

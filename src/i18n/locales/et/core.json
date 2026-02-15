@@ -397,7 +397,9 @@
     "status": "olek",
     "status_ready": "valmis (paigaldatud)",
     "status_not_installed": "paigaldamata",
-    "tags": "sildid"
+    "tags": "sildid",
+    "size": "suurus",
+    "updated": "uuendatud"
   },
   "filter": {
     "all": "kõik",

@@ -398,7 +398,9 @@
     "status": "الحالة",
     "status_ready": "جاهز (مثبت)",
     "status_not_installed": "غير مثبت",
-    "tags": "الوسوم"
+    "tags": "الوسوم",
+    "size": "الحجم",
+    "updated": "تم التحديث"
   },
   "filter": {
     "all": "الكل",
