@@ -1,9 +1,4 @@
 import { Fragment, useContext, useEffect, useState } from 'react';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import Divider from '@mui/material/Divider';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
 import Avatar from '@mui/material/Avatar';
 import Typography from '@mui/material/Typography';
 import {
@@ -291,31 +286,30 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       )}
 
       {wallets?.length > 0 && (
-        <List
+        <Box
           sx={{
-            backgroundColor: theme.palette.background.paper,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px',
             maxHeight: '60vh',
-            maxWidth: '500px',
-            overflowX: 'hidden',
             overflowY: 'auto',
             width: '100%',
+            maxWidth: '700px',
+            padding: '8px',
           }}
         >
           {wallets?.map((wallet, idx) => {
             return (
-              <>
-                <WalletItem
-                  setSelectedWallet={selectedWalletFunc}
-                  key={wallet?.address0}
-                  wallet={wallet}
-                  idx={idx}
-                  updateWalletItem={updateWalletItem}
-                />
-                <Divider variant="inset" component="li" />
-              </>
+              <WalletItem
+                setSelectedWallet={selectedWalletFunc}
+                key={wallet?.address0}
+                wallet={wallet}
+                idx={idx}
+                updateWalletItem={updateWalletItem}
+              />
             );
           })}
-        </List>
+        </Box>
       )}
 
       <Box
@@ -587,93 +581,149 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
     setAvatarSrc(null);
   };
   return (
-    <>
-      <ButtonBase
-        onClick={() => {
-          setSelectedWallet(wallet);
-        }}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '16px',
+        borderRadius: '12px',
+        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        cursor: isEdit ? 'default' : 'pointer',
+        minHeight: '180px',
+        ...(isEdit
+          ? { gridColumn: '1 / -1' }
+          : {
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme.shadows[4],
+              },
+            }),
+      }}
+      onClick={() => {
+        if (!isEdit) setSelectedWallet(wallet);
+      }}
+    >
+      {/* Card header: avatar + edit button */}
+      <Box
         sx={{
-          width: '100%',
-          padding: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 1.5,
         }}
       >
-        <ListItem
-          sx={{
-            bgcolor: theme.palette.background.default,
-            flexGrow: 1,
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-              transform: 'scale(1.01)',
-            },
-            transition: 'all 0.1s ease-in-out',
-          }}
-          alignItems="flex-start"
-        >
-          <ListItemAvatar>
-            <Avatar alt={wallet?.name || ''} src={avatarSrc || undefined} />
-          </ListItemAvatar>
-
-          <ListItemText
-            primary={
-              wallet?.name
-                ? wallet.name
-                : wallet?.filename
-                  ? parsefilenameQortal(wallet?.filename)
-                  : 'No name'
-            }
-            secondary={
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <Typography
-                  component="span"
-                  variant="body2"
-                  sx={{ color: theme.palette.text.primary, display: 'inline' }}
-                >
-                  {wallet?.address0}
-                </Typography>
-                {wallet?.note}
-                <Typography
-                  sx={{
-                    textAlign: 'end',
-                    marginTop: '5px',
-                  }}
-                >
-                  {t('core:action.login', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-            }
-          />
-        </ListItem>
-
+        <Avatar
+          alt={wallet?.name || ''}
+          src={avatarSrc || undefined}
+          sx={{ width: 56, height: 56 }}
+        />
         <IconButton
           sx={{
-            alignSelf: 'flex-start',
-            bgcolor: theme.palette.background.default,
             color: theme.palette.text.primary,
           }}
           onClick={(e) => {
             e.stopPropagation();
             setIsEdit(true);
           }}
-          edge="end"
           aria-label={t('core:action.edit', {
             postProcess: 'capitalizeFirstChar',
           })}
         >
           <EditIcon />
         </IconButton>
-      </ButtonBase>
+      </Box>
+
+      {/* Card body: name, address, note */}
+      <Typography
+        sx={{
+          fontSize: '16px',
+          fontWeight: 600,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: theme.palette.text.primary,
+        }}
+      >
+        {wallet?.name
+          ? wallet.name
+          : wallet?.filename
+            ? parsefilenameQortal(wallet?.filename)
+            : 'No name'}
+      </Typography>
+
+      <Typography
+        sx={{
+          fontSize: '13px',
+          color: theme.palette.text.secondary,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          mt: 0.5,
+        }}
+      >
+        {wallet?.address0}
+      </Typography>
+
+      {wallet?.note && (
+        <Typography
+          sx={{
+            fontSize: '13px',
+            color: theme.palette.text.secondary,
+            fontStyle: 'italic',
+            mt: 0.5,
+          }}
+        >
+          {wallet.note}
+        </Typography>
+      )}
+
+      {/* Card footer: login button */}
+      {!isEdit && (
+        <Box
+          sx={{
+            mt: 'auto',
+            pt: 1.5,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <ButtonBase
+            sx={{
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              borderRadius: '20px',
+              padding: '6px 24px',
+              fontSize: '13px',
+              fontWeight: 500,
+              transition: 'filter 0.2s ease, transform 0.1s ease',
+              '&:hover': {
+                filter: 'brightness(1.2)',
+                transform: 'scale(1.05)',
+              },
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedWallet(wallet);
+            }}
+          >
+            {t('core:action.login', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </ButtonBase>
+        </Box>
+      )}
+
+      {/* Edit mode panel */}
       {isEdit && (
         <Box
           sx={{
-            padding: '8px',
+            mt: 2,
+            pt: 2,
+            borderTop: `1px solid ${theme.palette.divider}`,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <Box
             sx={{
@@ -683,11 +733,6 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               mb: 1,
             }}
           >
-            <Avatar
-              alt={wallet?.name || ''}
-              src={avatarSrc || undefined}
-              sx={{ height: 56, width: 56 }}
-            />
             <ImageUploader onPick={handleAvatarPick}>
               <Button size="small" variant="outlined">
                 {t('auth:action.change_avatar', {
@@ -809,6 +854,6 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           </Box>
         </Box>
       )}
-    </>
+    </Box>
   );
 };
