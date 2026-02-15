@@ -75,7 +75,7 @@ export const sendMessageBackground = (
     // Return payload or error based on response content
     if (response?.payload !== null && response?.payload !== undefined) {
       return response.payload;
-    } else if (response?.error) {
+    } else if (response?.error || response?.message) {
       return {
         error: response.error,
         message: response?.message || response?.error || 'An error occurred',
