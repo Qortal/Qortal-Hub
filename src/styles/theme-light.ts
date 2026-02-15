@@ -6,21 +6,21 @@ export const lightThemeOptions: ThemeOptions = {
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgba(0, 133, 255, 1)',
-      dark: 'rgb(113, 198, 212)',
-      light: 'rgb(180, 200, 235)',
+      main: 'rgb(41, 121, 218)',
+      dark: 'rgb(80, 160, 180)',
+      light: 'rgb(150, 180, 220)',
     },
     secondary: {
-      main: 'rgb(69, 173, 255)',
+      main: 'rgb(55, 145, 215)',
     },
     background: {
-      default: 'rgba(250, 250, 250, 1)',
-      surface: 'rgb(240, 240, 240)', // optional middle gray for replies, side panels
-      paper: 'rgb(220, 220, 220)', // darker card background
+      default: 'rgb(228, 230, 235)',
+      surface: 'rgb(218, 220, 226)',
+      paper: 'rgb(206, 209, 216)',
     },
     text: {
-      primary: 'rgba(0, 0, 0, 0.87)', // 87% black (slightly softened)
-      secondary: 'rgba(0, 0, 0, 0.6)', // 60% black
+      primary: 'rgba(0, 0, 0, 0.8)',
+      secondary: 'rgba(0, 0, 0, 0.55)',
     },
     border: {
       main: 'rgba(0, 0, 0, 0.12)',
@@ -53,16 +53,16 @@ export const lightThemeOptions: ThemeOptions = {
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
-          '--Mail-Background': 'rgba(250, 250, 250, 1)',
-          '--bg-primary': 'rgba(240, 240, 240, 1)',
-          '--bg-2': 'rgb(220, 220, 220)',
+          '--Mail-Background': 'rgb(228, 230, 235)',
+          '--bg-primary': 'rgb(218, 220, 226)',
+          '--bg-2': 'rgb(206, 209, 216)',
           '--primary-main': theme.palette.primary.main,
           '--text-primary': theme.palette.text.primary,
           '--text-secondary': theme.palette.text.secondary,
           '--background-default': theme.palette.background.default,
           '--background-paper': theme.palette.background.paper,
           '--background-surface': theme.palette.background.surface,
-          '--videoplayer-bg': 'rgba(240, 240, 240, 1)',
+          '--videoplayer-bg': 'rgb(218, 220, 226)',
         },
         ...getCommonGlobalStyles(theme),
       }),
