@@ -117,6 +117,37 @@ export const getPublishesFromAdmins = async (admins: string[], groupId) => {
 
   return sortedData[0];
 };
+
+export const getAllPublishesFromAdmins = async (
+  admins: string[],
+  groupId: string
+) => {
+  const queryString = admins.map((name) => `name=${name}`).join('&');
+  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('network error');
+  }
+  const adminData = await response.json();
+
+  const filterId = adminData.filter(
+    (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
+  );
+
+  if (filterId?.length === 0) {
+    return [];
+  }
+
+  const sortedData = filterId.sort((a: any, b: any) => {
+    const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
+    const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
+    return dateB.getTime() - dateA.getTime();
+  });
+
+  return sortedData;
+};
+
 interface GroupProps {
   balance: number;
   isFocused: boolean;
@@ -2505,9 +2536,6 @@ export const Group = ({
                   />
                   {groupSection === 'adminSpace' && (
                     <AdminSpace
-                      setIsForceShowCreationKeyPopup={
-                        setIsForceShowCreationKeyPopup
-                      }
                       adminsWithNames={adminsWithNames}
                       selectedGroup={selectedGroup?.groupId}
                       isOwner={groupOwner?.owner === myAddress}

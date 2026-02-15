@@ -14,7 +14,6 @@ export const AdminSpace = ({
   hide,
   defaultThread,
   setDefaultThread,
-  setIsForceShowCreationKeyPopup,
   balance,
   isOwner,
 }) => {
@@ -68,7 +67,6 @@ export const AdminSpace = ({
 
       {isAdmin && (
         <AdminSpaceInner
-          setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup}
           adminsWithNames={adminsWithNames}
           selectedGroup={selectedGroup}
           balance={balance}
