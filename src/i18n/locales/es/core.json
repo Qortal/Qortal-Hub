@@ -190,6 +190,7 @@
   "message": {
     "error": {
       "address_not_found": "No se encontró su dirección",
+      "app_already_voted": "Ya has votado por esta aplicación",
       "app_need_name": "Tu aplicación necesita un nombre",
       "build_app": "Incapaz de crear una aplicación privada",
       "decrypt_app": "No se puede descifrar la aplicación privada '",
@@ -396,7 +397,9 @@
     "status": "estado",
     "status_ready": "listo (instalado)",
     "status_not_installed": "no instalado",
-    "tags": "etiquetas"
+    "tags": "etiquetas",
+    "size": "tamaño",
+    "updated": "actualizado"
   },
   "filter": {
     "all": "todos",
