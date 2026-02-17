@@ -7,7 +7,11 @@ import { mimeToExtensionMap } from '../utils/memeTypes';
 import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
-import { TIME_MINUTES_20_IN_MILLISECONDS } from '../constants/constants';
+import {
+  TIME_HOURS_1_IN_MILLISECONDS,
+  TIME_MINUTES_30_IN_MILLISECONDS,
+  TIME_SECONDS_30_IN_MILLISECONDS,
+} from '../constants/constants';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -204,7 +208,6 @@ export const listOfAllQortalRequests = [
   'GET_AT',
   'GET_BALANCE',
   'GET_CROSSCHAIN_SERVER_INFO',
-  'START_CROSSCHAIN_SERVER',
   'GET_DAY_SUMMARY',
   'GET_FOREIGN_FEE',
   'GET_HOSTED_DATA',
@@ -213,6 +216,7 @@ export const listOfAllQortalRequests = [
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
   'GET_PRICE',
+  'GET_PRIMARY_NAME',
   'GET_QDN_RESOURCE_METADATA',
   'GET_QDN_RESOURCE_PROPERTIES',
   'GET_QDN_RESOURCE_STATUS',
@@ -233,10 +237,13 @@ export const listOfAllQortalRequests = [
   'LIST_ATS',
   'LIST_GROUPS',
   'LIST_QDN_RESOURCES',
+  'LOCK_TAB',
   'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
   'OPEN_NEW_TAB',
+  'PLAY_ENCRYPTED_MEDIA',
   'PUBLISH_MULTIPLE_QDN_RESOURCES',
   'PUBLISH_QDN_RESOURCE',
+  'REENCRYPT_GROUP_KEYS',
   'REGISTER_NAME',
   'REMOVE_FOREIGN_SERVER',
   'REMOVE_GROUP_ADMIN',
@@ -248,23 +255,20 @@ export const listOfAllQortalRequests = [
   'SELL_NAME',
   'SEND_CHAT_MESSAGE',
   'SEND_COIN',
+  'SESSION_PERMISSIONS',
   'SET_CURRENT_FOREIGN_SERVER',
   'SHOW_ACTIONS',
   'SHOW_PDF_READER',
   'SIGN_FOREIGN_FEES',
   'SIGN_TRANSACTION',
+  'START_CROSSCHAIN_SERVER',
   'TRANSFER_ASSET',
+  'UNLOCK_TAB',
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
-  'SESSION_PERMISSIONS',
-  'LOCK_TAB',
-  'UNLOCK_TAB',
   'WHICH_UI',
-  'REENCRYPT_GROUP_KEYS',
-  'PLAY_ENCRYPTED_MEDIA',
 ];
 
 export const UIQortalRequests = [
@@ -292,13 +296,13 @@ export const UIQortalRequests = [
   'DEPLOY_AT',
   'GET_ARRR_SYNC_STATUS',
   'GET_CROSSCHAIN_SERVER_INFO',
-  'START_CROSSCHAIN_SERVER',
   'GET_DAY_SUMMARY',
   'GET_FOREIGN_FEE',
   'GET_HOSTED_DATA',
   'GET_LIST_ITEMS',
   'GET_NODE_INFO',
   'GET_NODE_STATUS',
+  'GET_PRIMARY_NAME',
   'GET_SERVER_CONNECTION_HISTORY',
   'GET_TX_ACTIVITY_SUMMARY',
   'GET_USER_ACCOUNT',
@@ -311,31 +315,31 @@ export const UIQortalRequests = [
   'JOIN_GROUP',
   'KICK_FROM_GROUP',
   'LEAVE_GROUP',
+  'LOCK_TAB',
   'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA',
   'OPEN_NEW_TAB',
+  'PLAY_ENCRYPTED_MEDIA',
+  'REENCRYPT_GROUP_KEYS',
   'REGISTER_NAME',
   'REMOVE_FOREIGN_SERVER',
   'REMOVE_GROUP_ADMIN',
   'SELL_NAME',
   'SEND_CHAT_MESSAGE',
   'SEND_COIN',
+  'SESSION_PERMISSIONS',
   'SET_CURRENT_FOREIGN_SERVER',
   'SHOW_ACTIONS',
   'SHOW_PDF_READER',
   'SIGN_FOREIGN_FEES',
   'SIGN_TRANSACTION',
+  'START_CROSSCHAIN_SERVER',
   'TRANSFER_ASSET',
+  'UNLOCK_TAB',
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
   'VOTE_ON_POLL',
-  'GET_PRIMARY_NAME',
-  'SESSION_PERMISSIONS',
-  'LOCK_TAB',
-  'UNLOCK_TAB',
   'WHICH_UI',
-  'REENCRYPT_GROUP_KEYS',
-  'PLAY_ENCRYPTED_MEDIA',
 ];
 
 async function retrieveFileFromIndexedDB(fileId) {
@@ -577,35 +581,134 @@ export const useQortalMessageListener = (
   }, []);
 
   useEffect(() => {
+    // Deduplication map: prevents identical concurrent requests from piling up
+    const pendingRequests = new Map<string, Promise<any>>();
+
+    // Actions that are safe to deduplicate (read-only / idempotent)
+    const deduplicableActions = new Set([
+      'FETCH_BLOCK_RANGE',
+      'FETCH_BLOCK',
+      'FETCH_QDN_RESOURCE',
+      'GET_ACCOUNT_DATA',
+      'GET_ACCOUNT_NAMES',
+      'GET_ARRR_SYNC_STATUS',
+      'GET_AT_DATA',
+      'GET_AT',
+      'GET_BALANCE',
+      'GET_CROSSCHAIN_SERVER_INFO',
+      'GET_DAY_SUMMARY',
+      'GET_FOREIGN_FEE',
+      'GET_HOSTED_DATA',
+      'GET_LIST_ITEMS',
+      'GET_NAME_DATA',
+      'GET_NODE_INFO',
+      'GET_NODE_STATUS',
+      'GET_PRICE',
+      'GET_PRIMARY_NAME',
+      'GET_QDN_RESOURCE_METADATA',
+      'GET_QDN_RESOURCE_PROPERTIES',
+      'GET_QDN_RESOURCE_STATUS',
+      'GET_QDN_RESOURCE_URL',
+      'GET_SERVER_CONNECTION_HISTORY',
+      'GET_TX_ACTIVITY_SUMMARY',
+      'GET_USER_ACCOUNT',
+      'GET_USER_WALLET_INFO',
+      'GET_USER_WALLET_TRANSACTIONS',
+      'GET_USER_WALLET',
+      'GET_WALLET_BALANCE',
+      'IS_USING_PUBLIC_NODE',
+      'LIST_ATS',
+      'LIST_GROUPS',
+      'LIST_QDN_RESOURCES',
+      'SEARCH_CHAT_MESSAGES',
+      'SEARCH_NAMES',
+      'SEARCH_QDN_RESOURCES',
+      'SEARCH_TRANSACTIONS',
+      'WHICH_UI',
+    ]);
+
     const listener = async (event) => {
       if (event?.data?.requestedHandler !== 'UI') return;
 
       const sendMessageToRuntime = (message, eventPort) => {
-        let timeout: number = 300000;
+        let timeout: number = TIME_SECONDS_30_IN_MILLISECONDS;
         if (
           message?.action === 'PUBLISH_MULTIPLE_QDN_RESOURCES' &&
           message?.payload?.resources?.length > 0
         ) {
           timeout =
             message?.payload?.resources?.length *
-            TIME_MINUTES_20_IN_MILLISECONDS;
+            TIME_MINUTES_30_IN_MILLISECONDS;
         } else if (message?.action === 'PUBLISH_QDN_RESOURCE') {
-          timeout = TIME_MINUTES_20_IN_MILLISECONDS;
+          timeout = TIME_HOURS_1_IN_MILLISECONDS;
         }
 
-        window
-          .sendMessage(
-            message.action,
-            message.payload,
-            timeout,
-            message.isExtension,
-            {
-              name: appName,
-              service: appService,
-              tabId,
-            },
-            skipAuth
-          )
+        // Build deduplication key for read-only actions
+        const isDeduplicable = deduplicableActions.has(message?.action);
+        let requestKey = '';
+        if (isDeduplicable) {
+          requestKey = `${message.action}-${JSON.stringify(message.payload || {})}`;
+        }
+
+        // If an identical request is already in-flight, reuse its result
+        if (isDeduplicable && pendingRequests.has(requestKey)) {
+          pendingRequests
+            .get(requestKey)
+            .then((response) => {
+              if (response.error) {
+                eventPort.postMessage({
+                  result: null,
+                  error: {
+                    error: response?.error,
+                    message:
+                      typeof response?.error === 'string'
+                        ? response?.error
+                        : typeof response?.message === 'string'
+                          ? response?.message
+                          : 'An error has occurred',
+                  },
+                });
+              } else {
+                eventPort.postMessage({
+                  result: response,
+                  error: null,
+                });
+              }
+            })
+            .catch((error) => {
+              eventPort.postMessage({
+                result: null,
+                error: {
+                  error: error?.message || 'Request failed',
+                  message: error?.message || 'An error has occurred',
+                },
+              });
+            });
+          return;
+        }
+
+        const requestPromise = window.sendMessage(
+          message.action,
+          message.payload,
+          timeout,
+          message.isExtension,
+          {
+            name: appName,
+            service: appService,
+            tabId,
+          },
+          skipAuth
+        );
+
+        // Store the promise for deduplication
+        if (isDeduplicable) {
+          pendingRequests.set(requestKey, requestPromise);
+          requestPromise.finally(() => {
+            pendingRequests.delete(requestKey);
+          });
+        }
+
+        requestPromise
           .then((response) => {
             if (response.error) {
               eventPort.postMessage({
@@ -629,6 +732,13 @@ export const useQortalMessageListener = (
           })
           .catch((error) => {
             console.error('Failed qortalRequest', error);
+            eventPort.postMessage({
+              result: null,
+              error: {
+                error: error?.message || 'Request failed',
+                message: error?.message || 'An error has occurred',
+              },
+            });
           });
       };
 
@@ -702,6 +812,10 @@ export const useQortalMessageListener = (
         } else if (appName?.toLowerCase() === 'q-wallets') {
           executeEvent('setLastEnteredTimestampPaymentEvent', {});
         }
+        // Respond to close the MessageChannel and prevent pending connections
+        if (event.ports[0]) {
+          event.ports[0].postMessage({ result: true, error: null });
+        }
       } else if (event?.data?.action === 'NAVIGATION_HISTORY') {
         if (event?.data?.payload?.isDOMContentLoaded) {
           setHistory((prev) => {
@@ -735,6 +849,10 @@ export const useQortalMessageListener = (
         } else {
           setHistory(event?.data?.payload);
         }
+        // Respond to close the MessageChannel and prevent pending connections
+        if (event.ports[0]) {
+          event.ports[0].postMessage({ result: true, error: null });
+        }
       } else if (event?.data?.action === 'SET_TAB' && !isDevMode) {
         executeEvent('addTab', {
           data: event?.data?.payload,
@@ -752,6 +870,10 @@ export const useQortalMessageListener = (
           },
           targetOrigin
         );
+        // Respond to close the MessageChannel and prevent pending connections
+        if (event.ports[0]) {
+          event.ports[0].postMessage({ result: true, error: null });
+        }
       }
     };
 
