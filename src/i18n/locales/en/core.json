@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "your address was not found",
+      "app_already_voted": "you have already voted for this app",
       "app_need_name": "your app needs a name",
       "build_app": "unable to build private app",
       "decrypt_app": "unable to decrypt private app'",
@@ -245,9 +246,10 @@
       "editing_message": "editing message",
       "encrypted_not": "not encrypted",
       "encrypted": "encrypted",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "amount: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "fetching app data",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "get QORT using Qortal's crosschain trade portal",
       "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
@@ -395,10 +397,12 @@
     "ratings_count": "{{count}} ratings",
     "rate_this_app": "rate this app",
     "service": "service",
+    "size": "size",
     "status": "status",
     "status_ready": "ready (installed)",
     "status_not_installed": "not installed",
-    "tags": "tags"
+    "tags": "tags",
+    "updated": "updated"
   },
   "filter": {
     "all": "all",

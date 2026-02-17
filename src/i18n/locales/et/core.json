@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "sinu aadressi ei leitud",
+      "app_already_voted": "Oled selle rakenduse poolt juba hääletanud",
       "app_need_name": "sinu rakendus vajab nime",
       "build_app": "privaatset rakendust ei saa koostada",
       "decrypt_app": "privaatset rakendust ei saa dekrüpteerida",
@@ -245,9 +246,10 @@
       "editing_message": "sõnumi muutmine",
       "encrypted_not": "pole krüpteeritud",
       "encrypted": "krüpteeritud",
-      "fee_qort": "tasu: {{ message }} QORT",
+      "amount_qort": "summa: {{ amount }} QORT",
+      "fee_qort": "tasu: {{ fee }} QORT",
       "fetching_data": "laadin rakenduse andmeid",
-      "foreign_fee": "välismaine tasu: {{ message }}",
+      "foreign_fee": "välismaine tasu: {{ fee }}",
       "get_qort_trade_portal": "hanki QORT Qortali rist-ahela kaubandusportaali kaudu",
       "mentioned": "mainitud",
       "message_with_image": "selles sõnumis on juba pilt",
@@ -397,7 +399,9 @@
     "status": "olek",
     "status_ready": "valmis (paigaldatud)",
     "status_not_installed": "paigaldamata",
-    "tags": "sildid"
+    "tags": "sildid",
+    "size": "suurus",
+    "updated": "uuendatud"
   },
   "filter": {
     "all": "kõik",

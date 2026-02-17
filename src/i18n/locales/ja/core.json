@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "あなたの住所は見つかりませんでした",
+      "app_already_voted": "このアプリにはすでに投票済みです",
       "app_need_name": "アプリには名前が必要です",
       "build_app": "プライベートアプリを作成できません",
       "decrypt_app": "プライベートアプリを復号化できません」",
@@ -245,9 +246,10 @@
       "editing_message": "メッセージの編集",
       "encrypted": "暗号化",
       "encrypted_not": "暗号化されていません",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "金額: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "アプリデータを取得します",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "QORTALのCrossChain Tradeポータルを使用してQORTを取得します",
       "minimal_qort_balance": "残高に少なくとも {{ quantity }} QORT があると、ほぼ即時の速度でチャットメッセージを送信できます。",
       "mentioned": "言及された",
@@ -397,7 +399,9 @@
     "status": "ステータス",
     "status_ready": "準備完了（インストール済み）",
     "status_not_installed": "未インストール",
-    "tags": "タグ"
+    "tags": "タグ",
+    "size": "サイズ",
+    "updated": "更新日"
   },
   "filter": {
     "all": "すべて",

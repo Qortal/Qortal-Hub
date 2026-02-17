@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "il tuo indirizzo non è stato trovato.",
+      "app_already_voted": "Hai già votato per questa app",
       "app_need_name": "la tua app ha bisogno di un nome.",
       "build_app": "impossibile creare app privata.",
       "decrypt_app": "impossibile decrittografare l'app privata '",
@@ -245,9 +246,10 @@
       "editing_message": "messaggio di modifica",
       "encrypted": "crittografato",
       "encrypted_not": "non crittografato",
-      "fee_qort": "commissione: {{ message }} QORT",
+      "amount_qort": "importo: {{ amount }} QORT",
+      "fee_qort": "commissione: {{ fee }} QORT",
       "fetching_data": "recupero dei dati dell'app",
-      "foreign_fee": "commissione esterna: {{ message }}",
+      "foreign_fee": "commissione esterna: {{ fee }}",
       "get_qort_trade_portal": "ottieni QORT con il portale di trade crosschain di Qortal",
       "minimal_qort_balance": "Avere almeno {{ quantity }} QORT nel tuo saldo ti consente di inviare messaggi di chat a una velocità quasi istantanea.",
       "mentioned": "menzionato",
@@ -396,7 +398,9 @@
     "status": "stato",
     "status_ready": "pronta (installata)",
     "status_not_installed": "non installata",
-    "tags": "tag"
+    "tags": "tag",
+    "size": "dimensione",
+    "updated": "aggiornata"
   },
   "filter": {
     "all": "tutti",

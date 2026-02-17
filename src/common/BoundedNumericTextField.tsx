@@ -9,7 +9,7 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import {
   removeTrailingZeros,
   setNumberWithinBounds,
-} from './numberFunctions.ts';
+} from '../utils/numberFunctions.ts';
 import { CustomInput } from '../styles/App-styles.ts';
 import { useRef, useState } from 'react';
 

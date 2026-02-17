@@ -222,6 +222,14 @@ export const AppRatingBreakdown = ({
             size="large"
             icon={<StarFilledIcon />}
             emptyIcon={<StarEmptyIcon />}
+            sx={{
+              '& .MuiRating-iconHover svg path': {
+                fill: '#FFD700',
+              },
+              '& .MuiRating-iconHover': {
+                transform: 'scale(1.3)',
+              },
+            }}
           />
         </RateSection>
       )}

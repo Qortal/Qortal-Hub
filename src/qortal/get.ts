@@ -264,6 +264,10 @@ const _deployAt = async (
         description: description,
         postProcess: 'capitalizeFirstChar',
       }),
+      highlightedText: i18n.t('core:message.generic.amount_qort', {
+        amount: amount,
+        postProcess: 'capitalizeFirstChar',
+      }),
       fee: fee.fee,
     },
     isFromExtension

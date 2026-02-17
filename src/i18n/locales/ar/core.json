@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "لم يتم العثور على عنوانك",
+      "app_already_voted": "لقد قمت بالتصويت لهذا التطبيق بالفعل",
       "app_need_name": "تطبيقك يحتاج إلى اسم",
       "build_app": "غير قادر على بناء تطبيق خاص",
       "decrypt_app": "غير قادر على فك تشفير التطبيق الخاص",
@@ -245,9 +246,10 @@
       "editing_message": "جاري تعديل الرسالة",
       "encrypted_not": "غير مشفر",
       "encrypted": "مشفر",
-      "fee_qort": "الرسوم: {{ message }} كورتال",
+      "amount_qort": "المبلغ: {{ amount }} كورتال",
+      "fee_qort": "الرسوم: {{ fee }} كورتال",
       "fetching_data": "جاري جلب بيانات التطبيق",
-      "foreign_fee": "رسوم العملات الأجنبية: {{ message }}",
+      "foreign_fee": "رسوم العملات الأجنبية: {{ fee }}",
       "get_qort_trade_portal": "احصل على كورتال من بوابة التبادل عبر السلاسل",
       "mentioned": "تم الإشارة إليك",
       "message_with_image": "هذه الرسالة تحتوي بالفعل على صورة",
@@ -398,7 +400,9 @@
     "status": "الحالة",
     "status_ready": "جاهز (مثبت)",
     "status_not_installed": "غير مثبت",
-    "tags": "الوسوم"
+    "tags": "الوسوم",
+    "size": "الحجم",
+    "updated": "تم التحديث"
   },
   "filter": {
     "all": "الكل",

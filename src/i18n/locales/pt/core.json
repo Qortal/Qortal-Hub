@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "seu endereço não foi encontrado",
+      "app_already_voted": "Você já votou neste aplicativo",
       "app_need_name": "seu aplicativo precisa de um nome",
       "build_app": "não foi possível construir o aplicativo privado",
       "decrypt_app": "não foi possível descriptografar o aplicativo privado",
@@ -245,9 +246,10 @@
       "editing_message": "editando mensagem",
       "encrypted_not": "não criptografado",
       "encrypted": "criptografado",
-      "fee_qort": "taxa: {{ message }} QORTs",
+      "amount_qort": "quantia: {{ amount }} QORT",
+      "fee_qort": "taxa: {{ fee }} QORTs",
       "fetching_data": "buscando dados do aplicativo",
-      "foreign_fee": "taxa externa: {{ message }}",
+      "foreign_fee": "taxa externa: {{ fee }}",
       "get_qort_trade_portal": "obtenha QORTs usando o portal de troca crosschain do Qortal",
       "mentioned": "mencionado",
       "message_with_image": "esta mensagem já possui uma imagem",
@@ -397,7 +399,9 @@
     "status": "status",
     "status_ready": "pronto (instalado)",
     "status_not_installed": "não instalado",
-    "tags": "tags"
+    "tags": "tags",
+    "size": "tamanho",
+    "updated": "atualizado"
   },
   "filter": {
     "all": "todos",

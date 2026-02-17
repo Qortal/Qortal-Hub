@@ -191,6 +191,7 @@
   "message": {
     "error": {
       "address_not_found": "Ваш адрес не был найден",
+      "app_already_voted": "Вы уже проголосовали за это приложение",
       "app_need_name": "Ваше приложение нужно имя",
       "build_app": "Невозможно создать частное приложение",
       "decrypt_app": "Невозможно расшифровать частное приложение '",
@@ -245,9 +246,10 @@
       "editing_message": "Редактирование сообщения",
       "encrypted": "зашифровано",
       "encrypted_not": "не шифровано",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "сумма: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "Извлечение данных приложения",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "Получить Qort, используя торговый портал Qortal's Crosschain",
       "minimal_qort_balance": "Наличие как минимум {{ quantity }} QORT на вашем балансе позволяет отправлять сообщения в чате практически мгновенно.",
       "mentioned": "упомянул",
@@ -397,7 +399,9 @@
     "status": "статус",
     "status_ready": "готово (установлено)",
     "status_not_installed": "не установлено",
-    "tags": "теги"
+    "tags": "теги",
+    "size": "размер",
+    "updated": "обновлено"
   },
   "filter": {
     "all": "все",
