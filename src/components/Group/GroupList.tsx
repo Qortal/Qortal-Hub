@@ -50,6 +50,7 @@ export const GroupList = ({
   setIsOpenBlockedUserModal,
   myAddress,
 }) => {
+  console.log('rendered');
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -228,6 +229,7 @@ export const GroupList = ({
 
 const GroupItem = memo(
   ({ selectGroupFunc, group, selectedGroup, getUserSettings, myAddress }) => {
+    console.log('GroupItem rendered');
     const theme = useTheme();
     const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));
     const announcement = useAtomValue(
