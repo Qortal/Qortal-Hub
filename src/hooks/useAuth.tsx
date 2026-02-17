@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   getDefaultLocalNodeUrl,
   isLocalNodeUrl,
@@ -6,7 +6,7 @@ import {
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
 import { isLocalPrivateHttpsUrl } from '../utils/helpers';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -57,9 +57,8 @@ export const useAuth = () => {
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
   const [enableAuthWhenSyncing] = useAtom(enableAuthWhenSyncingAtom);
-  const [authenticatePassword, setAuthenticatePassword] = useAtom(
-    authenticatePasswordAtom
-  );
+  const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
+  const store = useStore();
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
@@ -367,11 +366,12 @@ export const useAuth = () => {
           res();
         }, 250);
       });
+      const password = store.get(authenticatePasswordAtom);
       window
         .sendMessage(
           'decryptWallet',
           {
-            password: authenticatePassword,
+            password,
             wallet: rawWallet,
           },
           TIME_MINUTES_2_IN_MILLISECONDS
@@ -418,10 +418,10 @@ export const useAuth = () => {
         });
     },
     [
+      store,
       setIsLoading,
       setAuthenticatePassword,
       setExtstate,
-      authenticatePassword,
       setUserInfo,
       setRawWallet,
       setWalletToBeDecryptedError,
@@ -463,15 +463,28 @@ export const useAuth = () => {
     }
   }, [selectedNode, validateApiKey, handleSaveNodeInfo]);
 
-  return {
-    validateApiKey,
-    isNodeValid,
-    handleSaveNodeInfo,
-    authenticate,
-    getBalanceFunc,
-    resetApikey,
-    validateLocalApiKey,
-    validateApiKeyFromRegistration,
-    saveCustomNodes,
-  };
+  return useMemo(
+    () => ({
+      validateApiKey,
+      isNodeValid,
+      handleSaveNodeInfo,
+      authenticate,
+      getBalanceFunc,
+      resetApikey,
+      validateLocalApiKey,
+      validateApiKeyFromRegistration,
+      saveCustomNodes,
+    }),
+    [
+      validateApiKey,
+      isNodeValid,
+      handleSaveNodeInfo,
+      authenticate,
+      getBalanceFunc,
+      resetApikey,
+      validateLocalApiKey,
+      validateApiKeyFromRegistration,
+      saveCustomNodes,
+    ]
+  );
 };

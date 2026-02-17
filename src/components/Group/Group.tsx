@@ -150,7 +150,6 @@ export const getAllPublishesFromAdmins = async (
 
 interface GroupProps {
   balance: number;
-  isFocused: boolean;
   myAddress: string;
   userInfo: any;
 }
@@ -407,13 +406,13 @@ function areKeysEqual(array1, array2) {
 
 export const Group = ({
   myAddress,
-  isFocused,
   userInfo,
   balance,
   setIsOpenDrawerProfile,
   setDesktopViewMode,
   desktopViewMode,
 }: GroupProps) => {
+  console.log('group  rerendered');
   const [desktopSideView, setDesktopSideView] = useState('groups');
   const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
@@ -542,9 +541,7 @@ export const Group = ({
   useEffect(() => {
     timestampEnterDataRef.current = timestampEnterData;
   }, [timestampEnterData]);
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
+
   useEffect(() => {
     groupSectionRef.current = groupSection;
   }, [groupSection]);
@@ -577,7 +574,8 @@ export const Group = ({
     const wasInChatMode =
       prevDesktopViewModeRef.current === 'chat' ||
       prevMobileViewModeRef.current === 'chat';
-    const isNowInChatMode = desktopViewMode === 'chat' || mobileViewMode === 'chat';
+    const isNowInChatMode =
+      desktopViewMode === 'chat' || mobileViewMode === 'chat';
 
     // Only update timestamp when user RETURNS to chat (wasn't in chat, now is in chat)
     if (!wasInChatMode && isNowInChatMode) {
@@ -658,11 +656,8 @@ export const Group = ({
     }
   }, [setMutedGroups]);
 
-
-
   useEffect(() => {
     getUserSettings();
-
   }, [getUserSettings]);
 
   const getTimestampEnterChat = useCallback(async () => {
@@ -786,12 +781,7 @@ export const Group = ({
       }
     });
     return hasUnread;
-  }, [
-    timestampEnterData,
-    groups,
-    myAddress,
-    groupChatTimestamps,
-  ]);
+  }, [timestampEnterData, groups, myAddress, groupChatTimestamps]);
 
   const groupsAnnHasUnread = useMemo(() => {
     let hasUnread = false;
@@ -1531,7 +1521,6 @@ export const Group = ({
     hasInitialized.current = false;
     hasInitializedWebsocket.current = false;
     lastGroupNotification.current = null;
-    isFocusedRef.current = true;
     selectedGroupRef.current = null;
     selectedDirectRef.current = null;
     groupSectionRef.current = null;
@@ -1953,162 +1942,165 @@ export const Group = ({
         >
           {directs.map((direct: any) => {
             const avatarUrl = getUserAvatarUrl(direct?.name);
-            const avatarKey = direct?.address || direct?.name || `${direct?.timestamp}-${direct?.sender}`;
+            const avatarKey =
+              direct?.address ||
+              direct?.name ||
+              `${direct?.timestamp}-${direct?.sender}`;
             const isAvatarLoaded = Boolean(
               avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
             );
 
             return (
-            <List
-              key={direct?.timestamp + direct?.sender}
-              sx={{
-                width: '100%',
-              }}
-              className="group-list"
-              dense={true}
-            >
-              <ListItem
-                onClick={() => {
-                  setSelectedDirect(null);
-                  setNewChat(false);
-                  setIsOpenDrawer(false);
-                  window
-                    .sendMessage('addTimestampEnterChat', {
-                      timestamp: Date.now(),
-                      groupId: direct.address,
-                    })
-                    .catch((error) => {
-                      console.error(
-                        'Failed to add timestamp:',
-                        error.message || 'An error occurred'
-                      );
-                    });
-
-                  setTimeout(() => {
-                    setSelectedDirect(direct);
-
-                    getTimestampEnterChat();
-                  }, 200);
-                }}
+              <List
+                key={direct?.timestamp + direct?.sender}
                 sx={{
-                  background:
-                    direct?.address === selectedDirect?.address &&
-                    theme.palette.background.surface,
-                  borderRadius: '2px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '2px',
                   width: '100%',
                 }}
+                className="group-list"
+                dense={true}
               >
-                <Box
+                <ListItem
+                  onClick={() => {
+                    setSelectedDirect(null);
+                    setNewChat(false);
+                    setIsOpenDrawer(false);
+                    window
+                      .sendMessage('addTimestampEnterChat', {
+                        timestamp: Date.now(),
+                        groupId: direct.address,
+                      })
+                      .catch((error) => {
+                        console.error(
+                          'Failed to add timestamp:',
+                          error.message || 'An error occurred'
+                        );
+                      });
+
+                    setTimeout(() => {
+                      setSelectedDirect(direct);
+
+                      getTimestampEnterChat();
+                    }, 200);
+                  }}
                   sx={{
-                    alignItems: 'center',
+                    background:
+                      direct?.address === selectedDirect?.address &&
+                      theme.palette.background.surface,
+                    borderRadius: '2px',
+                    cursor: 'pointer',
                     display: 'flex',
+                    flexDirection: 'column',
+                    padding: '2px',
                     width: '100%',
                   }}
                 >
-                  <ListItemAvatar>
-                    <Avatar
-                      sx={{
-                        background: theme.palette.background.surface,
-                        color: theme.palette.text.primary,
-                        ...getClickableAvatarSx(theme, isAvatarLoaded),
-                      }}
-                      alt={direct?.name || direct?.address}
-                      src={avatarUrl}
-                      onClick={(event) => {
-                        if (!avatarUrl || !isAvatarLoaded) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openAvatarPreview(
-                          avatarUrl,
-                          direct?.name || direct?.address
-                        );
-                      }}
-                      imgProps={{
-                        onLoad: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey]) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: true,
-                            };
-                          });
-                        },
-                        onError: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey] === false) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: false,
-                            };
-                          });
-                        },
-                      }}
-                    >
-                      {(direct?.name || direct?.address)?.charAt(0)}
-                    </Avatar>
-                  </ListItemAvatar>
-
-                  <ListItemText
-                    primary={direct?.name || direct?.address}
-                    secondary={
-                      !direct?.timestamp
-                        ? t('core:message.generic.no_messages', {
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                        : t('group:last_message_date', {
-                            date: formatEmailDate(direct?.timestamp),
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                    }
-                    slotProps={{
-                      primary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          textWrap: 'wrap',
-                          overflow: 'hidden',
-                          fontSize: '16px',
-                        },
-                      },
-                      secondary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          fontSize: '12px',
-                        },
-                      },
-                    }}
+                  <Box
                     sx={{
-                      width: '150px',
-                      fontFamily: 'Inter',
-                      fontSize: '16px',
+                      alignItems: 'center',
+                      display: 'flex',
+                      width: '100%',
                     }}
-                  />
-
-                  {direct?.sender !== myAddress &&
-                    direct?.timestamp &&
-                    ((!timestampEnterData[direct?.address] &&
-                      Date.now() - direct?.timestamp <
-                        timeDifferenceForNotificationChats) ||
-                      timestampEnterData[direct?.address] <
-                        direct?.timestamp) && (
-                      <MarkChatUnreadIcon
+                  >
+                    <ListItemAvatar>
+                      <Avatar
                         sx={{
-                          color: theme.palette.other.unread,
+                          background: theme.palette.background.surface,
+                          color: theme.palette.text.primary,
+                          ...getClickableAvatarSx(theme, isAvatarLoaded),
                         }}
-                      />
-                    )}
-                </Box>
-              </ListItem>
-            </List>
+                        alt={direct?.name || direct?.address}
+                        src={avatarUrl}
+                        onClick={(event) => {
+                          if (!avatarUrl || !isAvatarLoaded) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openAvatarPreview(
+                            avatarUrl,
+                            direct?.name || direct?.address
+                          );
+                        }}
+                        imgProps={{
+                          onLoad: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey]) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: true,
+                              };
+                            });
+                          },
+                          onError: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey] === false) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: false,
+                              };
+                            });
+                          },
+                        }}
+                      >
+                        {(direct?.name || direct?.address)?.charAt(0)}
+                      </Avatar>
+                    </ListItemAvatar>
+
+                    <ListItemText
+                      primary={direct?.name || direct?.address}
+                      secondary={
+                        !direct?.timestamp
+                          ? t('core:message.generic.no_messages', {
+                              postProcess: 'capitalizeFirstChar',
+                            })
+                          : t('group:last_message_date', {
+                              date: formatEmailDate(direct?.timestamp),
+                              postProcess: 'capitalizeFirstChar',
+                            })
+                      }
+                      slotProps={{
+                        primary: {
+                          style: {
+                            color:
+                              direct?.address === selectedDirect?.address &&
+                              theme.palette.text.primary,
+                            textWrap: 'wrap',
+                            overflow: 'hidden',
+                            fontSize: '16px',
+                          },
+                        },
+                        secondary: {
+                          style: {
+                            color:
+                              direct?.address === selectedDirect?.address &&
+                              theme.palette.text.primary,
+                            fontSize: '12px',
+                          },
+                        },
+                      }}
+                      sx={{
+                        width: '150px',
+                        fontFamily: 'Inter',
+                        fontSize: '16px',
+                      }}
+                    />
+
+                    {direct?.sender !== myAddress &&
+                      direct?.timestamp &&
+                      ((!timestampEnterData[direct?.address] &&
+                        Date.now() - direct?.timestamp <
+                          timeDifferenceForNotificationChats) ||
+                        timestampEnterData[direct?.address] <
+                          direct?.timestamp) && (
+                        <MarkChatUnreadIcon
+                          sx={{
+                            color: theme.palette.other.unread,
+                          }}
+                        />
+                      )}
+                  </Box>
+                </ListItem>
+              </List>
             );
           })}
         </Box>
@@ -2197,8 +2189,6 @@ export const Group = ({
     }, 200);
   }, []);
 
-
-
   return (
     <>
       <WebSocketActive
@@ -2249,9 +2239,7 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={groups.filter((g) => g.groupId !== '0')
-
-            }
+            groups={groups.filter((g) => g.groupId !== '0')}
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}

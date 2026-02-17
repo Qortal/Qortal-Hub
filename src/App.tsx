@@ -61,6 +61,7 @@ import {
 } from './styles/App-styles.ts';
 import { Spacer } from './common/Spacer';
 import { Loader } from './components/Loader';
+import { AuthenticationForm } from './components/AuthenticationForm';
 import { PasswordField, ErrorText } from './components';
 import { Group, requestQueueMemberNames } from './components/Group/Group';
 import { TaskManager } from './components/TaskManager/TaskManager.tsx';
@@ -314,8 +315,6 @@ function App() {
   const [decryptedWallet, setdecryptedWallet] = useState<any>(null);
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
-  const [authenticatedMode, setAuthenticatedMode] = useState('qort');
-  const [requestAuthentication, setRequestAuthentication] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
   const [balance, setBalance] = useAtom(balanceAtom);
   const [paymentTo, setPaymentTo] = useState<string>('');
@@ -330,9 +329,7 @@ function App() {
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const [isMain, setIsMain] = useState<boolean>(true);
   const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useAtom(
-    authenticatePasswordAtom
-  );
+  const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
@@ -366,8 +363,6 @@ function App() {
   const [walletToBeDecryptedError, setWalletToBeDecryptedError] = useAtom(
     walletToBeDecryptedErrorAtom
   );
-
-  const [isFocused, setIsFocused] = useState(true);
 
   const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
@@ -467,14 +462,6 @@ function App() {
     const seedPhrase = generatorRef.current.parsedString;
     saveSeedPhraseToDisk(seedPhrase);
   };
-
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (extState === 'wallet-dropped' && passwordRef.current) {
-      passwordRef.current.focus();
-    }
-  }, [extState]);
 
   useEffect(() => {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
@@ -692,10 +679,6 @@ function App() {
       console.log(error);
     }
   }, []);
-
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
 
   const address = useMemo(() => {
     if (!rawWallet?.address0) return '';
@@ -1144,13 +1127,11 @@ function App() {
 
   const resetAllStates = () => {
     setExtstate('not-authenticated');
-    setAuthenticatedMode('qort');
     setBackupjson(null);
     setRawWallet(null);
     setdecryptedWallet(null);
     setRequestConnection(null);
     setRequestBuyOrder(null);
-    setRequestAuthentication(null);
     setUserInfo(null);
     setBalance(null);
     setPaymentTo('');
@@ -1198,12 +1179,12 @@ function App() {
     if (!isMainWindow) return;
     // Handler for when the window gains focus
     const handleFocus = () => {
-      setIsFocused(true);
+      isFocusedRef.current = true;
     };
 
     // Handler for when the window loses focus
     const handleBlur = () => {
-      setIsFocused(false);
+      isFocusedRef.current = false;
     };
 
     // Attach the event listeners
@@ -1213,9 +1194,9 @@ function App() {
     // Optionally, listen for visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        setIsFocused(true);
+        isFocusedRef.current = true;
       } else {
-        setIsFocused(false);
+        isFocusedRef.current = false;
       }
     };
 
@@ -1887,7 +1868,6 @@ function App() {
             <Group
               balance={balance}
               desktopViewMode={desktopViewMode}
-              isFocused={isFocused}
               isMain={isMain}
               isOpenDrawerProfile={isOpenDrawerProfile}
               logoutFunc={logoutFunc}
@@ -2525,142 +2505,19 @@ function App() {
         )}
 
         {rawWallet && extState === 'wallet-dropped' && (
-          <>
-            <Spacer height="22px" />
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                justifyContent: 'flex-start',
-                maxWidth: '700px',
-                paddingLeft: '22px',
-                width: '100%',
-              }}
-            >
-              <Return
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                  width: 'auto',
-                }}
-                onClick={() => {
-                  setRawWallet(null);
-                  setExtstate('wallets');
-                  setAuthenticatePassword('');
-                  logoutFunc();
-                }}
-              />
-            </Box>
-
-            <Spacer height="10px" />
-
-            <div
-              className="image-container"
-              style={{
-                width: '136px',
-                height: '154px',
-              }}
-            >
-              <img src={Logo1Dark} className="base-image" />
-            </div>
-
-            <Spacer height="35px" />
-
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <Avatar
-                  alt={rawWallet?.name || ''}
-                  src={walletAvatarSrc || undefined}
-                  sx={{ width: 40, height: 40 }}
-                />
-                <Typography>
-                  {rawWallet?.name ||
-                    rawWallet?.filename ||
-                    rawWallet?.address0}
-                </Typography>
-              </Box>
-
-              <Spacer height="10px" />
-
-              <TextP
-                sx={{
-                  textAlign: 'start',
-                  lineHeight: '24px',
-                  fontSize: '20px',
-                  fontWeight: 600,
-                }}
-              >
-                {t('auth:authentication', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </TextP>
-            </Box>
-
-            <Spacer height="35px" />
-
-            <>
-              <CustomLabel htmlFor="standard-adornment-password">
-                {t('auth:wallet.password', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomLabel>
-
-              <Spacer height="10px" />
-
-              <PasswordField
-                id="standard-adornment-password"
-                value={authenticatePassword}
-                onChange={(e) => setAuthenticatePassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    authenticateWallet();
-                  }
-                }}
-                ref={passwordRef}
-              />
-
-              <>
-                <Spacer height="20px" />
-
-                <Typography
-                  sx={{
-                    fontSize: '12px',
-                    ...(isLocalNodeUrl(selectedNode?.url) && {
-                      fontWeight: 'bold',
-                      color: theme.palette.other.positive,
-                    }),
-                  }}
-                >
-                  {t('auth:node.using', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  : {nodeDisplay(selectedNode?.url)}
-                </Typography>
-              </>
-
-              <Spacer height="20px" />
-
-              <CustomButton onClick={authenticateWallet}>
-                {t('auth:action.authenticate', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <ErrorText>{walletToBeDecryptedError}</ErrorText>
-            </>
-          </>
+          <AuthenticationForm
+            rawWallet={rawWallet}
+            walletAvatarSrc={walletAvatarSrc}
+            selectedNode={selectedNode}
+            walletToBeDecryptedError={walletToBeDecryptedError}
+            onBack={() => {
+              setRawWallet(null);
+              setExtstate('wallets');
+              setAuthenticatePassword('');
+              logoutFunc();
+            }}
+            onAuthenticate={authenticateWallet}
+          />
         )}
         {extState === 'download-wallet' && (
           <DownloadWallet
