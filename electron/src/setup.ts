@@ -21,6 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
+import { log as loggerLog, error as loggerError } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -324,24 +325,6 @@ export class ElectronCapacitorApp {
       }
     });
 
-    // this.MainWindow.webContents.on(
-    //   'certificate-error',
-    //   async (event, url, error, certificate, callback) => {
-    //     console.log('certificate-error', error, url);
-
-    //     event.preventDefault(); // prevent Chromium default rejection
-
-    //     const result = await ensureCertForBase(url);
-
-    //     if (result.success) {
-    //       console.log('Retrying after trusting CA...');
-    //       callback(true); // allow this request
-    //     } else {
-    //       callback(false); // reject
-    //     }
-    //   }
-    // );
-
     this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
       if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
         event.preventDefault();
@@ -543,7 +526,7 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 
     return fileBuffer;
   } catch (error) {
-    console.error('Error reading file:', error.message);
+    loggerError('Error reading file:', error.message);
     return null; // Return null on error
   }
 });
@@ -555,7 +538,7 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
       properties: ['openDirectory'],
     });
     if (canceled || filePaths.length === 0) {
-      console.error('No directory selected');
+      loggerError('No directory selected');
       return null;
     }
 
@@ -597,7 +580,7 @@ ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
 
     return fs.promises.readFile(filePath, 'utf-8');
   } catch (err) {
-    console.error(`Error in walletStorage:read for "${fileName}"`, err);
+    loggerError(`Error in walletStorage:read for "${fileName}"`, err);
     return null;
   }
 });
@@ -612,7 +595,7 @@ ipcMain.handle(
       await fs.promises.writeFile(filePath, contents, 'utf-8');
       return true;
     } catch (err) {
-      console.error(`Error in walletStorage:write for "${fileName}"`, err);
+      loggerError(`Error in walletStorage:write for "${fileName}"`, err);
       throw err;
     }
   }
@@ -645,7 +628,7 @@ ipcMain.handle(
         filePath: result.filePath,
       };
     } catch (err) {
-      console.error('Error in file:startStreamSave', err);
+      loggerError('Error in file:startStreamSave', err);
       throw err;
     }
   }
@@ -658,7 +641,7 @@ ipcMain.handle(
     try {
       const buffer = Buffer.from(chunk);
       const mode = append ? 'append' : 'write';
-      console.log(
+      loggerLog(
         `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
       );
 
@@ -670,11 +653,11 @@ ipcMain.handle(
 
       // Get file size after write to verify
       const stats = await fs.promises.stat(filePath);
-      console.log(`[IPC] File size after write: ${stats.size} bytes`);
+      loggerLog(`[IPC] File size after write: ${stats.size} bytes`);
 
       return true;
     } catch (err) {
-      console.error('[IPC] Error writing chunk to', filePath, ':', err);
+      loggerError('[IPC] Error writing chunk to', filePath, ':', err);
       throw err;
     }
   }
@@ -686,7 +669,7 @@ ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
     await fs.promises.unlink(filePath);
     return true;
   } catch (err) {
-    console.error('Error deleting file', filePath, err);
+    loggerError('Error deleting file', filePath, err);
     // Don't throw - file might not exist
     return false;
   }
@@ -745,7 +728,7 @@ ipcMain.handle('coreSetup:isCoreRunning', async () => {
         }
       }
     } catch (error) {
-      console.error(error);
+      loggerError(error);
     }
     const running = await isCoreRunning();
     if (running) {
@@ -979,14 +962,14 @@ ipcMain.handle('coreSetup:stopCore', async () => {
   try {
     return await stopCore();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 ipcMain.handle('coreSetup:bootstrap', async () => {
   try {
     return await bootstrap();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 
@@ -1030,7 +1013,7 @@ ipcMain.handle('videoServer:start', async (_event, port?: number) => {
     const serverPort = await startVideoServer(port);
     return { success: true, port: serverPort };
   } catch (error) {
-    console.error('Failed to start video server:', error);
+    loggerError('Failed to start video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });
@@ -1040,7 +1023,7 @@ ipcMain.handle('videoServer:stop', async () => {
     await stopVideoServer();
     return { success: true };
   } catch (error) {
-    console.error('Failed to stop video server:', error);
+    loggerError('Failed to stop video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });

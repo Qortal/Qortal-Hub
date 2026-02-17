@@ -1,7 +1,8 @@
 // ------------------- User Preload starts here -------------------
 require('./rt/electron-rt');
 
-console.log('User Preload!');
+import { log as loggerLog, error as loggerError } from './logger';
+loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 
 try {
@@ -165,5 +166,5 @@ try {
 
   ipcRenderer.send('test-ipc');
 } catch (error) {
-  console.log('error', error);
+  loggerError('error', error);
 }
