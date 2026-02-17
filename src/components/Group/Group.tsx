@@ -796,6 +796,11 @@ export const Group = ({
     return hasUnread;
   }, [groupAnnouncements, groups]);
 
+  const groupsFilteredForList = useMemo(
+    () => groups.filter((g) => g.groupId !== '0'),
+    [groups]
+  );
+
   const getSecretKey = useCallback(
     async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
       try {
@@ -2239,7 +2244,7 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={groups.filter((g) => g.groupId !== '0')}
+            groups={groupsFilteredForList}
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}
