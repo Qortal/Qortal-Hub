@@ -40,6 +40,7 @@ import {
 } from './core';
 import {
   ensureCertForBase,
+  isLocalPrivateHost,
   persistedLocalNodeCaExists,
   setLocalNodeHttpsReady,
 } from './local-https-cert';
@@ -374,10 +375,29 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
+      const expandedDomains = [...domainHolder.allowedDomains];
+      for (const d of domainHolder.allowedDomains) {
+        try {
+          const url = new URL(d);
+          if (isLocalPrivateHost(url.hostname)) {
+            const hostPort = url.port
+              ? `${url.hostname}:${url.port}`
+              : url.hostname;
+            expandedDomains.push(
+              `http://${hostPort}`,
+              `https://${hostPort}`,
+              `ws://${hostPort}`,
+              `wss://${hostPort}`
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const allowedSources = [
         "'self'",
         customScheme,
-        ...domainHolder.allowedDomains,
+        ...new Set(expandedDomains),
       ];
       const frameSources = [
         "'self'",
@@ -924,18 +944,21 @@ ipcMain.handle('coreSetup:getApiKey', async () => {
   } catch (error) {}
 });
 
-ipcMain.handle('cert:ensureForBase', async (_event, baseUrl: string) => {
-  const result = await ensureCertForBase(baseUrl);
-  if (result.success) {
-    setLocalNodeHttpsReady(true);
-    session.defaultSession.clearCache().catch(() => {});
-    const win = myCapacitorApp.getMainWindow();
-    if (win && !win.isDestroyed()) {
-      win.webContents.session.clearCache().catch(() => {});
+ipcMain.handle(
+  'cert:ensureForBase',
+  async (_event, baseUrl: string, apiKey?: string) => {
+    const result = await ensureCertForBase(baseUrl, apiKey);
+    if (result.success) {
+      setLocalNodeHttpsReady(true);
+      session.defaultSession.clearCache().catch(() => {});
+      const win = myCapacitorApp.getMainWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.session.clearCache().catch(() => {});
+      }
     }
+    return result;
   }
-  return result;
-});
+);
 ipcMain.handle('coreSetup:resetApikey', async () => {
   try {
     const running = await resetApikey();

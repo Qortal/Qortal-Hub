@@ -5,7 +5,8 @@ declare global {
       openExternal?: (url: string) => void;
       setAllowedDomains?: (domains: string[]) => void;
       ensureCertForBase?: (
-        baseUrl: string
+        baseUrl: string,
+        apiKey?: string
       ) => Promise<{ success: boolean; error?: string }>;
     };
     videoServer?: {

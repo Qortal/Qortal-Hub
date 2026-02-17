@@ -5,6 +5,7 @@ import {
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
+import { isLocalPrivateHttpsUrl } from '../utils/helpers';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   authenticatePasswordAtom,
@@ -63,9 +64,9 @@ export const useAuth = () => {
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
 
-  const checkIfLocalIsRunning = useCallback(async () => {
+  const checkIfLocalIsRunning = useCallback(async (baseUrl: string) => {
     try {
-      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
+      const res = await fetch(baseUrl + '/admin/status');
       if (res?.ok) return true;
       return false;
     } catch (error) {
@@ -75,9 +76,12 @@ export const useAuth = () => {
 
   const generateApiKey = useCallback(async () => {
     try {
-      const res = await fetch(`${getDefaultLocalNodeUrl()}/admin/apikey/generate`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `${getDefaultLocalNodeUrl()}/admin/apikey/generate`,
+        {
+          method: 'POST',
+        }
+      );
       if (!res.ok) {
         return null;
       }
@@ -94,19 +98,26 @@ export const useAuth = () => {
       const isElectron = !!window?.coreSetup;
       const validatedNodeInfo = currentNode;
 
+      const isLocalPrivateHttps = isLocalPrivateHttpsUrl(
+        validatedNodeInfo?.url
+      );
+      let baseUrl = validatedNodeInfo?.url;
+      if (isLocalPrivateHttps && baseUrl) {
+        baseUrl = baseUrl.replace(/^https:\/\//i, 'http://');
+      }
       try {
         const isLocal = isLocalNodeUrl(validatedNodeInfo?.url);
         if (isLocal) {
           const runningRes = isElectron
             ? await window.coreSetup.isCoreRunning()
-            : await checkIfLocalIsRunning();
+            : await checkIfLocalIsRunning(baseUrl);
           if (!runningRes && !disablePopup) {
             setIsOpenCoreSetup(false);
             setIsOpenRecommendation(true);
             return { isValid: false, validatedNodeInfo };
           }
           if (isLocal && isElectron && !disablePopup) {
-            const statusAvailable = await checkIfLocalIsRunning();
+            const statusAvailable = await checkIfLocalIsRunning(baseUrl);
             if (!statusAvailable) {
               const endpointsReady = await actions.show();
               if (!endpointsReady) {
@@ -125,9 +136,7 @@ export const useAuth = () => {
         if (!isLocal) {
           let isUrlGood = true;
           try {
-            const resUrlCheck = await fetch(
-              `${validatedNodeInfo?.url}/admin/status`
-            );
+            const resUrlCheck = await fetch(`${baseUrl}/admin/status`);
             if (!resUrlCheck.ok) {
               isUrlGood = false;
             }
@@ -145,7 +154,7 @@ export const useAuth = () => {
 
         let isValid = false;
 
-        const url = `${validatedNodeInfo?.url}/admin/settings/localAuthBypassEnabled`;
+        const url = `${baseUrl}/admin/settings/localAuthBypassEnabled`;
         const response = await fetch(url);
 
         // Assuming the response is in plain text and will be 'true' or 'false'
@@ -154,7 +163,7 @@ export const useAuth = () => {
           isValid = true;
         } else {
           try {
-            const url2 = `${validatedNodeInfo?.url}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
+            const url2 = `${baseUrl}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
             const response2 = await fetch(url2);
 
             // Assuming the response is in plain text and will be 'true' or 'false'
@@ -178,6 +187,20 @@ export const useAuth = () => {
         }
         if (isValid && !isElectron && isLocal && !disablePopup) {
           setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
+        }
+
+        if (isValid && isElectron && isLocalPrivateHttps) {
+          try {
+            const result = await window.electronAPI?.ensureCertForBase?.(
+              validatedNodeInfo?.url,
+              validatedNodeInfo?.apikey ?? ''
+            );
+            if (!result?.success) {
+              throw new Error('Failed to ensure cert for base');
+            }
+          } catch (err) {
+            throw new Error('Failed to ensure cert for base');
+          }
         }
 
         return { isValid, validatedNodeInfo };

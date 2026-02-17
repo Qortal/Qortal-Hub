@@ -11,8 +11,8 @@ try {
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);
     },
-    ensureCertForBase: (baseUrl: string) =>
-      ipcRenderer.invoke('cert:ensureForBase', baseUrl),
+    ensureCertForBase: (baseUrl: string, apiKey?: string) =>
+      ipcRenderer.invoke('cert:ensureForBase', baseUrl, apiKey),
   });
 
   // Expose other utility functions
