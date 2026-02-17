@@ -48,16 +48,7 @@ import {
 } from './utils/generateWallet/generateWallet';
 import { crypto, walletVersion } from './constants/decryptWallet';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import {
-  AppContainer,
-  CustomButton,
-  CustomButtonAccept,
-  CustomLabel,
-  TextItalic,
-  TextP,
-  TextSpan,
-} from './styles/App-styles.ts';
-import { Spacer } from './common/Spacer';
+import { AppContainer } from './styles/App-styles.ts';
 import { Loader } from './components/Loader';
 import { AuthenticationForm } from './components/AuthenticationForm';
 import { ProfileLeft } from './components/Profile';
@@ -111,10 +102,7 @@ import {
 } from './components/Chat/GroupAnnouncements';
 import { requestQueueGroupJoinRequests } from './components/Group/GroupJoinRequests';
 import { DrawerComponent } from './components/Drawer/Drawer';
-import { AddressQRCode } from './components/AddressQRCode';
 import { Settings } from './components/Group/Settings';
-import { MainAvatar } from './components/MainAvatar';
-import Avatar from '@mui/material/Avatar';
 import { loadAvatar } from './utils/avatarStorage.ts';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
@@ -164,8 +152,6 @@ import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortal/qortal-requests.ts';
-import { QMailStatus } from './components/QMailStatus';
-import { GlobalActions } from './components/GlobalActions/GlobalActions';
 import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';
@@ -191,8 +177,6 @@ import {
 import { CoreSetup } from './components/CoreSetup.tsx';
 import { ApiKey } from './types/auth.ts';
 import { useAuth } from './hooks/useAuth.tsx';
-import { nodeDisplay } from './utils/helpers.ts';
-import { isElectron } from './utils/platform';
 
 export type extStates =
   | 'authenticated'
@@ -396,7 +380,6 @@ function App() {
   const {
     showTutorial,
     openTutorialModal,
-    shownTutorialsInitiated,
     setOpenTutorialModal,
     hasSeenGettingStarted,
   } = useHandleTutorials();
@@ -414,7 +397,6 @@ function App() {
 
   const {
     isShow: isShowInfo,
-    onCancel: onCancelInfo,
     onOk: onOkInfo,
     show: showInfo,
     message: messageInfo,
