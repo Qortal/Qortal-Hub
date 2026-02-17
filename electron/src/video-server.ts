@@ -3,6 +3,8 @@ import * as https from 'https';
 import * as crypto from 'crypto';
 import { URL } from 'url';
 
+import { log as loggerLog, error as loggerError } from './logger';
+
 interface EncryptionConfig {
   key: Buffer;
   iv: Buffer;
@@ -147,10 +149,10 @@ const routes: Record<string, RouteHandler> = {
         mimeType: mimeType || 'video/mp4',
       });
 
-      console.log(`[Register] Video registered: ${videoId}`);
+      loggerLog(`[Register] Video registered: ${videoId}`);
       sendJSON(res, 200, { success: true, videoId });
     } catch (error) {
-      console.error('[Register] Error:', error);
+      loggerError('[Register] Error:', error);
       sendJSON(res, 500, { error: 'Registration failed' });
     }
   },
@@ -160,7 +162,7 @@ const routes: Record<string, RouteHandler> = {
     const existed = encryptionConfigs.has(videoId!);
     encryptionConfigs.delete(videoId!);
 
-    console.log(
+    loggerLog(
       `[Cleanup] Video unregistered: ${videoId} (existed: ${existed})`
     );
     sendJSON(res, 200, { success: true, existed });
@@ -171,7 +173,7 @@ const routes: Record<string, RouteHandler> = {
     const config = encryptionConfigs.get(videoId!);
 
     if (!config) {
-      console.error(`[Stream] Video config not found: ${videoId}`);
+      loggerError(`[Stream] Video config not found: ${videoId}`);
       return sendJSON(res, 404, { error: 'Video config not found' });
     }
 
@@ -214,7 +216,7 @@ const routes: Record<string, RouteHandler> = {
       res.writeHead(statusCode, headers);
       res.end(decryptedData);
     } catch (error) {
-      console.error('[Stream] Error:', error);
+      loggerError('[Stream] Error:', error);
       if (!res.headersSent) {
         sendJSON(res, 500, { error: 'Streaming failed' });
       }
@@ -237,7 +239,7 @@ let serverPort: number | null = null;
 export function startVideoServer(port: number = 57000): Promise<number> {
   return new Promise((resolve, reject) => {
     if (server) {
-      console.log(`Video server already running on port ${serverPort}`);
+      loggerLog(`Video server already running on port ${serverPort}`);
       resolve(serverPort!);
       return;
     }
@@ -279,7 +281,7 @@ export function startVideoServer(port: number = 57000): Promise<number> {
 
     server.on('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {
-        console.log(`Port ${port} in use, trying ${port + 1}`);
+        loggerLog(`Port ${port} in use, trying ${port + 1}`);
         // Try next port
         server = null;
         startVideoServer(port + 1)
@@ -292,8 +294,8 @@ export function startVideoServer(port: number = 57000): Promise<number> {
 
     server.listen(port, '127.0.0.1', () => {
       serverPort = port;
-      console.log(`Video decryption proxy server running on port ${port}`);
-      console.log(`Health check: http://localhost:${port}/api/health`);
+      loggerLog(`Video decryption proxy server running on port ${port}`);
+      loggerLog(`Health check: http://localhost:${port}/api/health`);
       resolve(port);
     });
   });
@@ -307,7 +309,7 @@ export function stopVideoServer(): Promise<void> {
     }
 
     server.close(() => {
-      console.log('Video server stopped');
+      loggerLog('Video server stopped');
       server = null;
       serverPort = null;
       encryptionConfigs.clear();

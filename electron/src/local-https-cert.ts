@@ -3,9 +3,11 @@ import path from 'path';
 import { app, type Session } from 'electron';
 import fs from 'fs';
 
+import { log as loggerLog } from './logger';
+
 const DEBUG_CERT = true;
 function certLog(...args: unknown[]) {
-  if (DEBUG_CERT) console.log('[local-https-cert]', ...args);
+  if (DEBUG_CERT) loggerLog('[local-https-cert]', ...args);
 }
 
 /**

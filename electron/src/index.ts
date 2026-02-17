@@ -14,6 +14,7 @@ import {
   installLocalNodeHttpsBlock,
   loadPersistedLocalNodeCa,
 } from './local-https-cert';
+import { log as loggerLog, error as loggerError } from './logger';
 import {
   ElectronCapacitorApp,
   setupContentSecurityPolicy,
@@ -118,7 +119,7 @@ const checkForUpdates = async () => {
   try {
     await autoUpdater.checkForUpdatesAndNotify();
   } catch (error) {
-    console.error('Error checking for updates:', error);
+    loggerError('Error checking for updates:', error);
   }
 };
 
@@ -140,14 +141,14 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     if (!(await isPortTaken(port))) {
       // First instance — use default Electron behavior
       if (i === 0) {
-        console.log(
+        loggerLog(
           `🟢 Using default userData path: ${app.getPath('userData')}`
         );
       } else {
         const instanceName = `qortal-instance-${i + 1}`;
         const userDataPath = path.join(app.getPath('appData'), instanceName);
         app.setPath('userData', userDataPath);
-        console.log(`🟢 Using custom userData path: ${userDataPath}`);
+        loggerLog(`🟢 Using custom userData path: ${userDataPath}`);
       }
 
       // Reserve the port so this instance is considered active
@@ -156,7 +157,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     }
   }
 
-  console.error('❌ Too many instances already running.');
+  loggerError('❌ Too many instances already running.');
   app.quit();
 }
 
