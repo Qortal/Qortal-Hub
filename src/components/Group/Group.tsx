@@ -44,6 +44,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
+import { requestQueueMemberNames } from '../../utils/queue/requestQueueMemberNames';
 import { WebSocketActive } from './WebsocketActive';
 import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
@@ -152,10 +153,16 @@ interface GroupProps {
   balance: number;
   myAddress: string;
   userInfo: any;
+  desktopViewMode: string;
+  isMain?: boolean;
+  isOpenDrawerProfile?: boolean;
+  logoutFunc?: () => Promise<void>;
+  setDesktopViewMode: (mode: string) => void;
+  setIsOpenDrawerProfile: (open: boolean) => void;
 }
 
 export const timeDifferenceForNotificationChats = 900000;
-export const requestQueueMemberNames = new RequestQueueWithPromise(5);
+export { requestQueueMemberNames };
 export const requestQueueAdminMemberNames = new RequestQueueWithPromise(5);
 
 export const getGroupAdminsAddress = async (groupNumber: number) => {

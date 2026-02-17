@@ -1,10 +1,12 @@
 import {
   createContext,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
@@ -58,7 +60,7 @@ import {
 import { Spacer } from './common/Spacer';
 import { Loader } from './components/Loader';
 import { AuthenticationForm } from './components/AuthenticationForm';
-import { AuthenticatedProfile, ProfileLeft } from './components/Profile';
+import { ProfileLeft } from './components/Profile';
 import {
   BuyOrderRequestScreen,
   ConnectionRequestScreen,
@@ -77,8 +79,15 @@ import {
   WalletsView,
   WebAppAuthRequestScreen,
 } from './components/App';
+
+const AuthenticatedShell = lazy(
+  () =>
+    import('./components/App/AuthenticatedShell').then((m) => ({
+      default: m.AuthenticatedShell,
+    }))
+);
 import { PasswordField, ErrorText } from './components';
-import { Group, requestQueueMemberNames } from './components/Group/Group';
+import { requestQueueMemberNames } from './utils/queue/requestQueueMemberNames';
 import { TaskManager } from './components/TaskManager/TaskManager.tsx';
 import { useModal } from './hooks/useModal.tsx';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
@@ -1425,15 +1434,8 @@ function App() {
         )}
 
         {extState === 'authenticated' && isMainWindow && (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              height: '100vh',
-              width: '100vw',
-            }}
-          >
-            <Group
+          <Suspense fallback={<Loader />}>
+            <AuthenticatedShell
               balance={balance}
               desktopViewMode={desktopViewMode}
               isMain={isMain}
@@ -1443,10 +1445,6 @@ function App() {
               setDesktopViewMode={setDesktopViewMode}
               setIsOpenDrawerProfile={setIsOpenDrawerProfile}
               userInfo={userInfo}
-            />
-            <AuthenticatedProfile
-              userInfo={userInfo}
-              balance={balance}
               rawWallet={rawWallet}
               qortBalanceLoading={qortBalanceLoading}
               setOpenSnack={setOpenSnack}
@@ -1454,10 +1452,8 @@ function App() {
               onRefreshBalance={getBalanceAndUserInfoFunc}
               onOpenSendQort={onOpenSendQort}
               onOpenRegisterName={onOpenRegisterName}
-              desktopViewMode={desktopViewMode}
               extState={extState}
               isMainWindow={isMainWindow}
-              onLogout={logoutFunc}
               onOpenSettings={onOpenSettings}
               onOpenDrawerLookup={onOpenDrawerLookup}
               onOpenWalletsApp={onOpenWalletsApp}
@@ -1467,7 +1463,7 @@ function App() {
               showTutorial={showTutorial}
               onBackupWallet={onBackupWallet}
             />
-          </Box>
+          </Suspense>
         )}
 
         {isOpenSendQort && isMainWindow && (

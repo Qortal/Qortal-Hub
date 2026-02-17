@@ -1,3 +1,4 @@
+export { AuthenticatedShell } from './AuthenticatedShell';
 export { SendQortOverlay } from './SendQortOverlay';
 export { SuccessOverlay } from './SuccessOverlay';
 export { SuccessScreen } from './SuccessScreen';
