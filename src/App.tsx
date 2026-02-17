@@ -1274,117 +1274,115 @@ function App() {
         <Spacer height="48px" />
 
         <>
-            <MainAvatar
-              setOpenSnack={setOpenSnack}
-              setInfoSnack={setInfoSnack}
-              myName={userInfo?.name}
-              balance={balance}
-            />
+          <MainAvatar
+            setOpenSnack={setOpenSnack}
+            setInfoSnack={setInfoSnack}
+            myName={userInfo?.name}
+            balance={balance}
+          />
 
-            <Spacer height="32px" />
+          <Spacer height="32px" />
 
-            <TextP
+          <TextP
+            sx={{
+              fontSize: '20px',
+              lineHeight: '24px',
+              textAlign: 'center',
+            }}
+          >
+            {userInfo?.name}
+          </TextP>
+
+          <Spacer height="10px" />
+
+          <ButtonBase
+            onClick={() => {
+              if (rawWallet?.address0) {
+                navigator.clipboard
+                  .writeText(rawWallet.address0)
+                  .catch((err) => {
+                    console.error('Failed to copy address:', err);
+                  });
+              }
+            }}
+          >
+            <AddressBox>
+              {rawWallet?.address0?.slice(0, 6)}...
+              {rawWallet?.address0?.slice(-4)}{' '}
+              <CopyIcon color={theme.palette.text.primary} />
+            </AddressBox>
+          </ButtonBase>
+
+          <Spacer height="10px" />
+
+          {qortBalanceLoading && <CircularProgress color="success" size={16} />}
+
+          {!qortBalanceLoading && balance >= 0 && (
+            <Box
               sx={{
-                fontSize: '20px',
-                lineHeight: '24px',
-                textAlign: 'center',
+                alignItems: 'center',
+                display: 'flex',
+                gap: '10px',
               }}
             >
-              {userInfo?.name}
-            </TextP>
-
-            <Spacer height="10px" />
-
-            <ButtonBase
-              onClick={() => {
-                if (rawWallet?.address0) {
-                  navigator.clipboard
-                    .writeText(rawWallet.address0)
-                    .catch((err) => {
-                      console.error('Failed to copy address:', err);
-                    });
-                }
-              }}
-            >
-              <AddressBox>
-                {rawWallet?.address0?.slice(0, 6)}...
-                {rawWallet?.address0?.slice(-4)}{' '}
-                <CopyIcon color={theme.palette.text.primary} />
-              </AddressBox>
-            </ButtonBase>
-
-            <Spacer height="10px" />
-
-            {qortBalanceLoading && (
-              <CircularProgress color="success" size={16} />
-            )}
-
-            {!qortBalanceLoading && balance >= 0 && (
-              <Box
+              <TextP
                 sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <TextP
-                  sx={{
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                  }}
-                >
-                  {balance?.toFixed(2)} QORT
-                </TextP>
-
-                <RefreshIcon
-                  onClick={getBalanceAndUserInfoFunc}
-                  sx={{
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                  }}
-                />
-              </Box>
-            )}
-
-            <Spacer height="35px" />
-
-            {userInfo && !userInfo?.name && (
-              <Button
-                variant={'contained'}
-                sx={{
-                  backgroundColor: 'red',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  fontWeight: 500,
-                  lineHeight: 1.2,
-                  marginTop: '10px',
+                  fontSize: '20px',
+                  fontWeight: 700,
+                  lineHeight: '24px',
                   textAlign: 'center',
                 }}
-                onClick={() => {
-                  executeEvent('openRegisterName', {});
-                }}
               >
-                {t('core:action.register_name', {
-                  postProcess: 'capitalizeAll',
-                })}
-              </Button>
-            )}
+                {balance?.toFixed(2)} QORT
+              </TextP>
 
-            <Spacer height="20px" />
+              <RefreshIcon
+                onClick={getBalanceAndUserInfoFunc}
+                sx={{
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                }}
+              />
+            </Box>
+          )}
 
-            <CustomButton
+          <Spacer height="35px" />
+
+          {userInfo && !userInfo?.name && (
+            <Button
+              variant={'contained'}
+              sx={{
+                backgroundColor: 'red',
+                cursor: 'pointer',
+                fontSize: '16px',
+                fontWeight: 500,
+                lineHeight: 1.2,
+                marginTop: '10px',
+                textAlign: 'center',
+              }}
               onClick={() => {
-                setIsOpenSendQort(true);
-                setIsOpenDrawerProfile(false);
+                executeEvent('openRegisterName', {});
               }}
             >
-              {t('core:action.transfer_qort', {
-                postProcess: 'capitalizeFirstChar',
+              {t('core:action.register_name', {
+                postProcess: 'capitalizeAll',
               })}
-            </CustomButton>
-            <AddressQRCode targetAddress={rawWallet?.address0} />
+            </Button>
+          )}
+
+          <Spacer height="20px" />
+
+          <CustomButton
+            onClick={() => {
+              setIsOpenSendQort(true);
+              setIsOpenDrawerProfile(false);
+            }}
+          >
+            {t('core:action.transfer_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </CustomButton>
+          <AddressQRCode targetAddress={rawWallet?.address0} />
         </>
 
         <TextP
@@ -2077,7 +2075,7 @@ function App() {
                   }}
                 >
                   {t('core:message.generic.fee_qort', {
-                    message: messageQortalRequest?.fee,
+                    fee: messageQortalRequest?.fee,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </TextP>
@@ -3601,7 +3599,7 @@ function App() {
                     }}
                   >
                     {t('core:message.generic.fee_qort', {
-                      message: messageQortalRequestExtension?.appFee,
+                      fee: messageQortalRequestExtension?.appFee,
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
@@ -3624,7 +3622,7 @@ function App() {
                     }}
                   >
                     {t('core:message.generic.foreign_fee', {
-                      message: messageQortalRequestExtension?.foreignFee,
+                      fee: messageQortalRequestExtension?.foreignFee,
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
