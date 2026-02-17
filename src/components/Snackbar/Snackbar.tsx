@@ -6,7 +6,7 @@ export const CustomizedSnackbars = ({
   setOpen,
   info,
   setInfo,
-  duration,
+  duration = 6000,
 }) => {
   const handleClose = (
     event?: React.SyntheticEvent | Event,
