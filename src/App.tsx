@@ -1,5 +1,4 @@
 import {
-  createContext,
   lazy,
   useCallback,
   useEffect,
@@ -42,36 +41,18 @@ import {
   WebAppAuthRequestScreen,
 } from './components/App';
 
-const AuthenticatedShell = lazy(
-  () =>
-    import('./components/App/AuthenticatedShell').then((m) => ({
-      default: m.AuthenticatedShell,
-    }))
-);
-import { requestQueueMemberNames } from './utils/queue/requestQueueMemberNames';
+import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import HelpIcon from '@mui/icons-material/Help';
-import {
-  cleanUrl,
-  getProtocol,
-  getWallets,
-  groupApi,
-  groupApiSocket,
-  storeWallets,
-} from './background/background.ts';
+import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from './utils/events';
-import {
-  requestQueueCommentCount,
-  requestQueuePublishedAccouncements,
-} from './components/Chat/GroupAnnouncements';
-import { requestQueueGroupJoinRequests } from './components/Group/GroupJoinRequests';
 import { DrawerComponent } from './components/Drawer/Drawer';
 import { Settings } from './components/Group/Settings';
 import { loadAvatar } from './utils/avatarStorage.ts';
@@ -117,138 +98,41 @@ import {
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
-import { ApiKey } from './types/auth.ts';
 import { useAuth } from './hooks/useAuth.tsx';
+import type { extStates } from './types/app';
+import { QORTAL_APP_CONTEXT } from './context/AppContext';
+import {
+  allQueues,
+  clearAllQueues,
+  pauseAllQueues,
+  resumeAllQueues,
+} from './utils/appQueues';
+import {
+  globalApiKey,
+  handleSetGlobalApikey,
+  getBaseApiReact,
+  getArbitraryEndpointReact,
+  getBaseApiReactSocket,
+} from './utils/globalApi';
+import { isMainWindow } from './constants/app';
 
-export type extStates =
-  | 'authenticated'
-  | 'buy-order-submitted'
-  | 'create-wallet'
-  | 'download-wallet'
-  | 'group'
-  | 'not-authenticated'
-  | 'send-qort'
-  | 'transfer-success-regular'
-  | 'transfer-success-request'
-  | 'wallet-dropped'
-  | 'wallets'
-  | 'web-app-request-authentication'
-  | 'web-app-request-buy-order'
-  | 'web-app-request-connection'
-  | 'web-app-request-payment';
-
-interface MyContextInterface {
-  isShow: boolean;
-  onCancel: () => void;
-  onOk: () => void;
-  show: () => void;
-  message: any;
-}
-
-const defaultValues: MyContextInterface = {
-  isShow: false,
-  onCancel: () => {},
-  onOk: () => {},
-  show: () => {},
-  message: {
-    publishFee: '',
-    message: '',
-  },
-};
-
-export const allQueues = {
-  requestQueueCommentCount: requestQueueCommentCount,
-  requestQueuePublishedAccouncements: requestQueuePublishedAccouncements,
-  requestQueueMemberNames: requestQueueMemberNames,
-  requestQueueGroupJoinRequests: requestQueueGroupJoinRequests,
-};
-
-const controlAllQueues = (action) => {
-  Object.keys(allQueues).forEach((key) => {
-    const val = allQueues[key];
-    try {
-      if (typeof val[action] === 'function') {
-        val[action]();
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  });
-};
-
-export const clearAllQueues = () => {
-  Object.keys(allQueues).forEach((key) => {
-    const val = allQueues[key];
-    try {
-      val.clear();
-    } catch (error) {
-      console.error(error);
-    }
-  });
-};
-
-export const pauseAllQueues = () => {
-  controlAllQueues('pause');
-  window.sendMessage('pauseAllQueues', {}).catch((error) => {
-    console.error(
-      'Failed to pause all queues:',
-      error.message || 'An error occurred'
-    );
-  });
-};
-
-export const resumeAllQueues = () => {
-  controlAllQueues('resume');
-  window.sendMessage('resumeAllQueues', {}).catch((error) => {
-    console.error(
-      'Failed to resume all queues:',
-      error.message || 'An error occurred'
-    );
-  });
-};
-
-export const QORTAL_APP_CONTEXT =
-  createContext<MyContextInterface>(defaultValues);
-
-export let globalApiKey: ApiKey | null = null;
-
-export const handleSetGlobalApikey = (data: ApiKey) => {
-  globalApiKey = data;
-};
-export const getBaseApiReact = (customApi?: string) => {
-  if (customApi) {
-    return customApi;
-  }
-  if (globalApiKey?.url) {
-    return globalApiKey?.url;
-  } else {
-    return groupApi;
-  }
-};
-
-export const getArbitraryEndpointReact = () => {
-  if (globalApiKey) {
-    return `/arbitrary/resources/searchsimple`;
-  } else {
-    return `/arbitrary/resources/searchsimple`;
-  }
-};
-
-export const getBaseApiReactSocket = (customApi?: string) => {
-  if (customApi) {
-    return customApi;
-  }
-
-  if (globalApiKey?.url) {
-    return `${
-      getProtocol(globalApiKey?.url) === 'http' ? 'ws://' : 'wss://'
-    }${cleanUrl(globalApiKey?.url)}`;
-  } else {
-    return groupApiSocket;
-  }
-};
-
-export const isMainWindow = true;
+// Re-export for consumers that still import from App
+export type { extStates } from './types/app';
+export { QORTAL_APP_CONTEXT } from './context/AppContext';
+export {
+  allQueues,
+  clearAllQueues,
+  pauseAllQueues,
+  resumeAllQueues,
+} from './utils/appQueues';
+export {
+  globalApiKey,
+  handleSetGlobalApikey,
+  getBaseApiReact,
+  getArbitraryEndpointReact,
+  getBaseApiReactSocket,
+} from './utils/globalApi';
+export { isMainWindow } from './constants/app';
 
 function App() {
   const [extState, setExtstate] = useAtom(extStateAtom);
@@ -1248,7 +1132,7 @@ function App() {
 
         {extState === 'authenticated' && isMainWindow && (
           <Suspense fallback={<Loader />}>
-            <AuthenticatedShell
+            <LazyAuthenticatedShell
               balance={balance}
               desktopViewMode={desktopViewMode}
               isMain={isMain}
