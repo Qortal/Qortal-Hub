@@ -2077,7 +2077,7 @@ function App() {
                   }}
                 >
                   {t('core:message.generic.fee_qort', {
-                    message: messageQortalRequest?.fee,
+                    fee: messageQortalRequest?.fee,
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </TextP>
@@ -3601,7 +3601,7 @@ function App() {
                     }}
                   >
                     {t('core:message.generic.fee_qort', {
-                      message: messageQortalRequestExtension?.appFee,
+                      fee: messageQortalRequestExtension?.appFee,
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
@@ -3624,7 +3624,7 @@ function App() {
                     }}
                   >
                     {t('core:message.generic.foreign_fee', {
-                      message: messageQortalRequestExtension?.foreignFee,
+                      fee: messageQortalRequestExtension?.foreignFee,
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </TextP>
