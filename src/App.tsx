@@ -9,38 +9,9 @@ import {
   Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import {
-  Box,
-  Button,
-  ButtonBase,
-  Checkbox,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  Tooltip,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
-import 'react-json-view-lite/dist/index.css';
-import HubIcon from '@mui/icons-material/Hub';
+import { ButtonBase, useTheme } from '@mui/material';
 import { decryptStoredWallet } from './utils/decryptWallet';
-import { CountdownCircleTimer } from 'react-countdown-circle-timer';
-import Logo1Dark from './assets/svgs/Logo1Dark.svg';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import DownloadIcon from '@mui/icons-material/Download';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
-import { Return } from './assets/Icons/Return.tsx';
-import WarningIcon from '@mui/icons-material/Warning';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
-import EngineeringIcon from '@mui/icons-material/Engineering';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import {
   createAccount,
   saveFileToDisk,
@@ -77,10 +48,10 @@ const AuthenticatedShell = lazy(
       default: m.AuthenticatedShell,
     }))
 );
-import { PasswordField, ErrorText } from './components';
 import { requestQueueMemberNames } from './utils/queue/requestQueueMemberNames';
-import { TaskManager } from './components/TaskManager/TaskManager.tsx';
-import { useModal } from './hooks/useModal.tsx';
+import { useAppModals } from './hooks/useAppModals';
+import { useAppReset } from './hooks/useAppReset';
+import { useAppMessageHandler } from './hooks/useAppMessageHandler';
 import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
 import HelpIcon from '@mui/icons-material/Help';
 import {
@@ -109,43 +80,21 @@ import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
   authenticatePasswordAtom,
   balanceAtom,
-  canSaveSettingToQdnAtom,
   enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
-  globalDownloadsAtom,
-  groupAnnouncementsAtom,
-  groupChatTimestampsAtom,
-  groupsOwnerNamesAtom,
-  groupsPropertiesAtom,
   hasSettingsChangedAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
   isRunningPublicNodeAtom,
-  isUsingImportExportSettingsAtom,
-  lastPaymentSeenTimestampAtom,
-  mailsAtom,
-  memberGroupsAtom,
-  mutedGroupsAtom,
-  myGroupsWhereIAmAdminAtom,
-  oldPinnedAppsAtom,
-  qMailLastEnteredTimestampAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
-  resourceDownloadControllerAtom,
   selectedNodeInfoAtom,
-  settingsLocalLastUpdatedAtom,
-  settingsQDNLastUpdatedAtom,
-  sortablePinnedAppsAtom,
-  timestampEnterDataAtom,
-  txListAtom,
   userInfoAtom,
   walletToBeDecryptedErrorAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
-import { handleGetFileFromIndexedDB } from './utils/indexedDB';
-import { Wallets } from './components/Wallets.tsx';
 import { useFetchResources } from './hooks/useFetchResources.tsx';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
@@ -156,17 +105,10 @@ import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';
 import { BuyQortInformation } from './components/BuyQortInformation';
-import { QortPayment } from './components/QortPayment';
-import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
-import ThemeSelector from './components/Theme/ThemeSelector.tsx';
-import { Trans, useTranslation } from 'react-i18next';
-import LanguageSelector from './components/Language/LanguageSelector.tsx';
+import { useTranslation } from 'react-i18next';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
-import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
-import { Save } from './components/Save/Save';
-import { useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { useResetAtom } from 'jotai/utils';
+import { useAtom, useSetAtom } from 'jotai';
 import {
   getDefaultLocalNodeUrl,
   isLocalNodeUrl,
@@ -373,9 +315,11 @@ function App() {
 
   const balanceSetIntervalRef = useRef(null);
   const downloadResource = useFetchResources();
-  const globalDownloadsValue = useAtomValue(globalDownloadsAtom);
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
+  const permissionHandlerRef = useRef<((message: any, event: MessageEvent) => void) | null>(null);
+
+  const { resetAllRecoil } = useAppReset();
 
   const {
     showTutorial,
@@ -384,39 +328,43 @@ function App() {
     hasSeenGettingStarted,
   } = useHandleTutorials();
 
-  const { isShow, onCancel, onOk, show, message } = useModal();
-
+  const modals = useAppModals();
   const {
-    isShow: isShowUnsavedChanges,
-    onCancel: onCancelUnsavedChanges,
-    onOk: onOkUnsavedChanges,
-    show: showUnsavedChanges,
-    message: messageUnsavedChanges,
-  } = useModal();
+    paymentPublish,
+    unsavedChanges,
+    info,
+    qortalRequest,
+    qortalRequestExtension,
+    confirmRequestRead,
+    setConfirmRequestRead,
+    qortalRequestCheckbox1Ref,
+  } = modals;
+  const isShow = paymentPublish.isShow;
+  const onCancel = paymentPublish.onCancel;
+  const onOk = paymentPublish.onOk;
+  const show = paymentPublish.show;
+  const message = paymentPublish.message;
+  const isShowUnsavedChanges = unsavedChanges.isShow;
+  const onCancelUnsavedChanges = unsavedChanges.onCancel;
+  const onOkUnsavedChanges = unsavedChanges.onOk;
+  const showUnsavedChanges = unsavedChanges.show;
+  const messageUnsavedChanges = unsavedChanges.message;
+  const isShowInfo = info.isShow;
+  const onOkInfo = info.onOk;
+  const showInfo = info.show;
+  const messageInfo = info.message;
+  const onCancelQortalRequest = qortalRequest.onCancel;
+  const onOkQortalRequest = qortalRequest.onOk;
+  const showQortalRequest = qortalRequest.show;
+  const isShowQortalRequest = qortalRequest.isShow;
+  const messageQortalRequest = qortalRequest.message;
+  const onCancelQortalRequestExtension = qortalRequestExtension.onCancel;
+  const onOkQortalRequestExtension = qortalRequestExtension.onOk;
+  const showQortalRequestExtension = qortalRequestExtension.show;
+  const isShowQortalRequestExtension = qortalRequestExtension.isShow;
+  const messageQortalRequestExtension = qortalRequestExtension.message;
+
   const confirmRef = useRef(null);
-
-  const {
-    isShow: isShowInfo,
-    onOk: onOkInfo,
-    show: showInfo,
-    message: messageInfo,
-  } = useModal();
-
-  const {
-    onCancel: onCancelQortalRequest,
-    onOk: onOkQortalRequest,
-    show: showQortalRequest,
-    isShow: isShowQortalRequest,
-    message: messageQortalRequest,
-  } = useModal();
-
-  const {
-    onCancel: onCancelQortalRequestExtension,
-    onOk: onOkQortalRequestExtension,
-    show: showQortalRequestExtension,
-    isShow: isShowQortalRequestExtension,
-    message: messageQortalRequestExtension,
-  } = useModal();
 
   const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
@@ -442,12 +390,10 @@ function App() {
 
   // const [useLocalNode, setUseLocalNode] = useState(true);
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
-  const [confirmRequestRead, setConfirmRequestRead] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
   const [creationStep, setCreationStep] = useState(1);
   const getIndividualUserInfo = useHandleUserInfo();
-  const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
@@ -486,76 +432,7 @@ function App() {
       });
   }, [extState]);
 
-  //resets for recoil
-  const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
-  const resetAtomIsUsingImportExportSettingsAtom = useResetAtom(
-    isUsingImportExportSettingsAtom
-  );
-  const resetAtomCanSaveSettingToQdnAtom = useResetAtom(
-    canSaveSettingToQdnAtom
-  );
-  const resetAtomSettingsQDNLastUpdatedAtom = useResetAtom(
-    settingsQDNLastUpdatedAtom
-  );
-  const resetAtomSettingsLocalLastUpdatedAtom = useResetAtom(
-    settingsLocalLastUpdatedAtom
-  );
-  const resetAtomOldPinnedAppsAtom = useResetAtom(oldPinnedAppsAtom);
-  const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
-    qMailLastEnteredTimestampAtom
-  );
-  const resetAtomMailsAtom = useResetAtom(mailsAtom);
-  const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
-  const resetLastPaymentSeenTimestampAtom = useResetAtom(
-    lastPaymentSeenTimestampAtom
-  );
-  const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
-    myGroupsWhereIAmAdminAtom
-  );
-  const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
-  const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
-  const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
-  const resetGroupChatTimestampsAtom = useResetAtom(groupChatTimestampsAtom);
-  const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
-  const resettxListAtomAtom = useResetAtom(txListAtom);
-  const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
-  const resetResourceDownloadControllerAtom = useResetAtom(
-    resourceDownloadControllerAtom
-  );
-  const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
-  const resetAllRecoil = () => {
-    // First, clean up any active download intervals/timeouts
-    if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
-      Object.values(globalDownloadsValue).forEach((entry: any) => {
-        if (entry?.interval) clearInterval(entry.interval);
-        if (entry?.timeout) clearTimeout(entry.timeout);
-        if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
-      });
-    }
-
-    // Reset all atoms
-    resetAtomSortablePinnedAppsAtom();
-    resetAtomCanSaveSettingToQdnAtom();
-    resetAtomSettingsQDNLastUpdatedAtom();
-    resetAtomSettingsLocalLastUpdatedAtom();
-    resetAtomOldPinnedAppsAtom();
-    resetAtomIsUsingImportExportSettingsAtom();
-    resetAtomQMailLastEnteredTimestampAtom();
-    resetAtomMailsAtom();
-    resetGroupPropertiesAtom();
-    resetLastPaymentSeenTimestampAtom();
-    resetGroupsOwnerNamesAtom();
-    resetGroupAnnouncementsAtom();
-    resetMutedGroupsAtom();
-    resetGroupChatTimestampsAtom();
-    resetTimestampEnterAtom();
-    resettxListAtomAtom();
-    resetmemberGroupsAtomAtom();
-    resetMyGroupsWhereIAmAdminAtom();
-    resetResourceDownloadControllerAtom();
-    resetGlobalDownloadsAtom();
-  };
 
   const contextValue = useMemo(
     () => ({
@@ -859,54 +736,8 @@ function App() {
       }
     }
   };
-
-  useEffect(() => {
-    // Handler function for incoming messages
-    const messageHandler = (event) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-      const message = event.data;
-
-      if (message?.action === 'CHECK_FOCUS') {
-        event.source.postMessage(
-          { action: 'CHECK_FOCUS_RESPONSE', isFocused: isFocusedRef.current },
-          event.origin
-        );
-      } else if (message.action === 'NOTIFICATION_OPEN_DIRECT') {
-        executeEvent('openDirectMessage', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_GROUP') {
-        executeEvent('openGroupMessage', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP') {
-        executeEvent('openGroupAnnouncement', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_THREAD_NEW_POST') {
-        executeEvent('openThreadNewPost', {
-          data: message.payload.data,
-        });
-      } else if (
-        message.action === 'QORTAL_REQUEST_PERMISSION' &&
-        message?.isFromExtension
-      ) {
-        qortalRequestPermissionFromExtension(message, event);
-      } else if (message?.action === 'getFileFromIndexedDB') {
-        handleGetFileFromIndexedDB(event);
-      }
-    };
-
-    // Attach the event listener
-    window.addEventListener('message', messageHandler);
-
-    // Clean up the event listener on component unmount
-    return () => {
-      window.removeEventListener('message', messageHandler);
-    };
-  }, []);
+  permissionHandlerRef.current = qortalRequestPermissionFromExtension;
+  useAppMessageHandler(isFocusedRef, permissionHandlerRef);
 
   //param = isDecline
   const confirmPayment = useCallback((isDecline: boolean) => {
