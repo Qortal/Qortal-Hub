@@ -48,7 +48,16 @@ function persistCaForHost(hostname: string, caPem: string): void {
     const filePath = getPersistedCaPath();
     fs.writeFileSync(filePath, normalized, 'utf-8');
     const fp = sha256FingerprintFromPem(normalized);
-    certLog('persisted CA to', filePath, 'len=', normalized.length, 'start=', normalized.slice(0, 80), 'fp=', fp.slice(0, 24) + '...');
+    certLog(
+      'persisted CA to',
+      filePath,
+      'len=',
+      normalized.length,
+      'start=',
+      normalized.slice(0, 80),
+      'fp=',
+      fp.slice(0, 24) + '...'
+    );
   } catch (e) {
     certLog('persist CA failed', e);
   }
@@ -83,7 +92,16 @@ export function loadPersistedLocalNodeCa(): void {
     trustedCaByHost.set('127.0.0.1', caPem);
     trustedCaByHost.set('localhost', caPem);
     const fp = sha256FingerprintFromPem(caPem);
-    certLog('loaded persisted CA path=', filePath, 'len=', caPem.length, 'start=', caPem.slice(0, 80), 'fp=', fp.slice(0, 24) + '...');
+    certLog(
+      'loaded persisted CA path=',
+      filePath,
+      'len=',
+      caPem.length,
+      'start=',
+      caPem.slice(0, 80),
+      'fp=',
+      fp.slice(0, 24) + '...'
+    );
   } catch {
     /* ignore */
   }
@@ -99,7 +117,7 @@ function normalizeHost(hostname: string): string {
  * True if the host is a local/private address (loopback or LAN, not routable to the public internet).
  * Covers: localhost, 127.0.0.0/8, 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12, ::1.
  */
-function isLocalPrivateHost(host: string): boolean {
+export function isLocalPrivateHost(host: string): boolean {
   const h = host.toLowerCase().trim();
   if (h === 'localhost') return true;
   const parts = h.split('.');
@@ -235,7 +253,11 @@ export function installLocalNodeHttpsBlock(session: Session): void {
         return;
       }
       if (!localNodeHttpsReady) {
-        certLog('blocked HTTPS to local/private host (not ready)', hostname, details.url);
+        certLog(
+          'blocked HTTPS to local/private host (not ready)',
+          hostname,
+          details.url
+        );
         callback({ cancel: true });
       } else {
         callback({});
@@ -268,7 +290,14 @@ export function installCertificateVerification(session: Session): void {
           .fingerprint256 ?? ''
       ) || sha256FingerprintFromPem(caPem);
     const storedFpFromPem = sha256FingerprintFromPem(caPem);
-    certLog('storedFp len=', storedFp.length, 'storedFpFromPem len=', storedFpFromPem.length, 'same=', storedFp === storedFpFromPem);
+    certLog(
+      'storedFp len=',
+      storedFp.length,
+      'storedFpFromPem len=',
+      storedFpFromPem.length,
+      'same=',
+      storedFp === storedFpFromPem
+    );
     certLog('stored PEM start=', caPem.trim().slice(0, 120), '...');
 
     // (1) Verify leaf (server cert) is signed by our stored CA
@@ -295,7 +324,9 @@ export function installCertificateVerification(session: Session): void {
     while (cert) {
       topCert = cert;
       const certFp = fingerprintToHex(cert.fingerprint ?? '');
-      const certFpFromPem = cert.data ? sha256FingerprintFromPem(cert.data) : '';
+      const certFpFromPem = cert.data
+        ? sha256FingerprintFromPem(cert.data)
+        : '';
       const match = certFp && certFp === storedFp;
       const matchFromPem = certFpFromPem && certFpFromPem === storedFpFromPem;
       certLog(
@@ -315,7 +346,16 @@ export function installCertificateVerification(session: Session): void {
       if (cert.data) {
         const chainPemNorm = normalizePem(cert.data);
         const chainFp = sha256FingerprintFromPem(chainPemNorm);
-        certLog('chain cert we compare: i=', chainIndex, 'len=', chainPemNorm.length, 'start=', chainPemNorm.slice(0, 80), 'fp=', chainFp.slice(0, 24) + '...');
+        certLog(
+          'chain cert we compare: i=',
+          chainIndex,
+          'len=',
+          chainPemNorm.length,
+          'start=',
+          chainPemNorm.slice(0, 80),
+          'fp=',
+          chainFp.slice(0, 24) + '...'
+        );
       }
       chainIndex++;
       if (match || matchFromPem) {
@@ -330,7 +370,14 @@ export function installCertificateVerification(session: Session): void {
     let topVerified = false;
     if (topCert?.data) {
       try {
-        certLog('top PEM len=', topCert.data.length, 'stored PEM len=', caPem.trim().length, 'top start=', topCert.data.trim().slice(0, 80));
+        certLog(
+          'top PEM len=',
+          topCert.data.length,
+          'stored PEM len=',
+          caPem.trim().length,
+          'top start=',
+          topCert.data.trim().slice(0, 80)
+        );
         const topX509 = new crypto.X509Certificate(topCert.data);
         topVerified = topX509.verify(storedCa.publicKey);
         certLog('top verify(storedCa.publicKey)=', topVerified);
@@ -358,16 +405,60 @@ export function installCertificateVerification(session: Session): void {
   });
 }
 
+/** SAN list from GET /admin/http/san */
+interface SanList {
+  dns?: string[];
+  ip?: string[];
+}
+
+async function fetchSanList(
+  httpBase: string,
+  apiKey?: string
+): Promise<SanList | null> {
+  try {
+    const apiKeyParam = `?apiKey=${apiKey || ''}`;
+    const res = await fetch(`${httpBase}/admin/http/san${apiKeyParam}`, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as SanList;
+    return {
+      dns: Array.isArray(json.dns) ? json.dns : [],
+      ip: Array.isArray(json.ip) ? json.ip : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** True if hostname appears in the SAN list (dns or ip); localhost and 127.0.0.1 are treated as equivalent. */
+function isHostInSanList(hostname: string, san: SanList): boolean {
+  const dns = san.dns ?? [];
+  const ip = san.ip ?? [];
+  const h = hostname.toLowerCase().trim();
+  if (ip.includes(h) || dns.includes(h)) return true;
+  if (h === '127.0.0.1' && dns.includes('localhost')) return true;
+  if (
+    h === 'localhost' &&
+    (ip.includes('127.0.0.1') || dns.includes('localhost'))
+  )
+    return true;
+  return false;
+}
+
 /**
  * Ensure we have a CA for the given HTTPS base.
  * Fetches /admin/http/getca over HTTP; if missing, POSTs /admin/http/createca then getca again.
+ * Verifies the connecting host is in the node's SAN list; if not, creates a new CA and refetches.
  * Compares with persisted CA by fingerprint; returns caChanged when GET differs from cache (or no cache).
  *
  * IMPORTANT: With the CA-based model, call this BEFORE the first HTTPS navigation to that host,
  * because Electron/Chromium may cache verification results. :contentReference[oaicite:8]{index=8}
  */
 export async function ensureCertForBase(
-  baseUrl: string
+  baseUrl: string,
+  apiKey?: string
 ): Promise<{ success: boolean; caChanged?: boolean; error?: string }> {
   try {
     certLog('ensureCertForBase start baseUrl=', baseUrl);
@@ -384,11 +475,12 @@ export async function ensureCertForBase(
     // (If Qortal differs, split this into explicit httpsPort/httpPort.)
     const port = url.port || '443';
     const httpBase = `http://${hostname}:${port}`;
+    const apiKeyParam = `?apiKey=${apiKey || ''}`;
 
     let caPem: string | null = null;
 
     certLog('ensureCertForBase httpBase=', httpBase, 'fetching getca');
-    const getcaRes = await fetch(`${httpBase}/admin/http/getca`, {
+    const getcaRes = await fetch(`${httpBase}/admin/http/getca${apiKeyParam}`, {
       method: 'GET',
       headers: { accept: 'text/plain' },
     });
@@ -400,11 +492,14 @@ export async function ensureCertForBase(
 
     if (!caPem) {
       certLog('ensureCertForBase no CA yet, calling createca');
-      const createRes = await fetch(`${httpBase}/admin/http/createca`, {
-        method: 'POST',
-        headers: { accept: 'text/plain' },
-        body: '',
-      });
+      const createRes = await fetch(
+        `${httpBase}/admin/http/createca${apiKeyParam}`,
+        {
+          method: 'POST',
+          headers: { accept: 'text/plain' },
+          body: '',
+        }
+      );
       if (!createRes.ok) {
         return {
           success: false,
@@ -419,10 +514,13 @@ export async function ensureCertForBase(
         return { success: false, error: `createca response: ${createText}` };
       }
 
-      const getcaRes2 = await fetch(`${httpBase}/admin/http/getca`, {
-        method: 'GET',
-        headers: { accept: 'text/plain' },
-      });
+      const getcaRes2 = await fetch(
+        `${httpBase}/admin/http/getca${apiKeyParam}`,
+        {
+          method: 'GET',
+          headers: { accept: 'text/plain' },
+        }
+      );
       if (!getcaRes2.ok) {
         return { success: false, error: 'getca after createca failed' };
       }
@@ -434,13 +532,61 @@ export async function ensureCertForBase(
       caPem = text2;
     }
 
+    // Verify connecting host is in the node's SAN list; if not, create a new CA and refetch.
+    const san = await fetchSanList(httpBase, apiKey);
+    if (san && !isHostInSanList(hostname, san)) {
+      certLog('ensureCertForBase host not in SAN list, creating new CA');
+      const createRes = await fetch(
+        `${httpBase}/admin/http/createca${apiKeyParam}`,
+        {
+          method: 'POST',
+          headers: { accept: 'text/plain' },
+          body: '',
+        }
+      );
+      if (!createRes.ok) {
+        return {
+          success: false,
+          error: `createca failed (host not in SAN): ${createRes.status}`,
+        };
+      }
+      const createText = (await createRes.text()).trim();
+      if (
+        !createText.includes('CA and server certificate created successfully')
+      ) {
+        return { success: false, error: `createca response: ${createText}` };
+      }
+      const getcaRes3 = await fetch(
+        `${httpBase}/admin/http/getca${apiKeyParam}`,
+        {
+          method: 'GET',
+          headers: { accept: 'text/plain' },
+        }
+      );
+      if (!getcaRes3.ok) {
+        return { success: false, error: 'getca after createca (SAN) failed' };
+      }
+      const text3 = (await getcaRes3.text()).trim();
+      if (!text3) {
+        return { success: false, error: 'getca returned empty after createca' };
+      }
+      caPem = text3;
+      const sanAfter = await fetchSanList(httpBase, apiKey);
+      if (sanAfter && !isHostInSanList(hostname, sanAfter)) {
+        return {
+          success: false,
+          error:
+            'Host still not in SAN list after creating new CA. Restart the node or check /admin/http/san.',
+        };
+      }
+    }
+
     const extracted = extractCaPem(caPem);
     const caPemToStore = normalizePem(extracted);
     const getFp = sha256FingerprintFromPem(caPemToStore);
 
     // caChanged: no persisted CA, or persisted fingerprint differs from GET (CA changed or first run).
-    const caChanged =
-      persistedFp === null || persistedFp !== getFp;
+    const caChanged = persistedFp === null || persistedFp !== getFp;
     if (persistedFp !== null) {
       certLog(
         'ensureCertForBase cache vs GET: persistedFp=',

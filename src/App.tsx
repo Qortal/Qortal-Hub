@@ -1168,47 +1168,6 @@ function App() {
   }
 
   const authenticateWallet = async () => {
-    const baseUrl = getDefaultLocalNodeUrl();
-    console.log(
-      'isElectron',
-      isElectron(),
-      baseUrl,
-      baseUrl?.startsWith('https://')
-    );
-    if (isElectron() && baseUrl?.startsWith('https://')) {
-      let isLikelyCertError = true;
-      try {
-        const statusRes = await fetch(`${baseUrl}/admin/status`);
-        if (!statusRes.ok) {
-          // Got a response: TLS worked, so not a cert error (e.g. 404, 502)
-          isLikelyCertError = false;
-        }
-      } catch (err) {
-        console.log('err', err.code);
-        const msg = err instanceof Error ? err.message : String(err);
-        const endpointUnavailable =
-          /connection refused|ECONNREFUSED|ETIMEDOUT|timeout|network error|load failed/i.test(
-            msg
-          );
-        const certRelated =
-          /certificate|SSL|TLS|CERT|ERR_CERT|secure/i.test(msg) ||
-          (msg === 'Failed to fetch' && !endpointUnavailable);
-        isLikelyCertError = true;
-      }
-      if (isLikelyCertError) {
-        const result = await window.electronAPI?.ensureCertForBase?.(baseUrl);
-        console.log('result', result);
-        if (!result?.success) {
-          setWalletToBeDecryptedError(
-            result?.error ??
-              t('core:message.error.password_wrong', {
-                postProcess: 'capitalizeFirstChar',
-              })
-          );
-          return;
-        }
-      }
-    }
     try {
       const isValid = await isNodeValid();
       if (!isValid) {
