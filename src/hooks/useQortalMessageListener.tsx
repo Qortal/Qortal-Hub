@@ -8,7 +8,8 @@ import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
 import { useSetAtom } from 'jotai';
 import {
-  TIME_MINUTES_20_IN_MILLISECONDS,
+  TIME_HOURS_1_IN_MILLISECONDS,
+  TIME_MINUTES_30_IN_MILLISECONDS,
   TIME_SECONDS_30_IN_MILLISECONDS,
 } from '../constants/constants';
 
@@ -585,13 +586,14 @@ export const useQortalMessageListener = (
 
     // Actions that are safe to deduplicate (read-only / idempotent)
     const deduplicableActions = new Set([
-      'FETCH_QDN_RESOURCE',
-      'FETCH_BLOCK',
       'FETCH_BLOCK_RANGE',
+      'FETCH_BLOCK',
+      'FETCH_QDN_RESOURCE',
       'GET_ACCOUNT_DATA',
       'GET_ACCOUNT_NAMES',
-      'GET_AT',
+      'GET_ARRR_SYNC_STATUS',
       'GET_AT_DATA',
+      'GET_AT',
       'GET_BALANCE',
       'GET_CROSSCHAIN_SERVER_INFO',
       'GET_DAY_SUMMARY',
@@ -602,6 +604,7 @@ export const useQortalMessageListener = (
       'GET_NODE_INFO',
       'GET_NODE_STATUS',
       'GET_PRICE',
+      'GET_PRIMARY_NAME',
       'GET_QDN_RESOURCE_METADATA',
       'GET_QDN_RESOURCE_PROPERTIES',
       'GET_QDN_RESOURCE_STATUS',
@@ -610,13 +613,10 @@ export const useQortalMessageListener = (
       'GET_TX_ACTIVITY_SUMMARY',
       'GET_USER_ACCOUNT',
       'GET_USER_WALLET_INFO',
-      'GET_USER_WALLET',
       'GET_USER_WALLET_TRANSACTIONS',
+      'GET_USER_WALLET',
       'GET_WALLET_BALANCE',
-      'GET_PRIMARY_NAME',
-      'GET_ARRR_SYNC_STATUS',
       'IS_USING_PUBLIC_NODE',
-      'WHICH_UI',
       'LIST_ATS',
       'LIST_GROUPS',
       'LIST_QDN_RESOURCES',
@@ -624,6 +624,7 @@ export const useQortalMessageListener = (
       'SEARCH_NAMES',
       'SEARCH_QDN_RESOURCES',
       'SEARCH_TRANSACTIONS',
+      'WHICH_UI',
     ]);
 
     const listener = async (event) => {
@@ -637,9 +638,9 @@ export const useQortalMessageListener = (
         ) {
           timeout =
             message?.payload?.resources?.length *
-            TIME_MINUTES_20_IN_MILLISECONDS;
+            TIME_MINUTES_30_IN_MILLISECONDS;
         } else if (message?.action === 'PUBLISH_QDN_RESOURCE') {
-          timeout = TIME_MINUTES_20_IN_MILLISECONDS;
+          timeout = TIME_HOURS_1_IN_MILLISECONDS;
         }
 
         // Build deduplication key for read-only actions
