@@ -19,7 +19,6 @@ import { Spacer } from '../../common/Spacer';
 import { ManageMembers } from './ManageMembers';
 import {
   clearAllQueues,
-  getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
   resumeAllQueues,
@@ -35,9 +34,22 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { RequestQueueWithPromise } from '../../utils/queue/queue';
-import { requestQueueMemberNames } from '../../utils/queue/requestQueueMemberNames';
 import { WebSocketActive } from './WebsocketActive';
+import {
+  getGroupAdmins,
+  getGroupMembers,
+  getNameInfo,
+  getPublishesFromAdmins,
+} from './groupApi';
+import { timeDifferenceForNotificationChats } from './groupConstants';
+import {
+  addDataPublishesFunc,
+  decryptResource,
+  getDataPublishesFunc,
+} from './groupDataPublishes';
+import { requestQueueMemberNames } from './groupQueues';
+import type { GroupProps } from './groupTypes';
+import { areKeysEqual, validateSecretKey } from './groupValidation';
 import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
@@ -76,329 +88,29 @@ import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import { DirectsSidebar } from './DirectsSidebar';
 
-export const getPublishesFromAdmins = async (admins: string[], groupId) => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
-    groupId
-  }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('network error');
-  }
-  const adminData = await response.json();
-
-  const filterId = adminData.filter(
-    (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
-  );
-
-  if (filterId?.length === 0) {
-    return false;
-  }
-
-  const sortedData = filterId.sort((a: any, b: any) => {
-    // Get the most recent date for both a and b
-    const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
-    const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
-
-    // Sort by most recent
-    return dateB.getTime() - dateA.getTime();
-  });
-
-  return sortedData[0];
-};
-
-export const getAllPublishesFromAdmins = async (
-  admins: string[],
-  groupId: string
-) => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error('network error');
-  }
-  const adminData = await response.json();
-
-  const filterId = adminData.filter(
-    (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
-  );
-
-  if (filterId?.length === 0) {
-    return [];
-  }
-
-  const sortedData = filterId.sort((a: any, b: any) => {
-    const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
-    const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
-    return dateB.getTime() - dateA.getTime();
-  });
-
-  return sortedData;
-};
-
-interface GroupProps {
-  balance: number;
-  myAddress: string;
-  userInfo: any;
-  desktopViewMode: string;
-  isMain?: boolean;
-  isOpenDrawerProfile?: boolean;
-  logoutFunc?: () => Promise<void>;
-  setDesktopViewMode: (mode: string) => void;
-  setIsOpenDrawerProfile: (open: boolean) => void;
-}
-
-export const timeDifferenceForNotificationChats = 900000;
-export { requestQueueMemberNames };
-export const requestQueueAdminMemberNames = new RequestQueueWithPromise(5);
-
-export const getGroupAdminsAddress = async (groupNumber: number) => {
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
-  );
-  const groupData = await response.json();
-  const members: any = [];
-  if (groupData && Array.isArray(groupData?.members)) {
-    for (const member of groupData.members) {
-      if (member.member) {
-        members.push(member?.member);
-      }
-    }
-
-    return members;
-  }
-};
-
-export function validateSecretKey(obj) {
-  // Check if the input is an object
-  if (typeof obj !== 'object' || obj === null) {
-    return false;
-  }
-
-  // Iterate over each key in the object
-  for (const key in obj) {
-    // Ensure the key is a string representation of a positive integer
-    if (!/^\d+$/.test(key)) {
-      return false;
-    }
-
-    // Get the corresponding value for the key
-    const value = obj[key];
-
-    // Check that value is an object and not null
-    if (typeof value !== 'object' || value === null) {
-      return false;
-    }
-
-    // Check for messageKey
-    if (!value.hasOwnProperty('messageKey')) {
-      return false;
-    }
-
-    // Ensure messageKey and nonce are non-empty strings
-    if (
-      typeof value.messageKey !== 'string' ||
-      value.messageKey.trim() === ''
-    ) {
-      return false;
-    }
-  }
-
-  // If all checks passed, return true
-  return true;
-}
-
-export const getGroupMembers = async (groupNumber: number) => {
-  // const validApi = await findUsableApi();
-
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0`
-  );
-  const groupData = await response.json();
-  return groupData;
-};
-
-export const decryptResource = async (data: string, fromQortalRequest) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('decryptGroupEncryption', {
-          data,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          if (fromQortalRequest) {
-            rej({ error: response.error, message: response?.error });
-          } else {
-            rej(response.error);
-          }
-        })
-        .catch((error) => {
-          if (fromQortalRequest) {
-            rej({
-              message: error.message || 'An error occurred',
-              error: error.message || 'An error occurred',
-            });
-          } else {
-            rej(error.message || 'An error occurred');
-          }
-        });
-    });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export const addDataPublishesFunc = async (data: string, groupId, type) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('addDataPublishes', {
-          data,
-          groupId,
-          type,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          rej(response.error);
-        })
-        .catch((error) => {
-          rej(error.message || 'An error occurred');
-        });
-    });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export const getDataPublishesFunc = async (groupId, type) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('getDataPublishes', {
-          groupId,
-          type,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          rej(response.error);
-        })
-        .catch((error) => {
-          rej(error.message || 'An error occurred');
-        });
-    });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export async function getNameInfo(address: string) {
-  const response = await fetch(`${getBaseApiReact()}/names/primary/` + address);
-  const nameData = await response.json();
-
-  if (nameData?.name) {
-    return nameData?.name;
-  } else {
-    return '';
-  }
-}
-
-export const getGroupAdmins = async (groupNumber: number) => {
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
-  );
-  const groupData = await response.json();
-  const members: any = [];
-  const membersAddresses = [];
-  const both = [];
-
-  const getMemNames = groupData?.members?.map(async (member) => {
-    if (member?.member) {
-      const name = await requestQueueAdminMemberNames.enqueue(() => {
-        return getNameInfo(member.member);
-      });
-      if (name) {
-        members.push(name);
-        both.push({ name, address: member.member });
-      }
-      membersAddresses.push(member.member);
-    }
-
-    return true;
-  });
-  await Promise.all(getMemNames);
-
-  return { names: members, addresses: membersAddresses, both };
-};
-
-export const getNames = async (listOfMembers) => {
-  // const validApi = await findUsableApi();
-
-  let members: any = [];
-
-  const getMemNames = listOfMembers.map(async (member) => {
-    if (member.member) {
-      const name = await requestQueueMemberNames.enqueue(() => {
-        return getNameInfo(member.member);
-      });
-      if (name) {
-        members.push({ ...member, name });
-      } else {
-        members.push({ ...member, name: '' });
-      }
-    }
-
-    return true;
-  });
-
-  await Promise.all(getMemNames);
-
-  return members;
-};
-
-export const getNamesForAdmins = async (admins) => {
-  let members: any = [];
-
-  const getMemNames = admins?.map(async (admin) => {
-    if (admin) {
-      const name = await requestQueueAdminMemberNames.enqueue(() => {
-        return getNameInfo(admin);
-      });
-      if (name) {
-        members.push({ address: admin, name });
-      }
-    }
-
-    return true;
-  });
-  await Promise.all(getMemNames);
-
-  return members;
-};
-
-function areKeysEqual(array1, array2) {
-  // If lengths differ, the arrays cannot be equal
-  if (array1?.length !== array2?.length) {
-    return false;
-  }
-
-  // Sort both arrays and compare their elements
-  const sortedArray1 = [...array1].sort();
-  const sortedArray2 = [...array2].sort();
-
-  return sortedArray1.every((key, index) => key === sortedArray2[index]);
-}
+// Re-export for backward compatibility with existing imports from Group.tsx
+export {
+  getAllPublishesFromAdmins,
+  getGroupAdmins,
+  getGroupAdminsAddress,
+  getNameInfo,
+  getNames,
+  getNamesForAdmins,
+  getGroupMembers,
+  getPublishesFromAdmins,
+} from './groupApi';
+export { timeDifferenceForNotificationChats } from './groupConstants';
+export {
+  addDataPublishesFunc,
+  decryptResource,
+  getDataPublishesFunc,
+} from './groupDataPublishes';
+export {
+  requestQueueAdminMemberNames,
+  requestQueueMemberNames,
+} from './groupQueues';
+export type { GroupProps } from './groupTypes';
+export { validateSecretKey } from './groupValidation';
 
 export const Group = ({
   myAddress,
