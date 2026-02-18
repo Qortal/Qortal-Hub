@@ -51,6 +51,7 @@ import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
@@ -76,7 +77,8 @@ export const ChatGroup = ({
   hideView,
   isPrivate,
 }) => {
-  const { isUserBlocked, show } = useContext(QORTAL_APP_CONTEXT);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const { isUserBlocked } = useBlockedAddresses(true);
   const [messages, setMessages] = useState([]);
   const [chatReferences, setChatReferences] = useState({});
   const [isSending, setIsSending] = useState(false);

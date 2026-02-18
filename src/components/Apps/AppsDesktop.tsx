@@ -1,7 +1,6 @@
 import {
   createRef,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -9,7 +8,8 @@ import {
 } from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
-import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
+import { useHandleTutorials } from '../../hooks/useHandleTutorials';
 import { AppInfo } from './AppInfo';
 import {
   executeEvent,
@@ -61,7 +61,7 @@ export const AppsDesktop = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-  const { showTutorial } = useContext(QORTAL_APP_CONTEXT);
+  const { showTutorial } = useHandleTutorials();
   const theme = useTheme();
   const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
   const [pendingTabToRemove, setPendingTabToRemove] = useState(null);

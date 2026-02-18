@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -20,7 +20,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../hooks/useModal.tsx';
@@ -29,7 +29,12 @@ import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
 import { getDefaultLocalNodeUrl, LOCALHOST } from '../../constants/constants.ts';
-import { devServerDomainAtom, devServerPortAtom } from '../../atoms/global.ts';
+import {
+  devServerDomainAtom,
+  devServerPortAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+} from '../../atoms/global.ts';
 import { useAtom } from 'jotai';
 import { Label } from '../../styles/App-styles.ts';
 
@@ -54,12 +59,8 @@ export const AppsDevModeHome = ({
     'tutorial',
   ]);
   const { isShow, onCancel, onOk, show, message } = useModal();
-  const {
-    openSnackGlobal,
-    setOpenSnackGlobal,
-    infoSnackCustom,
-    setInfoSnackCustom,
-  } = useContext(QORTAL_APP_CONTEXT);
+  const [openSnackGlobal, setOpenSnackGlobal] = useAtom(openSnackGlobalAtom);
+  const [infoSnackCustom, setInfoSnackCustom] = useAtom(infoSnackGlobalAtom);
 
   const handleSelectFile = async (existingFilePath) => {
     const filePath = existingFilePath || (await window.electron.selectFile());

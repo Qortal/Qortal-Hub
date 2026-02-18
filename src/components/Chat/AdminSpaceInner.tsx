@@ -32,7 +32,11 @@ import { GroupAvatar } from './GroupAvatar';
 import { useTranslation } from 'react-i18next';
 import i18next from 'i18next';
 import { useSetAtom } from 'jotai';
-import { txListAtom } from '../../atoms/global';
+import {
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+  txListAtom,
+} from '../../atoms/global';
 import { LoadingButton } from '@mui/lab';
 
 export const getPublishesFromAdminsAdminSpace = async (
@@ -98,8 +102,9 @@ export const AdminSpaceInner = ({
   const [groupKeyPublishConfirmOpen, setGroupKeyPublishConfirmOpen] =
     useState(false);
   const setTxList = useSetAtom(txListAtom);
-  const { show, setInfoSnackCustom, setOpenSnackGlobal } =
-    useContext(QORTAL_APP_CONTEXT);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const { t } = useTranslation([
     'auth',
     'core',
