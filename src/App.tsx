@@ -337,6 +337,7 @@ function App() {
                   return;
                 if (response?.hasKeyPair) {
                   setExtstate('authenticated');
+                  window.sendMessage('startNotificationCheck').catch(() => {});
                 } else {
                   setExtstate('wallet-dropped');
                 }

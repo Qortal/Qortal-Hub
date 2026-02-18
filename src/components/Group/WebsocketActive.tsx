@@ -5,8 +5,16 @@ import {
   resumeAllQueues,
 } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { useAtomValue } from 'jotai';
+import { extStateAtom } from '../../atoms/global';
 
 export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
+  const extState = useAtomValue(extStateAtom);
+  const extStateRef = useRef(extState);
+  extStateRef.current = extState;
+  const myAddressRef = useRef(myAddress);
+  myAddressRef.current = myAddress;
+
   const socketRef = useRef(null); // WebSocket reference
   const timeoutIdRef = useRef(null); // Timeout ID reference
   const groupSocketTimeoutRef = useRef(null); // Group Socket Timeout reference
@@ -33,7 +41,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
   }, []);
 
   useEffect(() => {
-    if (!myAddress) return; // Only proceed if myAddress is set
+    if (!myAddress || extState === 'not-authenticated') return; // Only proceed when authenticated with address
 
     const pingHeads = () => {
       try {
@@ -54,7 +62,8 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
     const initWebsocketMessageGroup = async () => {
       forceCloseWebSocket(); // Ensure we close any existing connection
       const currentAddress = myAddress;
-
+      if (extStateRef.current === 'not-authenticated') return;
+      if (currentAddress !== myAddressRef.current) return;
       try {
         if (!initiateRef.current) {
           setIsLoadingGroups(true);
@@ -122,7 +131,9 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
           clearTimeout(groupSocketTimeoutRef.current);
           clearTimeout(timeoutIdRef.current);
           console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
+          if (extStateRef.current === 'not-authenticated') return; // Don't retry after logout
           if (event.reason !== 'forced' && event.code !== 1000) {
+            console.log('hello init');
             setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
           }
         };
@@ -145,7 +156,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
     return () => {
       forceCloseWebSocket(); // Clean up WebSocket on component unmount
     };
-  }, [myAddress]);
+  }, [myAddress, extState]);
 
   return null;
 };
