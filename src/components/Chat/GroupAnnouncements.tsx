@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../atoms/global';
 import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import {
   base64ToUint8Array,
@@ -131,9 +133,10 @@ export const GroupAnnouncements = ({
   handleNewEncryptionNotification,
   isAdmin,
   hide,
-  myName,
   isPrivate,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const myName = userInfo?.name;
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);

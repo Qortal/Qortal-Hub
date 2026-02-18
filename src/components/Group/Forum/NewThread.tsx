@@ -1,4 +1,6 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
 import { Box, CircularProgress, Input, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import {
@@ -136,14 +138,14 @@ export const NewThread = ({
   currentThread,
   isMessage = false,
   publishCallback,
-  userInfo,
   getSecretKey,
   closeCallback,
   postReply,
-  myName,
   setPostReply,
   isPrivate,
 }: NewMessageProps) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const myName = userInfo?.name;
   const { t } = useTranslation([
     'auth',
     'core',

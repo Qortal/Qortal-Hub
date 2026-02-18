@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
 import { CustomButton } from '../../styles/App-styles';
@@ -42,11 +44,12 @@ export const ChatDirect = ({
   setSelectedDirect,
   setNewChat,
   getTimestampEnterChat,
-  myName,
-  balance,
   close,
   setMobileViewModeKeepOpen,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const myName = userInfo?.name;
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

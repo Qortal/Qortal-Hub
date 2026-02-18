@@ -33,8 +33,12 @@ import {
   DialogTitle,
   useTheme,
 } from '@mui/material';
-import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
-import { useAtom } from 'jotai';
+import {
+  enabledDevModeAtom,
+  isNewTabWindowAtom,
+  userInfoAtom,
+} from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
@@ -44,14 +48,15 @@ export const AppsDesktop = ({
   mode,
   setMode,
   show,
-  myName,
   goToHome,
   hasUnreadDirects,
   hasUnreadGroups,
   setDesktopViewMode,
   desktopViewMode,
-  myAddress,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const myName = userInfo?.name;
+  const myAddress = userInfo?.address;
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 export const AdminSpace = ({
   selectedGroup,
   adminsWithNames,
-  userInfo,
   secretKey,
   getSecretKey,
   isAdmin,
@@ -14,9 +15,10 @@ export const AdminSpace = ({
   hide,
   defaultThread,
   setDefaultThread,
-  balance,
   isOwner,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
   const [isMoved, setIsMoved] = useState(false);
   const { t } = useTranslation([
     'auth',
@@ -70,7 +72,6 @@ export const AdminSpace = ({
           adminsWithNames={adminsWithNames}
           selectedGroup={selectedGroup}
           balance={balance}
-          userInfo={userInfo}
           isOwner={isOwner}
         />
       )}

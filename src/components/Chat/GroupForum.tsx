@@ -3,7 +3,6 @@ import { GroupMail } from '../Group/Forum/GroupMail';
 
 export const GroupForum = ({
   selectedGroup,
-  userInfo,
   secretKey,
   getSecretKey,
   isAdmin,
@@ -41,7 +40,6 @@ export const GroupForum = ({
         hide={hide}
         getSecretKey={getSecretKey}
         selectedGroup={selectedGroup}
-        userInfo={userInfo}
         secretKey={secretKey}
         defaultThread={defaultThread}
         setDefaultThread={setDefaultThread}

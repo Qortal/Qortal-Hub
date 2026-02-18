@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -13,11 +15,11 @@ import { SUGGESTED_QORTS } from '../../constants/constants';
 
 export const ThingsToDoInitial = ({
   myAddress,
-  name,
   hasGroups,
-  balance,
-  userInfo,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const name = userInfo?.name;
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
   const { t } = useTranslation(['core', 'tutorial']);
