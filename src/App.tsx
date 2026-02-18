@@ -83,7 +83,7 @@ import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortal/qortal-requests.ts';
-import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
+import { useBlockedAddressesLoader } from './hooks/useBlockUsers.tsx';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';
 import { BuyQortInformation } from './components/BuyQortInformation';
@@ -240,7 +240,7 @@ function App() {
     getBalanceFunc,
     validateApiKeyFromRegistration,
   } = useAuth();
-  useBlockedAddresses(extState === 'authenticated');
+  useBlockedAddressesLoader(extState === 'authenticated');
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

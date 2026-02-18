@@ -35,7 +35,7 @@ import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
-export const GroupList = ({
+const GroupListInner = ({
   selectGroupFunc,
   setDesktopSideView,
   groupChatHasUnread,
@@ -50,7 +50,6 @@ export const GroupList = ({
   setIsOpenBlockedUserModal,
   myAddress,
 }) => {
-  console.log('rendered');
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -173,7 +172,7 @@ export const GroupList = ({
               selectGroupFunc={selectGroupFunc}
               key={group.groupId}
               group={group}
-              selectedGroup={selectedGroup}
+              selectedGroupId={selectedGroup?.groupId ?? null}
               getUserSettings={getUserSettings}
               myAddress={myAddress}
             />
@@ -227,9 +226,19 @@ export const GroupList = ({
   );
 };
 
-const GroupItem = memo(
-  ({ selectGroupFunc, group, selectedGroup, getUserSettings, myAddress }) => {
-    console.log('GroupItem rendered');
+GroupListInner.displayName = 'GroupList';
+
+export const GroupList = memo(GroupListInner);
+
+interface GroupItemProps {
+  selectGroupFunc: (group: any) => void;
+  group: any;
+  selectedGroupId: string | null;
+  getUserSettings: () => Promise<any>;
+  myAddress: string;
+}
+
+const GroupItem = memo(({ selectGroupFunc, group, selectedGroupId, getUserSettings, myAddress }: GroupItemProps) => {
     const theme = useTheme();
     const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));
     const announcement = useAtomValue(
@@ -286,7 +295,7 @@ const GroupItem = memo(
         sx={{
           display: 'flex',
           background:
-            group?.groupId === selectedGroup?.groupId &&
+            group?.groupId === selectedGroupId &&
             theme.palette.action.selected,
           borderRadius: '2px',
           cursor: 'pointer',
@@ -355,7 +364,7 @@ const GroupItem = memo(
                 primary: {
                   style: {
                     color:
-                      group?.groupId === selectedGroup?.groupId &&
+                      group?.groupId === selectedGroupId &&
                       theme.palette.text.primary,
                     fontSize: '16px',
                   },
@@ -363,7 +372,7 @@ const GroupItem = memo(
                 secondary: {
                   style: {
                     color:
-                      group?.groupId === selectedGroup?.groupId &&
+                      group?.groupId === selectedGroupId &&
                       theme.palette.text.primary,
                     fontSize: '12px',
                   },

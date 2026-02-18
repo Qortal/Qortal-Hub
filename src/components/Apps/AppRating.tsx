@@ -1,5 +1,5 @@
 import { Box, Rating } from '@mui/material';
-import { useContext, useState } from 'react';
+import { useCallback, useContext, memo, useMemo, useState } from 'react';
 import { getFee } from '../../background/background.ts';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
@@ -11,7 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
 import { useAppRating } from '../../hooks/useAppRatings';
 
-export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
+const AppRatingInner = ({
+  app,
+  myName,
+  ratingCountPosition = 'right',
+}) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
@@ -23,7 +27,6 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
     'tutorial',
   ]);
 
-  // Use centralized rating store with visibility-based fetching
   const { rating, containerRef, refresh } = useAppRating(
     app?.name,
     app?.service
@@ -32,11 +35,19 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
   const value = rating?.averageRating ?? 0;
   const hasPublishedRating = rating?.hasPublishedRating ?? null;
   const pollInfo = rating?.pollInfo ?? null;
-  const votesInfo = rating
-    ? { totalVotes: rating.totalVotes, voteCounts: rating.voteCounts }
-    : null;
+  const votesInfo = useMemo(
+    () =>
+      rating
+        ? {
+            totalVotes: rating.totalVotes,
+            voteCounts: rating.voteCounts,
+          }
+        : null,
+    [rating?.totalVotes, rating?.voteCounts]
+  );
 
-  const rateFunc = async (event, chosenValue, currentValue) => {
+  const rateFunc = useCallback(
+    async (event, chosenValue, currentValue) => {
     try {
       const newValue = chosenValue || currentValue;
       if (!myName)
@@ -164,7 +175,17 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
       });
       setOpenSnack(true);
     }
-  };
+    },
+    [
+      app,
+      myName,
+      show,
+      t,
+      refresh,
+      hasPublishedRating,
+      pollInfo,
+    ]
+  );
 
   return (
     <div ref={containerRef}>
@@ -217,3 +238,5 @@ export const AppRating = ({ app, myName, ratingCountPosition = 'right' }) => {
     </div>
   );
 };
+
+export const AppRating = memo(AppRatingInner);

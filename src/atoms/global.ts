@@ -9,6 +9,21 @@ import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
+
+/** Derived atom family: each card subscribes only to "is this app pinned?". Key: `${service}\\0${name}` */
+export const isAppPinnedAtomFamily = atomFamily((key: string) =>
+  atom((get) => {
+    const list = get(sortablePinnedAppsAtom);
+    if (!key || !list?.length) return false;
+    const sep = key.indexOf('\0');
+    const service = sep >= 0 ? key.slice(0, sep) : key;
+    const name = sep >= 0 ? key.slice(sep + 1) : '';
+    return !!list.find(
+      (item) => item?.service === service && item?.name === name
+    );
+  })
+);
+
 export const addressInfoControllerAtom = atomWithReset({});
 export const blobControllerAtom = atomWithReset({});
 export const canSaveSettingToQdnAtom = atomWithReset(false);

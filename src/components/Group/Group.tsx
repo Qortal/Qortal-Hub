@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import {
   lazy,
+  Profiler,
   Suspense,
   useCallback,
   useEffect,
@@ -75,8 +76,7 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
-import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+
 import { DirectsSidebar } from './DirectsSidebar';
 import {
   AdminRowBox,
@@ -1655,6 +1655,25 @@ export const Group = ({
     }, 200);
   }, []);
 
+  function onRender(
+    id,
+    phase,
+    actualDuration,
+    baseDuration,
+    startTime,
+    commitTime
+  ) {
+    // Aggregate or log render timings...
+    console.log('onRender', {
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      startTime,
+      commitTime,
+    });
+  }
+
   return (
     <>
       <WebSocketActive
@@ -1688,21 +1707,23 @@ export const Group = ({
         />
 
         {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
-          <GroupList
-            selectGroupFunc={selectGroupFunc}
-            setDesktopSideView={setDesktopSideView}
-            groupChatHasUnread={groupChatHasUnread}
-            groupsAnnHasUnread={groupsAnnHasUnread}
-            desktopSideView={desktopSideView}
-            directChatHasUnread={directChatHasUnread}
-            chatMode={chatMode}
-            groups={groupsFilteredForList}
-            selectedGroup={selectedGroup}
-            getUserSettings={getUserSettings}
-            setOpenAddGroup={setOpenAddGroup}
-            setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
-            myAddress={myAddress}
-          />
+          <Profiler id="App" onRender={onRender}>
+            <GroupList
+              selectGroupFunc={selectGroupFunc}
+              setDesktopSideView={setDesktopSideView}
+              groupChatHasUnread={groupChatHasUnread}
+              groupsAnnHasUnread={groupsAnnHasUnread}
+              desktopSideView={desktopSideView}
+              directChatHasUnread={directChatHasUnread}
+              chatMode={chatMode}
+              groups={groupsFilteredForList}
+              selectedGroup={selectedGroup}
+              getUserSettings={getUserSettings}
+              setOpenAddGroup={setOpenAddGroup}
+              setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
+              myAddress={myAddress}
+            />
+          </Profiler>
         )}
 
         {desktopViewMode === 'chat' && desktopSideView === 'directs' && (
@@ -2006,20 +2027,9 @@ export const Group = ({
           )}
 
           <AppsDesktop
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
             mode={appsMode}
             setMode={setAppsMode}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
             show={desktopViewMode === 'apps'}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            setDesktopViewMode={setDesktopViewMode}
-            isApps={desktopViewMode === 'apps'}
-            desktopViewMode={desktopViewMode}
           />
 
           <AppsDevMode
