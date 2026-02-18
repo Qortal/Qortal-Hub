@@ -1,8 +1,11 @@
 import { Box, Button, Typography } from '@mui/material';
+import { useAtomValue } from 'jotai';
+import { balanceAtom } from '../atoms/global';
 import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 
-export const NewUsersCTA = ({ balance }) => {
+export const NewUsersCTA = () => {
+  const balance = useAtomValue(balanceAtom);
   const { t } = useTranslation([
     'auth',
     'core',

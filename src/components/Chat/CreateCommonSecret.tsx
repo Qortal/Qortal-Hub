@@ -16,8 +16,8 @@ import {
 } from '../Group/Group';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption.ts';
-import { useSetAtom } from 'jotai';
-import { txListAtom } from '../../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { txListAtom, userInfoAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 export const CreateCommonSecret = ({
@@ -26,12 +26,12 @@ export const CreateCommonSecret = ({
   isOwner,
   myAddress,
   secretKeyDetails,
-  userInfo,
   noSecretKey,
   setHideCommonKeyPopup,
   setIsForceShowCreationKeyPopup,
   isForceShowCreationKeyPopup,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 

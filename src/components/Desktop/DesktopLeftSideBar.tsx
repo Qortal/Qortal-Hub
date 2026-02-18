@@ -26,7 +26,6 @@ export const DesktopSideBar = ({
   isApps,
   setDesktopViewMode,
   desktopViewMode,
-  myName,
   lastQappViewMode,
   mode,
 }) => {

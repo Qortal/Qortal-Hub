@@ -1,4 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import {
   QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
@@ -75,10 +77,10 @@ export const getPublishesFromAdminsAdminSpace = async (
 export const AdminSpaceInner = ({
   selectedGroup,
   adminsWithNames,
-  balance,
-  userInfo,
   isOwner,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
   const [adminGroupSecretKey, setAdminGroupSecretKey] = useState(null);
   const [isFetchingAdminGroupSecretKey, setIsFetchingAdminGroupSecretKey] =
     useState(true);

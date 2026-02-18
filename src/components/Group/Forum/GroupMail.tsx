@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
 import { Avatar, Box, Popover, Typography, useTheme } from '@mui/material';
 import { Thread } from './Thread';
 import {
@@ -56,7 +58,6 @@ export const threadIdentifier = 'DOCUMENT';
 
 export const GroupMail = ({
   selectedGroup,
-  userInfo,
   getSecretKey,
   secretKey,
   defaultThread,
@@ -64,6 +65,7 @@ export const GroupMail = ({
   hide,
   isPrivate,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
   const [viewedThreads, setViewedThreads] = useState<any>({});
   const [filterMode, setFilterMode] = useState<string>('Recently active');
   const [currentThread, setCurrentThread] = useState(null);
@@ -636,9 +638,7 @@ export const GroupMail = ({
               refreshLatestThreads={getMessages}
               members={members}
               publishCallback={setTempData}
-              userInfo={userInfo}
               getSecretKey={getSecretKey}
-              myName={userInfo?.name}
               isPrivate={isPrivate}
             />
             <ComposeContainerBlank

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
 import {
   Avatar,
   Box,
@@ -596,11 +598,9 @@ export const Thread = ({
           currentThread={currentThread}
           messageCallback={messageCallback}
           members={members}
-          userInfo={userInfo}
           getSecretKey={getSecretKey}
           closeCallback={closeCallback}
           postReply={postReply}
-          myName={userInfo?.name}
           publishCallback={setTempData}
           setPostReply={setPostReply}
           isPrivate={isPrivate}

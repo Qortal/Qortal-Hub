@@ -7,6 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import {
   decodeBase64ForUIChatMessages,
   objectToBase64,
@@ -71,12 +73,13 @@ export const ChatGroup = ({
   hide,
   handleSecretKeyCreationInProgress,
   triedToFetchSecretKey,
-  myName,
-  balance,
   getTimestampEnterChatParent,
   hideView,
   isPrivate,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const myName = userInfo?.name;
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const { isUserBlocked } = useBlockedAddresses(true);
   const [messages, setMessages] = useState([]);

@@ -7,8 +7,7 @@ import { AuthenticatedProfile } from '../Profile';
  * Lazy-loaded so the Group bundle is not loaded until the user is authenticated.
  */
 export type AuthenticatedShellProps = {
-  // Group props
-  balance: number;
+  // Group
   desktopViewMode: string;
   isMain: boolean;
   isOpenDrawerProfile: boolean;
@@ -16,8 +15,9 @@ export type AuthenticatedShellProps = {
   myAddress: string;
   setDesktopViewMode: (mode: string) => void;
   setIsOpenDrawerProfile: (open: boolean) => void;
+  // AuthenticatedProfile
+  balance: number;
   userInfo: any;
-  // AuthenticatedProfile props
   rawWallet: any;
   qortBalanceLoading: boolean;
   setOpenSnack: (open: boolean) => void;
@@ -75,7 +75,6 @@ export function AuthenticatedShell({
       }}
     >
       <Group
-        balance={balance}
         desktopViewMode={desktopViewMode}
         isMain={isMain}
         isOpenDrawerProfile={isOpenDrawerProfile}
@@ -83,7 +82,6 @@ export function AuthenticatedShell({
         myAddress={myAddress}
         setDesktopViewMode={setDesktopViewMode}
         setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-        userInfo={userInfo}
       />
       <AuthenticatedProfile
         userInfo={userInfo}

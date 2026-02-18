@@ -1,5 +1,7 @@
 import { Box, Divider, Typography, useTheme } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
 import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
@@ -27,10 +29,7 @@ const MotionBox = m(Box);
 export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
-  name,
   isLoadingGroups,
-  balance,
-  userInfo,
   groups,
   setGroupSection,
   setSelectedGroup,
@@ -41,6 +40,9 @@ export const HomeDesktop = ({
   setDesktopViewMode,
   desktopViewMode,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const name = userInfo?.name;
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
 
@@ -156,10 +158,7 @@ export const HomeDesktop = ({
                       }}
                     >
                       <ThingsToDoInitial
-                        balance={balance}
                         myAddress={myAddress}
-                        name={userInfo?.name}
-                        userInfo={userInfo}
                         hasGroups={
                           groups?.filter((item) => item?.groupId !== '0')
                             .length !== 0
@@ -268,7 +267,7 @@ export const HomeDesktop = ({
                     <Explore setDesktopViewMode={setDesktopViewMode} />
                   </Box>
 
-                  <NewUsersCTA balance={balance} />
+                  <NewUsersCTA />
                 </>
               )}
             </Box>
