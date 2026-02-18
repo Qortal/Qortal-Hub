@@ -115,7 +115,7 @@ export const AppsCategoryDesktop = ({
         <AppsWidthLimiter
           sx={{
             justifyContent: 'space-between',
-            aliginItems: 'center',
+            alignItems: 'center',
             flexDirection: 'row',
           }}
         >

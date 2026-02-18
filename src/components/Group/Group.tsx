@@ -68,7 +68,7 @@ import { sortArrayByTimestampAndGroupName } from '../../utils/time';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
@@ -129,6 +129,57 @@ export {
 export type { GroupProps } from './groupTypes';
 export { validateSecretKey } from './groupValidation';
 
+/** Subscribes to memberGroupsAtom and runs effects (Group does not subscribe). */
+function MemberGroupsEffects({
+  getGroupsWhereIAmAMember,
+  getGroupsProperties,
+  myAddress,
+  groupsPropertiesRef,
+  hasInitializedWebsocketRef,
+}: {
+  getGroupsWhereIAmAMember: (groups: any[]) => Promise<void>;
+  getGroupsProperties: (address: string) => void;
+  myAddress: string;
+  groupsPropertiesRef: React.MutableRefObject<Record<string, unknown>>;
+  hasInitializedWebsocketRef: React.MutableRefObject<boolean>;
+}) {
+  const memberGroups = useAtomValue(memberGroupsAtom);
+  useEffect(() => {
+    if (!myAddress) return;
+    if (
+      !areKeysEqual(
+        memberGroups?.map((grp: any) => grp?.groupId),
+        Object.keys(groupsPropertiesRef.current || {})
+      )
+    ) {
+      getGroupsProperties(myAddress);
+      getGroupsWhereIAmAMember(memberGroups || []);
+    }
+  }, [
+    memberGroups,
+    myAddress,
+    getGroupsWhereIAmAMember,
+    getGroupsProperties,
+    groupsPropertiesRef,
+  ]);
+  useEffect(() => {
+    if (
+      !myAddress ||
+      hasInitializedWebsocketRef.current ||
+      !memberGroups?.length
+    )
+      return;
+    window.sendMessage('setupGroupWebsocket', {}).catch((error: Error) => {
+      console.error(
+        'Failed to setup group websocket:',
+        error?.message || 'An error occurred'
+      );
+    });
+    hasInitializedWebsocketRef.current = true;
+  }, [myAddress, memberGroups, hasInitializedWebsocketRef]);
+  return null;
+}
+
 export const Group = ({
   myAddress,
   setIsOpenDrawerProfile,
@@ -148,7 +199,7 @@ export const Group = ({
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedDirect, setSelectedDirect] = useState(null);
   const hasInitializedWebsocket = useRef(false);
-  const [groups, setGroups] = useState([]);
+  const memberGroupsRef = useRef<any[]>([]);
   const [directs, setDirects] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [adminsWithNames, setAdminsWithNames] = useState([]);
@@ -480,45 +531,6 @@ export const Group = ({
     return hasUnread;
   }, [timestampEnterData, directs, myAddress]);
 
-  const groupChatHasUnread = useMemo(() => {
-    let hasUnread = false;
-    groups.forEach((group) => {
-      if (group?.groupId === '0') {
-        return;
-      }
-      if (
-        group?.data &&
-        group?.sender !== myAddress &&
-        group?.timestamp &&
-        groupChatTimestamps[group?.groupId] &&
-        ((!timestampEnterData[group?.groupId] &&
-          Date.now() - group?.timestamp < timeDifferenceForNotificationChats) ||
-          timestampEnterData[group?.groupId] < group?.timestamp)
-      ) {
-        hasUnread = true;
-      }
-    });
-    return hasUnread;
-  }, [timestampEnterData, groups, myAddress, groupChatTimestamps]);
-
-  const groupsAnnHasUnread = useMemo(() => {
-    let hasUnread = false;
-    groups.forEach((group) => {
-      if (
-        groupAnnouncements[group?.groupId] &&
-        !groupAnnouncements[group?.groupId]?.seentimestamp
-      ) {
-        hasUnread = true;
-      }
-    });
-    return hasUnread;
-  }, [groupAnnouncements, groups]);
-
-  const groupsFilteredForList = useMemo(
-    () => groups.filter((g) => g.groupId !== '0'),
-    [groups]
-  );
-
   const getSecretKey = useCallback(
     async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
       try {
@@ -817,19 +829,6 @@ export const Group = ({
   );
 
   useEffect(() => {
-    if (!myAddress) return;
-    if (
-      !areKeysEqual(
-        groups?.map((grp) => grp?.groupId),
-        Object.keys(groupsPropertiesRef.current)
-      )
-    ) {
-      getGroupsProperties(myAddress);
-      getGroupsWhereIAmAMember(groups);
-    }
-  }, [groups, myAddress]);
-
-  useEffect(() => {
     // Handler function for incoming messages
     const messageHandler = (event) => {
       if (event.origin !== window.location.origin) {
@@ -837,12 +836,12 @@ export const Group = ({
       }
       const message = event.data;
       if (message?.action === 'SET_GROUPS') {
-        // Update the component state with the received 'sendqort' state
-        setGroups(sortArrayByTimestampAndGroupName(message.payload));
-        getLatestRegularChat(message.payload);
-        setMemberGroups(
-          message.payload?.filter((item) => item?.groupId !== '0')
-        );
+        const sortedFiltered = sortArrayByTimestampAndGroupName(
+          message.payload || []
+        ).filter((item: any) => item?.groupId !== '0');
+        setMemberGroups(sortedFiltered);
+        memberGroupsRef.current = sortedFiltered;
+        getLatestRegularChat(sortedFiltered);
 
         // Only mark messages as read if user is actually viewing the chat
         if (
@@ -933,25 +932,6 @@ export const Group = ({
       window.removeEventListener('message', messageHandler);
     };
   }, []);
-
-  useEffect(() => {
-    if (
-      !myAddress ||
-      hasInitializedWebsocket.current ||
-      !groups ||
-      groups?.length === 0
-    )
-      return;
-
-    window.sendMessage('setupGroupWebsocket', {}).catch((error) => {
-      console.error(
-        'Failed to setup group websocket:',
-        error.message || 'An error occurred'
-      );
-    });
-
-    hasInitializedWebsocket.current = true;
-  }, [myAddress, groups]);
 
   const getMembers = useCallback(async (groupId) => {
     try {
@@ -1053,22 +1033,6 @@ export const Group = ({
     },
     [selectedGroup?.groupName, t]
   );
-
-  const isUnreadChat = useMemo(() => {
-    const findGroup = groups
-      .filter((group) => group?.sender !== myAddress)
-      .find((gr) => gr?.groupId === selectedGroup?.groupId);
-    if (!findGroup) return false;
-    if (!findGroup?.data) return false;
-    return (
-      findGroup?.timestamp &&
-      groupChatTimestamps[findGroup?.groupId] &&
-      ((!timestampEnterData[selectedGroup?.groupId] &&
-        Date.now() - findGroup?.timestamp <
-          timeDifferenceForNotificationChats) ||
-        timestampEnterData?.[selectedGroup?.groupId] < findGroup?.timestamp)
-    );
-  }, [timestampEnterData, selectedGroup, groupChatTimestamps]);
 
   const isUnread = useMemo(() => {
     if (!selectedGroup) return false;
@@ -1242,7 +1206,8 @@ export const Group = ({
     setIsForceShowCreationKeyPopup(false);
     setSelectedGroup(null);
     setSelectedDirect(null);
-    setGroups([]);
+    setMemberGroups([]);
+    memberGroupsRef.current = [];
     setDirects([]);
     setAdmins([]);
     setAdminsWithNames([]);
@@ -1318,7 +1283,9 @@ export const Group = ({
       if (isLoadingOpenSectionFromNotification.current) return;
 
       const groupId = e.detail?.from;
-      const findGroup = groups?.find((group) => +group?.groupId === +groupId);
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
       if (findGroup?.groupId === selectedGroup?.groupId) {
         isLoadingOpenSectionFromNotification.current = false;
         setChatMode('groups');
@@ -1370,7 +1337,7 @@ export const Group = ({
         isLoadingOpenSectionFromNotification.current = false;
       }
     },
-    [groups, selectedGroup?.groupId, getTimestampEnterChat]
+    [selectedGroup?.groupId, getTimestampEnterChat]
   );
 
   useEffect(() => {
@@ -1385,7 +1352,9 @@ export const Group = ({
     (e) => {
       const groupId = e.detail?.from;
 
-      const findGroup = groups?.find((group) => +group?.groupId === +groupId);
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
       if (findGroup?.groupId === selectedGroup?.groupId) return;
       if (findGroup) {
         setChatMode('groups');
@@ -1425,7 +1394,7 @@ export const Group = ({
         }, 350);
       }
     },
-    [groups, selectedGroup?.groupId, getGroupAnnouncements]
+    [selectedGroup?.groupId, getGroupAnnouncements]
   );
 
   useEffect(() => {
@@ -1446,7 +1415,9 @@ export const Group = ({
     (e) => {
       const data = e.detail?.data;
       const { groupId } = data;
-      const findGroup = groups?.find((group) => +group?.groupId === +groupId);
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
       if (findGroup?.groupId === selectedGroup?.groupId) {
         setGroupSection('forum');
         setDefaultThread(data);
@@ -1480,7 +1451,7 @@ export const Group = ({
         }, 350);
       }
     },
-    [groups, selectedGroup?.groupId, getGroupAnnouncements]
+    [selectedGroup?.groupId, getGroupAnnouncements]
   );
 
   useEffect(() => {
@@ -1689,6 +1660,13 @@ export const Group = ({
       />
 
       <RootBox>
+        <MemberGroupsEffects
+          getGroupsWhereIAmAMember={getGroupsWhereIAmAMember}
+          getGroupsProperties={getGroupsProperties}
+          myAddress={myAddress}
+          groupsPropertiesRef={groupsPropertiesRef}
+          hasInitializedWebsocketRef={hasInitializedWebsocket}
+        />
         <DesktopSideBar
           desktopViewMode={desktopViewMode}
           toggleSideViewGroups={toggleSideViewGroups}
@@ -1701,36 +1679,28 @@ export const Group = ({
           isApps={desktopViewMode === 'apps'}
           isGroups={isOpenSideViewGroups}
           isDirects={isOpenSideViewDirects}
-          hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
           setDesktopViewMode={setDesktopViewMode}
           lastQappViewMode={lastQappViewMode}
         />
 
         {desktopViewMode === 'chat' && desktopSideView !== 'directs' && (
-          <Profiler id="App" onRender={onRender}>
-            <GroupList
-              selectGroupFunc={selectGroupFunc}
-              setDesktopSideView={setDesktopSideView}
-              groupChatHasUnread={groupChatHasUnread}
-              groupsAnnHasUnread={groupsAnnHasUnread}
-              desktopSideView={desktopSideView}
-              directChatHasUnread={directChatHasUnread}
-              chatMode={chatMode}
-              groups={groupsFilteredForList}
-              selectedGroup={selectedGroup}
-              getUserSettings={getUserSettings}
-              setOpenAddGroup={setOpenAddGroup}
-              setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
-              myAddress={myAddress}
-            />
-          </Profiler>
+          <GroupList
+            selectGroupFunc={selectGroupFunc}
+            setDesktopSideView={setDesktopSideView}
+            desktopSideView={desktopSideView}
+            directChatHasUnread={directChatHasUnread}
+            chatMode={chatMode}
+            selectedGroup={selectedGroup}
+            getUserSettings={getUserSettings}
+            setOpenAddGroup={setOpenAddGroup}
+            setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
+            myAddress={myAddress}
+          />
         )}
 
         {desktopViewMode === 'chat' && desktopSideView === 'directs' && (
           <DirectsSidebar
             setDesktopSideView={setDesktopSideView}
-            groupChatHasUnread={groupChatHasUnread}
-            groupsAnnHasUnread={groupsAnnHasUnread}
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             directs={directs}
@@ -1801,12 +1771,9 @@ export const Group = ({
               groupSection={groupSection}
               isUnread={isUnread}
               goToAnnouncements={goToAnnouncements}
-              isUnreadChat={isUnreadChat}
               goToChat={goToChat}
               goToThreads={goToThreads}
               setOpenManageMembers={setOpenManageMembers}
-              groupChatHasUnread={groupChatHasUnread}
-              groupsAnnHasUnread={groupsAnnHasUnread}
               directChatHasUnread={directChatHasUnread}
               chatMode={chatMode}
               openDrawerGroups={openDrawerGroups}
@@ -1815,7 +1782,6 @@ export const Group = ({
               mobileViewMode={mobileViewMode}
               setMobileViewMode={setMobileViewMode}
               setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
               hasUnreadDirects={directChatHasUnread}
               isHome={groupSection === 'home'}
               isGroups={desktopSideView === 'groups'}
@@ -1824,7 +1790,6 @@ export const Group = ({
               hasUnreadAnnouncements={isUnread}
               isAnnouncement={groupSection === 'announcement'}
               isChat={groupSection === 'chat'}
-              hasUnreadChat={isUnreadChat}
               setGroupSection={setGroupSection}
               isForum={groupSection === 'forum'}
             />
@@ -2043,7 +2008,6 @@ export const Group = ({
             show={desktopViewMode === 'dev'}
             isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
             isApps={desktopViewMode === 'apps'}
@@ -2053,7 +2017,6 @@ export const Group = ({
             refreshHomeDataFunc={refreshHomeDataFunc}
             myAddress={myAddress}
             isLoadingGroups={isLoadingGroups}
-            groups={groups}
             setGroupSection={setGroupSection}
             setSelectedGroup={setSelectedGroup}
             getTimestampEnterChat={getTimestampEnterChat}

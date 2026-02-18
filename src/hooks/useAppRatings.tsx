@@ -24,10 +24,10 @@ export const ratingForAppAtomFamily = atomFamily((key: string) =>
 export const featuredRatingsMapAtomFamily = atomFamily((keysJson: string) =>
   atom((get) => {
     const keys = keysJson ? keysJson.split(',').filter(Boolean) : [];
-    const entries = keys.map((k) => [
-      k,
-      get(ratingForAppAtomFamily(k)) as AppRatingData | null,
-    ] as const);
+    const entries = keys.map(
+      (k) =>
+        [k, get(ratingForAppAtomFamily(k)) as AppRatingData | null] as const
+    );
     return Object.fromEntries(entries) as Record<string, AppRatingData | null>;
   })
 );
@@ -44,6 +44,14 @@ let batchFetchCallback: ((keys: string[]) => void) | null = null;
 
 // Map from lowercased cache key to original name/service (preserves casing for API calls)
 const keyToOriginalCase = new Map<string, { name: string; service: string }>();
+
+// Shared ref for current store state (used by useAppRatings and initializer; avoids N refs and keeps hydrate in sync)
+const ratingsStoreRef: { current: Map<string, AppRatingData> } = {
+  current: new Map(),
+};
+
+// Run load-from-DB + hydrate only once per app session (guards initializer effect)
+let ratingsCacheHydrated = false;
 
 // Generate cache key for an app (exported for consumers that need to subscribe to specific app ratings)
 export const getCacheKey = (name: string, service: string): string => {
@@ -185,16 +193,15 @@ const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
   );
 };
 
-export const useAppRatings = () => {
+/**
+ * Runs the ratings cache load from IndexedDB and hydrates the store once per app session.
+ * Mount once (e.g. in AppsDesktop); uses only useSetAtom so it does not re-render when the store updates.
+ */
+function RatingsCacheInitializerInner() {
   const setRatingsStore = useSetAtom(ratingsStoreAtom);
-  const initializedRef = useRef(false);
-  const ratingsStoreRef = useRef<Map<string, AppRatingData>>(new Map());
-
-  // Initialize: load cache from IndexedDB
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
+    if (ratingsCacheHydrated) return;
+    ratingsCacheHydrated = true;
     loadRatingsCacheFromDB().then((cached) => {
       if (cached.size > 0) {
         ratingsStoreRef.current = cached;
@@ -202,6 +209,13 @@ export const useAppRatings = () => {
       }
     });
   }, [setRatingsStore]);
+  return null;
+}
+
+export const RatingsCacheInitializer = RatingsCacheInitializerInner;
+
+export const useAppRatings = () => {
+  const setRatingsStore = useSetAtom(ratingsStoreAtom);
 
   // Fetch a single rating - stable callback that doesn't change on store updates
   const fetchRating = useCallback(
@@ -354,8 +368,7 @@ export const useAppRating = (name?: string, service?: string) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const registeredRef = useRef(false);
 
-  const key =
-    name && service ? getCacheKey(name, service) : '';
+  const key = name && service ? getCacheKey(name, service) : '';
   const rating = useAtomValue(ratingForAppAtomFamily(key));
 
   // Register for visibility-based fetching once when mounted (no rating in deps to avoid effect churn)
