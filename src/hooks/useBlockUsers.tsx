@@ -1,34 +1,19 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import {
   blockedAddressesAtom,
   blockedNamesAtom,
 } from '../atoms/global';
 
-export const useBlockedAddresses = (isAuthenticated?: boolean) => {
-  const [blockedAddresses, setBlockedAddresses] = useAtom(blockedAddressesAtom);
-  const [blockedNames, setBlockedNames] = useAtom(blockedNamesAtom);
-
-  const getAllBlockedUsers = useCallback(
-    () => ({
-      names: blockedNames,
-      addresses: blockedAddresses,
-    }),
-    [blockedAddresses, blockedNames]
-  );
-
-  const isUserBlocked = useCallback(
-    (address) => {
-      try {
-        if (!address) return false;
-        return !!blockedAddresses[address];
-      } catch (error) {
-        console.log(error);
-        return false;
-      }
-    },
-    [blockedAddresses]
-  );
+/**
+ * Loads blocked list into atoms when authenticated. Uses only setters so the
+ * component that calls this does NOT subscribe to the atoms and will not
+ * re-render when the blocked list changes. Use this in App/root; use
+ * useBlockedAddresses() in components that need to read the list.
+ */
+export const useBlockedAddressesLoader = (isAuthenticated?: boolean) => {
+  const setBlockedAddresses = useSetAtom(blockedAddressesAtom);
+  const setBlockedNames = useSetAtom(blockedNamesAtom);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -91,6 +76,32 @@ export const useBlockedAddresses = (isAuthenticated?: boolean) => {
     };
     fetchBlockedList();
   }, [isAuthenticated, setBlockedAddresses, setBlockedNames]);
+};
+
+export const useBlockedAddresses = (isAuthenticated?: boolean) => {
+  const [blockedAddresses, setBlockedAddresses] = useAtom(blockedAddressesAtom);
+  const [blockedNames, setBlockedNames] = useAtom(blockedNamesAtom);
+
+  const getAllBlockedUsers = useCallback(
+    () => ({
+      names: blockedNames,
+      addresses: blockedAddresses,
+    }),
+    [blockedAddresses, blockedNames]
+  );
+
+  const isUserBlocked = useCallback(
+    (address) => {
+      try {
+        if (!address) return false;
+        return !!blockedAddresses[address];
+      } catch (error) {
+        console.log(error);
+        return false;
+      }
+    },
+    [blockedAddresses]
+  );
 
   const removeBlockFromList = useCallback(
     async (address, name) => {

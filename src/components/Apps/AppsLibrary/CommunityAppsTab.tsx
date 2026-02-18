@@ -173,7 +173,7 @@ export const CommunityAppsTab = ({
               />
             );
           }}
-          overscan={200}
+          overscan={20}
         />
       ) : (
         <Box

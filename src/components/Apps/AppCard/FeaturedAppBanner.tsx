@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -123,7 +123,7 @@ interface FeaturedAppBannerProps {
   featuredApps: any[];
 }
 
-export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
+const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const [startIndex, setStartIndex] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -277,3 +277,7 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
     </CarouselContainer>
   );
 };
+
+FeaturedAppBannerInner.displayName = 'FeaturedAppBanner';
+
+export const FeaturedAppBanner = memo(FeaturedAppBannerInner);

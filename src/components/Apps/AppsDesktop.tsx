@@ -44,16 +44,7 @@ import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const AppsDesktop = ({
-  mode,
-  setMode,
-  show,
-  goToHome,
-  hasUnreadDirects,
-  hasUnreadGroups,
-  setDesktopViewMode,
-  desktopViewMode,
-}) => {
+export const AppsDesktop = ({ mode, setMode, show }) => {
   const userInfo = useAtomValue(userInfoAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
@@ -251,7 +242,11 @@ export const AppsDesktop = ({
         } else {
           setMode('home');
         }
-      } else if (mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') {
+      } else if (
+        mode === 'publish' ||
+        mode === 'publish-app' ||
+        mode === 'publish-website'
+      ) {
         setMode('library');
       }
     } else if (selectedTab?.tabId) {
@@ -481,15 +476,20 @@ export const AppsDesktop = ({
         myName={myName}
       />
 
-      {(mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') && !selectedTab && (
-        <AppPublish
-          categories={categories}
-          myAddress={myAddress}
-          myName={myName}
-          initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
-          isAppTypeLocked={mode === 'publish-app' || mode === 'publish-website'}
-        />
-      )}
+      {(mode === 'publish' ||
+        mode === 'publish-app' ||
+        mode === 'publish-website') &&
+        !selectedTab && (
+          <AppPublish
+            categories={categories}
+            myAddress={myAddress}
+            myName={myName}
+            initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
+            isAppTypeLocked={
+              mode === 'publish-app' || mode === 'publish-website'
+            }
+          />
+        )}
 
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {

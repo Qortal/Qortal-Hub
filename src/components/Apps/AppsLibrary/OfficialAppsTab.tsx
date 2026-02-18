@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { useAtomValue } from 'jotai';
 import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
 import { isFeaturedApp, officialAppList } from '../config/officialApps';
-import { useAppRatings } from '../../../hooks/useAppRatings';
+import {
+  featuredRatingsMapAtomFamily,
+  getCacheKey,
+  useAppRatings,
+} from '../../../hooks/useAppRatings';
 
 const AppsGrid = styled(Box)({
   display: 'grid',
@@ -33,7 +38,7 @@ export const OfficialAppsTab = ({
 }: OfficialAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
-  const { getRating, fetchRating, ratingsStore } = useAppRatings();
+  const { fetchRating } = useAppRatings();
   const fetchedAppsRef = useRef<Set<string>>(new Set());
 
   // Filter to get only official apps
@@ -45,10 +50,29 @@ export const OfficialAppsTab = ({
     );
   }, [availableQapps]);
 
+  // Featured app list (stable so we can subscribe only to their ratings)
+  const featuredAppsBase = useMemo(
+    () => officialApps.filter((app) => isFeaturedApp(app.name)),
+    [officialApps]
+  );
+
+  // Stable key string for the set of featured app cache keys (order-independent)
+  const featuredKeysStable = useMemo(() => {
+    const keys = featuredAppsBase.map((a) =>
+      getCacheKey(a.name, a.service)
+    );
+    return [...new Set(keys)].sort().join(',');
+  }, [featuredAppsBase]);
+
+  // Subscribe only to featured apps' ratings – re-render only when one of these changes
+  const ratingsForFeaturedMap = useAtomValue(
+    featuredRatingsMapAtomFamily(featuredKeysStable)
+  );
+
   // Fetch ratings for official apps (limited set ~17 apps) - only once per app
   useEffect(() => {
     officialApps.forEach((app) => {
-      const key = `${app.service}-${app.name}`;
+      const key = getCacheKey(app.name, app.service);
       if (!fetchedAppsRef.current.has(key)) {
         fetchedAppsRef.current.add(key);
         fetchRating(app.name, app.service);
@@ -56,26 +80,26 @@ export const OfficialAppsTab = ({
     });
   }, [officialApps, fetchRating]);
 
-  // Get featured apps sorted by rating
+  // Get featured apps sorted by rating (depends only on featured ratings map)
   const featuredApps = useMemo(() => {
-    return officialApps
-      .filter((app) => isFeaturedApp(app.name))
-      .sort((a, b) => {
-        const ratingA = getRating(a.name, a.service);
-        const ratingB = getRating(b.name, b.service);
+    return [...featuredAppsBase].sort((a, b) => {
+      const keyA = getCacheKey(a.name, a.service);
+      const keyB = getCacheKey(b.name, b.service);
+      const ratingA = ratingsForFeaturedMap[keyA];
+      const ratingB = ratingsForFeaturedMap[keyB];
 
-        const avgA = ratingA?.averageRating || 0;
-        const avgB = ratingB?.averageRating || 0;
+      const avgA = ratingA?.averageRating || 0;
+      const avgB = ratingB?.averageRating || 0;
 
-        if (avgB !== avgA) {
-          return avgB - avgA;
-        }
+      if (avgB !== avgA) {
+        return avgB - avgA;
+      }
 
-        const countA = ratingA?.totalVotes || 0;
-        const countB = ratingB?.totalVotes || 0;
-        return countB - countA;
-      });
-  }, [officialApps, getRating, ratingsStore]);
+      const countA = ratingA?.totalVotes || 0;
+      const countB = ratingB?.totalVotes || 0;
+      return countB - countA;
+    });
+  }, [featuredAppsBase, ratingsForFeaturedMap]);
 
   return (
     <AppsWidthLimiter>
