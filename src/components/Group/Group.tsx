@@ -1,9 +1,4 @@
-import {
-  Avatar,
-  Box,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { Box, Typography, useTheme } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
@@ -11,10 +6,7 @@ import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption';
 import { AddGroup } from './AddGroup';
 
-import {
-  AuthenticatedContainerInnerRight,
-  CustomButton,
-} from '../../styles/App-styles';
+import { AuthenticatedContainerInnerRight } from '../../styles/App-styles';
 import { Spacer } from '../../common/Spacer';
 import { ManageMembers } from './ManageMembers';
 import {
@@ -42,11 +34,7 @@ import {
   getPublishesFromAdmins,
 } from './groupApi';
 import { timeDifferenceForNotificationChats } from './groupConstants';
-import {
-  addDataPublishesFunc,
-  decryptResource,
-  getDataPublishesFunc,
-} from './groupDataPublishes';
+import { decryptResource } from './groupDataPublishes';
 import { requestQueueMemberNames } from './groupQueues';
 import type { GroupProps } from './groupTypes';
 import { areKeysEqual, validateSecretKey } from './groupValidation';
@@ -120,7 +108,6 @@ export const Group = ({
   setDesktopViewMode,
   desktopViewMode,
 }: GroupProps) => {
-  console.log('group  rerendered');
   const [desktopSideView, setDesktopSideView] = useState('groups');
   const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
@@ -133,7 +120,6 @@ export const Group = ({
     useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedDirect, setSelectedDirect] = useState(null);
-  const hasInitialized = useRef(false);
   const hasInitializedWebsocket = useRef(false);
   const [groups, setGroups] = useState([]);
   const [directs, setDirects] = useState([]);
@@ -143,7 +129,6 @@ export const Group = ({
   const [groupOwner, setGroupOwner] = useState(null);
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [openAddGroup, setOpenAddGroup] = useState(false);
-  const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
   const setMemberGroups = useSetAtom(memberGroupsAtom);
   const lastGroupNotification = useRef<null | number>(null);
@@ -169,11 +154,9 @@ export const Group = ({
   const setIsOpenBlockedUserModal = useSetAtom(isOpenBlockedModalAtom);
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
-  const [drawerMode, setDrawerMode] = useState('groups');
   const setMutedGroups = useSetAtom(mutedGroupsAtom);
   const [mobileViewMode, setMobileViewMode] = useState('home');
   const [mobileViewModeKeepOpen, setMobileViewModeKeepOpen] = useState('');
-  const isFocusedRef = useRef(true);
   const timestampEnterDataRef = useRef({});
   const selectedGroupRef = useRef(null);
   const selectedDirectRef = useRef(null);
@@ -1215,7 +1198,6 @@ export const Group = ({
     setTriedToFetchSecretKey(false);
     setHideCommonKeyPopup(false);
     setOpenAddGroup(false);
-    setIsInitialGroups(false);
     setOpenManageMembers(false);
     setTimestampEnterData({});
     setChatMode('groups');
@@ -1231,15 +1213,11 @@ export const Group = ({
     setDefaultThread(null);
     setMobileViewMode('home');
     // Reset all useRef values to their initial states
-    hasInitialized.current = false;
     hasInitializedWebsocket.current = false;
-    lastGroupNotification.current = null;
     selectedGroupRef.current = null;
     selectedDirectRef.current = null;
     groupSectionRef.current = null;
-    checkGroupInterval.current = null;
     isLoadingOpenSectionFromNotification.current = false;
-    setupGroupWebsocketInterval.current = null;
     settimeoutForRefetchSecretKey.current = null;
     initiatedGetMembers.current = false;
     setDesktopViewMode('home');
@@ -1515,7 +1493,6 @@ export const Group = ({
 
   const openDrawerGroups = () => {
     setIsOpenDrawer(true);
-    setDrawerMode('groups');
   };
 
   const goToThreads = () => {
