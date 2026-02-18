@@ -1,5 +1,4 @@
 import {
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -94,8 +93,6 @@ import {
   getDefaultLocalNodeUrl,
   isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
-  TIME_MINUTES_2_IN_MILLISECONDS,
-  TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
 import { useAuth } from './hooks/useAuth.tsx';
@@ -137,27 +134,21 @@ export { isMainWindow } from './constants/app';
 function App() {
   const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
-  const [backupjson, setBackupjson] = useState<any>(null);
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
   const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
     qortBalanceLoadingAtom
   );
-  const [decryptedWallet, setdecryptedWallet] = useState<any>(null);
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
   const [balance, setBalance] = useAtom(balanceAtom);
   const [paymentTo, setPaymentTo] = useState<string>('');
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentPassword, setPaymentPassword] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
-  const [sendPaymentSuccess, setSendPaymentSuccess] = useState<string>('');
   const [countdown, setCountdown] = useState<null | number>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
-  const [isMain, setIsMain] = useState<boolean>(true);
   const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
@@ -197,7 +188,6 @@ function App() {
     hasSettingsChangedAtom
   );
 
-  const balanceSetIntervalRef = useRef(null);
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
@@ -272,7 +262,6 @@ function App() {
     getAllBlockedUsers,
   } = useBlockedAddresses(extState === 'authenticated');
 
-  // const [useLocalNode, setUseLocalNode] = useState(true);
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
@@ -498,7 +487,6 @@ function App() {
         }
         setRawWallet(pf);
         setExtstate('wallet-dropped');
-        setdecryptedWallet(null);
       } catch (e) {
         console.log(e);
       }
@@ -524,34 +512,6 @@ function App() {
       wallet,
       qortAddress: rawWallet.address0,
     };
-  };
-
-  const balanceSetInterval = () => {
-    try {
-      if (balanceSetIntervalRef?.current) {
-        clearInterval(balanceSetIntervalRef?.current);
-      }
-
-      let isCalling = false;
-      balanceSetIntervalRef.current = setInterval(async () => {
-        if (isCalling) return;
-        isCalling = true;
-        window
-          .sendMessage('balance')
-          .then((response) => {
-            if (!response?.error && !isNaN(+response)) {
-              setBalance(response);
-            }
-            isCalling = false;
-          })
-          .catch((error) => {
-            console.error('Failed to get balance:', error);
-            isCalling = false;
-          });
-      }, TIME_SECONDS_40_IN_MILLISECONDS);
-    } catch (error) {
-      console.error(error);
-    }
   };
 
   const refetchUserInfo = () => {
@@ -843,10 +803,7 @@ function App() {
 
   const returnToMain = () => {
     setPaymentTo('');
-    setPaymentAmount(0);
-    setPaymentPassword('');
     setSendPaymentError('');
-    setSendPaymentSuccess('');
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
@@ -859,18 +816,13 @@ function App() {
 
   const resetAllStates = () => {
     setExtstate('not-authenticated');
-    setBackupjson(null);
     setRawWallet(null);
-    setdecryptedWallet(null);
     setRequestConnection(null);
     setRequestBuyOrder(null);
     setUserInfo(null);
     setBalance(null);
     setPaymentTo('');
-    setPaymentAmount(0);
-    setPaymentPassword('');
     setSendPaymentError('');
-    setSendPaymentSuccess('');
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
@@ -880,9 +832,6 @@ function App() {
     setWalletToBeDownloadedError('');
     setSendqortState(null);
     resetAllRecoil();
-    if (balanceSetIntervalRef?.current) {
-      clearInterval(balanceSetIntervalRef?.current);
-    }
   };
 
   function roundUpToDecimals(number, decimals = 8) {
@@ -1135,7 +1084,7 @@ function App() {
             <LazyAuthenticatedShell
               balance={balance}
               desktopViewMode={desktopViewMode}
-              isMain={isMain}
+              isMain={true}
               isOpenDrawerProfile={isOpenDrawerProfile}
               logoutFunc={logoutFunc}
               myAddress={address}
