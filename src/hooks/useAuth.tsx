@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   getDefaultLocalNodeUrl,
   isLocalNodeUrl,
@@ -6,7 +6,7 @@ import {
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
 import { isLocalPrivateHttpsUrl } from '../utils/helpers';
-import { useAtom, useSetAtom, useStore } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -56,12 +56,22 @@ export const useAuth = () => {
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
+  const extState = useAtomValue(extStateAtom);
   const [enableAuthWhenSyncing] = useAtom(enableAuthWhenSyncingAtom);
   const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const store = useStore();
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
+
+  useEffect(() => {
+    if (extState === 'not-authenticated') {
+      if (balanceSetIntervalRef) {
+        clearInterval(balanceSetIntervalRef);
+        balanceSetIntervalRef = null;
+      }
+    }
+  }, [extState]);
 
   const checkIfLocalIsRunning = useCallback(async (baseUrl: string) => {
     try {
@@ -381,6 +391,7 @@ export const useAuth = () => {
             setAuthenticatePassword('');
             setExtstate('authenticated');
             setWalletToBeDecryptedError('');
+            window.sendMessage('startNotificationCheck').catch(() => {});
 
             window
               .sendMessage('userInfo')

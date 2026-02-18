@@ -715,6 +715,17 @@ export const ChatGroup = ({
   }, [secretKey, isPrivate]);
 
   useEffect(() => {
+    const logoutEventFunc = () => {
+      forceCloseWebSocket();
+    };
+    subscribeToEvent('logout-event', logoutEventFunc);
+    return () => {
+      unsubscribeFromEvent('logout-event', logoutEventFunc);
+      forceCloseWebSocket();
+    };
+  }, []);
+
+  useEffect(() => {
     const notifications = messages.filter(
       (message) => message?.decryptedData?.type === 'notification'
     );

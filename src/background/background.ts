@@ -3174,6 +3174,9 @@ function setupMessageListener() {
       case 'decryptWallet':
         decryptWalletCase(request, event);
         break;
+      case 'startNotificationCheck':
+        startNotificationCheck();
+        break;
       case 'balance':
         balanceCase(request, event);
         break;
@@ -3360,6 +3363,15 @@ function setupMessageListener() {
               if (interval) {
                 // for announcement notification
                 clearInterval(interval);
+                interval = null;
+              }
+              if (notificationCheckInterval) {
+                clearInterval(notificationCheckInterval);
+                notificationCheckInterval = null;
+              }
+              if (paymentsCheckInterval) {
+                clearInterval(paymentsCheckInterval);
+                paymentsCheckInterval = null;
               }
               groupSecretkeys = {};
               const wallet = await getSaveWallet();
@@ -3839,5 +3851,9 @@ const createNotificationCheck = () => {
   }
 };
 
-// Call this function when initializing your app
+// Call this function when initializing your app or after user logs in (intervals are cleared on logout)
 createNotificationCheck();
+
+export function startNotificationCheck() {
+  createNotificationCheck();
+}
