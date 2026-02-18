@@ -5,8 +5,8 @@ import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import AppIcon from '../../assets/svgs/AppIcon.svg';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-import { enabledDevModeAtom } from '../../atoms/global';
-import { useAtom } from 'jotai';
+import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 export const IconWrapper = ({
@@ -56,7 +56,6 @@ export const IconWrapper = ({
 
 export const DesktopFooter = ({
   goToHome,
-  hasUnreadGroups,
   hasUnreadDirects,
   isHome,
   isGroups,
@@ -69,6 +68,7 @@ export const DesktopFooter = ({
   setIsOpenSideViewGroups,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

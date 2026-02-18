@@ -2,13 +2,17 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
-import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
+import {
+  enabledDevModeAtom,
+  hasUnreadGroupsAtom,
+  isNewTabWindowAtom,
+} from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
-import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
 import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
@@ -21,16 +25,16 @@ export const DesktopSideBar = ({
   hasUnreadDirects,
   isDirects,
   toggleSideViewGroups,
-  hasUnreadGroups,
   isGroups,
   isApps,
   setDesktopViewMode,
   desktopViewMode,
   lastQappViewMode,
   mode,
+  setMode,
 }) => {
   const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
-
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([

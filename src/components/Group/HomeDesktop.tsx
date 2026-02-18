@@ -1,7 +1,11 @@
 import { Box, Divider, Typography, useTheme } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { userInfoAtom, balanceAtom } from '../../atoms/global';
+import {
+  userInfoAtom,
+  balanceAtom,
+  memberGroupsAtom,
+} from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
 import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
@@ -30,7 +34,6 @@ export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
   isLoadingGroups,
-  groups,
   setGroupSection,
   setSelectedGroup,
   getTimestampEnterChat,
@@ -42,6 +45,7 @@ export const HomeDesktop = ({
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const groups = useAtomValue(memberGroupsAtom);
   const name = userInfo?.name;
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);

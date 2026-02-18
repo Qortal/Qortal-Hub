@@ -12,6 +12,8 @@ import CreateIcon from '@mui/icons-material/Create';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import { useTranslation } from 'react-i18next';
+import { useAtomValue } from 'jotai';
+import { groupChatHasUnreadAtom, groupsAnnHasUnreadAtom } from '../../atoms/global';
 import { CustomButton } from '../../styles/App-styles';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
@@ -22,8 +24,6 @@ import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
 export interface DirectsSidebarProps {
   setDesktopSideView: (view: 'groups' | 'directs') => void;
-  groupChatHasUnread: boolean;
-  groupsAnnHasUnread: boolean;
   desktopSideView: string;
   directChatHasUnread: boolean;
   directs: any[];
@@ -48,10 +48,10 @@ export interface DirectsSidebarProps {
 }
 
 export const DirectsSidebar = (props: DirectsSidebarProps) => {
+  const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
+  const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
   const {
     setDesktopSideView,
-    groupChatHasUnread,
-    groupsAnnHasUnread,
     desktopSideView,
     directChatHasUnread,
     directs,

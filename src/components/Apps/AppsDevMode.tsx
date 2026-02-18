@@ -1,6 +1,6 @@
 import { createRef, useEffect, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { userInfoAtom } from '../../atoms/global';
+import { userInfoAtom, hasUnreadGroupsAtom } from '../../atoms/global';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
 import {
@@ -25,7 +25,6 @@ export const AppsDevMode = ({
   hasUnreadDirects,
   isDirects,
   isGroups,
-  hasUnreadGroups,
   toggleSideViewGroups,
   toggleSideViewDirects,
   setDesktopViewMode,
@@ -33,6 +32,7 @@ export const AppsDevMode = ({
   isApps,
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const myName = userInfo?.name;
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);

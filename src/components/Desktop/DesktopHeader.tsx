@@ -1,5 +1,12 @@
 import { useState } from 'react';
+import { useAtomValue } from 'jotai';
 import { ButtonBase, Typography, useTheme } from '@mui/material';
+import {
+  groupChatHasUnreadAtom,
+  groupsAnnHasUnreadAtom,
+  hasUnreadGroupsAtom,
+  isUnreadChatAtomFamily,
+} from '../../atoms/global';
 import Box from '@mui/material/Box';
 import { NotificationIcon2 } from '../../assets/Icons/NotificationIcon2';
 import { ChatIcon } from '../../assets/Icons/ChatIcon';
@@ -54,12 +61,9 @@ export const DesktopHeader = ({
   groupSection,
   isUnread,
   goToAnnouncements,
-  isUnreadChat,
   goToChat,
   goToThreads,
   setOpenManageMembers,
-  groupChatHasUnread,
-  groupsAnnHasUnread,
   directChatHasUnread,
   chatMode,
   openDrawerGroups,
@@ -68,7 +72,6 @@ export const DesktopHeader = ({
   mobileViewMode,
   setMobileViewMode,
   setMobileViewModeKeepOpen,
-  hasUnreadGroups,
   hasUnreadDirects,
   isHome,
   isGroups,
@@ -76,7 +79,6 @@ export const DesktopHeader = ({
   setDesktopSideView,
   hasUnreadAnnouncements,
   isAnnouncement,
-  hasUnreadChat,
   isChat,
   isForum,
   setGroupSection,
@@ -84,6 +86,13 @@ export const DesktopHeader = ({
 }) => {
   const [value, setValue] = useState(0);
   const theme = useTheme();
+  const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
+  const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
+  const isUnreadChat = useAtomValue(
+    isUnreadChatAtomFamily(selectedGroup?.groupId ?? '')
+  );
+  const hasUnreadChat = isUnreadChat;
   const { t } = useTranslation([
     'auth',
     'core',

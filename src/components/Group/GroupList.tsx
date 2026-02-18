@@ -25,8 +25,11 @@ import {
   groupAnnouncementSelector,
   groupChatTimestampSelector,
   groupPropertySelector,
+  groupsAnnHasUnreadAtom,
+  groupChatHasUnreadAtom,
   groupsOwnerNamesSelector,
   isRunningPublicNodeAtom,
+  memberGroupsAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
 import { timeDifferenceForNotificationChats } from './Group';
@@ -38,12 +41,9 @@ import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 const GroupListInner = ({
   selectGroupFunc,
   setDesktopSideView,
-  groupChatHasUnread,
-  groupsAnnHasUnread,
   desktopSideView,
   directChatHasUnread,
   chatMode,
-  groups,
   selectedGroup,
   getUserSettings,
   setOpenAddGroup,
@@ -59,6 +59,9 @@ const GroupListInner = ({
     'tutorial',
   ]);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+  const groups = useAtomValue(memberGroupsAtom);
+  const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
+  const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
 
   return (
     <Box
@@ -238,7 +241,14 @@ interface GroupItemProps {
   myAddress: string;
 }
 
-const GroupItem = memo(({ selectGroupFunc, group, selectedGroupId, getUserSettings, myAddress }: GroupItemProps) => {
+const GroupItem = memo(
+  ({
+    selectGroupFunc,
+    group,
+    selectedGroupId,
+    getUserSettings,
+    myAddress,
+  }: GroupItemProps) => {
     const theme = useTheme();
     const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));
     const announcement = useAtomValue(
@@ -295,8 +305,7 @@ const GroupItem = memo(({ selectGroupFunc, group, selectedGroupId, getUserSettin
         sx={{
           display: 'flex',
           background:
-            group?.groupId === selectedGroupId &&
-            theme.palette.action.selected,
+            group?.groupId === selectedGroupId && theme.palette.action.selected,
           borderRadius: '2px',
           cursor: 'pointer',
           flexDirection: 'column',

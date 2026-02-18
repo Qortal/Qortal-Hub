@@ -124,6 +124,67 @@ export const hasSeenGettingStartedAtom = atom((get) => {
 export const blockedAddressesAtom = atomWithReset<Record<string, boolean>>({});
 export const blockedNamesAtom = atomWithReset<Record<string, boolean>>({});
 
+/** Time window (ms) for unread chat notifications – keep in sync with groupConstants */
+const TIME_DIFF_UNREAD_CHATS_MS = 900000;
+
+/** Derived: any group chat has unread. Subscribe here instead of memberGroupsAtom to avoid re-renders on list change. */
+export const groupChatHasUnreadAtom = atom((get) => {
+  const groups = get(memberGroupsAtom);
+  const myAddress = get(userInfoAtom)?.address;
+  const groupChatTimestamps = get(groupChatTimestampsAtom);
+  const timestampEnterData = get(timestampEnterDataAtom) || {};
+  if (!groups?.length || !myAddress) return false;
+  return groups.some(
+    (group: any) =>
+      group?.groupId !== '0' &&
+      group?.data &&
+      group?.sender !== myAddress &&
+      group?.timestamp &&
+      groupChatTimestamps[group?.groupId] &&
+      ((!timestampEnterData[group?.groupId] &&
+        Date.now() - group?.timestamp < TIME_DIFF_UNREAD_CHATS_MS) ||
+        timestampEnterData[group?.groupId] < group?.timestamp)
+  );
+});
+
+/** Derived: any group announcement has unread. */
+export const groupsAnnHasUnreadAtom = atom((get) => {
+  const groups = get(memberGroupsAtom);
+  const groupAnnouncements = get(groupAnnouncementsAtom);
+  if (!groups?.length) return false;
+  return groups.some(
+    (group: any) =>
+      groupAnnouncements[group?.groupId] &&
+      !groupAnnouncements[group?.groupId]?.seentimestamp
+  );
+});
+
+/** Combined: groups tab has any unread (chat or announcements). */
+export const hasUnreadGroupsAtom = atom((get) => {
+  return get(groupChatHasUnreadAtom) || get(groupsAnnHasUnreadAtom);
+});
+
+/** Derived: is the selected group's chat unread? Key: selectedGroupId (string) or empty. */
+export const isUnreadChatAtomFamily = atomFamily((selectedGroupId: string) =>
+  atom((get) => {
+    if (!selectedGroupId) return false;
+    const groups = get(memberGroupsAtom);
+    const myAddress = get(userInfoAtom)?.address;
+    const groupChatTimestamps = get(groupChatTimestampsAtom);
+    const timestampEnterData = get(timestampEnterDataAtom) || {};
+    const findGroup = groups
+      ?.filter((g: any) => g?.sender !== myAddress)
+      ?.find((g: any) => g?.groupId === selectedGroupId);
+    if (!findGroup?.data || !findGroup?.timestamp) return false;
+    return !!(
+      groupChatTimestamps[findGroup?.groupId] &&
+      ((!timestampEnterData[selectedGroupId] &&
+        Date.now() - findGroup.timestamp < TIME_DIFF_UNREAD_CHATS_MS) ||
+        timestampEnterData[selectedGroupId] < findGroup.timestamp)
+    );
+  })
+);
+
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

@@ -21,6 +21,7 @@ import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
+import { RatingsCacheInitializer } from '../../hooks/useAppRatings';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import {
@@ -428,6 +429,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
         position: !show && 'fixed',
       }}
     >
+      <RatingsCacheInitializer />
       {mode === 'home' && (
         <Box
           sx={{

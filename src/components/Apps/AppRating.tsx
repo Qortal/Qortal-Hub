@@ -11,11 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
 import { useAppRating } from '../../hooks/useAppRatings';
 
-const AppRatingInner = ({
-  app,
-  myName,
-  ratingCountPosition = 'right',
-}) => {
+const AppRatingInner = ({ app, myName, ratingCountPosition = 'right' }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
@@ -48,143 +44,135 @@ const AppRatingInner = ({
 
   const rateFunc = useCallback(
     async (event, chosenValue, currentValue) => {
-    try {
-      const newValue = chosenValue || currentValue;
-      if (!myName)
-        throw new Error(
-          t('core:message.generic.name_rate', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      if (!app?.name) return;
-      const fee = await getFee('CREATE_POLL');
-
-      await show({
-        message: t('core:message.question.rate_app', {
-          rate: newValue,
-          postProcess: 'capitalizeFirstChar',
-        }),
-        publishFee: fee.fee + ' QORT',
-      });
-
-      if (hasPublishedRating === false) {
-        const pollName = `app-library-${app.service}-rating-${app.name}`;
-        const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
-        const pollDescription = t('core:message.error.generic', {
-          name: app.name,
-          service: app.service,
-          postProcess: 'capitalizeFirstChar',
-        });
-
-        await new Promise((res, rej) => {
-          window
-            .sendMessage(
-              'createPoll',
-              {
-                pollName: pollName,
-                pollDescription: pollDescription,
-                pollOptions: pollOptions,
-                pollOwnerAddress: myName,
-              },
-              TIME_MINUTES_1_IN_MILLISECONDS
-            )
-            .then((response) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-                setInfoSnack({
-                  type: 'success',
-                  message: t('core:message.success.rated_app', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                });
-                setOpenSnack(true);
-                // Refresh rating after successful submission
-                refresh();
-              }
-            })
-            .catch((error) => {
-              rej(error);
-            });
-        });
-      } else {
-        const pollName = `app-library-${app.service}-rating-${app.name}`;
-
-        const optionIndex = pollInfo?.pollOptions.findIndex(
-          (option) => +option.optionName === +newValue
-        );
-        if (isNaN(optionIndex) || optionIndex === -1)
+      try {
+        const newValue = chosenValue || currentValue;
+        if (!myName)
           throw new Error(
-            t('core:message.error.rating_option', {
+            t('core:message.generic.name_rate', {
               postProcess: 'capitalizeFirstChar',
             })
           );
-        await new Promise((res, rej) => {
-          window
-            .sendMessage(
-              'voteOnPoll',
-              {
-                pollName: pollName,
-                optionIndex,
-              },
-              TIME_MINUTES_1_IN_MILLISECONDS
-            )
-            .then((response) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-                setInfoSnack({
-                  type: 'success',
-                  message: t('core:message.success.rated_app', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                });
-                setOpenSnack(true);
-                // Refresh rating after successful submission
-                refresh();
-              }
-            })
-            .catch((error) => {
-              rej(error);
-            });
+        if (!app?.name) return;
+        const fee = await getFee('CREATE_POLL');
+
+        await show({
+          message: t('core:message.question.rate_app', {
+            rate: newValue,
+            postProcess: 'capitalizeFirstChar',
+          }),
+          publishFee: fee.fee + ' QORT',
         });
-      }
-    } catch (error) {
-      console.log('error', error);
-      const errorMessage =
-        typeof error === 'string' ? error : error?.message || '';
-      let snackMessage: string;
-      if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
-        snackMessage = t('core:message.error.app_already_voted', {
-          postProcess: 'capitalizeFirstChar',
-        });
-      } else {
-        snackMessage =
-          errorMessage ||
-          t('core:message.error.rate', {
+
+        if (hasPublishedRating === false) {
+          const pollName = `app-library-${app.service}-rating-${app.name}`;
+          const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
+          const pollDescription = t('core:message.error.generic', {
+            name: app.name,
+            service: app.service,
             postProcess: 'capitalizeFirstChar',
           });
+
+          await new Promise((res, rej) => {
+            window
+              .sendMessage(
+                'createPoll',
+                {
+                  pollName: pollName,
+                  pollDescription: pollDescription,
+                  pollOptions: pollOptions,
+                  pollOwnerAddress: myName,
+                },
+                TIME_MINUTES_1_IN_MILLISECONDS
+              )
+              .then((response) => {
+                if (response.error) {
+                  rej(response?.message);
+                  return;
+                } else {
+                  res(response);
+                  setInfoSnack({
+                    type: 'success',
+                    message: t('core:message.success.rated_app', {
+                      postProcess: 'capitalizeFirstChar',
+                    }),
+                  });
+                  setOpenSnack(true);
+                  // Refresh rating after successful submission
+                  refresh();
+                }
+              })
+              .catch((error) => {
+                rej(error);
+              });
+          });
+        } else {
+          const pollName = `app-library-${app.service}-rating-${app.name}`;
+
+          const optionIndex = pollInfo?.pollOptions.findIndex(
+            (option) => +option.optionName === +newValue
+          );
+          if (isNaN(optionIndex) || optionIndex === -1)
+            throw new Error(
+              t('core:message.error.rating_option', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            );
+          await new Promise((res, rej) => {
+            window
+              .sendMessage(
+                'voteOnPoll',
+                {
+                  pollName: pollName,
+                  optionIndex,
+                },
+                TIME_MINUTES_1_IN_MILLISECONDS
+              )
+              .then((response) => {
+                if (response.error) {
+                  rej(response?.message);
+                  return;
+                } else {
+                  res(response);
+                  setInfoSnack({
+                    type: 'success',
+                    message: t('core:message.success.rated_app', {
+                      postProcess: 'capitalizeFirstChar',
+                    }),
+                  });
+                  setOpenSnack(true);
+                  // Refresh rating after successful submission
+                  refresh();
+                }
+              })
+              .catch((error) => {
+                rej(error);
+              });
+          });
+        }
+      } catch (error) {
+        console.log('error', error);
+        const errorMessage =
+          typeof error === 'string' ? error : error?.message || '';
+        let snackMessage: string;
+        if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
+          snackMessage = t('core:message.error.app_already_voted', {
+            postProcess: 'capitalizeFirstChar',
+          });
+        } else {
+          snackMessage =
+            errorMessage ||
+            t('core:message.error.rate', {
+              postProcess: 'capitalizeFirstChar',
+            });
+        }
+        setInfoSnack({
+          type: 'error',
+          message: snackMessage,
+        });
+        setOpenSnack(true);
       }
-      setInfoSnack({
-        type: 'error',
-        message: snackMessage,
-      });
-      setOpenSnack(true);
-    }
     },
-    [
-      app,
-      myName,
-      show,
-      t,
-      refresh,
-      hasPublishedRating,
-      pollInfo,
-    ]
+    [app, myName, show, t, refresh, hasPublishedRating, pollInfo]
   );
 
   return (
