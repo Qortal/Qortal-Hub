@@ -242,6 +242,7 @@ export const Group = ({
   const groupSectionRef = useRef(null);
   const isLoadingOpenSectionFromNotification = useRef(false);
   const settimeoutForRefetchSecretKey = useRef(null);
+  const secretKeyRef = useRef(null);
   const { clearStatesMessageQueueProvider } = useMessageQueue();
   const initiatedGetMembers = useRef(false);
   const [groupChatTimestamps, setGroupChatTimestamps] = useAtom(
@@ -321,6 +322,10 @@ export const Group = ({
   useEffect(() => {
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
+
+  useEffect(() => {
+    secretKeyRef.current = secretKey;
+  }, [secretKey]);
 
   // Track view modes to prevent marking messages as read when not viewing chat
   const desktopViewModeRef = useRef(desktopViewMode);
@@ -547,12 +552,12 @@ export const Group = ({
 
         if (
           secretKeyToPublish &&
-          secretKey &&
+          secretKeyRef.current &&
           lastFetchedSecretKey.current &&
           Date.now() - lastFetchedSecretKey.current <
             TIME_MINUTES_10_IN_MILLISECONDS
         ) {
-          return secretKey;
+          return secretKeyRef.current;
         }
 
         if (loadingGroupParam) {
@@ -659,7 +664,6 @@ export const Group = ({
       }
     },
     [
-      secretKey,
       selectedGroup?.groupId,
       setIsLoadingGroup,
       setIsLoadingGroupMessage,
@@ -1198,6 +1202,7 @@ export const Group = ({
   const resetAllStatesAndRefs = useCallback(() => {
     // Reset all useState values to their initial states
     setSecretKey(null);
+    secretKeyRef.current = null;
     lastFetchedSecretKey.current = null;
     setSecretKeyPublishDate(null);
     setSecretKeyDetails(null);
@@ -1299,6 +1304,7 @@ export const Group = ({
 
         setNewChat(false);
         setSecretKey(null);
+        secretKeyRef.current = null;
         setGroupOwner(null);
         lastFetchedSecretKey.current = null;
         initiatedGetMembers.current = false;
@@ -1360,6 +1366,7 @@ export const Group = ({
         setChatMode('groups');
         setSelectedGroup(null);
         setSecretKey(null);
+        secretKeyRef.current = null;
         setGroupOwner(null);
         lastFetchedSecretKey.current = null;
         initiatedGetMembers.current = false;
@@ -1428,6 +1435,7 @@ export const Group = ({
         setChatMode('groups');
         setSelectedGroup(null);
         setSecretKey(null);
+        secretKeyRef.current = null;
         setGroupOwner(null);
         lastFetchedSecretKey.current = null;
         initiatedGetMembers.current = false;
@@ -1608,6 +1616,7 @@ export const Group = ({
     setSelectedGroup(null);
     setUserInfoForLevels({});
     setSecretKey(null);
+    secretKeyRef.current = null;
     lastFetchedSecretKey.current = null;
     setSecretKeyPublishDate(null);
     setAdmins([]);
@@ -1625,25 +1634,6 @@ export const Group = ({
       setSelectedGroup(group);
     }, 200);
   }, []);
-
-  function onRender(
-    id,
-    phase,
-    actualDuration,
-    baseDuration,
-    startTime,
-    commitTime
-  ) {
-    // Aggregate or log render timings...
-    console.log('onRender', {
-      id,
-      phase,
-      actualDuration,
-      baseDuration,
-      startTime,
-      commitTime,
-    });
-  }
 
   return (
     <>
