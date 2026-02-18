@@ -189,6 +189,103 @@ export const ChatList = ({
     rowVirtualizer.scrollToIndex(idx);
   }, []);
 
+  // Memoize per-row payload so MessageItem receives stable references and memo can skip re-renders
+  const processedRows = useMemo(() => {
+    return messages.map((msg, index) => {
+      let message = msg || null;
+      let replyIndex = -1;
+      let reply = null;
+      let replyExpiredMeta = null;
+      let reactions = null;
+      let isUpdating = false;
+      try {
+        if (message) {
+          replyIndex = messages.findIndex(
+            (m) => m?.signature === message?.repliedTo
+          );
+          if (message?.repliedTo && replyIndex !== -1) {
+            reply = { ...(messages[replyIndex] || {}) };
+            if (chatReferences?.[reply?.signature]?.edit) {
+              const edit = chatReferences[reply?.signature]?.edit;
+              reply.decryptedData = edit;
+              reply.text = edit?.message;
+              reply.messageText = edit?.messageText;
+              reply.editTimestamp = edit?.timestamp;
+            }
+          } else if (message?.repliedTo && replyIndex === -1) {
+            const editMeta = chatReferences?.[message?.repliedTo]?.edit;
+            if (editMeta) {
+              replyExpiredMeta = {
+                senderName: editMeta?.senderName,
+                sender: editMeta?.sender,
+                messageText:
+                  editMeta?.messageText !== undefined
+                    ? editMeta?.messageText
+                    : undefined,
+                text:
+                  editMeta?.message !== undefined
+                    ? editMeta?.message
+                    : undefined,
+                decryptedData: editMeta,
+                editTimestamp: editMeta?.timestamp,
+              };
+            } else {
+              replyExpiredMeta = { missing: true };
+            }
+          }
+          if (message?.message && message?.groupDirectId) {
+            replyIndex = messages.findIndex(
+              (m) => m?.signature === message?.message?.repliedTo
+            );
+            if (message?.message?.repliedTo && replyIndex !== -1) {
+              reply = messages[replyIndex] || null;
+            }
+            message = {
+              ...(message?.message || {}),
+              isTemp: true,
+              unread: false,
+              status: message?.status,
+            };
+          }
+          if (chatReferences?.[message.signature]) {
+            reactions = chatReferences[message.signature]?.reactions || null;
+            if (chatReferences[message.signature]?.edit) {
+              message = {
+                ...message,
+                text: chatReferences[message.signature]?.edit?.message,
+                messageText:
+                  chatReferences[message.signature]?.edit?.messageText,
+                images: chatReferences[message.signature]?.edit?.images,
+                isEdit: true,
+                editTimestamp:
+                  chatReferences[message.signature]?.edit?.timestamp,
+              };
+            }
+          }
+          if (
+            tempChatReferences?.some(
+              (item) => item?.chatReference === message?.signature
+            )
+          ) {
+            isUpdating = true;
+          }
+        }
+      } catch (err) {
+        message = null;
+        reply = null;
+        reactions = null;
+      }
+      return {
+        message,
+        reply,
+        replyIndex,
+        replyExpiredMeta,
+        reactions,
+        isUpdating,
+      };
+    });
+  }, [messages, chatReferences, tempChatReferences]);
+
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -241,109 +338,40 @@ export const ChatList = ({
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const index = virtualRow.index;
-                let message = messages[index] || null; // Safeguard against undefined
-                let replyIndex = -1;
-                let reply = null;
-                let replyExpiredMeta: any = null;
-                let reactions: ReactionsMap | null = null;
-                let isUpdating = false;
-
-                try {
-                  // Safeguard for message existence
-                  if (message) {
-                    // Check for repliedTo logic
-                    replyIndex = messages.findIndex(
-                      (msg) => msg?.signature === message?.repliedTo
-                    );
-
-                    if (message?.repliedTo && replyIndex !== -1) {
-                      reply = { ...(messages[replyIndex] || {}) };
-                      if (chatReferences?.[reply?.signature]?.edit) {
-                        reply.decryptedData =
-                          chatReferences[reply?.signature]?.edit;
-                        reply.text =
-                          chatReferences[reply?.signature]?.edit?.message;
-                        reply.editTimestamp =
-                          chatReferences[reply?.signature]?.edit?.timestamp;
-                      }
-                    } else if (message?.repliedTo && replyIndex === -1) {
-                      // If original message is missing, attempt to use any edit metadata as minimal context
-                      const editMeta = chatReferences?.[message?.repliedTo]?.edit;
-                      if (editMeta) {
-                        replyExpiredMeta = {
-                          senderName: editMeta?.senderName,
-                          sender: editMeta?.sender,
-                          messageText:
-                            editMeta?.messageText !== undefined
-                              ? editMeta?.messageText
-                              : undefined,
-                          text:
-                            editMeta?.message !== undefined
-                              ? editMeta?.message
-                              : undefined,
-                          decryptedData: editMeta,
-                          editTimestamp: editMeta?.timestamp,
-                        };
-                      } else {
-                        replyExpiredMeta = { missing: true };
-                      }
-                    }
-
-                    // GroupDirectId logic
-                    if (message?.message && message?.groupDirectId) {
-                      replyIndex = messages.findIndex(
-                        (msg) => msg?.signature === message?.message?.repliedTo
-                      );
-                      if (message?.message?.repliedTo && replyIndex !== -1) {
-                        reply = messages[replyIndex] || null;
-                      }
-                      message = {
-                        ...(message?.message || {}),
-                        isTemp: true,
-                        unread: false,
-                        status: message?.status,
-                      };
-                    }
-
-                    // Check for reactions and edits
-                    if (chatReferences?.[message.signature]) {
-                      reactions =
-                        chatReferences[message.signature]?.reactions || null;
-
-                      if (chatReferences[message.signature]?.edit) {
-                        message.text =
-                          chatReferences[message.signature]?.edit?.message;
-                        message.messageText =
-                          chatReferences[message.signature]?.edit?.messageText;
-                        message.images =
-                          chatReferences[message.signature]?.edit?.images;
-
-                        message.isEdit = true;
-                        message.editTimestamp =
-                          chatReferences[message.signature]?.edit?.timestamp;
-                      }
-                    }
-
-                    // Check if message is updating
-                    if (
-                      tempChatReferences?.some(
-                        (item) => item?.chatReference === message?.signature
-                      )
-                    ) {
-                      isUpdating = true;
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error processing message:', error, {
-                    index,
-                    message,
-                  });
-                  // Gracefully handle the error by providing fallback data
-                  message = null;
-                  reply = null;
-                  reactions = null;
+                const rowPayload = processedRows[index];
+                if (!rowPayload) {
+                  return (
+                    <Box
+                      key={virtualRow.index}
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        left: '50%',
+                        padding: '10px 0',
+                        position: 'absolute',
+                        top: 0,
+                        transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
+                        width: '100%',
+                      }}
+                    >
+                      <Typography>
+                        {t('core:message.error.message_loading', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  );
                 }
-                // Render fallback if message is null
+                const {
+                  message,
+                  reply,
+                  replyIndex,
+                  replyExpiredMeta,
+                  reactions,
+                  isUpdating,
+                } = rowPayload;
                 if (!message) {
                   return (
                     <Box

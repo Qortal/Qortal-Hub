@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -164,11 +165,16 @@ export const MessageItemComponent = ({
     getInfo();
   }, [message?.sender, getIndividualUserInfo]);
 
+  // Defer only main message body so generateHTML runs when React has time (reduces scroll-time CPU spikes).
+  // Reply block uses reply/replyExpiredMeta directly so the reply preview always shows.
+  const deferredMessage = useDeferredValue(message);
+
   const htmlText = useMemo(() => {
-    if (message?.messageText) {
-      const isHtml = isHtmlString(message?.messageText);
-      if (isHtml) return message?.messageText;
-      return generateHTML(message?.messageText, [
+    const source = deferredMessage?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -176,13 +182,14 @@ export const MessageItemComponent = ({
         TextStyle,
       ]);
     }
-  }, [message?.editTimestamp]);
+  }, [deferredMessage?.messageText, deferredMessage?.editTimestamp]);
 
   const htmlReply = useMemo(() => {
-    if (reply?.messageText) {
-      const isHtml = isHtmlString(reply?.messageText);
-      if (isHtml) return reply?.messageText;
-      return generateHTML(reply?.messageText, [
+    const source = reply?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -190,14 +197,15 @@ export const MessageItemComponent = ({
         TextStyle,
       ]);
     }
-  }, [reply?.editTimestamp]);
+  }, [reply?.messageText, reply?.editTimestamp]);
 
   const htmlReplyExpired = useMemo(() => {
     if (!replyExpiredMeta) return null;
-    if (replyExpiredMeta?.messageText) {
-      const isHtml = isHtmlString(replyExpiredMeta?.messageText);
-      if (isHtml) return replyExpiredMeta?.messageText;
-      return generateHTML(replyExpiredMeta?.messageText, [
+    const source = replyExpiredMeta?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -206,7 +214,7 @@ export const MessageItemComponent = ({
       ]);
     }
     return null;
-  }, [replyExpiredMeta?.editTimestamp]);
+  }, [replyExpiredMeta?.messageText, replyExpiredMeta?.editTimestamp]);
 
   const userAvatarUrl = useMemo(() => {
     return message?.senderName
@@ -214,7 +222,7 @@ export const MessageItemComponent = ({
           message?.senderName
         }/qortal_avatar?async=true`
       : '';
-  }, []);
+  }, [message?.senderName]);
 
   useEffect(() => {
     setIsAvatarLoaded(false);
