@@ -1,14 +1,11 @@
 import { Box, Typography, useTheme } from '@mui/material';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption';
-import { AddGroup } from './AddGroup';
-
 import { AuthenticatedContainerInnerRight } from '../../styles/App-styles';
 import { Spacer } from '../../common/Spacer';
-import { ManageMembers } from './ManageMembers';
 import {
   clearAllQueues,
   getBaseApiReact,
@@ -60,7 +57,6 @@ import {
   timestampEnterDataAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
-import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
@@ -75,6 +71,16 @@ import { useWebsocketStatus } from './useWebsocketStatus';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import { DirectsSidebar } from './DirectsSidebar';
+
+const LazyAddGroup = lazy(() =>
+  import('./AddGroup').then((m) => ({ default: m.AddGroup }))
+);
+const LazyManageMembers = lazy(() =>
+  import('./ManageMembers').then((m) => ({ default: m.ManageMembers }))
+);
+const LazyBlockedUsersModal = lazy(() =>
+  import('./BlockedUsersModal').then((m) => ({ default: m.BlockedUsersModal }))
+);
 
 // Re-export for backward compatibility with existing imports from Group.tsx
 export {
@@ -151,7 +157,8 @@ export const Group = ({
   );
   const [defaultThread, setDefaultThread] = useState(null);
   const [isOpenDrawer, setIsOpenDrawer] = useState(false);
-  const setIsOpenBlockedUserModal = useSetAtom(isOpenBlockedModalAtom);
+  const [isOpenBlockedModal, setIsOpenBlockedUserModal] =
+    useAtom(isOpenBlockedModalAtom);
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
   const setMutedGroups = useSetAtom(mutedGroupsAtom);
@@ -1654,11 +1661,15 @@ export const Group = ({
             position: 'relative',
           }}
         >
-          <AddGroup
-            address={myAddress}
-            open={openAddGroup}
-            setOpen={setOpenAddGroup}
-          />
+          {openAddGroup && (
+            <Suspense fallback={null}>
+              <LazyAddGroup
+                address={myAddress}
+                open={openAddGroup}
+                setOpen={setOpenAddGroup}
+              />
+            </Suspense>
+          )}
 
           {newChat && (
             <>
@@ -1971,17 +1982,23 @@ export const Group = ({
             </Box>
 
             {openManageMembers && (
-              <ManageMembers
-                selectedGroup={selectedGroup}
-                address={myAddress}
-                open={openManageMembers}
-                setOpen={setOpenManageMembers}
-                isAdmin={admins.includes(myAddress)}
-                isOwner={groupOwner?.owner === myAddress}
-              />
+              <Suspense fallback={null}>
+                <LazyManageMembers
+                  selectedGroup={selectedGroup}
+                  address={myAddress}
+                  open={openManageMembers}
+                  setOpen={setOpenManageMembers}
+                  isAdmin={admins.includes(myAddress)}
+                  isOwner={groupOwner?.owner === myAddress}
+                />
+              </Suspense>
             )}
           </div>
-          <BlockedUsersModal />
+          {isOpenBlockedModal && (
+            <Suspense fallback={null}>
+              <LazyBlockedUsersModal />
+            </Suspense>
+          )}
 
           {selectedDirect && !newChat && (
             <>
