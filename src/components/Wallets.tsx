@@ -1,4 +1,4 @@
-import { Fragment, useContext, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import Avatar from '@mui/material/Avatar';
 import Typography from '@mui/material/Typography';
 import {
@@ -36,7 +36,8 @@ import { crypto } from '../constants/decryptWallet.ts';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './index.ts';
 import { HtmlTooltip } from './NotAuthenticated.tsx';
-import { QORTAL_APP_CONTEXT } from '../App.tsx';
+import { useAtomValue } from 'jotai';
+import { hasSeenGettingStartedAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
@@ -49,7 +50,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(QORTAL_APP_CONTEXT);
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);

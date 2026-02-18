@@ -87,6 +87,28 @@ export const statusesAtom = atomWithReset<Steps>({
 
 export const isNewTabWindowAtom = atomWithReset<boolean>(false);
 
+// Global snack (reduces context re-renders when snack opens/closes)
+export const openSnackGlobalAtom = atomWithReset<boolean>(false);
+export const infoSnackGlobalAtom = atomWithReset<{
+  message?: string;
+  type?: string;
+  duration?: number | null;
+} | null>(null);
+
+// Tutorial state (reduces context re-renders for tutorial UI)
+export const openTutorialModalAtom = atomWithReset<any>(null);
+export const shownTutorialsAtom = atomWithReset<Record<string, boolean> | null>(
+  null
+);
+export const hasSeenGettingStartedAtom = atom((get) => {
+  const shown = get(shownTutorialsAtom);
+  return shown === null ? null : !!(shown || {})['getting-started'];
+});
+
+// Block list (reduces context re-renders; useBlockedAddresses reads/writes these)
+export const blockedAddressesAtom = atomWithReset<Record<string, boolean>>({});
+export const blockedNamesAtom = atomWithReset<Record<string, boolean>>({});
+
 // Atom Families (replacing selectorFamily)
 export const resourceKeySelector = atomFamily((key) =>
   atom((get) => get(resourceDownloadControllerAtom)[key] || null)

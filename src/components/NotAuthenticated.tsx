@@ -1,7 +1,6 @@
 import {
   Fragment,
   useCallback,
-  useContext,
   useEffect,
   useRef,
   useState,
@@ -30,15 +29,19 @@ import { CustomizedSnackbars } from './Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_APP_CONTEXT } from '../App';
 import {
   getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   LOCALHOST_12391,
 } from '../constants/constants.ts';
-import { useAtom } from 'jotai';
-import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+  hasSeenGettingStartedAtom,
+  selectedNodeInfoAtom,
+  statusesAtom,
+} from '../atoms/global.ts';
+import { useHandleTutorials } from '../hooks/useHandleTutorials';
 import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
@@ -79,8 +82,8 @@ export const NotAuthenticated = ({
   const [enteredApiKey, setEnteredApiKey] = useState('');
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] = useState(null);
-  const { showTutorial, hasSeenGettingStarted } =
-    useContext(QORTAL_APP_CONTEXT);
+  const { showTutorial } = useHandleTutorials();
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

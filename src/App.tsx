@@ -64,10 +64,12 @@ import {
   enabledDevModeAtom,
   extStateAtom,
   hasSettingsChangedAtom,
+  infoSnackGlobalAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
   isRunningPublicNodeAtom,
+  openSnackGlobalAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -97,20 +99,8 @@ import {
 import { CoreSetup } from './components/CoreSetup.tsx';
 import { useAuth } from './hooks/useAuth.tsx';
 import type { extStates } from './types/app';
-import { QORTAL_APP_CONTEXT } from './context/AppContext';
-import {
-  allQueues,
-  clearAllQueues,
-  pauseAllQueues,
-  resumeAllQueues,
-} from './utils/appQueues';
-import {
-  globalApiKey,
-  handleSetGlobalApikey,
-  getBaseApiReact,
-  getArbitraryEndpointReact,
-  getBaseApiReactSocket,
-} from './utils/globalApi';
+import { AppContextInterface, QORTAL_APP_CONTEXT } from './context/AppContext';
+import { handleSetGlobalApikey } from './utils/globalApi';
 import { isMainWindow } from './constants/app';
 
 // Re-export for consumers that still import from App
@@ -195,12 +185,7 @@ function App() {
 
   const { resetAllRecoil } = useAppReset();
 
-  const {
-    showTutorial,
-    openTutorialModal,
-    setOpenTutorialModal,
-    hasSeenGettingStarted,
-  } = useHandleTutorials();
+  const { showTutorial } = useHandleTutorials();
 
   const modals = useAppModals();
   const {
@@ -242,8 +227,8 @@ function App() {
 
   const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
-  const [infoSnack, setInfoSnack] = useState(null);
-  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useAtom(infoSnackGlobalAtom);
+  const [openSnack, setOpenSnack] = useAtom(openSnackGlobalAtom);
   const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
@@ -255,12 +240,7 @@ function App() {
     getBalanceFunc,
     validateApiKeyFromRegistration,
   } = useAuth();
-  const {
-    isUserBlocked,
-    addToBlockList,
-    removeBlockFromList,
-    getAllBlockedUsers,
-  } = useBlockedAddresses(extState === 'authenticated');
+  useBlockedAddresses(extState === 'authenticated');
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -309,51 +289,14 @@ function App() {
 
   const contextValue = useMemo(
     () => ({
-      isShow,
       onCancel,
       onOk,
       show,
-      userInfo,
-      message,
       showInfo,
-      openSnackGlobal: openSnack,
-      setOpenSnackGlobal: setOpenSnack,
-      infoSnackCustom: infoSnack,
-      setInfoSnackCustom: setInfoSnack,
       downloadResource,
       getIndividualUserInfo,
-      isUserBlocked,
-      addToBlockList,
-      removeBlockFromList,
-      getAllBlockedUsers,
-      showTutorial,
-      openTutorialModal,
-      setOpenTutorialModal,
-      hasSeenGettingStarted,
     }),
-    [
-      isShow,
-      onCancel,
-      onOk,
-      show,
-      userInfo,
-      message,
-      showInfo,
-      openSnack,
-      setOpenSnack,
-      infoSnack,
-      setInfoSnack,
-      downloadResource,
-      getIndividualUserInfo,
-      isUserBlocked,
-      addToBlockList,
-      removeBlockFromList,
-      getAllBlockedUsers,
-      showTutorial,
-      openTutorialModal,
-      setOpenTutorialModal,
-      hasSeenGettingStarted,
-    ]
+    [onCancel, onOk, show, showInfo, downloadResource, getIndividualUserInfo]
   );
 
   useEffect(() => {
@@ -456,14 +399,13 @@ function App() {
         reader.readAsText(file);
       });
 
-      let error: any = null;
       let pf: any;
 
       try {
         if (typeof fileContents !== 'string') return;
         pf = JSON.parse(fileContents);
       } catch (e) {
-        console.log(error);
+        console.log(e);
       }
 
       try {
@@ -1068,7 +1010,7 @@ function App() {
     >
       <PdfViewer />
 
-      <QORTAL_APP_CONTEXT.Provider value={contextValue}>
+      <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
         <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
@@ -1275,7 +1217,7 @@ function App() {
         <InfoDialog
           open={isShowInfo}
           message={messageInfo.message}
-          onClose={onOkInfo}
+          onClose={() => onOkInfo(undefined)}
         />
         <UnsavedChangesDialog
           open={isShowUnsavedChanges}
@@ -1324,7 +1266,7 @@ function App() {
             rawWallet={rawWallet}
             qortBalanceLoading={qortBalanceLoading}
             setOpenSnack={setOpenSnack}
-            setInfoSnack={setInfoSnack}
+            setInfoSnack={setInfoSnack as (info: { type: string; message: string } | null) => void}
             onRefreshBalance={getBalanceAndUserInfoFunc}
             onOpenSendQort={onOpenSendQortAndCloseDrawer}
             onOpenRegisterName={onOpenRegisterName}
@@ -1342,7 +1284,7 @@ function App() {
           show={show}
           userInfo={userInfo}
           setOpenSnack={setOpenSnack}
-          setInfoSnack={setInfoSnack}
+          setInfoSnack={setInfoSnack as (info: { type: string; message: string } | null) => void}
         />
         <BuyQortInformation balance={balance} />
       </QORTAL_APP_CONTEXT.Provider>
