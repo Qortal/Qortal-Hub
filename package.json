@@ -79,6 +79,7 @@
     "react-json-view-lite": "^2.4.1",
     "react-loader-spinner": "^6.1.6",
     "react-qr-code": "^2.0.15",
+    "react-rnd": "^10.5.2",
     "react-virtualized": "^9.22.6",
     "react-virtuoso": "^4.10.4",
     "short-unique-id": "^5.2.0",

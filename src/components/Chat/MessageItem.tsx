@@ -266,6 +266,10 @@ export const MessageItemComponent = ({
     (!message?.messageText || message?.messageText === '<p></p>') &&
     (!message?.text || message?.text === '<p></p>');
 
+  const isOwn = message?.sender === myAddress;
+  const isRepliedToMe =
+    reply?.sender === myAddress || replyExpiredMeta?.sender === myAddress;
+
   return (
     <>
       {message?.divide && (
@@ -285,19 +289,35 @@ export const MessageItemComponent = ({
           className="message-item-row"
           sx={{
             display: 'flex',
+            flexDirection: 'row',
             gap: '12px',
             opacity: isTemp || isUpdating ? 0.5 : 1,
-            padding: isShowingAsReply ? '4px 8px' : '4px 16px',
+            padding: isShowingAsReply ? '2px 8px' : '8px 16px 10px',
+            marginBottom: isShowingAsReply ? 0 : '3px',
             position: 'relative',
-            transition: 'background-color 0.1s ease, box-shadow 0.25s ease',
+            transition: 'background-color 0.1s ease',
             width: '100%',
+            ...(isOwn && !isScrollTarget && {
+              borderLeft: `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+              backgroundColor: alpha(theme.palette.primary.main, 0.045),
+              paddingLeft: '14px',
+            }),
+            ...(!isOwn && !isScrollTarget && {
+              borderLeft: `2px solid ${alpha(theme.palette.text.secondary, 0.35)}`,
+              paddingLeft: '14px',
+            }),
             ...(isScrollTarget && {
-              backgroundColor: alpha(theme.palette.primary.main, 0.08),
-              boxShadow: `inset 3px 0 0 0 ${theme.palette.primary.main}, inset 0 0 0 1px ${alpha(theme.palette.primary.main, 0.2)}`,
+              borderLeft: `2px solid ${theme.palette.primary.main}`,
+              backgroundColor: alpha(theme.palette.primary.main, 0.07),
+              paddingLeft: '14px',
             }),
             ...(!isShowingAsReply && {
               '&:hover': {
-                backgroundColor: alpha(theme.palette.text.primary, 0.04),
+                backgroundColor: isScrollTarget
+                  ? alpha(theme.palette.primary.main, 0.09)
+                  : isOwn
+                    ? alpha(theme.palette.primary.main, 0.07)
+                    : alpha(theme.palette.text.primary, 0.04),
               },
               '& .message-item-toolbar': {
                 opacity: 0,
@@ -339,12 +359,12 @@ export const MessageItemComponent = ({
               >
                 <Avatar
                   sx={{
-                    backgroundColor: theme.palette.background.default,
-                    border: '2px solid',
-                    borderColor: 'divider',
+                    backgroundColor: alpha(theme.palette.text.primary, 0.06),
                     color: theme.palette.text.primary,
-                    height: '40px',
-                    width: '40px',
+                    height: '38px',
+                    width: '38px',
+                    fontSize: '15px',
+                    fontWeight: 600,
                     ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={message?.senderName}
@@ -393,9 +413,12 @@ export const MessageItemComponent = ({
               >
                 <Typography
                   sx={{
+                    color: isOwn
+                      ? theme.palette.primary.main
+                      : theme.palette.text.primary,
                     fontFamily: 'Inter',
-                    fontSize: '15px',
-                    fontWeight: 700,
+                    fontSize: '14px',
+                    fontWeight: 600,
                     lineHeight: 1.3,
                   }}
                 >
@@ -438,67 +461,68 @@ export const MessageItemComponent = ({
             {reply && (
               <Box
                 sx={{
-                  backgroundColor: theme.palette.background.surface,
-                  border: '1px solid',
-                  borderColor: theme.palette.divider,
-                  borderRadius: '0 8px 8px 0',
+                  borderLeft: isRepliedToMe
+                    ? `2px solid ${theme.palette.warning.main}`
+                    : `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                  backgroundColor: isRepliedToMe
+                    ? alpha(theme.palette.warning.main, 0.06)
+                    : 'transparent',
+                  borderRadius: '0 6px 6px 0',
                   cursor: 'pointer',
                   display: 'flex',
-                  marginTop: '6px',
-                  marginBottom: '8px',
-                  marginLeft: '12px',
+                  flexDirection: 'row',
+                  marginTop: '4px',
+                  marginBottom: '6px',
+                  marginLeft: '2px',
                   maxHeight: '72px',
                   overflow: 'hidden',
-                  transition:
-                    'background-color 0.15s ease, border-color 0.15s ease',
+                  padding: '4px 0 4px 10px',
+                  transition: 'opacity 0.1s ease',
                   width: '100%',
+                  opacity: isRepliedToMe ? 1 : 0.72,
                   '&:hover': {
-                    backgroundColor: theme.palette.action.hover,
-                    borderColor: theme.palette.text.secondary,
+                    opacity: 1,
                   },
                 }}
                 onClick={() => {
                   scrollToItem(replyIndex);
                 }}
               >
-                <Box
-                  sx={{
-                    background: theme.palette.primary.main,
-                    borderRadius: '4px 0 0 4px',
-                    flexShrink: 0,
-                    opacity: 0.7,
-                    width: '3px',
-                  }}
-                />
-                <Box sx={{ padding: '8px 12px', minWidth: 0 }}>
+                <Box sx={{ minWidth: 0 }}>
                   <Box
                     sx={{
                       alignItems: 'center',
                       display: 'flex',
                       gap: '6px',
-                      marginBottom: '4px',
+                      marginBottom: '2px',
                     }}
                   >
                     <ReplyIcon
                       sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '14px',
+                        color: isRepliedToMe
+                          ? theme.palette.warning.main
+                          : theme.palette.primary.main,
+                        fontSize: '13px',
                         flexShrink: 0,
                       }}
                     />
                     <Typography
                       sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        letterSpacing: '0.02em',
-                        textTransform: 'uppercase',
+                        color: isRepliedToMe
+                          ? theme.palette.warning.main
+                          : theme.palette.primary.main,
+                        fontSize: '12px',
+                        fontWeight: isRepliedToMe ? 600 : 500,
                       }}
                     >
-                      {t('core:message.generic.replied_to', {
-                        person: reply?.senderName || reply?.senderAddress,
-                        postProcess: 'capitalizeFirstChar',
-                      })}
+                      {isRepliedToMe
+                        ? t('core:message.generic.replied_to_you', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:message.generic.replied_to', {
+                            person: reply?.senderName || reply?.senderAddress,
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                     </Typography>
                   </Box>
 
@@ -522,51 +546,46 @@ export const MessageItemComponent = ({
             {!reply && (replyExpiredMeta || message?.repliedTo) && (
               <Box
                 sx={{
-                  backgroundColor: theme.palette.background.surface,
-                  border: '1px solid',
-                  borderColor: theme.palette.divider,
-                  borderRadius: '0 8px 8px 0',
+                  borderLeft: isRepliedToMe
+                    ? `2px solid ${theme.palette.warning.main}`
+                    : `2px solid ${alpha(theme.palette.text.secondary, 0.4)}`,
+                  backgroundColor: isRepliedToMe
+                    ? alpha(theme.palette.warning.main, 0.06)
+                    : 'transparent',
+                  borderRadius: '0 6px 6px 0',
                   display: 'flex',
-                  marginTop: '6px',
-                  marginBottom: '8px',
-                  marginLeft: '12px',
+                  flexDirection: 'row',
+                  marginTop: '4px',
+                  marginBottom: '6px',
+                  marginLeft: '2px',
                   maxHeight: '72px',
                   overflow: 'hidden',
+                  padding: '4px 0 4px 10px',
                   width: '100%',
+                  opacity: isRepliedToMe ? 1 : 0.6,
                 }}
               >
-                <Box
-                  sx={{
-                    background: theme.palette.text.secondary,
-                    borderRadius: '4px 0 0 4px',
-                    flexShrink: 0,
-                    opacity: 0.5,
-                    width: '3px',
-                  }}
-                />
-                <Box sx={{ padding: '8px 12px', minWidth: 0 }}>
+                <Box sx={{ minWidth: 0 }}>
                   <Box
                     sx={{
                       alignItems: 'center',
                       display: 'flex',
                       gap: '6px',
-                      marginBottom: '4px',
+                      marginBottom: '2px',
                     }}
                   >
                     <ReplyIcon
                       sx={{
                         color: theme.palette.text.secondary,
-                        fontSize: '14px',
+                        fontSize: '13px',
                         flexShrink: 0,
                       }}
                     />
                     <Typography
                       sx={{
                         color: theme.palette.text.secondary,
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        letterSpacing: '0.02em',
-                        textTransform: 'uppercase',
+                        fontSize: '12px',
+                        fontWeight: 500,
                       }}
                     >
                       {replyExpiredMeta?.senderName || replyExpiredMeta?.sender

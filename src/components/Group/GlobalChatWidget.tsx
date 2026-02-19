@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Rnd } from 'react-rnd';
 import {
   Avatar,
   Box,
@@ -18,7 +19,6 @@ import LockIcon from '@mui/icons-material/Lock';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import { useTranslation } from 'react-i18next';
 import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
 import {
   groupChatHasUnreadAtom,
   groupChatTimestampsAtom,
@@ -79,6 +79,162 @@ export function GlobalChatWidget({
   const [selectedDirect, setSelectedDirect] = useState<any>(null);
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
 
+  const WIDGET_MIN_WIDTH = 280;
+  const WIDGET_MAX_WIDTH = 720;
+  const WIDGET_MIN_HEIGHT = 240;
+  const WIDGET_MAX_HEIGHT = 800;
+  const BAR_HEIGHT = 52;
+  const RIGHT_SIDEBAR_OFFSET = 56;
+  const [widgetWidth, setWidgetWidth] = useState(380);
+  const [widgetHeight, setWidgetHeight] = useState(560);
+  const resizeStartRef = useRef<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const [windowSize, setWindowSize] = useState(() =>
+    typeof window !== 'undefined'
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: 800, h: 600 }
+  );
+  const [bottomX, setBottomX] = useState(() => {
+    if (typeof window === 'undefined') return 0;
+    const maxX = Math.max(0, window.innerWidth - 380 - 56);
+    return Math.max(0, Math.min(maxX, maxX / 2));
+  });
+  const [draggingX, setDraggingX] = useState<number | null>(null);
+  const didDragRef = useRef(false);
+
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        width: widgetWidth,
+        height: widgetHeight,
+      };
+      const onMouseMove = (e: MouseEvent) => {
+        const start = resizeStartRef.current;
+        if (!start) return;
+        const deltaX = e.clientX - start.x;
+        const deltaY = e.clientY - start.y;
+        const maxW = Math.min(WIDGET_MAX_WIDTH, typeof window !== 'undefined' ? window.innerWidth - RIGHT_SIDEBAR_OFFSET - 48 : WIDGET_MAX_WIDTH);
+        const maxH = Math.min(WIDGET_MAX_HEIGHT, typeof window !== 'undefined' ? window.innerHeight - 120 : WIDGET_MAX_HEIGHT);
+        setWidgetWidth((w) =>
+          Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, start.width - deltaX))
+        );
+        setWidgetHeight((h) =>
+          Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height - deltaY))
+        );
+      };
+      const onMouseUp = () => {
+        resizeStartRef.current = null;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'nwse-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [widgetWidth, widgetHeight]
+  );
+
+  const handleResizeStartHeightOnly = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        width: widgetWidth,
+        height: widgetHeight,
+      };
+      const onMouseMove = (e: MouseEvent) => {
+        const start = resizeStartRef.current;
+        if (!start) return;
+        const deltaY = e.clientY - start.y;
+        const maxH = Math.min(WIDGET_MAX_HEIGHT, typeof window !== 'undefined' ? window.innerHeight - 120 : WIDGET_MAX_HEIGHT);
+        setWidgetHeight((h) =>
+          Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height - deltaY))
+        );
+      };
+      const onMouseUp = () => {
+        resizeStartRef.current = null;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    },
+    [widgetHeight]
+  );
+
+  const totalHeight = BAR_HEIGHT + (open ? widgetHeight : 0);
+  const maxX = Math.max(0, windowSize.w - widgetWidth - RIGHT_SIDEBAR_OFFSET);
+  const bottomY = windowSize.h - totalHeight;
+
+  const rndPosition = useMemo(
+    (): { x: number; y: number } => ({
+      x: draggingX !== null ? draggingX : bottomX,
+      y: bottomY,
+    }),
+    [draggingX, bottomX, bottomY]
+  );
+
+  const positionRef = useRef(rndPosition);
+  positionRef.current = rndPosition;
+
+  useEffect(() => {
+    const onResize = () =>
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    setBottomX((prev) => Math.max(0, Math.min(maxX, prev)));
+  }, [windowSize, widgetWidth, maxX]);
+
+  const handleRndDragStart = useCallback(() => {
+    didDragRef.current = false;
+    setDraggingX(positionRef.current.x);
+  }, []);
+
+  const handleRndDrag = useCallback(
+    (_e: unknown, d: { x: number }) => {
+      didDragRef.current = true;
+      setDraggingX(Math.max(0, Math.min(maxX, d.x)));
+    },
+    [maxX]
+  );
+
+  const handleRndDragStop = useCallback(
+    (_e: unknown, d: { x: number }) => {
+      setDraggingX(null);
+      setBottomX(Math.max(0, Math.min(maxX, d.x)));
+    },
+    [maxX]
+  );
+
+  const handleBarClick = useCallback(() => {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
+    setOpen((o) => !o);
+  }, []);
+
   /** Same logic as Group.tsx: isPrivate for the currently selected group in the widget */
   const selectedGroupIsPrivate = useMemo(() => {
     if (!selectedGroup?.groupId) return null;
@@ -114,36 +270,95 @@ export function GlobalChatWidget({
     return null;
   }
 
-  /** Right sidebar width so widget does not overlap the navbar */
-  const rightSidebarOffset = 56;
-
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        bottom: 0,
-        right: rightSidebarOffset,
+    <Rnd
+      position={rndPosition}
+      size={{ width: widgetWidth, height: totalHeight }}
+      minWidth={WIDGET_MIN_WIDTH}
+      minHeight={BAR_HEIGHT}
+      maxWidth={windowSize.w - 48}
+      disableDragging={false}
+      enableResizing={false}
+      dragAxis="x"
+      bounds="window"
+      dragHandleClassName="global-chat-widget-drag-handle"
+      onDragStart={handleRndDragStart}
+      onDrag={handleRndDrag}
+      onDragStop={handleRndDragStop}
+      enableUserSelectHack={true}
+      cancel=".global-chat-widget-no-drag"
+      style={{
         zIndex: 1300,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-end',
-        overflow: 'hidden',
-        borderRadius: '8px 8px 0 0',
-        boxShadow: `0 -4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)'}, 0 -1px 0 ${theme.palette.divider}`,
-        border: '1px solid',
-        borderBottom: 'none',
-        borderColor: theme.palette.divider,
-        backgroundColor: theme.palette.background.surface,
+        transition:
+          draggingX === null
+            ? 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)'
+            : 'none',
       }}
     >
-      {/* Bar: always visible at very bottom, click to expand/collapse */}
       <Box
-        component="button"
-        onClick={() => setOpen((o) => !o)}
         sx={{
           width: '100%',
-          minWidth: 280,
-          maxWidth: 380,
+          height: '100%',
+          minWidth: WIDGET_MIN_WIDTH,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          overflow: 'hidden',
+          borderRadius: '8px 8px 0 0',
+          boxShadow: `0 -4px 24px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.12)'}, 0 -1px 0 ${theme.palette.divider}`,
+          border: '1px solid',
+          borderBottom: 'none',
+          borderColor: theme.palette.divider,
+          backgroundColor: theme.palette.background.surface,
+        }}
+      >
+      {/* Corner resize handles: at the very top of the widget, only when expanded */}
+      {open && (
+        <>
+          <Box
+            component="div"
+            role="button"
+            onMouseDown={handleResizeStart}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 24,
+              height: 24,
+              zIndex: 20,
+              cursor: 'nwse-resize',
+              borderRadius: '8px 0 0 0',
+            }}
+            aria-label={t('core:action.resize', { postProcess: 'capitalizeFirstChar' })}
+          />
+          <Box
+            component="div"
+            role="button"
+            onMouseDown={handleResizeStartHeightOnly}
+            sx={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: 24,
+              height: 24,
+              zIndex: 20,
+              cursor: 'ns-resize',
+              borderRadius: '0 8px 0 0',
+            }}
+            aria-label={t('core:action.resize', { postProcess: 'capitalizeFirstChar' })}
+          />
+        </>
+      )}
+      {/* Bar: always visible at very bottom, click to expand/collapse — also Rnd drag handle */}
+      <Box
+        component="button"
+        type="button"
+        className="global-chat-widget-drag-handle"
+        onClick={handleBarClick}
+        sx={{
+          width: '100%',
+          minWidth: WIDGET_MIN_WIDTH,
+          maxWidth: widgetWidth,
           border: 'none',
           cursor: 'pointer',
           display: 'flex',
@@ -153,12 +368,9 @@ export function GlobalChatWidget({
           padding: '8px 14px',
           backgroundColor: 'transparent',
           color: theme.palette.text.primary,
-          transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
+          transition: 'background-color 0.2s ease',
           '&:hover': {
             backgroundColor: theme.palette.action.hover,
-          },
-          '&:active': {
-            backgroundColor: theme.palette.action.selected,
           },
         }}
         aria-label={
@@ -233,7 +445,7 @@ export function GlobalChatWidget({
             />
           )}
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Box className="global-chat-widget-no-drag" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           {onClose && (
             <IconButton
               size="small"
@@ -244,6 +456,7 @@ export function GlobalChatWidget({
               sx={{
                 color: theme.palette.text.secondary,
                 borderRadius: '10px',
+                cursor: 'pointer',
                 '&:hover': {
                   backgroundColor: theme.palette.action.hover,
                   color: theme.palette.text.primary,
@@ -262,6 +475,7 @@ export function GlobalChatWidget({
               width: 34,
               height: 34,
               borderRadius: '10px',
+              cursor: 'pointer',
               color: theme.palette.text.secondary,
               '&:hover': {
                 backgroundColor: theme.palette.action.hover,
@@ -271,11 +485,11 @@ export function GlobalChatWidget({
             aria-hidden
           >
             {open ? (
-              <KeyboardArrowUpRoundedIcon sx={{ fontSize: 20 }} />
-            ) : (
               <KeyboardArrowUpRoundedIcon
-                sx={{ fontSize: 18, transform: 'rotate(180deg)' }}
+                sx={{ fontSize: 20, transform: 'rotate(180deg)' }}
               />
+            ) : (
+              <KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} />
             )}
           </IconButton>
         </Box>
@@ -284,8 +498,7 @@ export function GlobalChatWidget({
       {/* Panel always mounted so scroll position and state (tab, selection) are preserved when minimized */}
       <Box
         sx={{
-          width: 380,
-          maxWidth: 'calc(100vw - 48px)',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: theme.palette.background.surface,
@@ -293,8 +506,9 @@ export function GlobalChatWidget({
           borderColor: theme.palette.divider,
           ...(open
             ? {
-                height: 'min(560px, calc(100vh - 120px))',
-                maxHeight: 'min(560px, calc(100vh - 120px))',
+                height: widgetHeight,
+                minHeight: WIDGET_MIN_HEIGHT,
+                maxHeight: 'min(800px, calc(100vh - 120px))',
                 overflow: 'hidden',
                 visibility: 'visible',
                 opacity: 1,
@@ -885,6 +1099,7 @@ export function GlobalChatWidget({
             </>
           )}
         </Box>
-    </Box>
+      </Box>
+    </Rnd>
   );
 }
