@@ -78,6 +78,8 @@
     "save_disk": "savar no disco",
     "search": "buscar",
     "search_apps": "buscar apps",
+    "search_apps_or_link": "Pesquisar apps ou inserir link qortal://",
+    "open_as_qortal_link": "Abrir como link Qortal",
     "search_groups": "buscar grupos",
     "search_chat_text": "buscar texto na conversa",
     "see_qr_code": "ver código QR",

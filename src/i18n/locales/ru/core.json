@@ -78,6 +78,8 @@
     "save_disk": "сохранить на диск",
     "search": "поиск",
     "search_apps": "Поиск приложений",
+    "search_apps_or_link": "Поиск приложений или введите ссылку qortal://",
+    "open_as_qortal_link": "Открыть как ссылку Qortal",
     "search_groups": "Поиск групп",
     "search_chat_text": "Поиск текста чата",
     "see_qr_code": "Смотрите QR -код",
