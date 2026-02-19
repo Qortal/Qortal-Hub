@@ -42,11 +42,33 @@ function normalizePem(pem: string): string {
   return pem.trim().replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 }
 
+/** True if the string is valid PEM that Node can parse as an X.509 certificate (avoids NO_START_LINE). */
+function isValidPemCertificate(pem: string): boolean {
+  if (!pem || typeof pem !== 'string') return false;
+  const trimmed = pem.trim();
+  if (
+    !trimmed.includes('-----BEGIN CERTIFICATE-----') ||
+    !trimmed.includes('-----END CERTIFICATE-----')
+  ) {
+    return false;
+  }
+  try {
+    new crypto.X509Certificate(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Persist CA to disk so we can load it before first request on next startup. */
 function persistCaForHost(hostname: string, caPem: string): void {
   if (hostname !== '127.0.0.1') return;
   try {
     const normalized = normalizePem(caPem);
+    if (!isValidPemCertificate(normalized)) {
+      certLog('persistCaForHost: skipped invalid PEM');
+      return;
+    }
     const filePath = getPersistedCaPath();
     fs.writeFileSync(filePath, normalized, 'utf-8');
     const fp = sha256FingerprintFromPem(normalized);
@@ -90,7 +112,10 @@ export function loadPersistedLocalNodeCa(): void {
     if (!fs.existsSync(filePath)) return;
     const raw = fs.readFileSync(filePath, 'utf-8');
     const caPem = normalizePem(raw);
-    if (!caPem) return;
+    if (!caPem || !isValidPemCertificate(caPem)) {
+      certLog('loadPersistedLocalNodeCa: skipped invalid or missing PEM');
+      return;
+    }
     trustedCaByHost.set('127.0.0.1', caPem);
     trustedCaByHost.set('localhost', caPem);
     const fp = sha256FingerprintFromPem(caPem);
@@ -278,8 +303,8 @@ export function installCertificateVerification(session: Session): void {
 
     const caPem = trustedCaByHost.get(hostname);
 
-    if (!caPem) {
-      certLog('no CA for host, delegating -3');
+    if (!caPem || !isValidPemCertificate(caPem)) {
+      certLog('no valid CA for host, delegating -3');
       callback(-3);
       return;
     }
@@ -534,6 +559,61 @@ export async function ensureCertForBase(
       caPem = text2;
     }
 
+    // If getca returned something but it's not valid PEM, treat like no CA: create new and re-fetch.
+    if (caPem) {
+      const extractedCheck = extractCaPem(caPem);
+      const toStoreCheck = normalizePem(extractedCheck);
+      if (!isValidPemCertificate(toStoreCheck)) {
+        certLog(
+          'ensureCertForBase: getca response not valid PEM, calling createca'
+        );
+        const createRes = await fetch(
+          `${httpBase}/admin/http/createca${apiKeyParam}`,
+          {
+            method: 'POST',
+            headers: { accept: 'text/plain' },
+            body: '',
+          }
+        );
+        if (!createRes.ok) {
+          return {
+            success: false,
+            error: `createca failed (invalid PEM): ${createRes.status}`,
+          };
+        }
+        const createText = (await createRes.text()).trim();
+        if (
+          !createText.includes('CA and server certificate created successfully')
+        ) {
+          return {
+            success: false,
+            error: `createca response (invalid PEM): ${createText}`,
+          };
+        }
+        const getcaRes2 = await fetch(
+          `${httpBase}/admin/http/getca${apiKeyParam}`,
+          {
+            method: 'GET',
+            headers: { accept: 'text/plain' },
+          }
+        );
+        if (!getcaRes2.ok) {
+          return {
+            success: false,
+            error: 'getca after createca (invalid PEM) failed',
+          };
+        }
+        const text2 = (await getcaRes2.text()).trim();
+        if (!text2) {
+          return {
+            success: false,
+            error: 'getca returned empty after createca (invalid PEM)',
+          };
+        }
+        caPem = text2;
+      }
+    }
+
     // Verify connecting host is in the node's SAN list; if not, create a new CA and refetch.
     const san = await fetchSanList(httpBase, apiKey);
     if (san && !isHostInSanList(hostname, san)) {
@@ -585,6 +665,10 @@ export async function ensureCertForBase(
 
     const extracted = extractCaPem(caPem);
     const caPemToStore = normalizePem(extracted);
+    if (!isValidPemCertificate(caPemToStore)) {
+      certLog('ensureCertForBase: getca response is not valid PEM');
+      return { success: false, error: 'Invalid PEM from getca' };
+    }
     const getFp = sha256FingerprintFromPem(caPemToStore);
 
     // caChanged: no persisted CA, or persisted fingerprint differs from GET (CA changed or first run).
