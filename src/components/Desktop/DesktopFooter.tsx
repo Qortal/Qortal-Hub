@@ -158,7 +158,7 @@ export const DesktopFooter = ({
           }}
         >
           <IconWrapper
-            label={t('group:group.messaging', {
+            label={t('group:group.dm', {
               postProcess: 'capitalizeFirstChar',
             })}
             selected={isDirects}

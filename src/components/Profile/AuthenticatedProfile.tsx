@@ -20,6 +20,7 @@ import { GeneralNotifications } from '../GeneralNotifications';
 import { Save } from '../Save/Save';
 import { TaskManager } from '../TaskManager/TaskManager.tsx';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
+import { ChatWidgetReopenIcon } from './ChatWidgetReopenIcon';
 
 const tooltipSlotProps = (theme: any) => ({
   tooltip: {
@@ -75,7 +76,7 @@ export const AuthenticatedProfile = ({
   onBackupWallet,
 }: AuthenticatedProfileProps) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
 
   const showLeftColumn =
     desktopViewMode !== 'apps' &&
@@ -280,6 +281,8 @@ export const AuthenticatedProfile = ({
           <Spacer height="20px" />
 
           <Save isDesktop disableWidth={false} myName={userInfo?.name} />
+
+          <ChatWidgetReopenIcon />
         </Box>
 
         <Box

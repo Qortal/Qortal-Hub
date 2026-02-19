@@ -7,7 +7,6 @@ import {
   AllThreadP,
   ArrowDownIcon,
   ComposeContainer,
-  ComposeContainerBlank,
   ComposeP,
   GroupContainer,
   InstanceFooter,
@@ -577,13 +576,7 @@ export const GroupMail = ({
           horizontal: 'right',
         }}
       >
-        <InstanceListParent
-          sx={{
-            minHeight: 'unset',
-            width: 'auto',
-            padding: '0px',
-          }}
-        >
+        <InstanceListParent sx={{ width: '200px' }}>
           <InstanceListHeader />
 
           <InstanceListContainer>
@@ -630,7 +623,9 @@ export const GroupMail = ({
             sx={{
               alignItems: 'center',
               display: 'flex',
+              gap: '12px',
               justifyContent: 'space-between',
+              paddingTop: '16px',
             }}
           >
             <NewThread
@@ -641,11 +636,7 @@ export const GroupMail = ({
               getSecretKey={getSecretKey}
               isPrivate={isPrivate}
             />
-            <ComposeContainerBlank
-              sx={{
-                height: 'auto',
-              }}
-            >
+            <Box sx={{ alignItems: 'center', display: 'flex', gap: '8px' }}>
               {selectedGroup && !currentThread && (
                 <ComposeContainer
                   onClick={() => {
@@ -654,17 +645,37 @@ export const GroupMail = ({
                   ref={anchorElInstanceFilter}
                 >
                   <SortIcon />
-
                   <SelectInstanceContainerFilterInner>
                     <ComposeP>Sort by</ComposeP>
                     <ArrowDownIcon src={ArrowDownSVG} />
                   </SelectInstanceContainerFilterInner>
                 </ComposeContainer>
               )}
-            </ComposeContainerBlank>
+              <Box
+                component="button"
+                onClick={refetchThreadsLists}
+                sx={{
+                  alignItems: 'center',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: '50%',
+                  color: theme.palette.text.secondary,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  p: 0.75,
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                    color: theme.palette.text.primary,
+                  },
+                }}
+                aria-label="Refresh threads"
+              >
+                <RefreshIcon sx={{ fontSize: 22 }} />
+              </Box>
+            </Box>
           </Box>
 
-          <Spacer height="30px" />
+          <Spacer height="24px" />
 
           <Box
             sx={{
@@ -674,17 +685,9 @@ export const GroupMail = ({
             }}
           >
             <AllThreadP>{filterMode}</AllThreadP>
-
-            <RefreshIcon
-              onClick={refetchThreadsLists}
-              sx={{
-                cursor: 'pointer',
-                color: theme.palette.text.primary,
-              }}
-            />
           </Box>
 
-          <Spacer height="30px" />
+          <Spacer height="16px" />
 
           {combinedListTempAndReal.map((thread) => {
             const hasViewedRecent =

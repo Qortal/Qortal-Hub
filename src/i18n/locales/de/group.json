@@ -50,6 +50,7 @@
     "member_number": "Anzahl der Mitglieder",
     "member_other": "Mitglieder",
     "messaging": "Nachrichten",
+    "dm": "PN",
     "name": "Gruppenname",
     "open": "offen (öffentlich)",
     "private": "private Gruppe",
@@ -63,6 +64,8 @@
   "join_requests": "Beitrittsanfragen",
   "last_message": "Letzte Nachricht",
   "last_message_date": "Letzte Nachricht: {{date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Du",
   "latest_mails": "Neueste Q-Mails",
   "message": {
     "generic": {

@@ -2,7 +2,8 @@ import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { MessageItem } from './MessageItem';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import { Box, Button, IconButton, Typography, useTheme } from '@mui/material';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
@@ -32,15 +33,22 @@ export const ChatList = ({
   openQManager,
   hasSecretKey,
   isPrivate,
+  compactScrollButton = false,
 }) => {
   const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  const [highlightedMessageIndex, setHighlightedMessageIndex] = useState<
+    number | null
+  >(null);
   const hasLoadedInitialRef = useRef(false);
   const scrollingIntervalRef = useRef(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastSeenUnreadMessageTimestamp = useRef(null);
-
+  console.log('showScrollButton', showScrollButton);
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
@@ -117,6 +125,7 @@ export const ChatList = ({
             msg?.timestamp > lastSeenUnreadMessageTimestamp.current) ||
             0)
       );
+
       if (parentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
         const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
@@ -185,8 +194,17 @@ export const ChatList = ({
     return messages[lastIndex]?.signature;
   }, [messages]);
 
-  const goToMessage = useCallback((idx) => {
+  const goToMessage = useCallback((idx: number) => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
     rowVirtualizer.scrollToIndex(idx);
+    setHighlightedMessageIndex(idx);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedMessageIndex(null);
+      highlightTimeoutRef.current = null;
+    }, 1200);
   }, []);
 
   // Memoize per-row payload so MessageItem receives stable references and memo can skip re-renders
@@ -431,6 +449,9 @@ export const ChatList = ({
                         handleReaction={handleReaction}
                         isLast={index === messages.length - 1}
                         isPrivate={isPrivate}
+                        isScrollTarget={
+                          highlightedMessageIndex === virtualRow.index
+                        }
                         isTemp={!!message?.isTemp}
                         isUpdating={isUpdating}
                         lastSignature={lastSignature}
@@ -476,30 +497,56 @@ export const ChatList = ({
           </Button>
         )}
 
-        {showScrollDownButton && !showScrollButton && (
-          <Button
-            onClick={() => scrollToBottom()}
-            sx={{
-              backgroundColor: theme.palette.background.paper,
-              border: 'none',
-              borderRadius: '20px',
-              bottom: 20,
-              color: theme.palette.text.primary,
-              cursor: 'pointer',
-              fontSize: '16px',
-              outline: `1px solid ${theme.palette.primary.light}`,
-              padding: '10px 20px',
-              position: 'absolute',
-              right: 20,
-              textTransform: 'none',
-              zIndex: 10,
-            }}
-          >
-            {t('group:action.scroll_bottom', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-        )}
+        {showScrollDownButton &&
+          !showScrollButton &&
+          (compactScrollButton ? (
+            <IconButton
+              onClick={() => scrollToBottom()}
+              size="small"
+              aria-label={t('group:action.scroll_bottom', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              sx={{
+                backgroundColor: theme.palette.background.paper,
+                border: `1px solid ${theme.palette.primary.light}`,
+                borderRadius: '50%',
+                bottom: 16,
+                boxShadow: 1,
+                color: theme.palette.primary.main,
+                position: 'absolute',
+                right: 16,
+                zIndex: 10,
+                '&:hover': {
+                  backgroundColor: theme.palette.action.hover,
+                },
+              }}
+            >
+              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 24 }} />
+            </IconButton>
+          ) : (
+            <Button
+              onClick={() => scrollToBottom()}
+              sx={{
+                backgroundColor: theme.palette.background.paper,
+                border: 'none',
+                borderRadius: '20px',
+                bottom: 20,
+                color: theme.palette.text.primary,
+                cursor: 'pointer',
+                fontSize: '16px',
+                outline: `1px solid ${theme.palette.primary.light}`,
+                padding: '10px 20px',
+                position: 'absolute',
+                right: 20,
+                textTransform: 'none',
+                zIndex: 10,
+              }}
+            >
+              {t('group:action.scroll_bottom', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
+          ))}
       </Box>
 
       {enableMentions && (hasSecretKey || isPrivate === false) && (

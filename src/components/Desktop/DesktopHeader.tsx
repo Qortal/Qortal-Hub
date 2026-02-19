@@ -32,13 +32,15 @@ const IconWrapper = ({
         backgroundColor: selected
           ? selectColor || 'rgba(28, 29, 32, 1)'
           : 'transparent',
-        borderRadius: '50%',
+        borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '5px',
-        height: customHeight ? customHeight : '65px',
+        gap: '6px',
+        height: customHeight || '60px',
         justifyContent: 'center',
-        width: customHeight ? customHeight : '65px',
+        minWidth: '72px',
+        padding: '8px 4px',
+        transition: 'background-color 0.15s ease',
       }}
     >
       {children}
@@ -46,8 +48,12 @@ const IconWrapper = ({
         sx={{
           color: color,
           fontFamily: 'Inter',
-          fontSize: '10px',
+          fontSize: '11px',
           fontWeight: 500,
+          letterSpacing: '0.01em',
+          lineHeight: 1.2,
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
         }}
       >
         {label}
@@ -105,16 +111,19 @@ export const DesktopHeader = ({
     <Box
       sx={{
         alignItems: 'center',
+        borderBottom: '1px solid',
+        borderColor: 'divider',
         display: 'flex',
-        height: '70px', // Footer height
+        height: '64px',
         justifyContent: 'space-between',
-        padding: '10px',
+        padding: '0 16px',
         width: '100%',
         zIndex: 1,
       }}
     >
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           gap: '10px',
         }}
@@ -123,6 +132,7 @@ export const DesktopHeader = ({
           <LockIcon
             sx={{
               color: theme.palette.other.positive,
+              fontSize: '20px',
             }}
           />
         )}
@@ -131,6 +141,7 @@ export const DesktopHeader = ({
           <NoEncryptionGmailerrorredIcon
             sx={{
               color: theme.palette.other.danger,
+              fontSize: '20px',
             }}
           />
         )}
@@ -139,6 +150,7 @@ export const DesktopHeader = ({
           sx={{
             fontSize: '16px',
             fontWeight: 600,
+            letterSpacing: '0.01em',
           }}
         >
           {selectedGroup?.groupId === '0'
@@ -151,8 +163,8 @@ export const DesktopHeader = ({
         sx={{
           alignItems: 'center',
           display: 'flex',
-          gap: '20px',
-          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visibile',
+          gap: '8px',
+          visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visible',
         }}
       >
         <ButtonBase
@@ -191,6 +203,12 @@ export const DesktopHeader = ({
           onClick={() => {
             goToChat();
           }}
+          sx={{
+            borderRadius: '12px',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
         >
           <IconWrapper
             color={
@@ -199,7 +217,7 @@ export const DesktopHeader = ({
             label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
             selected={isChat}
             selectColor={theme.palette.action.selected}
-            customHeight="55px"
+            customHeight="56px"
           >
             <ChatIcon
               height={25}
@@ -219,6 +237,12 @@ export const DesktopHeader = ({
           onClick={() => {
             setGroupSection('forum');
           }}
+          sx={{
+            borderRadius: '12px',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
         >
           <IconWrapper
             color={
@@ -231,7 +255,7 @@ export const DesktopHeader = ({
             })}
             selected={isForum}
             selectColor={theme.palette.action.selected}
-            customHeight="55px"
+            customHeight="56px"
           >
             <ThreadsIcon
               height={25}
@@ -249,10 +273,16 @@ export const DesktopHeader = ({
           onClick={() => {
             setOpenManageMembers(true);
           }}
+          sx={{
+            borderRadius: '12px',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
         >
           <IconWrapper
             color={theme.palette.text.secondary}
-            customHeight="55px"
+            customHeight="56px"
             label={t('group:group.member_other', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -270,6 +300,12 @@ export const DesktopHeader = ({
           onClick={() => {
             setGroupSection('adminSpace');
           }}
+          sx={{
+            borderRadius: '12px',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
         >
           <IconWrapper
             color={
@@ -281,7 +317,7 @@ export const DesktopHeader = ({
               postProcess: 'capitalizeFirstChar',
             })}
             selected={groupSection === 'adminSpace'}
-            customHeight="55px"
+            customHeight="56px"
             selectColor={theme.palette.action.selected}
           >
             <AdminsIcon

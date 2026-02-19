@@ -22,7 +22,6 @@ import {
   CellMeasurerCache,
   List,
 } from 'react-virtualized';
-import _ from 'lodash';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background/background.ts';
@@ -59,33 +58,20 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
   const [inputValue, setInputValue] = useState('');
-  const [filteredItems, setFilteredItems] = useState(groups);
   const [isLoading, setIsLoading] = useState(false);
   const theme = useTheme();
 
-  const handleFilter = useCallback(
-    (query) => {
-      if (query) {
-        setFilteredItems(
-          groups.filter((item) =>
-            item.groupName.toLowerCase().includes(query.toLowerCase())
-          )
-        );
-      } else {
-        setFilteredItems(groups);
-      }
-    },
-    [groups]
-  );
-  const debouncedFilter = useMemo(
-    () => _.debounce(handleFilter, 500),
-    [handleFilter]
-  );
+  // Derive filtered list from groups + search so refetches (e.g. when memberGroups updates) don't clear the filter
+  const filteredItems = useMemo(() => {
+    const query = (inputValue || '').trim().toLowerCase();
+    if (!query) return groups;
+    return groups.filter((item) =>
+      item.groupName.toLowerCase().includes(query)
+    );
+  }, [groups, inputValue]);
 
   const handleChange = (event) => {
-    const value = event.target.value;
-    setInputValue(value);
-    debouncedFilter(value);
+    setInputValue(event.target.value);
   };
 
   const getGroups = async () => {
@@ -96,7 +82,6 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
         (item) => !memberGroups.find((group) => group.groupId === item.groupId)
       );
       setGroups(filteredGroup);
-      setFilteredItems(filteredGroup);
     } catch (error) {
       console.error(error);
     }

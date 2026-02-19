@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Editor, EditorProvider, useCurrentEditor } from '@tiptap/react';
+import { Fragment, Slice } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
 import { Color } from '@tiptap/extension-color';
 import ListItem from '@tiptap/extension-list-item';
@@ -40,6 +41,7 @@ const MenuBar = memo(
     isChat,
     isDisabledEditorEnter,
     setIsDisabledEditorEnter,
+    toolbarStyle = 'default',
   }) => {
     const { editor } = useCurrentEditor();
     const fileInputRef = useRef(null);
@@ -123,66 +125,100 @@ const MenuBar = memo(
     }, [editor, isChat]);
 
     return (
-      <div className="control-group">
-        <div
-          className="button-group"
-          style={{
+      <Box
+        sx={{
+          backgroundColor: isChat
+            ? 'transparent'
+            : theme.palette.background.paper,
+          border: isChat ? 'none' : '1px solid',
+          borderBottom: isChat ? '1px solid' : undefined,
+          borderColor: theme.palette.divider,
+          borderRadius: isChat ? '8px 8px 0 0' : '10px 10px 0 0',
+          padding: isChat ? '8px 10px 10px' : '6px 10px 8px',
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'center',
             display: 'flex',
+            flexWrap: 'wrap',
+            gap: '2px',
           }}
         >
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleBold().run()}
             disabled={!editor.can().chain().focus().toggleBold().run()}
             sx={{
               color: editor.isActive('bold')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatBoldIcon />
+            <FormatBoldIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleItalic().run()}
             disabled={!editor.can().chain().focus().toggleItalic().run()}
             sx={{
               color: editor.isActive('italic')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatItalicIcon />
+            <FormatItalicIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleStrike().run()}
             disabled={!editor.can().chain().focus().toggleStrike().run()}
             sx={{
               color: editor.isActive('strike')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <StrikethroughSIcon />
+            <StrikethroughSIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleCode().run()}
             disabled={!editor.can().chain().focus().toggleCode().run()}
             sx={{
               color: editor.isActive('code')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <CodeIcon />
+            <CodeIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().unsetAllMarks().run()}
             sx={{
               color:
@@ -192,69 +228,102 @@ const MenuBar = memo(
                 editor.isActive('code')
                   ? theme.palette.text.primary
                   : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatClearIcon />
+            <FormatClearIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             sx={{
               color: editor.isActive('bulletList')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatListBulletedIcon />
+            <FormatListBulletedIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             sx={{
               color: editor.isActive('orderedList')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatListNumberedIcon />
+            <FormatListNumberedIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             sx={{
               color: editor.isActive('codeBlock')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <DeveloperModeIcon />
+            <DeveloperModeIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             sx={{
               color: editor.isActive('blockquote')
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatQuoteIcon />
+            <FormatQuoteIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
             disabled={!editor.can().chain().focus().setHorizontalRule().run()}
-            sx={{ color: 'gray', padding: 'revert' }}
+            sx={{
+              color: theme.palette.text.secondary,
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
+            }}
           >
-            <HorizontalRuleIcon />
+            <HorizontalRuleIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() =>
               editor.chain().focus().toggleHeading({ level: 1 }).run()
             }
@@ -262,35 +331,58 @@ const MenuBar = memo(
               color: editor.isActive('heading', { level: 1 })
                 ? theme.palette.text.primary
                 : theme.palette.text.secondary,
-              padding: 'revert',
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
             }}
           >
-            <FormatHeadingIcon fontSize="small" />
+            <FormatHeadingIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().chain().focus().undo().run()}
-            sx={{ color: 'gray', padding: 'revert' }}
+            sx={{
+              color: theme.palette.text.secondary,
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
+            }}
           >
-            <UndoIcon />
+            <UndoIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           <IconButton
+            size="small"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().chain().focus().redo().run()}
-            sx={{ color: 'gray' }}
+            sx={{
+              color: theme.palette.text.secondary,
+              padding: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
+            }}
           >
-            <RedoIcon />
+            <RedoIcon sx={{ fontSize: '20px' }} />
           </IconButton>
 
           {isChat && (
             <Box
               sx={{
                 alignItems: 'center',
+                borderLeft: '1px solid',
+                borderColor: theme.palette.divider,
                 cursor: 'pointer',
                 display: 'flex',
-                marginLeft: '5px',
+                marginLeft: '8px',
+                paddingLeft: '8px',
               }}
               onClick={() => {
                 setIsDisabledEditorEnter(!isDisabledEditorEnter);
@@ -301,6 +393,7 @@ const MenuBar = memo(
                 tabIndex={-1}
                 disableRipple
                 checked={isDisabledEditorEnter}
+                size="small"
                 sx={{
                   '&.Mui-checked': {
                     color: theme.palette.text.secondary,
@@ -312,8 +405,8 @@ const MenuBar = memo(
               />
               <Typography
                 sx={{
-                  fontSize: '14px',
-                  color: theme.palette.text.primary,
+                  fontSize: '13px',
+                  color: theme.palette.text.secondary,
                 }}
               >
                 {t('core:action.disable_enter', {
@@ -326,13 +419,18 @@ const MenuBar = memo(
           {!isChat && (
             <>
               <IconButton
+                size="small"
                 onClick={triggerImageUpload}
                 sx={{
                   color: theme.palette.text.secondary,
-                  padding: 'revert',
+                  padding: '4px',
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                    color: theme.palette.text.primary,
+                  },
                 }}
               >
-                <ImageIcon />
+                <ImageIcon sx={{ fontSize: '20px' }} />
               </IconButton>
 
               <input
@@ -344,8 +442,8 @@ const MenuBar = memo(
               />
             </>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
     );
   }
 );
@@ -378,14 +476,16 @@ type TiptapProps = {
   onEnter: () => void | Promise<void>;
   disableEnter?: boolean;
   isChat?: boolean;
+  /** Use chat-style composer (single bar, minimal border) without chat-only behavior (e.g. announcements keep image) */
+  composerStyle?: boolean;
   maxHeightOffset?: number;
   overrideMobile?: boolean;
   customEditorHeight?: number | null;
   setIsFocusedParent: React.Dispatch<React.SetStateAction<boolean>>;
   isFocusedParent: boolean;
-  membersWithNames: unknown[];
+  membersWithNames?: unknown[];
   enableMentions?: boolean;
-  insertImage: (image: any) => void;
+  insertImage?: (image: any) => void;
 };
 
 const Tiptap = ({
@@ -393,12 +493,13 @@ const Tiptap = ({
   onEnter,
   disableEnter = false,
   isChat = false,
+  composerStyle = false,
   maxHeightOffset,
   setIsFocusedParent,
   isFocusedParent,
   overrideMobile,
   customEditorHeight,
-  membersWithNames,
+  membersWithNames = [],
   enableMentions,
   insertImage,
 }: TiptapProps) => {
@@ -548,8 +649,10 @@ const Tiptap = ({
     localStorage.setItem('settings-disable-editor-enter', JSON.stringify(val));
   }, []);
 
+  const useComposerLook = isChat || composerStyle;
   return (
     <Box
+      className={useComposerLook ? 'tiptap-chat-composer' : undefined}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -559,6 +662,10 @@ const Tiptap = ({
         '--text-secondary': theme.palette.text.secondary,
         '--background-default': theme.palette.background.default,
         '--background-secondary': theme.palette.background.paper,
+        ...(useComposerLook && {
+          '--composer-bg': theme.palette.background.default,
+          '--composer-border': theme.palette.divider,
+        }),
       }}
     >
       <EditorProvider
@@ -568,6 +675,7 @@ const Tiptap = ({
             isChat={isChat}
             isDisabledEditorEnter={isDisabledEditorEnter}
             setIsDisabledEditorEnter={handleSetIsDisabledEditorEnter}
+            toolbarStyle={useComposerLook ? 'chat' : 'default'}
           />
         }
         extensions={[...extensionsFiltered, ...additionalExtensions]}
@@ -606,7 +714,7 @@ const Tiptap = ({
             return false;
           },
           handlePaste(view, event) {
-            if (!isChat) return;
+            if (!isChat) return false;
             const items = event.clipboardData?.items;
             if (!items) return false;
 
@@ -619,6 +727,36 @@ const Tiptap = ({
                   return true; // Let ProseMirror know we handled it
                 }
               }
+            }
+
+            // Preserve paragraph spacing when pasting plain text (double newline = new paragraph)
+            const text = event.clipboardData?.getData('text/plain');
+            if (text != null && text !== '') {
+              event.preventDefault();
+              const schema = view.state.schema;
+              const paragraphs = text.split(/\n\n+/);
+              const paragraphNodes = paragraphs.map((block) => {
+                if (block === '') {
+                  return schema.nodes.paragraph.create(null, Fragment.empty);
+                }
+                const parts = block.split('\n');
+                const content = parts.flatMap((t, i) =>
+                  i === 0
+                    ? [schema.text(t)]
+                    : [
+                        schema.nodes.hardBreak.create(),
+                        schema.text(t),
+                      ]
+                );
+                return schema.nodes.paragraph.create(
+                  null,
+                  Fragment.from(content)
+                );
+              });
+              const fragment = Fragment.from(paragraphNodes);
+              const slice = new Slice(fragment, 0, 0);
+              view.dispatch(view.state.tr.replaceSelection(slice));
+              return true;
             }
 
             return false; // fallback to default behavior otherwise

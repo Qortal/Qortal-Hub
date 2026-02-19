@@ -50,6 +50,7 @@
     "member_number": "عدد الأعضاء",
     "member_other": "أعضاء",
     "messaging": "المراسلة",
+    "dm": "DM",
     "name": "اسم الجروب",
     "open": "مفتوح (عام)",
     "private": "جروب خاص",
@@ -63,6 +64,8 @@
   "join_requests": "طلبات الانضمام",
   "last_message": "آخر رسالة",
   "last_message_date": "آخر رسالة: {{date}}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "أنت",
   "latest_mails": "آخر Q-Mails",
   "message": {
     "generic": {

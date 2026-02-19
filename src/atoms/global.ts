@@ -1,5 +1,10 @@
 import { atom } from 'jotai';
-import { atomWithReset, atomFamily, useAtomCallback } from 'jotai/utils';
+import {
+  atomWithReset,
+  atomFamily,
+  atomWithStorage,
+  useAtomCallback,
+} from 'jotai/utils';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
@@ -56,6 +61,12 @@ export const selectedGroupIdAtom = atomWithReset(null);
 export const settingsLocalLastUpdatedAtom = atomWithReset(0);
 export const settingsQDNLastUpdatedAtom = atomWithReset(-100);
 export const timestampEnterDataAtom = atomWithReset({});
+
+/** Persisted: true = chat widget is closed (hidden). Reopen via right sidebar. */
+export const chatWidgetClosedAtom = atomWithStorage<boolean>(
+  'qortal_chat_widget_closed',
+  false
+);
 export const txListAtom = atomWithReset([]);
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
