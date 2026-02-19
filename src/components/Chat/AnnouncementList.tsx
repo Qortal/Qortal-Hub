@@ -44,8 +44,10 @@ export const AnnouncementList = ({
         flexGrow: 1,
         flexShrink: 1,
         overflow: 'auto',
+        padding: '8px 20px 32px',
         position: 'relative',
         width: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {messages.map((message) => {
@@ -59,10 +61,10 @@ export const AnnouncementList = ({
           <div
             key={message?.identifier}
             style={{
-              alignItems: 'center',
+              alignItems: 'stretch',
               display: 'flex',
               flexDirection: 'column',
-              marginBottom: '10px',
+              marginBottom: '12px',
               width: '100%',
             }}
           >

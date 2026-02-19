@@ -55,9 +55,8 @@ function processText(input) {
           if (part.startsWith(QORTAL_PROTOCOL)) {
             const link = document.createElement('span');
             link.setAttribute('data-url', part);
+            link.setAttribute('class', 'qortal-link');
             link.textContent = part;
-            link.style.color = 'var(--code-block-text-color)';
-            link.style.textDecoration = 'underline';
             link.style.cursor = 'pointer';
             fragment.appendChild(link);
           } else {
@@ -209,6 +208,7 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         '--text-secondary': theme.palette.text.secondary,
         '--background-default': theme.palette.background.default,
         '--background-secondary': theme.palette.background.paper,
+        '--primary-main': theme.palette.primary.main,
       }}
     >
       {embedLink && <Embed embedLink={embedData} />}

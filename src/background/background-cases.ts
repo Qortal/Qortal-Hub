@@ -1215,7 +1215,7 @@ export async function setGroupDataCase(request, event) {
 export async function getGroupDataSingleCase(request, event) {
   try {
     const { groupId } = request.payload;
-    const response = await getGroupDataSingle({ groupId });
+    const response = await getGroupDataSingle(groupId);
 
     event.source.postMessage(
       {

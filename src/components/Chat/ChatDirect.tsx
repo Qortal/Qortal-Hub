@@ -3,12 +3,21 @@ import { useAtomValue } from 'jotai';
 import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
+import './chat.css';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { Box, ButtonBase, Input, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  InputAdornment,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import SendIcon from '@mui/icons-material/Send';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getNameInfo } from '../Group/Group';
-import { Spacer } from '../../common/Spacer';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
   getBaseApiReact,
@@ -81,7 +90,7 @@ export const ChatDirect = ({
     editorRef.current = editorInstance;
   };
   const publicKeyOfRecipientRef = useRef(null);
-  
+
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
       try {
@@ -106,7 +115,11 @@ export const ChatDirect = ({
 
         const sendMessageFunc = async () => {
           return await sendChatDirect(
-            { chatReference: chatMessage.signature, messageText: '', otherData },
+            {
+              chatReference: chatMessage.signature,
+              messageText: '',
+              otherData,
+            },
             selectedDirect?.address,
             publicKeyOfRecipient,
             false
@@ -123,7 +136,12 @@ export const ChatDirect = ({
           },
           chatReference: chatMessage.signature,
         };
-        addToQueue(sendMessageFunc, messageObj, 'chat-direct', selectedDirect?.address);
+        addToQueue(
+          sendMessageFunc,
+          messageObj,
+          'chat-direct',
+          selectedDirect?.address
+        );
       } catch (error) {
         const errorMsg = error?.message || error;
         setInfoSnack({
@@ -137,7 +155,14 @@ export const ChatDirect = ({
         resumeAllQueues();
       }
     },
-    [isSending, balance, selectedDirect?.address, publicKeyOfRecipient, myName, myAddress]
+    [
+      isSending,
+      balance,
+      selectedDirect?.address,
+      publicKeyOfRecipient,
+      myName,
+      myAddress,
+    ]
   );
 
   const getPublicKeyFunc = async (address) => {
@@ -317,7 +342,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction/edit item:', error, item);
+                        console.error(
+                          'Error processing reaction/edit item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -422,7 +451,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction item:', error, item);
+                        console.error(
+                          'Error processing reaction item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -764,53 +797,123 @@ export const ChatDirect = ({
         width: '100%',
       }}
     >
+      {/* Header: back button + optional new-chat title */}
       <Box
-        onClick={close}
         sx={{
           alignItems: 'center',
-          alignSelf: 'center',
-          background: theme.palette.background.default,
-          borderRadius: '3px',
-          cursor: 'pointer',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
-          gap: '5px',
-          margin: '10px 0px',
-          padding: '4px 6px',
-          width: 'fit-content',
+          flexShrink: 0,
+          gap: '8px',
+          padding: '12px 16px',
+          width: '100%',
         }}
       >
-        <ArrowBackIcon
+        <ButtonBase
+          onClick={close}
           sx={{
-            color: theme.palette.text.primary,
-            fontSize: '20px',
-          }}
-        />
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '14px',
+            alignItems: 'center',
+            borderRadius: '8px',
+            color: theme.palette.text.secondary,
+            display: 'flex',
+            gap: '6px',
+            padding: '6px 10px',
+            transition: 'background-color 0.15s ease, color 0.15s ease',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+              color: theme.palette.text.primary,
+            },
           }}
         >
-          {t('core:action.close_chat', { postProcess: 'capitalizeFirstChar' })}
-        </Typography>
+          <ArrowBackIcon sx={{ fontSize: '20px' }} />
+          <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>
+            {t('core:action.close_chat', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </ButtonBase>
+        {isNewChat && (
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '13px',
+              fontWeight: 500,
+              marginLeft: '8px',
+            }}
+          >
+            {t('core:action.new.chat', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+        )}
       </Box>
 
       {isNewChat && (
-        <>
-          <Spacer height="30px" />
-
-          <Input
-            sx={{
-              fontSize: '18px',
-              padding: '5px',
-            }}
+        <Box
+          sx={{
+            flexShrink: 0,
+            padding: '20px 16px 16px',
+            width: '100%',
+          }}
+        >
+          <TextField
+            fullWidth
+            variant="outlined"
             placeholder={t('auth:message.generic.name_address', {
               postProcess: 'capitalizeFirstChar',
             })}
             value={directToValue}
             onChange={(e) => setDirectToValue(e.target.value)}
+            autoFocus
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchRoundedIcon
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '22px',
+                    }}
+                  />
+                </InputAdornment>
+              ),
+              sx: {
+                backgroundColor: theme.palette.background.paper,
+                borderRadius: '12px',
+                fontFamily: 'Inter',
+                fontSize: '15px',
+                '& fieldset': {
+                  borderColor: theme.palette.divider,
+                  borderRadius: '12px',
+                },
+                '&:hover fieldset': {
+                  borderColor: theme.palette.text.secondary,
+                },
+                '&.Mui-focused fieldset': {
+                  borderWidth: '1px',
+                  borderColor: theme.palette.primary.main,
+                },
+              },
+            }}
+            slotProps={{
+              htmlInput: {
+                'aria-label': t('auth:message.generic.name_address', {
+                  postProcess: 'capitalizeFirstChar',
+                }),
+              },
+            }}
           />
-        </>
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '12px',
+              marginTop: '8px',
+              paddingLeft: '4px',
+            }}
+          >
+            {t('auth:message.generic.insert_name_address', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
       )}
 
       <ChatList
@@ -826,16 +929,20 @@ export const ChatDirect = ({
       />
 
       <Box
-        style={{
+        sx={{
+          alignItems: 'flex-end',
           backgroundColor: theme.palette.background.default,
+          borderTop: '1px solid',
+          borderColor: 'divider',
           bottom: isFocusedParent ? '0px' : 'unset',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'row',
           flexShrink: 0,
+          gap: '12px',
           minHeight: '150px',
           overflow: 'hidden',
-          padding: '20px',
+          padding: '16px 20px 20px',
           position: isFocusedParent ? 'fixed' : 'relative',
           top: isFocusedParent ? '0px' : 'unset',
           width: '100%',
@@ -843,14 +950,14 @@ export const ChatDirect = ({
         }}
       >
         <Box
-          style={{
+          sx={{
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: 1,
+            flex: 1,
             flexShrink: 0,
             justifyContent: 'flex-end',
+            minWidth: 0,
             overflow: 'auto',
-            width: 'calc(100% - 100px)',
           }}
         >
           {replyMessage && (
@@ -860,7 +967,7 @@ export const ChatDirect = ({
                 display: 'flex',
                 gap: '5px',
                 justifyContent: 'flex-end',
-                width: 'calc(100% - 100px)',
+                width: '100%',
               }}
             >
               <ReplyPreview message={replyMessage} />
@@ -936,12 +1043,8 @@ export const ChatDirect = ({
 
         <Box
           sx={{
-            display: 'flex',
             flexShrink: 0,
-            gap: '10px',
-            justifyContent: 'center',
-            position: 'relative',
-            width: '100px',
+            paddingBottom: '2px',
           }}
         >
           <CustomButton
@@ -949,33 +1052,45 @@ export const ChatDirect = ({
               if (isSending) return;
               sendMessage();
             }}
-            style={{
-              alignSelf: 'center',
-              background: isSending
-                ? theme.palette.background.default
+            sx={{
+              alignItems: 'center',
+              backgroundColor: isSending
+                ? theme.palette.action.disabledBackground
                 : theme.palette.background.paper,
+              border: '1px solid',
+              borderColor: theme.palette.divider,
+              borderRadius: '8px',
+              color: theme.palette.text.primary,
               cursor: isSending ? 'default' : 'pointer',
-              flexShrink: 0,
-              marginTop: 'auto',
-              minWidth: 'auto',
-              padding: '5px',
-              width: '100px',
+              display: 'inline-flex',
+              gap: '6px',
+              fontSize: '14px',
+              fontWeight: 500,
+              justifyContent: 'center',
+              minHeight: '44px',
+              minWidth: '88px',
+              padding: '10px 16px',
+              position: 'relative',
+              transition: 'background-color 0.2s ease, border-color 0.2s ease',
+              '&:hover': isSending
+                ? {}
+                : {
+                    backgroundColor: theme.palette.action.hover,
+                    borderColor: theme.palette.divider,
+                  },
             }}
           >
-            {isSending && (
+            {isSending ? (
               <CircularProgress
                 size={18}
-                sx={{
-                  color: theme.palette.text.primary,
-                  left: '50%',
-                  marginLeft: '-12px',
-                  marginTop: '-12px',
-                  position: 'absolute',
-                  top: '50%',
-                }}
+                sx={{ color: theme.palette.text.secondary }}
               />
+            ) : (
+              <>
+                <SendIcon sx={{ fontSize: '18px' }} />
+                Send
+              </>
             )}
-            {` Send`}
           </CustomButton>
         </Box>
       </Box>

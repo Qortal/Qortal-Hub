@@ -50,6 +50,7 @@
     "member_number": "número de miembros",
     "member_other": "miembros",
     "messaging": "mensajería",
+    "dm": "MD",
     "name": "nombre del grupo",
     "open": "abierto (público)",
     "private": "grupo privado",
@@ -63,6 +64,8 @@
   "join_requests": "solicitudes de unión",
   "last_message": "último mensaje",
   "last_message_date": "último mensaje: {{date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Tú",
   "latest_mails": "últimos Q-Mails",
   "message": {
     "generic": {

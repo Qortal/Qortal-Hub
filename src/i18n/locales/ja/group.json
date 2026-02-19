@@ -50,6 +50,7 @@
     "member_number": "メンバー数",
     "member_other": "メンバー",
     "messaging": "メッセージ",
+    "dm": "DM",
     "name": "グループ名",
     "open": "公開（誰でも参加可）",
     "private": "非公開グループ",
@@ -63,6 +64,8 @@
   "join_requests": "参加リクエスト",
   "last_message": "最後のメッセージ",
   "last_message_date": "最後のメッセージ: {{date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "あなた",
   "latest_mails": "最新のQメール",
   "message": {
     "generic": {

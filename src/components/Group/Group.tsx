@@ -52,6 +52,7 @@ import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
+  chatWidgetClosedAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
@@ -76,8 +77,8 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
-
 import { DirectsSidebar } from './DirectsSidebar';
+import { GlobalChatWidget } from './GlobalChatWidget';
 import {
   AdminRowBox,
   CenterBox,
@@ -187,6 +188,7 @@ export const Group = ({
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
+  const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
   const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
@@ -678,6 +680,80 @@ export const Group = ({
     ]
   );
 
+  /** Fetch secret key for an arbitrary group (e.g. for widget). Same flow as full chat: try cache, then network; cache on success; retry on decrypt failure. */
+  const getSecretKeyForGroup = useCallback(
+    async (group: { groupId: string } | null): Promise<any> => {
+      if (!group?.groupId) return null;
+      const groupIdStr = String(group.groupId);
+      try {
+        // 1. Try cached key (same as full chat when it would use storage)
+        const cached: any = await window
+          .sendMessage('getGroupDataSingle', { groupId: groupIdStr })
+          .catch(() => null);
+        if (cached?.secretKeyData && !cached?.error) {
+          try {
+            const decryptedKey: any = await decryptResource(
+              cached.secretKeyData,
+              null
+            );
+            const dataint8Array = base64ToUint8Array(decryptedKey.data);
+            const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+            if (validateSecretKey(decryptedKeyToObject))
+              return decryptedKeyToObject;
+          } catch {
+            // Cached key invalid or decrypt failed, fall through to fetch
+          }
+        }
+
+        // 2. Fetch from network (same as full getSecretKey)
+        const groupIdNum = Number(group.groupId);
+        const { names, addresses, both } = await getGroupAdmins(groupIdNum);
+        if (!names?.length) return null;
+        const publish = await getPublishesFromAdmins(names, groupIdStr);
+        if (publish === false) {
+          return new Promise((resolve) => {
+            setTimeout(
+              () => resolve(getSecretKeyForGroup(group)),
+              TIME_MINUTES_2_IN_MILLISECONDS
+            );
+          });
+        }
+        const res = await fetch(
+          `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64&rebuild=true`
+        );
+        const data = await res.text();
+        const decryptedKey: any = await decryptResource(data, null);
+        const dataint8Array = base64ToUint8Array(decryptedKey.data);
+        const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+        if (!validateSecretKey(decryptedKeyToObject)) return null;
+
+        // 3. Cache for next time (same as full chat setGroupData)
+        window
+          .sendMessage('setGroupData', {
+            groupId: groupIdStr,
+            secretKeyData: data,
+            secretKeyResource: publish,
+            admins: { names, addresses, both },
+          })
+          .catch(() => {});
+
+        return decryptedKeyToObject;
+      } catch (e) {
+        if (e === 'Unable to decrypt data') {
+          return new Promise((resolve) => {
+            setTimeout(
+              () => resolve(getSecretKeyForGroup(group)),
+              TIME_MINUTES_2_IN_MILLISECONDS
+            );
+          });
+        }
+        console.error(e);
+        return null;
+      }
+    },
+    []
+  );
+
   const getAdminsForPublic = useCallback(async (selectedGroup) => {
     try {
       const { names, addresses, both } = await getGroupAdmins(
@@ -1098,6 +1174,7 @@ export const Group = ({
       );
 
       if (findDirect) {
+        setDesktopViewMode('chat');
         setDesktopSideView('directs');
         setSelectedDirect(null);
 
@@ -1120,6 +1197,7 @@ export const Group = ({
           getTimestampEnterChat();
         }, 200);
       } else {
+        setDesktopViewMode('chat');
         setDesktopSideView('directs');
         setNewChat(true);
         setTimeout(() => {
@@ -2036,6 +2114,24 @@ export const Group = ({
           info={loadingGroupsSnackbarInfo}
         />
         <WalletsAppWrapper />
+
+        {!chatWidgetClosed && (
+          <GlobalChatWidget
+            directs={directs}
+            getUserAvatarUrl={getUserAvatarUrl}
+            directChatHasUnread={directChatHasUnread}
+            timestampEnterData={timestampEnterData}
+            timeDifferenceForNotificationChats={
+              timeDifferenceForNotificationChats
+            }
+            myAddress={myAddress}
+            directAvatarLoaded={directAvatarLoaded}
+            setDirectAvatarLoaded={setDirectAvatarLoaded}
+            getTimestampEnterChat={getTimestampEnterChat}
+            getSecretKeyForGroup={getSecretKeyForGroup}
+            onClose={() => setChatWidgetClosed(true)}
+          />
+        )}
       </RootBox>
     </>
   );

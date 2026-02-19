@@ -106,6 +106,11 @@
   margin: 0px;
 }
 
+/* Space between paragraphs so pasted multi-paragraph text stays readable */
+.tiptap p + p {
+  margin-top: 0.75em;
+}
+
 .tiptap p.is-editor-empty:first-child::before {
   color: var(--text-primary);
   content: attr(data-placeholder);
@@ -120,7 +125,34 @@
 }
 
 .tiptap a {
-  color: cadetblue;
+  color: var(--primary-main, #5f9ea0);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  transition: opacity 0.15s ease;
+}
+.tiptap a:hover {
+  opacity: 0.85;
+}
+
+/* Qortal protocol links (e.g. qortal://use-group/...) */
+.tiptap .qortal-link,
+.tiptap span[data-url^='qortal://']
+{
+  color: var(--primary-main, #5f9ea0);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--primary-main, #5f9ea0) 14%, transparent);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-weight: 500;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+.tiptap .qortal-link:hover,
+.tiptap span[data-url^='qortal://']:hover
+{
+  background: color-mix(in srgb, var(--primary-main, #5f9ea0) 22%, transparent);
+  opacity: 0.95;
 }
 
 .tiptap img {
@@ -129,22 +161,117 @@
 }
 
 .isReply p {
+  color: var(--text-secondary);
   font-size: 12px !important;
+  line-height: 1.4;
+  margin: 0;
+  opacity: 0.95;
 }
 
+/* Reply preview: strip link/mention colors so preview stays easy on the eyes */
+.tiptap.isReply a,
+.tiptap.isReply .qortal-link,
+.tiptap.isReply span[data-url^='qortal://']
+{
+  color: inherit !important;
+  background: none !important;
+  text-decoration: none;
+  border-radius: 0;
+  padding: 0;
+}
+.tiptap.isReply a:hover,
+.tiptap.isReply .qortal-link:hover,
+.tiptap.isReply span[data-url^='qortal://']:hover
+{
+  opacity: 1;
+  background: none !important;
+}
+.tiptap.isReply [data-type='mention'] {
+  color: inherit !important;
+  background: none !important;
+  border-radius: 0;
+  padding: 0;
+  font-weight: inherit;
+}
+.tiptap.isReply [data-type='mention']:hover {
+  background: none !important;
+  opacity: 1;
+}
+
+/* @mentions */
 .tiptap [data-type='mention'] {
   box-decoration-break: clone;
-  color: var(--text-secondary);
-  padding: 0.1rem 0.3rem;
+  color: var(--primary-main, var(--text-secondary));
+  background: color-mix(in srgb, var(--primary-main, #5f9ea0) 12%, transparent);
+  border-radius: 6px;
+  padding: 0.15em 0.45em;
+  font-weight: 600;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+.tiptap [data-type='mention']:hover {
+  background: color-mix(in srgb, var(--primary-main, #5f9ea0) 20%, transparent);
+  opacity: 0.9;
 }
 
 .unread-divider {
-  border-bottom: 1px solid var(--text-primary);
-  border-radius: 2px;
+  align-items: center;
   color: var(--text-primary);
   display: flex;
-  justify-content: center;
-  width: 90%;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 12px;
+  letter-spacing: 0.06em;
+  margin: 8px 16px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  width: calc(100% - 32px);
+}
+
+.unread-divider::before,
+.unread-divider::after {
+  background: currentColor;
+  content: '';
+  flex: 1;
+  height: 1px;
+  opacity: 0.4;
+}
+
+/* Chat message composer – Discord-style: one bar, minimal border, no focus ring */
+.tiptap-chat-composer {
+  background-color: var(--composer-bg, var(--background-default));
+  border: 1px solid var(--composer-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tiptap-chat-composer:focus-within {
+  border-color: var(--composer-border);
+  box-shadow: none;
+}
+
+.tiptap-chat-composer .tiptap-prosemirror {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  border-top: 1px solid var(--composer-border);
+  min-height: 72px;
+  padding: 14px 16px;
+}
+
+.tiptap-chat-composer .tiptap-prosemirror:focus,
+.tiptap-chat-composer [contenteditable='true']:focus,
+.tiptap-chat-composer [contenteditable='true']:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.tiptap-chat-composer
+  .tiptap-prosemirror
+  p.is-editor-empty:first-child::before {
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 
 .mention-item {

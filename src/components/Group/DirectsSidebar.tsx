@@ -6,6 +6,7 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Typography,
   useTheme,
 } from '@mui/material';
 import CreateIcon from '@mui/icons-material/Create';
@@ -13,9 +14,11 @@ import PersonOffIcon from '@mui/icons-material/PersonOff';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import { useTranslation } from 'react-i18next';
 import { useAtomValue } from 'jotai';
-import { groupChatHasUnreadAtom, groupsAnnHasUnreadAtom } from '../../atoms/global';
+import {
+  groupChatHasUnreadAtom,
+  groupsAnnHasUnreadAtom,
+} from '../../atoms/global';
 import { CustomButton } from '../../styles/App-styles';
-import { IconWrapper } from '../Desktop/DesktopFooter';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './QMailMessages';
@@ -78,23 +81,27 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
 
   return (
     <Box
-      style={{
+      sx={{
         alignItems: 'flex-start',
         background: theme.palette.background.surface,
-        borderRadius: '0px 15px 15px 0px',
+        borderRadius: '0 15px 15px 0',
+        boxShadow: '6px 0 20px rgba(0,0,0,0.18), 2px 0 8px rgba(0,0,0,0.08)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        width: '380px',
-        padding: '0px 2px',
+        width: '400px',
+        padding: '0 2px 0 0',
       }}
     >
       <Box
         sx={{
-          alignItems: 'center',
+          alignItems: 'stretch',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
           gap: '10px',
           justifyContent: 'center',
+          padding: '14px 12px',
           width: '100%',
         }}
       >
@@ -102,64 +109,159 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
           onClick={() => {
             setDesktopSideView('groups');
           }}
+          sx={{
+            position: 'relative',
+            borderRadius: '12px',
+            flex: 1,
+            minWidth: 0,
+            padding: '14px 12px',
+            backgroundColor:
+              desktopSideView === 'groups'
+                ? theme.palette.action.selected
+                : 'transparent',
+            transition: 'background-color 0.15s ease',
+            '&:hover': {
+              backgroundColor:
+                desktopSideView === 'groups'
+                  ? theme.palette.action.selected
+                  : theme.palette.action.hover,
+            },
+          }}
         >
-          <IconWrapper
-            color={
-              groupChatHasUnread || groupsAnnHasUnread
-                ? theme.palette.other.unread
-                : desktopSideView === 'groups'
-                  ? theme.palette.text.primary
-                  : theme.palette.text.secondary
-            }
-            label={t('group:group.group_other', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            selected={desktopSideView === 'groups'}
-            customWidth="75px"
+          {(groupChatHasUnread || groupsAnnHasUnread) && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                backgroundColor: theme.palette.primary.main,
+                border: `2px solid ${theme.palette.background.paper}`,
+              }}
+              aria-hidden
+            />
+          )}
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              justifyContent: 'center',
+              width: '100%',
+            }}
           >
             <HubsIcon
-              height={24}
+              height={26}
+              width={26}
               color={
                 groupChatHasUnread || groupsAnnHasUnread
-                  ? theme.palette.other.unread
+                  ? theme.palette.primary.main
                   : desktopSideView === 'groups'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
             />
-          </IconWrapper>
+            <Typography
+              sx={{
+                color:
+                  groupChatHasUnread || groupsAnnHasUnread
+                    ? theme.palette.primary.main
+                    : desktopSideView === 'groups'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary,
+                fontFamily: 'Inter',
+                fontSize: '13px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('group:group.group_other', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         </ButtonBase>
 
         <ButtonBase
           onClick={() => {
             setDesktopSideView('directs');
           }}
+          sx={{
+            position: 'relative',
+            borderRadius: '12px',
+            flex: 1,
+            minWidth: 0,
+            padding: '14px 12px',
+            backgroundColor:
+              desktopSideView === 'directs'
+                ? theme.palette.action.selected
+                : 'transparent',
+            transition: 'background-color 0.15s ease',
+            '&:hover': {
+              backgroundColor:
+                desktopSideView === 'directs'
+                  ? theme.palette.action.selected
+                  : theme.palette.action.hover,
+            },
+          }}
         >
-          <IconWrapper
-            customWidth="75px"
-            color={
-              directChatHasUnread
-                ? theme.palette.other.unread
-                : desktopSideView === 'directs'
-                  ? theme.palette.text.primary
-                  : theme.palette.text.secondary
-            }
-            label={t('group:group.messaging', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            selected={desktopSideView === 'directs'}
+          {directChatHasUnread && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                backgroundColor: theme.palette.primary.main,
+                border: `2px solid ${theme.palette.background.paper}`,
+              }}
+              aria-hidden
+            />
+          )}
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              justifyContent: 'center',
+              width: '100%',
+            }}
           >
             <MessagingIcon
-              height={24}
+              height={26}
+              width={26}
               color={
                 directChatHasUnread
-                  ? theme.palette.other.unread
+                  ? theme.palette.primary.main
                   : desktopSideView === 'directs'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
             />
-          </IconWrapper>
+            <Typography
+              sx={{
+                color: directChatHasUnread
+                  ? theme.palette.primary.main
+                  : desktopSideView === 'directs'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary,
+                fontFamily: 'Inter',
+                fontSize: '13px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('group:group.dm', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         </ButtonBase>
       </Box>
 
@@ -170,29 +272,39 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
           flexDirection: 'column',
           flexGrow: 1,
           overflowY: 'auto',
+          padding: '12px 8px',
           width: '100%',
         }}
       >
-        {directs.map((direct: any) => {
-          const avatarUrl = getUserAvatarUrl(direct?.name);
-          const avatarKey =
-            direct?.address ||
-            direct?.name ||
-            `${direct?.timestamp}-${direct?.sender}`;
-          const isAvatarLoaded = Boolean(
-            avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
-          );
+        <List
+          sx={{
+            width: '100%',
+            padding: 0,
+          }}
+          className="group-list"
+          dense={false}
+        >
+          {directs.map((direct: any) => {
+            const avatarUrl = getUserAvatarUrl(direct?.name);
+            const avatarKey =
+              direct?.address ||
+              direct?.name ||
+              `${direct?.timestamp}-${direct?.sender}`;
+            const isAvatarLoaded = Boolean(
+              avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
+            );
+            const isSelected = direct?.address === selectedDirect?.address;
+            const hasUnread =
+              direct?.sender !== myAddress &&
+              direct?.timestamp &&
+              ((!timestampEnterData[direct?.address] &&
+                Date.now() - direct?.timestamp <
+                  timeDifferenceForNotificationChats) ||
+                timestampEnterData[direct?.address] < direct?.timestamp);
 
-          return (
-            <List
-              key={direct?.timestamp + direct?.sender}
-              sx={{
-                width: '100%',
-              }}
-              className="group-list"
-              dense={true}
-            >
+            return (
               <ListItem
+                key={direct?.timestamp + direct?.sender}
                 onClick={() => {
                   setSelectedDirect(null);
                   setNewChat(false);
@@ -216,27 +328,41 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   }, 200);
                 }}
                 sx={{
-                  background:
-                    direct?.address === selectedDirect?.address &&
-                    theme.palette.background.surface,
-                  borderRadius: '2px',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
-                  padding: '2px',
+                  marginBottom: '6px',
+                  padding: '12px 14px',
                   width: '100%',
+                  backgroundColor: isSelected
+                    ? theme.palette.action.selected
+                    : 'transparent',
+                  borderLeft: isSelected
+                    ? `3px solid ${theme.palette.primary.main}`
+                    : '3px solid transparent',
+                  transition:
+                    'background-color 0.15s ease, border-color 0.15s ease',
+                  '&:hover': {
+                    backgroundColor: isSelected
+                      ? theme.palette.action.selected
+                      : theme.palette.action.hover,
+                  },
                 }}
               >
                 <Box
                   sx={{
                     alignItems: 'center',
                     display: 'flex',
+                    gap: '20px',
                     width: '100%',
                   }}
                 >
-                  <ListItemAvatar>
+                  <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
                     <Avatar
                       sx={{
+                        height: 40,
+                        width: 40,
                         background: theme.palette.background.surface,
                         color: theme.palette.text.primary,
                         ...getClickableAvatarSx(theme, isAvatarLoaded),
@@ -291,60 +417,60 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                             postProcess: 'capitalizeFirstChar',
                           })
                     }
-                    slotProps={{
-                      primary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          textWrap: 'wrap',
-                          overflow: 'hidden',
-                          fontSize: '16px',
-                        },
+                    primaryTypographyProps={{
+                      sx: {
+                        color: hasUnread
+                          ? theme.palette.primary.main
+                          : theme.palette.text.primary,
+                        fontFamily: 'Inter',
+                        fontSize: '15px',
+                        fontWeight: 600,
+                        lineHeight: 1.3,
                       },
-                      secondary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          fontSize: '12px',
-                        },
+                    }}
+                    secondaryTypographyProps={{
+                      sx: {
+                        color: theme.palette.text.secondary,
+                        fontFamily: 'Inter',
+                        fontSize: '12px',
+                        lineHeight: 1.4,
+                        marginTop: '3px',
                       },
                     }}
                     sx={{
-                      width: '150px',
-                      fontFamily: 'Inter',
-                      fontSize: '16px',
+                      flex: 1,
+                      minWidth: 0,
+                      margin: 0,
+                      overflow: 'hidden',
                     }}
                   />
 
-                  {direct?.sender !== myAddress &&
-                    direct?.timestamp &&
-                    ((!timestampEnterData[direct?.address] &&
-                      Date.now() - direct?.timestamp <
-                        timeDifferenceForNotificationChats) ||
-                      timestampEnterData[direct?.address] <
-                        direct?.timestamp) && (
-                      <MarkChatUnreadIcon
-                        sx={{
-                          color: theme.palette.other.unread,
-                        }}
-                      />
-                    )}
+                  {hasUnread && (
+                    <MarkChatUnreadIcon
+                      sx={{
+                        color: theme.palette.primary.main,
+                        fontSize: '18px',
+                        flexShrink: 0,
+                        marginLeft: '4px',
+                      }}
+                    />
+                  )}
                 </Box>
               </ListItem>
-            </List>
-          );
-        })}
+            );
+          })}
+        </List>
       </Box>
 
       <Box
         sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
           width: '100%',
           gap: '10px',
           justifyContent: 'center',
-          padding: '10px',
+          padding: '16px 12px',
         }}
       >
         <CustomButton
@@ -353,10 +479,16 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
             setSelectedDirect(null);
             setIsOpenDrawer(false);
           }}
+          sx={{
+            flex: 1,
+            gap: '8px',
+            padding: '10px 16px',
+          }}
         >
           <CreateIcon
             sx={{
               color: theme.palette.text.primary,
+              fontSize: '20px',
             }}
           />
           {t('core:action.new.chat', {
@@ -376,7 +508,8 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
           >
             <PersonOffIcon
               sx={{
-                color: theme.palette.text.primary,
+                color: theme.palette.text.secondary,
+                fontSize: '22px',
               }}
             />
           </CustomButton>

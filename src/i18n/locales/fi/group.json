@@ -50,6 +50,7 @@
     "member_number": "jäsenten määrä",
     "member_other": "jäsenet",
     "messaging": "viestintä",
+    "dm": "DM",
     "name": "ryhmän nimi",
     "open": "avoin (julkinen)",
     "private": "yksityinen ryhmä",
@@ -63,6 +64,8 @@
   "join_requests": "liittymispyynnöt",
   "last_message": "viimeinen viesti",
   "last_message_date": "viimeinen viesti: {{date}}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Sinä",
   "latest_mails": "uusimmat Q-Mailit",
   "message": {
     "generic": {
