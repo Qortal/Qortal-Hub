@@ -78,6 +78,8 @@
     "save_disk": "Économiser sur le disque",
     "search": "recherche",
     "search_apps": "Rechercher des applications",
+    "search_apps_or_link": "Rechercher des applications ou entrer un lien qortal://",
+    "open_as_qortal_link": "Ouvrir comme lien Qortal",
     "search_groups": "rechercher des groupes",
     "search_chat_text": "Texte de chat de recherche",
     "see_qr_code": "Voir le code QR",

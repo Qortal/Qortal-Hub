@@ -78,6 +78,8 @@
     "save_disk": "ディスクに保存します",
     "search": "検索",
     "search_apps": "アプリを検索します",
+    "search_apps_or_link": "アプリを検索または qortal:// リンクを入力",
+    "open_as_qortal_link": "Qortal リンクとして開く",
     "search_groups": "グループを検索します",
     "search_chat_text": "チャットテキストを検索します",
     "see_qr_code": "QRコードを参照してください",

@@ -102,7 +102,7 @@ export function GlobalChatWidget({
   const [bottomX, setBottomX] = useState(() => {
     if (typeof window === 'undefined') return 0;
     const maxX = Math.max(0, window.innerWidth - 380 - 56);
-    return Math.max(0, Math.min(maxX, maxX / 2));
+    return maxX; // start on the bottom right
   });
   const [draggingX, setDraggingX] = useState<number | null>(null);
   const didDragRef = useRef(false);

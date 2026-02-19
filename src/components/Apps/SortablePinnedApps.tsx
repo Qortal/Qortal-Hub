@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -17,6 +17,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Avatar, ButtonBase } from '@mui/material';
 import { AppCircle, AppCircleContainer, AppCircleLabel } from './Apps-styles';
 import { getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import { executeEvent } from '../../utils/events';
 import {
   settingsLocalLastUpdatedAtom,
@@ -31,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 const SortableItem = ({ id, name, app, isDesktop }) => {
   const { openApp } = useHandlePrivateApps();
+  const [avatarError, setAvatarError] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id });
@@ -109,19 +111,23 @@ const SortableItem = ({ id, name, app, isDesktop }) => {
                 }}
                 alt={app?.metadata?.title || app?.name}
                 src={
-                  app?.privateAppProperties?.logo
-                    ? app?.privateAppProperties?.logo
-                    : `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                        app?.name
-                      }/qortal_avatar?async=true`
+                  avatarError
+                    ? LogoSelected
+                    : app?.privateAppProperties?.logo
+                      ? app?.privateAppProperties?.logo
+                      : `${getBaseApiReact()}/arbitrary/THUMBNAIL/${
+                          app?.name
+                        }/qortal_avatar?async=true`
                 }
+                imgProps={{ onError: () => setAvatarError(true) }}
               >
                 <img
                   style={{
                     width: '31px',
                     height: 'auto',
                   }}
-                  alt="center-icon"
+                  src={LogoSelected}
+                  alt=""
                 />
               </Avatar>
             )}
