@@ -42,7 +42,6 @@ export const AppsLibraryDesktop = ({
   };
 
   const renderTabContent = () => {
-    console.log('renderTabContent', currentTab);
     switch (currentTab) {
       case 'official':
         return (
