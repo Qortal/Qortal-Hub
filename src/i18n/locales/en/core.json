@@ -51,7 +51,6 @@
     "join": "join",
     "leave_comment": "leave comment",
     "load_announcements": "load older announcements",
-    "login": "login",
     "logout": "logout",
     "new": {
       "chat": "new chat",

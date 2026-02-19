@@ -680,7 +680,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
         </Typography>
       )}
 
-      {/* Card footer: login button */}
+      {/* Card footer: choose button */}
       {!isEdit && (
         <Box
           sx={{
@@ -709,7 +709,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               setSelectedWallet(wallet);
             }}
           >
-            {t('core:action.login', {
+            {t('core:action.choose', {
               postProcess: 'capitalizeFirstChar',
             })}
           </ButtonBase>
