@@ -52,6 +52,7 @@
     "messaging": "chat",
     "dm": "MP",
     "name": "nome del gruppo",
+    "no_groups_found": "nessun gruppo trovato",
     "open": "aperto (pubblico)",
     "private": "gruppo privato",
     "promotions": "promozioni di gruppo",

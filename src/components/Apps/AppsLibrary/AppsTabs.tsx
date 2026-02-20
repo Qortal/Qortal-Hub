@@ -5,7 +5,8 @@ export type AppsLibraryTabValue =
   | 'official'
   | 'community'
   | 'categories'
-  | 'my-apps';
+  | 'my-apps'
+  | 'private';
 
 interface AppsTabsProps {
   currentTab: AppsLibraryTabValue;
@@ -89,6 +90,12 @@ export const AppsTabs = ({ currentTab, onTabChange }: AppsTabsProps) => {
         <StyledTab
           value="my-apps"
           label={t('core:tabs.my_apps', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        />
+        <StyledTab
+          value="private"
+          label={t('core:tabs.add_private', {
             postProcess: 'capitalizeFirstChar',
           })}
         />

@@ -175,6 +175,7 @@
   "last_height": "last height",
   "level": "level",
   "library": "library",
+  "explore": "explore",
   "list": {
     "bans": "list of bans",
     "groups": "list of groups",
@@ -430,6 +431,7 @@
     "recently_updated": "recently updated"
   },
   "tabs": {
+    "add_private": "+ private app",
     "categories": "categories",
     "community_apps": "community apps",
     "my_apps": "my apps",

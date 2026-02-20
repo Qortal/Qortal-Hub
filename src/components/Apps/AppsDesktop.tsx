@@ -462,6 +462,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
         hasPublishApp={!!(myApp || myWebsite)}
         isShow={mode === 'library' && !selectedTab}
         myName={myName}
+        myAddress={myAddress}
         setMode={setMode}
       />
 

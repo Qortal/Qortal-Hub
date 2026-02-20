@@ -5,6 +5,7 @@ import {
   groupApiSocket,
 } from '../background/background.ts';
 import { ApiKey } from '../types/auth.ts';
+import { isLocalPrivateHttpsUrl } from './helpers.ts';
 
 export let globalApiKey: ApiKey | null = null;
 
@@ -20,6 +21,15 @@ export const getBaseApiReact = (customApi?: string): string => {
     return globalApiKey.url;
   }
   return groupApi;
+};
+
+/** Base API URL for avatar/image requests. Uses HTTP when on local/private HTTPS (same logic as useAuth). */
+export const getBaseApiReactForAvatar = (customApi?: string): string => {
+  let baseUrl = getBaseApiReact(customApi);
+  if (isLocalPrivateHttpsUrl(baseUrl)) {
+    baseUrl = baseUrl.replace(/^https:\/\//i, 'http://');
+  }
+  return baseUrl;
 };
 
 export const getArbitraryEndpointReact = (): string => {

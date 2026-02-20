@@ -52,6 +52,8 @@
     "messaging": "messaging",
     "dm": "DM",
     "name": "group name",
+    "no_groups_found": "no groups found",
+    "owner": "owner",
     "open": "open (public)",
     "private": "private group",
     "promotions": "group promotions",

@@ -16,7 +16,7 @@ import {
   Popper,
   useTheme,
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
+import AppsIcon from '@mui/icons-material/Apps';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import LinkIcon from '@mui/icons-material/Link';
@@ -24,7 +24,6 @@ import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { SortablePinnedApps } from './SortablePinnedApps';
 import { extractComponents } from '../Chat/MessageDisplay';
-import { AppsPrivate } from './AppsPrivate';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
@@ -467,16 +466,14 @@ export const AppsHomeDesktop = ({
             }}
           >
             <AppCircle>
-              <AddIcon />
+              <AppsIcon />
             </AppCircle>
 
             <AppCircleLabel>
-              {t('core:library', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:explore', { postProcess: 'capitalizeFirstChar' })}
             </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
-
-        <AppsPrivate myName={myName} myAddress={myAddress} />
 
         <SortablePinnedApps
           isDesktop={true}

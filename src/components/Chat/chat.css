@@ -171,11 +171,14 @@
 /* Reply preview: strip link/mention colors so preview stays easy on the eyes */
 .tiptap.isReply a,
 .tiptap.isReply .qortal-link,
+.tiptap.isReply .auto-link,
 .tiptap.isReply span[data-url^='qortal://']
 {
   color: inherit !important;
   background: none !important;
-  text-decoration: none;
+  pointer-events: none !important;
+  cursor: inherit !important;
+  text-decoration: none !important;
   border-radius: 0;
   padding: 0;
 }

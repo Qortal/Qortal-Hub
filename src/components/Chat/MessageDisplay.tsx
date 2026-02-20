@@ -150,7 +150,28 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
     );
   }, [htmlContent]);
 
+  const handleClickCapture = (e) => {
+    if (isReply) {
+      const target = e.target;
+      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      if (isLink) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  };
+
   const handleClick = async (e) => {
+    if (isReply) {
+      e.preventDefault();
+      const target = e.target;
+      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      if (isLink) {
+        e.stopPropagation();
+        return;
+      }
+      return;
+    }
     e.preventDefault();
 
     const target = e.target;
@@ -216,6 +237,7 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         className={`tiptap ${isReply ? 'isReply' : ''}`}
         dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         onClick={handleClick}
+        onClickCapture={handleClickCapture}
       />
     </Box>
   );

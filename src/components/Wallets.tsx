@@ -30,7 +30,7 @@ import {
   walletVersion,
 } from '../background/background.ts';
 import { getNameInfo } from './Group/groupApi';
-import { getBaseApiReact } from '../App';
+import { getBaseApiReactForAvatar } from '../App';
 import { useModal } from '../hooks/useModal.tsx';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
 import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
@@ -626,7 +626,7 @@ const WalletItem = ({
 
   const qortalAvatarSrc =
     primaryName &&
-    `${getBaseApiReact()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`;
+    `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`;
   const displayAvatarSrc = qortalAvatarSrc || undefined;
   const displayName =
     primaryName ||

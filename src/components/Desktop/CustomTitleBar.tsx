@@ -446,24 +446,7 @@ export function CustomTitleBar(props?: {
           <AccountBalanceWalletIcon sx={{ fontSize: 20 }} />
         </IconButton>
       </Tooltip>
-      {rightNav.desktopViewMode !== 'home' && (
-        <Tooltip
-          title={tooltipTitle(t('auth:account.your'))}
-          placement="bottom"
-          arrow
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <IconButton
-            {...titleBarIconButtonProps}
-            size="small"
-            onClick={rightNav.onOpenDrawerProfile}
-            sx={navIconSx}
-            aria-label={t('auth:account.your')}
-          >
-            <WalletIcon color={controlColor} width="22" />
-          </IconButton>
-        </Tooltip>
-      )}
+
       <Box sx={{ width: 2 }} />
       <QMailStatus compact />
       {rightNav.extState === 'authenticated' && (

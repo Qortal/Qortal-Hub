@@ -52,6 +52,7 @@
     "messaging": "消息",
     "dm": "私信",
     "name": "群组名称",
+    "no_groups_found": "未找到群组",
     "open": "开放（公共）",
     "private": "私有群组",
     "promotions": "群组推广",

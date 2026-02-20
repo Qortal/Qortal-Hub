@@ -480,6 +480,9 @@ export const MessageItemComponent = ({
                   transition: 'opacity 0.1s ease',
                   width: '100%',
                   opacity: isRepliedToMe ? 1 : 0.72,
+                  '& *': {
+                    cursor: 'pointer',
+                  },
                   '&:hover': {
                     opacity: 1,
                   },
@@ -557,6 +560,7 @@ export const MessageItemComponent = ({
                     ? alpha(theme.palette.warning.main, 0.06)
                     : 'transparent',
                   borderRadius: '0 6px 6px 0',
+                  cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'row',
                   marginTop: '4px',
@@ -567,6 +571,9 @@ export const MessageItemComponent = ({
                   padding: '4px 0 4px 10px',
                   width: '100%',
                   opacity: isRepliedToMe ? 1 : 0.6,
+                  '& *': {
+                    cursor: 'pointer',
+                  },
                 }}
               >
                 <Box sx={{ minWidth: 0 }}>

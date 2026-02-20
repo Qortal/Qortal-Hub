@@ -52,6 +52,7 @@
     "messaging": "Nachrichten",
     "dm": "PN",
     "name": "Gruppenname",
+    "no_groups_found": "Keine Gruppen gefunden",
     "open": "offen (öffentlich)",
     "private": "private Gruppe",
     "promotions": "Gruppen-Promotionen",

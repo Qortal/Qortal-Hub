@@ -52,6 +52,7 @@
     "messaging": "sõnumivahetus",
     "dm": "DM",
     "name": "rühma nimi",
+    "no_groups_found": "rühmad ei leitud",
     "open": "avatud (avalik)",
     "private": "privaatrühm",
     "promotions": "Uute Grupide Soovitused",

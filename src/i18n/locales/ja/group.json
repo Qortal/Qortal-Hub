@@ -52,6 +52,7 @@
     "messaging": "メッセージ",
     "dm": "DM",
     "name": "グループ名",
+    "no_groups_found": "グループが見つかりません",
     "open": "公開（誰でも参加可）",
     "private": "非公開グループ",
     "promotions": "グループのプロモーション",

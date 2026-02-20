@@ -120,6 +120,7 @@ export {
   globalApiKey,
   handleSetGlobalApikey,
   getBaseApiReact,
+  getBaseApiReactForAvatar,
   getArbitraryEndpointReact,
   getBaseApiReactSocket,
 } from './utils/globalApi';

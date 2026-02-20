@@ -13,7 +13,7 @@ import { CustomButton, CustomLabel, TextP } from '../styles/App-styles.ts';
 import { Spacer } from '../common/Spacer';
 import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
-import { getBaseApiReact } from '../App';
+import { getBaseApiReactForAvatar } from '../App';
 import { getNameInfo } from './Group/groupApi';
 
 type RawWallet = {
@@ -57,8 +57,9 @@ export const AuthenticationForm = ({
   }, [rawWallet?.address0]);
 
   // Avatar URL is built only from the fetched primary name (each address has its own primary name).
+  // Use getBaseApiReactForAvatar so local HTTPS uses HTTP for avatars (avoids cert issues).
   const avatarSrc = primaryName
-    ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
+    ? `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
     : undefined;
   const displayLabel =
     primaryName ||
