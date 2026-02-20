@@ -91,4 +91,5 @@
 html,
 body {
   overscroll-behavior: none !important;
+  overflow: hidden;
 }
