@@ -17,12 +17,13 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import {
   Box,
   Collapse,
-  Input,
+  FormControl,
   MenuItem,
   Select,
   SelectChangeEvent,
   Tab,
   Tabs,
+  TextField,
   useTheme,
 } from '@mui/material';
 import { AddGroupList } from './AddGroupList';
@@ -35,7 +36,6 @@ import { useTranslation } from 'react-i18next';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { TransitionUp } from '../../common/Transitions.tsx';
-import { Label } from '../../styles/App-styles.ts';
 
 export const AddGroup = ({ address, open, setOpen }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -209,14 +209,31 @@ export const AddGroup = ({ address, open, setOpen }) => {
         slots={{
           transition: TransitionUp,
         }}
+        PaperProps={{
+          sx: {
+            bgcolor: theme.palette.background.default,
+          },
+        }}
       >
         <AppBar
+          position="relative"
+          elevation={0}
           sx={{
-            position: 'relative',
+            bgcolor: theme.palette.background.paper,
+            borderBottom: `1px solid ${theme.palette.divider}`,
           }}
         >
-          <Toolbar>
-            <Typography sx={{ ml: 2, flex: 1 }} variant="h4" component="div">
+          <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, px: { xs: 1, sm: 2 } }}>
+            <Typography
+              sx={{
+                flex: 1,
+                fontSize: { xs: '1.15rem', sm: '1.35rem' },
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+              }}
+              variant="h6"
+              component="div"
+            >
               {t('group:group.management', {
                 postProcess: 'capitalizeFirstChar',
               })}
@@ -226,12 +243,13 @@ export const AddGroup = ({ address, open, setOpen }) => {
               aria-label={t('core:action.close', {
                 postProcess: 'capitalizeFirstChar',
               })}
-              color="inherit"
-              edge="start"
               onClick={handleClose}
               sx={{
-                bgcolor: theme.palette.background.default,
+                bgcolor: theme.palette.action.hover,
                 color: theme.palette.text.primary,
+                '&:hover': {
+                  bgcolor: theme.palette.action.selected,
+                },
               }}
             >
               <CloseIcon />
@@ -249,178 +267,229 @@ export const AddGroup = ({ address, open, setOpen }) => {
             overflowY: 'auto',
           }}
         >
-          <Box
-            sx={{ borderBottom: 1, borderColor: theme.palette.text.secondary }}
+          <Tabs
+            value={value}
+            onChange={handleChange}
+            variant="fullWidth"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              minHeight: 48,
+              borderBottom: `1px solid ${theme.palette.divider}`,
+              '& .MuiTabs-flexContainer': {
+                gap: 0,
+              },
+              '& .MuiTab-root': {
+                textTransform: 'uppercase',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                minHeight: 48,
+              },
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+                backgroundColor: theme.palette.primary.main,
+              },
+            }}
           >
-            <Tabs
-              value={value}
-              onChange={handleChange}
-              variant={'fullWidth'}
-              scrollButtons="auto"
-              allowScrollButtonsMobile
-              sx={{
-                '&.MuiTabs-indicator': {
-                  backgroundColor: theme.palette.background.default,
-                },
-              }}
-            >
-              <Tab
-                label={t('group:action.create_group', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                {...a11yProps(0)}
-                sx={{
-                  '&.Mui-selected': {
-                    color: theme.palette.text.primary,
-                  },
-                  fontSize: '1rem',
-                }}
-              />
-              <Tab
-                label={t('group:action.find_group', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                {...a11yProps(1)}
-                sx={{
-                  '&.Mui-selected': {
-                    color: theme.palette.text.primary,
-                  },
-                  fontSize: '1rem',
-                }}
-              />
-              <Tab
-                label={t('group:group.invites', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                {...a11yProps(2)}
-                sx={{
-                  '&.Mui-selected': {
-                    color: theme.palette.text.primary,
-                  },
-                  fontSize: '1rem',
-                }}
-              />
-            </Tabs>
-          </Box>
+            <Tab
+              label={t('group:action.create_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              {...a11yProps(0)}
+            />
+            <Tab
+              label={t('group:action.find_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              {...a11yProps(1)}
+            />
+            <Tab
+              label={t('group:group.invites', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              {...a11yProps(2)}
+            />
+          </Tabs>
 
           {value === 0 && (
             <Box
               sx={{
                 width: '100%',
-                padding: '25px',
+                p: { xs: 2, sm: 3 },
+                display: 'flex',
+                justifyContent: 'center',
               }}
             >
               <Box
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '20px',
-                  maxWidth: '500px',
+                  gap: 3,
+                  maxWidth: 480,
+                  width: '100%',
                 }}
               >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  <Typography
+                    component="label"
+                    variant="body2"
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
                     {t('group:group.name', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-                  </Label>
-
-                  <Input
+                  </Typography>
+                  <TextField
                     placeholder={t('group:group.name', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     inputProps={{ maxLength: 32 }}
+                    variant="outlined"
+                    fullWidth
+                    helperText={`${name?.length || 0}/32`}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        bgcolor: theme.palette.background.paper,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: theme.palette.action.hover,
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: 2,
+                        },
+                      },
+                    }}
                   />
-                  <Typography variant="caption" color="text.secondary">
-                    {name?.length || 0}/32
-                  </Typography>
                 </Box>
 
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  <Typography
+                    component="label"
+                    variant="body2"
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
                     {t('group:group.description', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-                  </Label>
-
-                  <Input
+                  </Typography>
+                  <TextField
                     placeholder={t('group:group.description', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     inputProps={{ maxLength: 120 }}
+                    variant="outlined"
+                    fullWidth
+                    multiline
+                    minRows={2}
+                    helperText={`${description?.length || 0}/120`}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        bgcolor: theme.palette.background.paper,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: theme.palette.action.hover,
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: 2,
+                        },
+                      },
+                    }}
                   />
-
-                  <Typography variant="caption" color="text.secondary">
-                    {description?.length || 0}/120
-                  </Typography>
                 </Box>
 
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '5px',
-                  }}
-                >
-                  <Label>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                  <Typography
+                    component="label"
+                    variant="body2"
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
                     {t('group:group.type', {
                       postProcess: 'capitalizeFirstChar',
                     })}
-                  </Label>
-
-                  <Select
-                    labelId="demo-simple-select-label"
-                    id="demo-simple-select"
-                    value={groupType}
-                    label={t('group:group.type', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                    onChange={handleChangeGroupType}
+                  </Typography>
+                  <FormControl
+                    fullWidth
+                    variant="outlined"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 2,
+                        bgcolor: theme.palette.background.paper,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: theme.palette.action.hover,
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderWidth: 2,
+                        },
+                      },
+                    }}
                   >
-                    <MenuItem value={1}>
-                      {t('group:group.open', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </MenuItem>
-                    <MenuItem value={0}>
-                      {t('group:group.closed', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </MenuItem>
-                  </Select>
+                    <Select
+                      value={groupType}
+                      onChange={handleChangeGroupType}
+                      fullWidth
+                      displayEmpty
+                    >
+                      <MenuItem value="1">
+                        {t('group:group.open', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </MenuItem>
+                      <MenuItem value="0">
+                        {t('group:group.closed', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
                 </Box>
 
                 <Box
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setOpenAdvance((prev) => !prev);
+                    }
+                  }}
                   sx={{
                     alignItems: 'center',
                     cursor: 'pointer',
                     display: 'flex',
-                    gap: '15px',
+                    gap: 1,
+                    py: 1,
+                    px: 1.5,
+                    borderRadius: 2,
+                    bgcolor: theme.palette.action.hover,
+                    '&:hover': {
+                      bgcolor: theme.palette.action.selected,
+                    },
                   }}
                   onClick={() => setOpenAdvance((prev) => !prev)}
                 >
-                  <Typography>
+                  <Typography variant="body2" fontWeight={500}>
                     {t('group:advanced_options', {
                       postProcess: 'capitalizeFirstChar',
                     })}
                   </Typography>
-
                   {openAdvance ? <ExpandLess /> : <ExpandMore />}
                 </Box>
 
@@ -429,179 +498,223 @@ export const AddGroup = ({ address, open, setOpen }) => {
                     sx={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '5px',
+                      gap: 2.5,
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: theme.palette.background.paper,
+                      border: `1px solid ${theme.palette.divider}`,
                     }}
                   >
-                    <Label>
-                      {t('group:message.generic.group_approval_threshold', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Label>
-
-                    <Select
-                      labelId="demo-simple-select-label"
-                      id="demo-simple-select"
-                      value={approvalThreshold}
-                      label={t('group:group.approval_threshold', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      onChange={handleChangeApprovalThreshold}
-                    >
-                      <MenuItem value={0}>
-                        {t('core:count.none', {
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Typography
+                        component="label"
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        {t('group:message.generic.group_approval_threshold', {
                           postProcess: 'capitalizeFirstChar',
                         })}
-                      </MenuItem>
-                      <MenuItem value={1}>
-                        {t('core:count.one', {
+                      </Typography>
+                      <FormControl
+                        fullWidth
+                        variant="outlined"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            bgcolor: theme.palette.background.default,
+                          },
+                        }}
+                      >
+                        <Select
+                          value={approvalThreshold}
+                          onChange={handleChangeApprovalThreshold}
+                          fullWidth
+                          displayEmpty
+                        >
+                          <MenuItem value="0">
+                            {t('core:count.none', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </MenuItem>
+                          <MenuItem value="1">
+                            {t('core:count.one', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </MenuItem>
+                          <MenuItem value="20">20%</MenuItem>
+                          <MenuItem value="40">40%</MenuItem>
+                          <MenuItem value="60">60%</MenuItem>
+                          <MenuItem value="80">80%</MenuItem>
+                          <MenuItem value="100">100%</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Typography
+                        component="label"
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        {t('group:message.generic.block_delay_minimum', {
                           postProcess: 'capitalizeFirstChar',
                         })}
-                      </MenuItem>
-                      <MenuItem value={20}>20%</MenuItem>
-                      <MenuItem value={40}>40%</MenuItem>
-                      <MenuItem value={60}>60%</MenuItem>
-                      <MenuItem value={80}>80%</MenuItem>
-                      <MenuItem value={100}>100%</MenuItem>
-                    </Select>
-                  </Box>
+                      </Typography>
+                      <FormControl
+                        fullWidth
+                        variant="outlined"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            bgcolor: theme.palette.background.default,
+                          },
+                        }}
+                      >
+                        <Select
+                          value={minBlock}
+                          onChange={handleChangeMinBlock}
+                          fullWidth
+                          displayEmpty
+                        >
+                          <MenuItem value="5">
+                            {t('core:time.minute', { count: 5 })}
+                          </MenuItem>
+                          <MenuItem value="10">
+                            {t('core:time.minute', { count: 10 })}
+                          </MenuItem>
+                          <MenuItem value="30">
+                            {t('core:time.minute', { count: 30 })}
+                          </MenuItem>
+                          <MenuItem value="60">
+                            {t('core:time.hour', { count: 1 })}
+                          </MenuItem>
+                          <MenuItem value="180">
+                            {t('core:time.hour', { count: 3 })}
+                          </MenuItem>
+                          <MenuItem value="300">
+                            {t('core:time.hour', { count: 5 })}
+                          </MenuItem>
+                          <MenuItem value="420">
+                            {t('core:time.hour', { count: 7 })}
+                          </MenuItem>
+                          <MenuItem value="720">
+                            {t('core:time.hour', { count: 12 })}
+                          </MenuItem>
+                          <MenuItem value="1440">
+                            {t('core:time.day', { count: 1 })}
+                          </MenuItem>
+                          <MenuItem value="4320">
+                            {t('core:time.day', { count: 3 })}
+                          </MenuItem>
+                          <MenuItem value="7200">
+                            {t('core:time.day', { count: 5 })}
+                          </MenuItem>
+                          <MenuItem value="10080">
+                            {t('core:time.day', { count: 7 })}
+                          </MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
 
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '5px',
-                    }}
-                  >
-                    <Label>
-                      {t('group:message.generic.block_delay_minimum', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Label>
-
-                    <Select
-                      labelId="demo-simple-select-label"
-                      id="demo-simple-select"
-                      value={minBlock}
-                      label={t('group:block_delay.minimum', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      onChange={handleChangeMinBlock}
-                    >
-                      <MenuItem value={5}>
-                        {t('core:time.minute', { count: 5 })}
-                      </MenuItem>
-                      <MenuItem value={10}>
-                        {t('core:time.minute', { count: 10 })}
-                      </MenuItem>
-                      <MenuItem value={30}>
-                        {t('core:time.minute', { count: 30 })}
-                      </MenuItem>
-                      <MenuItem value={60}>
-                        {t('core:time.hour', { count: 1 })}
-                      </MenuItem>
-                      <MenuItem value={180}>
-                        {t('core:time.hour', { count: 3 })}
-                      </MenuItem>
-                      <MenuItem value={300}>
-                        {t('core:time.hour', { count: 5 })}
-                      </MenuItem>
-                      <MenuItem value={420}>
-                        {t('core:time.hour', { count: 7 })}
-                      </MenuItem>
-                      <MenuItem value={720}>
-                        {t('core:time.hour', { count: 12 })}
-                      </MenuItem>
-                      <MenuItem value={1440}>
-                        {t('core:time.day', { count: 1 })}
-                      </MenuItem>
-                      <MenuItem value={4320}>
-                        {t('core:time.day', { count: 3 })}
-                      </MenuItem>
-                      <MenuItem value={7200}>
-                        {t('core:time.day', { count: 5 })}
-                      </MenuItem>
-                      <MenuItem value={10080}>
-                        {t('core:time.day', { count: 7 })}
-                      </MenuItem>
-                    </Select>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '5px',
-                    }}
-                  >
-                    <Label>
-                      {t('group:message.generic.block_delay_maximum', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Label>
-
-                    <Select
-                      labelId="demo-simple-select-label"
-                      id="demo-simple-select"
-                      value={maxBlock}
-                      label={t('group:block_delay.minimum', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      onChange={handleChangeMaxBlock}
-                    >
-                      <MenuItem value={60}>
-                        {t('core:time.hour', { count: 1 })}
-                      </MenuItem>
-                      <MenuItem value={180}>
-                        {t('core:time.hour', { count: 3 })}
-                      </MenuItem>
-                      <MenuItem value={300}>
-                        {t('core:time.hour', { count: 5 })}
-                      </MenuItem>
-                      <MenuItem value={420}>
-                        {t('core:time.hour', { count: 7 })}
-                      </MenuItem>
-                      <MenuItem value={720}>
-                        {t('core:time.hour', { count: 12 })}
-                      </MenuItem>
-                      <MenuItem value={1440}>
-                        {t('core:time.day', { count: 1 })}
-                      </MenuItem>
-                      <MenuItem value={4320}>
-                        {t('core:time.day', { count: 3 })}
-                      </MenuItem>
-                      <MenuItem value={7200}>
-                        {t('core:time.day', { count: 5 })}
-                      </MenuItem>
-                      <MenuItem value={10080}>
-                        {t('core:time.day', { count: 7 })}
-                      </MenuItem>
-                      <MenuItem value={14400}>
-                        {t('core:time.day', { count: 10 })}
-                      </MenuItem>
-                      <MenuItem value={21600}>
-                        {t('core:time.day', { count: 15 })}
-                      </MenuItem>
-                    </Select>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                      <Typography
+                        component="label"
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        {t('group:message.generic.block_delay_maximum', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                      <FormControl
+                        fullWidth
+                        variant="outlined"
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            bgcolor: theme.palette.background.default,
+                          },
+                        }}
+                      >
+                        <Select
+                          value={maxBlock}
+                          onChange={handleChangeMaxBlock}
+                          fullWidth
+                          displayEmpty
+                        >
+                          <MenuItem value="60">
+                            {t('core:time.hour', { count: 1 })}
+                          </MenuItem>
+                          <MenuItem value="180">
+                            {t('core:time.hour', { count: 3 })}
+                          </MenuItem>
+                          <MenuItem value="300">
+                            {t('core:time.hour', { count: 5 })}
+                          </MenuItem>
+                          <MenuItem value="420">
+                            {t('core:time.hour', { count: 7 })}
+                          </MenuItem>
+                          <MenuItem value="720">
+                            {t('core:time.hour', { count: 12 })}
+                          </MenuItem>
+                          <MenuItem value="1440">
+                            {t('core:time.day', { count: 1 })}
+                          </MenuItem>
+                          <MenuItem value="4320">
+                            {t('core:time.day', { count: 3 })}
+                          </MenuItem>
+                          <MenuItem value="7200">
+                            {t('core:time.day', { count: 5 })}
+                          </MenuItem>
+                          <MenuItem value="10080">
+                            {t('core:time.day', { count: 7 })}
+                          </MenuItem>
+                          <MenuItem value="14400">
+                            {t('core:time.day', { count: 10 })}
+                          </MenuItem>
+                          <MenuItem value="21600">
+                            {t('core:time.day', { count: 15 })}
+                          </MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
                   </Box>
                 </Collapse>
 
-                <Box
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleCreateGroup}
+                  fullWidth
                   sx={{
-                    display: 'flex',
-                    width: '100%',
-                    justifyContent: 'center',
+                    py: 1.5,
+                    mt: 0.5,
+                    borderRadius: 2,
+                    textTransform: 'uppercase',
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    boxShadow: theme.shadows[2],
+                    '&:hover': {
+                      boxShadow: theme.shadows[4],
+                    },
                   }}
                 >
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleCreateGroup}
-                  >
-                    {t('group:action.create_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                </Box>
+                  {t('group:action.create_group', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
               </Box>
             </Box>
           )}
@@ -612,7 +725,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 flexGrow: 1,
-                padding: '25px',
+                p: { xs: 2, sm: 3 },
                 width: '100%',
               }}
             >
@@ -629,7 +742,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
                 display: 'flex',
                 flexDirection: 'column',
                 flexGrow: 1,
-                padding: '25px',
+                p: { xs: 2, sm: 3 },
                 width: '100%',
               }}
             >

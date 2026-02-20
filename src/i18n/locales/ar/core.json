@@ -174,6 +174,7 @@
   "last_height": "آخر ارتفاع",
   "level": "مستوى",
   "library": "مكتبة",
+  "explore": "استكشاف",
   "list": {
     "bans": "قائمة المحظورين",
     "groups": "قائمة الجروبات",
@@ -427,6 +428,7 @@
     "recently_updated": "تم تحديثها مؤخراً"
   },
   "tabs": {
+    "add_private": "+ تطبيق خاص",
     "categories": "الفئات",
     "community_apps": "تطبيقات المجتمع",
     "my_apps": "تطبيقاتي",

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DrawerUserLookup } from '../Drawer/DrawerUserLookup';
 import {
   Avatar,
   Box,
@@ -18,8 +17,6 @@ import {
   CircularProgress,
   useTheme,
   Autocomplete,
-  IconButton,
-  ClickAwayListener,
 } from '@mui/material';
 import {
   getAddressInfo,
@@ -168,14 +165,49 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
     setAddressInfo(null);
   };
 
+  if (!isOpenDrawerLookup) return null;
+
   return (
-    <DrawerUserLookup open={isOpenDrawerLookup} setOpen={setIsOpenDrawerLookup}>
-      <ClickAwayListener onClickAway={onClose}>
+    <Box
+      sx={{
+        backgroundColor: theme.palette.background.paper,
+        borderTopLeftRadius: '10px',
+        borderTopRightRadius: '10px',
+        bottom: 0,
+        boxShadow: 4,
+        height: `calc(100vh - ${appHeighOffsetPx})`,
+        overflow: 'hidden',
+        position: 'fixed',
+        right: 0,
+        width: '100vw',
+        zIndex: 100,
+      }}
+    >
+      <Box sx={{ height: '100%', width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Box
+          sx={{
+            height: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '5px',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Typography>
+            {t('core:user_lookup', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+          <ButtonBase onClick={onClose}>
+            <CloseIcon sx={{ color: theme.palette.text.primary }} />
+          </ButtonBase>
+        </Box>
+        <Divider />
         <Box
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: `calc(100vh - ${appHeighOffsetPx})`,
+            flexGrow: 1,
             overflow: 'hidden',
             padding: '15px',
           }}
@@ -644,7 +676,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
             )}
           </Box>
         </Box>
-      </ClickAwayListener>
-    </DrawerUserLookup>
+      </Box>
+    </Box>
   );
 };

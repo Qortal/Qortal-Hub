@@ -19,6 +19,7 @@ import {
   CommunityAppsTab,
   CategoriesTab,
   MyAppsTab,
+  PrivateTab,
 } from './AppsLibrary';
 import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
@@ -27,6 +28,7 @@ export const AppsLibraryDesktop = ({
   availableQapps,
   setMode,
   myName,
+  myAddress,
   isShow,
   categories,
 }) => {
@@ -72,6 +74,8 @@ export const AppsLibraryDesktop = ({
             setMode={setMode}
           />
         );
+      case 'private':
+        return <PrivateTab myName={myName} myAddress={myAddress} />;
       default:
         return (
           <OfficialAppsTab availableQapps={availableQapps} myName={myName} />

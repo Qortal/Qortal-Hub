@@ -52,6 +52,7 @@
     "messaging": "viestintä",
     "dm": "DM",
     "name": "ryhmän nimi",
+    "no_groups_found": "ryhmiä ei löytynyt",
     "open": "avoin (julkinen)",
     "private": "yksityinen ryhmä",
     "promotions": "ryhmän mainokset",

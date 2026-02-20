@@ -174,6 +174,7 @@
   "last_height": "最后的高度",
   "level": "等级",
   "library": "图书馆",
+  "explore": "探索",
   "list": {
     "bans": "禁令名单",
     "groups": "组列表",
@@ -426,6 +427,7 @@
     "recently_updated": "最近更新"
   },
   "tabs": {
+    "add_private": "+ 私人应用",
     "categories": "分类",
     "community_apps": "社区应用",
     "my_apps": "我的应用",

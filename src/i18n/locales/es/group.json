@@ -52,6 +52,7 @@
     "messaging": "mensajería",
     "dm": "MD",
     "name": "nombre del grupo",
+    "no_groups_found": "no se encontraron grupos",
     "open": "abierto (público)",
     "private": "grupo privado",
     "promotions": "promociones del grupo",
