@@ -170,7 +170,6 @@ export const useFetchResources = () => {
           baselineSpeed !== null &&
           chunkHistory.length >= 4
         ) {
-          console.log('Download stalled - no chunk progress detected');
           return true;
         }
 
@@ -202,7 +201,9 @@ export const useFetchResources = () => {
                 ...(existing.status || {}),
                 ...status,
               },
-              isFetching: status.status !== 'READY' && status.status !== 'FAILED_TO_DOWNLOAD',
+              isFetching:
+                status.status !== 'READY' &&
+                status.status !== 'FAILED_TO_DOWNLOAD',
               service,
               name,
               identifier,
@@ -297,7 +298,10 @@ export const useFetchResources = () => {
                         method: 'GET',
                         headers: { 'Content-Type': 'application/json' },
                       }).catch((error) => {
-                        console.debug('Failed to fetch async on slowdown:', error);
+                        console.debug(
+                          'Failed to fetch async on slowdown:',
+                          error
+                        );
                       });
                     }
                   }
