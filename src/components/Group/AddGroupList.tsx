@@ -148,7 +148,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
         .then(() => {
           setInfoSnack({
             type: 'success',
-            message: t('auth:wallet.copy_address', {
+            message: t('auth:action.copy_address', {
               postProcess: 'capitalizeFirstChar',
             }),
           });
@@ -638,7 +638,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
                             <IconButton
                               size="small"
                               onClick={handleCopyAddress}
-                              aria-label={t('auth:wallet.copy_address', {
+                              aria-label={t('auth:action.copy_address', {
                                 postProcess: 'capitalizeFirstChar',
                               })}
                               sx={{
