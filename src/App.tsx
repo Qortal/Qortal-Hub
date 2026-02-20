@@ -54,7 +54,6 @@ import {
 } from './utils/events';
 import { DrawerComponent } from './components/Drawer/Drawer';
 import { Settings } from './components/Group/Settings';
-import { loadAvatar } from './utils/avatarStorage.ts';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
@@ -148,16 +147,6 @@ function App() {
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
-  const [walletAvatarSrc, setWalletAvatarSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (rawWallet?.address0 && extState === 'wallet-dropped') {
-      loadAvatar(rawWallet.address0).then(setWalletAvatarSrc);
-    } else {
-      setWalletAvatarSrc(null);
-    }
-  }, [rawWallet?.address0, extState]);
-
   const { t } = useTranslation([
     'auth',
     'core',
@@ -1153,7 +1142,6 @@ function App() {
         {rawWallet && extState === 'wallet-dropped' && (
           <AuthenticationForm
             rawWallet={rawWallet}
-            walletAvatarSrc={walletAvatarSrc}
             selectedNode={selectedNode}
             walletToBeDecryptedError={walletToBeDecryptedError}
             onBack={onAuthenticationFormBack}
