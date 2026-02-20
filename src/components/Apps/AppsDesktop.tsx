@@ -42,6 +42,8 @@ import {
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -435,7 +437,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx} )`,
             overflow: 'auto',
             width: '100%',
           }}
@@ -515,7 +517,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100vh',
+              height: `calc(100vh - ${appHeighOffsetPx} )`,
               overflow: 'auto',
               width: '100%',
             }}

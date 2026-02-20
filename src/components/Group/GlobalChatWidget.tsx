@@ -27,8 +27,9 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import { useTranslation } from 'react-i18next';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
+  globalChatWidgetBoundsAtom,
   groupChatHasUnreadAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
@@ -45,6 +46,7 @@ import { MiniDirectThread } from '../Chat/MiniDirectThread';
 import { MiniGroupThread } from '../Chat/MiniGroupThread';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { validateAddress } from '../../utils/validateAddress';
+import { appHeighOffset, appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 export type ChatWidgetTab = 'messages' | 'groups';
 
@@ -105,30 +107,53 @@ export function GlobalChatWidget({
   const WIDGET_MIN_HEIGHT = 240;
   const WIDGET_MAX_HEIGHT = 800;
   const BAR_HEIGHT = 52;
-  const RIGHT_SIDEBAR_OFFSET = 56;
-  const [widgetWidth, setWidgetWidth] = useState(380);
-  const [widgetHeight, setWidgetHeight] = useState(560);
+
+  const storedBounds = useAtomValue(globalChatWidgetBoundsAtom);
+  const setStoredBounds = useSetAtom(globalChatWidgetBoundsAtom);
+  const initialBounds = useMemo(() => {
+    if (typeof window === 'undefined')
+      return { x: 0, width: 380, height: 560 };
+    const w = window.innerWidth;
+    const h = window.innerHeight - appHeighOffset;
+    const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
+    const maxH = Math.min(
+      WIDGET_MAX_HEIGHT,
+      Math.max(WIDGET_MIN_HEIGHT, h - 120)
+    );
+    if (!storedBounds)
+      return {
+        x: Math.max(0, w - 380),
+        width: 380,
+        height: 560,
+      };
+    return {
+      x: Math.max(0, Math.min(w - storedBounds.width, storedBounds.x)),
+      width: Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, storedBounds.width)),
+      height: Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, storedBounds.height)),
+    };
+  }, [storedBounds]);
+
+  const [widgetWidth, setWidgetWidth] = useState(initialBounds.width);
+  const [widgetHeight, setWidgetHeight] = useState(initialBounds.height);
   const [resizing, setResizing] = useState(false);
 
   const [windowSize, setWindowSize] = useState(() =>
     typeof window !== 'undefined'
-      ? { w: window.innerWidth, h: window.innerHeight }
+      ? { w: window.innerWidth, h: window.innerHeight - appHeighOffset }
       : { w: 800, h: 600 }
   );
-  const [bottomX, setBottomX] = useState(() => {
-    if (typeof window === 'undefined') return 0;
-    const maxX = Math.max(0, window.innerWidth - 380 - 56);
-    return maxX; // start on the bottom right
-  });
+  const [bottomX, setBottomX] = useState(initialBounds.x);
   const [draggingX, setDraggingX] = useState<number | null>(null);
   const didDragRef = useRef(false);
-  const resizeCaptureRef = useRef<{ el: HTMLElement; pointerId: number } | null>(
-    null
-  );
+  const hasAppliedStoredRef = useRef(false);
+  const resizeCaptureRef = useRef<{
+    el: HTMLElement;
+    pointerId: number;
+  } | null>(null);
 
   const maxWidgetWidth = Math.min(
     WIDGET_MAX_WIDTH,
-    windowSize.w - RIGHT_SIDEBAR_OFFSET - 48
+    windowSize.w - 48
   );
   const maxWidgetHeight = Math.min(
     WIDGET_MAX_HEIGHT,
@@ -146,8 +171,7 @@ export function GlobalChatWidget({
       const native = e.nativeEvent as PointerEvent & { pointerId?: number };
       // PointerEvent has pointerId; MouseEvent does not - use 1 as fallback for primary mouse
       const pointerId =
-        native.pointerId ??
-        (e.type.startsWith('mouse') ? 1 : undefined);
+        native.pointerId ?? (e.type.startsWith('mouse') ? 1 : undefined);
       if (
         target &&
         pointerId != null &&
@@ -172,10 +196,7 @@ export function GlobalChatWidget({
       delta: { width: number; height: number }
     ) => {
       setWidgetWidth((prev) =>
-        Math.min(
-          maxWidgetWidth,
-          Math.max(WIDGET_MIN_WIDTH, prev + delta.width)
-        )
+        Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, prev + delta.width))
       );
       setWidgetHeight((prev) =>
         Math.min(
@@ -207,22 +228,24 @@ export function GlobalChatWidget({
       const w = elementRef.offsetWidth;
       const totalH = elementRef.offsetHeight;
       const contentH = totalH - BAR_HEIGHT;
-      setWidgetWidth(Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, w)));
-      setWidgetHeight(
-        Math.min(maxWidgetHeight, Math.max(WIDGET_MIN_HEIGHT, contentH))
+      const width = Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, w));
+      const height = Math.min(
+        maxWidgetHeight,
+        Math.max(WIDGET_MIN_HEIGHT, contentH)
       );
-      const maxXAfter = Math.max(
-        0,
-        windowSize.w - w - RIGHT_SIDEBAR_OFFSET
-      );
-      setBottomX((prev) => Math.max(0, Math.min(maxXAfter, position.x ?? prev)));
+      const maxXAfter = Math.max(0, windowSize.w - w);
+      const x = Math.max(0, Math.min(maxXAfter, position.x ?? 0));
+      setWidgetWidth(width);
+      setWidgetHeight(height);
+      setBottomX(x);
       setResizing(false);
+      setStoredBounds({ x, width, height });
     },
-    [maxWidgetWidth, maxWidgetHeight, windowSize.w]
+    [maxWidgetWidth, maxWidgetHeight, windowSize.w, setStoredBounds]
   );
 
   const totalHeight = BAR_HEIGHT + (open ? widgetHeight : 0);
-  const maxX = Math.max(0, windowSize.w - widgetWidth - RIGHT_SIDEBAR_OFFSET);
+  const maxX = Math.max(0, windowSize.w - widgetWidth);
   const bottomY = windowSize.h - totalHeight;
 
   const rndPosition = useMemo(
@@ -238,10 +261,30 @@ export function GlobalChatWidget({
 
   useEffect(() => {
     const onResize = () =>
-      setWindowSize({ w: window.innerWidth, h: window.innerHeight });
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appHeighOffset });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Apply stored bounds when they become available (e.g. after async hydration)
+  useEffect(() => {
+    if (!storedBounds || hasAppliedStoredRef.current) return;
+    hasAppliedStoredRef.current = true;
+    const w = window.innerWidth;
+    const h = window.innerHeight - appHeighOffset;
+    const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
+    const maxH = Math.min(
+      WIDGET_MAX_HEIGHT,
+      Math.max(WIDGET_MIN_HEIGHT, h - 120)
+    );
+    setWidgetWidth(Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, storedBounds.width)));
+    setWidgetHeight(
+      Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, storedBounds.height))
+    );
+    setBottomX(
+      Math.max(0, Math.min(w - storedBounds.width, storedBounds.x))
+    );
+  }, [storedBounds]);
 
   useEffect(() => {
     setBottomX((prev) => Math.max(0, Math.min(maxX, prev)));
@@ -262,10 +305,12 @@ export function GlobalChatWidget({
 
   const handleRndDragStop = useCallback(
     (_e: unknown, d: { x: number }) => {
+      const x = Math.max(0, Math.min(maxX, d.x));
       setDraggingX(null);
-      setBottomX(Math.max(0, Math.min(maxX, d.x)));
+      setBottomX(x);
+      setStoredBounds({ x, width: widgetWidth, height: widgetHeight });
     },
-    [maxX]
+    [maxX, widgetWidth, widgetHeight, setStoredBounds]
   );
 
   const handleBarClick = useCallback(() => {
@@ -337,13 +382,7 @@ export function GlobalChatWidget({
     setNewDmInput('');
     setLastSelectedNameOption(null);
     setNewDmSuggestionsOpen(false);
-  }, [
-    newDmInput,
-    lastSelectedNameOption,
-    newDmNameOptions,
-    myAddress,
-    myName,
-  ]);
+  }, [newDmInput, lastSelectedNameOption, newDmNameOptions, myAddress, myName]);
 
   const showThread = selectedDirect != null || selectedGroup != null;
   const showList = !showThread;
@@ -370,9 +409,7 @@ export function GlobalChatWidget({
       maxHeight={BAR_HEIGHT + maxWidgetHeight}
       disableDragging={false}
       enableResizing={
-        open
-          ? { top: true, topLeft: true, topRight: true }
-          : false
+        open ? { top: true, topLeft: true, topRight: true } : false
       }
       resizeHandleStyles={{
         top: { height: 24, top: -12, zIndex: 25, cursor: 'ns-resize' },
@@ -430,181 +467,192 @@ export function GlobalChatWidget({
           backgroundColor: theme.palette.background.surface,
         }}
       >
-      {/* Bar: always visible at very bottom, click to expand/collapse — also Rnd drag handle */}
-      <Box
-        component="button"
-        type="button"
-        className="global-chat-widget-drag-handle"
-        onClick={handleBarClick}
-        sx={{
-          width: '100%',
-          minWidth: WIDGET_MIN_WIDTH,
-          maxWidth: widgetWidth,
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 1.5,
-          padding: '8px 14px',
-          backgroundColor: 'transparent',
-          color: theme.palette.text.primary,
-          transition: 'background-color 0.2s ease',
-          '&:hover': {
-            backgroundColor: theme.palette.action.hover,
-          },
-        }}
-        aria-label={
-          open
-            ? t('core:action.close', { postProcess: 'capitalizeFirstChar' })
-            : t('group:group.messaging', {
-                postProcess: 'capitalizeFirstChar',
-              })
-        }
-      >
+        {/* Bar: always visible at very bottom, click to expand/collapse — also Rnd drag handle. Use div to avoid nesting buttons (IconButtons inside). */}
         <Box
+          component="div"
+          role="button"
+          tabIndex={0}
+          className="global-chat-widget-drag-handle"
+          onClick={handleBarClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleBarClick();
+            }
+          }}
           sx={{
+            width: '100%',
+            minWidth: WIDGET_MIN_WIDTH,
+            maxWidth: widgetWidth,
+            border: 'none',
+            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 1.5,
-            minWidth: 0,
-            flex: 1,
+            padding: '8px 14px',
+            backgroundColor: 'transparent',
+            color: theme.palette.text.primary,
+            transition: 'background-color 0.2s ease',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
           }}
+          aria-label={
+            open
+              ? t('core:action.close', { postProcess: 'capitalizeFirstChar' })
+              : t('group:group.messaging', {
+                  postProcess: 'capitalizeFirstChar',
+                })
+          }
         >
-          <Avatar
+          <Box
             sx={{
-              width: 36,
-              height: 36,
-              flexShrink: 0,
-              backgroundColor: theme.palette.background.default,
-              color: theme.palette.text.primary,
-              boxShadow: theme.shadows[1],
-              border: `1px solid ${theme.palette.divider}`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1.5,
+              minWidth: 0,
+              flex: 1,
             }}
-            alt={myName || ''}
-            src={getUserAvatarUrl(myName)}
           >
-            {(myName || '')?.charAt(0) || '?'}
-          </Avatar>
-          <Typography
-            sx={{
-              fontFamily: 'Inter',
-              fontSize: '15px',
-              fontWeight: 600,
-              letterSpacing: '-0.02em',
-              color: theme.palette.text.primary,
-            }}
-            noWrap
-          >
-            {t('group:group.messaging', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-          {(directChatHasUnread || groupChatHasUnread) && !open && (
-            <Box
+            <Avatar
               sx={{
-                width: 12,
-                height: 12,
-                borderRadius: '50%',
-                backgroundColor: theme.palette.primary.main,
-                border: `2px solid ${theme.palette.background.paper}`,
+                width: 36,
+                height: 36,
                 flexShrink: 0,
-                boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
-                animation: 'unread-pulse 1.5s ease-in-out infinite',
-                '@keyframes unread-pulse': {
-                  '0%, 100%': {
-                    boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
-                    transform: 'scale(1)',
-                  },
-                  '50%': {
-                    boxShadow: `0 0 0 6px ${theme.palette.primary.main}30`,
-                    transform: 'scale(1.1)',
-                  },
-                },
+                backgroundColor: theme.palette.background.default,
+                color: theme.palette.text.primary,
+                boxShadow: theme.shadows[1],
+                border: `1px solid ${theme.palette.divider}`,
               }}
-              aria-hidden
-            />
-          )}
-        </Box>
-        <Box className="global-chat-widget-no-drag" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          {onClose && (
+              alt={myName || ''}
+              src={getUserAvatarUrl(myName)}
+            >
+              {(myName || '')?.charAt(0) || '?'}
+            </Avatar>
+            <Typography
+              sx={{
+                fontFamily: 'Inter',
+                fontSize: '15px',
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                color: theme.palette.text.primary,
+              }}
+              noWrap
+            >
+              {t('group:group.messaging', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            {(directChatHasUnread || groupChatHasUnread) && !open && (
+              <Box
+                sx={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  backgroundColor: theme.palette.primary.main,
+                  border: `2px solid ${theme.palette.background.paper}`,
+                  flexShrink: 0,
+                  boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
+                  animation: 'unread-pulse 1.5s ease-in-out infinite',
+                  '@keyframes unread-pulse': {
+                    '0%, 100%': {
+                      boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
+                      transform: 'scale(1)',
+                    },
+                    '50%': {
+                      boxShadow: `0 0 0 6px ${theme.palette.primary.main}30`,
+                      transform: 'scale(1.1)',
+                    },
+                  },
+                }}
+                aria-hidden
+              />
+            )}
+          </Box>
+          <Box
+            className="global-chat-widget-no-drag"
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+          >
+            {onClose && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                sx={{
+                  color: theme.palette.text.secondary,
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                    color: theme.palette.text.primary,
+                  },
+                }}
+                aria-label={t('core:action.close', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              >
+                <CloseRoundedIcon sx={{ fontSize: 22 }} />
+              </IconButton>
+            )}
             <IconButton
               size="small"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
               sx={{
-                color: theme.palette.text.secondary,
+                width: 34,
+                height: 34,
                 borderRadius: '10px',
                 cursor: 'pointer',
+                color: theme.palette.text.secondary,
                 '&:hover': {
                   backgroundColor: theme.palette.action.hover,
                   color: theme.palette.text.primary,
                 },
               }}
-              aria-label={t('core:action.close', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              aria-hidden
             >
-              <CloseRoundedIcon sx={{ fontSize: 22 }} />
+              {open ? (
+                <KeyboardArrowUpRoundedIcon
+                  sx={{ fontSize: 20, transform: 'rotate(180deg)' }}
+                />
+              ) : (
+                <KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} />
+              )}
             </IconButton>
-          )}
-          <IconButton
-            size="small"
-            sx={{
-              width: 34,
-              height: 34,
-              borderRadius: '10px',
-              cursor: 'pointer',
-              color: theme.palette.text.secondary,
-              '&:hover': {
-                backgroundColor: theme.palette.action.hover,
-                color: theme.palette.text.primary,
-              },
-            }}
-            aria-hidden
-          >
-            {open ? (
-              <KeyboardArrowUpRoundedIcon
-                sx={{ fontSize: 20, transform: 'rotate(180deg)' }}
-              />
-            ) : (
-              <KeyboardArrowUpRoundedIcon sx={{ fontSize: 18 }} />
-            )}
-          </IconButton>
+          </Box>
         </Box>
-      </Box>
 
-      {/* Panel always mounted so scroll position and state (tab, selection) are preserved when minimized */}
-      <Box
-        sx={{
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: theme.palette.background.surface,
-          borderTop: '1px solid',
-          borderColor: theme.palette.divider,
-          ...(open
-            ? {
-                height: widgetHeight,
-                minHeight: WIDGET_MIN_HEIGHT,
-                maxHeight: 'min(800px, calc(100vh - 120px))',
-                overflow: 'hidden',
-                visibility: 'visible',
-                opacity: 1,
-              }
-            : {
-                height: 0,
-                minHeight: 0,
-                maxHeight: 0,
-                overflow: 'hidden',
-                visibility: 'hidden',
-                opacity: 0,
-                pointerEvents: 'none',
-              }),
-        }}
-      >
+        {/* Panel always mounted so scroll position and state (tab, selection) are preserved when minimized */}
+        <Box
+          sx={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: theme.palette.background.surface,
+            borderTop: '1px solid',
+            borderColor: theme.palette.divider,
+            ...(open
+              ? {
+                  height: widgetHeight,
+                  minHeight: WIDGET_MIN_HEIGHT,
+                  maxHeight:
+                    `min(800px, calc(100vh - ${appHeighOffsetPx} - 120px))`,
+                  overflow: 'hidden',
+                  visibility: 'visible',
+                  opacity: 1,
+                }
+              : {
+                  height: 0,
+                  minHeight: 0,
+                  maxHeight: 0,
+                  overflow: 'hidden',
+                  visibility: 'hidden',
+                  opacity: 0,
+                  pointerEvents: 'none',
+                }),
+          }}
+        >
           {showThread ? (
             selectedDirect != null ? (
               <MiniDirectThread
@@ -831,9 +879,12 @@ export function GlobalChatWidget({
                               fullWidth
                               size="small"
                               variant="outlined"
-                              placeholder={t('auth:message.generic.name_address', {
-                                postProcess: 'capitalizeFirstChar',
-                              })}
+                              placeholder={t(
+                                'auth:message.generic.name_address',
+                                {
+                                  postProcess: 'capitalizeFirstChar',
+                                }
+                              )}
                               value={newDmInput}
                               onChange={(e) => {
                                 setNewDmInput(e.target.value);
@@ -873,7 +924,8 @@ export function GlobalChatWidget({
                                   </InputAdornment>
                                 ) : null,
                                 sx: {
-                                  backgroundColor: theme.palette.background.paper,
+                                  backgroundColor:
+                                    theme.palette.background.paper,
                                   borderRadius: '12px',
                                   fontFamily: 'Inter',
                                   fontSize: '14px',
@@ -919,123 +971,125 @@ export function GlobalChatWidget({
                             )}
                           </Box>
                           {newDmSuggestionsOpen &&
-                          (newDmNameOptions.length > 0 || newDmNameLoading) && (
-                            <Paper
-                              elevation={8}
-                              sx={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                top: '100%',
-                                marginTop: 4,
-                                maxHeight: 220,
-                                overflow: 'hidden',
-                                overflowY: 'auto',
-                                zIndex: 1400,
-                                borderRadius: '12px',
-                                border: `1px solid ${theme.palette.divider}`,
-                                boxShadow:
-                                  theme.palette.mode === 'dark'
-                                    ? '0 8px 32px rgba(0,0,0,0.4)'
-                                    : '0 8px 32px rgba(0,0,0,0.12)',
-                                '&::-webkit-scrollbar': { width: 6 },
-                                '&::-webkit-scrollbar-thumb': {
-                                  backgroundColor: theme.palette.divider,
-                                  borderRadius: 3,
-                                },
-                              }}
-                            >
-                              {newDmNameLoading &&
-                              newDmNameOptions.length === 0 ? (
-                                <Box
-                                  sx={{
-                                    py: 2,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 1,
-                                  }}
-                                >
-                                  <CircularProgress size={20} />
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
+                            (newDmNameOptions.length > 0 ||
+                              newDmNameLoading) && (
+                              <Paper
+                                elevation={8}
+                                sx={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  right: 0,
+                                  top: '100%',
+                                  marginTop: 4,
+                                  maxHeight: 220,
+                                  overflow: 'hidden',
+                                  overflowY: 'auto',
+                                  zIndex: 1400,
+                                  borderRadius: '12px',
+                                  border: `1px solid ${theme.palette.divider}`,
+                                  boxShadow:
+                                    theme.palette.mode === 'dark'
+                                      ? '0 8px 32px rgba(0,0,0,0.4)'
+                                      : '0 8px 32px rgba(0,0,0,0.12)',
+                                  '&::-webkit-scrollbar': { width: 6 },
+                                  '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: theme.palette.divider,
+                                    borderRadius: 3,
+                                  },
+                                }}
+                              >
+                                {newDmNameLoading &&
+                                newDmNameOptions.length === 0 ? (
+                                  <Box
+                                    sx={{
+                                      py: 2,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: 1,
+                                    }}
                                   >
-                                    {t('core:loading.generic', {
-                                      postProcess: 'capitalizeFirstChar',
-                                    })}
-                                  </Typography>
-                                </Box>
-                              ) : (
-                                <List disablePadding sx={{ py: 0.5 }}>
-                                  {newDmNameOptions.map((opt) => {
-                                    const label =
-                                      typeof opt === 'string'
-                                        ? opt
-                                        : opt.name;
-                                    const key =
-                                      typeof opt === 'string'
-                                        ? opt
-                                        : opt.address;
-                                    const initial = (label || '?')
-                                      .charAt(0)
-                                      .toUpperCase();
-                                    return (
-                                      <ListItem
-                                        key={key}
-                                        disablePadding
-                                        sx={{ px: 0.5 }}
-                                      >
-                                        <ListItemButton
-                                          onClick={() => {
-                                            const valueToSet =
-                                              typeof opt === 'string'
-                                                ? opt
-                                                : opt.name;
-                                            setNewDmInput(valueToSet);
-                                            setLastSelectedNameOption(opt);
-                                            setNewDmSuggestionsOpen(false);
-                                          }}
-                                          sx={{
-                                            borderRadius: '8px',
-                                            py: 1,
-                                            px: 1.25,
-                                            '&:hover': {
-                                              backgroundColor:
-                                                theme.palette.action.hover,
-                                            },
-                                          }}
+                                    <CircularProgress size={20} />
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      {t('core:loading.generic', {
+                                        postProcess: 'capitalizeFirstChar',
+                                      })}
+                                    </Typography>
+                                  </Box>
+                                ) : (
+                                  <List disablePadding sx={{ py: 0.5 }}>
+                                    {newDmNameOptions.map((opt) => {
+                                      const label =
+                                        typeof opt === 'string'
+                                          ? opt
+                                          : opt.name;
+                                      const key =
+                                        typeof opt === 'string'
+                                          ? opt
+                                          : opt.address;
+                                      const initial = (label || '?')
+                                        .charAt(0)
+                                        .toUpperCase();
+                                      return (
+                                        <ListItem
+                                          key={key}
+                                          disablePadding
+                                          sx={{ px: 0.5 }}
                                         >
-                                          <Avatar
+                                          <ListItemButton
+                                            onClick={() => {
+                                              const valueToSet =
+                                                typeof opt === 'string'
+                                                  ? opt
+                                                  : opt.name;
+                                              setNewDmInput(valueToSet);
+                                              setLastSelectedNameOption(opt);
+                                              setNewDmSuggestionsOpen(false);
+                                            }}
                                             sx={{
-                                              width: 32,
-                                              height: 32,
-                                              mr: 1.25,
-                                              fontSize: '0.875rem',
-                                              fontWeight: 600,
-                                              bgcolor: theme.palette.primary
-                                                .main,
-                                              color: theme.palette.primary
-                                                .contrastText,
+                                              borderRadius: '8px',
+                                              py: 1,
+                                              px: 1.25,
+                                              '&:hover': {
+                                                backgroundColor:
+                                                  theme.palette.action.hover,
+                                              },
                                             }}
                                           >
-                                            {initial}
-                                          </Avatar>
-                                          <ListItemText
-                                            primary={label}
-                                            primaryTypographyProps={{
-                                              fontWeight: 500,
-                                              fontSize: '0.875rem',
-                                            }}
-                                          />
-                                        </ListItemButton>
-                                      </ListItem>
-                                    );
-                                  })}
-                                </List>
-                              )}
-                            </Paper>
-                          )}
+                                            <Avatar
+                                              sx={{
+                                                width: 32,
+                                                height: 32,
+                                                mr: 1.25,
+                                                fontSize: '0.875rem',
+                                                fontWeight: 600,
+                                                bgcolor:
+                                                  theme.palette.primary.main,
+                                                color:
+                                                  theme.palette.primary
+                                                    .contrastText,
+                                              }}
+                                            >
+                                              {initial}
+                                            </Avatar>
+                                            <ListItemText
+                                              primary={label}
+                                              primaryTypographyProps={{
+                                                fontWeight: 500,
+                                                fontSize: '0.875rem',
+                                              }}
+                                            />
+                                          </ListItemButton>
+                                        </ListItem>
+                                      );
+                                    })}
+                                  </List>
+                                )}
+                              </Paper>
+                            )}
                         </Box>
                       </Box>
                     </ClickAwayListener>
@@ -1116,7 +1170,9 @@ export function GlobalChatWidget({
                               },
                             }}
                           >
-                            <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
+                            <ListItemAvatar
+                              sx={{ minWidth: 44, marginRight: 0 }}
+                            >
                               <Avatar
                                 sx={{
                                   height: 40,
@@ -1303,7 +1359,9 @@ export function GlobalChatWidget({
                               },
                             }}
                           >
-                            <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
+                            <ListItemAvatar
+                              sx={{ minWidth: 44, marginRight: 0 }}
+                            >
                               <Avatar
                                 sx={{
                                   height: 40,
@@ -1401,7 +1459,9 @@ export function GlobalChatWidget({
                               {isPrivateGroup && (
                                 <LockIcon
                                   sx={{
-                                    color: theme.palette.other?.positive ?? theme.palette.text.secondary,
+                                    color:
+                                      theme.palette.other?.positive ??
+                                      theme.palette.text.secondary,
                                     fontSize: '18px',
                                   }}
                                   titleAccess={t('group:group.private', {

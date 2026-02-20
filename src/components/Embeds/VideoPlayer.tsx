@@ -29,6 +29,8 @@ import {
 
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
+
 const VideoContainer = styled(Box)`
   align-items: center;
   display: flex;
@@ -44,7 +46,7 @@ const VideoContainer = styled(Box)`
 const VideoElement = styled('video')`
   background: rgb(33, 33, 33);
   height: auto;
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh - ${150 + appHeighOffset}px);
   width: 100%;
 `;
 

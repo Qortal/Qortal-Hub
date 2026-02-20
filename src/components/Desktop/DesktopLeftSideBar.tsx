@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
 import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
 import { executeEvent } from '../../utils/events';
+import { appHeighOffsetPx } from './CustomTitleBar';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -54,7 +55,7 @@ export const DesktopSideBar = ({
         display: 'flex',
         flexDirection: 'column',
         gap: '25px',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: 'auto', // must adapt to the chosen language
       }}
     >

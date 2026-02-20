@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect, useRef, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { MessageItem } from './MessageItem';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import { Box, Button, IconButton, Typography, useTheme } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
@@ -35,6 +35,7 @@ export const ChatList = ({
   isPrivate,
   compactScrollButton = false,
 }) => {
+  const theme = useTheme();
   const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -48,7 +49,58 @@ export const ChatList = ({
     null
   );
   const lastSeenUnreadMessageTimestamp = useRef(null);
-  console.log('showScrollButton', showScrollButton);
+
+  // Shared scroll button styling (memoized so Button sx refs stay stable)
+  const scrollButtonSx = useMemo(
+    () => ({
+      position: 'absolute' as const,
+      right: 20,
+      bottom: 20,
+      zIndex: 10,
+      borderRadius: '24px',
+      textTransform: 'none' as const,
+      fontWeight: 600,
+      fontSize: '0.875rem',
+      px: 2,
+      py: 1.25,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? '0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08)'
+          : '0 4px 14px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+      backgroundColor: theme.palette.background.paper,
+      color: theme.palette.text.primary,
+      border: `1px solid ${theme.palette.divider}`,
+      transition:
+        'box-shadow 0.2s ease, transform 0.15s ease, background-color 0.2s ease',
+      '&:hover': {
+        backgroundColor: theme.palette.action.hover,
+        boxShadow:
+          theme.palette.mode === 'dark'
+            ? `0 6px 24px rgba(0,0,0,0.5), 0 0 0 1px ${theme.palette.primary.main}40`
+            : `0 6px 20px rgba(0,0,0,0.15), 0 0 0 1px ${theme.palette.primary.light}60`,
+      },
+      '&:active': {
+        transform: 'scale(0.98)',
+      },
+    }),
+    [theme]
+  );
+  const scrollButtonCompactSx = useMemo(
+    () => ({
+      ...scrollButtonSx,
+      right: 16,
+      bottom: 16,
+      borderRadius: '50%',
+      px: 0,
+      py: 0,
+      minWidth: 40,
+      width: 40,
+      height: 40,
+      '& .MuiButton-startIcon': { margin: 0 },
+    }),
+    [scrollButtonSx]
+  );
+
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
     count: messages.length,
@@ -97,7 +149,7 @@ export const ChatList = ({
 
   // Update message list with unique signatures and tempMessages
   useEffect(() => {
-    let uniqueInitialMessagesMap = new Map();
+    const uniqueInitialMessagesMap = new Map();
 
     // Only add a message if it doesn't already exist in the Map
     initialMessages.forEach((message) => {
@@ -148,7 +200,7 @@ export const ChatList = ({
     }, 500);
   }, [initialMessages, tempMessages]);
 
-  const scrollToBottom = (initialMsgs, divideIndex) => {
+  const scrollToBottom = (initialMsgs?: unknown[], divideIndex?: number) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
       if (divideIndex) {
@@ -304,7 +356,6 @@ export const ChatList = ({
     });
   }, [messages, chatReferences, tempChatReferences]);
 
-  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
@@ -477,18 +528,19 @@ export const ChatList = ({
         {showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
+            startIcon={
+              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+            }
             sx={{
-              backgroundColor: theme.palette.other.unread,
-              border: 'none',
-              borderRadius: '20px',
-              bottom: 20,
-              color: theme.palette.text.primary,
-              cursor: 'pointer',
-              outline: 'none',
-              padding: '10px 20px',
-              position: 'absolute',
-              right: 20,
-              zIndex: 10,
+              ...scrollButtonSx,
+              backgroundColor: theme.palette.primary.dark,
+              color: theme.palette.primary.contrastText,
+              border: `1px solid ${theme.palette.primary.main}`,
+              '&:hover': {
+                ...scrollButtonSx['&:hover'],
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+              },
             }}
           >
             {t('group:action.scroll_unread_messages', {
@@ -500,47 +552,22 @@ export const ChatList = ({
         {showScrollDownButton &&
           !showScrollButton &&
           (compactScrollButton ? (
-            <IconButton
+            <Button
               onClick={() => scrollToBottom()}
-              size="small"
               aria-label={t('group:action.scroll_bottom', {
                 postProcess: 'capitalizeFirstChar',
               })}
-              sx={{
-                backgroundColor: theme.palette.background.paper,
-                border: `1px solid ${theme.palette.primary.light}`,
-                borderRadius: '50%',
-                bottom: 16,
-                boxShadow: 1,
-                color: theme.palette.primary.main,
-                position: 'absolute',
-                right: 16,
-                zIndex: 10,
-                '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
-                },
-              }}
+              sx={scrollButtonCompactSx}
             >
-              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 24 }} />
-            </IconButton>
+              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 22 }} />
+            </Button>
           ) : (
             <Button
               onClick={() => scrollToBottom()}
-              sx={{
-                backgroundColor: theme.palette.background.paper,
-                border: 'none',
-                borderRadius: '20px',
-                bottom: 20,
-                color: theme.palette.text.primary,
-                cursor: 'pointer',
-                fontSize: '16px',
-                outline: `1px solid ${theme.palette.primary.light}`,
-                padding: '10px 20px',
-                position: 'absolute',
-                right: 20,
-                textTransform: 'none',
-                zIndex: 10,
-              }}
+              startIcon={
+                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+              }
+              sx={scrollButtonSx}
             >
               {t('group:action.scroll_bottom', {
                 postProcess: 'capitalizeFirstChar',

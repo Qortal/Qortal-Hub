@@ -4,6 +4,7 @@ import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 export const AdminSpace = ({
   selectedGroup,
@@ -41,7 +42,7 @@ export const AdminSpace = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 70px)',
+        height: `calc(100vh - ${70 + appHeighOffset}px)`,
         left: hide && '-1000px',
         opacity: hide ? 0 : 1,
         overflow: 'auto',

@@ -24,9 +24,12 @@ export function WalletsView({
           boxSizing: 'border-box',
           display: 'flex',
           justifyContent: 'flex-start',
+          alignItems: 'center',
           maxWidth: '700px',
           paddingLeft: '22px',
+          paddingRight: '22px',
           width: '100%',
+          marginBottom: 4,
         }}
       >
         <Return

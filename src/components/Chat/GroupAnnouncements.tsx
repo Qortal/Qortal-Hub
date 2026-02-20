@@ -38,6 +38,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
 import { useTranslation } from 'react-i18next';
 import { TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -549,7 +550,7 @@ export const GroupAnnouncements = ({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: 'calc(100vh - 70px)',
+          height: `calc(100vh - ${70 + appHeighOffset}px)`,
           left: hide && '-1000px',
           position: hide && 'fixed',
           visibility: hide && 'hidden',
@@ -575,7 +576,7 @@ export const GroupAnnouncements = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 70px)',
+        height: `calc(100vh - ${70 + appHeighOffset}px)`,
         left: hide && '-1000px',
         position: hide && 'fixed',
         visibility: hide && 'hidden',

@@ -1,6 +1,7 @@
 import { Box } from '@mui/material';
 import { Group } from '../Group/Group';
 import { AuthenticatedProfile } from '../Profile';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 /**
  * Authenticated main layout: Group (left) + AuthenticatedProfile (right).
@@ -70,7 +71,7 @@ export function AuthenticatedShell({
       sx={{
         display: 'flex',
         flexDirection: 'row',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: '100vw',
       }}
     >

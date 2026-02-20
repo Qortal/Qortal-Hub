@@ -67,6 +67,19 @@ export const chatWidgetClosedAtom = atomWithStorage<boolean>(
   'qortal_chat_widget_closed',
   false
 );
+
+/** Persisted: global chat widget position and size. Saved only on drag/resize end. */
+export const globalChatWidgetBoundsAtom = atomWithStorage<{
+  x: number;
+  width: number;
+  height: number;
+} | null>(
+  'qortal_chat_widget_bounds',
+  null,
+  undefined,
+  { getOnInit: true }
+);
+
 export const txListAtom = atomWithReset([]);
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
