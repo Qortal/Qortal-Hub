@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import Avatar from '@mui/material/Avatar';
+import PersonIcon from '@mui/icons-material/Person';
 import { useTranslation } from 'react-i18next';
 import { useAtom } from 'jotai';
 import { authenticatePasswordAtom } from '../atoms/global';
@@ -12,6 +13,8 @@ import { CustomButton, CustomLabel, TextP } from '../styles/App-styles.ts';
 import { Spacer } from '../common/Spacer';
 import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
+import { getBaseApiReact } from '../App';
+import { getNameInfo } from './Group/groupApi';
 
 type RawWallet = {
   name?: string;
@@ -21,7 +24,6 @@ type RawWallet = {
 
 type AuthenticationFormProps = {
   rawWallet: RawWallet;
-  walletAvatarSrc: string | null;
   selectedNode: ApiKey | null;
   walletToBeDecryptedError: string;
   onBack: () => void;
@@ -30,7 +32,6 @@ type AuthenticationFormProps = {
 
 export const AuthenticationForm = ({
   rawWallet,
-  walletAvatarSrc,
   selectedNode,
   walletToBeDecryptedError,
   onBack,
@@ -42,6 +43,29 @@ export const AuthenticationForm = ({
     authenticatePasswordAtom
   );
   const passwordRef = useRef<HTMLInputElement>(null);
+  const [primaryName, setPrimaryName] = useState<string | null>(null);
+
+  // Fetch primary name for this address first; only then can we construct the avatar URL.
+  useEffect(() => {
+    if (!rawWallet?.address0) {
+      setPrimaryName(null);
+      return;
+    }
+    getNameInfo(rawWallet.address0)
+      .then((name) => setPrimaryName(name || null))
+      .catch(() => setPrimaryName(null));
+  }, [rawWallet?.address0]);
+
+  // Avatar URL is built only from the fetched primary name (each address has its own primary name).
+  const avatarSrc = primaryName
+    ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
+    : undefined;
+  const displayLabel =
+    primaryName ||
+    rawWallet?.name ||
+    rawWallet?.filename ||
+    rawWallet?.address0 ||
+    '';
 
   useEffect(() => {
     passwordRef.current?.focus();
@@ -99,15 +123,13 @@ export const AuthenticationForm = ({
           }}
         >
           <Avatar
-            alt={rawWallet?.name || ''}
-            src={walletAvatarSrc || undefined}
+            alt={displayLabel}
+            src={avatarSrc}
             sx={{ width: 40, height: 40 }}
-          />
-          <Typography>
-            {rawWallet?.name ||
-              rawWallet?.filename ||
-              rawWallet?.address0}
-          </Typography>
+          >
+            <PersonIcon sx={{ fontSize: 24 }} />
+          </Avatar>
+          <Typography>{displayLabel}</Typography>
         </Box>
 
         <Spacer height="10px" />

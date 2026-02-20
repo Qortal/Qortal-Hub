@@ -80,7 +80,7 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
           try {
             if (e.data === 'pong') {
               clearTimeout(timeoutIdRef.current);
-              groupSocketTimeoutRef.current = setTimeout(pingHeads, 45000); // Ping every 45 seconds
+              groupSocketTimeoutRef.current = setTimeout(pingHeads, 20000); // Ping every 20 seconds
             } else {
               if (!initiateRef.current) {
                 setIsLoadingGroups(false);
@@ -133,7 +133,6 @@ export const WebSocketActive = ({ myAddress, setIsLoadingGroups }) => {
           console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
           if (extStateRef.current === 'not-authenticated') return; // Don't retry after logout
           if (event.reason !== 'forced' && event.code !== 1000) {
-            console.log('hello init');
             setTimeout(() => initWebsocketMessageGroup(), 10000); // Retry after 10 seconds
           }
         };
