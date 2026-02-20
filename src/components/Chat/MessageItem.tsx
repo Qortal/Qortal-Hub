@@ -501,8 +501,10 @@ export const MessageItemComponent = ({
                       sx={{
                         color: isRepliedToMe
                           ? theme.palette.warning.main
-                          : theme.palette.primary.main,
-                        fontSize: '13px',
+                          : theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.primary.main,
+                        fontSize: '14px',
                         flexShrink: 0,
                       }}
                     />
@@ -510,8 +512,10 @@ export const MessageItemComponent = ({
                       sx={{
                         color: isRepliedToMe
                           ? theme.palette.warning.main
-                          : theme.palette.primary.main,
-                        fontSize: '12px',
+                          : theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.primary.main,
+                        fontSize: '13px',
                         fontWeight: isRepliedToMe ? 600 : 500,
                       }}
                     >
@@ -576,15 +580,21 @@ export const MessageItemComponent = ({
                   >
                     <ReplyIcon
                       sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '13px',
+                        color:
+                          theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                        fontSize: '14px',
                         flexShrink: 0,
                       }}
                     />
                     <Typography
                       sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '12px',
+                        color:
+                          theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                        fontSize: '13px',
                         fontWeight: 500,
                       }}
                     >
