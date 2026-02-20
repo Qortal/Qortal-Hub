@@ -3,11 +3,17 @@ import { Rnd } from 'react-rnd';
 import {
   Avatar,
   Box,
+  Button,
+  ClickAwayListener,
   IconButton,
+  InputAdornment,
   List,
   ListItem,
   ListItemAvatar,
+  ListItemButton,
   ListItemText,
+  Paper,
+  TextField,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -17,6 +23,9 @@ import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import LockIcon from '@mui/icons-material/Lock';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import CircularProgress from '@mui/material/CircularProgress';
 import { useTranslation } from 'react-i18next';
 import { useAtomValue } from 'jotai';
 import {
@@ -34,6 +43,8 @@ import { formatEmailDate } from './QMailMessages';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import { MiniDirectThread } from '../Chat/MiniDirectThread';
 import { MiniGroupThread } from '../Chat/MiniGroupThread';
+import { useNameSearch } from '../../hooks/useNameSearch';
+import { validateAddress } from '../../utils/validateAddress';
 
 export type ChatWidgetTab = 'messages' | 'groups';
 
@@ -67,7 +78,7 @@ export function GlobalChatWidget({
   onClose,
 }: GlobalChatWidgetProps) {
   const theme = useTheme();
-  const { t } = useTranslation(['core', 'group']);
+  const { t } = useTranslation(['core', 'group', 'auth']);
   const memberGroups = useAtomValue(memberGroupsAtom) ?? [];
   const groupsProperties = useAtomValue(groupsPropertiesAtom) ?? {};
   const groupsOwnerNames = useAtomValue(groupsOwnerNamesAtom) ?? {};
@@ -78,6 +89,16 @@ export function GlobalChatWidget({
   const [tab, setTab] = useState<ChatWidgetTab>('messages');
   const [selectedDirect, setSelectedDirect] = useState<any>(null);
   const [selectedGroup, setSelectedGroup] = useState<any>(null);
+  const [newDmInput, setNewDmInput] = useState('');
+  const [newDmSuggestionsOpen, setNewDmSuggestionsOpen] = useState(false);
+  const [lastSelectedNameOption, setLastSelectedNameOption] = useState<
+    { name: string; address: string } | string | null
+  >(null);
+  const newDmInputRef = useRef<HTMLDivElement>(null);
+  const newDmSearchQuery =
+    newDmInput.trim().length >= 1 ? newDmInput.trim() : '';
+  const { results: newDmNameResults, isLoading: newDmNameLoading } =
+    useNameSearch(newDmSearchQuery, 15);
 
   const WIDGET_MIN_WIDTH = 280;
   const WIDGET_MAX_WIDTH = 720;
@@ -87,12 +108,7 @@ export function GlobalChatWidget({
   const RIGHT_SIDEBAR_OFFSET = 56;
   const [widgetWidth, setWidgetWidth] = useState(380);
   const [widgetHeight, setWidgetHeight] = useState(560);
-  const resizeStartRef = useRef<{
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  const [resizing, setResizing] = useState(false);
 
   const [windowSize, setWindowSize] = useState(() =>
     typeof window !== 'undefined'
@@ -106,78 +122,103 @@ export function GlobalChatWidget({
   });
   const [draggingX, setDraggingX] = useState<number | null>(null);
   const didDragRef = useRef(false);
-
-  const handleResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      resizeStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        width: widgetWidth,
-        height: widgetHeight,
-      };
-      const onMouseMove = (e: MouseEvent) => {
-        const start = resizeStartRef.current;
-        if (!start) return;
-        const deltaX = e.clientX - start.x;
-        const deltaY = e.clientY - start.y;
-        const maxW = Math.min(WIDGET_MAX_WIDTH, typeof window !== 'undefined' ? window.innerWidth - RIGHT_SIDEBAR_OFFSET - 48 : WIDGET_MAX_WIDTH);
-        const maxH = Math.min(WIDGET_MAX_HEIGHT, typeof window !== 'undefined' ? window.innerHeight - 120 : WIDGET_MAX_HEIGHT);
-        setWidgetWidth((w) =>
-          Math.min(maxW, Math.max(WIDGET_MIN_WIDTH, start.width - deltaX))
-        );
-        setWidgetHeight((h) =>
-          Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height - deltaY))
-        );
-      };
-      const onMouseUp = () => {
-        resizeStartRef.current = null;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'nwse-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    },
-    [widgetWidth, widgetHeight]
+  const resizeCaptureRef = useRef<{ el: HTMLElement; pointerId: number } | null>(
+    null
   );
 
-  const handleResizeStartHeightOnly = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      resizeStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        width: widgetWidth,
-        height: widgetHeight,
-      };
-      const onMouseMove = (e: MouseEvent) => {
-        const start = resizeStartRef.current;
-        if (!start) return;
-        const deltaY = e.clientY - start.y;
-        const maxH = Math.min(WIDGET_MAX_HEIGHT, typeof window !== 'undefined' ? window.innerHeight - 120 : WIDGET_MAX_HEIGHT);
-        setWidgetHeight((h) =>
-          Math.min(maxH, Math.max(WIDGET_MIN_HEIGHT, start.height - deltaY))
-        );
-      };
-      const onMouseUp = () => {
-        resizeStartRef.current = null;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'ns-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+  const maxWidgetWidth = Math.min(
+    WIDGET_MAX_WIDTH,
+    windowSize.w - RIGHT_SIDEBAR_OFFSET - 48
+  );
+  const maxWidgetHeight = Math.min(
+    WIDGET_MAX_HEIGHT,
+    Math.max(WIDGET_MIN_HEIGHT, windowSize.h - 120)
+  );
+
+  const handleRndResizeStart = useCallback(
+    (
+      e: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
+      _dir: unknown,
+      _elementRef: HTMLElement
+    ) => {
+      setResizing(true);
+      const target = e.target as HTMLElement;
+      const native = e.nativeEvent as PointerEvent & { pointerId?: number };
+      // PointerEvent has pointerId; MouseEvent does not - use 1 as fallback for primary mouse
+      const pointerId =
+        native.pointerId ??
+        (e.type.startsWith('mouse') ? 1 : undefined);
+      if (
+        target &&
+        pointerId != null &&
+        typeof target.setPointerCapture === 'function'
+      ) {
+        try {
+          target.setPointerCapture(pointerId);
+          resizeCaptureRef.current = { el: target, pointerId };
+        } catch (_) {
+          resizeCaptureRef.current = null;
+        }
+      }
     },
-    [widgetHeight]
+    []
+  );
+
+  const handleRndResize = useCallback(
+    (
+      _e: MouseEvent | TouchEvent,
+      _dir: unknown,
+      _elementRef: HTMLElement,
+      delta: { width: number; height: number }
+    ) => {
+      setWidgetWidth((prev) =>
+        Math.min(
+          maxWidgetWidth,
+          Math.max(WIDGET_MIN_WIDTH, prev + delta.width)
+        )
+      );
+      setWidgetHeight((prev) =>
+        Math.min(
+          maxWidgetHeight,
+          Math.max(WIDGET_MIN_HEIGHT, prev + delta.height)
+        )
+      );
+    },
+    [maxWidgetWidth, maxWidgetHeight]
+  );
+
+  const handleRndResizeStop = useCallback(
+    (
+      e: MouseEvent | TouchEvent,
+      _dir: unknown,
+      elementRef: HTMLElement,
+      _delta: unknown,
+      position: { x: number; y: number }
+    ) => {
+      const capture = resizeCaptureRef.current;
+      if (capture) {
+        try {
+          capture.el.releasePointerCapture(capture.pointerId);
+        } catch (_) {
+          // ignore if already released
+        }
+        resizeCaptureRef.current = null;
+      }
+      const w = elementRef.offsetWidth;
+      const totalH = elementRef.offsetHeight;
+      const contentH = totalH - BAR_HEIGHT;
+      setWidgetWidth(Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, w)));
+      setWidgetHeight(
+        Math.min(maxWidgetHeight, Math.max(WIDGET_MIN_HEIGHT, contentH))
+      );
+      const maxXAfter = Math.max(
+        0,
+        windowSize.w - w - RIGHT_SIDEBAR_OFFSET
+      );
+      setBottomX((prev) => Math.max(0, Math.min(maxXAfter, position.x ?? prev)));
+      setResizing(false);
+    },
+    [maxWidgetWidth, maxWidgetHeight, windowSize.w]
   );
 
   const totalHeight = BAR_HEIGHT + (open ? widgetHeight : 0);
@@ -255,6 +296,55 @@ export function GlobalChatWidget({
     [memberGroups]
   );
 
+  type NameOrAddressOption = string | { name: string; address: string };
+  const newDmNameOptions = useMemo((): NameOrAddressOption[] => {
+    const trimmed = newDmInput.trim();
+    if (validateAddress(trimmed)) return [trimmed];
+    return newDmNameResults ?? [];
+  }, [newDmInput, newDmNameResults]);
+
+  const handleStartNewDm = useCallback(() => {
+    const trimmed = newDmInput.trim();
+    if (!trimmed) return;
+    let address: string;
+    let name: string;
+    if (validateAddress(trimmed)) {
+      address = trimmed;
+      name = trimmed;
+    } else if (
+      lastSelectedNameOption &&
+      typeof lastSelectedNameOption === 'object'
+    ) {
+      address = lastSelectedNameOption.address;
+      name = lastSelectedNameOption.name;
+    } else if (
+      newDmNameOptions.length > 0 &&
+      typeof newDmNameOptions[0] === 'object'
+    ) {
+      const first = newDmNameOptions[0] as { name: string; address: string };
+      address = first.address;
+      name = first.name;
+    } else {
+      return;
+    }
+    setSelectedDirect({
+      address,
+      name,
+      timestamp: Date.now(),
+      sender: myAddress,
+      senderName: myName,
+    });
+    setNewDmInput('');
+    setLastSelectedNameOption(null);
+    setNewDmSuggestionsOpen(false);
+  }, [
+    newDmInput,
+    lastSelectedNameOption,
+    newDmNameOptions,
+    myAddress,
+    myName,
+  ]);
+
   const showThread = selectedDirect != null || selectedGroup != null;
   const showList = !showThread;
 
@@ -276,21 +366,49 @@ export function GlobalChatWidget({
       size={{ width: widgetWidth, height: totalHeight }}
       minWidth={WIDGET_MIN_WIDTH}
       minHeight={BAR_HEIGHT}
-      maxWidth={windowSize.w - 48}
+      maxWidth={maxWidgetWidth}
+      maxHeight={BAR_HEIGHT + maxWidgetHeight}
       disableDragging={false}
-      enableResizing={false}
+      enableResizing={
+        open
+          ? { top: true, topLeft: true, topRight: true }
+          : false
+      }
+      resizeHandleStyles={{
+        top: { height: 24, top: -12, zIndex: 25, cursor: 'ns-resize' },
+        topLeft: {
+          width: 28,
+          height: 28,
+          left: -14,
+          top: -14,
+          zIndex: 25,
+          cursor: 'nwse-resize',
+        },
+        topRight: {
+          width: 28,
+          height: 28,
+          right: -14,
+          top: -14,
+          zIndex: 25,
+          cursor: 'nwse-resize',
+        },
+      }}
+      resizeHandleWrapperStyle={{ pointerEvents: 'auto' }}
       dragAxis="x"
       bounds="window"
       dragHandleClassName="global-chat-widget-drag-handle"
       onDragStart={handleRndDragStart}
       onDrag={handleRndDrag}
       onDragStop={handleRndDragStop}
+      onResizeStart={handleRndResizeStart}
+      onResize={handleRndResize}
+      onResizeStop={handleRndResizeStop}
       enableUserSelectHack={true}
       cancel=".global-chat-widget-no-drag"
       style={{
         zIndex: 1300,
         transition:
-          draggingX === null
+          draggingX === null && !resizing
             ? 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)'
             : 'none',
       }}
@@ -312,43 +430,6 @@ export function GlobalChatWidget({
           backgroundColor: theme.palette.background.surface,
         }}
       >
-      {/* Corner resize handles: at the very top of the widget, only when expanded */}
-      {open && (
-        <>
-          <Box
-            component="div"
-            role="button"
-            onMouseDown={handleResizeStart}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: 24,
-              height: 24,
-              zIndex: 20,
-              cursor: 'nwse-resize',
-              borderRadius: '8px 0 0 0',
-            }}
-            aria-label={t('core:action.resize', { postProcess: 'capitalizeFirstChar' })}
-          />
-          <Box
-            component="div"
-            role="button"
-            onMouseDown={handleResizeStartHeightOnly}
-            sx={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: 24,
-              height: 24,
-              zIndex: 20,
-              cursor: 'ns-resize',
-              borderRadius: '0 8px 0 0',
-            }}
-            aria-label={t('core:action.resize', { postProcess: 'capitalizeFirstChar' })}
-          />
-        </>
-      )}
       {/* Bar: always visible at very bottom, click to expand/collapse — also Rnd drag handle */}
       <Box
         component="button"
@@ -718,6 +799,246 @@ export function GlobalChatWidget({
               >
                 {tab === 'messages' && (
                   <>
+                    <ClickAwayListener
+                      onClickAway={() => setNewDmSuggestionsOpen(false)}
+                    >
+                      <Box
+                        ref={newDmInputRef}
+                        sx={{
+                          flexShrink: 0,
+                          padding: '12px 8px 8px',
+                          width: '100%',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            position: 'relative',
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 1,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                              width: '100%',
+                            }}
+                          >
+                            <TextField
+                              fullWidth
+                              size="small"
+                              variant="outlined"
+                              placeholder={t('auth:message.generic.name_address', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                              value={newDmInput}
+                              onChange={(e) => {
+                                setNewDmInput(e.target.value);
+                                setLastSelectedNameOption(null);
+                                setNewDmSuggestionsOpen(true);
+                              }}
+                              onFocus={() => setNewDmSuggestionsOpen(true)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && newDmInput.trim()) {
+                                  e.preventDefault();
+                                  handleStartNewDm();
+                                  setNewDmSuggestionsOpen(false);
+                                }
+                              }}
+                              slotProps={{
+                                htmlInput: {
+                                  'aria-label': t(
+                                    'auth:message.generic.name_address',
+                                    { postProcess: 'capitalizeFirstChar' }
+                                  ),
+                                },
+                              }}
+                              InputProps={{
+                                startAdornment: (
+                                  <InputAdornment position="start">
+                                    <AddRoundedIcon
+                                      sx={{
+                                        color: theme.palette.primary.main,
+                                        fontSize: '20px',
+                                      }}
+                                    />
+                                  </InputAdornment>
+                                ),
+                                endAdornment: newDmNameLoading ? (
+                                  <InputAdornment position="end">
+                                    <CircularProgress size={18} />
+                                  </InputAdornment>
+                                ) : null,
+                                sx: {
+                                  backgroundColor: theme.palette.background.paper,
+                                  borderRadius: '12px',
+                                  fontFamily: 'Inter',
+                                  fontSize: '14px',
+                                  '& fieldset': {
+                                    borderColor: theme.palette.divider,
+                                    borderRadius: '12px',
+                                  },
+                                  '&.Mui-focused fieldset': {
+                                    borderWidth: '2px',
+                                    borderColor: theme.palette.primary.main,
+                                  },
+                                },
+                              }}
+                            />
+                            {newDmInput.trim() && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                onClick={() => {
+                                  handleStartNewDm();
+                                  setNewDmSuggestionsOpen(false);
+                                }}
+                                disabled={
+                                  !newDmInput.trim() ||
+                                  (!validateAddress(newDmInput.trim()) &&
+                                    !lastSelectedNameOption &&
+                                    (newDmNameOptions.length === 0 ||
+                                      typeof newDmNameOptions[0] !== 'object'))
+                                }
+                                sx={{
+                                  flexShrink: 0,
+                                  borderRadius: '10px',
+                                  fontFamily: 'Inter',
+                                  fontWeight: 600,
+                                  fontSize: '13px',
+                                  textTransform: 'none',
+                                }}
+                              >
+                                {t('core:action.new.chat', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Button>
+                            )}
+                          </Box>
+                          {newDmSuggestionsOpen &&
+                          (newDmNameOptions.length > 0 || newDmNameLoading) && (
+                            <Paper
+                              elevation={8}
+                              sx={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                top: '100%',
+                                marginTop: 4,
+                                maxHeight: 220,
+                                overflow: 'hidden',
+                                overflowY: 'auto',
+                                zIndex: 1400,
+                                borderRadius: '12px',
+                                border: `1px solid ${theme.palette.divider}`,
+                                boxShadow:
+                                  theme.palette.mode === 'dark'
+                                    ? '0 8px 32px rgba(0,0,0,0.4)'
+                                    : '0 8px 32px rgba(0,0,0,0.12)',
+                                '&::-webkit-scrollbar': { width: 6 },
+                                '&::-webkit-scrollbar-thumb': {
+                                  backgroundColor: theme.palette.divider,
+                                  borderRadius: 3,
+                                },
+                              }}
+                            >
+                              {newDmNameLoading &&
+                              newDmNameOptions.length === 0 ? (
+                                <Box
+                                  sx={{
+                                    py: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 1,
+                                  }}
+                                >
+                                  <CircularProgress size={20} />
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    {t('core:loading.generic', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })}
+                                  </Typography>
+                                </Box>
+                              ) : (
+                                <List disablePadding sx={{ py: 0.5 }}>
+                                  {newDmNameOptions.map((opt) => {
+                                    const label =
+                                      typeof opt === 'string'
+                                        ? opt
+                                        : opt.name;
+                                    const key =
+                                      typeof opt === 'string'
+                                        ? opt
+                                        : opt.address;
+                                    const initial = (label || '?')
+                                      .charAt(0)
+                                      .toUpperCase();
+                                    return (
+                                      <ListItem
+                                        key={key}
+                                        disablePadding
+                                        sx={{ px: 0.5 }}
+                                      >
+                                        <ListItemButton
+                                          onClick={() => {
+                                            const valueToSet =
+                                              typeof opt === 'string'
+                                                ? opt
+                                                : opt.name;
+                                            setNewDmInput(valueToSet);
+                                            setLastSelectedNameOption(opt);
+                                            setNewDmSuggestionsOpen(false);
+                                          }}
+                                          sx={{
+                                            borderRadius: '8px',
+                                            py: 1,
+                                            px: 1.25,
+                                            '&:hover': {
+                                              backgroundColor:
+                                                theme.palette.action.hover,
+                                            },
+                                          }}
+                                        >
+                                          <Avatar
+                                            sx={{
+                                              width: 32,
+                                              height: 32,
+                                              mr: 1.25,
+                                              fontSize: '0.875rem',
+                                              fontWeight: 600,
+                                              bgcolor: theme.palette.primary
+                                                .main,
+                                              color: theme.palette.primary
+                                                .contrastText,
+                                            }}
+                                          >
+                                            {initial}
+                                          </Avatar>
+                                          <ListItemText
+                                            primary={label}
+                                            primaryTypographyProps={{
+                                              fontWeight: 500,
+                                              fontSize: '0.875rem',
+                                            }}
+                                          />
+                                        </ListItemButton>
+                                      </ListItem>
+                                    );
+                                  })}
+                                </List>
+                              )}
+                            </Paper>
+                          )}
+                        </Box>
+                      </Box>
+                    </ClickAwayListener>
                     {sortedDirects.length === 0 ? (
                       <Box
                         sx={{
