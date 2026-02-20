@@ -14,6 +14,15 @@ try {
     },
     ensureCertForBase: (baseUrl: string, apiKey?: string) =>
       ipcRenderer.invoke('cert:ensureForBase', baseUrl, apiKey),
+    // Custom title bar window controls
+    windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+    windowMaximize: () => ipcRenderer.invoke('window:maximize'),
+    windowClose: () => ipcRenderer.invoke('window:close'),
+    getWindowState: () =>
+      ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
+    getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
+    showAppMenu: (x?: number, y?: number) =>
+      ipcRenderer.invoke('window:showAppMenu', { x, y }),
   });
 
   // Expose other utility functions

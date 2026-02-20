@@ -20,7 +20,7 @@ const tooltipSlotProps = (theme: any) => ({
 });
 
 /** Right-sidebar icon to reopen the chat widget. Subscribes to atoms; only visible when widget is closed and user has groups. */
-export function ChatWidgetReopenIcon() {
+export function ChatWidgetReopenIcon({ inTitleBar = false }: { inTitleBar?: boolean } = {}) {
   const theme = useTheme();
   const { t } = useTranslation(['group']);
   const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
@@ -30,39 +30,51 @@ export function ChatWidgetReopenIcon() {
     chatWidgetClosed && (memberGroups?.length ?? 0) > 0;
   if (!show) return null;
 
+  const icon = (
+    <ButtonBase
+      onClick={() => setChatWidgetClosed(false)}
+      aria-label={t('group:group.messaging', {
+        postProcess: 'capitalizeFirstChar',
+      })}
+      sx={inTitleBar ? { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 1 } : undefined}
+    >
+      <Tooltip
+        title={
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+            }}
+          >
+            {t('group:group.messaging', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </span>
+        }
+        placement={inTitleBar ? 'bottom' : 'left'}
+        arrow
+        sx={{ fontSize: inTitleBar ? '20' : '24' }}
+        slotProps={tooltipSlotProps(theme)}
+      >
+        <ChatBubbleOutlineRoundedIcon
+          sx={{ color: theme.palette.text.secondary, fontSize: inTitleBar ? 20 : undefined }}
+        />
+      </Tooltip>
+    </ButtonBase>
+  );
+
+  if (inTitleBar) {
+    return (
+      <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+    );
+  }
   return (
     <>
       <Spacer height="20px" />
-      <ButtonBase
-        onClick={() => setChatWidgetClosed(false)}
-        aria-label={t('group:group.messaging', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      >
-        <Tooltip
-          title={
-            <span
-              style={{
-                fontSize: '14px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-              }}
-            >
-              {t('group:group.messaging', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </span>
-          }
-          placement="left"
-          arrow
-          sx={{ fontSize: '24' }}
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <ChatBubbleOutlineRoundedIcon
-            sx={{ color: theme.palette.text.secondary }}
-          />
-        </Tooltip>
-      </ButtonBase>
+      {icon}
     </>
   );
 }

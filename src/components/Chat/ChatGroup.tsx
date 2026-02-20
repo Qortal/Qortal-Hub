@@ -54,6 +54,7 @@ import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
@@ -1524,7 +1525,7 @@ export const ChatGroup = ({
                 ? 'block'
                 : 'none',
             height: '600px',
-            maxHeight: '100vh',
+            maxHeight: `calc(100vh - ${appHeighOffsetPx})`,
             maxWidth: '100vw',
             overflow: 'hidden',
             position: 'fixed',

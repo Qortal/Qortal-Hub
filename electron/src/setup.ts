@@ -192,6 +192,7 @@ export class ElectronCapacitorApp {
       width: this.mainWindowState.width,
       height: this.mainWindowState.height,
       backgroundColor: '#27282c',
+      frame: false,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
@@ -500,6 +501,47 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
     }
   }
 });
+
+// Custom title bar: window controls (minimize, maximize, close)
+ipcMain.handle('window:minimize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+});
+
+ipcMain.handle('window:close', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  const win = myCapacitorApp.getMainWindow();
+  return win != null && !win.isDestroyed() && win.isMaximized();
+});
+
+ipcMain.handle('window:getPlatform', () => process.platform);
+
+ipcMain.handle(
+  'window:showAppMenu',
+  (event, { x, y }: { x?: number; y?: number }) => {
+    const win = myCapacitorApp.getMainWindow();
+    const menu = Menu.getApplicationMenu();
+    if (menu && win && !win.isDestroyed()) {
+      menu.popup({
+        window: win,
+        x: x ?? 0,
+        y: y ?? 32,
+      });
+    }
+  }
+);
 
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog({

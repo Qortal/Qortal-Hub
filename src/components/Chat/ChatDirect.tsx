@@ -52,6 +52,7 @@ import {
   MIN_REQUIRED_QORTS,
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -848,7 +849,7 @@ export const ChatDirect = ({
         background: theme.palette.background.default,
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: '100%',
       }}
     >

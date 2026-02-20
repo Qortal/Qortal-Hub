@@ -7,7 +7,7 @@ import {
   Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { ButtonBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, useTheme } from '@mui/material';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
 import {
@@ -102,6 +102,11 @@ import type { extStates } from './types/app';
 import { AppContextInterface, QORTAL_APP_CONTEXT } from './context/AppContext';
 import { handleSetGlobalApikey } from './utils/globalApi';
 import { isMainWindow } from './constants/app';
+import type { CustomTitleBarRightNavProps } from './components/Desktop/CustomTitleBar';
+import {
+  CustomTitleBar,
+  CUSTOM_TITLE_BAR_HEIGHT,
+} from './components/Desktop/CustomTitleBar';
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -181,7 +186,9 @@ function App() {
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
-  const permissionHandlerRef = useRef<((message: any, event: MessageEvent) => void) | null>(null);
+  const permissionHandlerRef = useRef<
+    ((message: any, event: MessageEvent) => void) | null
+  >(null);
 
   const { resetAllRecoil } = useAppReset();
 
@@ -547,7 +554,11 @@ function App() {
         requestConnection?.hostname ?? '',
         requestConnection?.interactionId ?? ''
       ),
-    [responseToConnectionRequest, requestConnection?.hostname, requestConnection?.interactionId]
+    [
+      responseToConnectionRequest,
+      requestConnection?.hostname,
+      requestConnection?.interactionId,
+    ]
   );
   const onConnectionRequestDecline = useCallback(
     () =>
@@ -556,7 +567,11 @@ function App() {
         requestConnection?.hostname ?? '',
         requestConnection?.interactionId ?? ''
       ),
-    [responseToConnectionRequest, requestConnection?.hostname, requestConnection?.interactionId]
+    [
+      responseToConnectionRequest,
+      requestConnection?.hostname,
+      requestConnection?.interactionId,
+    ]
   );
 
   const getUserInfo = useCallback(async (useTimer?: boolean) => {
@@ -880,10 +895,7 @@ function App() {
     []
   );
   const onOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
-  const onOpenDrawerLookup = useCallback(
-    () => setIsOpenDrawerLookup(true),
-    []
-  );
+  const onOpenDrawerLookup = useCallback(() => setIsOpenDrawerLookup(true), []);
   const onOpenWalletsApp = useCallback(
     () => executeEvent('openWalletsApp', {}),
     []
@@ -987,7 +999,10 @@ function App() {
   const onTransferSuccessRequestClose = useCallback(() => window.close(), []);
   const onBuyOrderSubmittedClose = useCallback(() => window.close(), []);
   const onOkQortalRequestExtensionAccept = useCallback(() => {
-    const ext = messageQortalRequestExtension as { confirmCheckbox?: boolean } | null | undefined;
+    const ext = messageQortalRequestExtension as
+      | { confirmCheckbox?: boolean }
+      | null
+      | undefined;
     if (ext?.confirmCheckbox && !confirmRequestRead) return;
     onOkQortalRequestExtension('accepted');
   }, [
@@ -995,20 +1010,23 @@ function App() {
     confirmRequestRead,
     onOkQortalRequestExtension,
   ]);
-  const onOpenCoreSetup = useCallback(() => setOpenCoreSetup(true), [
-    setOpenCoreSetup,
-  ]);
+  const onOpenCoreSetup = useCallback(
+    () => setOpenCoreSetup(true),
+    [setOpenCoreSetup]
+  );
   const onShowTutorialImportantInfo = useCallback(
     () => showTutorial('important-information', true),
     [showTutorial]
   );
 
-  return (
-    <AppContainer
-      sx={{
-        height: '100vh',
-      }}
-    >
+  const isElectron =
+    typeof window !== 'undefined' &&
+    typeof (
+      window as Window & { electronAPI?: { windowMinimize?: () => unknown } }
+    ).electronAPI?.windowMinimize === 'function';
+
+  const mainContent = (
+    <>
       <PdfViewer />
 
       <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
@@ -1077,7 +1095,10 @@ function App() {
             onCheckboxChange={(checked) => {
               qortalRequestCheckbox1Ref.current = checked;
             }}
-            checkboxDefaultChecked={(messageQortalRequest as { checkbox1?: { value?: boolean } })?.checkbox1?.value}
+            checkboxDefaultChecked={
+              (messageQortalRequest as { checkbox1?: { value?: boolean } })
+                ?.checkbox1?.value
+            }
           />
         )}
 
@@ -1155,7 +1176,9 @@ function App() {
             creationStep={creationStep}
             walletToBeDownloaded={walletToBeDownloaded}
             walletToBeDownloadedPassword={walletToBeDownloadedPassword}
-            walletToBeDownloadedPasswordConfirm={walletToBeDownloadedPasswordConfirm}
+            walletToBeDownloadedPasswordConfirm={
+              walletToBeDownloadedPasswordConfirm
+            }
             walletToBeDownloadedError={walletToBeDownloadedError}
             showSeed={showSeed}
             storeAccount={storeAccount}
@@ -1267,7 +1290,11 @@ function App() {
             rawWallet={rawWallet}
             qortBalanceLoading={qortBalanceLoading}
             setOpenSnack={setOpenSnack}
-            setInfoSnack={setInfoSnack as (info: { type: string; message: string } | null) => void}
+            setInfoSnack={
+              setInfoSnack as (
+                info: { type: string; message: string } | null
+              ) => void
+            }
             onRefreshBalance={getBalanceAndUserInfoFunc}
             onOpenSendQort={onOpenSendQortAndCloseDrawer}
             onOpenRegisterName={onOpenRegisterName}
@@ -1285,13 +1312,19 @@ function App() {
           show={show}
           userInfo={userInfo}
           setOpenSnack={setOpenSnack}
-          setInfoSnack={setInfoSnack as (info: { type: string; message: string } | null) => void}
+          setInfoSnack={
+            setInfoSnack as (
+              info: { type: string; message: string } | null
+            ) => void
+          }
         />
         <BuyQortInformation balance={balance} />
       </QORTAL_APP_CONTEXT.Provider>
 
       {extState === 'create-wallet' && walletToBeDownloaded && (
-        <ButtonBase onClick={onShowTutorialImportantInfo} sx={{
+        <ButtonBase
+          onClick={onShowTutorialImportantInfo}
+          sx={{
             bottom: '25px',
             position: 'fixed',
             right: '25px',
@@ -1319,6 +1352,52 @@ function App() {
           onOpenCoreSetup={onOpenCoreSetup}
         />
       )}
+    </>
+  );
+
+  const titleBarRightNav: CustomTitleBarRightNavProps | null =
+    extState === 'authenticated' && isMainWindow
+      ? {
+          desktopViewMode,
+          extState,
+          isMainWindow,
+          userInfo,
+          onOpenSettings,
+          onOpenDrawerLookup,
+          onOpenWalletsApp,
+          onOpenDrawerProfile,
+          onLogout: logoutFunc,
+          getUserInfo,
+          onOpenMinting,
+          showTutorial,
+          onBackupWallet,
+        }
+      : null;
+
+  return (
+    <AppContainer
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        ['--electron-title-bar-height' as string]: `${CUSTOM_TITLE_BAR_HEIGHT}px`,
+      }}
+    >
+      <CustomTitleBar rightNav={titleBarRightNav} />
+
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {mainContent}
+      </Box>
     </AppContainer>
   );
 }

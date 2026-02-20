@@ -39,6 +39,7 @@ import {
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { useTranslation } from 'react-i18next';
 import { validateAddress } from '../../utils/validateAddress.ts';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 function formatAddress(str) {
   if (str.length <= 12) return str;
@@ -174,7 +175,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx})`,
             overflow: 'hidden',
             padding: '15px',
           }}

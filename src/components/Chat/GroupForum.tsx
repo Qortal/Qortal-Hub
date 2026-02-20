@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { GroupMail } from '../Group/Forum/GroupMail';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 export const GroupForum = ({
   selectedGroup,
@@ -27,7 +28,7 @@ export const GroupForum = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 70px)',
+        height: `calc(100vh - ${70 + appHeighOffset}px)`,
         left: hide && '-1000px',
         opacity: hide ? 0 : 1,
         position: hide ? 'fixed' : 'relative',

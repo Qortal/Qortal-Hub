@@ -13,6 +13,8 @@ import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -227,7 +229,7 @@ export const AppsDevMode = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx} )`,
             overflow: 'auto',
             width: 'auto',
           }}
@@ -266,7 +268,7 @@ export const AppsDevMode = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100vh',
+              height: `calc(100vh - ${appHeighOffsetPx} )`,
               overflow: 'auto',
               width: 'auto',
             }}

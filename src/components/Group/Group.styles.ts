@@ -1,6 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/system';
 import { AuthenticatedContainerInnerRight } from '../../styles/App-styles';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 /**
  * Group layout styled components using MUI's styled API.
@@ -54,7 +55,7 @@ export const AdminRowBox = styled(Box)({
 export const ChatContentBox = styled(Box)({
   display: 'flex',
   flexGrow: 1,
-  height: 'calc(100vh - 70px)',
+  height: `calc(100vh - ${70 + appHeighOffset}px)`,
   position: 'relative',
 });
 
@@ -71,7 +72,7 @@ export const NotPartGroupDiv = styled('div')({
   alignItems: 'flex-start',
   display: 'flex',
   flexDirection: 'column',
-  height: 'calc(100vh - 70px)',
+  height: `calc(100vh - ${70 + appHeighOffset}px)`,
   overflow: 'auto',
   padding: '20px',
   width: '100%',

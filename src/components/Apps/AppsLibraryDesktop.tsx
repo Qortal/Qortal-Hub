@@ -20,6 +20,8 @@ import {
   CategoriesTab,
   MyAppsTab,
 } from './AppsLibrary';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
 
 export const AppsLibraryDesktop = ({
   availableQapps,
@@ -82,7 +84,7 @@ export const AppsLibraryDesktop = ({
       sx={{
         display: !isShow && 'none',
         padding: '0px',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx} )`,
         overflow: 'hidden',
         paddingTop: '30px',
       }}

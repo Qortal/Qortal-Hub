@@ -337,7 +337,7 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-      <Spacer height="15px" />
+      <Spacer height="24px" />
       <Typography
         sx={{
           fontSize: '12px',
@@ -351,24 +351,25 @@ export const NotAuthenticated = ({
         {nodeDisplay(selectedNode?.url)}
       </Typography>
       <>
-        <Spacer height="15px" />
+        <Spacer height="24px" />
 
         <Box
           sx={{
             alignItems: 'center',
-            borderRadius: '8px',
+            borderRadius: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
-            outlineStyle: 'solid',
-            outlineWidth: '0.5px',
+            gap: '14px',
+            border: `1px solid ${theme.palette.divider}`,
             padding: '20px 30px',
+            backgroundColor: theme.palette.background.paper,
           }}
         >
           <>
             <Typography
               sx={{
                 textDecoration: 'underline',
+                fontWeight: 600,
               }}
             >
               {t('auth:advanced_users', { postProcess: 'capitalizeFirstChar' })}
