@@ -143,13 +143,16 @@ export function GlobalChatWidget({
       : { w: 800, h: 600 }
   );
   const [bottomX, setBottomX] = useState(initialBounds.x);
-  const [draggingX, setDraggingX] = useState<number | null>(null);
   const didDragRef = useRef(false);
   const hasAppliedStoredRef = useRef(false);
-  const resizeCaptureRef = useRef<{
-    el: HTMLElement;
-    pointerId: number;
-  } | null>(null);
+  const rndRef = useRef<Rnd>(null);
+  const maxXRef = useRef(0);
+  const dragStartClientXRef = useRef(0);
+  const dragStartBottomXRef = useRef(0);
+  const currentDragXRef = useRef(0);
+  const dragFixedYRef = useRef(0); // actual transform-y at drag start, held constant during drag
+  // delta from re-resizable is cumulative from resize start, so track initial size
+  const resizeInitialSizeRef = useRef({ width: widgetWidth, height: widgetHeight });
 
   const maxWidgetWidth = Math.min(
     WIDGET_MAX_WIDTH,
@@ -160,33 +163,11 @@ export function GlobalChatWidget({
     Math.max(WIDGET_MIN_HEIGHT, windowSize.h - 120)
   );
 
-  const handleRndResizeStart = useCallback(
-    (
-      e: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
-      _dir: unknown,
-      _elementRef: HTMLElement
-    ) => {
-      setResizing(true);
-      const target = e.target as HTMLElement;
-      const native = e.nativeEvent as PointerEvent & { pointerId?: number };
-      // PointerEvent has pointerId; MouseEvent does not - use 1 as fallback for primary mouse
-      const pointerId =
-        native.pointerId ?? (e.type.startsWith('mouse') ? 1 : undefined);
-      if (
-        target &&
-        pointerId != null &&
-        typeof target.setPointerCapture === 'function'
-      ) {
-        try {
-          target.setPointerCapture(pointerId);
-          resizeCaptureRef.current = { el: target, pointerId };
-        } catch (_) {
-          resizeCaptureRef.current = null;
-        }
-      }
-    },
-    []
-  );
+  // Store initial size so we can apply cumulative delta correctly (re-resizable delta is from resize start).
+  const handleRndResizeStart = useCallback(() => {
+    setResizing(true);
+    resizeInitialSizeRef.current = { width: widgetWidth, height: widgetHeight };
+  }, [widgetWidth, widgetHeight]);
 
   const handleRndResize = useCallback(
     (
@@ -195,51 +176,34 @@ export function GlobalChatWidget({
       _elementRef: HTMLElement,
       delta: { width: number; height: number }
     ) => {
-      setWidgetWidth((prev) =>
-        Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, prev + delta.width))
-      );
-      setWidgetHeight((prev) =>
-        Math.min(
-          maxWidgetHeight,
-          Math.max(WIDGET_MIN_HEIGHT, prev + delta.height)
-        )
-      );
+      const { width: initW, height: initH } = resizeInitialSizeRef.current;
+      setWidgetWidth(Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, initW + delta.width)));
+      setWidgetHeight(Math.min(maxWidgetHeight, Math.max(WIDGET_MIN_HEIGHT, initH + delta.height)));
     },
     [maxWidgetWidth, maxWidgetHeight]
   );
 
   const handleRndResizeStop = useCallback(
     (
-      e: MouseEvent | TouchEvent,
+      _e: MouseEvent | TouchEvent,
       _dir: unknown,
       elementRef: HTMLElement,
       _delta: unknown,
-      position: { x: number; y: number }
+      _position: { x: number; y: number }
     ) => {
-      const capture = resizeCaptureRef.current;
-      if (capture) {
-        try {
-          capture.el.releasePointerCapture(capture.pointerId);
-        } catch (_) {
-          // ignore if already released
-        }
-        resizeCaptureRef.current = null;
-      }
       const w = elementRef.offsetWidth;
-      const totalH = elementRef.offsetHeight;
-      const contentH = totalH - BAR_HEIGHT;
+      const h = elementRef.offsetHeight - BAR_HEIGHT;
       const width = Math.min(maxWidgetWidth, Math.max(WIDGET_MIN_WIDTH, w));
-      const height = Math.min(
-        maxWidgetHeight,
-        Math.max(WIDGET_MIN_HEIGHT, contentH)
-      );
-      const maxXAfter = Math.max(0, windowSize.w - w);
-      const x = Math.max(0, Math.min(maxXAfter, position.x ?? 0));
+      const height = Math.min(maxWidgetHeight, Math.max(WIDGET_MIN_HEIGHT, h));
       setWidgetWidth(width);
       setWidgetHeight(height);
+      const maxXAfter = Math.max(0, windowSize.w - width);
+      // Use actual element rect for x so topLeft/topRight resize picks up the correct shifted x.
+      const rect = elementRef.getBoundingClientRect();
+      const x = Math.max(0, Math.min(maxXAfter, rect.left));
       setBottomX(x);
-      setResizing(false);
       setStoredBounds({ x, width, height });
+      setResizing(false);
     },
     [maxWidgetWidth, maxWidgetHeight, windowSize.w, setStoredBounds]
   );
@@ -247,17 +211,12 @@ export function GlobalChatWidget({
   const totalHeight = BAR_HEIGHT + (open ? widgetHeight : 0);
   const maxX = Math.max(0, windowSize.w - widgetWidth);
   const bottomY = windowSize.h - totalHeight;
+  maxXRef.current = maxX;
 
   const rndPosition = useMemo(
-    (): { x: number; y: number } => ({
-      x: draggingX !== null ? draggingX : bottomX,
-      y: bottomY,
-    }),
-    [draggingX, bottomX, bottomY]
+    (): { x: number; y: number } => ({ x: bottomX, y: bottomY }),
+    [bottomX, bottomY]
   );
-
-  const positionRef = useRef(rndPosition);
-  positionRef.current = rndPosition;
 
   useEffect(() => {
     const onResize = () =>
@@ -286,31 +245,50 @@ export function GlobalChatWidget({
     );
   }, [storedBounds]);
 
+  // Clamp bottomX when window/widget size changes, but skip during resize to avoid horizontal jump.
   useEffect(() => {
+    if (resizing) return;
     setBottomX((prev) => Math.max(0, Math.min(maxX, prev)));
-  }, [windowSize, widgetWidth, maxX]);
+  }, [windowSize, widgetWidth, maxX, resizing]);
 
-  const handleRndDragStart = useCallback(() => {
-    didDragRef.current = false;
-    setDraggingX(positionRef.current.x);
-  }, []);
-
-  const handleRndDrag = useCallback(
-    (_e: unknown, d: { x: number }) => {
-      didDragRef.current = true;
-      setDraggingX(Math.max(0, Math.min(maxX, d.x)));
+  // Drag: manipulate Rnd's DOM element transform directly — zero React state changes during drag,
+  // so no re-renders fight the position. Rnd's own transition is suppressed via inline override.
+  const handleBarPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if ((e.target as HTMLElement).closest('.global-chat-widget-no-drag')) return;
+      e.preventDefault();
+      didDragRef.current = false;
+      const el = rndRef.current?.resizableElement?.current;
+      if (!el) return;
+      dragStartClientXRef.current = e.clientX;
+      dragStartBottomXRef.current = bottomX;
+      currentDragXRef.current = bottomX;
+      // Read the actual transform-y react-draggable set so we keep it exactly fixed during drag.
+      const matrix = new DOMMatrix(el.style.transform || window.getComputedStyle(el).transform);
+      dragFixedYRef.current = matrix.m42;
+      el.style.transition = 'none';
+      const onMove = (moveEvent: PointerEvent) => {
+        moveEvent.preventDefault();
+        didDragRef.current = true;
+        const dx = moveEvent.clientX - dragStartClientXRef.current;
+        const nextX = Math.max(0, Math.min(maxXRef.current, dragStartBottomXRef.current + dx));
+        currentDragXRef.current = nextX;
+        el.style.transform = `translate(${nextX}px, ${dragFixedYRef.current}px)`;
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove, true);
+        window.removeEventListener('pointerup', onUp, true);
+        window.removeEventListener('pointercancel', onUp, true);
+        const finalX = currentDragXRef.current;
+        // React's next render will overwrite our inline transform with the correct controlled value
+        setBottomX(finalX);
+        setStoredBounds({ x: finalX, width: widgetWidth, height: widgetHeight });
+      };
+      window.addEventListener('pointermove', onMove, true);
+      window.addEventListener('pointerup', onUp, true);
+      window.addEventListener('pointercancel', onUp, true);
     },
-    [maxX]
-  );
-
-  const handleRndDragStop = useCallback(
-    (_e: unknown, d: { x: number }) => {
-      const x = Math.max(0, Math.min(maxX, d.x));
-      setDraggingX(null);
-      setBottomX(x);
-      setStoredBounds({ x, width: widgetWidth, height: widgetHeight });
-    },
-    [maxX, widgetWidth, widgetHeight, setStoredBounds]
+    [bottomX, widgetWidth, widgetHeight, setStoredBounds]
   );
 
   const handleBarClick = useCallback(() => {
@@ -401,13 +379,14 @@ export function GlobalChatWidget({
 
   return (
     <Rnd
+      ref={rndRef}
       position={rndPosition}
       size={{ width: widgetWidth, height: totalHeight }}
       minWidth={WIDGET_MIN_WIDTH}
       minHeight={BAR_HEIGHT}
       maxWidth={maxWidgetWidth}
       maxHeight={BAR_HEIGHT + maxWidgetHeight}
-      disableDragging={false}
+      disableDragging={true}
       enableResizing={
         open ? { top: true, topLeft: true, topRight: true } : false
       }
@@ -431,24 +410,10 @@ export function GlobalChatWidget({
         },
       }}
       resizeHandleWrapperStyle={{ pointerEvents: 'auto' }}
-      dragAxis="x"
-      bounds="window"
-      dragHandleClassName="global-chat-widget-drag-handle"
-      onDragStart={handleRndDragStart}
-      onDrag={handleRndDrag}
-      onDragStop={handleRndDragStop}
       onResizeStart={handleRndResizeStart}
       onResize={handleRndResize}
       onResizeStop={handleRndResizeStop}
-      enableUserSelectHack={true}
-      cancel=".global-chat-widget-no-drag"
-      style={{
-        zIndex: 1300,
-        transition:
-          draggingX === null && !resizing
-            ? 'left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)'
-            : 'none',
-      }}
+      style={{ zIndex: 1300 }}
     >
       <Box
         sx={{
@@ -467,13 +432,13 @@ export function GlobalChatWidget({
           backgroundColor: theme.palette.background.surface,
         }}
       >
-        {/* Bar: always visible at very bottom, click to expand/collapse — also Rnd drag handle. Use div to avoid nesting buttons (IconButtons inside). */}
+        {/* Bar: drag handle (pointer) + click to expand/collapse. */}
         <Box
           component="div"
           role="button"
           tabIndex={0}
-          className="global-chat-widget-drag-handle"
           onClick={handleBarClick}
+          onPointerDown={handleBarPointerDown}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();

@@ -162,10 +162,10 @@
 
 .isReply p {
   color: var(--text-secondary);
-  font-size: 12px !important;
+  font-size: 16px !important;
   line-height: 1.4;
   margin: 0;
-  opacity: 0.95;
+  opacity: 1;
 }
 
 /* Reply preview: strip link/mention colors so preview stays easy on the eyes */
