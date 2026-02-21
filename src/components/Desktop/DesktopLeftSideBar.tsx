@@ -71,8 +71,15 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         sx={{
+          borderRadius: '8px',
           height: '60px',
           width: '60px',
+          ...(desktopViewMode === 'home' && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
         }}
         onClick={() => {
           goToHome();
@@ -89,6 +96,17 @@ export const DesktopSideBar = ({
       </ButtonBase>
 
       <ButtonBase
+        sx={{
+          borderRadius: '8px',
+          height: '60px',
+          width: '60px',
+          ...(isApps && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
+        }}
         onClick={() => {
           isApps
             ? executeEvent('newTabWindow', {})
@@ -98,6 +116,8 @@ export const DesktopSideBar = ({
         <IconWrapper
           label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
           disableWidth
+          noBackground
+          selected={isApps}
         >
           <AppsIcon
             color={
@@ -109,6 +129,17 @@ export const DesktopSideBar = ({
       </ButtonBase>
 
       <ButtonBase
+        sx={{
+          borderRadius: '8px',
+          height: '60px',
+          width: '60px',
+          ...(desktopViewMode === 'chat' && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
+        }}
         onClick={() => {
           setDesktopViewMode('chat');
         }}
@@ -123,6 +154,8 @@ export const DesktopSideBar = ({
           }
           label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
           disableWidth
+          noBackground
+          selected={desktopViewMode === 'chat'}
         >
           <MessagingIconFilled
             height={30}
@@ -139,6 +172,17 @@ export const DesktopSideBar = ({
 
       {isEnabledDevMode && (
         <ButtonBase
+          sx={{
+            borderRadius: '8px',
+            height: '60px',
+            width: '60px',
+            ...(desktopViewMode === 'dev' && {
+              backgroundColor: theme.palette.action.selected,
+            }),
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
           onClick={() => {
             desktopViewMode === 'dev'
               ? executeEvent('devModeNewTabWindow', {})
@@ -148,6 +192,8 @@ export const DesktopSideBar = ({
           <IconWrapper
             label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
+            noBackground
+            selected={desktopViewMode === 'dev'}
           >
             <AppsIcon
               height={30}

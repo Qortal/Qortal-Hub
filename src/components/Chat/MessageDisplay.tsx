@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import './chat.css';
 import { executeEvent } from '../../utils/events';
 import { Embed } from '../Embeds/Embed';
-import { Box, useTheme } from '@mui/material';
+import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 
 export const extractComponents = (url: string) => {
@@ -87,8 +88,12 @@ const linkify = (text) => {
   return processText(textFormatted);
 };
 
+const hasCodeBlock = (html) => /<pre[\s>]/i.test(html ?? '');
+
 export const MessageDisplay = ({ htmlContent, isReply = false }) => {
   const theme = useTheme();
+  const contentRef = useRef(null);
+  const [copied, setCopied] = useState(false);
 
   const sanitizedContent = useMemo(() => {
     return DOMPurify.sanitize(linkify(htmlContent), {
@@ -222,6 +227,27 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
     embedData = embedLink[0];
   }
 
+  const showCopyButton = hasCodeBlock(sanitizedContent) && !isReply;
+
+  const handleCopyCode = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const container = contentRef.current;
+    if (!container) return;
+    const preEls = container.querySelectorAll('.tiptap pre');
+    if (!preEls.length) return;
+    const text = Array.from(preEls)
+      .map((el) => el.textContent?.trim() ?? '')
+      .join('\n\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.warn('Copy failed', err);
+    }
+  }, []);
+
   return (
     <Box
       sx={{
@@ -229,16 +255,52 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
         '--text-secondary': theme.palette.text.secondary,
         '--background-default': theme.palette.background.default,
         '--background-secondary': theme.palette.background.paper,
+        '--code-block-bg': theme.palette.background.paper,
+        '--code-block-accent': theme.palette.primary.main,
+        '--code-block-border': theme.palette.divider,
         '--primary-main': theme.palette.primary.main,
       }}
     >
       {embedLink && <Embed embedLink={embedData} />}
-      <div
-        className={`tiptap ${isReply ? 'isReply' : ''}`}
-        dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-        onClick={handleClick}
-        onClickCapture={handleClickCapture}
-      />
+      <Box
+        ref={contentRef}
+        sx={{
+          position: 'relative',
+          '&:hover .message-copy-code-btn': { opacity: 1 },
+        }}
+      >
+        <div
+          className={`tiptap ${isReply ? 'isReply' : ''}`}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+          onClick={handleClick}
+          onClickCapture={handleClickCapture}
+        />
+        {showCopyButton && (
+          <Tooltip title={copied ? 'Copied!' : 'Copy code'} leaveDelay={0}>
+            <IconButton
+              className="message-copy-code-btn"
+              size="small"
+              onClick={handleCopyCode}
+              sx={{
+                position: 'absolute',
+                top: 4,
+                right: 4,
+                opacity: 0,
+                transition: 'opacity 0.15s ease',
+                backgroundColor: theme.palette.background.paper,
+                color: theme.palette.text.secondary,
+                '&:hover': {
+                  backgroundColor: theme.palette.background.default,
+                  color: theme.palette.text.primary,
+                },
+              }}
+              aria-label={copied ? 'Copied!' : 'Copy code'}
+            >
+              <ContentCopyIcon sx={{ fontSize: '18px' }} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
     </Box>
   );
 };

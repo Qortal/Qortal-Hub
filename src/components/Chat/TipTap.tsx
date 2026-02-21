@@ -662,6 +662,9 @@ const Tiptap = ({
         '--text-secondary': theme.palette.text.secondary,
         '--background-default': theme.palette.background.default,
         '--background-secondary': theme.palette.background.paper,
+        '--code-block-bg': theme.palette.background.paper,
+        '--code-block-accent': theme.palette.primary.main,
+        '--code-block-border': theme.palette.divider,
         ...(useComposerLook && {
           '--composer-bg': theme.palette.background.default,
           '--composer-border': theme.palette.divider,
