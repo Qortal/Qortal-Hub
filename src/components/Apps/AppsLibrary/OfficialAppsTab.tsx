@@ -30,25 +30,41 @@ const SectionHeader = styled(Box)({
 interface OfficialAppsTabProps {
   availableQapps: any[];
   myName?: string;
+  searchValue?: string;
 }
 
 export const OfficialAppsTab = ({
   availableQapps,
   myName = '',
+  searchValue = '',
 }: OfficialAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const { fetchRating } = useAppRatings();
   const fetchedAppsRef = useRef<Set<string>>(new Set());
 
-  // Filter to get only official apps
+  // Filter to get only official apps, then apply search
   const officialApps = useMemo(() => {
-    return availableQapps.filter(
+    let result = availableQapps.filter(
       (app) =>
         app.service === 'APP' &&
         officialAppList.includes(app?.name?.toLowerCase())
     );
-  }, [availableQapps]);
+
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return result;
+  }, [availableQapps, searchValue]);
 
   // Featured app list (stable so we can subscribe only to their ratings)
   const featuredAppsBase = useMemo(
