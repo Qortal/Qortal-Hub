@@ -19,6 +19,7 @@ interface MyAppsTabProps {
   myName: string;
   availableQapps: any[];
   setMode: (mode: string) => void;
+  searchValue?: string;
 }
 
 const SectionContainer = styled(Box)({
@@ -83,28 +84,53 @@ export const MyAppsTab = ({
   myName,
   availableQapps,
   setMode,
+  searchValue = '',
 }: MyAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
-  // Find user's published apps and websites
+  // Find user's published apps and websites, applying search filter
   const myApps = useMemo(() => {
     if (!myName || !availableQapps) return [];
-    return availableQapps.filter(
+    let result = availableQapps.filter(
       (app) =>
         app.name === myName &&
         (app.service === 'APP' || app.service?.includes('APP'))
     );
-  }, [myName, availableQapps]);
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+    return result;
+  }, [myName, availableQapps, searchValue]);
 
   const myWebsites = useMemo(() => {
     if (!myName || !availableQapps) return [];
-    return availableQapps.filter(
+    let result = availableQapps.filter(
       (app) =>
         app.name === myName &&
         (app.service === 'WEBSITE' || app.service?.includes('WEBSITE'))
     );
-  }, [myName, availableQapps]);
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+    return result;
+  }, [myName, availableQapps, searchValue]);
 
   if (!myName) {
     return (
