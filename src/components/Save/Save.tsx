@@ -230,7 +230,11 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
 
   return (
     <>
-      <ButtonBase onClick={handleDialogOpen} disabled={isLoading}>
+      <ButtonBase
+        onClick={handleDialogOpen}
+        disabled={isLoading}
+        sx={{ marginBottom: '2px' }}
+      >
         {isDesktop ? (
           disableWidth ? (
             <IconWrapper
@@ -251,6 +255,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                     ? '#5EB049'
                     : theme.palette.text.secondary
                 }
+                height={18}
+                width={18}
               />
             </IconWrapper>
           ) : (
@@ -260,8 +266,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                   ? '#5EB049'
                   : theme.palette.text.secondary
               }
-              height={24}
-              width={24}
+              height={18}
+              width={18}
             />
           )
         ) : (
@@ -271,6 +277,8 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 ? '#5EB049'
                 : theme.palette.text.secondary
             }
+            height={18}
+            width={18}
           />
         )}
       </ButtonBase>

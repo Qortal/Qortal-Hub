@@ -27,6 +27,9 @@ import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 
 const TITLE_BAR_HEIGHT = 32;
+/** Left offset so title-bar nav aligns with content vertical line (DesktopLeftSideBar width). */
+const TITLE_BAR_LEFT_OFFSET_PX = 70;
+const TITLE_BAR_MENU_WIDTH_PX = 40;
 export const CUSTOM_TITLE_BAR_HEIGHT = TITLE_BAR_HEIGHT;
 export const appHeighOffsetPx = `${TITLE_BAR_HEIGHT}px`;
 export const appHeighOffset = TITLE_BAR_HEIGHT;
@@ -42,6 +45,11 @@ declare global {
     };
   }
 }
+
+export const titleBarIconButtonProps = {
+  disableFocusRipple: true,
+  tabIndex: -1,
+};
 
 export type CustomTitleBarRightNavProps = {
   desktopViewMode: string;
@@ -156,11 +164,6 @@ export function CustomTitleBar(props?: {
     close: '#ff5f57',
     minimize: '#febc2e',
     maximize: '#28c840',
-  };
-
-  const titleBarIconButtonProps = {
-    disableFocusRipple: true,
-    tabIndex: -1,
   };
 
   const macWindowControls = (
@@ -383,19 +386,19 @@ export function CustomTitleBar(props?: {
     '& svg': { width: 20, height: 20 },
   };
 
-  const rightNavSection = rightNav && (
-    <Box
-      sx={{
-        alignItems: 'center',
-        display: 'flex',
-        flexShrink: 0,
-        gap: 0.5,
-        height: '100%',
-        pl: 0.5,
-        pr: 0.5,
-        ...(isElectron && { WebkitAppRegion: 'no-drag' }),
-      }}
-    >
+  const navSectionSx = {
+    alignItems: 'center' as const,
+    display: 'flex',
+    flexShrink: 0,
+    gap: 0.5,
+    height: '100%',
+    pl: 0.5,
+    pr: 0.5,
+    ...(isElectron && { WebkitAppRegion: 'no-drag' as const }),
+  };
+
+  const leftNavSection = rightNav && (
+    <Box sx={navSectionSx}>
       <Tooltip
         title={tooltipTitle(t('core:settings'))}
         placement="bottom"
@@ -457,6 +460,7 @@ export function CustomTitleBar(props?: {
           />
         </Box>
       )}
+      <Box sx={{ width: 2 }} />
       <Tooltip
         title={tooltipTitle(
           t('core:action.save', { postProcess: 'capitalizeFirstChar' })
@@ -465,7 +469,7 @@ export function CustomTitleBar(props?: {
         arrow
         slotProps={tooltipSlotProps(theme)}
       >
-        <Box sx={navCellSx} component="span">
+        <Box component="span">
           <Save
             isDesktop
             disableWidth={false}
@@ -473,24 +477,29 @@ export function CustomTitleBar(props?: {
           />
         </Box>
       </Tooltip>
+    </Box>
+  );
+
+  const rightNavSection = rightNav && (
+    <Box sx={navSectionSx}>
       <ChatWidgetReopenIcon inTitleBar />
-      {rightNav.extState === 'authenticated' && rightNav.isMainWindow && (
-        <>
-          <Tooltip
-            title={tooltipTitle(t('core:message.generic.ongoing_transactions'))}
-            placement="bottom"
-            arrow
-            slotProps={tooltipSlotProps(theme)}
-          >
-            <Box sx={navCellSx} component="span">
-              <TaskManager getUserInfo={rightNav.getUserInfo} />
-            </Box>
-          </Tooltip>
-          <Box sx={navCellSx}>
-            <GlobalActions />
+      {/* {rightNav.extState === 'authenticated' && rightNav.isMainWindow && ( */}
+      <>
+        <Tooltip
+          title={tooltipTitle(t('core:message.generic.ongoing_transactions'))}
+          placement="bottom"
+          arrow
+          slotProps={tooltipSlotProps(theme)}
+        >
+          <Box sx={navCellSx} component="span">
+            <TaskManager getUserInfo={rightNav.getUserInfo} />
           </Box>
-        </>
-      )}
+        </Tooltip>
+        <Box sx={navCellSx}>
+          <GlobalActions />
+        </Box>
+      </>
+      {/* )} */}
       <Box sx={{ width: 2 }} />
       <Tooltip
         title={tooltipTitle(t('core:minting.status_title'))}
@@ -567,6 +576,29 @@ export function CustomTitleBar(props?: {
     </Box>
   );
 
+  const titleBarVerticalDivider = (
+    <Box
+      sx={{
+        width: '1px',
+        minWidth: '1px',
+        alignSelf: 'stretch',
+        backgroundColor: borderColor,
+        my: 0.75,
+      }}
+      aria-hidden
+    />
+  );
+
+  const leftOffsetSpacer = (
+    <Box
+      sx={{
+        width: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
+        minWidth: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
+        flexShrink: 0,
+      }}
+    />
+  );
+
   return (
     <Box
       onDoubleClick={isElectron ? handleTitleBarDoubleClick : undefined}
@@ -590,6 +622,13 @@ export function CustomTitleBar(props?: {
           <>
             {macWindowControls}
             {menuButton}
+            {rightNav && (
+              <>
+                {leftOffsetSpacer}
+                {titleBarVerticalDivider}
+                {leftNavSection}
+              </>
+            )}
             <Box sx={{ flex: 1 }} />
             {rightNavSection}
             <Box sx={{ width: 52 }} />
@@ -597,24 +636,22 @@ export function CustomTitleBar(props?: {
         ) : (
           <>
             {menuButton}
+            {rightNav && (
+              <>
+                {leftOffsetSpacer}
+                {titleBarVerticalDivider}
+                {leftNavSection}
+              </>
+            )}
             <Box sx={{ flex: 1 }} />
             {rightNavSection}
-            <Box
-              sx={{
-                width: '1px',
-                minWidth: '1px',
-                alignSelf: 'stretch',
-                backgroundColor: borderColor,
-                mx: 0.5,
-                my: 0.75,
-              }}
-              aria-hidden
-            />
+            {titleBarVerticalDivider}
             {winWindowControls}
           </>
         ))}
       {!isElectron && (
         <>
+          {rightNav && <>{leftNavSection}</>}
           <Box sx={{ flex: 1 }} />
           {rightNavSection}
         </>
