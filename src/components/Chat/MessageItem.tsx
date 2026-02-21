@@ -802,7 +802,7 @@ export const MessageItemComponent = ({
                 </Tooltip>
               )}
 
-            {/* Reaction popover */}
+            {/* Reaction popover — zIndex 1400 so it appears above GlobalChatWidget (1300) */}
             {selectedReaction && (
               <Popover
                 open={Boolean(anchorEl)}
@@ -820,6 +820,9 @@ export const MessageItemComponent = ({
                   horizontal: 'center',
                 }}
                 slotProps={{
+                  root: {
+                    sx: { zIndex: 1400 },
+                  },
                   paper: {
                     sx: {
                       backgroundColor: theme.palette.background.paper,
