@@ -12,10 +12,11 @@ import { useTranslation } from 'react-i18next';
 export const IconWrapper = ({
   children,
   label,
-  color,
-  selected,
-  disableWidth,
-  customWidth,
+  color = undefined,
+  selected = false,
+  disableWidth = undefined,
+  customWidth = undefined,
+  noBackground = false,
 }) => {
   const theme = useTheme();
 
@@ -23,10 +24,11 @@ export const IconWrapper = ({
     <Box
       sx={{
         alignItems: 'center',
-        backgroundColor: selected
-          ? theme.palette.action.selected
-          : 'transparent',
-        borderRadius: '50%',
+        backgroundColor:
+          noBackground ? 'transparent' : selected
+            ? theme.palette.action.selected
+            : 'transparent',
+        borderRadius: noBackground ? 0 : '50%',
         color: color ? color : theme.palette.text.primary,
         display: 'flex',
         flexDirection: 'column',

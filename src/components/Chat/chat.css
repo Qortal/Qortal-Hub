@@ -53,31 +53,39 @@
   font-size: 1rem;
 }
 
-/* Code and preformatted text styles */
+/* Code and preformatted text styles – distinct from composer/editor bg, code-block look */
 .tiptap code {
-  background-color: var(--background-default);
-  border-radius: 0.4rem;
+  background-color: var(--code-block-bg, var(--background-default));
+  border: 1px solid var(--code-block-border, rgba(128, 128, 128, 0.25));
+  border-radius: 0.35rem;
   color: var(--text-primary);
+  font-family: 'JetBrainsMono', monospace;
   font-size: 0.85rem;
-  padding: 0.25em 0.3em;
+  padding: 0.2em 0.4em;
   text-wrap: pretty;
 }
 
 .tiptap pre {
-  background: var(--background-default);
+  background: var(--code-block-bg, var(--background-default));
+  border: 1px solid var(--code-block-border, rgba(128, 128, 128, 0.25));
+  border-left: 4px solid var(--code-block-accent, var(--primary-main, #5f9ea0));
   border-radius: 0.5rem;
   color: var(--text-primary);
   font-family: 'JetBrainsMono', monospace;
-  margin: 1.5rem 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0.75rem 0;
   padding: 0.75rem 1rem;
   outline: none;
+  overflow-x: auto;
   text-wrap: wrap;
 }
 
 .tiptap pre code {
   background: none;
-  color: inherit; /* Inherit text color from the parent pre block */
-  font-size: 0.8rem;
+  border: none;
+  color: inherit;
+  font-size: inherit;
   padding: 0;
   text-wrap: pretty;
 }
