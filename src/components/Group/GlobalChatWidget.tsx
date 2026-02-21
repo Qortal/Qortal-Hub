@@ -378,43 +378,56 @@ export function GlobalChatWidget({
   }
 
   return (
-    <Rnd
-      ref={rndRef}
-      position={rndPosition}
-      size={{ width: widgetWidth, height: totalHeight }}
-      minWidth={WIDGET_MIN_WIDTH}
-      minHeight={BAR_HEIGHT}
-      maxWidth={maxWidgetWidth}
-      maxHeight={BAR_HEIGHT + maxWidgetHeight}
-      disableDragging={true}
-      enableResizing={
-        open ? { top: true, topLeft: true, topRight: true } : false
-      }
-      resizeHandleStyles={{
-        top: { height: 24, top: -12, zIndex: 25, cursor: 'ns-resize' },
-        topLeft: {
-          width: 28,
-          height: 28,
-          left: -14,
-          top: -14,
-          zIndex: 25,
-          cursor: 'nwse-resize',
-        },
-        topRight: {
-          width: 28,
-          height: 28,
-          right: -14,
-          top: -14,
-          zIndex: 25,
-          cursor: 'nwse-resize',
-        },
-      }}
-      resizeHandleWrapperStyle={{ pointerEvents: 'auto' }}
-      onResizeStart={handleRndResizeStart}
-      onResize={handleRndResize}
-      onResizeStop={handleRndResizeStop}
-      style={{ zIndex: 1300 }}
-    >
+    <>
+      {resizing && (
+        <Box
+          aria-hidden
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1299,
+            pointerEvents: 'auto',
+            backgroundColor: 'transparent',
+          }}
+        />
+      )}
+      <Rnd
+        ref={rndRef}
+        position={rndPosition}
+        size={{ width: widgetWidth, height: totalHeight }}
+        minWidth={WIDGET_MIN_WIDTH}
+        minHeight={BAR_HEIGHT}
+        maxWidth={maxWidgetWidth}
+        maxHeight={BAR_HEIGHT + maxWidgetHeight}
+        disableDragging={true}
+        enableResizing={
+          open ? { top: true, topLeft: true, topRight: true } : false
+        }
+        resizeHandleStyles={{
+          top: { height: 24, top: -12, zIndex: 25, cursor: 'ns-resize' },
+          topLeft: {
+            width: 28,
+            height: 28,
+            left: -14,
+            top: -14,
+            zIndex: 25,
+            cursor: 'nwse-resize',
+          },
+          topRight: {
+            width: 28,
+            height: 28,
+            right: -14,
+            top: -14,
+            zIndex: 25,
+            cursor: 'nwse-resize',
+          },
+        }}
+        resizeHandleWrapperStyle={{ pointerEvents: 'auto' }}
+        onResizeStart={handleRndResizeStart}
+        onResize={handleRndResize}
+        onResizeStop={handleRndResizeStop}
+        style={{ zIndex: 1300 }}
+      >
       <Box
         sx={{
           width: '100%',
@@ -1447,5 +1460,6 @@ export function GlobalChatWidget({
         </Box>
       </Box>
     </Rnd>
+    </>
   );
 }
