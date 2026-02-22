@@ -71,7 +71,13 @@ export function getGroupId(str) {
   return match ? match[1] : null;
 }
 
-export const ListOfGroupPromotions = () => {
+export const ListOfGroupPromotions = ({
+  compact = false,
+  onCountChange,
+}: {
+  compact?: boolean;
+  onCountChange?: (count: number) => void;
+} = {}) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -374,123 +380,24 @@ export const ListOfGroupPromotions = () => {
     }
   };
 
-  return (
+  // Report count to parent when in compact mode
+  useEffect(() => {
+    onCountChange?.(promotions.length);
+  }, [promotions.length, onCountChange]);
+
+  const promotionsList = (
     <Box
       sx={{
-        alignItems: 'center',
+        bgcolor: 'background.paper',
+        borderRadius: compact ? '0' : '19px',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
-        marginTop: '20px',
-        width: '100%',
+        maxHeight: compact ? undefined : '700px',
+        maxWidth: compact ? '100%' : '90%',
+        padding: '20px 0px',
+        width: compact ? '100%' : '750px',
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          gap: '20px',
-          justifyContent: 'space-between',
-          width: '100%',
-        }}
-      >
-        <ButtonBase
-          sx={{
-            alignSelf: isExpanded && 'flex-start',
-            display: 'flex',
-            flexDirection: 'row',
-            gap: '10px',
-            justifyContent: 'flex-start',
-            padding: `0px ${isExpanded ? '24px' : '20px'}`,
-          }}
-          onClick={() => setIsExpanded((prev) => !prev)}
-        >
-          <Typography
-            sx={{
-              fontSize: '1rem',
-            }}
-          >
-            {t('group:group.promotions', {
-              postProcess: 'capitalizeFirstChar',
-            })}{' '}
-            {promotions.length > 0 && ` (${promotions.length})`}
-          </Typography>
-
-          {isExpanded ? (
-            <ExpandLessIcon
-              sx={{
-                marginLeft: 'auto',
-              }}
-            />
-          ) : (
-            <ExpandMoreIcon
-              sx={{
-                marginLeft: 'auto',
-              }}
-            />
-          )}
-        </ButtonBase>
-
-        <Box
-          style={{
-            width: '330px',
-          }}
-        />
-      </Box>
-
-      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              maxWidth: '90%',
-              padding: '0px 20px',
-              width: '750px',
-            }}
-          >
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                }}
-              ></Typography>
-
-              <Button
-                variant="contained"
-                onClick={() => setIsShowModal(true)}
-                sx={{
-                  fontSize: '12px',
-                }}
-              >
-                {t('group:action.add_promotion', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </Box>
-
-            <Spacer height="10px" />
-          </Box>
-
-          <Box
-            sx={{
-              bgcolor: 'background.paper',
-              borderRadius: '19px',
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: '700px',
-              maxWidth: '90%',
-              padding: '20px 0px',
-              width: '750px',
-            }}
-          >
             {loading && promotions.length === 0 && (
               <Box
                 sx={{
@@ -857,9 +764,109 @@ export const ListOfGroupPromotions = () => {
                 </div>
               </div>
             </div>
-          </Box>
-        </>
-      </Collapse>
+    </Box>
+  );
+
+  return (
+    <Box
+      sx={{
+        alignItems: compact ? 'stretch' : 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        marginTop: compact ? '0' : '20px',
+        width: '100%',
+      }}
+    >
+      {!compact && (
+        <Box
+          sx={{
+            display: 'flex',
+            gap: '20px',
+            justifyContent: 'space-between',
+            width: '100%',
+          }}
+        >
+          <ButtonBase
+            sx={{
+              alignSelf: isExpanded ? 'flex-start' : undefined,
+              display: 'flex',
+              flexDirection: 'row',
+              gap: '10px',
+              justifyContent: 'flex-start',
+              padding: `0px ${isExpanded ? '24px' : '20px'}`,
+            }}
+            onClick={() => setIsExpanded((prev) => !prev)}
+          >
+            <Typography sx={{ fontSize: '1rem' }}>
+              {t('group:group.promotions', { postProcess: 'capitalizeFirstChar' })}{' '}
+              {promotions.length > 0 && ` (${promotions.length})`}
+            </Typography>
+            {isExpanded ? (
+              <ExpandLessIcon sx={{ marginLeft: 'auto' }} />
+            ) : (
+              <ExpandMoreIcon sx={{ marginLeft: 'auto' }} />
+            )}
+          </ButtonBase>
+          <Box style={{ width: '330px' }} />
+        </Box>
+      )}
+
+      {/* ADD PROMOTION button — shown inline in compact mode, inside collapse in original */}
+      {compact && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '0px 20px',
+            mb: '8px',
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={() => setIsShowModal(true)}
+            sx={{ fontSize: '12px' }}
+          >
+            {t('group:action.add_promotion', { postProcess: 'capitalizeFirstChar' })}
+          </Button>
+        </Box>
+      )}
+
+      {compact ? promotionsList : (
+        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+          <>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                maxWidth: '90%',
+                padding: '0px 20px',
+                width: '750px',
+              }}
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                }}
+              >
+                <Typography sx={{ fontSize: '13px', fontWeight: 600 }} />
+                <Button
+                  variant="contained"
+                  onClick={() => setIsShowModal(true)}
+                  sx={{ fontSize: '12px' }}
+                >
+                  {t('group:action.add_promotion', { postProcess: 'capitalizeFirstChar' })}
+                </Button>
+              </Box>
+              <Spacer height="10px" />
+            </Box>
+            {promotionsList}
+          </>
+        </Collapse>
+      )}
 
       <Spacer height="20px" />
 

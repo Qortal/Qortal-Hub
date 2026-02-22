@@ -26,6 +26,19 @@ export const GroupJoinRequests = ({
   setGroupSection,
   setMobileViewMode,
   setDesktopViewMode,
+  compact = false,
+  onCountChange,
+}: {
+  myAddress: string;
+  groups?: any[];
+  setOpenManageMembers?: (v: boolean) => void;
+  getTimestampEnterChat?: () => void;
+  setSelectedGroup?: (g: any) => void;
+  setGroupSection?: (s: string) => void;
+  setMobileViewMode?: (m: string) => void;
+  setDesktopViewMode?: (m: string) => void;
+  compact?: boolean;
+  onCountChange?: (count: number) => void;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const { t } = useTranslation([
@@ -97,184 +110,169 @@ export const GroupJoinRequests = ({
     });
   }, [groupsWithJoinRequests, txList]);
 
+  // Report count to parent when in compact mode
+  const activeRequestCount = useMemo(
+    () => filteredJoinRequests?.filter((g) => g?.data?.length > 0)?.length ?? 0,
+    [filteredJoinRequests]
+  );
+
+  useEffect(() => {
+    onCountChange?.(activeRequestCount);
+  }, [activeRequestCount, onCountChange]);
+
+  const listContent = (
+    <Box
+      sx={{
+        bgcolor: 'background.paper',
+        borderRadius: compact ? '0' : '19px',
+        display: 'flex',
+        flexDirection: 'column',
+        height: compact ? 'auto' : '250px',
+        maxHeight: compact ? '300px' : undefined,
+        overflow: compact ? 'auto' : undefined,
+        padding: '20px',
+        width: compact ? '100%' : '322px',
+      }}
+    >
+      {loading && filteredJoinRequests.length === 0 && (
+        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+          <CustomLoader />
+        </Box>
+      )}
+
+      {!loading &&
+        (filteredJoinRequests.length === 0 || activeRequestCount === 0) && (
+          <Box
+            sx={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              height: '100%',
+              py: compact ? 4 : 0,
+            }}
+          >
+            <Typography
+              sx={{
+                fontSize: '11px',
+                fontWeight: 400,
+                color: 'rgba(255, 255, 255, 0.2)',
+              }}
+            >
+              {t('group:message.generic.no_display', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
+        )}
+
+      <List
+        className="scrollable-container"
+        sx={{
+          bgcolor: 'background.paper',
+          maxHeight: '300px',
+          maxWidth: compact ? '100%' : 360,
+          overflow: 'auto',
+          width: '100%',
+        }}
+      >
+        {filteredJoinRequests?.map((group) => {
+          if (group?.data?.length === 0) return null;
+          return (
+            <ListItem
+              key={group?.groupId}
+              onClick={() => {
+                setSelectedGroup(group?.group);
+                setMobileViewMode('group');
+                getTimestampEnterChat();
+                setGroupSection('announcement');
+                setOpenManageMembers(true);
+                setDesktopViewMode('chat');
+                setTimeout(() => {
+                  executeEvent('openGroupJoinRequest', {});
+                }, 300);
+              }}
+              sx={{ marginBottom: '20px' }}
+              disablePadding
+              secondaryAction={
+                <IconButton
+                  edge="end"
+                  aria-label={t('core:comment_other', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  sx={{
+                    bgcolor: theme.palette.background.default,
+                    color: theme.palette.text.primary,
+                  }}
+                >
+                  <GroupAddIcon
+                    sx={{ color: theme.palette.text.primary, fontSize: '18px' }}
+                  />
+                </IconButton>
+              }
+            >
+              <ListItemButton
+                sx={{ padding: '0px' }}
+                disableRipple
+                role={undefined}
+                dense
+              >
+                <ListItemText
+                  sx={{
+                    '& .MuiTypography-root': { fontSize: '13px', fontWeight: 400 },
+                  }}
+                  primary={t('group:message.generic.pending_join_requests', {
+                    group: group?.group?.groupName,
+                    count: group?.data?.length,
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
+      </List>
+    </Box>
+  );
+
   return (
     <Box
       sx={{
         width: '100%',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
+        alignItems: compact ? 'stretch' : 'center',
       }}
     >
-      <ButtonBase
-        sx={{
-          width: '322px',
-          display: 'flex',
-          flexDirection: 'row',
-          padding: '0px 20px',
-          gap: '10px',
-          justifyContent: 'flex-start',
-        }}
-        onClick={() => setIsExpanded((prev) => !prev)}
-      >
-        <Typography
+      {!compact && (
+        <ButtonBase
           sx={{
-            fontSize: '1rem',
-          }}
-        >
-          {t('group:join_requests', { postProcess: 'capitalizeFirstChar' })}{' '}
-          {filteredJoinRequests?.filter((group) => group?.data?.length > 0)
-            ?.length > 0 &&
-            ` (${filteredJoinRequests?.filter((group) => group?.data?.length > 0)?.length})`}
-        </Typography>
-
-        {isExpanded ? (
-          <ExpandLessIcon
-            sx={{
-              marginLeft: 'auto',
-            }}
-          />
-        ) : (
-          <ExpandMoreIcon
-            sx={{
-              marginLeft: 'auto',
-            }}
-          />
-        )}
-      </ButtonBase>
-
-      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <Box
-          sx={{
-            bgcolor: 'background.paper',
-            borderRadius: '19px',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '250px',
-            padding: '20px',
             width: '322px',
+            display: 'flex',
+            flexDirection: 'row',
+            padding: '0px 20px',
+            gap: '10px',
+            justifyContent: 'flex-start',
           }}
+          onClick={() => setIsExpanded((prev) => !prev)}
         >
-          {loading && filteredJoinRequests.length === 0 && (
-            <Box
-              sx={{
-                width: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-              }}
-            >
-              <CustomLoader />
-            </Box>
+          <Typography sx={{ fontSize: '1rem' }}>
+            {t('group:join_requests', { postProcess: 'capitalizeFirstChar' })}{' '}
+            {activeRequestCount > 0 && ` (${activeRequestCount})`}
+          </Typography>
+          {isExpanded ? (
+            <ExpandLessIcon sx={{ marginLeft: 'auto' }} />
+          ) : (
+            <ExpandMoreIcon sx={{ marginLeft: 'auto' }} />
           )}
+        </ButtonBase>
+      )}
 
-          {!loading &&
-            (filteredJoinRequests.length === 0 ||
-              filteredJoinRequests?.filter((group) => group?.data?.length > 0)
-                .length === 0) && (
-              <Box
-                sx={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  height: '100%',
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 400,
-                    color: 'rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  {t('group:message.generic.no_display', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-            )}
-
-          <List
-            className="scrollable-container"
-            sx={{
-              bgcolor: 'background.paper',
-              maxHeight: '300px',
-              maxWidth: 360,
-              overflow: 'auto',
-              width: '100%',
-            }}
-          >
-            {filteredJoinRequests?.map((group) => {
-              if (group?.data?.length === 0) return null;
-              return (
-                <ListItem
-                  key={group?.groupId}
-                  onClick={() => {
-                    setSelectedGroup(group?.group);
-                    setMobileViewMode('group');
-                    getTimestampEnterChat();
-                    setGroupSection('announcement');
-                    setOpenManageMembers(true);
-                    setDesktopViewMode('chat');
-                    setTimeout(() => {
-                      executeEvent('openGroupJoinRequest', {});
-                    }, 300);
-                  }}
-                  sx={{
-                    marginBottom: '20px',
-                  }}
-                  disablePadding
-                  secondaryAction={
-                    <IconButton
-                      edge="end"
-                      aria-label={t('core:comment_other', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      sx={{
-                        bgcolor: theme.palette.background.default,
-                        color: theme.palette.text.primary,
-                      }}
-                    >
-                      <GroupAddIcon
-                        sx={{
-                          color: theme.palette.text.primary,
-                          fontSize: '18px',
-                        }}
-                      />
-                    </IconButton>
-                  }
-                >
-                  <ListItemButton
-                    sx={{
-                      padding: '0px',
-                    }}
-                    disableRipple
-                    role={undefined}
-                    dense
-                  >
-                    <ListItemText
-                      sx={{
-                        '& .MuiTypography-root': {
-                          fontSize: '13px',
-                          fontWeight: 400,
-                        },
-                      }}
-                      primary={t(
-                        'group:message.generic.pending_join_requests',
-                        {
-                          group: group?.group?.groupName,
-                          count: group?.data?.length,
-                          postProcess: 'capitalizeFirstChar',
-                        }
-                      )}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              );
-            })}
-          </List>
-        </Box>
-      </Collapse>
+      {compact ? listContent : (
+        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+          {listContent}
+        </Collapse>
+      )}
     </Box>
   );
 };

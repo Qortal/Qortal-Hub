@@ -26,6 +26,7 @@ import {
 } from 'framer-motion';
 
 type HomeTab = 'user' | 'developer';
+type ActivityTab = 'requests' | 'invites' | 'promotions';
 
 export const HomeDesktop = ({
   refreshHomeDataFunc,
@@ -46,11 +47,15 @@ export const HomeDesktop = ({
   const name = userInfo?.name;
 
   const [activeTab, setActiveTab] = useState<HomeTab>('user');
+  const [activityTab, setActivityTab] = useState<ActivityTab>('promotions');
+  const [requestsCount, setRequestsCount] = useState(0);
+  const [invitesCount, setInvitesCount] = useState(0);
+  const [promotionsCount, setPromotionsCount] = useState(0);
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
 
   const reduce = useReducedMotion();
-  const { t } = useTranslation(['core', 'tutorial']);
+  const { t } = useTranslation(['core', 'group', 'tutorial']);
   const theme = useTheme();
 
   useEffect(() => {
@@ -177,54 +182,141 @@ export const HomeDesktop = ({
                         borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '8px',
+                        gap: '12px',
                         padding: '16px 20px',
                         width: '100%',
                       }}
                     >
+                      {/* Section title */}
                       <Box
                         sx={{
                           color: theme.palette.text.primary,
                           fontSize: '1rem',
                           fontWeight: 600,
-                          mb: '4px',
                         }}
                       >
                         {t('tutorial:home.group_activity', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Box>
+
+                      {/* Tab bar */}
                       <Box
                         sx={{
+                          alignSelf: 'center',
+                          bgcolor: theme.palette.background.default,
+                          borderRadius: '50px',
                           display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '8px',
+                          gap: '4px',
+                          padding: '4px',
                         }}
                       >
-                        <Box sx={{ flex: 1, minWidth: '220px' }}>
-                          <GroupJoinRequests
-                            setGroupSection={setGroupSection}
-                            setSelectedGroup={setSelectedGroup}
-                            getTimestampEnterChat={getTimestampEnterChat}
-                            setOpenManageMembers={setOpenManageMembers}
-                            myAddress={myAddress}
-                            groups={groups}
-                            setMobileViewMode={setMobileViewMode}
-                            setDesktopViewMode={setDesktopViewMode}
-                          />
-                        </Box>
-                        <Box sx={{ flex: 1, minWidth: '220px' }}>
-                          <GroupInvites
-                            setOpenAddGroup={setOpenAddGroup}
-                            myAddress={myAddress}
-                            groups={groups}
-                            setMobileViewMode={setMobileViewMode}
-                          />
-                        </Box>
-                        <Box sx={{ flex: 1, minWidth: '220px' }}>
-                          <ListOfGroupPromotions />
-                        </Box>
+                        {(
+                          [
+                            {
+                              key: 'requests' as ActivityTab,
+                              label: t('group:join_requests', { postProcess: 'capitalizeFirstChar' }),
+                              count: requestsCount,
+                            },
+                            {
+                              key: 'invites' as ActivityTab,
+                              label: t('group:group.invites', { postProcess: 'capitalizeFirstChar' }),
+                              count: invitesCount,
+                            },
+                            {
+                              key: 'promotions' as ActivityTab,
+                              label: t('group:group.promotions', { postProcess: 'capitalizeFirstChar' }),
+                              count: promotionsCount,
+                            },
+                          ]
+                        ).map(({ key, label, count }) => (
+                          <Button
+                            key={key}
+                            onClick={() => setActivityTab(key)}
+                            size="small"
+                            disableElevation
+                            sx={{
+                              bgcolor:
+                                activityTab === key
+                                  ? theme.palette.primary.main
+                                  : 'transparent',
+                              borderRadius: '50px',
+                              color:
+                                activityTab === key
+                                  ? theme.palette.primary.contrastText
+                                  : theme.palette.text.secondary,
+                              fontSize: '0.82rem',
+                              fontWeight: activityTab === key ? 600 : 400,
+                              px: 2,
+                              textTransform: 'none',
+                              whiteSpace: 'nowrap',
+                              '&:hover': {
+                                bgcolor:
+                                  activityTab === key
+                                    ? theme.palette.primary.dark
+                                    : theme.palette.action.hover,
+                              },
+                            }}
+                          >
+                            {label}
+                            {count > 0 && (
+                              <Box
+                                component="span"
+                                sx={{
+                                  bgcolor:
+                                    activityTab === key
+                                      ? 'rgba(255,255,255,0.25)'
+                                      : theme.palette.primary.main,
+                                  borderRadius: '50px',
+                                  color:
+                                    activityTab === key
+                                      ? theme.palette.primary.contrastText
+                                      : theme.palette.primary.contrastText,
+                                  display: 'inline-block',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  lineHeight: 1,
+                                  ml: '6px',
+                                  px: '6px',
+                                  py: '2px',
+                                }}
+                              >
+                                {count}
+                              </Box>
+                            )}
+                          </Button>
+                        ))}
                       </Box>
+
+                      {/* Active tab content */}
+                      {activityTab === 'requests' && (
+                        <GroupJoinRequests
+                          compact
+                          onCountChange={setRequestsCount}
+                          setGroupSection={setGroupSection}
+                          setSelectedGroup={setSelectedGroup}
+                          getTimestampEnterChat={getTimestampEnterChat}
+                          setOpenManageMembers={setOpenManageMembers}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                          setDesktopViewMode={setDesktopViewMode}
+                        />
+                      )}
+                      {activityTab === 'invites' && (
+                        <GroupInvites
+                          compact
+                          onCountChange={setInvitesCount}
+                          setOpenAddGroup={setOpenAddGroup}
+                          myAddress={myAddress}
+                        />
+                      )}
+                      {activityTab === 'promotions' && (
+                        <ListOfGroupPromotions
+                          compact
+                          onCountChange={setPromotionsCount}
+                        />
+                      )}
                     </Box>
                   )}
 
