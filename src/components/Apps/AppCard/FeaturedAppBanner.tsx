@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -123,7 +123,21 @@ interface FeaturedAppBannerProps {
   featuredApps: any[];
 }
 
-export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
+function featuredAppsAreEqual(
+  prev: FeaturedAppBannerProps,
+  next: FeaturedAppBannerProps
+): boolean {
+  if (prev.featuredApps === next.featuredApps) return true;
+  const a = prev.featuredApps;
+  const b = next.featuredApps;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every(
+    (app: any, i: number) =>
+      b[i]?.name === app?.name && b[i]?.service === app?.service
+  );
+}
+
+const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const [startIndex, setStartIndex] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -162,24 +176,24 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const canGoBack = startIndex > 0;
   const canGoForward = startIndex + visibleCount < featuredApps.length;
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     setStartIndex((prev) => Math.max(0, prev - 1));
-  };
+  }, []);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setStartIndex((prev) =>
       Math.min(featuredApps.length - visibleCount, prev + 1)
     );
-  };
+  }, [featuredApps.length, visibleCount]);
 
-  const handleOpenApp = (app: any, e: React.MouseEvent) => {
+  const handleOpenApp = useCallback((app: any, e: React.MouseEvent) => {
     e.stopPropagation();
     executeEvent('addTab', { data: app });
-  };
+  }, []);
 
-  const handleViewDetails = (app: any) => {
+  const handleViewDetails = useCallback((app: any) => {
     executeEvent('selectedAppInfo', { data: app });
-  };
+  }, []);
 
   return (
     <CarouselContainer>
@@ -277,3 +291,10 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
     </CarouselContainer>
   );
 };
+
+FeaturedAppBannerInner.displayName = 'FeaturedAppBanner';
+
+export const FeaturedAppBanner = memo(
+  FeaturedAppBannerInner,
+  featuredAppsAreEqual
+);

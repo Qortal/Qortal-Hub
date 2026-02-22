@@ -50,7 +50,9 @@
     "member_number": "liikmete arv",
     "member_other": "liikmed",
     "messaging": "sõnumivahetus",
+    "dm": "DM",
     "name": "rühma nimi",
+    "no_groups_found": "rühmad ei leitud",
     "open": "avatud (avalik)",
     "private": "privaatrühm",
     "promotions": "Uute Grupide Soovitused",
@@ -63,6 +65,8 @@
   "join_requests": "liitumistaotlused",
   "last_message": "viimane sõnum",
   "last_message_date": "viimane sõnum: {{date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Sina",
   "latest_mails": "viimased Q-kirjad",
   "message": {
     "generic": {

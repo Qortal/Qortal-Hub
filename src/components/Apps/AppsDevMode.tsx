@@ -1,4 +1,6 @@
 import { createRef, useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, hasUnreadGroupsAtom } from '../../atoms/global';
 import { AppsDevModeHome } from './AppsDevModeHome';
 import { Spacer } from '../../common/Spacer';
 import {
@@ -11,6 +13,8 @@ import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
 import { Box, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -18,19 +22,20 @@ export const AppsDevMode = ({
   mode,
   setMode,
   show,
-  myName,
   goToHome,
   setDesktopSideView,
   hasUnreadDirects,
   isDirects,
   isGroups,
-  hasUnreadGroups,
   toggleSideViewGroups,
   toggleSideViewDirects,
   setDesktopViewMode,
   desktopViewMode,
   isApps,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
+  const myName = userInfo?.name;
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -224,7 +229,7 @@ export const AppsDevMode = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx} )`,
             overflow: 'auto',
             width: 'auto',
           }}
@@ -263,7 +268,7 @@ export const AppsDevMode = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100vh',
+              height: `calc(100vh - ${appHeighOffsetPx} )`,
               overflow: 'auto',
               width: 'auto',
             }}

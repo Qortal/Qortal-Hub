@@ -22,6 +22,7 @@
     "choose_name": "Choisissez un nom",
     "close": "fermer",
     "close_chat": "Fermer le chat direct",
+    "confirm": "confirmer",
     "continue": "continuer",
     "continue_logout": "continuer à se déconnecter",
     "copy_link": "Copier le lien",
@@ -50,7 +51,6 @@
     "join": "rejoindre",
     "leave_comment": "laisser un commentaire",
     "load_announcements": "Chargez des annonces plus anciennes",
-    "login": "se connecter",
     "logout": "déconnexion",
     "new": {
       "chat": "nouveau chat",
@@ -78,6 +78,8 @@
     "save_disk": "Économiser sur le disque",
     "search": "recherche",
     "search_apps": "Rechercher des applications",
+    "search_apps_or_link": "Rechercher des applications ou entrer un lien qortal://",
+    "open_as_qortal_link": "Ouvrir comme lien Qortal",
     "search_groups": "rechercher des groupes",
     "search_chat_text": "Texte de chat de recherche",
     "see_qr_code": "Voir le code QR",
@@ -172,6 +174,7 @@
   "last_height": "dernière hauteur",
   "level": "niveau",
   "library": "bibliothèque",
+  "explore": "Explorer",
   "list": {
     "bans": "liste des interdictions",
     "groups": "liste des groupes",
@@ -424,6 +427,7 @@
     "recently_updated": "mises à jour récemment"
   },
   "tabs": {
+    "add_private": "+ app privé",
     "categories": "catégories",
     "community_apps": "apps communautaires",
     "my_apps": "mes apps",

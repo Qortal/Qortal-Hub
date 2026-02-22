@@ -21,6 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
+import { log as loggerLog, error as loggerError } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -39,6 +40,12 @@ import {
   stopCore,
 } from './core';
 import {
+  ensureCertForBase,
+  isLocalPrivateHost,
+  persistedLocalNodeCaExists,
+  setLocalNodeHttpsReady,
+} from './local-https-cert';
+import {
   startVideoServer,
   stopVideoServer,
   getVideoServerPort,
@@ -52,7 +59,9 @@ const path = require('path');
 const defaultDomains = [
   'capacitor-electron://-',
   'http://127.0.0.1:12391',
+  'https://127.0.0.1:12391',
   'ws://127.0.0.1:12391',
+  'wss://127.0.0.1:12391',
   'https://ext-node.qortal.link',
   'wss://ext-node.qortal.link',
   'https://appnode.qortal.org',
@@ -183,6 +192,7 @@ export class ElectronCapacitorApp {
       width: this.mainWindowState.width,
       height: this.mainWindowState.height,
       backgroundColor: '#27282c',
+      frame: false,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
@@ -315,6 +325,7 @@ export class ElectronCapacitorApp {
         return { action: 'allow' };
       }
     });
+
     this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
       if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
         event.preventDefault();
@@ -348,10 +359,29 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
+      const expandedDomains = [...domainHolder.allowedDomains];
+      for (const d of domainHolder.allowedDomains) {
+        try {
+          const url = new URL(d);
+          if (isLocalPrivateHost(url.hostname)) {
+            const hostPort = url.port
+              ? `${url.hostname}:${url.port}`
+              : url.hostname;
+            expandedDomains.push(
+              `http://${hostPort}`,
+              `https://${hostPort}`,
+              `ws://${hostPort}`,
+              `wss://${hostPort}`
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const allowedSources = [
         "'self'",
         customScheme,
-        ...domainHolder.allowedDomains,
+        ...new Set(expandedDomains),
       ];
       const frameSources = [
         "'self'",
@@ -472,6 +502,47 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   }
 });
 
+// Custom title bar: window controls (minimize, maximize, close)
+ipcMain.handle('window:minimize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+});
+
+ipcMain.handle('window:close', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  const win = myCapacitorApp.getMainWindow();
+  return win != null && !win.isDestroyed() && win.isMaximized();
+});
+
+ipcMain.handle('window:getPlatform', () => process.platform);
+
+ipcMain.handle(
+  'window:showAppMenu',
+  (event, { x, y }: { x?: number; y?: number }) => {
+    const win = myCapacitorApp.getMainWindow();
+    const menu = Menu.getApplicationMenu();
+    if (menu && win && !win.isDestroyed()) {
+      menu.popup({
+        window: win,
+        x: x ?? 0,
+        y: y ?? 32,
+      });
+    }
+  }
+);
+
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -497,7 +568,7 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 
     return fileBuffer;
   } catch (error) {
-    console.error('Error reading file:', error.message);
+    loggerError('Error reading file:', error.message);
     return null; // Return null on error
   }
 });
@@ -509,7 +580,7 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
       properties: ['openDirectory'],
     });
     if (canceled || filePaths.length === 0) {
-      console.error('No directory selected');
+      loggerError('No directory selected');
       return null;
     }
 
@@ -551,7 +622,7 @@ ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
 
     return fs.promises.readFile(filePath, 'utf-8');
   } catch (err) {
-    console.error(`Error in walletStorage:read for "${fileName}"`, err);
+    loggerError(`Error in walletStorage:read for "${fileName}"`, err);
     return null;
   }
 });
@@ -566,7 +637,7 @@ ipcMain.handle(
       await fs.promises.writeFile(filePath, contents, 'utf-8');
       return true;
     } catch (err) {
-      console.error(`Error in walletStorage:write for "${fileName}"`, err);
+      loggerError(`Error in walletStorage:write for "${fileName}"`, err);
       throw err;
     }
   }
@@ -599,7 +670,7 @@ ipcMain.handle(
         filePath: result.filePath,
       };
     } catch (err) {
-      console.error('Error in file:startStreamSave', err);
+      loggerError('Error in file:startStreamSave', err);
       throw err;
     }
   }
@@ -612,7 +683,7 @@ ipcMain.handle(
     try {
       const buffer = Buffer.from(chunk);
       const mode = append ? 'append' : 'write';
-      console.log(
+      loggerLog(
         `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
       );
 
@@ -624,11 +695,11 @@ ipcMain.handle(
 
       // Get file size after write to verify
       const stats = await fs.promises.stat(filePath);
-      console.log(`[IPC] File size after write: ${stats.size} bytes`);
+      loggerLog(`[IPC] File size after write: ${stats.size} bytes`);
 
       return true;
     } catch (err) {
-      console.error('[IPC] Error writing chunk to', filePath, ':', err);
+      loggerError('[IPC] Error writing chunk to', filePath, ':', err);
       throw err;
     }
   }
@@ -640,7 +711,7 @@ ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
     await fs.promises.unlink(filePath);
     return true;
   } catch (err) {
-    console.error('Error deleting file', filePath, err);
+    loggerError('Error deleting file', filePath, err);
     // Don't throw - file might not exist
     return false;
   }
@@ -699,7 +770,7 @@ ipcMain.handle('coreSetup:isCoreRunning', async () => {
         }
       }
     } catch (error) {
-      console.error(error);
+      loggerError(error);
     }
     const running = await isCoreRunning();
     if (running) {
@@ -897,6 +968,22 @@ ipcMain.handle('coreSetup:getApiKey', async () => {
     return running;
   } catch (error) {}
 });
+
+ipcMain.handle(
+  'cert:ensureForBase',
+  async (_event, baseUrl: string, apiKey?: string) => {
+    const result = await ensureCertForBase(baseUrl, apiKey);
+    if (result.success) {
+      setLocalNodeHttpsReady(true);
+      session.defaultSession.clearCache().catch(() => {});
+      const win = myCapacitorApp.getMainWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.session.clearCache().catch(() => {});
+      }
+    }
+    return result;
+  }
+);
 ipcMain.handle('coreSetup:resetApikey', async () => {
   try {
     const running = await resetApikey();
@@ -917,14 +1004,14 @@ ipcMain.handle('coreSetup:stopCore', async () => {
   try {
     return await stopCore();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 ipcMain.handle('coreSetup:bootstrap', async () => {
   try {
     return await bootstrap();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 
@@ -968,7 +1055,7 @@ ipcMain.handle('videoServer:start', async (_event, port?: number) => {
     const serverPort = await startVideoServer(port);
     return { success: true, port: serverPort };
   } catch (error) {
-    console.error('Failed to start video server:', error);
+    loggerError('Failed to start video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });
@@ -978,7 +1065,7 @@ ipcMain.handle('videoServer:stop', async () => {
     await stopVideoServer();
     return { success: true };
   } catch (error) {
-    console.error('Failed to stop video server:', error);
+    loggerError('Failed to stop video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });

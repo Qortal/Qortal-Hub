@@ -1,6 +1,7 @@
 import { forwardRef } from 'react';
 import { AppViewer } from './AppViewer';
 import Frame from 'react-frame-component';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 type AppViewerContainerProps = {
   app: any;
@@ -43,7 +44,7 @@ const AppViewerContainer = forwardRef<
       }
       style={{
         border: 'none',
-        height: customHeight || '100vh',
+        height: customHeight || `calc(100vh - ${appHeighOffsetPx})`,
         left: (!isSelected || hide) && '-200vw',
         overflow: 'hidden',
         position: (!isSelected || hide) && 'fixed',

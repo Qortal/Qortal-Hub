@@ -23,13 +23,16 @@ import {
   ChangeEvent,
   Fragment,
   useCallback,
-  useContext,
   useEffect,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_APP_CONTEXT } from '../../App';
-import { enabledDevModeAtom } from '../../atoms/global';
+import { useSetAtom } from 'jotai';
+import {
+  enabledDevModeAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+} from '../../atoms/global';
 import { walletVersion } from '../../background/background.ts';
 import { Spacer } from '../../common/Spacer';
 import { TransitionUp } from '../../common/Transitions.tsx';
@@ -237,8 +240,8 @@ const ExportPrivateKey = ({ rawWallet }) => {
   const [password, setPassword] = useState('');
   const [privateKey, setPrivateKey] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const { setOpenSnackGlobal, setInfoSnackCustom } =
-    useContext(QORTAL_APP_CONTEXT);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

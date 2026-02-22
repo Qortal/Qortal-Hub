@@ -22,6 +22,7 @@
     "choose_name": "选择一个名称",
     "close": "关闭",
     "close_chat": "直接聊天",
+    "confirm": "确认",
     "continue": "继续",
     "continue_logout": "继续注销",
     "copy_link": "复制链接",
@@ -50,7 +51,6 @@
     "join": "加入",
     "leave_comment": "留下评论",
     "load_announcements": "加载较旧的公告",
-    "login": "登录",
     "logout": "注销",
     "new": {
       "chat": "新聊天",
@@ -78,6 +78,8 @@
     "save_disk": "保存到磁盘",
     "search": "搜索",
     "search_apps": "搜索应用程序",
+    "search_apps_or_link": "搜索应用或输入 qortal:// 链接",
+    "open_as_qortal_link": "作为 Qortal 链接打开",
     "search_groups": "搜索组",
     "search_chat_text": "搜索聊天文字",
     "see_qr_code": "请参阅QR码",
@@ -172,6 +174,7 @@
   "last_height": "最后的高度",
   "level": "等级",
   "library": "图书馆",
+  "explore": "探索",
   "list": {
     "bans": "禁令名单",
     "groups": "组列表",
@@ -424,6 +427,7 @@
     "recently_updated": "最近更新"
   },
   "tabs": {
+    "add_private": "+ 私人应用",
     "categories": "分类",
     "community_apps": "社区应用",
     "my_apps": "我的应用",

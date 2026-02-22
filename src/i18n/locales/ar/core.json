@@ -22,6 +22,7 @@
     "choose_name": "اختر اسم",
     "close": "إغلاق",
     "close_chat": "غلق الدردشة",
+    "confirm": "تأكيد",
     "continue": "متابعة",
     "continue_logout": "متابعة الخروج",
     "copy_link": "نسخ الرابط",
@@ -50,7 +51,6 @@
     "join": "انضمام",
     "leave_comment": "ترك تعليق",
     "load_announcements": "تحميل إعلانات أقدم",
-    "login": "تسجيل دخول",
     "logout": "تسجيل خروج",
     "new": {
       "chat": "دردشة جديدة",
@@ -78,6 +78,8 @@
     "save_disk": "حفظ على القرص",
     "search": "بحث",
     "search_apps": "بحث عن تطبيقات",
+    "search_apps_or_link": "البحث عن التطبيقات أو إدخال رابط qortal://",
+    "open_as_qortal_link": "فتح كرابط Qortal",
     "search_groups": "بحث عن جروبات",
     "search_chat_text": "بحث في نص الدردشة",
     "see_qr_code": "عرض كود QR",
@@ -172,6 +174,7 @@
   "last_height": "آخر ارتفاع",
   "level": "مستوى",
   "library": "مكتبة",
+  "explore": "استكشاف",
   "list": {
     "bans": "قائمة المحظورين",
     "groups": "قائمة الجروبات",
@@ -425,6 +428,7 @@
     "recently_updated": "تم تحديثها مؤخراً"
   },
   "tabs": {
+    "add_private": "+ تطبيق خاص",
     "categories": "الفئات",
     "community_apps": "تطبيقات المجتمع",
     "my_apps": "تطبيقاتي",

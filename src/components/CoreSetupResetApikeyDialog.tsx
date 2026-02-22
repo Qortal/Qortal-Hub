@@ -8,12 +8,15 @@ import {
   Typography,
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
-import { useAtom } from 'jotai';
-import { isOpenDialogResetApikey } from '../atoms/global';
-import { QORTAL_APP_CONTEXT } from '../App';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  infoSnackGlobalAtom,
+  isOpenDialogResetApikey,
+  openSnackGlobalAtom,
+} from '../atoms/global';
 import { useTranslation } from 'react-i18next';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
-import { useContext, useState } from 'react';
+import { getDefaultLocalNodeUrl } from '../constants/constants';
+import { useState } from 'react';
 
 const isElectron = !!window?.coreSetup;
 
@@ -27,8 +30,8 @@ export function CoreSetupResetApikeyDialog() {
   } = useAuth();
   const { t } = useTranslation(['node', 'core']);
   const [newApiKey, setNewApiKey] = useState('');
-  const { setOpenSnackGlobal, setInfoSnackCustom } =
-    useContext(QORTAL_APP_CONTEXT);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const [open, setOpen] = useAtom(isOpenDialogResetApikey);
   const resetApikeyFunc = async () => {
     try {
@@ -54,7 +57,7 @@ export function CoreSetupResetApikeyDialog() {
         return;
       }
       await handleSaveNodeInfo({
-        url: HTTP_LOCALHOST_12391,
+        url: getDefaultLocalNodeUrl(),
         apikey: newApiKey,
       });
 

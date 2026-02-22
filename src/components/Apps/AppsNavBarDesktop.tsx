@@ -190,8 +190,17 @@ export const AppsNavBarDesktop = ({
               }}
               disabled={isDisableBackButton}
               sx={{
+                alignItems: 'center',
+                borderRadius: '50%',
+                display: 'flex',
+                height: '36px',
+                justifyContent: 'center',
                 opacity: !isDisableBackButton ? 1 : 0.1,
                 cursor: !isDisableBackButton ? 'pointer' : 'default',
+                width: '36px',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: theme.palette.action.hover,
+                },
               }}
             >
               <NavBack />
@@ -209,9 +218,18 @@ export const AppsNavBarDesktop = ({
               }}
               disabled={!selectedTab || !isApps}
               sx={{
+                alignItems: 'center',
+                borderRadius: '50%',
+                display: 'flex',
+                height: '36px',
+                justifyContent: 'center',
                 marginTop: '20px',
                 opacity: selectedTab && isApps ? 1 : 0.1,
                 cursor: selectedTab && isApps ? 'pointer' : 'default',
+                width: '36px',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: theme.palette.action.hover,
+                },
               }}
             >
               <RefreshIcon
@@ -277,6 +295,17 @@ export const AppsNavBarDesktop = ({
               setSelectedTab(null);
               executeEvent('newTabWindow', {});
             }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
+            }}
           >
             <NavAdd
               style={{
@@ -290,6 +319,17 @@ export const AppsNavBarDesktop = ({
             onClick={(e) => {
               if (!selectedTab) return;
               handleClick(e);
+            }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
             }}
           >
             <NavMoreMenu

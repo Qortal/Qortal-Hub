@@ -1,4 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import {
   Card,
@@ -38,7 +40,8 @@ export const PollCard = ({
   const [ownerName, setOwnerName] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const { show, userInfo } = useContext(QORTAL_APP_CONTEXT);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const userInfo = useAtomValue(userInfoAtom);
   const [isLoadingSubmit, setIsLoadingSubmit] = useState(false);
   const theme = useTheme();
   const { t } = useTranslation([

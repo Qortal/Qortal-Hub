@@ -16,6 +16,7 @@ i18n.init({
         'tabs.community_apps': 'community apps',
         'tabs.categories': 'categories',
         'tabs.my_apps': 'my apps',
+        'tabs.add_private': '+ private app',
       },
     },
   },
@@ -37,7 +38,7 @@ const TestWrapper = ({ children }: { children: React.ReactNode }) => (
 import { AppsTabs, AppsLibraryTabValue } from '../AppsLibrary';
 
 describe('AppsTabs', () => {
-  it('renders all four tabs', () => {
+  it('renders all five tabs', () => {
     const mockOnTabChange = vi.fn();
     render(
       <TestWrapper>
@@ -49,6 +50,7 @@ describe('AppsTabs', () => {
     expect(screen.getByText(/community apps/i)).toBeInTheDocument();
     expect(screen.getByText(/categories/i)).toBeInTheDocument();
     expect(screen.getByText(/my apps/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+ private app/i)).toBeInTheDocument();
   });
 
   it('highlights the current tab', () => {
@@ -121,6 +123,7 @@ describe('AppsTabs', () => {
       'community',
       'categories',
       'my-apps',
+      'private',
     ];
 
     tabValues.forEach((tabValue) => {
@@ -129,8 +132,8 @@ describe('AppsTabs', () => {
           <AppsTabs currentTab={tabValue} onTabChange={mockOnTabChange} />
         </TestWrapper>
       );
-      // Should render without errors
-      expect(screen.getAllByRole('tab').length).toBe(4);
+      // Should render without errors (5 tabs: official, community, categories, my-apps, private)
+      expect(screen.getAllByRole('tab').length).toBe(5);
       unmount();
     });
   });

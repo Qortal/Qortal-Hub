@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MessageDisplay } from './MessageDisplay';
+import { alpha } from '@mui/material/styles';
 import { Avatar, Box, Typography, useTheme } from '@mui/material';
 import { formatTimestamp } from '../../utils/time';
 import ChatBubbleIcon from '@mui/icons-material/ChatBubble';
@@ -55,21 +56,22 @@ export const AnnouncementItem = ({
   }, []);
 
   return (
-    <div
-      style={{
-        backgroundColor: theme.palette.background.paper,
-        borderRadius: '7px',
+    <Box
+      sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '7px',
-        padding: '10px',
-        width: '95%',
+        width: '100%',
+        transition: 'background-color 0.1s ease',
+        '&:hover': {
+          backgroundColor: alpha(theme.palette.text.primary, 0.04),
+        },
       }}
     >
       <Box
         sx={{
           display: 'flex',
-          gap: '7px',
+          gap: '12px',
+          padding: '10px 16px 8px',
           width: '100%',
           wordBreak: 'break-word',
         }}
@@ -81,7 +83,12 @@ export const AnnouncementItem = ({
         >
           <Avatar
             sx={{
+              height: 40,
+              width: 40,
+              flexShrink: 0,
               backgroundColor: theme.palette.background.default,
+              border: '2px solid',
+              borderColor: 'divider',
               color: theme.palette.text.primary,
             }}
             alt={message?.name}
@@ -95,24 +102,47 @@ export const AnnouncementItem = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '7px',
-            width: '100%',
+            gap: '6px',
+            flex: 1,
+            minWidth: 0,
           }}
         >
-          <WrapperUserAction
-            disabled={myName === message?.name}
-            address={undefined}
-            name={message?.name}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
           >
+            <WrapperUserAction
+              disabled={myName === message?.name}
+              address={undefined}
+              name={message?.name}
+            >
+              <Typography
+                sx={{
+                  fontWeight: 600,
+                  fontFamily: 'Inter',
+                  fontSize: '15px',
+                  color: theme.palette.text.primary,
+                }}
+              >
+                {message?.name}
+              </Typography>
+            </WrapperUserAction>
             <Typography
               sx={{
-                fontWight: 600,
+                color: theme.palette.text.secondary,
                 fontFamily: 'Inter',
+                fontSize: '12px',
+                flexShrink: 0,
               }}
             >
-              {message?.name}
+              {formatTimestamp(message.created)}
             </Typography>
-          </WrapperUserAction>
+          </Box>
 
           {!messageData?.decryptedData && (
             <Box
@@ -120,6 +150,7 @@ export const AnnouncementItem = ({
                 width: '100%',
                 display: 'flex',
                 justifyContent: 'center',
+                py: 1,
               }}
             >
               <CustomLoader />
@@ -127,7 +158,22 @@ export const AnnouncementItem = ({
           )}
 
           {messageData?.decryptedData?.message && (
-            <>
+            <Box
+              sx={{
+                '& .tiptap': {
+                  fontSize: '15px',
+                  lineHeight: 1.6,
+                  color: theme.palette.text.primary,
+                },
+                '& .tiptap p': {
+                  marginTop: 0,
+                  marginBottom: '0.5em',
+                },
+                '& .tiptap p:last-child': {
+                  marginBottom: 0,
+                },
+              }}
+            >
               {messageData?.type === 'notification' ? (
                 <MessageDisplay
                   htmlContent={messageData?.decryptedData?.message}
@@ -137,26 +183,8 @@ export const AnnouncementItem = ({
                   htmlContent={messageData?.decryptedData?.message}
                 />
               )}
-            </>
+            </Box>
           )}
-
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              width: '100%',
-            }}
-          >
-            <Typography
-              sx={{
-                color: theme.palette.text.secondary,
-                fontFamily: 'Inter',
-                fontSize: '14px',
-              }}
-            >
-              {formatTimestamp(message.created)}
-            </Typography>
-          </Box>
         </Box>
       </Box>
 
@@ -164,39 +192,35 @@ export const AnnouncementItem = ({
         <Box
           sx={{
             alignItems: 'center',
-            borderTop: '1px solid white',
             cursor: 'pointer',
             display: 'flex',
             justifyContent: 'space-between',
-            opacity: 0.4,
-            padding: '20px',
+            padding: '6px 16px 12px 48px',
             width: '100%',
+            color: theme.palette.text.secondary,
+            transition: 'color 0.15s ease',
+            '&:hover': {
+              color: theme.palette.primary.main,
+            },
           }}
           onClick={() => setSelectedAnnouncement(message)}
         >
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              gap: '25px',
-              width: '100%',
-            }}
-          >
-            <ChatBubbleIcon
-              sx={{
-                fontSize: '20px',
-              }}
-            />
+          <Box sx={{ alignItems: 'center', display: 'flex', gap: '6px' }}>
+            <ChatBubbleIcon sx={{ fontSize: '16px' }} />
             {commentLength ? (
               <Typography
                 sx={{
-                  fontSize: '14px',
+                  fontSize: '13px',
+                  fontFamily: 'Inter',
+                  fontWeight: 500,
                 }}
               >{`${commentLength > 1 ? `${commentLength} comments` : `${commentLength} comment`}`}</Typography>
             ) : (
               <Typography
                 sx={{
-                  fontSize: '14px',
+                  fontSize: '13px',
+                  fontFamily: 'Inter',
+                  fontWeight: 500,
                 }}
               >
                 {t('core:action.leave_comment', {
@@ -205,14 +229,9 @@ export const AnnouncementItem = ({
               </Typography>
             )}
           </Box>
-
-          <ArrowForwardIosIcon
-            sx={{
-              fontSize: '20px',
-            }}
-          />
+          <ArrowForwardIosIcon sx={{ fontSize: '12px', flexShrink: 0 }} />
         </Box>
       )}
-    </div>
+    </Box>
   );
 };

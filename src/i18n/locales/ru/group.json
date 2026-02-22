@@ -50,7 +50,9 @@
     "member_number": "количество участников",
     "member_other": "члены",
     "messaging": "сообщения",
+    "dm": "ЛС",
     "name": "название группы",
+    "no_groups_found": "группы не найдены",
     "open": "открытая (публичная)",
     "private": "приватная группа",
     "promotions": "промоакции группы",
@@ -63,6 +65,8 @@
   "join_requests": "запросы на вступление",
   "last_message": "последнее сообщение",
   "last_message_date": "последнее сообщение: {{date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Вы",
   "latest_mails": "последние Q-сообщения",
   "message": {
     "generic": {

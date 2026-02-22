@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { MessageItem } from './MessageItem';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { Box, Button, Typography, useTheme } from '@mui/material';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import { ChatOptions } from './ChatOptions';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
@@ -32,14 +33,73 @@ export const ChatList = ({
   openQManager,
   hasSecretKey,
   isPrivate,
+  compactScrollButton = false,
 }) => {
+  const theme = useTheme();
   const parentRef = useRef(null);
   const [messages, setMessages] = useState(initialMessages);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [showScrollDownButton, setShowScrollDownButton] = useState(false);
+  const [highlightedMessageIndex, setHighlightedMessageIndex] = useState<
+    number | null
+  >(null);
   const hasLoadedInitialRef = useRef(false);
   const scrollingIntervalRef = useRef(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastSeenUnreadMessageTimestamp = useRef(null);
+
+  // Shared scroll button styling (memoized so Button sx refs stay stable)
+  const scrollButtonSx = useMemo(
+    () => ({
+      position: 'absolute' as const,
+      right: 20,
+      bottom: 20,
+      zIndex: 10,
+      borderRadius: '24px',
+      textTransform: 'none' as const,
+      fontWeight: 600,
+      fontSize: '0.875rem',
+      px: 2,
+      py: 1.25,
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? '0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08)'
+          : '0 4px 14px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
+      backgroundColor: theme.palette.background.paper,
+      color: theme.palette.text.primary,
+      border: `1px solid ${theme.palette.divider}`,
+      transition:
+        'box-shadow 0.2s ease, transform 0.15s ease, background-color 0.2s ease',
+      '&:hover': {
+        backgroundColor: theme.palette.action.hover,
+        boxShadow:
+          theme.palette.mode === 'dark'
+            ? `0 6px 24px rgba(0,0,0,0.5), 0 0 0 1px ${theme.palette.primary.main}40`
+            : `0 6px 20px rgba(0,0,0,0.15), 0 0 0 1px ${theme.palette.primary.light}60`,
+      },
+      '&:active': {
+        transform: 'scale(0.98)',
+      },
+    }),
+    [theme]
+  );
+  const scrollButtonCompactSx = useMemo(
+    () => ({
+      ...scrollButtonSx,
+      right: 16,
+      bottom: 16,
+      borderRadius: '50%',
+      px: 0,
+      py: 0,
+      minWidth: 40,
+      width: 40,
+      height: 40,
+      '& .MuiButton-startIcon': { margin: 0 },
+    }),
+    [scrollButtonSx]
+  );
 
   // Initialize the virtualizer
   const rowVirtualizer = useVirtualizer({
@@ -89,7 +149,7 @@ export const ChatList = ({
 
   // Update message list with unique signatures and tempMessages
   useEffect(() => {
-    let uniqueInitialMessagesMap = new Map();
+    const uniqueInitialMessagesMap = new Map();
 
     // Only add a message if it doesn't already exist in the Map
     initialMessages.forEach((message) => {
@@ -117,6 +177,7 @@ export const ChatList = ({
             msg?.timestamp > lastSeenUnreadMessageTimestamp.current) ||
             0)
       );
+
       if (parentRef.current) {
         const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
         const atBottom = scrollTop + clientHeight >= scrollHeight - 10; // Adjust threshold as needed
@@ -139,7 +200,7 @@ export const ChatList = ({
     }, 500);
   }, [initialMessages, tempMessages]);
 
-  const scrollToBottom = (initialMsgs, divideIndex) => {
+  const scrollToBottom = (initialMsgs?: unknown[], divideIndex?: number) => {
     const index = initialMsgs ? initialMsgs.length - 1 : messages.length - 1;
     if (rowVirtualizer) {
       if (divideIndex) {
@@ -185,11 +246,116 @@ export const ChatList = ({
     return messages[lastIndex]?.signature;
   }, [messages]);
 
-  const goToMessage = useCallback((idx) => {
+  const goToMessage = useCallback((idx: number) => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
     rowVirtualizer.scrollToIndex(idx);
+    setHighlightedMessageIndex(idx);
+    highlightTimeoutRef.current = setTimeout(() => {
+      setHighlightedMessageIndex(null);
+      highlightTimeoutRef.current = null;
+    }, 1200);
   }, []);
 
-  const theme = useTheme();
+  // Memoize per-row payload so MessageItem receives stable references and memo can skip re-renders
+  const processedRows = useMemo(() => {
+    return messages.map((msg, index) => {
+      let message = msg || null;
+      let replyIndex = -1;
+      let reply = null;
+      let replyExpiredMeta = null;
+      let reactions = null;
+      let isUpdating = false;
+      try {
+        if (message) {
+          replyIndex = messages.findIndex(
+            (m) => m?.signature === message?.repliedTo
+          );
+          if (message?.repliedTo && replyIndex !== -1) {
+            reply = { ...(messages[replyIndex] || {}) };
+            if (chatReferences?.[reply?.signature]?.edit) {
+              const edit = chatReferences[reply?.signature]?.edit;
+              reply.decryptedData = edit;
+              reply.text = edit?.message;
+              reply.messageText = edit?.messageText;
+              reply.editTimestamp = edit?.timestamp;
+            }
+          } else if (message?.repliedTo && replyIndex === -1) {
+            const editMeta = chatReferences?.[message?.repliedTo]?.edit;
+            if (editMeta) {
+              replyExpiredMeta = {
+                senderName: editMeta?.senderName,
+                sender: editMeta?.sender,
+                messageText:
+                  editMeta?.messageText !== undefined
+                    ? editMeta?.messageText
+                    : undefined,
+                text:
+                  editMeta?.message !== undefined
+                    ? editMeta?.message
+                    : undefined,
+                decryptedData: editMeta,
+                editTimestamp: editMeta?.timestamp,
+              };
+            } else {
+              replyExpiredMeta = { missing: true };
+            }
+          }
+          if (message?.message && message?.groupDirectId) {
+            replyIndex = messages.findIndex(
+              (m) => m?.signature === message?.message?.repliedTo
+            );
+            if (message?.message?.repliedTo && replyIndex !== -1) {
+              reply = messages[replyIndex] || null;
+            }
+            message = {
+              ...(message?.message || {}),
+              isTemp: true,
+              unread: false,
+              status: message?.status,
+            };
+          }
+          if (chatReferences?.[message.signature]) {
+            reactions = chatReferences[message.signature]?.reactions || null;
+            if (chatReferences[message.signature]?.edit) {
+              message = {
+                ...message,
+                text: chatReferences[message.signature]?.edit?.message,
+                messageText:
+                  chatReferences[message.signature]?.edit?.messageText,
+                images: chatReferences[message.signature]?.edit?.images,
+                isEdit: true,
+                editTimestamp:
+                  chatReferences[message.signature]?.edit?.timestamp,
+              };
+            }
+          }
+          if (
+            tempChatReferences?.some(
+              (item) => item?.chatReference === message?.signature
+            )
+          ) {
+            isUpdating = true;
+          }
+        }
+      } catch (err) {
+        message = null;
+        reply = null;
+        reactions = null;
+      }
+      return {
+        message,
+        reply,
+        replyIndex,
+        replyExpiredMeta,
+        reactions,
+        isUpdating,
+      };
+    });
+  }, [messages, chatReferences, tempChatReferences]);
+
   const { t } = useTranslation([
     'auth',
     'core',
@@ -241,109 +407,40 @@ export const ChatList = ({
             >
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const index = virtualRow.index;
-                let message = messages[index] || null; // Safeguard against undefined
-                let replyIndex = -1;
-                let reply = null;
-                let replyExpiredMeta: any = null;
-                let reactions: ReactionsMap | null = null;
-                let isUpdating = false;
-
-                try {
-                  // Safeguard for message existence
-                  if (message) {
-                    // Check for repliedTo logic
-                    replyIndex = messages.findIndex(
-                      (msg) => msg?.signature === message?.repliedTo
-                    );
-
-                    if (message?.repliedTo && replyIndex !== -1) {
-                      reply = { ...(messages[replyIndex] || {}) };
-                      if (chatReferences?.[reply?.signature]?.edit) {
-                        reply.decryptedData =
-                          chatReferences[reply?.signature]?.edit;
-                        reply.text =
-                          chatReferences[reply?.signature]?.edit?.message;
-                        reply.editTimestamp =
-                          chatReferences[reply?.signature]?.edit?.timestamp;
-                      }
-                    } else if (message?.repliedTo && replyIndex === -1) {
-                      // If original message is missing, attempt to use any edit metadata as minimal context
-                      const editMeta = chatReferences?.[message?.repliedTo]?.edit;
-                      if (editMeta) {
-                        replyExpiredMeta = {
-                          senderName: editMeta?.senderName,
-                          sender: editMeta?.sender,
-                          messageText:
-                            editMeta?.messageText !== undefined
-                              ? editMeta?.messageText
-                              : undefined,
-                          text:
-                            editMeta?.message !== undefined
-                              ? editMeta?.message
-                              : undefined,
-                          decryptedData: editMeta,
-                          editTimestamp: editMeta?.timestamp,
-                        };
-                      } else {
-                        replyExpiredMeta = { missing: true };
-                      }
-                    }
-
-                    // GroupDirectId logic
-                    if (message?.message && message?.groupDirectId) {
-                      replyIndex = messages.findIndex(
-                        (msg) => msg?.signature === message?.message?.repliedTo
-                      );
-                      if (message?.message?.repliedTo && replyIndex !== -1) {
-                        reply = messages[replyIndex] || null;
-                      }
-                      message = {
-                        ...(message?.message || {}),
-                        isTemp: true,
-                        unread: false,
-                        status: message?.status,
-                      };
-                    }
-
-                    // Check for reactions and edits
-                    if (chatReferences?.[message.signature]) {
-                      reactions =
-                        chatReferences[message.signature]?.reactions || null;
-
-                      if (chatReferences[message.signature]?.edit) {
-                        message.text =
-                          chatReferences[message.signature]?.edit?.message;
-                        message.messageText =
-                          chatReferences[message.signature]?.edit?.messageText;
-                        message.images =
-                          chatReferences[message.signature]?.edit?.images;
-
-                        message.isEdit = true;
-                        message.editTimestamp =
-                          chatReferences[message.signature]?.edit?.timestamp;
-                      }
-                    }
-
-                    // Check if message is updating
-                    if (
-                      tempChatReferences?.some(
-                        (item) => item?.chatReference === message?.signature
-                      )
-                    ) {
-                      isUpdating = true;
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error processing message:', error, {
-                    index,
-                    message,
-                  });
-                  // Gracefully handle the error by providing fallback data
-                  message = null;
-                  reply = null;
-                  reactions = null;
+                const rowPayload = processedRows[index];
+                if (!rowPayload) {
+                  return (
+                    <Box
+                      key={virtualRow.index}
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px',
+                        left: '50%',
+                        padding: '10px 0',
+                        position: 'absolute',
+                        top: 0,
+                        transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
+                        width: '100%',
+                      }}
+                    >
+                      <Typography>
+                        {t('core:message.error.message_loading', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                  );
                 }
-                // Render fallback if message is null
+                const {
+                  message,
+                  reply,
+                  replyIndex,
+                  replyExpiredMeta,
+                  reactions,
+                  isUpdating,
+                } = rowPayload;
                 if (!message) {
                   return (
                     <Box
@@ -403,6 +500,9 @@ export const ChatList = ({
                         handleReaction={handleReaction}
                         isLast={index === messages.length - 1}
                         isPrivate={isPrivate}
+                        isScrollTarget={
+                          highlightedMessageIndex === virtualRow.index
+                        }
                         isTemp={!!message?.isTemp}
                         isUpdating={isUpdating}
                         lastSignature={lastSignature}
@@ -428,18 +528,19 @@ export const ChatList = ({
         {showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
+            startIcon={
+              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+            }
             sx={{
-              backgroundColor: theme.palette.other.unread,
-              border: 'none',
-              borderRadius: '20px',
-              bottom: 20,
-              color: theme.palette.text.primary,
-              cursor: 'pointer',
-              outline: 'none',
-              padding: '10px 20px',
-              position: 'absolute',
-              right: 20,
-              zIndex: 10,
+              ...scrollButtonSx,
+              backgroundColor: theme.palette.primary.dark,
+              color: theme.palette.primary.contrastText,
+              border: `1px solid ${theme.palette.primary.main}`,
+              '&:hover': {
+                ...scrollButtonSx['&:hover'],
+                backgroundColor: theme.palette.primary.main,
+                color: theme.palette.primary.contrastText,
+              },
             }}
           >
             {t('group:action.scroll_unread_messages', {
@@ -448,30 +549,31 @@ export const ChatList = ({
           </Button>
         )}
 
-        {showScrollDownButton && !showScrollButton && (
-          <Button
-            onClick={() => scrollToBottom()}
-            sx={{
-              backgroundColor: theme.palette.background.paper,
-              border: 'none',
-              borderRadius: '20px',
-              bottom: 20,
-              color: theme.palette.text.primary,
-              cursor: 'pointer',
-              fontSize: '16px',
-              outline: `1px solid ${theme.palette.primary.light}`,
-              padding: '10px 20px',
-              position: 'absolute',
-              right: 20,
-              textTransform: 'none',
-              zIndex: 10,
-            }}
-          >
-            {t('group:action.scroll_bottom', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-        )}
+        {showScrollDownButton &&
+          !showScrollButton &&
+          (compactScrollButton ? (
+            <Button
+              onClick={() => scrollToBottom()}
+              aria-label={t('group:action.scroll_bottom', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              sx={scrollButtonCompactSx}
+            >
+              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 22 }} />
+            </Button>
+          ) : (
+            <Button
+              onClick={() => scrollToBottom()}
+              startIcon={
+                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
+              }
+              sx={scrollButtonSx}
+            >
+              {t('group:action.scroll_bottom', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Button>
+          ))}
       </Box>
 
       {enableMentions && (hasSecretKey || isPrivate === false) && (

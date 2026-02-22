@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useMemo,
   useState,
@@ -21,6 +22,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { formatTimestamp } from '../../utils/time';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
 import { generateHTML } from '@tiptap/react';
@@ -30,7 +32,6 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import { WrapperUserAction } from '../WrapperUserAction';
 import ReplyIcon from '@mui/icons-material/Reply';
-import { Spacer } from '../../common/Spacer';
 import { ReactionPicker } from '../ReactionPicker';
 import KeyOffIcon from '@mui/icons-material/KeyOff';
 import EditIcon from '@mui/icons-material/Edit';
@@ -106,6 +107,7 @@ type MessageItemProps = {
   handleReaction: (reaction: string, messageId: string) => void;
   isLast: boolean;
   isPrivate: boolean;
+  isScrollTarget?: boolean;
   isShowingAsReply?: boolean;
   isTemp: boolean;
   isUpdating: boolean;
@@ -126,6 +128,7 @@ export const MessageItemComponent = ({
   handleReaction,
   isLast,
   isPrivate,
+  isScrollTarget,
   isShowingAsReply,
   isTemp,
   isUpdating,
@@ -164,11 +167,16 @@ export const MessageItemComponent = ({
     getInfo();
   }, [message?.sender, getIndividualUserInfo]);
 
+  // Defer only main message body so generateHTML runs when React has time (reduces scroll-time CPU spikes).
+  // Reply block uses reply/replyExpiredMeta directly so the reply preview always shows.
+  const deferredMessage = useDeferredValue(message);
+
   const htmlText = useMemo(() => {
-    if (message?.messageText) {
-      const isHtml = isHtmlString(message?.messageText);
-      if (isHtml) return message?.messageText;
-      return generateHTML(message?.messageText, [
+    const source = deferredMessage?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -176,13 +184,14 @@ export const MessageItemComponent = ({
         TextStyle,
       ]);
     }
-  }, [message?.editTimestamp]);
+  }, [deferredMessage?.messageText, deferredMessage?.editTimestamp]);
 
   const htmlReply = useMemo(() => {
-    if (reply?.messageText) {
-      const isHtml = isHtmlString(reply?.messageText);
-      if (isHtml) return reply?.messageText;
-      return generateHTML(reply?.messageText, [
+    const source = reply?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -190,14 +199,15 @@ export const MessageItemComponent = ({
         TextStyle,
       ]);
     }
-  }, [reply?.editTimestamp]);
+  }, [reply?.messageText, reply?.editTimestamp]);
 
   const htmlReplyExpired = useMemo(() => {
     if (!replyExpiredMeta) return null;
-    if (replyExpiredMeta?.messageText) {
-      const isHtml = isHtmlString(replyExpiredMeta?.messageText);
-      if (isHtml) return replyExpiredMeta?.messageText;
-      return generateHTML(replyExpiredMeta?.messageText, [
+    const source = replyExpiredMeta?.messageText;
+    if (source) {
+      const isHtml = isHtmlString(source);
+      if (isHtml) return source;
+      return generateHTML(source, [
         StarterKit,
         Underline,
         Highlight,
@@ -206,7 +216,7 @@ export const MessageItemComponent = ({
       ]);
     }
     return null;
-  }, [replyExpiredMeta?.editTimestamp]);
+  }, [replyExpiredMeta?.messageText, replyExpiredMeta?.editTimestamp]);
 
   const userAvatarUrl = useMemo(() => {
     return message?.senderName
@@ -214,7 +224,7 @@ export const MessageItemComponent = ({
           message?.senderName
         }/qortal_avatar?async=true`
       : '';
-  }, []);
+  }, [message?.senderName]);
 
   useEffect(() => {
     setIsAvatarLoaded(false);
@@ -256,6 +266,10 @@ export const MessageItemComponent = ({
     (!message?.messageText || message?.messageText === '<p></p>') &&
     (!message?.text || message?.text === '<p></p>');
 
+  const isOwn = message?.sender === myAddress;
+  const isRepliedToMe =
+    reply?.sender === myAddress || replyExpiredMeta?.sender === myAddress;
+
   return (
     <>
       {message?.divide && (
@@ -272,21 +286,59 @@ export const MessageItemComponent = ({
         onSeen={onSeenFunc}
       >
         <Box
+          className="message-item-row"
           sx={{
-            backgroundColor: theme.palette.background.paper,
-            borderRadius: '7px',
             display: 'flex',
-            gap: '7px',
+            flexDirection: 'row',
+            gap: '12px',
             opacity: isTemp || isUpdating ? 0.5 : 1,
-            padding: '10px',
-            width: '95%',
+            padding: isShowingAsReply ? '2px 8px' : '8px 16px 10px',
+            marginBottom: isShowingAsReply ? 0 : '3px',
+            position: 'relative',
+            transition: 'background-color 0.1s ease',
+            width: '100%',
+            ...(isOwn && !isScrollTarget && {
+              borderLeft: `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+              backgroundColor: alpha(theme.palette.primary.main, 0.045),
+              paddingLeft: '14px',
+            }),
+            ...(!isOwn && !isScrollTarget && {
+              borderLeft: `2px solid ${alpha(theme.palette.text.secondary, 0.35)}`,
+              paddingLeft: '14px',
+            }),
+            ...(isScrollTarget && {
+              borderLeft: `2px solid ${theme.palette.primary.main}`,
+              backgroundColor: alpha(theme.palette.primary.main, 0.07),
+              paddingLeft: '14px',
+            }),
+            ...(!isShowingAsReply && {
+              '&:hover': {
+                backgroundColor: isScrollTarget
+                  ? alpha(theme.palette.primary.main, 0.09)
+                  : isOwn
+                    ? alpha(theme.palette.primary.main, 0.07)
+                    : alpha(theme.palette.text.primary, 0.04),
+              },
+              '& .message-item-toolbar': {
+                opacity: 0,
+                pointerEvents: 'none',
+              },
+              '&:hover .message-item-toolbar': {
+                opacity: 1,
+                pointerEvents: 'auto',
+              },
+            }),
           }}
           id={message?.signature}
         >
+          {/* Left column: avatar + badge */}
           {isShowingAsReply ? (
             <ReplyIcon
               sx={{
-                fontSize: '30px',
+                color: theme.palette.text.secondary,
+                flexShrink: 0,
+                fontSize: '18px',
+                mt: '2px',
               }}
             />
           ) : (
@@ -295,7 +347,9 @@ export const MessageItemComponent = ({
                 alignItems: 'center',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '20px',
+                flexShrink: 0,
+                gap: '4px',
+                paddingTop: '2px',
               }}
             >
               <WrapperUserAction
@@ -305,10 +359,12 @@ export const MessageItemComponent = ({
               >
                 <Avatar
                   sx={{
-                    backgroundColor: theme.palette.background.default,
+                    backgroundColor: alpha(theme.palette.text.primary, 0.06),
                     color: theme.palette.text.primary,
-                    height: '40px',
-                    width: '40px',
+                    height: '38px',
+                    width: '38px',
+                    fontSize: '15px',
+                    fontWeight: 600,
                     ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={message?.senderName}
@@ -330,20 +386,24 @@ export const MessageItemComponent = ({
             </Box>
           )}
 
+          {/* Right column: header + body + reactions */}
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '7px',
-              height: isShowingAsReply && '40px',
+              gap: '4px',
+              height: isShowingAsReply ? '40px' : undefined,
+              minWidth: 0,
               width: '100%',
             }}
           >
+            {/* Header: sender name + timestamp + edited label inline */}
             <Box
               sx={{
+                alignItems: 'baseline',
                 display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <WrapperUserAction
@@ -353,149 +413,198 @@ export const MessageItemComponent = ({
               >
                 <Typography
                   sx={{
-                    fontWight: 600,
+                    color: isOwn
+                      ? theme.palette.primary.main
+                      : theme.palette.text.primary,
                     fontFamily: 'Inter',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    lineHeight: 1.3,
                   }}
                 >
                   {message?.senderName || message?.sender}
                 </Typography>
               </WrapperUserAction>
 
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: '10px',
-                  alignItems: 'center',
-                }}
-              >
-                {message?.sender === myAddress &&
-                  (!message?.isNotEncrypted || isPrivate === false) && (
-                    <ButtonBase
-                      onClick={() => {
-                        onEdit(message);
-                      }}
-                    >
-                      <EditIcon />
-                    </ButtonBase>
-                  )}
+              {!isUpdating && !isTemp && (
+                <Typography
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    flexShrink: 0,
+                    fontFamily: 'Inter',
+                    fontSize: '11px',
+                    lineHeight: 1,
+                  }}
+                >
+                  {formatTimestamp(message.timestamp)}
+                </Typography>
+              )}
 
-                {!isShowingAsReply && (
-                  <ButtonBase
-                    onClick={() => {
-                      onReply(message);
-                    }}
-                  >
-                    <ReplyIcon />
-                  </ButtonBase>
-                )}
-
-                {!isShowingAsReply && handleReaction && (
-                  <ReactionPicker
-                    onReaction={(val) => {
-                      if (
-                        reactions &&
-                        reactions[val] &&
-                        reactions[val]?.find(
-                          (item) => item?.sender === myAddress
-                        )
-                      ) {
-                        handleReaction(val, message, false);
-                      } else {
-                        handleReaction(val, message, true);
-                      }
-                    }}
-                  />
-                )}
-              </Box>
+              {message?.isEdit && !isUpdating && !isTemp && (
+                <Typography
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontFamily: 'Inter',
+                    fontSize: '11px',
+                    fontStyle: 'italic',
+                    lineHeight: 1,
+                  }}
+                >
+                  {t('core:message.generic.edited', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              )}
             </Box>
 
+            {/* Reply preview - active reply */}
             {reply && (
-              <>
-                <Spacer height="20px" />
-
-                <Box
-                  sx={{
-                    backgroundColor: theme.palette.background.surface,
-                    borderRadius: '8px',
+              <Box
+                sx={{
+                  borderLeft: isRepliedToMe
+                    ? `2px solid ${theme.palette.warning.main}`
+                    : `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                  backgroundColor: isRepliedToMe
+                    ? alpha(theme.palette.warning.main, 0.06)
+                    : 'transparent',
+                  borderRadius: '0 6px 6px 0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  marginTop: '4px',
+                  marginBottom: '6px',
+                  marginLeft: '2px',
+                  maxHeight: '72px',
+                  overflow: 'hidden',
+                  padding: '4px 0 4px 10px',
+                  transition: 'opacity 0.1s ease',
+                  width: '100%',
+                  opacity: isRepliedToMe ? 1 : 0.72,
+                  '& *': {
                     cursor: 'pointer',
-                    display: 'flex',
-                    gap: '20px',
-                    maxHeight: '90px',
-                    overflow: 'hidden',
-                    width: '100%',
-                  }}
-                  onClick={() => {
-                    scrollToItem(replyIndex);
-                  }}
-                >
+                  },
+                  '&:hover': {
+                    opacity: 1,
+                  },
+                }}
+                onClick={() => {
+                  scrollToItem(replyIndex);
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
                   <Box
                     sx={{
-                      background: theme.palette.text.primary,
-                      height: '100%',
-                      width: '5px',
-                      flexShrink: 0,
-                    }} // This is the little bar at left of replied messages
-                  />
-
-                  <Box
-                    sx={{
-                      padding: '5px',
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: '6px',
+                      marginBottom: '2px',
                     }}
                   >
+                    <ReplyIcon
+                      sx={{
+                        color: isRepliedToMe
+                          ? theme.palette.warning.main
+                          : theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.primary.main,
+                        fontSize: '14px',
+                        flexShrink: 0,
+                      }}
+                    />
                     <Typography
                       sx={{
-                        fontSize: '12px',
-                        fontWeight: 600,
+                        color: isRepliedToMe
+                          ? theme.palette.warning.main
+                          : theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.primary.main,
+                        fontSize: '13px',
+                        fontWeight: isRepliedToMe ? 600 : 500,
                       }}
                     >
-                      {t('core:message.generic.replied_to', {
-                        person: reply?.senderName || reply?.senderAddress,
-                        postProcess: 'capitalizeFirstChar',
-                      })}
+                      {isRepliedToMe
+                        ? t('core:message.generic.replied_to_you', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:message.generic.replied_to', {
+                            person: reply?.senderName || reply?.senderAddress,
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                     </Typography>
-
-                    {reply?.messageText && (
-                      <MessageDisplay htmlContent={htmlReply} />
-                    )}
-
-                    {reply?.decryptedData?.type === 'notification' ? (
-                      <MessageDisplay
-                        htmlContent={reply.decryptedData?.data?.message}
-                      />
-                    ) : (
-                      <MessageDisplay isReply htmlContent={reply.text} />
-                    )}
                   </Box>
+
+                  {reply?.messageText && (
+                    <MessageDisplay isReply htmlContent={htmlReply} />
+                  )}
+
+                  {reply?.decryptedData?.type === 'notification' ? (
+                    <MessageDisplay
+                      isReply
+                      htmlContent={reply.decryptedData?.data?.message}
+                    />
+                  ) : (
+                    <MessageDisplay isReply htmlContent={reply.text} />
+                  )}
                 </Box>
-              </>
+              </Box>
             )}
 
+            {/* Reply preview - expired/missing reply */}
             {!reply && (replyExpiredMeta || message?.repliedTo) && (
-              <>
-                <Spacer height="20px" />
-
-                <Box
-                  sx={{
-                    backgroundColor: theme.palette.background.surface,
-                    borderRadius: '8px',
-                    display: 'flex',
-                    gap: '20px',
-                    maxHeight: '90px',
-                    overflow: 'hidden',
-                    width: '100%',
-                  }}
-                >
+              <Box
+                sx={{
+                  borderLeft: isRepliedToMe
+                    ? `2px solid ${theme.palette.warning.main}`
+                    : `2px solid ${alpha(theme.palette.text.secondary, 0.4)}`,
+                  backgroundColor: isRepliedToMe
+                    ? alpha(theme.palette.warning.main, 0.06)
+                    : 'transparent',
+                  borderRadius: '0 6px 6px 0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  marginTop: '4px',
+                  marginBottom: '6px',
+                  marginLeft: '2px',
+                  maxHeight: '72px',
+                  overflow: 'hidden',
+                  padding: '4px 0 4px 10px',
+                  width: '100%',
+                  opacity: isRepliedToMe ? 1 : 0.6,
+                  '& *': {
+                    cursor: 'pointer',
+                  },
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
                   <Box
                     sx={{
-                      background: theme.palette.text.primary,
-                      height: '100%',
-                      width: '5px',
-                      flexShrink: 0,
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: '6px',
+                      marginBottom: '2px',
                     }}
-                  />
-
-                  <Box sx={{ padding: '5px' }}>
-                    <Typography sx={{ fontSize: '12px', fontWeight: 600 }}>
+                  >
+                    <ReplyIcon
+                      sx={{
+                        color:
+                          theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                        fontSize: '14px',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        color:
+                          theme.palette.mode === 'light'
+                            ? theme.palette.text.primary
+                            : theme.palette.text.secondary,
+                        fontSize: '13px',
+                        fontWeight: 500,
+                      }}
+                    >
                       {replyExpiredMeta?.senderName || replyExpiredMeta?.sender
                         ? t('core:message.generic.replied_to', {
                             person:
@@ -504,100 +613,163 @@ export const MessageItemComponent = ({
                             postProcess: 'capitalizeFirstChar',
                           })
                         : t('core:message.generic.replied_to', {
-                            person:
-                              t('core:message.error.missing_fields', {
-                                fields: t('core:message.message')
-                              }),
+                            person: t('core:message.error.missing_fields', {
+                              fields: t('core:message.message'),
+                            }),
                             postProcess: 'capitalizeFirstChar',
                           })}
                     </Typography>
-
-                    {replyExpiredMeta?.messageText && (
-                      <MessageDisplay htmlContent={htmlReplyExpired} />
-                    )}
-
-                    {replyExpiredMeta?.text && (
-                      <MessageDisplay isReply htmlContent={replyExpiredMeta.text} />
-                    )}
                   </Box>
+
+                  {replyExpiredMeta?.messageText && (
+                    <MessageDisplay isReply htmlContent={htmlReplyExpired} />
+                  )}
+
+                  {replyExpiredMeta?.text && (
+                    <MessageDisplay
+                      isReply
+                      htmlContent={replyExpiredMeta.text}
+                    />
+                  )}
                 </Box>
-              </>
+              </Box>
             )}
 
-            {htmlText && !hasNoMessage && (
-              <MessageDisplay htmlContent={htmlText} />
-            )}
-
+            {/* Message body - show only one of htmlText or message.text to avoid duplicate for open groups */}
             {message?.decryptedData?.type === 'notification' ? (
               <MessageDisplay
                 htmlContent={message.decryptedData?.data?.message}
               />
-            ) : hasNoMessage ? null : (
+            ) : hasNoMessage ? null : htmlText ? (
+              <MessageDisplay htmlContent={htmlText} />
+            ) : (
               <MessageDisplay htmlContent={message.text} />
             )}
+
             {hasNoMessage && (
               <Box
                 sx={{
-                  display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
+                  display: 'flex',
+                  gap: '8px',
                 }}
               >
-                <CommentsDisabledIcon color="primary" />
-                <Typography color="primary">
+                <CommentsDisabledIcon
+                  color="primary"
+                  sx={{ fontSize: '18px' }}
+                />
+                <Typography color="primary" sx={{ fontSize: '14px' }}>
                   {t('core:message.generic.no_message', {
                     postProcess: 'capitalizeFirstChar',
                   })}
                 </Typography>
               </Box>
             )}
+
             {message?.images && messageHasImage(message) && (
               <Embed embedLink={buildImageEmbedLink(message.images[0])} />
             )}
 
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
-              <Box
+            {/* Sending / updating status */}
+            {(isUpdating || isTemp) && (
+              <Typography
                 sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '5px',
+                  color: theme.palette.text.secondary,
+                  fontFamily: 'Inter',
+                  fontSize: '12px',
+                  fontStyle: 'italic',
+                  marginTop: '2px',
                 }}
               >
-                {reactions &&
-                  Object.keys(reactions).map((reaction) => {
+                {isUpdating
+                  ? message?.status === 'failed-permanent'
+                    ? t('core:message.error.update_failed', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:message.generic.updating', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                  : message?.status === 'failed-permanent'
+                    ? t('core:message.error.send_failed', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:message.generic.sending', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+              </Typography>
+            )}
+
+            {/* Reactions row */}
+            {reactions &&
+              Object.keys(reactions).some(
+                (r) => (reactions[r]?.length ?? 0) > 0
+              ) && (
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px',
+                    marginTop: '4px',
+                  }}
+                >
+                  {message?.isNotEncrypted && isPrivate && (
+                    <Tooltip title="Unencrypted" disableFocusListener>
+                      <KeyOffIcon
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '16px',
+                          mr: '4px',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+
+                  {Object.keys(reactions).map((reaction) => {
                     const numberOfReactions = reactions[reaction]?.length;
                     if (numberOfReactions === 0) return null;
+                    const isMine = !!reactions[reaction]?.find(
+                      (item) => item?.sender === myAddress
+                    );
                     return (
                       <ButtonBase
                         key={reaction}
                         sx={{
-                          background: theme.palette.background.surface,
-                          borderRadius: '7px',
-                          height: '30px',
-                          minWidth: '45px',
+                          background: isMine
+                            ? `${theme.palette.primary.main}22`
+                            : theme.palette.background.surface,
+                          border: '1px solid',
+                          borderColor: isMine
+                            ? theme.palette.primary.main
+                            : theme.palette.divider,
+                          borderRadius: '14px',
+                          height: '28px',
+                          minWidth: '44px',
+                          padding: '0 10px',
+                          transition:
+                            'background-color 0.1s ease, border-color 0.1s ease',
+                          '&:hover': {
+                            backgroundColor: theme.palette.action.hover,
+                          },
                         }}
                         onClick={(event) => {
-                          event.stopPropagation(); // Prevent event bubbling
+                          event.stopPropagation();
                           setAnchorEl(event.currentTarget);
                           setSelectedReaction(reaction);
                         }}
                       >
-                        <div
-                          style={{
-                            fontSize: '16px',
-                          }}
-                        >
+                        <span style={{ fontSize: '14px', lineHeight: 1 }}>
                           {reaction}
-                        </div>{' '}
+                        </span>
                         {numberOfReactions > 1 && (
                           <Typography
                             sx={{
+                              color: isMine
+                                ? theme.palette.primary.main
+                                : theme.palette.text.secondary,
+                              fontFamily: 'Inter',
+                              fontSize: '12px',
+                              fontWeight: 600,
                               marginLeft: '4px',
                             }}
                           >
@@ -607,170 +779,253 @@ export const MessageItemComponent = ({
                       </ButtonBase>
                     );
                   })}
-              </Box>
+                </Box>
+              )}
 
-              {selectedReaction && (
-                <Popover
-                  open={Boolean(anchorEl)}
-                  anchorEl={anchorEl}
-                  onClose={() => {
-                    setAnchorEl(null);
-                    setSelectedReaction(null);
-                  }}
-                  anchorOrigin={{
-                    vertical: 'top',
-                    horizontal: 'center',
-                  }}
-                  transformOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'center',
-                  }}
-                  slotProps={{
-                    paper: {
-                      style: {
-                        backgroundColor: theme.palette.background.default,
-                        color: theme.palette.text.primary,
-                      },
+            {/* KeyOff when no reactions to show it beside */}
+            {message?.isNotEncrypted &&
+              isPrivate &&
+              !(
+                reactions &&
+                Object.keys(reactions).some(
+                  (r) => (reactions[r]?.length ?? 0) > 0
+                )
+              ) && (
+                <Tooltip title="Unencrypted" disableFocusListener>
+                  <KeyOffIcon
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '16px',
+                      marginTop: '2px',
+                    }}
+                  />
+                </Tooltip>
+              )}
+
+            {/* Reaction popover — zIndex 1400 so it appears above GlobalChatWidget (1300) */}
+            {selectedReaction && (
+              <Popover
+                open={Boolean(anchorEl)}
+                anchorEl={anchorEl}
+                onClose={() => {
+                  setAnchorEl(null);
+                  setSelectedReaction(null);
+                }}
+                anchorOrigin={{
+                  vertical: 'top',
+                  horizontal: 'center',
+                }}
+                transformOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'center',
+                }}
+                slotProps={{
+                  root: {
+                    sx: { zIndex: 1400 },
+                  },
+                  paper: {
+                    sx: {
+                      backgroundColor: theme.palette.background.paper,
+                      border: '1px solid',
+                      borderColor: theme.palette.divider,
+                      borderRadius: '12px',
+                      boxShadow: theme.shadows[8],
+                      minWidth: '260px',
+                      maxWidth: '320px',
                     },
-                  }}
-                >
-                  <Box sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" sx={{ marginBottom: 1 }}>
+                  },
+                }}
+              >
+                <Box sx={{ padding: '16px 16px 12px' }}>
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: '8px',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        backgroundColor: theme.palette.action.hover,
+                        borderRadius: '8px',
+                        display: 'flex',
+                        fontSize: '18px',
+                        height: '36px',
+                        justifyContent: 'center',
+                        width: '36px',
+                      }}
+                    >
+                      {selectedReaction}
+                    </Box>
+                    <Typography
+                      sx={{
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        color: theme.palette.text.primary,
+                      }}
+                    >
                       {t('core:message.generic.people_reaction', {
                         reaction: selectedReaction,
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
-
-                    <List
-                      sx={{
-                        maxHeight: '300px',
-                        maxWidth: '300px',
-                        overflow: 'auto',
-                      }}
-                    >
-                      {reactions[selectedReaction]?.map((reactionItem) => (
-                        <ListItem key={reactionItem.sender}>
-                          <ListItemText
-                            primary={
-                              reactionItem.senderName || reactionItem.sender
-                            }
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => {
-                        if (
-                          reactions[selectedReaction]?.find(
-                            (item) => item?.sender === myAddress
-                          )
-                        ) {
-                          handleReaction(selectedReaction, message, false); // Remove reaction
-                        } else {
-                          handleReaction(selectedReaction, message, true); // Add reaction
-                        }
-                        setAnchorEl(null);
-                        setSelectedReaction(null);
-                      }}
-                      sx={{ marginTop: 2 }}
-                    >
-                      {reactions[selectedReaction]?.find(
-                        (item) => item?.sender === myAddress
-                      )
-                        ? t('core:action.remove_reaction', {
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                        : t('core:action.add_reaction', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                    </Button>
                   </Box>
-                </Popover>
-              )}
 
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '15px',
-                }}
-              >
-                {message?.isNotEncrypted && isPrivate && (
-                  <KeyOffIcon
+                  <List
+                    disablePadding
                     sx={{
-                      color: theme.palette.text.primary,
-                      marginLeft: '10px',
-                    }}
-                  />
-                )}
-
-                {isUpdating ? (
-                  <Typography
-                    sx={{
-                      fontSize: '14px',
-                      color: theme.palette.text.secondary,
-                      fontFamily: 'Inter',
+                      maxHeight: '240px',
+                      overflow: 'auto',
+                      marginBottom: '12px',
                     }}
                   >
-                    {message?.status === 'failed-permanent'
-                      ? t('core:message.error.update_failed', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                      : t('core:message.generic.updating', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                  </Typography>
-                ) : isTemp ? (
-                  <Typography
-                    sx={{
-                      fontSize: '14px',
-                      color: theme.palette.text.secondary,
-                      fontFamily: 'Inter',
-                    }}
-                  >
-                    {message?.status === 'failed-permanent'
-                      ? t('core:message.error.send_failed', {
-                          postProcess: 'capitalizeFirstChar',
-                        })
-                      : t('core:message.generic.sending', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                  </Typography>
-                ) : (
-                  <>
-                    {message?.isEdit && (
-                      <Typography
+                    {reactions[selectedReaction]?.map((reactionItem) => (
+                      <ListItem
+                        key={reactionItem.sender}
+                        disablePadding
                         sx={{
-                          fontSize: '14px',
-                          color: theme.palette.text.secondary,
-                          fontFamily: 'Inter',
-                          fontStyle: 'italic',
+                          borderRadius: '8px',
+                          marginBottom: '2px',
+                          '&:last-of-type': { marginBottom: 0 },
+                          '&:hover': {
+                            backgroundColor: theme.palette.action.hover,
+                          },
                         }}
                       >
-                        {t('core:message.generic.edited', {
+                        <ListItemText
+                          primary={
+                            reactionItem.senderName || reactionItem.sender
+                          }
+                          primaryTypographyProps={{
+                            fontSize: '14px',
+                            fontWeight: 500,
+                          }}
+                          sx={{ py: '8px', px: '12px' }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    onClick={() => {
+                      if (
+                        reactions[selectedReaction]?.find(
+                          (item) => item?.sender === myAddress
+                        )
+                      ) {
+                        handleReaction(selectedReaction, message, false);
+                      } else {
+                        handleReaction(selectedReaction, message, true);
+                      }
+                      setAnchorEl(null);
+                      setSelectedReaction(null);
+                    }}
+                    sx={{
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      padding: '8px 16px',
+                      textTransform: 'none',
+                    }}
+                  >
+                    {reactions[selectedReaction]?.find(
+                      (item) => item?.sender === myAddress
+                    )
+                      ? t('core:action.remove_reaction', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('core:action.add_reaction', {
                           postProcess: 'capitalizeFirstChar',
                         })}
-                      </Typography>
-                    )}
+                  </Button>
+                </Box>
+              </Popover>
+            )}
+          </Box>
 
-                    <Typography
+          {/* Floating action toolbar — visible on hover (via CSS so only one row is hovered) */}
+          {!isShowingAsReply && (
+            <Box
+              className="message-item-toolbar"
+              sx={{
+                alignItems: 'center',
+                backgroundColor: theme.palette.background.paper,
+                border: '1px solid',
+                borderColor: theme.palette.divider,
+                borderRadius: '8px',
+                boxShadow: theme.shadows[2],
+                display: 'flex',
+                gap: '2px',
+                padding: '3px 6px',
+                position: 'absolute',
+                right: '16px',
+                top: '4px',
+                transition: 'opacity 0.15s ease',
+                zIndex: 2,
+              }}
+            >
+              {message?.sender === myAddress &&
+                (!message?.isNotEncrypted || isPrivate === false) && (
+                  <Tooltip title="Edit" disableFocusListener>
+                    <ButtonBase
                       sx={{
-                        fontSize: '14px',
+                        borderRadius: '6px',
                         color: theme.palette.text.secondary,
-                        fontFamily: 'Inter',
+                        padding: '4px',
+                        '&:hover': {
+                          backgroundColor: theme.palette.action.hover,
+                          color: theme.palette.text.primary,
+                        },
+                      }}
+                      onClick={() => {
+                        onEdit(message);
                       }}
                     >
-                      {formatTimestamp(message.timestamp)}
-                    </Typography>
-                  </>
+                      <EditIcon sx={{ fontSize: '18px' }} />
+                    </ButtonBase>
+                  </Tooltip>
                 )}
-              </Box>
+
+              <Tooltip title="Reply" disableFocusListener>
+                <ButtonBase
+                  sx={{
+                    borderRadius: '6px',
+                    color: theme.palette.text.secondary,
+                    padding: '4px',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                      color: theme.palette.text.primary,
+                    },
+                  }}
+                  onClick={() => {
+                    onReply(message);
+                  }}
+                >
+                  <ReplyIcon sx={{ fontSize: '18px' }} />
+                </ButtonBase>
+              </Tooltip>
+
+              {handleReaction && (
+                <ReactionPicker
+                  onReaction={(val) => {
+                    if (
+                      reactions &&
+                      reactions[val] &&
+                      reactions[val]?.find((item) => item?.sender === myAddress)
+                    ) {
+                      handleReaction(val, message, false);
+                    } else {
+                      handleReaction(val, message, true);
+                    }
+                  }}
+                />
+              )}
             </Box>
-          </Box>
+          )}
         </Box>
         <AvatarPreviewModal
           open={isAvatarPreviewOpen}
@@ -815,50 +1070,98 @@ export const ReplyPreview = ({ message, isEdit = false }) => {
     <Box
       sx={{
         backgroundColor: theme.palette.background.surface,
-        borderRadius: '8px',
+        border: '1px solid',
+        borderColor: theme.palette.divider,
+        borderRadius: '0 8px 8px 0',
         cursor: 'pointer',
         display: 'flex',
-        gap: '20px',
-        marginTop: '20px',
-        maxHeight: '90px',
+        marginTop: '8px',
+        maxHeight: '72px',
         overflow: 'hidden',
         width: '100%',
       }}
     >
       <Box
         sx={{
-          padding: '5px',
+          background: theme.palette.primary.main,
+          borderRadius: '4px 0 0 4px',
+          flexShrink: 0,
+          width: '4px',
         }}
-      >
+      />
+      <Box sx={{ padding: '8px 12px', minWidth: 0 }}>
         {isEdit ? (
-          <Typography
+          <Box
             sx={{
-              fontSize: '12px',
-              fontWeight: 600,
+              alignItems: 'center',
+              display: 'flex',
+              gap: '6px',
+              marginBottom: '4px',
             }}
           >
-            {t('core:message.generic.editing_message', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
+            <EditIcon
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '14px',
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {t('core:message.generic.editing_message', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         ) : (
-          <Typography
+          <Box
             sx={{
-              fontSize: '12px',
-              fontWeight: 600,
+              alignItems: 'center',
+              display: 'flex',
+              gap: '6px',
+              marginBottom: '4px',
             }}
           >
-            {t('core:message.generic.replied_to', {
-              person: message?.senderName || message?.senderAddress,
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
+            <ReplyIcon
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '14px',
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {t('core:message.generic.replied_to', {
+                person: message?.senderName || message?.senderAddress,
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         )}
 
-        {replyMessageText && <MessageDisplay htmlContent={replyMessageText} />}
+        {replyMessageText && (
+          <MessageDisplay isReply htmlContent={replyMessageText} />
+        )}
 
         {message?.decryptedData?.type === 'notification' ? (
-          <MessageDisplay htmlContent={message.decryptedData?.data?.message} />
+          <MessageDisplay
+            isReply
+            htmlContent={message.decryptedData?.data?.message}
+          />
         ) : (
           <MessageDisplay isReply htmlContent={message.text} />
         )}

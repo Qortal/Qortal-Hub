@@ -24,7 +24,7 @@ import { TradeBotRespondMultipleRequest } from '../transactions/TradeBotRespondM
 import {
   API_ENDPOINTS,
   EXT_NODE_QORTAL_LINK,
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
   HTTPS_QORT_TRADE,
   HTTPS_TRADE_NODE,
   LOCALHOST_12391,
@@ -130,7 +130,7 @@ export const gateways = [EXT_NODE_QORTAL_LINK];
 let lastGroupNotification;
 export const groupApi = 'https://' + EXT_NODE_QORTAL_LINK;
 export const groupApiSocket = 'wss://' + EXT_NODE_QORTAL_LINK;
-export const groupApiLocal = HTTP_LOCALHOST_12391;
+export const groupApiLocal = getDefaultLocalNodeUrl();
 export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 
 const timeDifferenceForNotificationChatsBackground = 86400000;
@@ -3174,6 +3174,9 @@ function setupMessageListener() {
       case 'decryptWallet':
         decryptWalletCase(request, event);
         break;
+      case 'startNotificationCheck':
+        startNotificationCheck();
+        break;
       case 'balance':
         balanceCase(request, event);
         break;
@@ -3360,6 +3363,15 @@ function setupMessageListener() {
               if (interval) {
                 // for announcement notification
                 clearInterval(interval);
+                interval = null;
+              }
+              if (notificationCheckInterval) {
+                clearInterval(notificationCheckInterval);
+                notificationCheckInterval = null;
+              }
+              if (paymentsCheckInterval) {
+                clearInterval(paymentsCheckInterval);
+                paymentsCheckInterval = null;
               }
               groupSecretkeys = {};
               const wallet = await getSaveWallet();
@@ -3839,5 +3851,9 @@ const createNotificationCheck = () => {
   }
 };
 
-// Call this function when initializing your app
+// Call this function when initializing your app or after user logs in (intervals are cleared on logout)
 createNotificationCheck();
+
+export function startNotificationCheck() {
+  createNotificationCheck();
+}

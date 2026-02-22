@@ -1,44 +1,15 @@
 import {
-  createContext,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import {
-  Box,
-  Button,
-  ButtonBase,
-  Checkbox,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-  FormControlLabel,
-  IconButton,
-  Tooltip,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { JsonView, allExpanded, darkStyles } from 'react-json-view-lite';
-import 'react-json-view-lite/dist/index.css';
-import HubIcon from '@mui/icons-material/Hub';
+import { Box, ButtonBase, useTheme } from '@mui/material';
 import { decryptStoredWallet } from './utils/decryptWallet';
-import { CountdownCircleTimer } from 'react-countdown-circle-timer';
-import Logo1Dark from './assets/svgs/Logo1Dark.svg';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import DownloadIcon from '@mui/icons-material/Download';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
-import { Return } from './assets/Icons/Return.tsx';
-import WarningIcon from '@mui/icons-material/Warning';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
-import EngineeringIcon from '@mui/icons-material/Engineering';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import PriorityHighIcon from '@mui/icons-material/PriorityHigh';
 import {
   createAccount,
   saveFileToDisk,
@@ -46,304 +17,137 @@ import {
 } from './utils/generateWallet/generateWallet';
 import { crypto, walletVersion } from './constants/decryptWallet';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
-import {
-  AddressBox,
-  AppContainer,
-  AuthenticatedContainer,
-  AuthenticatedContainerInnerLeft,
-  AuthenticatedContainerInnerRight,
-  CustomButton,
-  CustomButtonAccept,
-  CustomLabel,
-  TextItalic,
-  TextP,
-  TextSpan,
-} from './styles/App-styles.ts';
-import { Spacer } from './common/Spacer';
+import { AppContainer } from './styles/App-styles.ts';
 import { Loader } from './components/Loader';
-import { PasswordField, ErrorText } from './components';
-import { Group, requestQueueMemberNames } from './components/Group/Group';
-import { TaskManager } from './components/TaskManager/TaskManager.tsx';
-import { useModal } from './hooks/useModal.tsx';
-import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
-import SettingsIcon from '@mui/icons-material/Settings';
-import LogoutIcon from '@mui/icons-material/Logout';
-import HelpIcon from '@mui/icons-material/Help';
+import { AuthenticationForm } from './components/AuthenticationForm';
+import { ProfileLeft } from './components/Profile';
 import {
-  cleanUrl,
-  getProtocol,
-  getWallets,
-  groupApi,
-  groupApiSocket,
-  storeWallets,
-} from './background/background.ts';
+  BuyOrderRequestScreen,
+  ConnectionRequestScreen,
+  CountdownOverlay,
+  CreateWalletView,
+  InfoDialog,
+  NotAuthenticatedFooter,
+  PaymentPublishDialog,
+  PaymentRequestScreen,
+  QortalRequestExtensionDialog,
+  QortalRequestScreen,
+  SendQortOverlay,
+  SuccessOverlay,
+  SuccessScreen,
+  UnsavedChangesDialog,
+  WalletsView,
+  WebAppAuthRequestScreen,
+} from './components/App';
+
+import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
+import { useAppModals } from './hooks/useAppModals';
+import { useAppReset } from './hooks/useAppReset';
+import { useAppMessageHandler } from './hooks/useAppMessageHandler';
+import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
+import HelpIcon from '@mui/icons-material/Help';
+import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from './utils/events';
-import {
-  requestQueueCommentCount,
-  requestQueuePublishedAccouncements,
-} from './components/Chat/GroupAnnouncements';
-import { requestQueueGroupJoinRequests } from './components/Group/GroupJoinRequests';
 import { DrawerComponent } from './components/Drawer/Drawer';
-import { AddressQRCode } from './components/AddressQRCode';
 import { Settings } from './components/Group/Settings';
-import { MainAvatar } from './components/MainAvatar';
-import Avatar from '@mui/material/Avatar';
-import { loadAvatar } from './utils/avatarStorage.ts';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
 import {
   authenticatePasswordAtom,
   balanceAtom,
-  canSaveSettingToQdnAtom,
   enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
-  globalDownloadsAtom,
-  groupAnnouncementsAtom,
-  groupChatTimestampsAtom,
-  groupsOwnerNamesAtom,
-  groupsPropertiesAtom,
   hasSettingsChangedAtom,
+  infoSnackGlobalAtom,
   isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
   isRunningPublicNodeAtom,
-  isUsingImportExportSettingsAtom,
-  lastPaymentSeenTimestampAtom,
-  mailsAtom,
-  memberGroupsAtom,
-  mutedGroupsAtom,
-  myGroupsWhereIAmAdminAtom,
-  oldPinnedAppsAtom,
-  qMailLastEnteredTimestampAtom,
+  openSnackGlobalAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
-  resourceDownloadControllerAtom,
   selectedNodeInfoAtom,
-  settingsLocalLastUpdatedAtom,
-  settingsQDNLastUpdatedAtom,
-  sortablePinnedAppsAtom,
-  timestampEnterDataAtom,
-  txListAtom,
   userInfoAtom,
   walletToBeDecryptedErrorAtom,
 } from './atoms/global';
 import { NotAuthenticated } from './components/NotAuthenticated.tsx';
-import { handleGetFileFromIndexedDB } from './utils/indexedDB';
-import { Wallets } from './components/Wallets.tsx';
 import { useFetchResources } from './hooks/useFetchResources.tsx';
 import { Tutorials } from './components/Tutorials/Tutorials';
 import { useHandleTutorials } from './hooks/useHandleTutorials.tsx';
 import { useHandleUserInfo } from './hooks/useHandleUserInfo.tsx';
 import { Minting } from './components/Minting/Minting';
 import { isRunningGateway } from './qortal/qortal-requests.ts';
-import { QMailStatus } from './components/QMailStatus';
-import { GlobalActions } from './components/GlobalActions/GlobalActions';
-import { useBlockedAddresses } from './hooks/useBlockUsers.tsx';
-import { WalletIcon } from './assets/Icons/WalletIcon';
+import { useBlockedAddressesLoader } from './hooks/useBlockUsers.tsx';
 import { UserLookup } from './components/UserLookup.tsx/UserLookup';
 import { RegisterName } from './components/RegisterName';
 import { BuyQortInformation } from './components/BuyQortInformation';
-import { QortPayment } from './components/QortPayment';
-import { GeneralNotifications } from './components/GeneralNotifications';
 import { PdfViewer } from './common/PdfViewer';
-import ThemeSelector from './components/Theme/ThemeSelector.tsx';
-import { Trans, useTranslation } from 'react-i18next';
-import LanguageSelector from './components/Language/LanguageSelector.tsx';
+import { useTranslation } from 'react-i18next';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
-import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
-import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
-import { Save } from './components/Save/Save';
-import { useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { useResetAtom } from 'jotai/utils';
+import { useAtom, useSetAtom } from 'jotai';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
+  isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
-  TIME_MINUTES_2_IN_MILLISECONDS,
-  TIME_SECONDS_40_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
-import { ApiKey } from './types/auth.ts';
 import { useAuth } from './hooks/useAuth.tsx';
-import { nodeDisplay } from './utils/helpers.ts';
+import type { extStates } from './types/app';
+import { AppContextInterface, QORTAL_APP_CONTEXT } from './context/AppContext';
+import { handleSetGlobalApikey } from './utils/globalApi';
+import { isMainWindow } from './constants/app';
+import type { CustomTitleBarRightNavProps } from './components/Desktop/CustomTitleBar';
+import {
+  CustomTitleBar,
+  CUSTOM_TITLE_BAR_HEIGHT,
+} from './components/Desktop/CustomTitleBar';
 
-export type extStates =
-  | 'authenticated'
-  | 'buy-order-submitted'
-  | 'create-wallet'
-  | 'download-wallet'
-  | 'group'
-  | 'not-authenticated'
-  | 'send-qort'
-  | 'transfer-success-regular'
-  | 'transfer-success-request'
-  | 'wallet-dropped'
-  | 'wallets'
-  | 'web-app-request-authentication'
-  | 'web-app-request-buy-order'
-  | 'web-app-request-connection'
-  | 'web-app-request-payment';
-
-interface MyContextInterface {
-  isShow: boolean;
-  onCancel: () => void;
-  onOk: () => void;
-  show: () => void;
-  message: any;
-}
-
-const defaultValues: MyContextInterface = {
-  isShow: false,
-  onCancel: () => {},
-  onOk: () => {},
-  show: () => {},
-  message: {
-    publishFee: '',
-    message: '',
-  },
-};
-
-export const allQueues = {
-  requestQueueCommentCount: requestQueueCommentCount,
-  requestQueuePublishedAccouncements: requestQueuePublishedAccouncements,
-  requestQueueMemberNames: requestQueueMemberNames,
-  requestQueueGroupJoinRequests: requestQueueGroupJoinRequests,
-};
-
-const controlAllQueues = (action) => {
-  Object.keys(allQueues).forEach((key) => {
-    const val = allQueues[key];
-    try {
-      if (typeof val[action] === 'function') {
-        val[action]();
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  });
-};
-
-export const clearAllQueues = () => {
-  Object.keys(allQueues).forEach((key) => {
-    const val = allQueues[key];
-    try {
-      val.clear();
-    } catch (error) {
-      console.error(error);
-    }
-  });
-};
-
-export const pauseAllQueues = () => {
-  controlAllQueues('pause');
-  window.sendMessage('pauseAllQueues', {}).catch((error) => {
-    console.error(
-      'Failed to pause all queues:',
-      error.message || 'An error occurred'
-    );
-  });
-};
-
-export const resumeAllQueues = () => {
-  controlAllQueues('resume');
-  window.sendMessage('resumeAllQueues', {}).catch((error) => {
-    console.error(
-      'Failed to resume all queues:',
-      error.message || 'An error occurred'
-    );
-  });
-};
-
-export const QORTAL_APP_CONTEXT =
-  createContext<MyContextInterface>(defaultValues);
-
-export let globalApiKey: ApiKey | null = null;
-
-export const handleSetGlobalApikey = (data: ApiKey) => {
-  globalApiKey = data;
-};
-export const getBaseApiReact = (customApi?: string) => {
-  if (customApi) {
-    return customApi;
-  }
-  if (globalApiKey?.url) {
-    return globalApiKey?.url;
-  } else {
-    return groupApi;
-  }
-};
-
-export const getArbitraryEndpointReact = () => {
-  if (globalApiKey) {
-    return `/arbitrary/resources/searchsimple`;
-  } else {
-    return `/arbitrary/resources/searchsimple`;
-  }
-};
-
-export const getBaseApiReactSocket = (customApi?: string) => {
-  if (customApi) {
-    return customApi;
-  }
-
-  if (globalApiKey?.url) {
-    return `${
-      getProtocol(globalApiKey?.url) === 'http' ? 'ws://' : 'wss://'
-    }${cleanUrl(globalApiKey?.url)}`;
-  } else {
-    return groupApiSocket;
-  }
-};
-
-export const isMainWindow = true;
+// Re-export for consumers that still import from App
+export type { extStates } from './types/app';
+export { QORTAL_APP_CONTEXT } from './context/AppContext';
+export {
+  allQueues,
+  clearAllQueues,
+  pauseAllQueues,
+  resumeAllQueues,
+} from './utils/appQueues';
+export {
+  globalApiKey,
+  handleSetGlobalApikey,
+  getBaseApiReact,
+  getBaseApiReactForAvatar,
+  getArbitraryEndpointReact,
+  getBaseApiReactSocket,
+} from './utils/globalApi';
+export { isMainWindow } from './constants/app';
 
 function App() {
   const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
-  const [backupjson, setBackupjson] = useState<any>(null);
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
   const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
     qortBalanceLoadingAtom
   );
-  const [decryptedWallet, setdecryptedWallet] = useState<any>(null);
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
-  const [authenticatedMode, setAuthenticatedMode] = useState('qort');
-  const [requestAuthentication, setRequestAuthentication] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
   const [balance, setBalance] = useAtom(balanceAtom);
   const [paymentTo, setPaymentTo] = useState<string>('');
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
-  const [paymentPassword, setPaymentPassword] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
-  const [sendPaymentSuccess, setSendPaymentSuccess] = useState<string>('');
   const [countdown, setCountdown] = useState<null | number>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
-  const [isMain, setIsMain] = useState<boolean>(true);
-  const isMainRef = useRef(false);
-  const [authenticatePassword, setAuthenticatePassword] = useAtom(
-    authenticatePasswordAtom
-  );
+  const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
   const isAuthenticated = extState === 'authenticated';
-  const [walletAvatarSrc, setWalletAvatarSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (rawWallet?.address0 && extState === 'wallet-dropped') {
-      loadAvatar(rawWallet.address0).then(setWalletAvatarSrc);
-    } else {
-      setWalletAvatarSrc(null);
-    }
-  }, [rawWallet?.address0, extState]);
-
   const { t } = useTranslation([
     'auth',
     'core',
@@ -365,66 +169,63 @@ function App() {
     walletToBeDecryptedErrorAtom
   );
 
-  const [isFocused, setIsFocused] = useState(true);
-
   const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
   );
 
-  const balanceSetIntervalRef = useRef(null);
   const downloadResource = useFetchResources();
-  const globalDownloadsValue = useAtomValue(globalDownloadsAtom);
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
+  const permissionHandlerRef = useRef<
+    ((message: any, event: MessageEvent) => void) | null
+  >(null);
 
+  const { resetAllRecoil } = useAppReset();
+
+  const { showTutorial } = useHandleTutorials();
+
+  const modals = useAppModals();
   const {
-    showTutorial,
-    openTutorialModal,
-    shownTutorialsInitiated,
-    setOpenTutorialModal,
-    hasSeenGettingStarted,
-  } = useHandleTutorials();
+    paymentPublish,
+    unsavedChanges,
+    info,
+    qortalRequest,
+    qortalRequestExtension,
+    confirmRequestRead,
+    setConfirmRequestRead,
+    qortalRequestCheckbox1Ref,
+  } = modals;
+  const isShow = paymentPublish.isShow;
+  const onCancel = paymentPublish.onCancel;
+  const onOk = paymentPublish.onOk;
+  const show = paymentPublish.show;
+  const message = paymentPublish.message;
+  const isShowUnsavedChanges = unsavedChanges.isShow;
+  const onCancelUnsavedChanges = unsavedChanges.onCancel;
+  const onOkUnsavedChanges = unsavedChanges.onOk;
+  const showUnsavedChanges = unsavedChanges.show;
+  const messageUnsavedChanges = unsavedChanges.message;
+  const isShowInfo = info.isShow;
+  const onOkInfo = info.onOk;
+  const showInfo = info.show;
+  const messageInfo = info.message;
+  const onCancelQortalRequest = qortalRequest.onCancel;
+  const onOkQortalRequest = qortalRequest.onOk;
+  const showQortalRequest = qortalRequest.show;
+  const isShowQortalRequest = qortalRequest.isShow;
+  const messageQortalRequest = qortalRequest.message;
+  const onCancelQortalRequestExtension = qortalRequestExtension.onCancel;
+  const onOkQortalRequestExtension = qortalRequestExtension.onOk;
+  const showQortalRequestExtension = qortalRequestExtension.show;
+  const isShowQortalRequestExtension = qortalRequestExtension.isShow;
+  const messageQortalRequestExtension = qortalRequestExtension.message;
 
-  const { isShow, onCancel, onOk, show, message } = useModal();
-
-  const {
-    isShow: isShowUnsavedChanges,
-    onCancel: onCancelUnsavedChanges,
-    onOk: onOkUnsavedChanges,
-    show: showUnsavedChanges,
-    message: messageUnsavedChanges,
-  } = useModal();
   const confirmRef = useRef(null);
-
-  const {
-    isShow: isShowInfo,
-    onCancel: onCancelInfo,
-    onOk: onOkInfo,
-    show: showInfo,
-    message: messageInfo,
-  } = useModal();
-
-  const {
-    onCancel: onCancelQortalRequest,
-    onOk: onOkQortalRequest,
-    show: showQortalRequest,
-    isShow: isShowQortalRequest,
-    message: messageQortalRequest,
-  } = useModal();
-
-  const {
-    onCancel: onCancelQortalRequestExtension,
-    onOk: onOkQortalRequestExtension,
-    show: showQortalRequestExtension,
-    isShow: isShowQortalRequestExtension,
-    message: messageQortalRequestExtension,
-  } = useModal();
 
   const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
-  const [infoSnack, setInfoSnack] = useState(null);
-  const [openSnack, setOpenSnack] = useState(false);
-  const [hasLocalNode, setHasLocalNode] = useState(false);
+  const [infoSnack, setInfoSnack] = useAtom(infoSnackGlobalAtom);
+  const [openSnack, setOpenSnack] = useAtom(openSnackGlobalAtom);
   const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
@@ -436,21 +237,13 @@ function App() {
     getBalanceFunc,
     validateApiKeyFromRegistration,
   } = useAuth();
-  const {
-    isUserBlocked,
-    addToBlockList,
-    removeBlockFromList,
-    getAllBlockedUsers,
-  } = useBlockedAddresses(extState === 'authenticated');
+  useBlockedAddressesLoader(extState === 'authenticated');
 
-  // const [useLocalNode, setUseLocalNode] = useState(true);
-  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
-  const [confirmRequestRead, setConfirmRequestRead] = useState(false);
+  const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showSeed, setShowSeed] = useState(false);
   const [creationStep, setCreationStep] = useState(1);
   const getIndividualUserInfo = useHandleUserInfo();
-  const qortalRequestCheckbox1Ref = useRef(null);
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
@@ -465,14 +258,6 @@ function App() {
     const seedPhrase = generatorRef.current.parsedString;
     saveSeedPhraseToDisk(seedPhrase);
   };
-
-  const passwordRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (extState === 'wallet-dropped' && passwordRef.current) {
-      passwordRef.current.focus();
-    }
-  }, [extState]);
 
   useEffect(() => {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
@@ -497,124 +282,18 @@ function App() {
       });
   }, [extState]);
 
-  //resets for recoil
-  const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
-  const resetAtomIsUsingImportExportSettingsAtom = useResetAtom(
-    isUsingImportExportSettingsAtom
-  );
-  const resetAtomCanSaveSettingToQdnAtom = useResetAtom(
-    canSaveSettingToQdnAtom
-  );
-  const resetAtomSettingsQDNLastUpdatedAtom = useResetAtom(
-    settingsQDNLastUpdatedAtom
-  );
-  const resetAtomSettingsLocalLastUpdatedAtom = useResetAtom(
-    settingsLocalLastUpdatedAtom
-  );
-  const resetAtomOldPinnedAppsAtom = useResetAtom(oldPinnedAppsAtom);
-  const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
-    qMailLastEnteredTimestampAtom
-  );
-  const resetAtomMailsAtom = useResetAtom(mailsAtom);
-  const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
-  const resetLastPaymentSeenTimestampAtom = useResetAtom(
-    lastPaymentSeenTimestampAtom
-  );
-  const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
-    myGroupsWhereIAmAdminAtom
-  );
-  const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
-  const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);
-  const resetMutedGroupsAtom = useResetAtom(mutedGroupsAtom);
-  const resetGroupChatTimestampsAtom = useResetAtom(groupChatTimestampsAtom);
-  const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
-  const resettxListAtomAtom = useResetAtom(txListAtom);
-  const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
-  const resetResourceDownloadControllerAtom = useResetAtom(
-    resourceDownloadControllerAtom
-  );
-  const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
-  const resetAllRecoil = () => {
-    // First, clean up any active download intervals/timeouts
-    if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
-      Object.values(globalDownloadsValue).forEach((entry: any) => {
-        if (entry?.interval) clearInterval(entry.interval);
-        if (entry?.timeout) clearTimeout(entry.timeout);
-        if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
-      });
-    }
-
-    // Reset all atoms
-    resetAtomSortablePinnedAppsAtom();
-    resetAtomCanSaveSettingToQdnAtom();
-    resetAtomSettingsQDNLastUpdatedAtom();
-    resetAtomSettingsLocalLastUpdatedAtom();
-    resetAtomOldPinnedAppsAtom();
-    resetAtomIsUsingImportExportSettingsAtom();
-    resetAtomQMailLastEnteredTimestampAtom();
-    resetAtomMailsAtom();
-    resetGroupPropertiesAtom();
-    resetLastPaymentSeenTimestampAtom();
-    resetGroupsOwnerNamesAtom();
-    resetGroupAnnouncementsAtom();
-    resetMutedGroupsAtom();
-    resetGroupChatTimestampsAtom();
-    resetTimestampEnterAtom();
-    resettxListAtomAtom();
-    resetmemberGroupsAtomAtom();
-    resetMyGroupsWhereIAmAdminAtom();
-    resetResourceDownloadControllerAtom();
-    resetGlobalDownloadsAtom();
-  };
 
   const contextValue = useMemo(
     () => ({
-      isShow,
       onCancel,
       onOk,
       show,
-      userInfo,
-      message,
       showInfo,
-      openSnackGlobal: openSnack,
-      setOpenSnackGlobal: setOpenSnack,
-      infoSnackCustom: infoSnack,
-      setInfoSnackCustom: setInfoSnack,
       downloadResource,
       getIndividualUserInfo,
-      isUserBlocked,
-      addToBlockList,
-      removeBlockFromList,
-      getAllBlockedUsers,
-      showTutorial,
-      openTutorialModal,
-      setOpenTutorialModal,
-      hasSeenGettingStarted,
     }),
-    [
-      isShow,
-      onCancel,
-      onOk,
-      show,
-      userInfo,
-      message,
-      showInfo,
-      openSnack,
-      setOpenSnack,
-      infoSnack,
-      setInfoSnack,
-      downloadResource,
-      getIndividualUserInfo,
-      isUserBlocked,
-      addToBlockList,
-      removeBlockFromList,
-      getAllBlockedUsers,
-      showTutorial,
-      openTutorialModal,
-      setOpenTutorialModal,
-      hasSeenGettingStarted,
-    ]
+    [onCancel, onOk, show, showInfo, downloadResource, getIndividualUserInfo]
   );
 
   useEffect(() => {
@@ -628,7 +307,7 @@ function App() {
             setSelectedNode(response);
           } else {
             const payload = {
-              url: HTTP_LOCALHOST_12391,
+              url: getDefaultLocalNodeUrl(),
               apikey: '',
             };
             handleSetGlobalApikey(response);
@@ -655,6 +334,7 @@ function App() {
                   return;
                 if (response?.hasKeyPair) {
                   setExtstate('authenticated');
+                  window.sendMessage('startNotificationCheck').catch(() => {});
                 } else {
                   setExtstate('wallet-dropped');
                 }
@@ -691,10 +371,6 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
-
   const address = useMemo(() => {
     if (!rawWallet?.address0) return '';
     return rawWallet.address0;
@@ -721,14 +397,13 @@ function App() {
         reader.readAsText(file);
       });
 
-      let error: any = null;
       let pf: any;
 
       try {
         if (typeof fileContents !== 'string') return;
         pf = JSON.parse(fileContents);
       } catch (e) {
-        console.log(error);
+        console.log(e);
       }
 
       try {
@@ -752,7 +427,6 @@ function App() {
         }
         setRawWallet(pf);
         setExtstate('wallet-dropped');
-        setdecryptedWallet(null);
       } catch (e) {
         console.log(e);
       }
@@ -778,34 +452,6 @@ function App() {
       wallet,
       qortAddress: rawWallet.address0,
     };
-  };
-
-  const balanceSetInterval = () => {
-    try {
-      if (balanceSetIntervalRef?.current) {
-        clearInterval(balanceSetIntervalRef?.current);
-      }
-
-      let isCalling = false;
-      balanceSetIntervalRef.current = setInterval(async () => {
-        if (isCalling) return;
-        isCalling = true;
-        window
-          .sendMessage('balance')
-          .then((response) => {
-            if (!response?.error && !isNaN(+response)) {
-              setBalance(response);
-            }
-            isCalling = false;
-          })
-          .catch((error) => {
-            console.error('Failed to get balance:', error);
-            isCalling = false;
-          });
-      }, TIME_SECONDS_40_IN_MILLISECONDS);
-    } catch (error) {
-      console.error(error);
-    }
   };
 
   const refetchUserInfo = () => {
@@ -874,70 +520,49 @@ function App() {
       }
     }
   };
-
-  useEffect(() => {
-    // Handler function for incoming messages
-    const messageHandler = (event) => {
-      if (event.origin !== window.location.origin) {
-        return;
-      }
-      const message = event.data;
-
-      if (message?.action === 'CHECK_FOCUS') {
-        event.source.postMessage(
-          { action: 'CHECK_FOCUS_RESPONSE', isFocused: isFocusedRef.current },
-          event.origin
-        );
-      } else if (message.action === 'NOTIFICATION_OPEN_DIRECT') {
-        executeEvent('openDirectMessage', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_GROUP') {
-        executeEvent('openGroupMessage', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_ANNOUNCEMENT_GROUP') {
-        executeEvent('openGroupAnnouncement', {
-          from: message.payload.from,
-        });
-      } else if (message.action === 'NOTIFICATION_OPEN_THREAD_NEW_POST') {
-        executeEvent('openThreadNewPost', {
-          data: message.payload.data,
-        });
-      } else if (
-        message.action === 'QORTAL_REQUEST_PERMISSION' &&
-        message?.isFromExtension
-      ) {
-        qortalRequestPermissionFromExtension(message, event);
-      } else if (message?.action === 'getFileFromIndexedDB') {
-        handleGetFileFromIndexedDB(event);
-      }
-    };
-
-    // Attach the event listener
-    window.addEventListener('message', messageHandler);
-
-    // Clean up the event listener on component unmount
-    return () => {
-      window.removeEventListener('message', messageHandler);
-    };
-  }, []);
+  permissionHandlerRef.current = qortalRequestPermissionFromExtension;
+  useAppMessageHandler(isFocusedRef, permissionHandlerRef);
 
   //param = isDecline
-  const confirmPayment = (isDecline: boolean) => {
+  const confirmPayment = useCallback((isDecline: boolean) => {
     // REMOVED FOR MOBILE APP
-  };
+  }, []);
 
-  const confirmBuyOrder = (isDecline: boolean) => {
+  const confirmBuyOrder = useCallback((isDecline: boolean) => {
     // REMOVED FOR MOBILE APP
-  };
-  const responseToConnectionRequest = (
-    isOkay: boolean,
-    hostname: string,
-    interactionId: string
-  ) => {
-    // REMOVED FOR MOBILE APP
-  };
+  }, []);
+  const responseToConnectionRequest = useCallback(
+    (isOkay: boolean, hostname: string, interactionId: string) => {
+      // REMOVED FOR MOBILE APP
+    },
+    []
+  );
+  const onConnectionRequestAccept = useCallback(
+    () =>
+      responseToConnectionRequest(
+        true,
+        requestConnection?.hostname ?? '',
+        requestConnection?.interactionId ?? ''
+      ),
+    [
+      responseToConnectionRequest,
+      requestConnection?.hostname,
+      requestConnection?.interactionId,
+    ]
+  );
+  const onConnectionRequestDecline = useCallback(
+    () =>
+      responseToConnectionRequest(
+        false,
+        requestConnection?.hostname ?? '',
+        requestConnection?.interactionId ?? ''
+      ),
+    [
+      responseToConnectionRequest,
+      requestConnection?.hostname,
+      requestConnection?.interactionId,
+    ]
+  );
 
   const getUserInfo = useCallback(async (useTimer?: boolean) => {
     try {
@@ -1126,10 +751,7 @@ function App() {
 
   const returnToMain = () => {
     setPaymentTo('');
-    setPaymentAmount(0);
-    setPaymentPassword('');
     setSendPaymentError('');
-    setSendPaymentSuccess('');
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
@@ -1142,20 +764,13 @@ function App() {
 
   const resetAllStates = () => {
     setExtstate('not-authenticated');
-    setAuthenticatedMode('qort');
-    setBackupjson(null);
     setRawWallet(null);
-    setdecryptedWallet(null);
     setRequestConnection(null);
     setRequestBuyOrder(null);
-    setRequestAuthentication(null);
     setUserInfo(null);
     setBalance(null);
     setPaymentTo('');
-    setPaymentAmount(0);
-    setPaymentPassword('');
     setSendPaymentError('');
-    setSendPaymentSuccess('');
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
@@ -1164,11 +779,7 @@ function App() {
     setWalletToBeDownloadedPasswordConfirm('');
     setWalletToBeDownloadedError('');
     setSendqortState(null);
-    setHasLocalNode(false);
     resetAllRecoil();
-    if (balanceSetIntervalRef?.current) {
-      clearInterval(balanceSetIntervalRef?.current);
-    }
   };
 
   function roundUpToDecimals(number, decimals = 8) {
@@ -1196,12 +807,12 @@ function App() {
     if (!isMainWindow) return;
     // Handler for when the window gains focus
     const handleFocus = () => {
-      setIsFocused(true);
+      isFocusedRef.current = true;
     };
 
     // Handler for when the window loses focus
     const handleBlur = () => {
-      setIsFocused(false);
+      isFocusedRef.current = false;
     };
 
     // Attach the event listeners
@@ -1211,9 +822,9 @@ function App() {
     // Optionally, listen for visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        setIsFocused(true);
+        isFocusedRef.current = true;
       } else {
-        setIsFocused(false);
+        isFocusedRef.current = false;
       }
     };
 
@@ -1260,609 +871,155 @@ function App() {
     };
   }, []);
 
-  const renderProfileLeft = () => {
-    return (
-      <AuthenticatedContainerInnerLeft
-        sx={{
-          minWidth: '225px',
-          overflowY: 'auto',
-          padding: '0px 20px',
-        }}
-      >
-        <Spacer height="20px" />
-
-        <Spacer height="48px" />
-
-        <>
-          <MainAvatar
-            setOpenSnack={setOpenSnack}
-            setInfoSnack={setInfoSnack}
-            myName={userInfo?.name}
-            balance={balance}
-          />
-
-          <Spacer height="32px" />
-
-          <TextP
-            sx={{
-              fontSize: '20px',
-              lineHeight: '24px',
-              textAlign: 'center',
-            }}
-          >
-            {userInfo?.name}
-          </TextP>
-
-          <Spacer height="10px" />
-
-          <ButtonBase
-            onClick={() => {
-              if (rawWallet?.address0) {
-                navigator.clipboard
-                  .writeText(rawWallet.address0)
-                  .catch((err) => {
-                    console.error('Failed to copy address:', err);
-                  });
-              }
-            }}
-          >
-            <AddressBox>
-              {rawWallet?.address0?.slice(0, 6)}...
-              {rawWallet?.address0?.slice(-4)}{' '}
-              <CopyIcon color={theme.palette.text.primary} />
-            </AddressBox>
-          </ButtonBase>
-
-          <Spacer height="10px" />
-
-          {qortBalanceLoading && <CircularProgress color="success" size={16} />}
-
-          {!qortBalanceLoading && balance >= 0 && (
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                gap: '10px',
-              }}
-            >
-              <TextP
-                sx={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  lineHeight: '24px',
-                  textAlign: 'center',
-                }}
-              >
-                {balance?.toFixed(2)} QORT
-              </TextP>
-
-              <RefreshIcon
-                onClick={getBalanceAndUserInfoFunc}
-                sx={{
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                }}
-              />
-            </Box>
-          )}
-
-          <Spacer height="35px" />
-
-          {userInfo && !userInfo?.name && (
-            <Button
-              variant={'contained'}
-              sx={{
-                backgroundColor: 'red',
-                cursor: 'pointer',
-                fontSize: '16px',
-                fontWeight: 500,
-                lineHeight: 1.2,
-                marginTop: '10px',
-                textAlign: 'center',
-              }}
-              onClick={() => {
-                executeEvent('openRegisterName', {});
-              }}
-            >
-              {t('core:action.register_name', {
-                postProcess: 'capitalizeAll',
-              })}
-            </Button>
-          )}
-
-          <Spacer height="20px" />
-
-          <CustomButton
-            onClick={() => {
-              setIsOpenSendQort(true);
-              setIsOpenDrawerProfile(false);
-            }}
-          >
-            {t('core:action.transfer_qort', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </CustomButton>
-          <AddressQRCode targetAddress={rawWallet?.address0} />
-        </>
-
-        <TextP
-          sx={{
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 500,
-            lineHeight: '24px',
-            marginTop: '10px',
-            textAlign: 'center',
-            textDecoration: 'underline',
-          }}
-          onClick={async () => {
-            executeEvent('addTab', {
-              data: { service: 'APP', name: 'q-trade' },
-            });
-            executeEvent('open-apps-mode', {});
-          }}
-        >
-          {t('core:action.get_qort_trade', {
+  const onOpenSendQort = useCallback(() => setIsOpenSendQort(true), []);
+  const onCloseDrawerProfile = useCallback(
+    () => setIsOpenDrawerProfile(false),
+    []
+  );
+  const onOpenSendQortAndCloseDrawer = useCallback(() => {
+    setIsOpenSendQort(true);
+    setIsOpenDrawerProfile(false);
+  }, []);
+  const onOpenRegisterName = useCallback(
+    () => executeEvent('openRegisterName', {}),
+    []
+  );
+  const onOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
+  const onOpenDrawerLookup = useCallback(() => setIsOpenDrawerLookup(true), []);
+  const onOpenWalletsApp = useCallback(
+    () => executeEvent('openWalletsApp', {}),
+    []
+  );
+  const onOpenDrawerProfile = useCallback(
+    () => setIsOpenDrawerProfile(true),
+    []
+  );
+  const onOpenMinting = useCallback(async () => {
+    try {
+      const res = await isRunningGateway();
+      if (res)
+        throw new Error(
+          t('core:message.generic.no_minting_details', {
             postProcess: 'capitalizeFirstChar',
-          })}
-        </TextP>
-      </AuthenticatedContainerInnerLeft>
-    );
-  };
+          })
+        );
+      setIsOpenMinting(true);
+    } catch (error: any) {
+      setOpenSnack(true);
+      setInfoSnack({
+        type: 'error',
+        message: error?.message,
+      });
+    }
+  }, [t]);
+  const onBackupWallet = useCallback(() => {
+    setExtstate('download-wallet');
+    setIsOpenDrawerProfile(false);
+  }, [setExtstate]);
 
-  const renderProfile = () => {
-    return (
-      <AuthenticatedContainer
-        sx={{
-          backgroundColor: theme.palette.background.paper,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          width: 'auto',
-        }}
-      >
-        {desktopViewMode !== 'apps' &&
-          desktopViewMode !== 'dev' &&
-          desktopViewMode !== 'chat' && <>{renderProfileLeft()}</>}
+  const onOkQortalRequestAccepted = useCallback(
+    () => onOkQortalRequest('accepted'),
+    [onOkQortalRequest]
+  );
+  const onConfirmBuyOrderAccept = useCallback(
+    () => confirmBuyOrder(false),
+    [confirmBuyOrder]
+  );
+  const onConfirmBuyOrderDecline = useCallback(
+    () => confirmBuyOrder(true),
+    [confirmBuyOrder]
+  );
+  const onConfirmPaymentAccept = useCallback(
+    () => confirmPayment(false),
+    [confirmPayment]
+  );
+  const onConfirmPaymentDecline = useCallback(
+    () => confirmPayment(true),
+    [confirmPayment]
+  );
+  const onGoToCreateWallet = useCallback(
+    () => setExtstate('create-wallet'),
+    [setExtstate]
+  );
+  const onWalletsBack = useCallback(() => {
+    setRawWallet(null);
+    setExtstate('not-authenticated');
+    logoutFunc();
+  }, [setExtstate, logoutFunc]);
+  const onAuthenticationFormBack = useCallback(() => {
+    setRawWallet(null);
+    setExtstate('wallets');
+    setAuthenticatePassword('');
+    logoutFunc();
+  }, [setExtstate, logoutFunc]);
+  const onCreateWalletReturnBack = useCallback(() => {
+    if (creationStep === 2) {
+      setCreationStep(1);
+      setWalletToBeDownloadedPasswordConfirm('');
+      setWalletToBeDownloadedPassword('');
+      return;
+    }
+    setExtstate('not-authenticated');
+    setShowSeed(false);
+    setCreationStep(1);
+    setWalletToBeDownloadedPasswordConfirm('');
+    setWalletToBeDownloadedPassword('');
+  }, [
+    creationStep,
+    setExtstate,
+    setWalletToBeDownloadedPasswordConfirm,
+    setWalletToBeDownloadedPassword,
+  ]);
+  const onShowSeed = useCallback(() => setShowSeed(true), []);
+  const onHideSeed = useCallback(() => setShowSeed(false), []);
+  const onCreationStepNext = useCallback(() => setCreationStep(2), []);
+  const onBackupAccountConfirm = useCallback(async () => {
+    await saveFileToDiskFunc();
+    returnToMain();
+    await showInfo({
+      message: t('auth:tips.wallet_secure', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    });
+  }, [t, showInfo]);
+  const onCountdownComplete = useCallback(() => {
+    window.close();
+  }, []);
+  const onTransferSuccessContinue = useCallback(() => returnToMain(), []);
+  const onTransferSuccessRequestClose = useCallback(() => window.close(), []);
+  const onBuyOrderSubmittedClose = useCallback(() => window.close(), []);
+  const onOkQortalRequestExtensionAccept = useCallback(() => {
+    const ext = messageQortalRequestExtension as
+      | { confirmCheckbox?: boolean }
+      | null
+      | undefined;
+    if (ext?.confirmCheckbox && !confirmRequestRead) return;
+    onOkQortalRequestExtension('accepted');
+  }, [
+    messageQortalRequestExtension,
+    confirmRequestRead,
+    onOkQortalRequestExtension,
+  ]);
+  const onOpenCoreSetup = useCallback(
+    () => setOpenCoreSetup(true),
+    [setOpenCoreSetup]
+  );
+  const onShowTutorialImportantInfo = useCallback(
+    () => showTutorial('important-information', true),
+    [showTutorial]
+  );
 
-        <AuthenticatedContainerInnerRight
-          sx={{
-            borderLeft: `1px solid ${theme.palette.border.subtle}`,
-            height: '100%',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              width: '100%',
-            }}
-          >
-            <Spacer height="20px" />
+  const isElectron =
+    typeof window !== 'undefined' &&
+    typeof (
+      window as Window & { electronAPI?: { windowMinimize?: () => unknown } }
+    ).electronAPI?.windowMinimize === 'function';
 
-            <ButtonBase
-              onClick={() => {
-                logoutFunc();
-                setIsOpenDrawerProfile(false);
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('core:action.logout')}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <LogoutIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-
-            <Spacer height="20px" />
-
-            <ButtonBase
-              onClick={() => {
-                setIsSettingsOpen(true);
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('core:settings')}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <SettingsIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-
-            <Spacer height="20px" />
-
-            <ButtonBase
-              onClick={() => {
-                setIsOpenDrawerLookup(true);
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {t('core:user_lookup', {
-                      postProcess: 'capitalizeAll',
-                    })}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <PersonSearchIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-
-            <Spacer height="20px" />
-
-            <ButtonBase
-              onClick={() => {
-                executeEvent('openWalletsApp', {});
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('core:wallet.wallet_other')}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <AccountBalanceWalletIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-
-            {desktopViewMode !== 'home' && (
-              <>
-                <Spacer height="20px" />
-
-                <Tooltip
-                  title={
-                    <span
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {t('auth:account.your')}
-                    </span>
-                  }
-                  placement="left"
-                  arrow
-                  sx={{ fontSize: '24' }}
-                  slotProps={{
-                    tooltip: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                        backgroundColor: theme.palette.background.paper,
-                      },
-                    },
-                    arrow: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                      },
-                    },
-                  }}
-                >
-                  <ButtonBase
-                    onClick={() => {
-                      setIsOpenDrawerProfile(true);
-                    }}
-                  >
-                    <WalletIcon
-                      color={theme.palette.text.secondary}
-                      width="25"
-                    />
-                  </ButtonBase>
-                </Tooltip>
-              </>
-            )}
-
-            <Spacer height="20px" />
-
-            <QMailStatus />
-
-            <Spacer height="20px" />
-
-            {extState === 'authenticated' && (
-              <GeneralNotifications address={userInfo?.address} />
-            )}
-
-            <Spacer height="20px" />
-
-            <Save isDesktop disableWidth={false} myName={userInfo?.name} />
-          </Box>
-
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              width: '100%',
-            }}
-          >
-            {extState === 'authenticated' && isMainWindow && (
-              <>
-                <TaskManager getUserInfo={getUserInfo} />
-                <GlobalActions />
-              </>
-            )}
-
-            <Spacer height="20px" />
-
-            <ButtonBase
-              onClick={async () => {
-                try {
-                  const res = await isRunningGateway();
-                  if (res)
-                    throw new Error(
-                      t('core:message.generic.no_minting_details', {
-                        postProcess: 'capitalizeFirstChar',
-                      })
-                    );
-                  setIsOpenMinting(true);
-                } catch (error) {
-                  setOpenSnack(true);
-                  setInfoSnack({
-                    type: 'error',
-                    message: error?.message,
-                  });
-                }
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('core:minting.status_title')}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <EngineeringIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-
-            <Spacer height="20px" />
-
-            {(desktopViewMode === 'apps' || desktopViewMode === 'home') && (
-              <ButtonBase
-                onClick={() => {
-                  if (desktopViewMode === 'apps') {
-                    showTutorial('qapps', true);
-                  } else {
-                    showTutorial('getting-started', true);
-                  }
-                }}
-              >
-                <Tooltip
-                  title={
-                    <span
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {t('core:tutorial')}
-                    </span>
-                  }
-                  placement="left"
-                  arrow
-                  sx={{ fontSize: '24' }}
-                  slotProps={{
-                    tooltip: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                        backgroundColor: theme.palette.background.paper,
-                      },
-                    },
-                    arrow: {
-                      sx: {
-                        color: theme.palette.text.primary,
-                      },
-                    },
-                  }}
-                >
-                  <HelpIcon
-                    sx={{
-                      color: theme.palette.text.secondary,
-                    }}
-                  />
-                </Tooltip>
-              </ButtonBase>
-            )}
-
-            <Spacer height="20px" />
-
-            <ButtonBase
-              onClick={() => {
-                setExtstate('download-wallet');
-                setIsOpenDrawerProfile(false);
-              }}
-            >
-              <Tooltip
-                title={
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('core:action.backup_wallet')}
-                  </span>
-                }
-                placement="left"
-                arrow
-                sx={{ fontSize: '24' }}
-                slotProps={{
-                  tooltip: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                      backgroundColor: theme.palette.background.paper,
-                    },
-                  },
-                  arrow: {
-                    sx: {
-                      color: theme.palette.text.primary,
-                    },
-                  },
-                }}
-              >
-                <DownloadIcon
-                  sx={{
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-              </Tooltip>
-            </ButtonBase>
-            <Spacer height="40px" />
-          </Box>
-        </AuthenticatedContainerInnerRight>
-      </AuthenticatedContainer>
-    );
-  };
-
-  return (
-    <AppContainer
-      sx={{
-        height: '100vh',
-      }}
-    >
+  const mainContent = (
+    <>
       <PdfViewer />
 
-      <QORTAL_APP_CONTEXT.Provider value={contextValue}>
+      <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
         <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
@@ -1874,791 +1031,123 @@ function App() {
         )}
 
         {extState === 'authenticated' && isMainWindow && (
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              height: '100vh',
-              width: '100vw',
-            }}
-          >
-            <Group
+          <Suspense fallback={<Loader />}>
+            <LazyAuthenticatedShell
               balance={balance}
               desktopViewMode={desktopViewMode}
-              isFocused={isFocused}
-              isMain={isMain}
+              isMain={true}
               isOpenDrawerProfile={isOpenDrawerProfile}
               logoutFunc={logoutFunc}
               myAddress={address}
               setDesktopViewMode={setDesktopViewMode}
               setIsOpenDrawerProfile={setIsOpenDrawerProfile}
               userInfo={userInfo}
+              rawWallet={rawWallet}
+              qortBalanceLoading={qortBalanceLoading}
+              setOpenSnack={setOpenSnack}
+              setInfoSnack={setInfoSnack}
+              onRefreshBalance={getBalanceAndUserInfoFunc}
+              onOpenSendQort={onOpenSendQort}
+              onOpenRegisterName={onOpenRegisterName}
+              extState={extState}
+              isMainWindow={isMainWindow}
+              onOpenSettings={onOpenSettings}
+              onOpenDrawerLookup={onOpenDrawerLookup}
+              onOpenWalletsApp={onOpenWalletsApp}
+              onOpenDrawerProfile={onOpenDrawerProfile}
+              getUserInfo={getUserInfo}
+              onOpenMinting={onOpenMinting}
+              showTutorial={showTutorial}
+              onBackupWallet={onBackupWallet}
             />
-            {renderProfile()}
-          </Box>
+          </Suspense>
         )}
 
         {isOpenSendQort && isMainWindow && (
-          <Box
-            sx={{
-              alignItems: 'center',
-              background: theme.palette.background.default,
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              position: 'fixed',
-              width: '100%',
-              zIndex: 10000,
+          <SendQortOverlay
+            balance={balance}
+            paymentTo={paymentTo}
+            onReturn={returnToMain}
+            onSuccess={() => {
+              setIsOpenSendQort(false);
+              setIsOpenSendQortSuccess(true);
             }}
-          >
-            <Spacer height="22px" />
-
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                justifyContent: 'flex-start',
-                maxWidth: '700px',
-                paddingLeft: '22px',
-                width: '100%',
-              }}
-            >
-              <Return
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                  width: 'auto',
-                }}
-                onClick={returnToMain}
-              />
-            </Box>
-
-            <Spacer height="35px" />
-
-            <QortPayment
-              balance={balance}
-              show={show}
-              onSuccess={() => {
-                setIsOpenSendQort(false);
-                setIsOpenSendQortSuccess(true);
-              }}
-              defaultPaymentTo={paymentTo}
-            />
-          </Box>
+            show={show}
+          />
         )}
 
         {isShowQortalRequest && !isMainWindow && (
-          <>
-            <Spacer height="120px" />
-
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                width: '100%',
-              }}
-            >
-              <TextP
-                sx={{
-                  lineHeight: 1.2,
-                  maxWidth: '90%',
-                  textAlign: 'center',
-                  fontSize: '16px',
-                  marginBottom: '10px',
-                }}
-              >
-                {messageQortalRequest?.text1}
-              </TextP>
-            </Box>
-
-            {messageQortalRequest?.text2 && (
-              <>
-                <Spacer height="10px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    width: '90%',
-                  }}
-                >
-                  <TextP
-                    sx={{
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                    }}
-                  >
-                    {messageQortalRequest?.text2}
-                  </TextP>
-                </Box>
-
-                <Spacer height="15px" />
-              </>
-            )}
-
-            {messageQortalRequest?.text3 && (
-              <>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    width: '90%',
-                  }}
-                >
-                  <TextP
-                    sx={{
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                    }}
-                  >
-                    {messageQortalRequest?.text3}
-                  </TextP>
-
-                  <Spacer height="15px" />
-                </Box>
-              </>
-            )}
-
-            {messageQortalRequest?.text4 && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'flex-start',
-                  width: '90%',
-                }}
-              >
-                <TextP
-                  sx={{
-                    lineHeight: 1.2,
-                    fontSize: '16px',
-                    fontWeight: 'normal',
-                  }}
-                >
-                  {messageQortalRequest?.text4}
-                </TextP>
-              </Box>
-            )}
-
-            {messageQortalRequest?.html && (
-              <div
-                dangerouslySetInnerHTML={{ __html: messageQortalRequest?.html }}
-              />
-            )}
-
-            <Spacer height="15px" />
-
-            <TextP
-              sx={{
-                fontSize: '16px',
-                fontWeight: 700,
-                lineHeight: 1.2,
-                maxWidth: '90%',
-                textAlign: 'center',
-              }}
-            >
-              {messageQortalRequest?.highlightedText}
-            </TextP>
-
-            {messageQortalRequest?.fee && (
-              <>
-                <Spacer height="15px" />
-
-                <TextP
-                  sx={{
-                    textAlign: 'center',
-                    lineHeight: 1.2,
-                    fontSize: '16px',
-                    fontWeight: 'normal',
-                    maxWidth: '90%',
-                  }}
-                >
-                  {t('core:message.generic.fee_qort', {
-                    fee: messageQortalRequest?.fee,
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </TextP>
-
-                <Spacer height="15px" />
-              </>
-            )}
-
-            {messageQortalRequest?.checkbox1 && (
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                  justifyContent: 'center',
-                  marginTop: '20px',
-                  width: '90%',
-                }}
-              >
-                <Checkbox
-                  onChange={(e) => {
-                    qortalRequestCheckbox1Ref.current = e.target.checked;
-                  }}
-                  edge="start"
-                  tabIndex={-1}
-                  disableRipple
-                  defaultChecked={messageQortalRequest?.checkbox1?.value}
-                  sx={{
-                    '&.Mui-checked': {
-                      color: theme.palette.text.secondary, // Customize the color when checked
-                    },
-                    '& .MuiSvgIcon-root': {
-                      color: theme.palette.text.secondary,
-                    },
-                  }}
-                />
-
-                <Typography
-                  sx={{
-                    fontSize: '14px',
-                  }}
-                >
-                  {messageQortalRequest?.checkbox1?.label}
-                </Typography>
-              </Box>
-            )}
-
-            <Spacer height="29px" />
-
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-              }}
-            >
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => onOkQortalRequest('accepted')}
-              >
-                {t('core:action.accept', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => onCancelQortalRequest()}
-              >
-                {t('core:action.decline', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-            </Box>
-
-            <ErrorText>{sendPaymentError}</ErrorText>
-          </>
+          <QortalRequestScreen
+            message={messageQortalRequest}
+            sendPaymentError={sendPaymentError}
+            onAccept={onOkQortalRequestAccepted}
+            onDecline={onCancelQortalRequest}
+            onCheckboxChange={(checked) => {
+              qortalRequestCheckbox1Ref.current = checked;
+            }}
+            checkboxDefaultChecked={
+              (messageQortalRequest as { checkbox1?: { value?: boolean } })
+                ?.checkbox1?.value
+            }
+          />
         )}
 
         {extState === 'web-app-request-buy-order' && !isMainWindow && (
-          <>
-            <Spacer height="100px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              <Trans
-                i18nKey="message.generic.buy_order_request"
-                ns="core"
-                components={{
-                  br: <br />,
-                  italic: <TextItalic />,
-                  span: <TextSpan />,
-                }}
-                values={{
-                  hostname: requestBuyOrder?.hostname,
-                  count: requestBuyOrder?.crosschainAtInfo?.length || 0,
-                }}
-                tOptions={{ postProcess: ['capitalizeFirstChar'] }}
-              ></Trans>
-            </TextP>
-
-            <Spacer height="10px" />
-
-            <TextP
-              sx={{
-                fontSize: '20px',
-                fontWeight: 700,
-                lineHeight: '24px',
-                textAlign: 'center',
-              }}
-            >
-              {requestBuyOrder?.crosschainAtInfo?.reduce((latest, cur) => {
-                return latest + +cur?.qortAmount;
-              }, 0)}{' '}
-              QORT
-            </TextP>
-
-            <Spacer height="15px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-                fontSize: '14px',
-              }}
-            >
-              {t('core:for', { postProcess: 'capitalizeAll' })}
-            </TextP>
-
-            <Spacer height="15px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '24px',
-                fontSize: '20px',
-                fontWeight: 700,
-              }}
-            >
-              {roundUpToDecimals(
-                requestBuyOrder?.crosschainAtInfo?.reduce((latest, cur) => {
-                  return latest + +cur?.expectedForeignAmount;
-                }, 0)
-              )}
-              {` ${requestBuyOrder?.crosschainAtInfo?.[0]?.foreignBlockchain}`}
-            </TextP>
-
-            <Spacer height="29px" />
-
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-              }}
-            >
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => confirmBuyOrder(false)}
-              >
-                {t('core:action.accept', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => confirmBuyOrder(true)}
-              >
-                {t('core:action.decline', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-            </Box>
-
-            <ErrorText>{sendPaymentError}</ErrorText>
-          </>
+          <BuyOrderRequestScreen
+            hostname={requestBuyOrder?.hostname}
+            crosschainAtInfo={requestBuyOrder?.crosschainAtInfo}
+            sendPaymentError={sendPaymentError}
+            roundUpToDecimals={roundUpToDecimals}
+            onAccept={onConfirmBuyOrderAccept}
+            onDecline={onConfirmBuyOrderDecline}
+          />
         )}
         {extState === 'web-app-request-payment' && !isMainWindow && (
-          <>
-            <Spacer height="100px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              <Trans
-                i18nKey="message.generic.payment_request"
-                ns="core"
-                components={{
-                  br: <br />,
-                  italic: <TextItalic />,
-                  span: <TextSpan />,
-                }}
-                values={{
-                  hostname: requestBuyOrder?.hostname,
-                  count: requestBuyOrder?.crosschainAtInfo?.length || 0,
-                }}
-                tOptions={{ postProcess: ['capitalizeFirstChar'] }}
-              ></Trans>
-            </TextP>
-
-            <Spacer height="10px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-                fontSize: '10px',
-              }}
-            >
-              {sendqortState?.description}
-            </TextP>
-
-            <Spacer height="15px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '24px',
-                fontSize: '20px',
-                fontWeight: 700,
-              }}
-            >
-              {sendqortState?.amount} QORT
-            </TextP>
-
-            <Spacer height="29px" />
-
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '14px',
-              }}
-            >
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => confirmPayment(false)}
-              >
-                {t('core:action.accept', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() => confirmPayment(true)}
-              >
-                {t('core:action.decline', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-            </Box>
-
-            <ErrorText>{sendPaymentError}</ErrorText>
-          </>
+          <PaymentRequestScreen
+            hostname={requestBuyOrder?.hostname}
+            count={requestBuyOrder?.crosschainAtInfo?.length || 0}
+            description={sendqortState?.description}
+            amount={sendqortState?.amount}
+            sendPaymentError={sendPaymentError}
+            onAccept={onConfirmPaymentAccept}
+            onDecline={onConfirmPaymentDecline}
+          />
         )}
 
         {extState === 'web-app-request-connection' && !isMainWindow && (
-          <>
-            <Spacer height="48px" />
-
-            <div
-              className="image-container"
-              style={{
-                width: '136px',
-                height: '154px',
-              }}
-            >
-              <img src={Logo1Dark} className="base-image" />
-            </div>
-
-            <Spacer height="38px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              The Application <br></br>
-              <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
-              <TextSpan>is requestion a connection</TextSpan>
-            </TextP>
-
-            <Spacer height="38px" />
-
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                gap: '14px',
-              }}
-            >
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() =>
-                  responseToConnectionRequest(
-                    true,
-                    requestConnection?.hostname,
-                    requestConnection.interactionId
-                  )
-                }
-              >
-                {t('core:action.accept', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <CustomButton
-                sx={{
-                  minWidth: '102px',
-                }}
-                onClick={() =>
-                  responseToConnectionRequest(
-                    false,
-                    requestConnection?.hostname,
-                    requestConnection.interactionId
-                  )
-                }
-              >
-                {t('core:action.decline', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-            </Box>
-          </>
+          <ConnectionRequestScreen
+            hostname={requestConnection?.hostname}
+            onAccept={onConnectionRequestAccept}
+            onDecline={onConnectionRequestDecline}
+          />
         )}
 
         {extState === 'web-app-request-authentication' && !isMainWindow && (
-          <>
-            <Spacer height="48px" />
-
-            <div
-              className="image-container"
-              style={{
-                width: '136px',
-                height: '154px',
-              }}
-            >
-              <img src={Logo1Dark} className="base-image" />
-            </div>
-
-            <Spacer height="38px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              The Application <br></br>
-              <TextItalic>{requestConnection?.hostname}</TextItalic> <br></br>
-              <TextSpan>requests authentication</TextSpan>
-            </TextP>
-
-            <Spacer height="38px" />
-
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                gap: '14px',
-              }}
-            ></Box>
-
-            <Spacer height="38px" />
-
-            <CustomButton {...getRootProps()}>
-              <input {...getInputProps()} />
-              {t('auth:action.authenticate', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </CustomButton>
-
-            <Spacer height="6px" />
-
-            <CustomButton
-              onClick={() => {
-                setExtstate('create-wallet');
-              }}
-            >
-              {t('auth:action.create_account', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </CustomButton>
-          </>
+          <WebAppAuthRequestScreen
+            hostname={requestConnection?.hostname}
+            getRootProps={getRootProps}
+            getInputProps={getInputProps}
+            onCreateAccount={onGoToCreateWallet}
+          />
         )}
 
         {extState === 'wallets' && (
-          <>
-            <Spacer height="22px" />
-
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                justifyContent: 'flex-start',
-                maxWidth: '700px',
-                paddingLeft: '22px',
-                width: '100%',
-              }}
-            >
-              <Return
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                  width: 'auto',
-                }}
-                onClick={() => {
-                  setRawWallet(null);
-                  setExtstate('not-authenticated');
-                  logoutFunc();
-                }}
-              />
-            </Box>
-
-            <Wallets
-              setRawWallet={setRawWallet}
-              setExtState={setExtstate}
-              rawWallet={rawWallet}
-            />
-          </>
+          <WalletsView
+            onBack={onWalletsBack}
+            setRawWallet={setRawWallet}
+            setExtState={setExtstate}
+            rawWallet={rawWallet}
+          />
         )}
 
         {rawWallet && extState === 'wallet-dropped' && (
-          <>
-            <Spacer height="22px" />
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                justifyContent: 'flex-start',
-                maxWidth: '700px',
-                paddingLeft: '22px',
-                width: '100%',
-              }}
-            >
-              <Return
-                style={{
-                  cursor: 'pointer',
-                  height: '24px',
-                  width: 'auto',
-                }}
-                onClick={() => {
-                  setRawWallet(null);
-                  setExtstate('wallets');
-                  setAuthenticatePassword('');
-                  logoutFunc();
-                }}
-              />
-            </Box>
-
-            <Spacer height="10px" />
-
-            <div
-              className="image-container"
-              style={{
-                width: '136px',
-                height: '154px',
-              }}
-            >
-              <img src={Logo1Dark} className="base-image" />
-            </div>
-
-            <Spacer height="35px" />
-
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <Avatar
-                  alt={rawWallet?.name || ''}
-                  src={walletAvatarSrc || undefined}
-                  sx={{ width: 40, height: 40 }}
-                />
-                <Typography>
-                  {rawWallet?.name ||
-                    rawWallet?.filename ||
-                    rawWallet?.address0}
-                </Typography>
-              </Box>
-
-              <Spacer height="10px" />
-
-              <TextP
-                sx={{
-                  textAlign: 'start',
-                  lineHeight: '24px',
-                  fontSize: '20px',
-                  fontWeight: 600,
-                }}
-              >
-                {t('auth:authentication', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </TextP>
-            </Box>
-
-            <Spacer height="35px" />
-
-            <>
-              <CustomLabel htmlFor="standard-adornment-password">
-                {t('auth:wallet.password', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomLabel>
-
-              <Spacer height="10px" />
-
-              <PasswordField
-                id="standard-adornment-password"
-                value={authenticatePassword}
-                onChange={(e) => setAuthenticatePassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    authenticateWallet();
-                  }
-                }}
-                ref={passwordRef}
-              />
-
-              <>
-                <Spacer height="20px" />
-
-                <Typography
-                  sx={{
-                    fontSize: '12px',
-                    ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
-                      fontWeight: 'bold',
-                      color: theme.palette.other.positive,
-                    }),
-                  }}
-                >
-                  {t('auth:node.using', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  : {nodeDisplay(selectedNode?.url)}
-                </Typography>
-              </>
-
-              <Spacer height="20px" />
-
-              <CustomButton onClick={authenticateWallet}>
-                {t('auth:action.authenticate', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-
-              <ErrorText>{walletToBeDecryptedError}</ErrorText>
-            </>
-          </>
+          <AuthenticationForm
+            rawWallet={rawWallet}
+            selectedNode={selectedNode}
+            walletToBeDecryptedError={walletToBeDecryptedError}
+            onBack={onAuthenticationFormBack}
+            onAuthenticate={authenticateWallet}
+          />
         )}
         {extState === 'download-wallet' && (
           <DownloadWallet
@@ -2672,1100 +1161,97 @@ function App() {
         )}
 
         {extState === 'create-wallet' && (
-          <>
-            {!walletToBeDownloaded && (
-              <>
-                <Spacer height="22px" />
-
-                <Box
-                  sx={{
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    maxWidth: '700px',
-                    paddingLeft: '22px',
-                    width: '100%',
-                  }}
-                >
-                  <Return
-                    style={{
-                      cursor: 'pointer',
-                      height: '24px',
-                      width: 'auto',
-                    }}
-                    onClick={() => {
-                      if (creationStep === 2) {
-                        setCreationStep(1);
-                        setWalletToBeDownloadedPasswordConfirm('');
-                        setWalletToBeDownloadedPassword('');
-                        return;
-                      }
-                      setExtstate('not-authenticated');
-                      setShowSeed(false);
-                      setCreationStep(1);
-                      setWalletToBeDownloadedPasswordConfirm('');
-                      setWalletToBeDownloadedPassword('');
-                    }}
-                  />
-                </Box>
-
-                <Spacer height="15px" />
-
-                <div
-                  className="image-container"
-                  style={{
-                    width: '136px',
-                    height: '154px',
-                  }}
-                >
-                  <img src={Logo1Dark} className="base-image" />
-                </div>
-
-                <Spacer height="38px" />
-
-                <TextP
-                  sx={{
-                    textAlign: 'center',
-                    lineHeight: 1.2,
-                    fontSize: '18px',
-                  }}
-                >
-                  {t('auth:action.setup_qortal_account', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </TextP>
-
-                <Spacer height="14px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    maxWidth: '100%',
-                    justifyContent: 'center',
-                    padding: '10px',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: creationStep === 1 ? 'flex' : 'none',
-                      flexDirection: 'column',
-                      maxWidth: '95%',
-                      width: '350px',
-                    }}
-                  >
-                    <Typography
-                      sx={{
-                        fontSize: '14px',
-                      }}
-                    >
-                      <Trans
-                        ns="auth"
-                        i18nKey="message.generic.seedphrase_notice"
-                        components={{
-                          seed: (
-                            <span
-                              onClick={() => setShowSeed(true)}
-                              style={{
-                                fontSize: '14px',
-                                color: 'steelblue',
-                                cursor: 'pointer',
-                              }}
-                            />
-                          ),
-                        }}
-                        tOptions={{ postProcess: ['capitalizeFirstChar'] }}
-                      ></Trans>
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        fontSize: '14px',
-                        marginTop: '5px',
-                      }}
-                    >
-                      {t('auth:tips.view_seedphrase', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-
-                    <Typography
-                      sx={{
-                        fontSize: '18px',
-                        marginTop: '15px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <Trans
-                        i18nKey="action.create_qortal_account"
-                        ns="auth"
-                        components={{
-                          next: (
-                            <span
-                              style={{
-                                fontWeight: 'bold',
-                              }}
-                            />
-                          ),
-                        }}
-                        tOptions={{ postProcess: ['capitalizeFirstChar'] }}
-                      ></Trans>
-                    </Typography>
-
-                    <Spacer height="17px" />
-
-                    <CustomButton
-                      onClick={() => {
-                        setCreationStep(2);
-                      }}
-                    >
-                      {t('core:pagination.next', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </CustomButton>
-                  </Box>
-
-                  <div
-                    style={{
-                      display: 'none',
-                    }}
-                  >
-                    <random-sentence-generator
-                      ref={generatorRef}
-                      template="adverb verb noun adjective noun adverb verb noun adjective noun adjective verbed adjective noun"
-                    ></random-sentence-generator>
-                  </div>
-
-                  <Dialog
-                    open={showSeed}
-                    aria-labelledby="alert-dialog-title"
-                    aria-describedby="alert-dialog-description"
-                  >
-                    <DialogContent>
-                      <Box
-                        sx={{
-                          alignItems: 'center',
-                          display: showSeed ? 'flex' : 'none',
-                          flexDirection: 'column',
-                          gap: '10px',
-                          maxWidth: '400px',
-                        }}
-                      >
-                        <Typography
-                          sx={{
-                            fontSize: '14px',
-                          }}
-                        >
-                          {t('auth:seed_your', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </Typography>
-
-                        <Box
-                          sx={{
-                            background: theme.palette.background.paper,
-                            borderRadius: '8px',
-                            padding: '10px',
-                            textAlign: 'center',
-                            width: '100%',
-                          }}
-                        >
-                          {generatorRef.current?.parsedString}
-                        </Box>
-
-                        <CustomButton
-                          sx={{
-                            padding: '7px',
-                            fontSize: '12px',
-                          }}
-                          onClick={exportSeedphrase}
-                        >
-                          {t('auth:action.export_seedphrase', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </CustomButton>
-                      </Box>
-                    </DialogContent>
-
-                    <DialogActions>
-                      <Button
-                        variant="contained"
-                        onClick={() => setShowSeed(false)}
-                      >
-                        {t('core:action.close', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Button>
-                    </DialogActions>
-                  </Dialog>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: creationStep === 2 ? 'flex' : 'none',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                  }}
-                >
-                  <Spacer height="14px" />
-
-                  <CustomLabel htmlFor="standard-adornment-password">
-                    {t('auth:wallet.password', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </CustomLabel>
-
-                  <Spacer height="5px" />
-
-                  <PasswordField
-                    id="standard-adornment-password"
-                    value={walletToBeDownloadedPassword}
-                    onChange={(e) =>
-                      setWalletToBeDownloadedPassword(e.target.value)
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        confirmRef.current?.focus();
-                      }
-                    }}
-                  />
-
-                  <Spacer height="5px" />
-
-                  <CustomLabel htmlFor="standard-adornment-password">
-                    {t('auth:wallet.password_confirmation', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </CustomLabel>
-
-                  <Spacer height="5px" />
-
-                  <PasswordField
-                    inputRef={confirmRef}
-                    id="standard-adornment-password"
-                    value={walletToBeDownloadedPasswordConfirm}
-                    onChange={(e) =>
-                      setWalletToBeDownloadedPasswordConfirm(e.target.value)
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        createAccountFunc();
-                      }
-                    }}
-                  />
-                  <Spacer height="5px" />
-
-                  <Typography variant="body2">
-                    {t('auth:message.generic.no_minimum_length', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                  <Spacer height="5px" />
-                  <FormControlLabel
-                    sx={{
-                      margin: 0,
-                    }}
-                    control={
-                      <Checkbox
-                        onChange={(e) => setStoredAccount(e.target.checked)}
-                        checked={storeAccount}
-                        edge="start"
-                        tabIndex={-1}
-                        disableRipple
-                        sx={{
-                          '&.Mui-checked': {
-                            color: theme.palette.text.secondary,
-                          },
-                          '& .MuiSvgIcon-root': {
-                            color: theme.palette.text.secondary,
-                          },
-                        }}
-                      />
-                    }
-                    label={
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Typography sx={{ fontSize: '14px' }}>
-                          {t('auth:store_account', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                        </Typography>
-                      </Box>
-                    }
-                  />
-                  <Spacer height="17px" />
-
-                  <CustomButton onClick={createAccountFunc}>
-                    {t('auth:action.create_account', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </CustomButton>
-                </Box>
-
-                <ErrorText>{walletToBeDownloadedError}</ErrorText>
-              </>
-            )}
-
-            {walletToBeDownloaded && (
-              <>
-                <Spacer height="48px" />
-
-                <SuccessIcon />
-
-                <Spacer height="45px" />
-
-                <TextP
-                  sx={{
-                    textAlign: 'center',
-                    lineHeight: '15px',
-                  }}
-                >
-                  {t('auth:message.generic.congrats_setup', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </TextP>
-
-                <Spacer height="50px" />
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: '15px',
-                    alignItems: 'center',
-                    padding: '10px',
-                  }}
-                >
-                  <WarningIcon color="warning" />
-
-                  <Typography>
-                    {t('auth:tips.safe_place', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Typography>
-                </Box>
-
-                <Spacer height="50px" />
-
-                <CustomButton
-                  onClick={async () => {
-                    await saveFileToDiskFunc();
-                    returnToMain();
-                    await showInfo({
-                      message: t('auth:tips.wallet_secure', {
-                        postProcess: 'capitalizeFirstChar',
-                      }),
-                    });
-                  }}
-                >
-                  {t('core:action.backup_account', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </CustomButton>
-              </>
-            )}
-          </>
+          <CreateWalletView
+            creationStep={creationStep}
+            walletToBeDownloaded={walletToBeDownloaded}
+            walletToBeDownloadedPassword={walletToBeDownloadedPassword}
+            walletToBeDownloadedPasswordConfirm={
+              walletToBeDownloadedPasswordConfirm
+            }
+            walletToBeDownloadedError={walletToBeDownloadedError}
+            showSeed={showSeed}
+            storeAccount={storeAccount}
+            generatorRef={generatorRef}
+            confirmRef={confirmRef}
+            onReturnBack={onCreateWalletReturnBack}
+            onShowSeed={onShowSeed}
+            onHideSeed={onHideSeed}
+            onCreationStepNext={onCreationStepNext}
+            setWalletToBeDownloadedPassword={setWalletToBeDownloadedPassword}
+            setWalletToBeDownloadedPasswordConfirm={
+              setWalletToBeDownloadedPasswordConfirm
+            }
+            setStoredAccount={setStoredAccount}
+            onCreateAccount={createAccountFunc}
+            onBackupAccountConfirm={onBackupAccountConfirm}
+            exportSeedphrase={exportSeedphrase}
+          />
         )}
 
         {isOpenSendQortSuccess && (
-          <Box
-            sx={{
-              alignItems: 'center',
-              background: theme.palette.background.default,
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              position: 'fixed',
-              width: '100%',
-              zIndex: 10000,
-            }}
-          >
-            <Spacer height="48px" />
-
-            <SuccessIcon />
-
-            <Spacer height="45px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              {t('core:message.success.transfer', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </TextP>
-
-            <Spacer height="100px" />
-
-            <ButtonBase
-              autoFocus
-              onClick={() => {
-                returnToMain();
-              }}
-            >
-              <CustomButton>
-                {t('core:action.continue', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </CustomButton>
-            </ButtonBase>
-          </Box>
+          <SuccessOverlay
+            messageKey="message.success.transfer"
+            buttonLabelKey="action.continue"
+            onAction={onTransferSuccessContinue}
+            fullPage
+          />
         )}
 
         {extState === 'transfer-success-request' && (
-          <>
-            <Spacer height="48px" />
-
-            <SuccessIcon />
-
-            <Spacer height="45px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              {t('core:message.success.transfer', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </TextP>
-
-            <Spacer height="100px" />
-
-            <CustomButton
-              onClick={() => {
-                window.close();
-              }}
-            >
-              {t('core:action.continue', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </CustomButton>
-          </>
+          <SuccessScreen
+            messageKey="message.success.transfer"
+            buttonLabelKey="action.continue"
+            onAction={onTransferSuccessRequestClose}
+          />
         )}
 
         {extState === 'buy-order-submitted' && (
-          <>
-            <Spacer height="48px" />
-
-            <SuccessIcon />
-
-            <Spacer height="45px" />
-
-            <TextP
-              sx={{
-                textAlign: 'center',
-                lineHeight: '15px',
-              }}
-            >
-              {t('core:message.success.order_submitted', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </TextP>
-
-            <Spacer height="100px" />
-
-            <CustomButton
-              onClick={() => {
-                window.close();
-              }}
-            >
-              {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
-            </CustomButton>
-          </>
+          <SuccessScreen
+            messageKey="message.success.order_submitted"
+            buttonLabelKey="action.close"
+            onAction={onBuyOrderSubmittedClose}
+          />
         )}
 
         {countdown && (
-          <Box
-            style={{
-              left: '20px',
-              position: 'absolute',
-              top: '20px',
-            }}
-          >
-            <CountdownCircleTimer
-              isPlaying
-              duration={countdown}
-              colors={['#004777', '#F7B801', '#A30000', '#A30000']}
-              colorsTime={[7, 5, 2, 0]}
-              onComplete={() => {
-                window.close();
-              }}
-              size={75}
-              strokeWidth={8}
-            >
-              {({ remainingTime }) => <TextP>{remainingTime}</TextP>}
-            </CountdownCircleTimer>
-          </Box>
+          <CountdownOverlay
+            countdown={countdown}
+            onComplete={onCountdownComplete}
+          />
         )}
 
         {isLoading && <Loader />}
-        {isShow && (
-          <Dialog
-            open={isShow}
-            aria-labelledby="alert-dialog-title"
-            aria-describedby="alert-dialog-description"
-            sx={{
-              zIndex: 10001,
-            }}
-          >
-            <DialogTitle
-              id="alert-dialog-title"
-              sx={{
-                textAlign: 'center',
-                color: theme.palette.text.primary,
-                fontWeight: 'bold',
-                opacity: 1,
-              }}
-            >
-              {message.paymentFee
-                ? t('core:payment', {
-                    postProcess: 'capitalizeFirstChar',
-                  })
-                : t('core:publish', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-            </DialogTitle>
-
-            <DialogContent>
-              <DialogContentText id="alert-dialog-description">
-                {message.message}
-              </DialogContentText>
-
-              {message?.paymentFee && (
-                <DialogContentText id="alert-dialog-description2">
-                  {t('core:fee.payment', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  : {message.paymentFee}
-                </DialogContentText>
-              )}
-
-              {message?.publishFee && (
-                <DialogContentText id="alert-dialog-description2">
-                  {t('core:fee.publish', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                  : {message.publishFee}
-                </DialogContentText>
-              )}
-            </DialogContent>
-
-            <DialogActions>
-              <Button
-                sx={{
-                  backgroundColor: theme.palette.other.positive,
-                  color: theme.palette.text.primary,
-                  fontWeight: 'bold',
-                  opacity: 0.7,
-                  '&:hover': {
-                    backgroundColor: theme.palette.other.positive,
-                    color: 'black',
-                    opacity: 1,
-                  },
-                }}
-                variant="contained"
-                onClick={onOk}
-                autoFocus
-              >
-                {t('core:action.accept', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-
-              <Button
-                sx={{
-                  backgroundColor: theme.palette.other.danger,
-                  color: 'black',
-                  fontWeight: 'bold',
-                  opacity: 0.7,
-                  '&:hover': {
-                    backgroundColor: theme.palette.other.danger,
-                    color: 'black',
-                    opacity: 1,
-                  },
-                }}
-                variant="contained"
-                onClick={onCancel}
-              >
-                {t('core:action.decline', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
-
-        {isShowInfo && (
-          <Dialog
-            open={isShowInfo}
-            aria-labelledby="alert-dialog-title"
-            aria-describedby="alert-dialog-description"
-          >
-            <DialogTitle
-              id="alert-dialog-title"
-              sx={{
-                textAlign: 'center',
-                color: theme.palette.text.primary,
-                fontWeight: 'bold',
-                opacity: 1,
-              }}
-            >
-              {t('tutorial:important_info', {
-                postProcess: 'capitalizeAll',
-              })}
-            </DialogTitle>
-
-            <DialogContent>
-              <DialogContentText id="alert-dialog-description">
-                {messageInfo.message}
-              </DialogContentText>
-            </DialogContent>
-
-            <DialogActions>
-              <Button variant="contained" onClick={onOkInfo} autoFocus>
-                {t('core:action.close', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
-
-        {isShowUnsavedChanges && (
-          <Dialog
-            open={isShowUnsavedChanges}
-            aria-labelledby="alert-dialog-title"
-            aria-describedby="alert-dialog-description"
-          >
-            <DialogTitle
-              id="alert-dialog-title"
-              sx={{
-                textAlign: 'center',
-                color: theme.palette.text.primary,
-                fontWeight: 'bold',
-                opacity: 1,
-              }}
-            >
-              {t('core:action.logout', { postProcess: 'capitalizeAll' })}
-            </DialogTitle>
-
-            <DialogContent>
-              <DialogContentText
-                id="alert-dialog-description"
-                sx={{
-                  textAlign: 'center',
-                }}
-              >
-                {messageUnsavedChanges.message}
-              </DialogContentText>
-            </DialogContent>
-
-            <DialogActions>
-              <Button
-                variant="contained"
-                onClick={onCancelUnsavedChanges}
-                sx={{
-                  backgroundColor: theme.palette.other.danger,
-                  color: theme.palette.text.primary,
-                  fontWeight: 'bold',
-                  opacity: 0.7,
-                  '&:hover': {
-                    backgroundColor: theme.palette.other.danger,
-                    color: 'black',
-                    opacity: 1,
-                  },
-                }}
-              >
-                {t('core:action.cancel', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-
-              <Button
-                variant="contained"
-                onClick={onOkUnsavedChanges}
-                autoFocus
-                sx={{
-                  backgroundColor: theme.palette.other.positive,
-                  color: theme.palette.text.primary,
-                  fontWeight: 'bold',
-                  opacity: 0.7,
-                  '&:hover': {
-                    backgroundColor: theme.palette.other.positive,
-                    color: 'black',
-                    opacity: 1,
-                  },
-                }}
-              >
-                {t('core:action.continue_logout', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        )}
-
+        <PaymentPublishDialog
+          open={isShow}
+          message={message}
+          onAccept={() => onOk(undefined)}
+          onCancel={() => onCancel(undefined)}
+        />
+        <InfoDialog
+          open={isShowInfo}
+          message={messageInfo.message}
+          onClose={() => onOkInfo(undefined)}
+        />
+        <UnsavedChangesDialog
+          open={isShowUnsavedChanges}
+          message={messageUnsavedChanges.message}
+          onCancel={onCancelUnsavedChanges}
+          onConfirm={() => onOkUnsavedChanges(undefined)}
+        />
         {isShowQortalRequestExtension && isMainWindow && (
-          <Dialog
+          <QortalRequestExtensionDialog
             open={isShowQortalRequestExtension}
-            aria-labelledby="alert-dialog-title"
-            aria-describedby="alert-dialog-description"
-          >
-            <CountdownCircleTimer
-              isPlaying
-              duration={60}
-              colors={['#004777', '#F7B801', '#A30000', '#A30000']}
-              colorsTime={[7, 5, 2, 0]}
-              onComplete={() => {
-                onCancelQortalRequestExtension();
-              }}
-              size={50}
-              strokeWidth={5}
-            >
-              {({ remainingTime }) => <TextP>{remainingTime}</TextP>}
-            </CountdownCircleTimer>
-
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'flex-start',
-                maxHeight: '90vh',
-                overflow: 'auto',
-                padding: '20px',
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  width: '100%',
-                }}
-              >
-                <TextP
-                  sx={{
-                    lineHeight: 1.2,
-                    maxWidth: '90%',
-                    textAlign: 'center',
-                    fontSize: '16px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  {messageQortalRequestExtension?.text1}
-                </TextP>
-              </Box>
-
-              {messageQortalRequestExtension?.text2 && (
-                <>
-                  <Spacer height="10px" />
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'flex-start',
-                      width: '90%',
-                    }}
-                  >
-                    <TextP
-                      sx={{
-                        lineHeight: 1.2,
-                        fontSize: '16px',
-                        fontWeight: 'normal',
-                      }}
-                    >
-                      {messageQortalRequestExtension?.text2}
-                    </TextP>
-                  </Box>
-
-                  <Spacer height="15px" />
-                </>
-              )}
-
-              {messageQortalRequestExtension?.text3 && (
-                <>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'flex-start',
-                      width: '90%',
-                    }}
-                  >
-                    <TextP
-                      sx={{
-                        lineHeight: 1.2,
-                        fontSize: '16px',
-                        fontWeight: 'normal',
-                      }}
-                    >
-                      {messageQortalRequestExtension?.text3}
-                    </TextP>
-                  </Box>
-
-                  <Spacer height="15px" />
-                </>
-              )}
-
-              {messageQortalRequestExtension?.text4 && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    width: '90%',
-                  }}
-                >
-                  <TextP
-                    sx={{
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                    }}
-                  >
-                    {messageQortalRequestExtension?.text4}
-                  </TextP>
-                </Box>
-              )}
-
-              {messageQortalRequestExtension?.html && (
-                <>
-                  <Spacer height="15px" />
-
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: messageQortalRequestExtension?.html,
-                    }}
-                  />
-                </>
-              )}
-
-              <Spacer height="15px" />
-
-              <TextP
-                sx={{
-                  textAlign: 'center',
-                  lineHeight: 1.2,
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  maxWidth: '90%',
-                }}
-              >
-                {messageQortalRequestExtension?.highlightedText}
-              </TextP>
-
-              {messageQortalRequestExtension?.json && (
-                <>
-                  <Spacer height="15px" />
-
-                  <JsonView
-                    data={messageQortalRequestExtension?.json}
-                    shouldExpandNode={allExpanded}
-                    style={darkStyles}
-                  />
-                  <Spacer height="15px" />
-                </>
-              )}
-
-              {messageQortalRequestExtension?.fee && (
-                <>
-                  <Spacer height="15px" />
-
-                  <TextP
-                    sx={{
-                      textAlign: 'center',
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                      maxWidth: '90%',
-                    }}
-                  >
-                    {'Fee: '}
-                    {messageQortalRequestExtension?.fee}
-                    {' QORT'}
-                  </TextP>
-                  <Spacer height="15px" />
-                </>
-              )}
-              {messageQortalRequestExtension?.appFee && (
-                <>
-                  <TextP
-                    sx={{
-                      textAlign: 'center',
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                      maxWidth: '90%',
-                    }}
-                  >
-                    {t('core:message.generic.fee_qort', {
-                      fee: messageQortalRequestExtension?.appFee,
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </TextP>
-
-                  <Spacer height="15px" />
-                </>
-              )}
-
-              {messageQortalRequestExtension?.foreignFee && (
-                <>
-                  <Spacer height="15px" />
-
-                  <TextP
-                    sx={{
-                      textAlign: 'center',
-                      lineHeight: 1.2,
-                      fontSize: '16px',
-                      fontWeight: 'normal',
-                      maxWidth: '90%',
-                    }}
-                  >
-                    {t('core:message.generic.foreign_fee', {
-                      fee: messageQortalRequestExtension?.foreignFee,
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </TextP>
-
-                  <Spacer height="15px" />
-                </>
-              )}
-
-              {messageQortalRequestExtension?.checkbox1 && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '90%',
-                    marginTop: '20px',
-                  }}
-                >
-                  <Checkbox
-                    onChange={(e) => {
-                      qortalRequestCheckbox1Ref.current = e.target.checked;
-                    }}
-                    edge="start"
-                    tabIndex={-1}
-                    disableRipple
-                    defaultChecked={
-                      messageQortalRequestExtension?.checkbox1?.value
-                    }
-                    sx={{
-                      '&.Mui-checked': {
-                        color: theme.palette.text.secondary, // Customize the color when checked
-                      },
-                      '& .MuiSvgIcon-root': {
-                        color: theme.palette.text.secondary,
-                      },
-                    }}
-                  />
-
-                  <Typography
-                    sx={{
-                      fontSize: '14px',
-                    }}
-                  >
-                    {messageQortalRequestExtension?.checkbox1?.label}
-                  </Typography>
-                </Box>
-              )}
-
-              {messageQortalRequestExtension?.confirmCheckbox && (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      onChange={(e) => setConfirmRequestRead(e.target.checked)}
-                      checked={confirmRequestRead}
-                      edge="start"
-                      tabIndex={-1}
-                      disableRipple
-                      sx={{
-                        '&.Mui-checked': {
-                          color: theme.palette.text.secondary,
-                        },
-                        '& .MuiSvgIcon-root': {
-                          color: theme.palette.text.secondary,
-                        },
-                      }}
-                    />
-                  }
-                  label={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Typography sx={{ fontSize: '14px' }}>
-                        {messageQortalRequestExtension?.confirmCheckboxLabel ||
-                          t('core:message.success.request_read', {
-                            postProcess: 'capitalizeFirstChar',
-                          })}
-                      </Typography>
-                      <PriorityHighIcon color="warning" />
-                    </Box>
-                  }
-                />
-              )}
-
-              <Spacer height="29px" />
-
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '14px',
-                }}
-              >
-                <CustomButtonAccept
-                  customColor="black"
-                  customBgColor={theme.palette.other.positive}
-                  sx={{
-                    minWidth: '102px',
-                    opacity:
-                      messageQortalRequestExtension?.confirmCheckbox &&
-                      !confirmRequestRead
-                        ? 0.1
-                        : 0.7,
-                    cursor:
-                      messageQortalRequestExtension?.confirmCheckbox &&
-                      !confirmRequestRead
-                        ? 'default'
-                        : 'pointer',
-                    '&:hover': {
-                      opacity:
-                        messageQortalRequestExtension?.confirmCheckbox &&
-                        !confirmRequestRead
-                          ? 0.1
-                          : 1,
-                    },
-                  }}
-                  onClick={() => {
-                    if (
-                      messageQortalRequestExtension?.confirmCheckbox &&
-                      !confirmRequestRead
-                    )
-                      return;
-                    onOkQortalRequestExtension('accepted');
-                  }}
-                >
-                  {t('core:action.accept', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </CustomButtonAccept>
-
-                <CustomButtonAccept
-                  customColor="black"
-                  customBgColor={theme.palette.other.danger}
-                  sx={{
-                    minWidth: '102px',
-                  }}
-                  onClick={() => onCancelQortalRequestExtension()}
-                >
-                  {t('core:action.decline', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </CustomButtonAccept>
-              </Box>
-              <ErrorText>{sendPaymentError}</ErrorText>
-            </Box>
-          </Dialog>
+            message={messageQortalRequestExtension}
+            sendPaymentError={sendPaymentError}
+            confirmRequestRead={confirmRequestRead}
+            onConfirmRequestReadChange={setConfirmRequestRead}
+            onCheckbox1Change={(checked) => {
+              qortalRequestCheckbox1Ref.current = checked;
+            }}
+            onAccept={onOkQortalRequestExtensionAccept}
+            onCancel={onCancelQortalRequestExtension}
+            onCountdownComplete={onCancelQortalRequestExtension}
+          />
         )}
 
         {isSettingsOpen && (
@@ -3787,7 +1273,22 @@ function App() {
           open={isOpenDrawerProfile}
           setOpen={setIsOpenDrawerProfile}
         >
-          {renderProfileLeft()}
+          <ProfileLeft
+            userInfo={userInfo}
+            balance={balance}
+            rawWallet={rawWallet}
+            qortBalanceLoading={qortBalanceLoading}
+            setOpenSnack={setOpenSnack}
+            setInfoSnack={
+              setInfoSnack as (
+                info: { type: string; message: string } | null
+              ) => void
+            }
+            onRefreshBalance={getBalanceAndUserInfoFunc}
+            onOpenSendQort={onOpenSendQortAndCloseDrawer}
+            onOpenRegisterName={onOpenRegisterName}
+            onCloseDrawer={onCloseDrawerProfile}
+          />
         </DrawerComponent>
 
         <UserLookup
@@ -3800,16 +1301,18 @@ function App() {
           show={show}
           userInfo={userInfo}
           setOpenSnack={setOpenSnack}
-          setInfoSnack={setInfoSnack}
+          setInfoSnack={
+            setInfoSnack as (
+              info: { type: string; message: string } | null
+            ) => void
+          }
         />
         <BuyQortInformation balance={balance} />
       </QORTAL_APP_CONTEXT.Provider>
 
       {extState === 'create-wallet' && walletToBeDownloaded && (
         <ButtonBase
-          onClick={() => {
-            showTutorial('important-information', true);
-          }}
+          onClick={onShowTutorialImportantInfo}
           sx={{
             bottom: '25px',
             position: 'fixed',
@@ -3833,34 +1336,57 @@ function App() {
       )}
 
       {!isAuthenticated && (
-        <Box
-          sx={{
-            alignItems: 'flex-start',
-            bottom: '1%',
-            display: 'flex',
-            flexDirection: 'column',
-            left: '3px',
-            position: 'absolute',
-            width: 'auto',
-          }}
-        >
-          {window?.coreSetup && (
-            <Box sx={{ alignSelf: 'center' }}>
-              <IconButton onClick={() => setOpenCoreSetup(true)}>
-                <HubIcon />
-              </IconButton>
-            </Box>
-          )}
-
-          <Box sx={{ alignSelf: 'left' }}>
-            <LanguageSelector />
-          </Box>
-
-          <Box sx={{ alignSelf: 'center' }}>
-            <ThemeSelector />
-          </Box>
-        </Box>
+        <NotAuthenticatedFooter
+          showCoreSetup={!!window?.coreSetup}
+          onOpenCoreSetup={onOpenCoreSetup}
+        />
       )}
+    </>
+  );
+
+  const titleBarRightNav: CustomTitleBarRightNavProps | null =
+    extState === 'authenticated' && isMainWindow
+      ? {
+          desktopViewMode,
+          extState,
+          isMainWindow,
+          userInfo,
+          onOpenSettings,
+          onOpenDrawerLookup,
+          onOpenWalletsApp,
+          onOpenDrawerProfile,
+          onLogout: logoutFunc,
+          getUserInfo,
+          onOpenMinting,
+          showTutorial,
+          onBackupWallet,
+        }
+      : null;
+
+  return (
+    <AppContainer
+      sx={{
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        ['--electron-title-bar-height' as string]: `${CUSTOM_TITLE_BAR_HEIGHT}px`,
+      }}
+    >
+      <CustomTitleBar rightNav={titleBarRightNav} />
+
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        {mainContent}
+      </Box>
     </AppContainer>
   );
 }

@@ -22,6 +22,7 @@
     "choose_name": "choose a name",
     "close": "close",
     "close_chat": "close Direct Chat",
+    "confirm": "confirm",
     "continue": "continue",
     "continue_logout": "continue to logout",
     "copy_link": "copy link",
@@ -50,7 +51,6 @@
     "join": "join",
     "leave_comment": "leave comment",
     "load_announcements": "load older announcements",
-    "login": "login",
     "logout": "logout",
     "new": {
       "chat": "new chat",
@@ -73,11 +73,14 @@
     "remove": "remove",
     "remove_reaction": "remove reaction",
     "return_apps_dashboard": "return to Apps Dashboard",
+    "resize": "resize",
     "return": "return",
     "save": "save",
     "save_disk": "save to disk",
     "search": "search",
     "search_apps": "search for apps",
+    "search_apps_or_link": "Search apps or enter qortal:// link",
+    "open_as_qortal_link": "Open as Qortal link",
     "search_groups": "search for groups",
     "search_chat_text": "search chat text",
     "see_qr_code": "see QR code",
@@ -172,6 +175,7 @@
   "last_height": "last height",
   "level": "level",
   "library": "library",
+  "explore": "explore",
   "list": {
     "bans": "list of bans",
     "groups": "list of groups",
@@ -286,6 +290,7 @@
       "rating": "rating for {{ service }} {{ name }}",
       "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
       "replied_to": "replied to {{ person }}",
+      "replied_to_you": "↩ replied to you",
       "revert_default": "revert to default",
       "revert_qdn": "revert to QDN",
       "save_qdn": "save to QDN",
@@ -297,6 +302,7 @@
       "settings": "you are using the export/import way of saving settings.",
       "space_for_admins": "sorry, this space is only for Admins.",
       "unread_messages": "unread messages below",
+      "replying_to": "replying to {{name}}",
       "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN.",
       "updating": "updating",
       "wait": "please wait"
@@ -425,6 +431,7 @@
     "recently_updated": "recently updated"
   },
   "tabs": {
+    "add_private": "+ private app",
     "categories": "categories",
     "community_apps": "community apps",
     "my_apps": "my apps",

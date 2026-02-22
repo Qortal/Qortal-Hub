@@ -110,8 +110,17 @@ export const AppsDevModeNavBar = ({
               }}
               disabled={isDisableBackButton}
               sx={{
+                alignItems: 'center',
+                borderRadius: '50%',
+                display: 'flex',
+                height: '36px',
+                justifyContent: 'center',
                 opacity: !isDisableBackButton ? 1 : 0.1,
                 cursor: !isDisableBackButton ? 'pointer' : 'default',
+                width: '36px',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: theme.palette.action.hover,
+                },
               }}
             >
               <NavBack />
@@ -171,6 +180,17 @@ export const AppsDevModeNavBar = ({
               setSelectedTab(null);
               executeEvent('devModeNewTabWindow', {});
             }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
+            }}
           >
             <NavAdd
               style={{
@@ -189,6 +209,17 @@ export const AppsDevModeNavBar = ({
                   tabId: selectedTab?.tabId,
                 });
               }
+            }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
             }}
           >
             <RefreshIcon

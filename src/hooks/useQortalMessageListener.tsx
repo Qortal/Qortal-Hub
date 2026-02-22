@@ -1,12 +1,15 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { executeEvent } from '../utils/events';
-import { navigationControllerAtom } from '../atoms/global';
+import {
+  infoSnackGlobalAtom,
+  navigationControllerAtom,
+  openSnackGlobalAtom,
+} from '../atoms/global';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { saveFile } from '../qortal/get';
 import { mimeToExtensionMap } from '../utils/memeTypes';
-import { QORTAL_APP_CONTEXT } from '../App';
 import FileSaver from 'file-saver';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
   TIME_HOURS_1_IN_MILLISECONDS,
   TIME_MINUTES_30_IN_MILLISECONDS,
@@ -542,12 +545,10 @@ export const useQortalMessageListener = (
   });
   const setHasSettingsChangedAtom = useSetAtom(navigationControllerAtom);
 
-  const {
-    openSnackGlobal,
-    setOpenSnackGlobal,
-    infoSnackCustom,
-    setInfoSnackCustom,
-  } = useContext(QORTAL_APP_CONTEXT);
+  const openSnackGlobal = useAtomValue(openSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const infoSnackCustom = useAtomValue(infoSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
 
   useEffect(() => {
     if (tabId && !isNaN(history?.currentIndex)) {

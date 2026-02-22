@@ -22,6 +22,7 @@
     "choose_name": "valitse nimi",
     "close": "sulje",
     "close_chat": "sulje yksityisviesti",
+    "confirm": "vahvista",
     "continue": "jatka",
     "continue_logout": "jatka uloskirjautumista",
     "copy_link": "kopioi linkki",
@@ -50,7 +51,6 @@
     "join": "liity",
     "leave_comment": "jätä kommentti",
     "load_announcements": "lataa vanhemmat ilmoitukset",
-    "login": "kirjaudu sisään",
     "logout": "kirjaudu ulos",
     "new": {
       "chat": "uusi keskustelu",
@@ -78,6 +78,8 @@
     "save_disk": "tallenna levylle",
     "search": "etsi",
     "search_apps": "etsi sovelluksia",
+    "search_apps_or_link": "Etsi sovelluksia tai syötä qortal://-linkki",
+    "open_as_qortal_link": "Ava Qortal-linkkinä",
     "search_groups": "etsi ryhmiä",
     "search_chat_text": "etsi keskustelusta",
     "see_qr_code": "näytä QR-koodi",
@@ -172,6 +174,7 @@
   "last_height": "viimeisin korkeus",
   "level": "taso",
   "library": "kirjasto",
+  "explore": "Selaa",
   "list": {
     "bans": "estolistat",
     "groups": "ryhmien lista",
@@ -351,6 +354,7 @@
     "recently_updated": "äskettäin päivitetyt"
   },
   "tabs": {
+    "add_private": "+ yksityinen sovellus",
     "categories": "kategoriat",
     "community_apps": "yhteisösovellukset",
     "my_apps": "omat sovellukset",

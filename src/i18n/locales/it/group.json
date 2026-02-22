@@ -50,7 +50,9 @@
     "member_number": "numero di membri",
     "member_other": "membri",
     "messaging": "chat",
+    "dm": "MP",
     "name": "nome del gruppo",
+    "no_groups_found": "nessun gruppo trovato",
     "open": "aperto (pubblico)",
     "private": "gruppo privato",
     "promotions": "promozioni di gruppo",
@@ -63,6 +65,8 @@
   "join_requests": "richieste di adesione",
   "last_message": "ultimo messaggio",
   "last_message_date": "ultimo messaggio: {{ date }}",
+  "last_message_from": "{{sender}} • {{date}}",
+  "last_message_you": "Tu",
   "latest_mails": "ultimi Q-Mail",
   "message": {
     "generic": {

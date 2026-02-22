@@ -3,6 +3,7 @@
 const cp = require('child_process');
 const chokidar = require('chokidar');
 const electron = require('electron');
+const { log } = require('./scripts/logger');
 
 let child = null;
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -54,7 +55,7 @@ function setupReloadWatcher() {
       if (reloadWatcher.ready) {
         clearTimeout(reloadWatcher.debouncer);
         reloadWatcher.debouncer = setTimeout(async () => {
-          console.log('Restarting');
+          log('Restarting');
           reloadWatcher.restarting = true;
           await spawnElectron();
           reloadWatcher.restarting = false;

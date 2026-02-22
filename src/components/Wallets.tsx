@@ -1,4 +1,4 @@
-import { Fragment, useContext, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Avatar from '@mui/material/Avatar';
 import Typography from '@mui/material/Typography';
 import {
@@ -16,7 +16,7 @@ import {
 import { CustomButton, Label } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
-import ImageUploader from '../common/ImageUploader.tsx';
+import PersonIcon from '@mui/icons-material/Person';
 import { Spacer } from '../common/Spacer.tsx';
 import {
   deleteAvatar,
@@ -29,6 +29,8 @@ import {
   storeWallets,
   walletVersion,
 } from '../background/background.ts';
+import { getNameInfo } from './Group/groupApi';
+import { getBaseApiReactForAvatar } from '../App';
 import { useModal } from '../hooks/useModal.tsx';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
 import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
@@ -36,7 +38,8 @@ import { crypto } from '../constants/decryptWallet.ts';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './index.ts';
 import { HtmlTooltip } from './NotAuthenticated.tsx';
-import { QORTAL_APP_CONTEXT } from '../App.tsx';
+import { useAtomValue } from 'jotai';
+import { hasSeenGettingStartedAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
@@ -49,10 +52,15 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(QORTAL_APP_CONTEXT);
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
+  const [primaryNamesByAddress, setPrimaryNamesByAddress] = useState<
+    Record<string, string>
+  >({});
+  const fetchingAddressesRef = useRef<Set<string>>(new Set());
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -62,6 +70,48 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     'tutorial',
   ]);
   const { isShow, onCancel, onOk, show } = useModal();
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target as HTMLElement;
+          const address = el.getAttribute('data-address');
+          if (!address || fetchingAddressesRef.current.has(address)) return;
+          fetchingAddressesRef.current.add(address);
+          getNameInfo(address)
+            .then((name) => {
+              if (name) {
+                setPrimaryNamesByAddress((prev) =>
+                  prev[address] === undefined
+                    ? { ...prev, [address]: name }
+                    : prev
+                );
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              fetchingAddressesRef.current.delete(address);
+              observerRef.current?.unobserve(el);
+            });
+        });
+      },
+      { rootMargin: '100px', threshold: 0.01 }
+    );
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
+
+  const registerCardRef = useCallback((address: string) => {
+    return (el: HTMLElement | null) => {
+      if (!el) return;
+      el.setAttribute('data-address', address);
+      observerRef.current?.observe(el);
+    };
+  }, []);
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -306,6 +356,12 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
                 wallet={wallet}
                 idx={idx}
                 updateWalletItem={updateWalletItem}
+                primaryName={
+                  wallet?.address0
+                    ? primaryNamesByAddress[wallet.address0]
+                    : undefined
+                }
+                registerCardRef={registerCardRef}
               />
             );
           })}
@@ -539,11 +595,17 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   );
 };
 
-const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
+const WalletItem = ({
+  wallet,
+  updateWalletItem,
+  idx,
+  setSelectedWallet,
+  primaryName,
+  registerCardRef,
+}) => {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
-  const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -562,26 +624,19 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
     }
   }, [wallet]);
 
-  useEffect(() => {
-    if (wallet?.address0) {
-      loadAvatar(wallet.address0).then(setAvatarSrc);
-    }
-  }, [wallet?.address0]);
+  const qortalAvatarSrc =
+    primaryName &&
+    `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`;
+  const displayAvatarSrc = qortalAvatarSrc || undefined;
+  const displayName =
+    primaryName ||
+    wallet?.name ||
+    (wallet?.filename ? parsefilenameQortal(wallet.filename) : null) ||
+    'No name';
 
-  const handleAvatarPick = async (file: File) => {
-    if (!wallet?.address0) return;
-    const resizedBase64 = await resizeImageToAvatar(file, 150);
-    await saveAvatar(wallet.address0, resizedBase64);
-    setAvatarSrc(`data:image/webp;base64,${resizedBase64}`);
-  };
-
-  const handleAvatarRemove = async () => {
-    if (!wallet?.address0) return;
-    await deleteAvatar(wallet.address0);
-    setAvatarSrc(null);
-  };
   return (
     <Box
+      ref={wallet?.address0 ? registerCardRef(wallet.address0) : undefined}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -615,10 +670,12 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
         }}
       >
         <Avatar
-          alt={wallet?.name || ''}
-          src={avatarSrc || undefined}
+          alt={displayName}
+          src={displayAvatarSrc}
           sx={{ width: 56, height: 56 }}
-        />
+        >
+          <PersonIcon sx={{ fontSize: 32 }} />
+        </Avatar>
         <IconButton
           sx={{
             color: theme.palette.text.primary,
@@ -646,11 +703,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           color: theme.palette.text.primary,
         }}
       >
-        {wallet?.name
-          ? wallet.name
-          : wallet?.filename
-            ? parsefilenameQortal(wallet?.filename)
-            : 'No name'}
+        {displayName}
       </Typography>
 
       <Typography
@@ -679,7 +732,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
         </Typography>
       )}
 
-      {/* Card footer: login button */}
+      {/* Card footer: choose button */}
       {!isEdit && (
         <Box
           sx={{
@@ -708,7 +761,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               setSelectedWallet(wallet);
             }}
           >
-            {t('core:action.login', {
+            {t('core:action.choose', {
               postProcess: 'capitalizeFirstChar',
             })}
           </ButtonBase>
@@ -725,32 +778,6 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              gap: '12px',
-              mb: 1,
-            }}
-          >
-            <ImageUploader onPick={handleAvatarPick}>
-              <Button size="small" variant="outlined">
-                {t('auth:action.change_avatar', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </ImageUploader>
-            {avatarSrc && (
-              <Button size="small" color="error" onClick={handleAvatarRemove}>
-                {t('core:action.remove', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            )}
-          </Box>
-
-          <Spacer height="10px" />
-
           <Label>
             {t('core:name', {
               postProcess: 'capitalizeFirstChar',
@@ -815,12 +842,7 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
               }}
               size="small"
               variant="contained"
-              onClick={async () => {
-                if (wallet?.address0) {
-                  await deleteAvatar(wallet.address0);
-                }
-                updateWalletItem(idx, null);
-              }}
+              onClick={() => updateWalletItem(idx, null)}
             >
               {t('core:action.remove', {
                 postProcess: 'capitalizeFirstChar',

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { Box, Typography } from '@mui/material';
 import { AdminSpaceInner } from './AdminSpaceInner';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 export const AdminSpace = ({
   selectedGroup,
   adminsWithNames,
-  userInfo,
   secretKey,
   getSecretKey,
   isAdmin,
@@ -14,10 +16,10 @@ export const AdminSpace = ({
   hide,
   defaultThread,
   setDefaultThread,
-  setIsForceShowCreationKeyPopup,
-  balance,
   isOwner,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
   const [isMoved, setIsMoved] = useState(false);
   const { t } = useTranslation([
     'auth',
@@ -40,7 +42,7 @@ export const AdminSpace = ({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 70px)',
+        height: `calc(100vh - ${70 + appHeighOffset}px)`,
         left: hide && '-1000px',
         opacity: hide ? 0 : 1,
         overflow: 'auto',
@@ -68,11 +70,9 @@ export const AdminSpace = ({
 
       {isAdmin && (
         <AdminSpaceInner
-          setIsForceShowCreationKeyPopup={setIsForceShowCreationKeyPopup}
           adminsWithNames={adminsWithNames}
           selectedGroup={selectedGroup}
           balance={balance}
-          userInfo={userInfo}
           isOwner={isOwner}
         />
       )}

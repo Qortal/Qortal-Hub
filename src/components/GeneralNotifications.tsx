@@ -16,7 +16,7 @@ import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotificat
 import { executeEvent } from '../utils/events';
 import { useTranslation } from 'react-i18next';
 
-export const GeneralNotifications = ({ address }) => {
+export const GeneralNotifications = ({ address, tooltipPlacement = 'left' }) => {
   const [anchorEl, setAnchorEl] = useState(null);
 
   const {
@@ -63,7 +63,7 @@ export const GeneralNotifications = ({ address }) => {
               {t('core:payment_notification')}
             </span>
           }
-          placement="left"
+          placement={tooltipPlacement}
           arrow
           sx={{ fontSize: '24' }}
           slotProps={{
