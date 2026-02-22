@@ -1,4 +1,4 @@
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import BuildIcon from '@mui/icons-material/Build';
 import GroupsIcon from '@mui/icons-material/Groups';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
@@ -88,8 +88,9 @@ export const HomeDeveloperTab = ({
       </Typography>
 
       {cards.map((card) => (
-        <Box
+        <ButtonBase
           key={card.key}
+          onClick={card.onAction}
           sx={{
             alignItems: 'center',
             bgcolor: theme.palette.background.default,
@@ -97,6 +98,9 @@ export const HomeDeveloperTab = ({
             display: 'flex',
             gap: '16px',
             padding: '14px 16px',
+            textAlign: 'left',
+            width: '100%',
+            '&:hover': { bgcolor: theme.palette.action.hover },
           }}
         >
           {/* Icon */}
@@ -122,17 +126,7 @@ export const HomeDeveloperTab = ({
               {card.description}
             </Typography>
           </Box>
-
-          {/* Action button */}
-          <Button
-            onClick={card.onAction}
-            size="small"
-            variant="outlined"
-            sx={{ borderRadius: '50px', flexShrink: 0, fontSize: '0.78rem', textTransform: 'none' }}
-          >
-            {t('tutorial:home.open', { postProcess: 'capitalizeFirstChar' })}
-          </Button>
-        </Box>
+        </ButtonBase>
       ))}
     </Box>
   );

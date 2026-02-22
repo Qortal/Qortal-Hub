@@ -1,4 +1,4 @@
-import { Avatar, Box, Button, Typography, useTheme } from '@mui/material';
+import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
@@ -53,7 +53,6 @@ export const HomeFeaturedApps = () => {
           <AppTile
             key={appName}
             appName={appName}
-            label={t('tutorial:home.open_app', { postProcess: 'capitalizeFirstChar' })}
             theme={theme}
           />
         ))}
@@ -66,15 +65,15 @@ export const HomeFeaturedApps = () => {
 
 interface AppTileProps {
   appName: string;
-  label: string;
   theme: any;
 }
 
-const AppTile = ({ appName, label, theme }: AppTileProps) => {
+const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
   const avatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
 
   return (
-    <Box
+    <ButtonBase
+      onClick={() => openApp(appName)}
       sx={{
         alignItems: 'center',
         bgcolor: theme.palette.background.default,
@@ -85,6 +84,7 @@ const AppTile = ({ appName, label, theme }: AppTileProps) => {
         gap: '8px',
         padding: '14px 10px',
         width: '120px',
+        '&:hover': { bgcolor: theme.palette.action.hover },
       }}
     >
       <Avatar
@@ -109,15 +109,6 @@ const AppTile = ({ appName, label, theme }: AppTileProps) => {
       >
         {appName}
       </Typography>
-
-      <Button
-        onClick={() => openApp(appName)}
-        size="small"
-        variant="outlined"
-        sx={{ borderRadius: '50px', fontSize: '0.75rem', textTransform: 'none', width: '100%' }}
-      >
-        {label}
-      </Button>
-    </Box>
+    </ButtonBase>
   );
 };

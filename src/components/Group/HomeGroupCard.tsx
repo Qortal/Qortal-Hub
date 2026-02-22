@@ -1,6 +1,5 @@
-import { Avatar, Box, Button, Typography, useTheme } from '@mui/material';
+import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { useAtomValue } from 'jotai';
-import { useTranslation } from 'react-i18next';
 import { groupsOwnerNamesSelector } from '../../atoms/global';
 import { getBaseApiReact } from '../../App';
 import { FeaturedGroup } from '../../data/featuredGroups';
@@ -11,7 +10,6 @@ interface HomeGroupCardProps {
 }
 
 export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
-  const { t } = useTranslation(['tutorial']);
   const theme = useTheme();
   const ownerName = useAtomValue(groupsOwnerNamesSelector(String(group.id)));
 
@@ -28,7 +26,8 @@ export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
     .join('');
 
   return (
-    <Box
+    <ButtonBase
+      onClick={onClick}
       sx={{
         alignItems: 'center',
         bgcolor: theme.palette.background.default,
@@ -39,6 +38,7 @@ export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
         gap: '8px',
         padding: '14px 10px',
         width: '160px',
+        '&:hover': { bgcolor: theme.palette.action.hover },
       }}
     >
       {/* Avatar */}
@@ -88,16 +88,6 @@ export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
       >
         {group.description}
       </Typography>
-
-      {/* View button */}
-      <Button
-        onClick={onClick}
-        size="small"
-        variant="outlined"
-        sx={{ borderRadius: '50px', fontSize: '0.75rem', textTransform: 'none', width: '100%' }}
-      >
-        {t('tutorial:home.view_group', { postProcess: 'capitalizeFirstChar' })}
-      </Button>
-    </Box>
+    </ButtonBase>
   );
 };
