@@ -47,7 +47,15 @@ i18n.init({
 import { userInfoAtom, balanceAtom } from '../../../atoms/global';
 import { HomeProfileCard } from '../HomeProfileCard';
 
-const theme = createTheme();
+const theme = createTheme({
+  palette: {
+    other: {
+      positive: '#00a000',
+      danger: '#d00000',
+      unread: '#1976d2',
+    },
+  },
+});
 
 const renderCard = (
   userInfo: { name: string | null; address: string } | null,

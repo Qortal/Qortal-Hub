@@ -98,24 +98,24 @@ describe('HomeDeveloperTab', () => {
     expect(screen.getByText('Test your Q-Apps in the DevNet-Testing environment')).toBeInTheDocument();
   });
 
-  it('renders three Open buttons', () => {
+  it('renders three clickable cards', () => {
     renderComponent();
-    expect(screen.getAllByRole('button', { name: 'Open' })).toHaveLength(3);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
   });
 
-  it('opens Q-Tube app when first button is clicked', () => {
+  it('opens Q-Tube app when first card is clicked', () => {
     renderComponent();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
+    fireEvent.click(screen.getAllByRole('button')[0]);
     expect(mockExecuteEvent).toHaveBeenCalledWith('addTab', {
       data: { service: 'APP', name: 'q-tube' },
     });
     expect(mockExecuteEvent).toHaveBeenCalledWith('open-apps-mode', {});
   });
 
-  it('navigates to CORE support group when second button is clicked', () => {
+  it('navigates to CORE support group when second card is clicked', () => {
     const props = makeProps();
     renderComponent(props);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[1]);
+    fireEvent.click(screen.getAllByRole('button')[1]);
     expect(props.setSelectedGroup).toHaveBeenCalledWith(
       expect.objectContaining({ groupName: 'Qortal-CORE-Support' })
     );
@@ -125,20 +125,20 @@ describe('HomeDeveloperTab', () => {
     expect(props.getTimestampEnterChat).toHaveBeenCalled();
   });
 
-  it('navigates to DevNet-Testing group when third button is clicked', () => {
+  it('navigates to DevNet-Testing group when third card is clicked', () => {
     const props = makeProps();
     renderComponent(props);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[2]);
+    fireEvent.click(screen.getAllByRole('button')[2]);
     expect(props.setSelectedGroup).toHaveBeenCalledWith(
       expect.objectContaining({ groupName: 'Q-App-DevNet-Testing' })
     );
     expect(props.setDesktopViewMode).toHaveBeenCalledWith('chat');
   });
 
-  it('does not call group navigation when Q-Tube button is clicked', () => {
+  it('does not call group navigation when Q-Tube card is clicked', () => {
     const props = makeProps();
     renderComponent(props);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
+    fireEvent.click(screen.getAllByRole('button')[0]);
     expect(props.setSelectedGroup).not.toHaveBeenCalled();
     expect(props.setDesktopViewMode).not.toHaveBeenCalled();
   });

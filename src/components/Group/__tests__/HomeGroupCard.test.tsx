@@ -95,15 +95,15 @@ describe('HomeGroupCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders a View button', () => {
+  it('renders a clickable card', () => {
     renderCard();
-    expect(screen.getByRole('button', { name: 'View' })).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeInTheDocument();
   });
 
-  it('calls onClick when the View button is clicked', () => {
+  it('calls onClick when the card is clicked', () => {
     const onClick = vi.fn();
     renderCard(onClick);
-    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+    fireEvent.click(screen.getByRole('button'));
     expect(onClick).toHaveBeenCalledOnce();
   });
 

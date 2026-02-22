@@ -81,16 +81,16 @@ describe('HomeFeaturedApps', () => {
     }
   });
 
-  it('renders an Open button for each featured app', () => {
+  it('renders a clickable tile for each featured app', () => {
     renderComponent();
-    const buttons = screen.getAllByRole('button', { name: 'Open' });
+    const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(officialAppsConfig.featured.length);
   });
 
   it('fires addTab and open-apps-mode events when an app is opened', () => {
     renderComponent();
     const firstAppName = officialAppsConfig.featured[0];
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
+    fireEvent.click(screen.getAllByRole('button')[0]);
 
     expect(mockExecuteEvent).toHaveBeenCalledWith('addTab', {
       data: { service: 'APP', name: firstAppName },
@@ -98,9 +98,9 @@ describe('HomeFeaturedApps', () => {
     expect(mockExecuteEvent).toHaveBeenCalledWith('open-apps-mode', {});
   });
 
-  it('opens the correct app for each button', () => {
+  it('opens the correct app for each tile', () => {
     renderComponent();
-    const buttons = screen.getAllByRole('button', { name: 'Open' });
+    const buttons = screen.getAllByRole('button');
 
     officialAppsConfig.featured.forEach((appName, index) => {
       vi.clearAllMocks();

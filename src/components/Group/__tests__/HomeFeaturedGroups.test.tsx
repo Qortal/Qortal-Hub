@@ -96,9 +96,9 @@ describe('HomeFeaturedGroups', () => {
     }
   });
 
-  it('renders a View button for each group', () => {
+  it('renders a clickable card for each group', () => {
     renderComponent();
-    const buttons = screen.getAllByRole('button', { name: 'View' });
+    const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(featuredGroups.length);
   });
 
@@ -115,11 +115,11 @@ describe('HomeFeaturedGroups', () => {
     expect(screen.getByText('Q')).toBeInTheDocument();
   });
 
-  it('calls navigation props when View is clicked', () => {
+  it('calls navigation props when a card is clicked', () => {
     const props = makeProps();
     renderComponent(props);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'View' })[0]);
+    fireEvent.click(screen.getAllByRole('button')[0]);
 
     const firstGroup = featuredGroups[0];
     expect(props.setSelectedGroup).toHaveBeenCalledWith({
@@ -132,10 +132,10 @@ describe('HomeFeaturedGroups', () => {
     expect(props.getTimestampEnterChat).toHaveBeenCalled();
   });
 
-  it('navigates to the correct group when different View buttons are clicked', () => {
+  it('navigates to the correct group when different cards are clicked', () => {
     const props = makeProps();
     renderComponent(props);
-    const buttons = screen.getAllByRole('button', { name: 'View' });
+    const buttons = screen.getAllByRole('button');
 
     featuredGroups.forEach((group, index) => {
       vi.clearAllMocks();
