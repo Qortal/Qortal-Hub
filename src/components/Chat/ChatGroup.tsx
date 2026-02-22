@@ -341,7 +341,6 @@ export const ChatGroup = ({
                     };
                   });
                 setMessages((prev) => [...prev, ...formatted]);
-
                 setChatReferences((prev) => {
                   const organizedChatReferences = { ...prev };
                   combineUIAndExtensionMsgs
@@ -666,7 +665,7 @@ export const ChatGroup = ({
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingGroupSocket, 45000); // Ping every 45 seconds
+          groupSocketTimeoutRef.current = setTimeout(pingGroupSocket, 20000); // Ping every 20 seconds
         } else {
           middletierFunc(JSON.parse(e.data), selectedGroup);
           setIsLoading(false);
