@@ -88,9 +88,9 @@ export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
         onClick={onClick}
         size="small"
         variant="outlined"
-        sx={{ flexShrink: 0, fontSize: '0.78rem' }}
+        sx={{ borderRadius: '50px', flexShrink: 0, fontSize: '0.78rem', textTransform: 'none' }}
       >
-        {t('tutorial:home.view_group')}
+        {t('tutorial:home.view_group', { postProcess: 'capitalizeFirstChar' })}
       </Button>
     </Box>
   );

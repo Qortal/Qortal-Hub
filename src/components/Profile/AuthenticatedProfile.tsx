@@ -49,7 +49,8 @@ export const AuthenticatedProfile = ({
   const showLeftColumn =
     desktopViewMode !== 'apps' &&
     desktopViewMode !== 'dev' &&
-    desktopViewMode !== 'chat';
+    desktopViewMode !== 'chat' &&
+    desktopViewMode !== 'home';
 
   return (
     <AuthenticatedContainer

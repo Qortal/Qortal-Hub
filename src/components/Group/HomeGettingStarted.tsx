@@ -25,6 +25,7 @@ import {
   getArbitraryEndpointReact,
 } from '../../App';
 
+const LS_KEY = 'getting_started_status';
 const GET_QORTS_URL = 'https://www.example.com';
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
@@ -39,13 +40,15 @@ export const HomeGettingStarted = () => {
   const [hasAvatar, setHasAvatar] = useState(false);
   const [checkingAvatar, setCheckingAvatar] = useState(false);
   const [openQortsDialog, setOpenQortsDialog] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem(LS_KEY) === 'completed'
+  );
 
   const name = userInfo?.name;
 
   // Step completion flags
   const hasQorts = balance != null && Number(balance) >= MIN_BALANCE_FOR_QORTS;
   const hasName = Boolean(name);
-  const hasExplored = false; // always actionable
 
   // Check avatar existence via API (same approach as MainAvatar)
   const checkAvatar = useCallback(async () => {
@@ -74,10 +77,13 @@ export const HomeGettingStarted = () => {
     return () => unsubscribeFromEvent('avatarUploaded', onUploaded);
   }, [checkAvatar]);
 
-  const completedCount = useMemo(
-    () => [hasQorts, hasName, hasAvatar, hasExplored].filter(Boolean).length,
-    [hasQorts, hasName, hasAvatar, hasExplored]
-  );
+  // Once all steps are complete, persist and hide the section
+  useEffect(() => {
+    if (!checkingAvatar && hasQorts && hasName && hasAvatar && !dismissed) {
+      localStorage.setItem(LS_KEY, 'completed');
+      setDismissed(true);
+    }
+  }, [checkingAvatar, hasQorts, hasName, hasAvatar, dismissed]);
 
   const steps = useMemo(
     () => [
@@ -100,15 +106,17 @@ export const HomeGettingStarted = () => {
         loading: checkingAvatar,
         onAction: () => executeEvent('openAvatarUpload', {}),
       },
-      {
-        key: 'explore_apps',
-        label: t('tutorial:home.explore_apps'),
-        done: hasExplored,
-        onAction: () => executeEvent('open-apps-mode', {}),
-      },
     ],
-    [t, hasQorts, hasName, hasAvatar, checkingAvatar, hasExplored]
+    [t, hasQorts, hasName, hasAvatar, checkingAvatar]
   );
+
+  const completedCount = useMemo(
+    () => steps.filter((s) => s.done).length,
+    [steps]
+  );
+
+  // Hidden once the user has completed all steps (persisted across sessions)
+  if (dismissed) return null;
 
   return (
     <>

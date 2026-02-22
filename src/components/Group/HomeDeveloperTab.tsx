@@ -128,9 +128,9 @@ export const HomeDeveloperTab = ({
             onClick={card.onAction}
             size="small"
             variant="outlined"
-            sx={{ flexShrink: 0, fontSize: '0.78rem' }}
+            sx={{ borderRadius: '50px', flexShrink: 0, fontSize: '0.78rem', textTransform: 'none' }}
           >
-            {t('tutorial:home.open')}
+            {t('tutorial:home.open', { postProcess: 'capitalizeFirstChar' })}
           </Button>
         </Box>
       ))}

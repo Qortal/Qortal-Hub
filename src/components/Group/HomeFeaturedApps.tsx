@@ -41,6 +41,7 @@ export const HomeFeaturedApps = () => {
         sx={{
           display: 'flex',
           gap: '12px',
+          justifyContent: 'center',
           overflowX: 'auto',
           pb: '4px', // prevent clipping box-shadows on scroll
           // Hide scrollbar visually while keeping it functional
@@ -52,7 +53,7 @@ export const HomeFeaturedApps = () => {
           <AppTile
             key={appName}
             appName={appName}
-            label={t('tutorial:home.open_app')}
+            label={t('tutorial:home.open_app', { postProcess: 'capitalizeFirstChar' })}
             theme={theme}
           />
         ))}
@@ -113,7 +114,7 @@ const AppTile = ({ appName, label, theme }: AppTileProps) => {
         onClick={() => openApp(appName)}
         size="small"
         variant="outlined"
-        sx={{ fontSize: '0.75rem', width: '100%' }}
+        sx={{ borderRadius: '50px', fontSize: '0.75rem', textTransform: 'none', width: '100%' }}
       >
         {label}
       </Button>

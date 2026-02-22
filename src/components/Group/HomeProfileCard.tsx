@@ -1,19 +1,40 @@
 import { useState } from 'react';
-import { Avatar, Box, Tooltip, Typography, useTheme } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  IconButton,
+  Popover,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import PersonIcon from '@mui/icons-material/Person';
-import { useAtomValue } from 'jotai';
+import SendIcon from '@mui/icons-material/Send';
+import QrCode2Icon from '@mui/icons-material/QrCode2';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import QRCode from 'react-qr-code';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { userInfoAtom, balanceAtom } from '../../atoms/global';
+import {
+  userInfoAtom,
+  balanceAtom,
+  openSnackGlobalAtom,
+  infoSnackGlobalAtom,
+} from '../../atoms/global';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
+import { executeEvent } from '../../utils/events';
 
 export const HomeProfileCard = () => {
-  const { t } = useTranslation(['tutorial']);
+  const { t } = useTranslation(['tutorial', 'core']);
   const theme = useTheme();
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const setOpenSnack = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
+
   const [avatarError, setAvatarError] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
 
   const name = userInfo?.name;
   const address = userInfo?.address;
@@ -27,8 +48,22 @@ export const HomeProfileCard = () => {
   const handleCopyAddress = () => {
     if (!address) return;
     navigator.clipboard.writeText(address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setInfoSnack({
+      type: 'info',
+      message: t('tutorial:home.address_copied', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    });
+    setOpenSnack(true);
+  };
+
+  const handleTransferQort = () => {
+    executeEvent('openPaymentInternal', {});
+  };
+
+  const handleOpenQTrade = () => {
+    executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } });
+    executeEvent('open-apps-mode', {});
   };
 
   return (
@@ -73,13 +108,9 @@ export const HomeProfileCard = () => {
 
       {/* Center: Address (copy on click) */}
       <Tooltip
-        title={
-          copied
-            ? '✓'
-            : t('tutorial:home.copy_address', {
-                postProcess: 'capitalizeFirstChar',
-              })
-        }
+        title={t('tutorial:home.copy_address', {
+          postProcess: 'capitalizeFirstChar',
+        })}
       >
         <Box
           onClick={handleCopyAddress}
@@ -119,30 +150,95 @@ export const HomeProfileCard = () => {
         </Box>
       </Tooltip>
 
-      {/* Right: Balance */}
+      {/* Right: Balance + actions */}
       <Box
         sx={{
-          alignItems: 'flex-end',
+          alignItems: 'center',
           display: 'flex',
-          flexDirection: 'column',
           flexShrink: 0,
+          gap: '4px',
         }}
       >
-        <Typography
-          sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}
-        >
-          {t('tutorial:home.balance', { postProcess: 'capitalizeFirstChar' })}
-        </Typography>
-        <Typography
+        {/* Balance */}
+        <Box
           sx={{
-            color: theme.palette.text.primary,
-            fontSize: '1rem',
-            fontWeight: 700,
+            alignItems: 'flex-end',
+            display: 'flex',
+            flexDirection: 'column',
+            mr: '8px',
           }}
         >
-          {formattedBalance} QORT
-        </Typography>
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}
+          >
+            {t('tutorial:home.balance', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+          <Typography
+            sx={{
+              color: theme.palette.text.primary,
+              fontSize: '1rem',
+              fontWeight: 700,
+            }}
+          >
+            {formattedBalance} QORT
+          </Typography>
+        </Box>
+
+        {/* Transfer QORT */}
+        <Tooltip
+          title={t('core:action.transfer_qort', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        >
+          <IconButton onClick={handleTransferQort} size="small">
+            <SendIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
+        {/* QR Code */}
+        <Tooltip
+          title={t('core:action.see_qr_code', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        >
+          <IconButton
+            onClick={(e) => setQrAnchorEl(e.currentTarget)}
+            size="small"
+          >
+            <QrCode2Icon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
+        {/* Get QORT in Q-Trade */}
+        <Tooltip
+          title={t('core:action.get_qort_trade', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        >
+          <IconButton onClick={handleOpenQTrade} size="small">
+            <ShoppingCartIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
+
+      {/* QR Code popover */}
+      <Popover
+        open={Boolean(qrAnchorEl)}
+        anchorEl={qrAnchorEl}
+        onClose={() => setQrAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Box sx={{ p: 2 }}>
+          <QRCode
+            value={address ?? ''}
+            size={160}
+            level="M"
+            bgColor="#FFFFFF"
+            fgColor="#000000"
+          />
+        </Box>
+      </Popover>
     </Box>
   );
 };

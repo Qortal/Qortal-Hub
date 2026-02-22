@@ -40,6 +40,8 @@
     "core_support": "Qortal official CORE support",
     "core_support_desc": "Get help from the official Qortal CORE support group",
     "devnet_testing": "Q-App DevNet-Testing",
-    "devnet_testing_desc": "Test your Q-Apps in the DevNet-Testing environment"
+    "devnet_testing_desc": "Test your Q-Apps in the DevNet-Testing environment",
+    "open_app": "Open",
+    "address_copied": "Address copied to clipboard"
   }
 }
