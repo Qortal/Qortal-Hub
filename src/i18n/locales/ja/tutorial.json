@@ -17,5 +17,29 @@
     "register_name": "名前を登録する",
     "see_apps": "アプリを見る",
     "trade_qort": "QORT を取引する"
+  },
+  "home": {
+    "tab_user": "User",
+    "tab_developer": "Developer",
+    "getting_started": "Getting Started",
+    "progress": "{{completed}} / {{total}} completed",
+    "get_six_qorts": "Get your 6 QORT",
+    "register_name": "Register your name",
+    "load_avatar": "Load your avatar",
+    "explore_apps": "Explore featured apps",
+    "done": "Done",
+    "open": "Open",
+    "copy_address": "Click to copy address",
+    "balance": "Balance",
+    "featured_apps": "Featured Apps",
+    "view_group": "View",
+    "featured_groups": "Featured Groups",
+    "developer_resources": "Developer Resources",
+    "qtube_tutorial": "Q-Tube Tutorial",
+    "qtube_tutorial_desc": "Learn how to publish and browse videos on Q-Tube",
+    "core_support": "Qortal official CORE support",
+    "core_support_desc": "Get help from the official Qortal CORE support group",
+    "devnet_testing": "Q-App DevNet-Testing",
+    "devnet_testing_desc": "Test your Q-Apps in the DevNet-Testing environment"
   }
 }
