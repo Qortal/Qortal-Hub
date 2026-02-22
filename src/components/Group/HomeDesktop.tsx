@@ -201,23 +201,29 @@ export const HomeDesktop = ({
                           gap: '8px',
                         }}
                       >
-                        <GroupJoinRequests
-                          setGroupSection={setGroupSection}
-                          setSelectedGroup={setSelectedGroup}
-                          getTimestampEnterChat={getTimestampEnterChat}
-                          setOpenManageMembers={setOpenManageMembers}
-                          myAddress={myAddress}
-                          groups={groups}
-                          setMobileViewMode={setMobileViewMode}
-                          setDesktopViewMode={setDesktopViewMode}
-                        />
-                        <GroupInvites
-                          setOpenAddGroup={setOpenAddGroup}
-                          myAddress={myAddress}
-                          groups={groups}
-                          setMobileViewMode={setMobileViewMode}
-                        />
-                        <ListOfGroupPromotions />
+                        <Box sx={{ flex: 1, minWidth: '220px' }}>
+                          <GroupJoinRequests
+                            setGroupSection={setGroupSection}
+                            setSelectedGroup={setSelectedGroup}
+                            getTimestampEnterChat={getTimestampEnterChat}
+                            setOpenManageMembers={setOpenManageMembers}
+                            myAddress={myAddress}
+                            groups={groups}
+                            setMobileViewMode={setMobileViewMode}
+                            setDesktopViewMode={setDesktopViewMode}
+                          />
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: '220px' }}>
+                          <GroupInvites
+                            setOpenAddGroup={setOpenAddGroup}
+                            myAddress={myAddress}
+                            groups={groups}
+                            setMobileViewMode={setMobileViewMode}
+                          />
+                        </Box>
+                        <Box sx={{ flex: 1, minWidth: '220px' }}>
+                          <ListOfGroupPromotions />
+                        </Box>
                       </Box>
                     </Box>
                   )}
