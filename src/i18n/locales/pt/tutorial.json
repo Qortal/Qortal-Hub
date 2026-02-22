@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Teste seus Q-Apps no ambiente DevNet-Testing",
     "open_app": "Abrir",
-    "address_copied": "Endereço copiado para a área de transferência"
+    "address_copied": "Endereço copiado para a área de transferência",
+    "group_activity": "Atividade de Grupo"
   }
 }

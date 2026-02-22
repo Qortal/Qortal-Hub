@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Test your Q-Apps in the DevNet-Testing environment",
     "open_app": "Open",
-    "address_copied": "Address copied to clipboard"
+    "address_copied": "Address copied to clipboard",
+    "group_activity": "Group Activity"
   }
 }

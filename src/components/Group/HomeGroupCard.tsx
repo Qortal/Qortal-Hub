@@ -34,61 +34,67 @@ export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {
         bgcolor: theme.palette.background.default,
         borderRadius: '10px',
         display: 'flex',
-        gap: '12px',
-        padding: '12px 14px',
-        width: '100%',
+        flexDirection: 'column',
+        flexShrink: 0,
+        gap: '8px',
+        padding: '14px 10px',
+        width: '160px',
       }}
     >
-      {/* Logo */}
+      {/* Avatar */}
       <Avatar
         src={avatarUrl ?? undefined}
         variant="rounded"
         sx={{
           bgcolor: theme.palette.primary.main,
-          flexShrink: 0,
-          fontSize: '0.8rem',
+          fontSize: '0.85rem',
           fontWeight: 700,
-          height: 44,
-          width: 44,
+          height: 52,
+          width: 52,
         }}
       >
         {fallbackLabel}
       </Avatar>
 
-      {/* Name + description */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {group.name}
-        </Typography>
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.78rem',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {group.description}
-        </Typography>
-      </Box>
+      {/* Name */}
+      <Typography
+        sx={{
+          color: theme.palette.text.primary,
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          maxWidth: '140px',
+          overflow: 'hidden',
+          textAlign: 'center',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {group.name}
+      </Typography>
+
+      {/* Description */}
+      <Typography
+        sx={{
+          color: theme.palette.text.secondary,
+          display: '-webkit-box',
+          fontSize: '0.72rem',
+          lineHeight: 1.3,
+          overflow: 'hidden',
+          textAlign: 'center',
+          WebkitBoxOrient: 'vertical',
+          WebkitLineClamp: 2,
+          flex: 1,
+        }}
+      >
+        {group.description}
+      </Typography>
 
       {/* View button */}
       <Button
         onClick={onClick}
         size="small"
         variant="outlined"
-        sx={{ borderRadius: '50px', flexShrink: 0, fontSize: '0.78rem', textTransform: 'none' }}
+        sx={{ borderRadius: '50px', fontSize: '0.75rem', textTransform: 'none', width: '100%' }}
       >
         {t('tutorial:home.view_group', { postProcess: 'capitalizeFirstChar' })}
       </Button>

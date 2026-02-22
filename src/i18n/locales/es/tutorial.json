@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Prueba tus Q-Apps en el entorno DevNet-Testing",
     "open_app": "Abrir",
-    "address_copied": "Dirección copiada al portapapeles"
+    "address_copied": "Dirección copiada al portapapeles",
+    "group_activity": "Actividad de Grupo"
   }
 }

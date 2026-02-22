@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-testaus",
     "devnet_testing_desc": "Testaa Q-App-sovelluksiasi DevNet-testausympäristössä",
     "open_app": "Avaa",
-    "address_copied": "Osoite kopioitu leikepöydälle"
+    "address_copied": "Osoite kopioitu leikepöydälle",
+    "group_activity": "Ryhmätoiminta"
   }
 }

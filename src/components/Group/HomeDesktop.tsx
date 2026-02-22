@@ -169,27 +169,57 @@ export const HomeDesktop = ({
                   <HomeFeaturedApps />
                   <HomeFeaturedGroups {...sharedGroupNavProps} />
 
-                  {/* Preserved: join requests, invites, promotions */}
+                  {/* ── GROUP ACTIVITY SECTION ── */}
                   {!isLoadingGroups && hasDoneNameAndBalanceAndIsLoaded && (
-                    <>
-                      <GroupJoinRequests
-                        setGroupSection={setGroupSection}
-                        setSelectedGroup={setSelectedGroup}
-                        getTimestampEnterChat={getTimestampEnterChat}
-                        setOpenManageMembers={setOpenManageMembers}
-                        myAddress={myAddress}
-                        groups={groups}
-                        setMobileViewMode={setMobileViewMode}
-                        setDesktopViewMode={setDesktopViewMode}
-                      />
-                      <GroupInvites
-                        setOpenAddGroup={setOpenAddGroup}
-                        myAddress={myAddress}
-                        groups={groups}
-                        setMobileViewMode={setMobileViewMode}
-                      />
-                      <ListOfGroupPromotions />
-                    </>
+                    <Box
+                      sx={{
+                        bgcolor: theme.palette.background.paper,
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        padding: '16px 20px',
+                        width: '100%',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '1rem',
+                          fontWeight: 600,
+                          mb: '4px',
+                        }}
+                      >
+                        {t('tutorial:home.group_activity', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Box>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '8px',
+                        }}
+                      >
+                        <GroupJoinRequests
+                          setGroupSection={setGroupSection}
+                          setSelectedGroup={setSelectedGroup}
+                          getTimestampEnterChat={getTimestampEnterChat}
+                          setOpenManageMembers={setOpenManageMembers}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                          setDesktopViewMode={setDesktopViewMode}
+                        />
+                        <GroupInvites
+                          setOpenAddGroup={setOpenAddGroup}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                        />
+                        <ListOfGroupPromotions />
+                      </Box>
+                    </Box>
                   )}
 
                 </>

@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-testimine",
     "devnet_testing_desc": "Testi oma Q-App'e DevNet-testimise keskkonnas",
     "open_app": "Ava",
-    "address_copied": "Aadress kopeeritud lõikelauale"
+    "address_copied": "Aadress kopeeritud lõikelauale",
+    "group_activity": "Grupi aktiivsus"
   }
 }

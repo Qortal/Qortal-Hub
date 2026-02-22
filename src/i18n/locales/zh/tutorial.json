@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet测试",
     "devnet_testing_desc": "在DevNet-Testing环境中测试您的Q-Apps",
     "open_app": "打开",
-    "address_copied": "地址已复制到剪贴板"
+    "address_copied": "地址已复制到剪贴板",
+    "group_activity": "群组动态"
   }
 }

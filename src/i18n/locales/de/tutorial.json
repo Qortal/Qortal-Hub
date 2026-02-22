@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Teste deine Q-Apps in der DevNet-Testing-Umgebung",
     "open_app": "Öffnen",
-    "address_copied": "Adresse in die Zwischenablage kopiert"
+    "address_copied": "Adresse in die Zwischenablage kopiert",
+    "group_activity": "Gruppenaktivität"
   }
 }

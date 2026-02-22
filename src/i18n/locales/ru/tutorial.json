@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Тестируйте ваши Q-Apps в среде DevNet-Testing",
     "open_app": "Открыть",
-    "address_copied": "Адрес скопирован в буфер обмена"
+    "address_copied": "Адрес скопирован в буфер обмена",
+    "group_activity": "Активность группы"
   }
 }

@@ -36,7 +36,7 @@ export const HomeFeaturedGroups = ({
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '12px',
         padding: '16px 20px',
         width: '100%',
       }}
@@ -46,19 +46,31 @@ export const HomeFeaturedGroups = ({
           color: theme.palette.text.primary,
           fontSize: '1rem',
           fontWeight: 600,
-          mb: '4px',
         }}
       >
         {t('tutorial:home.featured_groups')}
       </Typography>
 
-      {featuredGroups.map((group) => (
-        <HomeGroupCard
-          key={group.id}
-          group={group}
-          onClick={() => handleGroupClick(group)}
-        />
-      ))}
+      {/* Horizontally scrollable group card row */}
+      <Box
+        sx={{
+          display: 'flex',
+          gap: '12px',
+          justifyContent: 'center',
+          overflowX: 'auto',
+          pb: '4px',
+          scrollbarWidth: 'none',
+          '&::-webkit-scrollbar': { display: 'none' },
+        }}
+      >
+        {featuredGroups.map((group) => (
+          <HomeGroupCard
+            key={group.id}
+            group={group}
+            onClick={() => handleGroupClick(group)}
+          />
+        ))}
+      </Box>
     </Box>
   );
 };

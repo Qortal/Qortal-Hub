@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "Testez vos Q-Apps dans l'environnement DevNet-Testing",
     "open_app": "Ouvrir",
-    "address_copied": "Adresse copiée dans le presse-papiers"
+    "address_copied": "Adresse copiée dans le presse-papiers",
+    "group_activity": "Activité de groupe"
   }
 }

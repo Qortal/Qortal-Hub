@@ -42,6 +42,7 @@
     "devnet_testing": "Q-App DevNet-Testing",
     "devnet_testing_desc": "DevNet-Testing環境でQ-Appsをテストする",
     "open_app": "開く",
-    "address_copied": "アドレスをクリップボードにコピーしました"
+    "address_copied": "アドレスをクリップボードにコピーしました",
+    "group_activity": "グループアクティビティ"
   }
 }
