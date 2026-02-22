@@ -1,4 +1,4 @@
-import { Box, Button, Typography, useTheme } from '@mui/material';
+import { Box, Button, useTheme } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import {
@@ -10,9 +10,6 @@ import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
-import { QortPrice } from '../QortPrice';
-import { Explore } from '../Explore/Explore';
-import { NewUsersCTA } from '../NewUsersCTA';
 import { HomeProfileCard } from './HomeProfileCard';
 import { HomeGettingStarted } from './HomeGettingStarted';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
@@ -22,14 +19,11 @@ import { useTranslation } from 'react-i18next';
 
 import {
   AnimatePresence,
-  m,
   LazyMotion,
   domAnimation,
   useReducedMotion,
   motion,
 } from 'framer-motion';
-
-const MotionBox = m(Box);
 
 type HomeTab = 'user' | 'developer';
 
@@ -198,24 +192,6 @@ export const HomeDesktop = ({
                     </>
                   )}
 
-                  {/* Explore + price widget */}
-                  {!isLoadingGroups && (
-                    <>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '20px',
-                          justifyContent: 'center',
-                          width: '100%',
-                        }}
-                      >
-                        <QortPrice />
-                        <Explore setDesktopViewMode={setDesktopViewMode} />
-                      </Box>
-                      <NewUsersCTA />
-                    </>
-                  )}
                 </>
               )}
 
