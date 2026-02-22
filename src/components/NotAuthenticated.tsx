@@ -40,9 +40,10 @@ import { useAtom } from 'jotai';
 import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
 import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
+import { markNodeSelectionExplicit } from '../utils/nodeSelection';
 
 export const manifestData = {
-  version: '0.5.9',
+  version: '0.6.1',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -171,6 +172,7 @@ export const NotAuthenticated = ({
       });
     }
     if (!isFullListOfNodes && url) {
+      markNodeSelectionExplicit();
       await handleSaveNodeInfo({
         url: removeTrailingSlash(url),
         apikey: customApikey?.trim() || '',
@@ -554,6 +556,7 @@ export const NotAuthenticated = ({
                         onClick={() => {
                           setMode('list');
                           setShow(false);
+                          markNodeSelectionExplicit();
                           const payload = {
                             url: HTTP_LOCALHOST_12391,
                             apikey: '',
@@ -617,6 +620,7 @@ export const NotAuthenticated = ({
                         onClick={() => {
                           setMode('list');
                           setShow(false);
+                          markNodeSelectionExplicit();
                           const payload = {
                             url: HTTPS_EXT_NODE_QORTAL_LINK,
                             apikey: '',
@@ -687,6 +691,7 @@ export const NotAuthenticated = ({
 
                               setMode('list');
                               setShow(false);
+                              markNodeSelectionExplicit();
 
                               window
                                 .sendMessage('setApiKey', payload)
@@ -734,8 +739,9 @@ export const NotAuthenticated = ({
                             size="small"
                             onClick={async () => {
                               if (node?.url === selectedNode?.url) {
+                                markNodeSelectionExplicit();
                                 await handleSaveNodeInfo({
-                                  url: HTTP_LOCALHOST_12391,
+                                  url: HTTPS_EXT_NODE_QORTAL_LINK,
                                   apikey: '',
                                 });
                               }

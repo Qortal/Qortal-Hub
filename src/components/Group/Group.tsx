@@ -470,7 +470,6 @@ export const Group = ({
   const [isOpenSideViewGroups, setIsOpenSideViewGroups] = useState(false);
   const [isForceShowCreationKeyPopup, setIsForceShowCreationKeyPopup] =
     useState(false);
-  const [disableGeneralChat, setDisableGeneralChat] = useState(false);
   const groupsOwnerNamesRef = useRef({});
   const { t } = useTranslation([
     'auth',
@@ -526,6 +525,79 @@ export const Group = ({
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
 
+  // Track view modes to prevent marking messages as read when not viewing chat
+  const desktopViewModeRef = useRef(desktopViewMode);
+  const mobileViewModeRef = useRef(mobileViewMode);
+
+  useEffect(() => {
+    desktopViewModeRef.current = desktopViewMode;
+  }, [desktopViewMode]);
+
+  useEffect(() => {
+    mobileViewModeRef.current = mobileViewMode;
+  }, [mobileViewMode]);
+
+  // Track previous view mode to detect when user returns to chat
+  const prevDesktopViewModeRef = useRef(desktopViewMode);
+  const prevMobileViewModeRef = useRef(mobileViewMode);
+
+  // Mark messages as read when user returns to chat view
+  useEffect(() => {
+    const wasInChatMode =
+      prevDesktopViewModeRef.current === 'chat' ||
+      prevMobileViewModeRef.current === 'chat';
+    const isNowInChatMode = desktopViewMode === 'chat' || mobileViewMode === 'chat';
+
+    // Only update timestamp when user RETURNS to chat (wasn't in chat, now is in chat)
+    if (!wasInChatMode && isNowInChatMode) {
+      // Update timestamp for selected group chat
+      if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: selectedGroupRef.current.groupId,
+          })
+          .then(() => {
+            // Refresh the timestamp data to update UI
+            setTimeout(() => {
+              getTimestampEnterChat();
+            }, 600);
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+      }
+
+      // Update timestamp for selected direct chat
+      if (selectedDirectRef.current) {
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: selectedDirectRef.current.address,
+          })
+          .then(() => {
+            // Refresh the timestamp data to update UI
+            setTimeout(() => {
+              getTimestampEnterChat();
+            }, 600);
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+      }
+    }
+
+    // Update previous view mode refs
+    prevDesktopViewModeRef.current = desktopViewMode;
+    prevMobileViewModeRef.current = mobileViewMode;
+  }, [desktopViewMode, mobileViewMode]);
+
   const getUserSettings = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
@@ -555,39 +627,12 @@ export const Group = ({
     }
   }, [setMutedGroups]);
 
-  const getDisableGeneralChatSetting = useCallback(async () => {
-    try {
-      return new Promise((res, rej) => {
-        window
-          .sendMessage('getUserSettings', {
-            key: 'disable-general-chat',
-          })
-          .then((response) => {
-            if (!response?.error) {
-              setDisableGeneralChat(response || false);
-              res(response);
-              return;
-            }
-            rej(response.error);
-          })
-          .catch((error) => {
-            rej(
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-            );
-          });
-      });
-    } catch (error) {
-      console.error(error);
-    }
-  }, []);
+
 
   useEffect(() => {
     getUserSettings();
-    getDisableGeneralChatSetting();
-  }, [getUserSettings, getDisableGeneralChatSetting]);
+
+  }, [getUserSettings]);
 
   const getTimestampEnterChat = useCallback(async () => {
     try {
@@ -694,7 +739,7 @@ export const Group = ({
   const groupChatHasUnread = useMemo(() => {
     let hasUnread = false;
     groups.forEach((group) => {
-      if (group?.groupId === '0' && disableGeneralChat) {
+      if (group?.groupId === '0') {
         return;
       }
       if (
@@ -715,7 +760,6 @@ export const Group = ({
     groups,
     myAddress,
     groupChatTimestamps,
-    disableGeneralChat,
   ]);
 
   const groupsAnnHasUnread = useMemo(() => {
@@ -1046,10 +1090,14 @@ export const Group = ({
         setMemberGroups(
           message.payload?.filter((item) => item?.groupId !== '0')
         );
-        // Refresh general chat visibility preference when groups update
-        getDisableGeneralChatSetting();
 
-        if (selectedGroupRef.current && groupSectionRef.current === 'chat') {
+        // Only mark messages as read if user is actually viewing the chat
+        if (
+          selectedGroupRef.current &&
+          groupSectionRef.current === 'chat' &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'chat')
+        ) {
           window
             .sendMessage('addTimestampEnterChat', {
               timestamp: Date.now(),
@@ -1063,7 +1111,12 @@ export const Group = ({
             });
         }
 
-        if (selectedDirectRef.current) {
+        // Only mark direct messages as read if user is actually viewing the chat
+        if (
+          selectedDirectRef.current &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'chat')
+        ) {
           window
             .sendMessage('addTimestampEnterChat', {
               timestamp: Date.now(),
@@ -1086,9 +1139,12 @@ export const Group = ({
         // Update the component state with the received 'sendqort' state
         setGroupAnnouncements(message.payload);
 
+        // Only mark announcements as read if user is actually viewing the announcement section
         if (
           selectedGroupRef.current &&
-          groupSectionRef.current === 'announcement'
+          groupSectionRef.current === 'announcement' &&
+          (desktopViewModeRef.current === 'chat' ||
+            mobileViewModeRef.current === 'group')
         ) {
           window
             .sendMessage('addGroupNotificationTimestamp', {
@@ -2110,32 +2166,7 @@ export const Group = ({
     }, 200);
   }, []);
 
-  // Apply general chat visibility changes immediately without app reload
-  useEffect(() => {
-    const onGeneralChatVisibilityChanged = (e) => {
-      const disabled = !!e.detail?.disabled;
-      setDisableGeneralChat(disabled);
-      if (disabled && selectedGroupRef.current?.groupId === '0') {
-        const next = groups.find((g) => g.groupId !== '0');
-        if (next) {
-          selectGroupFunc(next);
-        } else {
-          setSelectedGroup(null);
-        }
-      }
-    };
 
-    subscribeToEvent(
-      'generalChatVisibilityChanged',
-      onGeneralChatVisibilityChanged
-    );
-    return () => {
-      unsubscribeFromEvent(
-        'generalChatVisibilityChanged',
-        onGeneralChatVisibilityChanged
-      );
-    };
-  }, [groups, selectGroupFunc]);
 
   return (
     <>
@@ -2187,10 +2218,8 @@ export const Group = ({
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={
-              disableGeneralChat
-                ? groups.filter((g) => g.groupId !== '0')
-                : groups
+            groups={groups.filter((g) => g.groupId !== '0')
+
             }
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}

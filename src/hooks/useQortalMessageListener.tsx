@@ -204,6 +204,7 @@ export const listOfAllQortalRequests = [
   'GET_AT',
   'GET_BALANCE',
   'GET_CROSSCHAIN_SERVER_INFO',
+  'START_CROSSCHAIN_SERVER',
   'GET_DAY_SUMMARY',
   'GET_FOREIGN_FEE',
   'GET_HOSTED_DATA',
@@ -291,6 +292,7 @@ export const UIQortalRequests = [
   'DEPLOY_AT',
   'GET_ARRR_SYNC_STATUS',
   'GET_CROSSCHAIN_SERVER_INFO',
+  'START_CROSSCHAIN_SERVER',
   'GET_DAY_SUMMARY',
   'GET_FOREIGN_FEE',
   'GET_HOSTED_DATA',
@@ -695,7 +697,7 @@ export const useQortalMessageListener = (
         setPath(pathUrl);
         if (appName?.toLowerCase() === 'q-mail') {
           window.sendMessage('addEnteredQmailTimestamp').catch((error) => {
-            // TODO print error
+            console.error(error);
           });
         } else if (appName?.toLowerCase() === 'q-wallets') {
           executeEvent('setLastEnteredTimestampPaymentEvent', {});

@@ -115,15 +115,20 @@
   "app_service_type": "tipo di servizio app",
   "apps_dashboard": "dashboard delle app",
   "apps_official": "app ufficiali",
+  "official_apps": {
+    "featured": "in evidenza",
+    "all_apps": "tutte le app ufficiali",
+    "view_all": "vedi tutte"
+  },
   "attachment": "allegato",
   "balance": "bilancio:",
   "category": "categoria",
-  "category_other": "categorie",
   "chat": "chat",
   "comment_other": "commenti",
   "contact_other": "contatti",
   "core": {
     "block_height": "altezza del blocco",
+    "data_peers": "peer QDN (dati)",
     "information": "informazioni di base",
     "peers": "peer connessi",
     "version": "versione core"
@@ -131,6 +136,17 @@
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
   "dev_mode": "modalità Dev",
+  "developer": {
+    "no_apps_yet": "non hai ancora pubblicato nessuna app",
+    "no_sites_yet": "non hai ancora pubblicato nessun sito web",
+    "publish_app": "pubblica app",
+    "publish_new": "pubblica nuova",
+    "publish_site": "pubblica sito web",
+    "update": "aggiorna",
+    "view_stats": "vedi statistiche",
+    "your_published_apps": "le tue app pubblicate",
+    "your_published_websites": "i tuoi siti web pubblicati"
+  },
   "domain": "dominio",
   "ui": {
     "version": "versione UI"
@@ -347,9 +363,9 @@
   "option": "opzione",
   "option_no": "nessuna opzione",
   "option_other": "opzioni",
-  "page": {
-    "last": "ultima",
+  "pagination": {
     "first": "prima",
+    "last": "ultima",
     "next": "prossima",
     "previous": "precedente"
   },
@@ -366,13 +382,50 @@
     "q_sandbox": "Q-Sandbox",
     "q_wallets": "Q-Wallets"
   },
+  "app_detail": {
+    "about": "informazioni",
+    "by_developer": "di @{{developer}}",
+    "category": "categoria",
+    "details": "dettagli",
+    "published": "pubblicata",
+    "ratings": "valutazioni",
+    "ratings_count": "{{count}} valutazioni",
+    "rate_this_app": "valuta questa app",
+    "service": "servizio",
+    "status": "stato",
+    "status_ready": "pronta (installata)",
+    "status_not_installed": "non installata",
+    "tags": "tag"
+  },
+  "filter": {
+    "all": "tutti",
+    "category": "categoria",
+    "installed": "installata",
+    "not_installed": "non installata",
+    "showing_apps": "{{count}} app visualizzate",
+    "sort_by": "ordina per",
+    "status": "stato"
+  },
   "receiver": "ricevitore",
   "sender": "mittente",
   "server": "server",
   "service_type": "tipo di servizio",
   "settings": "impostazioni",
   "sort": {
-    "by_member": "per membro"
+    "alphabetical": "alfabetico",
+    "by_member": "per membro",
+    "newest": "più recenti",
+    "oldest": "meno recenti",
+    "recently_updated": "aggiornate di recente"
+  },
+  "tabs": {
+    "categories": "categorie",
+    "community_apps": "app della community",
+    "my_apps": "le mie app",
+    "official_apps": "app ufficiali"
+  },
+  "aria": {
+    "apps_library_tabs": "schede di navigazione della libreria app"
   },
   "supply": "offerta monetaria",
   "tags": "tag",
@@ -400,6 +453,7 @@
   "title": "titolo",
   "to": "a",
   "tutorial": "tutorial",
+  "unknown": "sconosciuto",
   "url": "uRL",
   "user_lookup": "ricerca utente",
   "video_embed": "video incorporato",

@@ -14,9 +14,9 @@
   "sync": {
     "behind": "Sie sind {{count}} Blöcke im Rückstand.",
     "waiting": "Bitte warten Sie, bis Sie synchronisiert sind.",
-    "not_syncronized": "nicht synchronisiert",
-    "syncronized": "synchronisiert",
-    "syncronized_desc": "Sie sind jetzt synchronisiert. Sie können fortfahren.",
+    "not_synchronized": "nicht synchronisiert",
+    "synchronized": "synchronisiert",
+    "synchronized_desc": "Sie sind jetzt synchronisiert. Sie können fortfahren.",
     "description": "Wenn du nicht warten möchtest, bis dein Local Node synchronisiert ist, fahre vorerst mit public fort. (Wenn du weißt, dass dein node hinterherhinkt/aus ist, kannst du trotzdem mit local weitermachen oder auf einen public node wechseln.)"
   },
   "steps": {

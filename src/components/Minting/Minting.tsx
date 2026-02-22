@@ -1216,7 +1216,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       onClick={onOk}
                       autoFocus
                     >
-                      {t('core:page.next', {
+                      {t('core:pagination.next', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Button>

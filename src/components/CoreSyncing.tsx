@@ -15,6 +15,7 @@ import { isOpenSyncingDialogAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { HTTP_LOCALHOST_12391 } from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { markNodeSelectionExplicit } from '../utils/nodeSelection';
 
 export function CoreSyncing() {
   const { authenticate, handleSaveNodeInfo } = useAuth();
@@ -80,6 +81,7 @@ export function CoreSyncing() {
 
   const handleContinue = async (isPublic = false) => {
     try {
+      markNodeSelectionExplicit();
       if (isPublic) {
         await handleSaveNodeInfo(null);
         await authenticate(isPublic);
@@ -105,7 +107,7 @@ export function CoreSyncing() {
       {!canContinue && (
         <>
           <DialogTitle id="core-setup-title">
-            {t('node:sync.not_syncronized', {
+            {t('node:sync.not_synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
@@ -146,13 +148,13 @@ export function CoreSyncing() {
       {canContinue && (
         <>
           <DialogTitle id="core-setup-title">
-            {t('node:sync.syncronized', {
+            {t('node:sync.synchronized', {
               postProcess: 'capitalizeEachFirstChar',
             })}
           </DialogTitle>
           <DialogContent dividers>
             <Typography variant="body1" gutterBottom>
-              {t('node:sync.syncronized_desc', {
+              {t('node:sync.synchronized_desc', {
                 postProcess: 'capitalizeFirstWord',
               })}
             </Typography>

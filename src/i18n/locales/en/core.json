@@ -115,15 +115,20 @@
   "app_service_type": "app service type",
   "apps_dashboard": "apps Dashboard",
   "apps_official": "official Apps",
+  "official_apps": {
+    "featured": "featured",
+    "all_apps": "all official apps",
+    "view_all": "view all"
+  },
   "attachment": "attachment",
   "balance": "balance:",
   "category": "category",
-  "category_other": "categories",
   "chat": "chat",
   "comment_other": "comments",
   "contact_other": "contacts",
   "core": {
     "block_height": "block height",
+    "data_peers": "QDN (data) peers",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
@@ -131,6 +136,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "dev",
   "dev_mode": "dev Mode",
+  "developer": {
+    "no_apps_yet": "you haven't published any apps yet",
+    "no_sites_yet": "you haven't published any websites yet",
+    "publish_app": "publish app",
+    "publish_new": "publish new",
+    "publish_site": "publish website",
+    "update": "update",
+    "view_stats": "view stats",
+    "your_published_apps": "your published apps",
+    "your_published_websites": "your published websites"
+  },
   "domain": "domain",
   "ui": {
     "version": "uI version"
@@ -305,12 +321,12 @@
 
     "success": {
       "order_submitted": "your buy order was submitted",
-      "published": "successfully published. Please wait a couple minutes for the network to propogate the changes.",
+      "published": "successfully published. Please wait a couple minutes for the network to propagate the changes.",
       "published_qdn": "successfully published to QDN",
-      "rated_app": "successfully rated. Please wait a couple minutes for the network to propogate the changes.",
+      "rated_app": "successfully rated. Please wait a couple minutes for the network to propagate the changes.",
       "request_read": "i have read this request",
-      "transfer": "the transfer was succesful!",
-      "voted": "successfully voted. Please wait a couple minutes for the network to propogate the changes."
+      "transfer": "the transfer was successful!",
+      "voted": "successfully voted. Please wait a couple minutes for the network to propagate the changes."
     }
   },
   "minting": {
@@ -349,9 +365,9 @@
   "option": "option",
   "option_no": "no options",
   "option_other": "options",
-  "page": {
-    "last": "last",
+  "pagination": {
     "first": "first",
+    "last": "last",
     "next": "next",
     "previous": "previous"
   },
@@ -368,13 +384,50 @@
     "q_sandbox": "q-Sandbox",
     "q_wallets": "q-Wallets"
   },
+  "app_detail": {
+    "about": "about",
+    "by_developer": "by @{{developer}}",
+    "category": "category",
+    "details": "details",
+    "published": "published",
+    "ratings": "ratings",
+    "ratings_count": "{{count}} ratings",
+    "rate_this_app": "rate this app",
+    "service": "service",
+    "status": "status",
+    "status_ready": "ready (installed)",
+    "status_not_installed": "not installed",
+    "tags": "tags"
+  },
+  "filter": {
+    "all": "all",
+    "category": "category",
+    "installed": "installed",
+    "not_installed": "not installed",
+    "showing_apps": "showing {{count}} apps",
+    "sort_by": "sort by",
+    "status": "status"
+  },
   "receiver": "receiver",
   "sender": "sender",
   "server": "server",
   "service_type": "service type",
   "settings": "settings",
   "sort": {
-    "by_member": "by member"
+    "alphabetical": "alphabetical",
+    "by_member": "by member",
+    "newest": "newest",
+    "oldest": "oldest",
+    "recently_updated": "recently updated"
+  },
+  "tabs": {
+    "categories": "categories",
+    "community_apps": "community apps",
+    "my_apps": "my apps",
+    "official_apps": "official apps"
+  },
+  "aria": {
+    "apps_library_tabs": "apps library navigation tabs"
   },
   "supply": "supply",
   "tags": "tags",
@@ -404,6 +457,7 @@
   "title": "title",
   "to": "to",
   "tutorial": "tutorial",
+  "unknown": "unknown",
   "url": "url",
   "user_lookup": "user lookup",
   "video_embed": "video embed",

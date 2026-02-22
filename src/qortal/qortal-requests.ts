@@ -30,6 +30,7 @@ import {
   encryptQortalGroupData,
   getCrossChainServerInfo,
   getDaySummary,
+  startCrossChainServer,
   getNodeInfo,
   getNodeStatus,
   getForeignFee,
@@ -173,6 +174,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'GET_LIST_ITEMS',
   'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
+  'START_CROSSCHAIN_SERVER',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -185,6 +187,7 @@ export const AUTO_GRANTED_PERMISSIONS_ON_AUTH = [
   'GET_USER_WALLET_TRANSACTIONS',
   'GET_LIST_ITEMS',
   'SIGN_FOREIGN_FEES',
+  'START_CROSSCHAIN_SERVER',
 ];
 
 export function setSessionPermissions(tabId, qapName, permissions) {
@@ -870,6 +873,36 @@ function setupMessageListenerQortalRequest() {
       case 'GET_CROSSCHAIN_SERVER_INFO': {
         try {
           const res = await getCrossChainServerInfo(request.payload);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'START_CROSSCHAIN_SERVER': {
+        try {
+          const res = await startCrossChainServer(
+            request.payload,
+            isFromExtension,
+            appInfo
+          );
           event.source.postMessage(
             {
               requestId: request.requestId,

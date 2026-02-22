@@ -14,9 +14,9 @@
   "sync": {
     "behind": "您落后 {{count}} 个区块。",
     "waiting": "请等待同步完成。",
-    "not_syncronized": "未同步",
-    "syncronized": "已同步",
-    "syncronized_desc": "您现在已同步，可以继续。",
+    "not_synchronized": "未同步",
+    "synchronized": "已同步",
+    "synchronized_desc": "您现在已同步，可以继续。",
     "description": "如果你不想等待你的 Local Node 完成同步，可以先使用 public 继续。 (如果你知道你的 node 落后/离线，你仍然可以继续使用 local，或切换到 public node。)"
   },
   "steps": {

@@ -32,9 +32,7 @@ import { CountdownCircleTimer } from 'react-countdown-circle-timer';
 import Logo1Dark from './assets/svgs/Logo1Dark.svg';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DownloadIcon from '@mui/icons-material/Download';
-import ltcLogo from './assets/ltc.png';
 import PersonSearchIcon from '@mui/icons-material/PersonSearch';
-import qortLogo from './assets/qort.png';
 import { Return } from './assets/Icons/Return.tsx';
 import WarningIcon from '@mui/icons-material/Warning';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
@@ -95,6 +93,7 @@ import { Settings } from './components/Group/Settings';
 import { MainAvatar } from './components/MainAvatar';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
+import { isNodeSelectionExplicit } from './utils/nodeSelection';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -102,6 +101,7 @@ import {
   enableAuthWhenSyncingAtom,
   enabledDevModeAtom,
   extStateAtom,
+  globalDownloadsAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
@@ -121,6 +121,7 @@ import {
   qMailLastEnteredTimestampAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
+  resourceDownloadControllerAtom,
   selectedNodeInfoAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
@@ -155,7 +156,8 @@ import LanguageSelector from './components/Language/LanguageSelector.tsx';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { CopyIcon } from './assets/Icons/CopyIcon.tsx';
 import { SuccessIcon } from './assets/Icons/SuccessIcon.tsx';
-import { useAtom, useSetAtom } from 'jotai';
+import { Save } from './components/Save/Save';
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
   HTTP_LOCALHOST_12391,
@@ -304,7 +306,6 @@ function App() {
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [backupjson, setBackupjson] = useState<any>(null);
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
-  const [ltcBalanceLoading, setLtcBalanceLoading] = useState<boolean>(false);
   const [qortBalanceLoading, setQortBalanceLoading] = useAtom(
     qortBalanceLoadingAtom
   );
@@ -315,7 +316,6 @@ function App() {
   const [requestAuthentication, setRequestAuthentication] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
   const [balance, setBalance] = useAtom(balanceAtom);
-  const [ltcBalance, setLtcBalance] = useState<any>(null);
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
@@ -364,6 +364,7 @@ function App() {
 
   const balanceSetIntervalRef = useRef(null);
   const downloadResource = useFetchResources();
+  const globalDownloadsValue = useAtomValue(globalDownloadsAtom);
   const holdRefExtState = useRef<extStates>('not-authenticated');
   const isFocusedRef = useRef<boolean>(true);
 
@@ -520,8 +521,22 @@ function App() {
   const resetTimestampEnterAtom = useResetAtom(timestampEnterDataAtom);
   const resettxListAtomAtom = useResetAtom(txListAtom);
   const resetmemberGroupsAtomAtom = useResetAtom(memberGroupsAtom);
+  const resetResourceDownloadControllerAtom = useResetAtom(
+    resourceDownloadControllerAtom
+  );
+  const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
   const resetAllRecoil = () => {
+    // First, clean up any active download intervals/timeouts
+    if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
+      Object.values(globalDownloadsValue).forEach((entry: any) => {
+        if (entry?.interval) clearInterval(entry.interval);
+        if (entry?.timeout) clearTimeout(entry.timeout);
+        if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
+      });
+    }
+
+    // Reset all atoms
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
     resetAtomSettingsQDNLastUpdatedAtom();
@@ -540,6 +555,8 @@ function App() {
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
     resetMyGroupsWhereIAmAdminAtom();
+    resetResourceDownloadControllerAtom();
+    resetGlobalDownloadsAtom();
   };
 
   const contextValue = useMemo(
@@ -594,20 +611,30 @@ function App() {
   useEffect(() => {
     try {
       setIsLoading(true);
+      const hasExplicitNodeSelection = isNodeSelectionExplicit();
       window
         .sendMessage('getApiKey')
         .then((response) => {
-          if (response?.url) {
-            handleSetGlobalApikey(response);
-            setSelectedNode(response);
-          } else {
-            const payload = {
-              url: HTTPS_EXT_NODE_QORTAL_LINK,
-              apikey: '',
-            };
-            handleSetGlobalApikey(payload);
-            setSelectedNode(payload);
+          const shouldUseStoredNode =
+            hasExplicitNodeSelection && Boolean(response?.url);
+          const payload = shouldUseStoredNode
+            ? response
+            : {
+                url: HTTPS_EXT_NODE_QORTAL_LINK,
+                apikey: '',
+              };
+
+          if (!shouldUseStoredNode) {
+            window.sendMessage('setApiKey', payload).catch((error) => {
+              console.error(
+                'Failed to set default API key:',
+                error?.message || 'An error occurred'
+              );
+            });
           }
+
+          handleSetGlobalApikey(payload);
+          setSelectedNode(payload);
         })
         .catch((error) => {
           console.error(
@@ -800,22 +827,6 @@ function App() {
     refetchUserInfo();
   };
 
-  const getLtcBalanceFunc = () => {
-    setLtcBalanceLoading(true);
-    window
-      .sendMessage('ltcBalance')
-      .then((response) => {
-        if (!response?.error && !isNaN(+response)) {
-          setLtcBalance(response);
-        }
-        setLtcBalanceLoading(false);
-      })
-      .catch((error) => {
-        console.error('Failed to get LTC balance:', error);
-        setLtcBalanceLoading(false);
-      });
-  };
-
   const qortalRequestPermissionFromExtension = async (message, event) => {
     if (message.action === 'QORTAL_REQUEST_PERMISSION') {
       try {
@@ -965,16 +976,6 @@ function App() {
       console.log('exit');
     };
   }, []);
-
-  useEffect(() => {
-    if (
-      authenticatedMode === 'ltc' &&
-      !ltcBalanceLoading &&
-      ltcBalance === null
-    ) {
-      getLtcBalanceFunc();
-    }
-  }, [authenticatedMode]);
 
   const saveFileToDiskFunc = async () => {
     try {
@@ -1151,7 +1152,6 @@ function App() {
     setRequestAuthentication(null);
     setUserInfo(null);
     setBalance(null);
-    setLtcBalance(null);
     setPaymentTo('');
     setPaymentAmount(0);
     setPaymentPassword('');
@@ -1272,153 +1272,9 @@ function App() {
       >
         <Spacer height="20px" />
 
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'flex-start',
-            width: '100%',
-          }}
-        >
-          {authenticatedMode === 'qort' && (
-            <Tooltip
-              title={
-                <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  {t('core:wallet.litecoin', { postProcess: 'capitalizeAll' })}
-                </span>
-              }
-              placement="left"
-              arrow
-              sx={{ fontSize: '24' }}
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                    backgroundColor: theme.palette.background.default,
-                  },
-                },
-                arrow: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                  },
-                },
-              }}
-            >
-              <img
-                onClick={() => {
-                  setAuthenticatedMode('ltc');
-                }}
-                src={ltcLogo}
-                style={{
-                  cursor: 'pointer',
-                  height: 'auto',
-                  width: '20px',
-                }}
-              />
-            </Tooltip>
-          )}
-
-          {authenticatedMode === 'ltc' && (
-            <Tooltip
-              title={
-                <span style={{ fontSize: '14px', fontWeight: 700 }}>
-                  {t('core:wallet.qortal', { postProcess: 'capitalizeAll' })}
-                </span>
-              }
-              placement="left"
-              arrow
-              sx={{ fontSize: '24' }}
-              slotProps={{
-                tooltip: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                    backgroundColor: theme.palette.background.default,
-                  },
-                },
-                arrow: {
-                  sx: {
-                    color: theme.palette.text.primary,
-                  },
-                },
-              }}
-            >
-              <img
-                onClick={() => {
-                  setAuthenticatedMode('qort');
-                }}
-                src={qortLogo}
-                style={{
-                  cursor: 'pointer',
-                  width: '20px',
-                  height: 'auto',
-                }}
-              />
-            </Tooltip>
-          )}
-        </Box>
-
         <Spacer height="48px" />
 
-        {authenticatedMode === 'ltc' ? (
-          <>
-            <img src={ltcLogo} />
-
-            <Spacer height="32px" />
-
-            <ButtonBase
-              onClick={() => {
-                if (rawWallet?.ltcAddress) {
-                  navigator.clipboard
-                    .writeText(rawWallet.ltcAddress)
-                    .catch((err) => {
-                      console.error('Failed to copy LTC address:', err);
-                    });
-                }
-              }}
-            >
-              <AddressBox>
-                {rawWallet?.ltcAddress?.slice(0, 6)}...
-                {rawWallet?.ltcAddress?.slice(-4)}{' '}
-                <CopyIcon color={theme.palette.text.primary} />
-              </AddressBox>
-            </ButtonBase>
-
-            <Spacer height="10px" />
-
-            {ltcBalanceLoading && (
-              <CircularProgress color="success" size={16} />
-            )}
-            {!isNaN(+ltcBalance) && !ltcBalanceLoading && (
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  gap: '10px',
-                }}
-              >
-                <TextP
-                  sx={{
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                  }}
-                >
-                  {ltcBalance} LTC
-                </TextP>
-
-                <RefreshIcon
-                  onClick={getLtcBalanceFunc}
-                  sx={{
-                    fontSize: '16px',
-                    cursor: 'pointer',
-                  }}
-                />
-              </Box>
-            )}
-            <AddressQRCode targetAddress={rawWallet?.ltcAddress} />
-          </>
-        ) : (
-          <>
+        <>
             <MainAvatar
               setOpenSnack={setOpenSnack}
               setInfoSnack={setInfoSnack}
@@ -1530,8 +1386,7 @@ function App() {
               })}
             </CustomButton>
             <AddressQRCode targetAddress={rawWallet?.address0} />
-          </>
-        )}
+        </>
 
         <TextP
           sx={{
@@ -1821,6 +1676,10 @@ function App() {
             {extState === 'authenticated' && (
               <GeneralNotifications address={userInfo?.address} />
             )}
+
+            <Spacer height="20px" />
+
+            <Save isDesktop disableWidth={false} myName={userInfo?.name} />
           </Box>
 
           <Box
@@ -2948,7 +2807,7 @@ function App() {
                         setCreationStep(2);
                       }}
                     >
-                      {t('core:page.next', {
+                      {t('core:pagination.next', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </CustomButton>

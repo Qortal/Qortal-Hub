@@ -18,6 +18,7 @@ import { Spacer } from '../common/Spacer';
 import { useTranslation } from 'react-i18next';
 import { ApiKey } from '../types/auth';
 import { useEffect, useState } from 'react';
+import { markNodeSelectionExplicit } from '../utils/nodeSelection';
 
 export function CustomNodeApikeyDialog() {
   const { validateApiKey, handleSaveNodeInfo, authenticate, saveCustomNodes } =
@@ -58,6 +59,7 @@ export function CustomNodeApikeyDialog() {
       };
       const { isValid } = await validateApiKey(payload);
       if (isValid) {
+        markNodeSelectionExplicit();
         const customNodes = await getCustomNodes();
         const copyCustomNodes = [...customNodes];
         const findNode = copyCustomNodes.findIndex(

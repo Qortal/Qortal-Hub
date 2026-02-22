@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
+import { markNodeSelectionExplicit } from '../utils/nodeSelection';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 const isElectron = !!window?.coreSetup;
@@ -35,6 +36,7 @@ export function CoreSetupRecommendationDialog(
 
   const proceedWithPublic = async () => {
     try {
+      markNodeSelectionExplicit();
       await handleSaveNodeInfo(null);
       await authenticate(true);
     } catch (error) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isNodeSelectionExplicit } from './utils/nodeSelection';
 
 export const OnLaunchWrapper = ({ children }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -6,7 +7,8 @@ export const OnLaunchWrapper = ({ children }) => {
   useEffect(() => {
     const fetchApiKey = async () => {
       try {
-        if (window.walletStorage) {
+        const hasExplicitNodeSelection = isNodeSelectionExplicit();
+        if (window.walletStorage && hasExplicitNodeSelection) {
           const res = await window.walletStorage.get('apiKey');
           if (res) {
             await window.sendMessage('setApiKey', res);

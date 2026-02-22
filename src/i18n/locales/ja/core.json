@@ -115,15 +115,20 @@
   "app_service_type": "アプリサービスタイプ",
   "apps_dashboard": "アプリダッシュボード",
   "apps_official": "公式アプリ",
+  "official_apps": {
+    "featured": "おすすめ",
+    "all_apps": "すべての公式アプリ",
+    "view_all": "すべて表示"
+  },
   "attachment": "添付ファイル",
   "balance": "バランス：",
   "category": "カテゴリ",
-  "category_other": "カテゴリ",
   "chat": "チャット",
   "comment_other": "コメント",
   "contact_other": "連絡先",
   "core": {
     "block_height": "ブロックの高さ",
+    "data_peers": "QDN (データ) ピア",
     "information": "コア情報",
     "peers": "コネクテッドピア",
     "version": "コアバージョン"
@@ -131,6 +136,17 @@
   "current_language": "current language: {{ language }}",
   "dev": "開発者",
   "dev_mode": "開発モード",
+  "developer": {
+    "no_apps_yet": "まだアプリを公開していません",
+    "no_sites_yet": "まだサイトを公開していません",
+    "publish_app": "アプリを公開",
+    "publish_new": "新規公開",
+    "publish_site": "サイトを公開",
+    "update": "更新",
+    "view_stats": "統計を見る",
+    "your_published_apps": "公開済みアプリ",
+    "your_published_websites": "公開済みサイト"
+  },
   "domain": "ドメイン",
   "ui": {
     "version": "UIバージョン"
@@ -348,11 +364,11 @@
   "option": "オプション",
   "option_no": "オプションはありません",
   "option_other": "オプション",
-  "page": {
+  "pagination": {
+    "first": "最初",
     "last": "最後",
-    "first": "初め",
-    "next": "次",
-    "previous": "前の"
+    "next": "次へ",
+    "previous": "前へ"
   },
   "payment_notification": "支払い通知",
   "payment": "支払い",
@@ -367,13 +383,50 @@
     "q_sandbox": "Q-Sandbox",
     "q_wallets": "Q-Wallets"
   },
+  "app_detail": {
+    "about": "概要",
+    "by_developer": "@{{developer}}による",
+    "category": "カテゴリ",
+    "details": "詳細",
+    "published": "公開日",
+    "ratings": "評価",
+    "ratings_count": "{{count}}件の評価",
+    "rate_this_app": "このアプリを評価",
+    "service": "サービス",
+    "status": "ステータス",
+    "status_ready": "準備完了（インストール済み）",
+    "status_not_installed": "未インストール",
+    "tags": "タグ"
+  },
+  "filter": {
+    "all": "すべて",
+    "category": "カテゴリ",
+    "installed": "インストール済み",
+    "not_installed": "未インストール",
+    "showing_apps": "{{count}}件のアプリを表示",
+    "sort_by": "並び替え",
+    "status": "ステータス"
+  },
   "receiver": "受信機",
   "sender": "送信者",
   "server": "サーバ",
   "service_type": "サービスタイプ",
   "settings": "設定",
   "sort": {
-    "by_member": "メンバーによって"
+    "alphabetical": "アルファベット順",
+    "by_member": "メンバーによって",
+    "newest": "新着順",
+    "oldest": "古い順",
+    "recently_updated": "最近更新された順"
+  },
+  "tabs": {
+    "categories": "カテゴリ",
+    "community_apps": "コミュニティアプリ",
+    "my_apps": "マイアプリ",
+    "official_apps": "公式アプリ"
+  },
+  "aria": {
+    "apps_library_tabs": "アプリライブラリナビゲーションタブ"
   },
   "supply": "供給",
   "tags": "タグ",
@@ -401,6 +454,7 @@
   "title": "タイトル",
   "to": "に",
   "tutorial": "チュートリアル",
+  "unknown": "不明",
   "url": "URL",
   "user_lookup": "ユーザールックアップ",
   "video_embed": "動画埋め込み",

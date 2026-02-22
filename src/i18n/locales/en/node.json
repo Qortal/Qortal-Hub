@@ -14,10 +14,10 @@
   "sync": {
     "behind": "You are {{count}} blocks behind.",
     "waiting": "Please wait until you are synchronized.",
-    "not_syncronized": "not syncronized",
-    "syncronized": "syncronized",
-    "syncronized_desc": "you are now Syncronized. you may continue.",
-    "description": "If you do not want to wait until your Local Node is synced, continue with public for now. (If you are aware that your node is behind/off, you can can continue with local anyway, or switch to public node.)"
+    "not_synchronized": "not synchronized",
+    "synchronized": "synchronized",
+    "synchronized_desc": "you are now synchronized. you may continue.",
+    "description": "If you do not want to wait until your Local Node is synced, continue with public for now. (If you are aware that your node is behind/off, you can continue with local anyway, or switch to public node.)"
   },
   "steps": {
     "java": "has java",

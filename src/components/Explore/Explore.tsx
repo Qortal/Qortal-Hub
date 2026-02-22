@@ -1,10 +1,9 @@
-import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
-import ChatIcon from '@mui/icons-material/Chat';
-import qTradeLogo from '../../assets/Icons/q-trade-logo.webp';
-import AppsIcon from '@mui/icons-material/Apps';
-import { executeEvent } from '../../utils/events';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import AppsIcon from '@mui/icons-material/Apps';
+import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import qTradeLogo from '../../assets/Icons/q-trade-logo.webp';
+import { executeEvent } from '../../utils/events';
 
 export const Explore = ({ setDesktopViewMode }) => {
   const theme = useTheme();
@@ -77,37 +76,6 @@ export const Explore = ({ setDesktopViewMode }) => {
           }}
         >
           {t('tutorial:initial.see_apps', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
-      </ButtonBase>
-
-      <ButtonBase
-        sx={{
-          '&:hover': { backgroundColor: theme.palette.background.paper },
-          borderRadius: '8px',
-          gap: '5px',
-          padding: '5px',
-          transition: 'all 0.1s ease-in-out',
-        }}
-        onClick={async () => {
-          executeEvent('openGroupMessage', {
-            from: '0',
-          });
-        }}
-      >
-        <ChatIcon
-          sx={{
-            color: theme.palette.text.primary,
-          }}
-        />
-
-        <Typography
-          sx={{
-            fontSize: '1rem',
-          }}
-        >
-          {t('tutorial:initial.general_chat', {
             postProcess: 'capitalizeFirstChar',
           })}
         </Typography>

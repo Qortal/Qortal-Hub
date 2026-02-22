@@ -1,22 +1,4 @@
-import {
-  ChangeEvent,
-  forwardRef,
-  Fragment,
-  ReactElement,
-  Ref,
-  useContext,
-  useEffect,
-  useCallback,
-  useState,
-} from 'react';
-import Dialog from '@mui/material/Dialog';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import IconButton from '@mui/material/IconButton';
-import Typography from '@mui/material/Typography';
 import CloseIcon from '@mui/icons-material/Close';
-import Slide from '@mui/material/Slide';
-import { TransitionProps } from '@mui/material/transitions';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   Box,
@@ -26,23 +8,36 @@ import {
   DialogContentText,
   DialogTitle,
   FormControlLabel,
+  styled,
   Switch,
   TextField,
-  styled,
   useTheme,
 } from '@mui/material';
-import { enabledDevModeAtom } from '../../atoms/global';
-import ThemeManager from '../Theme/ThemeManager';
+import AppBar from '@mui/material/AppBar';
+import Dialog from '@mui/material/Dialog';
+import IconButton from '@mui/material/IconButton';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
 import { useAtom } from 'jotai';
-import { decryptStoredWallet } from '../../utils/decryptWallet';
-import { Spacer } from '../../common/Spacer';
-import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
-import { walletVersion } from '../../background/background.ts';
-import Base58 from '../../encryption/Base58.ts';
-import { QORTAL_APP_CONTEXT } from '../../App';
-import { executeEvent } from '../../utils/events';
+import {
+  ChangeEvent,
+  Fragment,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
+import { QORTAL_APP_CONTEXT } from '../../App';
+import { enabledDevModeAtom } from '../../atoms/global';
+import { walletVersion } from '../../background/background.ts';
+import { Spacer } from '../../common/Spacer';
 import { TransitionUp } from '../../common/Transitions.tsx';
+import Base58 from '../../encryption/Base58.ts';
+import { decryptStoredWallet } from '../../utils/decryptWallet';
+import { executeEvent } from '../../utils/events';
+import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
+import ThemeManager from '../Theme/ThemeManager';
 
 export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   padding: 8,
@@ -79,7 +74,6 @@ export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
 
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
-  const [generalChatEnabled, setGeneralChatEnabled] = useState(true);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -112,32 +106,6 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
           error.message || 'An error occurred'
         );
       });
-  };
-
-  const handleGeneralChatChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextEnabled = event.target.checked;
-    setGeneralChatEnabled(nextEnabled);
-    // Store as disable flag
-    window
-      .sendMessage('addUserSettings', {
-        keyValue: {
-          key: 'disable-general-chat',
-          value: !nextEnabled,
-        },
-      })
-      .then((response) => {
-        if (response?.error) {
-          console.error('Error adding user settings:', response.error);
-        }
-      })
-      .catch((error) => {
-        console.error(
-          'Failed to add user settings:',
-          error.message || 'An error occurred'
-        );
-      });
-    // Notify the app to update visibility immediately
-    executeEvent('generalChatVisibilityChanged', { disabled: !nextEnabled });
   };
 
   const handleClose = () => {
@@ -173,40 +141,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     }
   }, [setChecked]);
 
-  const getGeneralChatSetting = useCallback(async () => {
-    try {
-      return new Promise((res, rej) => {
-        window
-          .sendMessage('getUserSettings', {
-            key: 'disable-general-chat',
-          })
-          .then((response) => {
-            if (!response?.error) {
-              // Response is the disable flag; enabled is the inverse
-              setGeneralChatEnabled(!(response || false));
-              res(response);
-              return;
-            }
-            rej(response.error);
-          })
-          .catch((error) => {
-            rej(
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-            );
-          });
-      });
-    } catch (error) {
-      console.log('error', error);
-    }
-  }, [setGeneralChatEnabled]);
-
   useEffect(() => {
     getUserSettings();
-    getGeneralChatSetting();
-  }, [getUserSettings, getGeneralChatSetting]);
+  }, [getUserSettings]);
 
   return (
     <Fragment>
@@ -266,20 +203,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
             })}
           />
 
-          <FormControlLabel
-            sx={{
-              color: theme.palette.text.primary,
-            }}
-            control={
-              <LocalNodeSwitch
-                checked={generalChatEnabled}
-                onChange={handleGeneralChatChange}
-              />
-            }
-            label={t('tutorial:initial.general_chat', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          />
+
 
           {window?.electronAPI && (
             <FormControlLabel
