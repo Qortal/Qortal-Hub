@@ -1,6 +1,6 @@
 import React, { createContext } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -150,8 +150,9 @@ describe('HomeGettingStarted', () => {
   it('opens the Get QORT dialog when step 1 button clicked', () => {
     renderComponent({ name: null, address: 'QADDR' }, 0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[0]);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByTitle('Get your 6 QORT')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText('Get your 6 QORT')).toBeInTheDocument();
   });
 
   it('hides the section when all 3 steps are completed', async () => {
