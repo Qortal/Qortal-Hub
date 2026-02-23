@@ -24,7 +24,6 @@ let localNodeHttpsReady = false;
 
 export function setLocalNodeHttpsReady(ready: boolean): void {
   localNodeHttpsReady = ready;
-  certLog('localNodeHttpsReady=', ready);
 }
 
 export function isLocalNodeHttpsReady(): boolean {
@@ -66,22 +65,11 @@ function persistCaForHost(hostname: string, caPem: string): void {
   try {
     const normalized = normalizePem(caPem);
     if (!isValidPemCertificate(normalized)) {
-      certLog('persistCaForHost: skipped invalid PEM');
       return;
     }
     const filePath = getPersistedCaPath();
     fs.writeFileSync(filePath, normalized, 'utf-8');
     const fp = sha256FingerprintFromPem(normalized);
-    certLog(
-      'persisted CA to',
-      filePath,
-      'len=',
-      normalized.length,
-      'start=',
-      normalized.slice(0, 80),
-      'fp=',
-      fp.slice(0, 24) + '...'
-    );
   } catch (e) {
     certLog('persist CA failed', e);
   }
@@ -113,22 +101,10 @@ export function loadPersistedLocalNodeCa(): void {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const caPem = normalizePem(raw);
     if (!caPem || !isValidPemCertificate(caPem)) {
-      certLog('loadPersistedLocalNodeCa: skipped invalid or missing PEM');
       return;
     }
     trustedCaByHost.set('127.0.0.1', caPem);
     trustedCaByHost.set('localhost', caPem);
-    const fp = sha256FingerprintFromPem(caPem);
-    certLog(
-      'loaded persisted CA path=',
-      filePath,
-      'len=',
-      caPem.length,
-      'start=',
-      caPem.slice(0, 80),
-      'fp=',
-      fp.slice(0, 24) + '...'
-    );
   } catch {
     /* ignore */
   }
@@ -208,7 +184,6 @@ function splitPem(pem: string): string[] {
  */
 function extractCaPem(pem: string): string {
   const blocks = splitPem(pem);
-  certLog('extractCaPem: found', blocks.length, 'cert(s)');
   if (blocks.length === 0) return pem.trim();
   if (blocks.length === 1) return blocks[0];
 
@@ -219,7 +194,6 @@ function extractCaPem(pem: string): string {
         ca?: boolean;
       };
       if (x.ca === true) {
-        certLog('extractCaPem: using x.ca === true');
         return block;
       }
     } catch {
@@ -232,7 +206,6 @@ function extractCaPem(pem: string): string {
     try {
       const x = new crypto.X509Certificate(block);
       if (x.checkIssued(x)) {
-        certLog('extractCaPem: using self-signed cert');
         return block;
       }
     } catch {
@@ -241,7 +214,6 @@ function extractCaPem(pem: string): string {
   }
 
   // Last resort: assume last is root
-  certLog('extractCaPem: fallback to last cert');
   return blocks[blocks.length - 1];
 }
 
@@ -280,31 +252,21 @@ export function installLocalNodeHttpsBlock(session: Session): void {
         return;
       }
       if (!localNodeHttpsReady) {
-        certLog(
-          'blocked HTTPS to local/private host (not ready)',
-          hostname,
-          details.url
-        );
         callback({ cancel: true });
       } else {
         callback({});
       }
     }
   );
-  certLog('installLocalNodeHttpsBlock: installed (local/private hosts only)');
 }
 
 export function installCertificateVerification(session: Session): void {
-  certLog('installCertificateVerification: proc installed');
-
   session.setCertificateVerifyProc((request, callback) => {
     const hostname = normalizeHost(request.hostname);
-    certLog('verify proc called hostname=', hostname);
 
     const caPem = trustedCaByHost.get(hostname);
 
     if (!caPem || !isValidPemCertificate(caPem)) {
-      certLog('no valid CA for host, delegating -3');
       callback(-3);
       return;
     }
@@ -317,15 +279,6 @@ export function installCertificateVerification(session: Session): void {
           .fingerprint256 ?? ''
       ) || sha256FingerprintFromPem(caPem);
     const storedFpFromPem = sha256FingerprintFromPem(caPem);
-    certLog(
-      'storedFp len=',
-      storedFp.length,
-      'storedFpFromPem len=',
-      storedFpFromPem.length,
-      'same=',
-      storedFp === storedFpFromPem
-    );
-    certLog('stored PEM start=', caPem.trim().slice(0, 120), '...');
 
     // (1) Verify leaf (server cert) is signed by our stored CA
     let leafVerified = false;
@@ -333,9 +286,7 @@ export function installCertificateVerification(session: Session): void {
       try {
         const leafX509 = new crypto.X509Certificate(request.certificate.data);
         leafVerified = leafX509.verify(storedCa.publicKey);
-        certLog('leaf verify(storedCa.publicKey)=', leafVerified);
         if (leafVerified) {
-          certLog('leaf signed by stored CA, accept');
           callback(0);
           return;
         }
@@ -356,37 +307,9 @@ export function installCertificateVerification(session: Session): void {
         : '';
       const match = certFp && certFp === storedFp;
       const matchFromPem = certFpFromPem && certFpFromPem === storedFpFromPem;
-      certLog(
-        'chain i=',
-        chainIndex,
-        'subject=',
-        cert.subjectName,
-        'electronFp=',
-        (cert.fingerprint ?? '').slice(0, 50),
-        'fpFromPem=',
-        certFpFromPem.slice(0, 16),
-        'match=',
-        match,
-        'matchFromPem=',
-        matchFromPem
-      );
-      if (cert.data) {
-        const chainPemNorm = normalizePem(cert.data);
-        const chainFp = sha256FingerprintFromPem(chainPemNorm);
-        certLog(
-          'chain cert we compare: i=',
-          chainIndex,
-          'len=',
-          chainPemNorm.length,
-          'start=',
-          chainPemNorm.slice(0, 80),
-          'fp=',
-          chainFp.slice(0, 24) + '...'
-        );
-      }
+
       chainIndex++;
       if (match || matchFromPem) {
-        certLog('chain match fingerprint');
         callback(0);
         return;
       }
@@ -397,20 +320,10 @@ export function installCertificateVerification(session: Session): void {
     let topVerified = false;
     if (topCert?.data) {
       try {
-        certLog(
-          'top PEM len=',
-          topCert.data.length,
-          'stored PEM len=',
-          caPem.trim().length,
-          'top start=',
-          topCert.data.trim().slice(0, 80)
-        );
         const topX509 = new crypto.X509Certificate(topCert.data);
         topVerified = topX509.verify(storedCa.publicKey);
-        certLog('top verify(storedCa.publicKey)=', topVerified);
+
         if (topVerified) {
-          certLog('top cert issued by stored CA, accept');
-          callback(0);
           return;
         }
       } catch (e) {
@@ -418,16 +331,6 @@ export function installCertificateVerification(session: Session): void {
       }
     }
 
-    certLog(
-      'reject: leaf=',
-      leafVerified,
-      'top=',
-      topVerified,
-      'storedFp=',
-      storedFp.slice(0, 24),
-      'storedFpFromPem=',
-      storedFpFromPem.slice(0, 24)
-    );
     callback(-2);
   });
 }
@@ -488,7 +391,6 @@ export async function ensureCertForBase(
   apiKey?: string
 ): Promise<{ success: boolean; caChanged?: boolean; error?: string }> {
   try {
-    certLog('ensureCertForBase start baseUrl=', baseUrl);
     const url = new URL(baseUrl);
 
     const hostname = normalizeHost(url.hostname);
@@ -506,7 +408,6 @@ export async function ensureCertForBase(
 
     let caPem: string | null = null;
 
-    certLog('ensureCertForBase httpBase=', httpBase, 'fetching getca');
     const getcaRes = await fetch(`${httpBase}/admin/http/getca${apiKeyParam}`, {
       method: 'GET',
       headers: { accept: 'text/plain' },
@@ -518,7 +419,6 @@ export async function ensureCertForBase(
     }
 
     if (!caPem) {
-      certLog('ensureCertForBase no CA yet, calling createca');
       const createRes = await fetch(
         `${httpBase}/admin/http/createca${apiKeyParam}`,
         {
@@ -564,9 +464,6 @@ export async function ensureCertForBase(
       const extractedCheck = extractCaPem(caPem);
       const toStoreCheck = normalizePem(extractedCheck);
       if (!isValidPemCertificate(toStoreCheck)) {
-        certLog(
-          'ensureCertForBase: getca response not valid PEM, calling createca'
-        );
         const createRes = await fetch(
           `${httpBase}/admin/http/createca${apiKeyParam}`,
           {
@@ -617,7 +514,6 @@ export async function ensureCertForBase(
     // Verify connecting host is in the node's SAN list; if not, create a new CA and refetch.
     const san = await fetchSanList(httpBase, apiKey);
     if (san && !isHostInSanList(hostname, san)) {
-      certLog('ensureCertForBase host not in SAN list, creating new CA');
       const createRes = await fetch(
         `${httpBase}/admin/http/createca${apiKeyParam}`,
         {
@@ -666,25 +562,12 @@ export async function ensureCertForBase(
     const extracted = extractCaPem(caPem);
     const caPemToStore = normalizePem(extracted);
     if (!isValidPemCertificate(caPemToStore)) {
-      certLog('ensureCertForBase: getca response is not valid PEM');
       return { success: false, error: 'Invalid PEM from getca' };
     }
     const getFp = sha256FingerprintFromPem(caPemToStore);
 
     // caChanged: no persisted CA, or persisted fingerprint differs from GET (CA changed or first run).
     const caChanged = persistedFp === null || persistedFp !== getFp;
-    if (persistedFp !== null) {
-      certLog(
-        'ensureCertForBase cache vs GET: persistedFp=',
-        persistedFp.slice(0, 24) + '...',
-        'getFp=',
-        getFp.slice(0, 24) + '...',
-        'caChanged=',
-        caChanged
-      );
-    } else {
-      certLog('ensureCertForBase no persisted CA, caChanged=', caChanged);
-    }
 
     // Store for both localhost and 127.0.0.1 to avoid mismatch pain.
     trustedCaByHost.set(hostname, caPemToStore);
@@ -693,7 +576,6 @@ export async function ensureCertForBase(
       persistCaForHost(hostname, caPemToStore);
     }
 
-    certLog('ensureCertForBase done, stored CA for host=', hostname);
     return { success: true, caChanged };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
