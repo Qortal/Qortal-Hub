@@ -1,4 +1,4 @@
-import { atom } from 'jotai';
+import { atom, type PrimitiveAtom } from 'jotai';
 import {
   atomWithReset,
   atomFamily,
@@ -52,6 +52,25 @@ export const navigationControllerAtom = atomWithReset({});
 export const oldPinnedAppsAtom = atomWithReset([]);
 export const promotionsAtom = atomWithReset([]);
 export const promotionTimeIntervalAtom = atomWithReset(0);
+
+/** TTL in ms for join requests and group invites cache (3 minutes). */
+export const GROUP_ACTIVITY_CACHE_TTL_MS = 3 * 60 * 1000;
+
+/** Cache for group invites (user's list). Invalidated after TTL or explicit refresh. */
+export type GroupInvitesCache = {
+  data: any[];
+  fetchedAt: number;
+  address: string;
+} | null;
+export const groupInvitesCacheAtom = atom<GroupInvitesCache>(null) as PrimitiveAtom<GroupInvitesCache>;
+
+/** Cache for join requests (admin list). Invalidated after TTL or explicit refresh. */
+export type JoinRequestsCache = {
+  data: Array<{ group: any; data: any[] }>;
+  fetchedAt: number;
+  adminGroupIds: number[];
+} | null;
+export const joinRequestsCacheAtom = atom<JoinRequestsCache>(null) as PrimitiveAtom<JoinRequestsCache>;
 export const qMailLastEnteredTimestampAtom = atomWithReset(null);
 export const resourceDownloadControllerAtom = atomWithReset({});
 export const globalDownloadsAtom = atomWithReset<

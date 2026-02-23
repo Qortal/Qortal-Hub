@@ -14,7 +14,7 @@ import { Spacer } from '../common/Spacer';
 import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
 import { getBaseApiReactForAvatar } from '../App';
-import { getNameInfo } from './Group/groupApi';
+import { getPrimaryNameForAvatar } from './Group/groupApi';
 
 type RawWallet = {
   name?: string;
@@ -46,12 +46,13 @@ export const AuthenticationForm = ({
   const [primaryName, setPrimaryName] = useState<string | null>(null);
 
   // Fetch primary name for this address first; only then can we construct the avatar URL.
+  // Use getPrimaryNameForAvatar so the request uses the avatar-friendly base URL (e.g. HTTP when local HTTPS).
   useEffect(() => {
     if (!rawWallet?.address0) {
       setPrimaryName(null);
       return;
     }
-    getNameInfo(rawWallet.address0)
+    getPrimaryNameForAvatar(rawWallet.address0)
       .then((name) => setPrimaryName(name || null))
       .catch(() => setPrimaryName(null));
   }, [rawWallet?.address0]);
