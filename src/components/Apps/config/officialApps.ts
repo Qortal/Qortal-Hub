@@ -11,7 +11,7 @@ export interface OfficialAppConfig {
 
 export const officialAppsConfig = {
   // Apps featured in the carousel
-  featured: ['Q-Blog', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Tube', 'Q-Wallets'],
+  featured: ['Q-Tube', 'Quitter', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
 
   // All official apps with metadata
   all: [

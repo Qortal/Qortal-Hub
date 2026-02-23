@@ -264,7 +264,7 @@
       "name_preview": "you need a name to use preview",
       "name_publish": "you need a Qortal name to publish",
       "name_rate": "you need a name to rate.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "no data for image",
       "no_description": "no description",

@@ -263,7 +263,7 @@
       "name_preview": "プレビューを使用するには名前が必要です",
       "name_publish": "公開するにはQortal名が必要です",
       "name_rate": "評価するには名前が必要です。",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "残高は {{ balance }} QORT です。名前の登録には {{ fee }} QORT の手数料が必要です。",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "画像のデータはありません",
       "no_description": "説明なし",

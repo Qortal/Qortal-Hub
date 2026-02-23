@@ -263,7 +263,7 @@
       "name_preview": "您需要一个使用预览的名称",
       "name_publish": "您需要一个Qortal名称才能发布",
       "name_rate": "您需要一个名称来评估。",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "您的余额为 {{ balance }} QORT。名称注册需要 {{ fee }} QORT 费用。",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "没有图像数据",
       "no_description": "没有描述",

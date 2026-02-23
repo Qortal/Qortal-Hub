@@ -283,7 +283,7 @@ export const ChatGroup = ({
         window
           .sendMessage('decryptSingle', {
             data: encryptedMessages,
-            secretKeyObject: secretKey,
+            secretKeyObject: secretKeyRef.current,
           })
           .then((response) => {
             if (!response?.error) {

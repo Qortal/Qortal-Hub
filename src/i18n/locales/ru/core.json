@@ -263,7 +263,7 @@
       "name_preview": "вам нужно имя для использования предварительного просмотра",
       "name_publish": "вам нужно имя Qortal для публикации",
       "name_rate": "Вам нужно имя, чтобы оценить.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Ваш баланс: {{ balance }} QORT. Для регистрации имени требуется комиссия {{ fee }} QORT.",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "Нет данных для изображения",
       "no_description": "Нет описания",

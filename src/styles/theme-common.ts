@@ -21,28 +21,32 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   '::-webkit-scrollbar-track': {
-    backgroundColor: 'transparent',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
   },
 
   '::-webkit-scrollbar-track:hover': {
-    backgroundColor: 'transparent',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
   },
 
   '::-webkit-scrollbar': {
-    width: '16px',
+    width: '10px',
     height: '10px',
   },
 
   '::-webkit-scrollbar-thumb': {
-    backgroundColor: theme.palette.primary.main,
-    borderRadius: '8px',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.2)',
+    borderRadius: '5px',
+    border: '2px solid transparent',
     backgroundClip: 'content-box',
-    border: '4px solid transparent',
-    transition: '0.3s background-color',
+    transition: 'background-color 0.2s ease',
   },
 
   '::-webkit-scrollbar-thumb:hover': {
-    backgroundColor: theme.palette.primary.light,
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
+  },
+
+  '::-webkit-scrollbar-thumb:active': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.4)',
   },
 });
 

@@ -29,7 +29,7 @@ import {
   storeWallets,
   walletVersion,
 } from '../background/background.ts';
-import { getNameInfo } from './Group/groupApi';
+import { getPrimaryNameForAvatar } from './Group/groupApi';
 import { getBaseApiReactForAvatar } from '../App';
 import { useModal } from '../hooks/useModal.tsx';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
@@ -80,7 +80,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
           const address = el.getAttribute('data-address');
           if (!address || fetchingAddressesRef.current.has(address)) return;
           fetchingAddressesRef.current.add(address);
-          getNameInfo(address)
+          getPrimaryNameForAvatar(address)
             .then((name) => {
               if (name) {
                 setPrimaryNamesByAddress((prev) =>
