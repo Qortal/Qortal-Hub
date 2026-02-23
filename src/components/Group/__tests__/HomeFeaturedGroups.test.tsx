@@ -1,6 +1,6 @@
 import React, { createContext } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -28,6 +28,15 @@ vi.mock('../../../utils/events', () => ({
   unsubscribeFromEvent: vi.fn(),
 }));
 
+// --- Static featured groups (from data/featuredGroups) ---
+
+const featuredGroupNames = ['Qortal', 'Qortal-General-Chat', 'Q-Apps'];
+const featuredDescriptions = [
+  'Official Qortal community group',
+  'General chat for the Qortal community',
+  'Discussion and support for Qortal Q-Apps',
+];
+
 // --- i18n ---
 
 i18n.init({
@@ -37,6 +46,7 @@ i18n.init({
     en: {
       tutorial: {
         'home.featured_groups': 'Featured Groups',
+        'home.most_active_groups': 'Most active groups',
         'home.view_group': 'View',
       },
     },
@@ -47,7 +57,6 @@ i18n.init({
 // --- Atoms + Components ---
 
 import { groupsOwnerNamesAtom } from '../../../atoms/global';
-import { featuredGroups } from '../../../data/featuredGroups';
 import { HomeFeaturedGroups } from '../HomeFeaturedGroups';
 
 const theme = createTheme();
@@ -91,59 +100,69 @@ describe('HomeFeaturedGroups', () => {
 
   it('renders a card for each featured group', () => {
     renderComponent();
-    for (const group of featuredGroups) {
-      expect(screen.getByText(group.name)).toBeInTheDocument();
+    for (const name of featuredGroupNames) {
+      expect(screen.getByText(name)).toBeInTheDocument();
     }
   });
 
   it('renders a clickable card for each group', () => {
     renderComponent();
+    for (const name of featuredGroupNames) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    // Cards + prev/next arrows
     const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(featuredGroups.length);
+    expect(buttons.length).toBeGreaterThanOrEqual(featuredGroupNames.length);
   });
 
   it('renders group descriptions', () => {
     renderComponent();
-    for (const group of featuredGroups) {
-      expect(screen.getByText(group.description)).toBeInTheDocument();
+    for (const desc of featuredDescriptions) {
+      expect(screen.getByText(desc)).toBeInTheDocument();
     }
   });
 
   it('renders fallback letter avatar when owner name is unknown', () => {
     renderComponent();
-    // First group is 'Qortal' → fallback label 'Q'
+    expect(screen.getByText('Qortal')).toBeInTheDocument();
+    // Qortal → fallback first letter 'Q'
     expect(screen.getByText('Q')).toBeInTheDocument();
   });
 
-  it('calls navigation props when a card is clicked', () => {
-    const props = makeProps();
-    renderComponent(props);
+  it('opens the join popover when a card is clicked', async () => {
+    renderComponent();
 
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    const cards = featuredGroupNames.map((name) => screen.getByText(name));
+    fireEvent.click(cards[0].closest('button') ?? cards[0]);
 
-    const firstGroup = featuredGroups[0];
-    expect(props.setSelectedGroup).toHaveBeenCalledWith({
-      groupId: String(firstGroup.id),
-      groupName: firstGroup.name,
+    await waitFor(() => {
+      const popover = document.querySelector('.MuiPopover-paper');
+      expect(popover).toBeInTheDocument();
+      expect(popover?.querySelector('h6')?.textContent).toBe('Qortal');
+      expect(popover?.textContent).toMatch(/Official Qortal community group/);
+      expect(popover?.textContent).toMatch(/action\.close|Close/);
+      expect(popover?.textContent).toMatch(/action\.join|Join/);
     });
-    expect(props.setGroupSection).toHaveBeenCalledWith('default');
-    expect(props.setDesktopViewMode).toHaveBeenCalledWith('chat');
-    expect(props.setMobileViewMode).toHaveBeenCalledWith('group');
-    expect(props.getTimestampEnterChat).toHaveBeenCalled();
   });
 
-  it('navigates to the correct group when different cards are clicked', () => {
-    const props = makeProps();
-    renderComponent(props);
-    const buttons = screen.getAllByRole('button');
+  it('shows the correct group in the popover when different cards are clicked', async () => {
+    renderComponent();
 
-    featuredGroups.forEach((group, index) => {
-      vi.clearAllMocks();
-      fireEvent.click(buttons[index]);
-      expect(props.setSelectedGroup).toHaveBeenCalledWith({
-        groupId: String(group.id),
-        groupName: group.name,
-      });
+    const cards = featuredGroupNames.map((name) => screen.getByText(name));
+
+    fireEvent.click(cards[0].closest('button') ?? cards[0]);
+    await waitFor(() => {
+      expect(screen.getByText('Qortal', { selector: 'h6' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(cards[1].closest('button') ?? cards[1]);
+    await waitFor(() => {
+      expect(screen.getByText('Qortal-General-Chat', { selector: 'h6' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(cards[2].closest('button') ?? cards[2]);
+    await waitFor(() => {
+      expect(screen.getByText('Q-Apps', { selector: 'h6' })).toBeInTheDocument();
     });
   });
 });

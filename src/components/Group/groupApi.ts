@@ -1,6 +1,7 @@
 import {
   getArbitraryEndpointReact,
   getBaseApiReact,
+  getBaseApiReactForPrimaryName,
 } from '../../App';
 import {
   requestQueueAdminMemberNames,
@@ -10,6 +11,19 @@ import {
 export async function getNameInfo(address: string): Promise<string> {
   const response = await fetch(
     `${getBaseApiReact()}/names/primary/` + address
+  );
+  const nameData = await response.json();
+
+  if (nameData?.name) {
+    return nameData.name;
+  }
+  return '';
+}
+
+/** Primary name for avatar display (wallets/auth). Uses avatar-friendly base URL (e.g. HTTP when local HTTPS). */
+export async function getPrimaryNameForAvatar(address: string): Promise<string> {
+  const response = await fetch(
+    `${getBaseApiReactForPrimaryName()}/names/primary/` + encodeURIComponent(address)
   );
   const nameData = await response.json();
 

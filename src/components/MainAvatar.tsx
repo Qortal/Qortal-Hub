@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import Logo2 from '../assets/svgs/Logo2.svg';
 import {
   QORTAL_APP_CONTEXT,
@@ -22,10 +22,6 @@ import { LoadingButton } from '@mui/lab';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useTranslation } from 'react-i18next';
 import { MAX_SIZE_AVATAR } from '../constants/constants.ts';
-import {
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../utils/events';
 
 export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   const [hasAvatar, setHasAvatar] = useState(false);
@@ -35,22 +31,12 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Handle child element click to open Popover
   const handleChildClick = (event) => {
     event.stopPropagation(); // Prevent parent onClick from firing
     setAnchorEl(event.currentTarget);
   };
-
-  // Allow external components to open the avatar popover via event
-  useEffect(() => {
-    const openFromEvent = () => {
-      if (triggerRef.current) setAnchorEl(triggerRef.current);
-    };
-    subscribeToEvent('openAvatarUpload', openFromEvent);
-    return () => unsubscribeFromEvent('openAvatarUpload', openFromEvent);
-  }, []);
 
   // Handle closing the Popover
   const handleClose = () => {
@@ -154,15 +140,9 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
     }
   };
 
-  // Hidden anchor used when the popover is triggered via the openAvatarUpload event
-  const hiddenTrigger = (
-    <button ref={triggerRef} style={{ display: 'none' }} aria-hidden />
-  );
-
   if (tempAvatar) {
     return (
       <>
-        {hiddenTrigger}
         <Avatar
           sx={{
             height: '138px',
@@ -205,7 +185,6 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
   if (hasAvatar) {
     return (
       <>
-        {hiddenTrigger}
         <Avatar
           sx={{
             height: '138px',
@@ -247,7 +226,6 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
 
   return (
     <>
-      {hiddenTrigger}
       <img src={Logo2} />
       <ButtonBase onClick={handleChildClick}>
         <Typography

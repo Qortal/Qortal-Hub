@@ -1,8 +1,11 @@
+import { useEffect, useRef, useState } from 'react';
 import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import { officialAppsConfig } from '../Apps/config/officialApps';
+
+const RETRY_DELAY_MS = 5000;
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -50,11 +53,7 @@ export const HomeFeaturedApps = () => {
         }}
       >
         {officialAppsConfig.featured.map((appName) => (
-          <AppTile
-            key={appName}
-            appName={appName}
-            theme={theme}
-          />
+          <AppTile key={appName} appName={appName} theme={theme} />
         ))}
       </Box>
     </Box>
@@ -69,7 +68,26 @@ interface AppTileProps {
 }
 
 const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
-  const avatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+  const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+  const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
+  const hasRetriedRef = useRef(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    };
+  }, []);
+
+  const handleImageError = () => {
+    if (hasRetriedRef.current) return;
+    console.log('handleImageError', appName);
+    hasRetriedRef.current = true;
+    retryTimeoutRef.current = setTimeout(() => {
+      retryTimeoutRef.current = null;
+      setImageSrc(`${baseAvatarUrl}&_retry=${Date.now()}`);
+    }, RETRY_DELAY_MS);
+  };
 
   return (
     <ButtonBase
@@ -88,8 +106,9 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
       }}
     >
       <Avatar
-        src={avatarUrl}
+        src={imageSrc}
         variant="rounded"
+        onError={handleImageError}
         sx={{ height: 52, width: 52 }}
       >
         {appName.charAt(0)}

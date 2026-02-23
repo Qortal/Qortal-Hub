@@ -1,4 +1,4 @@
-import { Box, Button, useTheme } from '@mui/material';
+import { Box, Button, CircularProgress, useTheme } from '@mui/material';
 import { useEffect, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import {
@@ -11,7 +11,7 @@ import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
-import { HomeGettingStarted } from './HomeGettingStarted';
+import { HomeGettingStarted, GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
@@ -27,6 +27,12 @@ import {
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
+
+// Temporarily hide User/Developer toggle — only User mode is shown (no option visible)
+const SHOW_USER_DEVELOPER_TOGGLE = false;
+
+// Temporarily hide Most active groups section — no render, no API calls
+const SHOW_MOST_ACTIVE_GROUPS = false;
 
 export const HomeDesktop = ({
   refreshHomeDataFunc,
@@ -53,6 +59,11 @@ export const HomeDesktop = ({
   const [promotionsCount, setPromotionsCount] = useState(0);
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
+  const [showMostActiveGroups, setShowMostActiveGroups] = useState(
+    () => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed'
+  );
+  const [requestsCountLoading, setRequestsCountLoading] = useState(true);
+  const [invitesCountLoading, setInvitesCountLoading] = useState(true);
 
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial']);
@@ -120,59 +131,61 @@ export const HomeDesktop = ({
               {/* Profile card — always visible */}
               <HomeProfileCard />
 
-              {/* Tab switcher */}
-              <Box
-                sx={{
-                  alignSelf: 'center',
-                  bgcolor: theme.palette.background.paper,
-                  borderRadius: '50px',
-                  display: 'flex',
-                  gap: '4px',
-                  padding: '4px',
-                }}
-              >
-                {(['user', 'developer'] as HomeTab[]).map((tab) => (
-                  <Button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    size="small"
-                    disableElevation
-                    sx={{
-                      bgcolor:
-                        activeTab === tab
-                          ? theme.palette.primary.main
-                          : 'transparent',
-                      borderRadius: '50px',
-                      color:
-                        activeTab === tab
-                          ? theme.palette.primary.contrastText
-                          : theme.palette.text.secondary,
-                      fontSize: '0.85rem',
-                      fontWeight: activeTab === tab ? 600 : 400,
-                      minWidth: '100px',
-                      px: 2,
-                      textTransform: 'none',
-                      '&:hover': {
+              {/* Tab switcher — temporarily hidden when SHOW_USER_DEVELOPER_TOGGLE is false */}
+              {SHOW_USER_DEVELOPER_TOGGLE && (
+                <Box
+                  sx={{
+                    alignSelf: 'center',
+                    bgcolor: theme.palette.background.paper,
+                    borderRadius: '50px',
+                    display: 'flex',
+                    gap: '4px',
+                    padding: '4px',
+                  }}
+                >
+                  {(['user', 'developer'] as HomeTab[]).map((tab) => (
+                    <Button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      size="small"
+                      disableElevation
+                      sx={{
                         bgcolor:
                           activeTab === tab
-                            ? theme.palette.primary.dark
-                            : theme.palette.action.hover,
-                      },
-                    }}
-                  >
-                    {t(`tutorial:home.tab_${tab}`, {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </Button>
-                ))}
-              </Box>
+                            ? theme.palette.primary.main
+                            : 'transparent',
+                        borderRadius: '50px',
+                        color:
+                          activeTab === tab
+                            ? theme.palette.primary.contrastText
+                            : theme.palette.text.secondary,
+                        fontSize: '0.85rem',
+                        fontWeight: activeTab === tab ? 600 : 400,
+                        minWidth: '100px',
+                        px: 2,
+                        textTransform: 'none',
+                        '&:hover': {
+                          bgcolor:
+                            activeTab === tab
+                              ? theme.palette.primary.dark
+                              : theme.palette.action.hover,
+                        },
+                      }}
+                    >
+                      {t(`tutorial:home.tab_${tab}`, {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  ))}
+                </Box>
+              )}
 
               {/* ── USER TAB ── */}
               {activeTab === 'user' && (
                 <>
-                  <HomeGettingStarted />
+                  <HomeGettingStarted onGettingStartedComplete={() => setShowMostActiveGroups(true)} />
                   <HomeFeaturedApps />
-                  <HomeFeaturedGroups {...sharedGroupNavProps} />
+                  {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
 
                   {/* ── GROUP ACTIVITY SECTION ── */}
                   {!isLoadingGroups && hasDoneNameAndBalanceAndIsLoaded && (
@@ -217,19 +230,22 @@ export const HomeDesktop = ({
                               key: 'requests' as ActivityTab,
                               label: t('group:join_requests', { postProcess: 'capitalizeFirstChar' }),
                               count: requestsCount,
+                              countLoading: requestsCountLoading,
                             },
                             {
                               key: 'invites' as ActivityTab,
                               label: t('group:group.invites', { postProcess: 'capitalizeFirstChar' }),
                               count: invitesCount,
+                              countLoading: invitesCountLoading,
                             },
                             {
                               key: 'promotions' as ActivityTab,
                               label: t('group:group.promotions', { postProcess: 'capitalizeFirstChar' }),
                               count: promotionsCount,
+                              countLoading: false,
                             },
                           ]
-                        ).map(({ key, label, count }) => (
+                        ).map(({ key, label, count, countLoading }) => (
                           <Button
                             key={key}
                             onClick={() => setActivityTab(key)}
@@ -259,40 +275,63 @@ export const HomeDesktop = ({
                             }}
                           >
                             {label}
-                            {count > 0 && (
+                            {countLoading ? (
                               <Box
                                 component="span"
                                 sx={{
-                                  bgcolor:
-                                    activityTab === key
-                                      ? 'rgba(255,255,255,0.25)'
-                                      : theme.palette.primary.main,
-                                  borderRadius: '50px',
-                                  color:
-                                    activityTab === key
-                                      ? theme.palette.primary.contrastText
-                                      : theme.palette.primary.contrastText,
-                                  display: 'inline-block',
-                                  fontSize: '0.72rem',
-                                  fontWeight: 700,
-                                  lineHeight: 1,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
                                   ml: '6px',
-                                  px: '6px',
-                                  py: '2px',
                                 }}
                               >
-                                {count}
+                                <CircularProgress
+                                  size={14}
+                                  thickness={4}
+                                  sx={{
+                                    color:
+                                      activityTab === key
+                                        ? 'rgba(255,255,255,0.9)'
+                                        : theme.palette.primary.contrastText,
+                                  }}
+                                />
                               </Box>
+                            ) : (
+                              count > 0 && (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    bgcolor:
+                                      activityTab === key
+                                        ? 'rgba(255,255,255,0.25)'
+                                        : theme.palette.primary.main,
+                                    borderRadius: '50px',
+                                    color:
+                                      activityTab === key
+                                        ? theme.palette.primary.contrastText
+                                        : theme.palette.primary.contrastText,
+                                    display: 'inline-block',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    lineHeight: 1,
+                                    ml: '6px',
+                                    px: '6px',
+                                    py: '2px',
+                                  }}
+                                >
+                                  {count}
+                                </Box>
+                              )
                             )}
                           </Button>
                         ))}
                       </Box>
 
-                      {/* Active tab content */}
-                      {activityTab === 'requests' && (
+                      {/* Tab content: mount all so each can report its count; hide inactive */}
+                      <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
                         <GroupJoinRequests
                           compact
                           onCountChange={setRequestsCount}
+                          onLoadingChange={setRequestsCountLoading}
                           setGroupSection={setGroupSection}
                           setSelectedGroup={setSelectedGroup}
                           getTimestampEnterChat={getTimestampEnterChat}
@@ -302,21 +341,22 @@ export const HomeDesktop = ({
                           setMobileViewMode={setMobileViewMode}
                           setDesktopViewMode={setDesktopViewMode}
                         />
-                      )}
-                      {activityTab === 'invites' && (
+                      </Box>
+                      <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
                         <GroupInvites
                           compact
                           onCountChange={setInvitesCount}
+                          onLoadingChange={setInvitesCountLoading}
                           setOpenAddGroup={setOpenAddGroup}
                           myAddress={myAddress}
                         />
-                      )}
-                      {activityTab === 'promotions' && (
+                      </Box>
+                      <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
                         <ListOfGroupPromotions
                           compact
                           onCountChange={setPromotionsCount}
                         />
-                      )}
+                      </Box>
                     </Box>
                   )}
 

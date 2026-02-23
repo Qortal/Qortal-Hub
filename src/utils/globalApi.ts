@@ -32,6 +32,15 @@ export const getBaseApiReactForAvatar = (customApi?: string): string => {
   return baseUrl;
 };
 
+/** Base API URL for primary name fetch when used for avatar (wallets/auth). Uses HTTP when on local/private HTTPS. */
+export const getBaseApiReactForPrimaryName = (customApi?: string): string => {
+  let baseUrl = getBaseApiReact(customApi);
+  if (isLocalPrivateHttpsUrl(baseUrl)) {
+    baseUrl = baseUrl.replace(/^https:\/\//i, 'http://');
+  }
+  return baseUrl;
+};
+
 export const getArbitraryEndpointReact = (): string => {
   return `/arbitrary/resources/searchsimple`;
 };

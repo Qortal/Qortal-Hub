@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -31,7 +31,11 @@ import { getFee } from '../../background/background.ts';
 import ImageUploader from '../../common/ImageUploader';
 import { MAX_SIZE_AVATAR } from '../../constants/constants.ts';
 import { fileToBase64 } from '../../utils/fileReading';
-import { executeEvent } from '../../utils/events';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 
 export const HomeProfileCard = () => {
@@ -43,12 +47,34 @@ export const HomeProfileCard = () => {
   const setOpenSnack = useSetAtom(openSnackGlobalAtom);
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
 
+  const avatarAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [tempAvatar, setTempAvatar] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [avatarAnchorEl, setAvatarAnchorEl] = useState<HTMLElement | null>(null);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
+
+  // Object URL for selected file preview; revoke on change/cleanup
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
+
+  // When "Load your avatar" step (or any openAvatarUpload event) fires, open the same popover as "Change avatar"
+  useEffect(() => {
+    const openFromEvent = () => {
+      if (avatarAnchorRef.current) setAvatarAnchorEl(avatarAnchorRef.current);
+    };
+    subscribeToEvent('openAvatarUpload', openFromEvent);
+    return () => unsubscribeFromEvent('openAvatarUpload', openFromEvent);
+  }, []);
 
   const name = userInfo?.name;
   const address = userInfo?.address;
@@ -131,6 +157,7 @@ export const HomeProfileCard = () => {
       setAvatarFile(null);
       setTempAvatar(`data:image/webp;base64,${avatarBase64}`);
       setAvatarAnchorEl(null);
+      executeEvent('avatarUploaded', {});
     } catch (error) {
       if (error?.message) {
         setInfoSnack({ type: 'error', message: error.message });
@@ -160,6 +187,7 @@ export const HomeProfileCard = () => {
       >
         <Box sx={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <ButtonBase
+            ref={avatarAnchorRef}
             onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
             sx={{ borderRadius: '50%' }}
           >
@@ -280,6 +308,8 @@ export const HomeProfileCard = () => {
             title={t('core:action.transfer_qort', {
               postProcess: 'capitalizeFirstChar',
             })}
+            placement="left"
+            disableInteractive
           >
             <IconButton onClick={handleTransferQort} size="small">
               <SendIcon fontSize="small" />
@@ -291,6 +321,8 @@ export const HomeProfileCard = () => {
             title={t('core:action.see_qr_code', {
               postProcess: 'capitalizeFirstChar',
             })}
+            placement="left"
+            disableInteractive
           >
             <IconButton
               onClick={(e) => setQrAnchorEl(e.currentTarget)}
@@ -305,6 +337,8 @@ export const HomeProfileCard = () => {
             title={t('core:action.get_qort_trade', {
               postProcess: 'capitalizeFirstChar',
             })}
+            placement="left"
+            disableInteractive
           >
             <IconButton onClick={handleOpenQTrade} size="small">
               <ShoppingCartIcon fontSize="small" />
@@ -317,30 +351,83 @@ export const HomeProfileCard = () => {
       <Popover
         open={Boolean(avatarAnchorEl)}
         anchorEl={avatarAnchorEl}
-        onClose={() => setAvatarAnchorEl(null)}
+        onClose={() => {
+          setAvatarAnchorEl(null);
+          setAvatarFile(null);
+        }}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              overflow: 'hidden',
+              boxShadow: theme.shadows[8],
+              border: `1px solid ${theme.palette.divider}`,
+              minWidth: 280,
+            },
+          },
+        }}
       >
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Typography sx={{ fontSize: '12px' }}>
+        <Box
+          sx={{
+            p: 2.5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            bgcolor: theme.palette.background.paper,
+          }}
+        >
+          <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
             {t('core:message.generic.avatar_size', {
               size: MAX_SIZE_AVATAR,
               postProcess: 'capitalizeFirstChar',
             })}
           </Typography>
 
+          {/* Preview area */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              alignSelf: 'center',
+              width: 120,
+              height: 120,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              bgcolor: theme.palette.action.hover,
+              border: `2px solid ${theme.palette.divider}`,
+            }}
+          >
+            {avatarPreviewUrl ? (
+              <Box
+                component="img"
+                src={avatarPreviewUrl}
+                alt=""
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            ) : (
+              <PersonIcon sx={{ fontSize: 56, color: theme.palette.text.disabled }} />
+            )}
+          </Box>
+
           <ImageUploader onPick={(file) => setAvatarFile(file)}>
             <Button
-              variant="contained"
+              variant="outlined"
+              fullWidth
               sx={{
-                backgroundColor: theme.palette.other.positive,
-                color: theme.palette.text.primary,
-                fontWeight: 'bold',
-                opacity: 0.7,
+                borderColor: theme.palette.other.positive,
+                color: theme.palette.other.positive,
+                fontWeight: 600,
+                textTransform: 'none',
                 '&:hover': {
-                  backgroundColor: theme.palette.other.positive,
-                  color: 'black',
-                  opacity: 1,
+                  borderColor: theme.palette.other.positive,
+                  bgcolor: `${theme.palette.other.positive}14`,
                 },
               }}
             >
@@ -349,15 +436,25 @@ export const HomeProfileCard = () => {
           </ImageUploader>
 
           {avatarFile?.name && (
-            <Typography sx={{ fontSize: '0.8rem' }}>{avatarFile.name}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ textAlign: 'center' }}>
+              {avatarFile.name}
+            </Typography>
           )}
 
-          <Box sx={{ height: '16px' }} />
-
           {!name && (
-            <Box sx={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-              <ErrorIcon sx={{ color: theme.palette.text.primary }} />
-              <Typography>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center',
+                p: 1.25,
+                borderRadius: 1,
+                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,152,0,0.12)' : 'rgba(255,152,0,0.08)',
+                border: `1px solid ${theme.palette.warning.main}40`,
+              }}
+            >
+              <ErrorIcon sx={{ color: theme.palette.warning.main, fontSize: 20, flexShrink: 0 }} />
+              <Typography variant="body2" color="text.secondary">
                 {t('group:message.generic.avatar_registered_name', {
                   postProcess: 'capitalizeFirstChar',
                 })}
@@ -365,22 +462,25 @@ export const HomeProfileCard = () => {
             </Box>
           )}
 
-          <Box sx={{ height: '16px' }} />
-
           <LoadingButton
             loading={isAvatarLoading}
             disabled={!avatarFile || !name}
             onClick={publishAvatar}
             variant="contained"
+            fullWidth
             sx={{
-              backgroundColor: theme.palette.other.positive,
-              color: theme.palette.text.primary,
-              fontWeight: 'bold',
-              opacity: 0.7,
+              bgcolor: theme.palette.other.positive,
+              color: theme.palette.getContrastText(theme.palette.other.positive),
+              fontWeight: 600,
+              textTransform: 'none',
+              py: 1.25,
               '&:hover': {
-                backgroundColor: theme.palette.other.positive,
-                color: 'black',
-                opacity: 1,
+                bgcolor: theme.palette.other.positive,
+                filter: 'brightness(1.08)',
+              },
+              '&.Mui-disabled': {
+                bgcolor: theme.palette.action.disabledBackground,
+                color: theme.palette.action.disabled,
               },
             }}
           >

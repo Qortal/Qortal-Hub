@@ -6,7 +6,7 @@ import { FeaturedGroup } from '../../data/featuredGroups';
 
 interface HomeGroupCardProps {
   group: FeaturedGroup;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent<HTMLElement>) => void;
 }
 
 export const HomeGroupCard = ({ group, onClick }: HomeGroupCardProps) => {

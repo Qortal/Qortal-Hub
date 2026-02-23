@@ -263,7 +263,7 @@
       "name_preview": "Vous avez besoin d'un nom pour utiliser l'aperçu",
       "name_publish": "Vous avez besoin d'un nom Qortal pour publier",
       "name_rate": "Vous avez besoin d'un nom pour évaluer.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Votre solde est de {{ balance }} QORT. L'enregistrement d'un nom nécessite des frais de {{ fee }} QORT.",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "Aucune donnée pour l'image",
       "no_description": "Aucune description",

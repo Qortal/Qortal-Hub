@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   ListItem,
   ListItemButton,
   ListItemText,
@@ -188,46 +189,97 @@ export const UserListOfInvites = ({
                 open={openPopoverIndex === index}
                 anchorEl={popoverAnchor}
                 onClose={handlePopoverClose}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'center',
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      mt: 1,
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      boxShadow: theme.shadows[8],
+                      border: `1px solid ${theme.palette.divider}`,
+                      minWidth: 280,
+                      maxWidth: 360,
+                    },
+                  },
                 }}
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'center',
-                }}
-                style={{ marginTop: '8px' }}
               >
                 <Box
                   sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    height: '250px',
-                    padding: '10px',
-                    width: '325px',
+                    overflow: 'hidden',
+                    bgcolor: theme.palette.background.paper,
                   }}
                 >
-                  <Typography>
-                    {t('core:action.join', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}{' '}
-                    {invite?.groupName}
-                  </Typography>
-
-                  <LoadingButton
-                    loading={isLoading}
-                    loadingPosition="start"
-                    variant="contained"
-                    onClick={() =>
-                      handleJoinGroup(invite?.groupId, invite?.groupName)
-                    }
+                  <Box
+                    sx={{
+                      px: 2.5,
+                      pt: 2.5,
+                      pb: 1.5,
+                      bgcolor: theme.palette.background?.default ?? 'rgba(0,0,0,0.2)',
+                      borderBottom: `1px solid ${theme.palette.divider}`,
+                    }}
                   >
-                    {t('group:action.join_group', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
-                  </LoadingButton>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                      {t('group:group.name', { postProcess: 'capitalizeFirstChar' })}
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+                      {invite?.groupName}
+                    </Typography>
+                    {(invite?.participantCount != null || invite?.memberCount != null) && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                        {t('group:group.member_number', { postProcess: 'capitalizeFirstChar' })}:{' '}
+                        {invite?.participantCount ?? invite?.memberCount ?? 0}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ px: 2.5, py: 2 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}
+                    >
+                      {t('group:group.description', { postProcess: 'capitalizeFirstChar', defaultValue: 'Description' })}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        lineHeight: 1.5,
+                        minHeight: '2em',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 4,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {invite?.description ||
+                        t('group:message.generic.no_description', { postProcess: 'capitalizeFirstChar', defaultValue: 'No description' })}
+                    </Typography>
+                    {invite?.isOpen === false && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                        {t('group:message.generic.closed_group', { postProcess: 'capitalizeFirstChar' })}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ px: 2.5, pb: 2.5, pt: 0, display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handlePopoverClose}
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
+                    >
+                      {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
+                    </Button>
+                    <LoadingButton
+                      loading={isLoading}
+                      loadingPosition="start"
+                      variant="contained"
+                      onClick={() => handleJoinGroup(invite?.groupId, invite?.groupName)}
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
+                    >
+                      {t('group:action.join_group', { postProcess: 'capitalizeFirstChar' })}
+                    </LoadingButton>
+                  </Box>
                 </Box>
               </Popover>
 

@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Avatar,
   Box,
+  Button,
   ListItem,
   ListItemAvatar,
   ListItemButton,
   ListItemText,
   Popover,
+  Typography,
+  useTheme,
 } from '@mui/material';
 import {
   AutoSizer,
@@ -64,6 +67,7 @@ export const ListOfJoinRequests = ({
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null); // Track which list item has the popover open
   const listRef = useRef(null);
   const [isLoadingAccept, setIsLoadingAccept] = useState(false);
+  const theme = useTheme();
   const { t } = useTranslation([
     'auth',
     'core',
@@ -189,6 +193,9 @@ export const ListOfJoinRequests = ({
 
     if (findJoinRequestInTxList) return null;
 
+    const displayName = member?.name || member?.joiner || '';
+    const isSelected = openPopoverIndex === index;
+
     return (
       <CellMeasurer
         key={key}
@@ -201,40 +208,84 @@ export const ListOfJoinRequests = ({
           <div style={style} onLoad={measure}>
             <ListItem disablePadding>
               <Popover
-                open={openPopoverIndex === index}
+                open={isSelected}
                 anchorEl={popoverAnchor}
                 onClose={handlePopoverClose}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'center',
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      mt: 1,
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      boxShadow: theme.shadows[8],
+                      border: `1px solid ${theme.palette.divider}`,
+                      minWidth: 280,
+                      maxWidth: 360,
+                    },
+                  },
                 }}
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'center',
-                }}
-                style={{ marginTop: '8px' }}
               >
                 <Box
                   sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    height: '250px',
-                    padding: '10px',
-                    width: '325px',
+                    p: 2.5,
+                    bgcolor: theme.palette.background.paper,
                   }}
                 >
-                  <LoadingButton
-                    loading={isLoadingAccept}
-                    loadingPosition="start"
-                    variant="contained"
-                    onClick={() => handleAcceptJoinRequest(member?.joiner)}
-                  >
-                    {t('core:action.accept', {
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5, fontWeight: 600 }}>
+                    {t('group:message.generic.join_request_from', {
                       postProcess: 'capitalizeFirstChar',
+                      defaultValue: 'Join request from',
                     })}
-                  </LoadingButton>
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+                    <Avatar
+                      alt={displayName}
+                      src={
+                        member?.name
+                          ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member.name}/qortal_avatar?async=true`
+                          : undefined
+                      }
+                      sx={{ width: 40, height: 40 }}
+                    >
+                      {displayName?.charAt(0)?.toUpperCase() || '?'}
+                    </Avatar>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" fontWeight={600} noWrap>
+                        {displayName}
+                      </Typography>
+                      {member?.joiner && (
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                          {member.joiner}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {t('group:message.generic.accept_join_request_confirm', {
+                      postProcess: 'capitalizeFirstChar',
+                      defaultValue: 'Accept this request to add them to the group.',
+                    })}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handlePopoverClose}
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
+                    >
+                      {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
+                    </Button>
+                    <LoadingButton
+                      loading={isLoadingAccept}
+                      loadingPosition="start"
+                      variant="contained"
+                      onClick={() => handleAcceptJoinRequest(member?.joiner)}
+                      sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
+                    >
+                      {t('core:action.accept', { postProcess: 'capitalizeFirstChar' })}
+                    </LoadingButton>
+                  </Box>
                 </Box>
               </Popover>
 
