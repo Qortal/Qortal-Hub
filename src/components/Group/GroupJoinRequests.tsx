@@ -5,7 +5,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import { Box, Button, ButtonBase, Collapse, Dialog, DialogContent, DialogTitle, IconButton, Typography, useTheme } from '@mui/material';
 import { CustomLoader } from '../../common/CustomLoader';
 import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
-import { myGroupsWhereIAmAdminAtom, txListAtom } from '../../atoms/global';
+import {
+  GROUP_ACTIVITY_CACHE_TTL_MS,
+  joinRequestsCacheAtom,
+  myGroupsWhereIAmAdminAtom,
+  txListAtom,
+} from '../../atoms/global';
 import { ListOfJoinRequests } from './ListOfJoinRequests';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -50,6 +55,7 @@ export const GroupJoinRequests = ({
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [txList] = useAtom(txListAtom);
+  const [joinRequestsCache, setJoinRequestsCache] = useAtom(joinRequestsCacheAtom);
 
   const [myGroupsWhereIAmAdmin] = useAtom(myGroupsWhereIAmAdminAtom);
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -62,7 +68,31 @@ export const GroupJoinRequests = ({
   const [infoSnack, setInfoSnack] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const theme = useTheme();
-  const getJoinRequests = async (silent = false) => {
+  const adminGroupIds = useMemo(
+    () =>
+      [...(myGroupsWhereIAmAdmin ?? [])]
+        .map((g) => g?.groupId)
+        .filter((id) => id != null)
+        .sort((a, b) => a - b),
+    [myGroupsWhereIAmAdmin]
+  );
+
+  const isCacheValid = useMemo(() => {
+    if (!joinRequestsCache || adminGroupIds.length === 0) return false;
+    if (joinRequestsCache.adminGroupIds.length !== adminGroupIds.length) return false;
+    const same = joinRequestsCache.adminGroupIds.every(
+      (id, i) => id === adminGroupIds[i]
+    );
+    if (!same) return false;
+    return Date.now() - joinRequestsCache.fetchedAt < GROUP_ACTIVITY_CACHE_TTL_MS;
+  }, [joinRequestsCache, adminGroupIds]);
+
+  const getJoinRequests = async (silent = false, force = false) => {
+    if (!force && isCacheValid && joinRequestsCache?.data) {
+      setGroupsWithJoinRequests(joinRequestsCache.data);
+      if (!silent) setLoading(false);
+      return;
+    }
     try {
       if (!silent) setLoading(true);
       const res = await Promise.all(
@@ -82,6 +112,11 @@ export const GroupJoinRequests = ({
         })
       );
       setGroupsWithJoinRequests(res);
+      setJoinRequestsCache({
+        data: res,
+        fetchedAt: Date.now(),
+        adminGroupIds: [...adminGroupIds],
+      });
     } catch (error) {
       console.log(error);
     } finally {
@@ -90,12 +125,17 @@ export const GroupJoinRequests = ({
   };
 
   useEffect(() => {
-    if (myAddress && myGroupsWhereIAmAdmin.length > 0) {
-      getJoinRequests();
-    } else {
+    if (!myAddress || myGroupsWhereIAmAdmin.length === 0) {
       setLoading(false);
+      return;
     }
-  }, [myAddress, myGroupsWhereIAmAdmin]);
+    if (isCacheValid && joinRequestsCache?.data) {
+      setGroupsWithJoinRequests(joinRequestsCache.data);
+      setLoading(false);
+      return;
+    }
+    getJoinRequests();
+  }, [myAddress, myGroupsWhereIAmAdmin, joinRequestsCache, isCacheValid]);
 
   const filteredJoinRequests = useMemo(() => {
     return groupsWithJoinRequests.map((group) => {
@@ -143,7 +183,7 @@ export const GroupJoinRequests = ({
   const handleCloseJoinRequestsDialog = () => {
     setJoinRequestsDialogOpen(false);
     setSelectedGroupForDialog(null);
-    getJoinRequests(true);
+    getJoinRequests(true, true);
   };
 
   const listContent = (

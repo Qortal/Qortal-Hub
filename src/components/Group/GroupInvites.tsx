@@ -2,8 +2,12 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { Box, Button, ButtonBase, Collapse, Popover, Typography, useTheme } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { useSetAtom } from 'jotai';
-import { txListAtom } from '../../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  GROUP_ACTIVITY_CACHE_TTL_MS,
+  groupInvitesCacheAtom,
+  txListAtom,
+} from '../../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background';
 import { getGroupNames } from './UserListOfInvites';
@@ -37,6 +41,7 @@ export const GroupInvites = ({
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
+  const [groupInvitesCache, setGroupInvitesCache] = useAtom(groupInvitesCacheAtom);
 
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -118,7 +123,7 @@ export const GroupInvites = ({
                 }
                 setOpenSnack(true);
                 handlePopoverClose();
-                getJoinRequests();
+                getJoinRequests(true);
                 res(response);
                 return;
               }
@@ -144,30 +149,58 @@ export const GroupInvites = ({
     [show, t, setTxList, handlePopoverClose]
   );
 
-  const getJoinRequests = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${getBaseApiReact()}/groups/invites/${myAddress}/?limit=0`
-      );
-      const data = await response.json();
-      const resMoreData = await getGroupNames(data);
+  const isInvitesCacheValid =
+    groupInvitesCache &&
+    groupInvitesCache.address === myAddress &&
+    Date.now() - groupInvitesCache.fetchedAt < GROUP_ACTIVITY_CACHE_TTL_MS;
 
-      setGroupsWithJoinRequests(resMoreData);
-    } catch (error) {
-      console.log(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const getJoinRequests = useCallback(
+    async (force = false) => {
+      if (!force && isInvitesCacheValid && groupInvitesCache?.data) {
+        setGroupsWithJoinRequests(groupInvitesCache.data);
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await fetch(
+          `${getBaseApiReact()}/groups/invites/${myAddress}/?limit=0`
+        );
+        const data = await response.json();
+        const resMoreData = await getGroupNames(data);
+
+        setGroupsWithJoinRequests(resMoreData);
+        setGroupInvitesCache({
+          data: resMoreData,
+          fetchedAt: Date.now(),
+          address: myAddress,
+        });
+      } catch (error) {
+        console.log(error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      myAddress,
+      isInvitesCacheValid,
+      groupInvitesCache,
+      setGroupInvitesCache,
+    ]
+  );
 
   useEffect(() => {
-    if (myAddress) {
-      getJoinRequests();
-    } else {
+    if (!myAddress) {
       setLoading(false);
+      return;
     }
-  }, [myAddress]);
+    if (isInvitesCacheValid && groupInvitesCache?.data) {
+      setGroupsWithJoinRequests(groupInvitesCache.data);
+      setLoading(false);
+      return;
+    }
+    getJoinRequests();
+  }, [myAddress, groupInvitesCache, isInvitesCacheValid, getJoinRequests]);
 
   // Report count to parent when in compact mode
   useEffect(() => {

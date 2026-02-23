@@ -1,7 +1,10 @@
-import { Box, Button, CircularProgress, useTheme } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, useTheme } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useEffect, useMemo, useState } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
+  groupInvitesCacheAtom,
+  joinRequestsCacheAtom,
   userInfoAtom,
   balanceAtom,
   memberGroupsAtom,
@@ -68,6 +71,13 @@ export const HomeDesktop = ({
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial']);
   const theme = useTheme();
+  const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
+  const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
+
+  const handleRefreshGroupActivity = () => {
+    setGroupInvitesCache(null);
+    setJoinRequestsCache(null);
+  };
 
   useEffect(() => {
     if (balance && +balance >= 4.5) setChecked1(true);
@@ -200,17 +210,37 @@ export const HomeDesktop = ({
                         width: '100%',
                       }}
                     >
-                      {/* Section title */}
+                      {/* Section title and refresh */}
                       <Box
                         sx={{
-                          color: theme.palette.text.primary,
-                          fontSize: '1rem',
-                          fontWeight: 600,
+                          alignItems: 'center',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          width: '100%',
                         }}
                       >
-                        {t('tutorial:home.group_activity', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
+                        <Box
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {t('tutorial:home.group_activity', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Box>
+                        <IconButton
+                          aria-label={t('core:action.refresh', {
+                            postProcess: 'capitalizeFirstChar',
+                            defaultValue: 'Refresh',
+                          })}
+                          onClick={handleRefreshGroupActivity}
+                          size="small"
+                          sx={{ color: theme.palette.text.secondary }}
+                        >
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
                       </Box>
 
                       {/* Tab bar */}
