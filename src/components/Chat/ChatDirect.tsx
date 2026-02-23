@@ -535,7 +535,7 @@ export const ChatDirect = ({
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, 45000); // Ping every 45 seconds
+          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, 20000); // Ping every 20 seconds
         } else {
           middletierFunc(
             JSON.parse(e.data),

@@ -512,7 +512,7 @@ export function MiniGroupThread({
             clearTimeout(timeoutIdRef.current);
             timeoutIdRef.current = null;
           }
-          pingTimeoutRef.current = setTimeout(pingWebSocket, 45000);
+          pingTimeoutRef.current = setTimeout(pingWebSocket, 20000);
         } else {
           const data = JSON.parse(e.data);
           const dataArray = Array.isArray(data) ? data : [data];
