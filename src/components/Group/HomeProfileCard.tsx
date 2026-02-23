@@ -52,7 +52,9 @@ export const HomeProfileCard = () => {
   const [tempAvatar, setTempAvatar] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const [avatarAnchorEl, setAvatarAnchorEl] = useState<HTMLElement | null>(null);
+  const [avatarAnchorEl, setAvatarAnchorEl] = useState<HTMLElement | null>(
+    null
+  );
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -183,9 +185,21 @@ export const HomeProfileCard = () => {
     >
       {/* Left: Avatar + Name */}
       <Box
-        sx={{ alignItems: 'center', display: 'flex', flexShrink: 0, gap: '12px' }}
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          flexShrink: 0,
+          gap: '12px',
+        }}
       >
-        <Box sx={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+          }}
+        >
           <ButtonBase
             ref={avatarAnchorRef}
             onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
@@ -201,9 +215,15 @@ export const HomeProfileCard = () => {
           </ButtonBase>
           <ButtonBase onClick={(e) => setAvatarAnchorEl(e.currentTarget)}>
             <Typography
-              sx={{ color: theme.palette.text.secondary, fontSize: '0.68rem', opacity: 0.7 }}
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '0.68rem',
+                opacity: 0.7,
+              }}
             >
-              {t('core:action.change_avatar', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:action.change_avatar', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </ButtonBase>
         </Box>
@@ -224,48 +244,68 @@ export const HomeProfileCard = () => {
       </Box>
 
       {/* Center: Address (copy on click) */}
-      <Tooltip
-        title={t('tutorial:home.copy_address', {
-          postProcess: 'capitalizeFirstChar',
-        })}
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'column',
+          gap: '4px',
+          minWidth: 0,
+        }}
       >
-        <Box
-          onClick={handleCopyAddress}
+        <Typography
           sx={{
-            alignItems: 'center',
-            bgcolor: theme.palette.background.default,
-            borderRadius: '8px',
-            cursor: 'pointer',
-            display: 'flex',
-            flex: 1,
-            gap: '6px',
-            justifyContent: 'center',
-            maxWidth: '360px',
-            padding: '8px 12px',
-            '&:hover': { bgcolor: theme.palette.action.hover },
+            fontSize: '1rem',
           }}
         >
-          <Typography
+          {t('tutorial:home.account_address', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </Typography>
+        <Tooltip
+          title={t('tutorial:home.copy_address', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        >
+          <Box
+            onClick={handleCopyAddress}
             sx={{
-              color: theme.palette.text.secondary,
-              fontFamily: 'monospace',
-              fontSize: '0.78rem',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              alignItems: 'center',
+              bgcolor: theme.palette.background.default,
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              gap: '6px',
+              justifyContent: 'center',
+              maxWidth: '360px',
+              padding: '8px 12px',
+              width: '100%',
+              '&:hover': { bgcolor: theme.palette.action.hover },
             }}
           >
-            {address ?? '—'}
-          </Typography>
-          <ContentCopyIcon
-            sx={{
-              color: theme.palette.text.secondary,
-              flexShrink: 0,
-              fontSize: '0.9rem',
-            }}
-          />
-        </Box>
-      </Tooltip>
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontFamily: 'monospace',
+                fontSize: '0.78rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {address ?? '—'}
+            </Typography>
+            <ContentCopyIcon
+              sx={{
+                color: theme.palette.text.secondary,
+                flexShrink: 0,
+                fontSize: '0.9rem',
+              }}
+            />
+          </Box>
+        </Tooltip>
+      </Box>
 
       {/* Right: Balance + actions (vertical) */}
       <Box
@@ -378,7 +418,11 @@ export const HomeProfileCard = () => {
             bgcolor: theme.palette.background.paper,
           }}
         >
-          <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+          <Typography
+            variant="subtitle2"
+            color="text.secondary"
+            sx={{ fontWeight: 600 }}
+          >
             {t('core:message.generic.avatar_size', {
               size: MAX_SIZE_AVATAR,
               postProcess: 'capitalizeFirstChar',
@@ -412,7 +456,9 @@ export const HomeProfileCard = () => {
                 }}
               />
             ) : (
-              <PersonIcon sx={{ fontSize: 56, color: theme.palette.text.disabled }} />
+              <PersonIcon
+                sx={{ fontSize: 56, color: theme.palette.text.disabled }}
+              />
             )}
           </Box>
 
@@ -431,12 +477,19 @@ export const HomeProfileCard = () => {
                 },
               }}
             >
-              {t('core:action.choose_image', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:action.choose_image', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
           </ImageUploader>
 
           {avatarFile?.name && (
-            <Typography variant="caption" color="text.secondary" noWrap sx={{ textAlign: 'center' }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              noWrap
+              sx={{ textAlign: 'center' }}
+            >
               {avatarFile.name}
             </Typography>
           )}
@@ -449,11 +502,20 @@ export const HomeProfileCard = () => {
                 alignItems: 'center',
                 p: 1.25,
                 borderRadius: 1,
-                bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,152,0,0.12)' : 'rgba(255,152,0,0.08)',
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(255,152,0,0.12)'
+                    : 'rgba(255,152,0,0.08)',
                 border: `1px solid ${theme.palette.warning.main}40`,
               }}
             >
-              <ErrorIcon sx={{ color: theme.palette.warning.main, fontSize: 20, flexShrink: 0 }} />
+              <ErrorIcon
+                sx={{
+                  color: theme.palette.warning.main,
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}
+              />
               <Typography variant="body2" color="text.secondary">
                 {t('group:message.generic.avatar_registered_name', {
                   postProcess: 'capitalizeFirstChar',
@@ -470,7 +532,9 @@ export const HomeProfileCard = () => {
             fullWidth
             sx={{
               bgcolor: theme.palette.other.positive,
-              color: theme.palette.getContrastText(theme.palette.other.positive),
+              color: theme.palette.getContrastText(
+                theme.palette.other.positive
+              ),
               fontWeight: 600,
               textTransform: 'none',
               py: 1.25,
@@ -484,7 +548,9 @@ export const HomeProfileCard = () => {
               },
             }}
           >
-            {t('group:action.publish_avatar', { postProcess: 'capitalizeFirstChar' })}
+            {t('group:action.publish_avatar', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </LoadingButton>
         </Box>
       </Popover>
