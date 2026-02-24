@@ -297,15 +297,17 @@ export const MessageItemComponent = ({
             position: 'relative',
             transition: 'background-color 0.1s ease',
             width: '100%',
-            ...(isOwn && !isScrollTarget && {
-              borderLeft: `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
-              backgroundColor: alpha(theme.palette.primary.main, 0.045),
-              paddingLeft: '14px',
-            }),
-            ...(!isOwn && !isScrollTarget && {
-              borderLeft: `2px solid ${alpha(theme.palette.text.secondary, 0.35)}`,
-              paddingLeft: '14px',
-            }),
+            ...(isOwn &&
+              !isScrollTarget && {
+                borderLeft: `2px solid ${alpha(theme.palette.primary.main, 0.5)}`,
+                backgroundColor: alpha(theme.palette.primary.main, 0.045),
+                paddingLeft: '14px',
+              }),
+            ...(!isOwn &&
+              !isScrollTarget && {
+                borderLeft: `2px solid ${alpha(theme.palette.text.secondary, 0.35)}`,
+                paddingLeft: '14px',
+              }),
             ...(isScrollTarget && {
               borderLeft: `2px solid ${theme.palette.primary.main}`,
               backgroundColor: alpha(theme.palette.primary.main, 0.07),
@@ -400,7 +402,7 @@ export const MessageItemComponent = ({
             {/* Header: sender name + timestamp + edited label inline */}
             <Box
               sx={{
-                alignItems: 'baseline',
+                alignItems: 'center',
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: '8px',
