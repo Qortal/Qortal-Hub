@@ -136,6 +136,7 @@ export function GlobalChatWidget({
   const [widgetWidth, setWidgetWidth] = useState(initialBounds.width);
   const [widgetHeight, setWidgetHeight] = useState(initialBounds.height);
   const [resizing, setResizing] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const [windowSize, setWindowSize] = useState(() =>
     typeof window !== 'undefined'
@@ -260,6 +261,7 @@ export function GlobalChatWidget({
       didDragRef.current = false;
       const el = rndRef.current?.resizableElement?.current;
       if (!el) return;
+      setDragging(true);
       dragStartClientXRef.current = e.clientX;
       dragStartBottomXRef.current = bottomX;
       currentDragXRef.current = bottomX;
@@ -279,6 +281,7 @@ export function GlobalChatWidget({
         window.removeEventListener('pointermove', onMove, true);
         window.removeEventListener('pointerup', onUp, true);
         window.removeEventListener('pointercancel', onUp, true);
+        setDragging(false);
         const finalX = currentDragXRef.current;
         // React's next render will overwrite our inline transform with the correct controlled value
         setBottomX(finalX);
@@ -379,7 +382,7 @@ export function GlobalChatWidget({
 
   return (
     <>
-      {resizing && (
+      {(resizing || dragging) && (
         <Box
           aria-hidden
           sx={{
