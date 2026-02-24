@@ -603,7 +603,7 @@ function App() {
     };
   }, []);
 
-  const saveFileToDiskFunc = async () => {
+  const saveFileToDiskFunc = useCallback(async () => {
     try {
       await saveFileToDisk(
         walletToBeDownloaded.wallet,
@@ -612,7 +612,7 @@ function App() {
     } catch (error: any) {
       setWalletToBeDownloadedError(error?.message);
     }
-  };
+  }, [walletToBeDownloaded]);
 
   const saveWalletToLocalStorage = async (newWallet) => {
     try {
@@ -751,7 +751,7 @@ function App() {
     }
   }, [hasSettingsChanged, extState]);
 
-  const returnToMain = () => {
+  const returnToMain = useCallback(() => {
     setPaymentTo('');
     setSendPaymentError('');
     setCountdown(null);
@@ -762,7 +762,7 @@ function App() {
     setExtstate('authenticated');
     setIsOpenSendQort(false);
     setIsOpenSendQortSuccess(false);
-  };
+  }, []);
 
   const resetAllStates = () => {
     setExtstate('not-authenticated');
@@ -978,7 +978,7 @@ function App() {
         postProcess: 'capitalizeFirstChar',
       }),
     });
-  }, [t, showInfo]);
+  }, [t, showInfo, saveFileToDiskFunc, returnToMain]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
