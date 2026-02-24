@@ -312,20 +312,9 @@ export const decryptSingle = async ({
 
     // Convert the key string back to a number
     const highestKey = parseInt(keyStr, 10);
-    console.log('secretKeyObject', secretKeyObject);
-    console.log('highestKey', highestKey);
-    console.log('data64', data64);
-    console.log('skipDecodeBase64', skipDecodeBase64);
-    console.log('decodeForNumber', decodeForNumber);
-    console.log('decodedData', decodedData);
+
     // Check if we have a valid secret key for the extracted highestKey
     if (!secretKeyObject[highestKey]) {
-      console.log('secretKeyObject', secretKeyObject);
-      console.log('highestKey', highestKey);
-      console.log('data64', data64);
-      console.log('skipDecodeBase64', skipDecodeBase64);
-      console.log('decodeForNumber', decodeForNumber);
-      console.log('decodedData', decodedData);
       throw new Error(
         i18n.t('auth:message.error.find_secret_key', {
           postProcess: 'capitalizeFirstChar',
