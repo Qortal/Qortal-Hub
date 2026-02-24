@@ -102,9 +102,48 @@ const hasExtension = (filename) => {
 
 export const saveFileToDisk = async (data, qortAddress) => {
   const dataString = JSON.stringify(data);
-  const blob = new Blob([dataString], { type: 'application/json' });
   const fileName = 'qortal_backup_' + qortAddress + '.json';
 
+  // Electron: native save dialog then write file via IPC
+  if (typeof window !== 'undefined' && window.electron?.startStreamSave) {
+    const saveResult = await window.electron.startStreamSave({
+      filename: fileName,
+      mimeType: 'application/json',
+    });
+    if (saveResult?.canceled || !saveResult?.filePath) return;
+    const encoder = new TextEncoder();
+    const chunk = encoder.encode(dataString);
+    await window.electron.writeChunk(saveResult.filePath, chunk, false);
+    return;
+  }
+
+  // Web: File System Access API for a real file picker when supported
+  if (
+    typeof window !== 'undefined' &&
+    'showSaveFilePicker' in window
+  ) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(dataString);
+      await writable.close();
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return; // User canceled
+      // Fall through to FileSaver fallback on other errors
+    }
+  }
+
+  // Fallback: classic download (no guaranteed file picker)
+  const blob = new Blob([dataString], { type: 'application/json' });
   await FileSaver.saveAs(blob, fileName);
 };
 
