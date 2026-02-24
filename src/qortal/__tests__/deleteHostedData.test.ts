@@ -1,170 +1,90 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks (hoisted before any import) ────────────────────────────────
+// Factories live in ./common.ts; async dynamic import is used because vi.mock()
+// is hoisted before regular imports.
 
-vi.mock('../qortal-requests', () => ({
-  isRunningGateway: vi.fn(),
-  getPermission: vi.fn(),
-  setPermission: vi.fn(),
-  setSessionPermissions: vi.fn(),
-  hasSessionPermission: vi.fn(),
-  VALID_SESSION_PERMISSIONS: [],
-  AUTO_GRANTED_PERMISSIONS_ON_AUTH: [],
-}));
-
-vi.mock('../../background/background', () => ({
-  createEndpoint: vi.fn(),
-  gateways: [],
-  getApiKeyFromStorage: vi.fn(),
-  getNameInfoForOthers: vi.fn(),
-  getBalanceInfo: vi.fn(),
-  getFee: vi.fn(),
-  getKeyPair: vi.fn(),
-  getLastRef: vi.fn(),
-  getSaveWallet: vi.fn(),
-  processTransactionVersion2: vi.fn(),
-  signChatFunc: vi.fn(),
-  joinGroup: vi.fn(),
-  sendQortFee: vi.fn(),
-  sendCoin: vi.fn(),
-  createBuyOrderTx: vi.fn(),
-  performPowTask: vi.fn(),
-  parseErrorResponse: vi.fn(),
-  groupSecretkeys: vi.fn(),
-  registerName: vi.fn(),
-  updateName: vi.fn(),
-  leaveGroup: vi.fn(),
-  inviteToGroup: vi.fn(),
-  kickFromGroup: vi.fn(),
-  banFromGroup: vi.fn(),
-  cancelBan: vi.fn(),
-  makeAdmin: vi.fn(),
-  removeAdmin: vi.fn(),
-  cancelInvitationToGroup: vi.fn(),
-  createGroup: vi.fn(),
-  updateGroup: vi.fn(),
-  sellName: vi.fn(),
-  cancelSellName: vi.fn(),
-  buyName: vi.fn(),
-  getBaseApi: vi.fn(),
-  getAssetBalanceInfo: vi.fn(),
-  getNameOrAddress: vi.fn(),
-  getAssetInfo: vi.fn(),
-  getPublicKey: vi.fn(),
-  transferAsset: vi.fn(),
-  sendChatNotification: vi.fn(),
-  sendChatGroup: vi.fn(),
-}));
-
-vi.mock('../../encryption/encryption', () => ({
-  encryptAndPublishSymmetricKeyGroupChat: vi.fn(),
-  getAllUserNames: vi.fn(),
-  getNameInfo: vi.fn(),
-  uint8ArrayToObject: vi.fn(),
-}));
-
-vi.mock('../../components/Chat/AdminSpaceInner', () => ({
-  getPublishesFromAdminsAdminSpace: vi.fn(),
-}));
-
-vi.mock('../../components/Chat/MessageDisplay', () => ({
-  extractComponents: vi.fn(),
-}));
-
-vi.mock('../../components/Group/Group', () => ({
-  decryptResource: vi.fn(),
-  getGroupAdmins: vi.fn(),
-  getPublishesFromAdmins: vi.fn(),
-  validateSecretKey: vi.fn(),
-}));
-
-vi.mock('../../qdn/encryption/group-encryption', () => ({
-  base64ToUint8Array: vi.fn(),
-  createSymmetricKeyAndNonce: vi.fn(),
-  decryptDeprecatedSingle: vi.fn(),
-  decryptGroupDataQortalRequest: vi.fn(),
-  decryptGroupEncryptionWithSharingKey: vi.fn(),
-  decryptSingle: vi.fn(),
-  encryptDataGroup: vi.fn(),
-  encryptSingle: vi.fn(),
-  hasPrivateString: vi.fn(),
-  objectToBase64: vi.fn(),
-  uint8ArrayStartsWith: vi.fn(),
-  uint8ArrayToBase64: vi.fn(),
-}));
-
-vi.mock('../../qdn/publish/publish', () => ({
-  publishData: vi.fn(),
-}));
-
-vi.mock('../../transactions/TradeBotCreateRequest', () => ({
-  default: vi.fn(),
-}));
-
-vi.mock('../../transactions/TradeBotDeleteRequest', () => ({
-  default: vi.fn(),
-}));
-
-vi.mock('../../transactions/signTradeBotTransaction', () => ({
-  default: vi.fn(),
-}));
-
-vi.mock('../../transactions/transactions', () => ({
-  createTransaction: vi.fn(),
-}));
-
-vi.mock('../../utils/events', () => ({
-  executeEvent: vi.fn(),
-}));
-
-vi.mock('../../utils/fileReading/index', () => ({
-  fileToBase64: vi.fn(),
-}));
-
-vi.mock('../../utils/memeTypes', () => ({
-  mimeToExtensionMap: {},
-}));
-
-vi.mock('../../utils/queue/queue', () => ({
-  RequestQueueWithPromise: vi.fn().mockImplementation(() => ({
-    enqueue: vi.fn(),
-  })),
-}));
-
-vi.mock('../../utils/utils', () => ({
-  default: { some: vi.fn() },
-}));
-
-vi.mock('short-unique-id', () => ({
-  default: vi.fn().mockImplementation(() => ({ rnd: vi.fn(() => 'abc123') })),
-}));
-
-vi.mock('../../utils/decode', () => ({
-  isValidBase64WithDecode: vi.fn(),
-  validateAesCtrIvAndKey: vi.fn(),
-}));
-
-vi.mock('i18next', () => ({
-  default: { t: vi.fn((key: string) => key) },
-}));
-
-vi.mock('aes-js', () => ({ default: {} }));
-vi.mock('../../encryption/Base58', () => ({ default: {} }));
-vi.mock('../../encryption/ed2curve', () => ({ default: {} }));
-vi.mock('../../encryption/nacl-fast', () => ({ default: {} }));
-vi.mock('asmcrypto.js', () => ({ Sha256: {} }));
-
-vi.mock('../../hooks/useQortalMessageListener', () => ({
-  showSaveFilePicker: vi.fn(),
-  listOfAllQortalRequests: [],
-  UIQortalRequests: [],
-}));
+vi.mock('../qortal-requests', async () =>
+  (await import('./common')).qortalRequestsFactory()
+);
+vi.mock('../../background/background', async () =>
+  (await import('./common')).backgroundFactory()
+);
+vi.mock('../../encryption/encryption', async () =>
+  (await import('./common')).encryptionFactory()
+);
+vi.mock('../../components/Chat/AdminSpaceInner', async () =>
+  (await import('./common')).adminSpaceFactory()
+);
+vi.mock('../../components/Chat/MessageDisplay', async () =>
+  (await import('./common')).messageDisplayFactory()
+);
+vi.mock('../../components/Group/Group', async () =>
+  (await import('./common')).groupFactory()
+);
+vi.mock('../../qdn/encryption/group-encryption', async () =>
+  (await import('./common')).groupEncryptionFactory()
+);
+vi.mock('../../qdn/publish/publish', async () =>
+  (await import('./common')).publishFactory()
+);
+vi.mock('../../transactions/TradeBotCreateRequest', async () =>
+  (await import('./common')).tradeBotCreateFactory()
+);
+vi.mock('../../transactions/TradeBotDeleteRequest', async () =>
+  (await import('./common')).tradeBotDeleteFactory()
+);
+vi.mock('../../transactions/signTradeBotTransaction', async () =>
+  (await import('./common')).signTradeBotFactory()
+);
+vi.mock('../../transactions/transactions', async () =>
+  (await import('./common')).transactionsFactory()
+);
+vi.mock('../../utils/events', async () =>
+  (await import('./common')).eventsFactory()
+);
+vi.mock('../../utils/fileReading/index', async () =>
+  (await import('./common')).fileReadingFactory()
+);
+vi.mock('../../utils/memeTypes', async () =>
+  (await import('./common')).mimeTypesFactory()
+);
+vi.mock('../../utils/queue/queue', async () =>
+  (await import('./common')).queueFactory()
+);
+vi.mock('../../utils/utils', async () =>
+  (await import('./common')).utilsFactory()
+);
+vi.mock('short-unique-id', async () =>
+  (await import('./common')).shortUidFactory()
+);
+vi.mock('../../utils/decode', async () =>
+  (await import('./common')).decodeFactory()
+);
+vi.mock('i18next', async () => (await import('./common')).i18nFactory());
+vi.mock('aes-js', async () => (await import('./common')).aesFactory());
+vi.mock('../../encryption/Base58', async () =>
+  (await import('./common')).base58Factory()
+);
+vi.mock('../../encryption/ed2curve', async () =>
+  (await import('./common')).ed2curveFactory()
+);
+vi.mock('../../encryption/nacl-fast', async () =>
+  (await import('./common')).naclFactory()
+);
+vi.mock('asmcrypto.js', async () =>
+  (await import('./common')).asmcryptoFactory()
+);
+vi.mock('../../hooks/useQortalMessageListener', async () =>
+  (await import('./common')).messageListenerFactory()
+);
 
 // ── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { deleteHostedData } from '../get';
 import { isRunningGateway } from '../qortal-requests';
 import { createEndpoint } from '../../background/background';
+import { simulatePermission } from './common';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -179,32 +99,6 @@ const makeItem = (n: number): HostedDataItem => ({
   name: `name${n}`,
   identifier: `id${n}`,
 });
-
-/**
- * Register a one-shot listener that responds to the outgoing
- * QORTAL_REQUEST_PERMISSION postMessage with an acceptance/rejection result.
- * get.ts attaches its own `handleMessage` listener at module load time, so
- * posting QORTAL_REQUEST_PERMISSION_RESPONSE back to window is enough to
- * resolve the getUserPermission() promise.
- */
-function simulatePermission(accepted: boolean) {
-  window.addEventListener(
-    'message',
-    (event: MessageEvent) => {
-      if (event.data?.action === 'QORTAL_REQUEST_PERMISSION') {
-        window.postMessage(
-          {
-            action: 'QORTAL_REQUEST_PERMISSION_RESPONSE',
-            requestId: event.data.requestId,
-            result: { accepted },
-          },
-          window.location.origin
-        );
-      }
-    },
-    { once: true }
-  );
-}
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -370,9 +264,7 @@ describe('deleteHostedData', () => {
 
   it('issues a DELETE request to the correct URL for each item', async () => {
     simulatePermission(true);
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValue({ ok: true, status: 200 });
+    const mockFetch = vi.fn().mockResolvedValue({ ok: true, status: 200 });
     vi.stubGlobal('fetch', mockFetch);
 
     await deleteHostedData(
