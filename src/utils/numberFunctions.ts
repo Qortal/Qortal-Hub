@@ -62,3 +62,8 @@ export function formatTime(seconds: number): string {
 
   return hours + remainingMinutes + ':' + remainingSeconds;
 }
+
+export function roundUpToDecimals(number, decimals = 8) {
+  const factor = Math.pow(10, decimals); // Create a factor based on the number of decimals
+  return Math.ceil(+number * factor) / factor;
+}

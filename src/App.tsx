@@ -106,6 +106,7 @@ import {
   CustomTitleBar,
   CUSTOM_TITLE_BAR_HEIGHT,
 } from './components/Desktop/CustomTitleBar';
+import { roundUpToDecimals } from './utils/numberFunctions.ts';
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -782,11 +783,6 @@ function App() {
     setSendqortState(null);
     resetAllRecoil();
   };
-
-  function roundUpToDecimals(number, decimals = 8) {
-    const factor = Math.pow(10, decimals); // Create a factor based on the number of decimals
-    return Math.ceil(+number * factor) / factor;
-  }
 
   const authenticateWallet = async () => {
     try {
