@@ -132,9 +132,14 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const getImage = async ({ identifier, name, service }, key, parsedData) => {
+  const getImage = async (
+    { identifier, name, service },
+    key,
+    parsedData,
+    forceRefresh = false
+  ) => {
     try {
-      if (blobUrl?.blobUrl) {
+      if (!forceRefresh && blobUrl?.blobUrl) {
         return blobUrl?.blobUrl;
       }
       let numberOfTries = 0;
@@ -285,7 +290,7 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const handleImage = async (parsedData) => {
+  const handleImage = async (parsedData, forceRefresh = false) => {
     try {
       setIsLoading(true);
       setErrorMsg('');
@@ -302,7 +307,8 @@ export const Embed = ({ embedLink }) => {
           identifier: parsedData?.identifier,
         },
         parsedData?.key,
-        parsedData
+        parsedData,
+        forceRefresh
       );
 
       setImageUrl(image);
@@ -362,10 +368,10 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const fetchImage = () => {
+  const fetchImage = (forceRefresh = false) => {
     try {
       const parsedData = parseQortalLink(embedLink);
-      handleImage(parsedData);
+      handleImage(parsedData, forceRefresh);
     } catch (error) {
       setErrorMsg(
         error?.message ||
@@ -374,6 +380,17 @@ export const Embed = ({ embedLink }) => {
           })
       );
     }
+  };
+
+  const refreshImage = () => {
+    if (keyIdentifier) {
+      setBlobs((prev) => {
+        const next = { ...prev };
+        delete next[keyIdentifier];
+        return next;
+      });
+    }
+    fetchImage(true);
   };
 
   const openExternal = () => {
@@ -425,7 +442,7 @@ export const Embed = ({ embedLink }) => {
           image={imageUrl}
           owner={parsedData?.name}
           fetchImage={fetchImage}
-          refresh={fetchImage}
+          refresh={refreshImage}
           setInfoSnack={setInfoSnack}
           setOpenSnack={setOpenSnack}
           external={external}
