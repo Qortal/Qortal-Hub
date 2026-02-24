@@ -66,7 +66,7 @@ const AppRatingInner = ({ app, myName, ratingCountPosition = 'right' }) => {
         if (hasPublishedRating === false) {
           const pollName = `app-library-${app.service}-rating-${app.name}`;
           const pollOptions = [`1, 2, 3, 4, 5, initialValue-${newValue}`];
-          const pollDescription = t('core:message.error.generic', {
+          const pollDescription = t('core:message.generic.rating', {
             name: app.name,
             service: app.service,
             postProcess: 'capitalizeFirstChar',
