@@ -5565,10 +5565,6 @@ export const sendCoin = async (data, isFromExtension) => {
   }
 };
 
-function calculateFeeFromRate(feePerKb, sizeInBytes) {
-  return (feePerKb / 1000) * sizeInBytes;
-}
-
 const getBuyingFees = async (foreignBlockchain) => {
   const ticker = SELLER_FOREIGN_FEE[foreignBlockchain].ticker;
   if (!ticker) throw new Error('invalid foreign blockchain');
