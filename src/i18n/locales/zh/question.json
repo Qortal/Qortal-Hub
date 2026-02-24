@@ -100,7 +100,7 @@
       "use_private_service": "请使用以 _PRIVATE 结尾的服务进行加密发布",
       "user_qortal_name": "用户没有 Qortal 名称",
       "max_size_publish": "每个文件允许的最大大小为 {{size}} GB。",
-      "max_size_publish_public": "公共节点允许的最大文件大小为 {{size}} MB。请使用本地节点上传更大文件。"
+      "max_size_publish_public": "共享节点允许的最大文件大小为 {{size}} MB。请使用本地节点上传更大文件。"
     },
     "generic": {
       "calculate_fee": "*{{ amount }} 聪的费用是基于每 KB {{ rate }} 聪的费率，交易大约为 300 字节。",
@@ -108,7 +108,7 @@
       "include_data_decrypt": "请提供需要解密的数据",
       "include_data_encrypt": "请提供需要加密的数据",
       "max_retry_transaction": "已达到最大重试次数。跳过该交易。",
-      "no_action_public_node": "此操作无法通过公共节点执行",
+      "no_action_public_node": "此操作无法通过共享节点执行",
       "private_service": "请使用私有服务",
       "provide_group_id": "请提供 groupId",
       "read_transaction_carefully": "请在确认前仔细阅读交易内容！",

@@ -17,7 +17,7 @@
     "not_synchronized": "ei synkronoitu",
     "synchronized": "synkronoitu",
     "synchronized_desc": "olet nyt synkronoitu. voit jatkaa.",
-    "description": "Jos et halua odottaa, että Local Node synkronoituu, jatka toistaiseksi publicin avulla. (Jos tiedät, että node on jäljessä/pois päältä, voit silti jatkaa localin kautta tai vaihtaa public nodeen.)"
+    "description": "Jos et halua odottaa, että paikallinen solmusi synkronoituu, jatka toistaiseksi jaetulla solmulla. (Jos tiedät, että solmusi on jäljessä/pois päältä, voit silti jatkaa paikallisella solmulla tai vaihtaa jaettuun solmuun.)"
   },
   "steps": {
     "java": "java on asennettu",
@@ -28,12 +28,12 @@
     "finished": "valmis",
     "start": "käynnistä Qortal Core",
     "install": "asenna ja käynnistä Qortal Core",
-    "continuePublic": "jatka julkisella solmulla",
+    "continuePublic": "jatka jaetulla solmulla",
     "openSetup": "avaa paikallinen asetus",
     "goToDownloads": "siirry latauksiin",
     "resetKey": "nollaa apikey",
     "continue": "jatka",
-    "continueLocal": "jatka Localilla"
+    "continueLocal": "jatka paikallisella solmulla"
   },
   "error": {
     "noJar": "valittu hakemisto ei sisällä qortal.jar -tiedostoa",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "paikallisen core-ytimen käyttö",
-    "description": "Voit halutessasi jatkaa public nodella, mutta suosittelemme vahvasti käyttämään local nodea parhaan käyttökokemuksen saamiseksi. (Jos yrität käyttää ilman yhteyttä, voit jatkaa publicilla ilman yhteyttä.)",
+    "description": "Voit halutessasi jatkaa jaetulla solmulla, mutta suosittelemme vahvasti käyttämään paikallista solmuasi parhaan käyttökokemuksen saamiseksi. (Jos yrität käyttää ilman yhteyttä, voit jatkaa jaetulla solmulla myös ilman yhteyttä.)",
     "subTitle": "paikallisen solmun käytön edut:",
     "point1": "täysi hajautettu pääsy",
     "point2": "nopeammat lataukset",
     "point3": "käyttäjän hallitsema data",
-    "publicExplanation": "julkinen solmu, johon yhdistät, on itse asiassa yksityisesti ylläpidetty solmu, joka on tehty julkisesti saataville. Vaikka se on kätevä, siihen liittyy tiettyjä rajoituksia verrattuna oman solmun ajamiseen."
+    "publicExplanation": "jaettu solmu, johon yhdistät, on itse asiassa yksityisesti ylläpidetty solmu, joka on avattu yhteisön käyttöön. Vaikka se on kätevä, siihen liittyy tiettyjä rajoituksia verrattuna oman solmun ajamiseen."
   },
   "invalidKey": {
     "title": "virheellinen apikey",

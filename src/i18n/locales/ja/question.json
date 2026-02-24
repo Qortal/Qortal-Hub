@@ -100,7 +100,7 @@
       "use_private_service": "暗号化された公開には、_PRIVATEで終わるサービスを使用してください",
       "user_qortal_name": "ユーザーはQortal名を持っていません",
       "max_size_publish": "ファイルごとの最大サイズは{{size}}GBです。",
-      "max_size_publish_public": "公開ノードで許可されている最大ファイルサイズは{{size}}MBです。より大きなファイルにはローカルノードを使用してください。"
+      "max_size_publish_public": "共有ノードで許可されている最大ファイルサイズは{{size}}MBです。より大きなファイルにはローカルノードを使用してください。"
     },
     "generic": {
       "calculate_fee": "*{{ amount }} sats の手数料は、約300バイトのトランザクションに対して、{{ rate }} sats/KB に基づいて算出されています。",
@@ -108,7 +108,7 @@
       "include_data_decrypt": "復号するデータを含めてください",
       "include_data_encrypt": "暗号化するデータを含めてください",
       "max_retry_transaction": "最大リトライ回数に達しました。トランザクションをスキップします。",
-      "no_action_public_node": "この操作はパブリックノードでは実行できません",
+      "no_action_public_node": "この操作は共有ノードでは実行できません",
       "private_service": "プライベートサービスを使用してください",
       "provide_group_id": "groupId を提供してください",
       "read_transaction_carefully": "トランザクションを承認する前に内容をよく確認してください！",

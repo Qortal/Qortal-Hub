@@ -17,7 +17,7 @@
     "not_synchronized": "not synchronized",
     "synchronized": "synchronized",
     "synchronized_desc": "you are now synchronized. you may continue.",
-    "description": "If you do not want to wait until your Local Node is synced, continue with public for now. (If you are aware that your node is behind/off, you can continue with local anyway, or switch to public node.)"
+    "description": "If you do not want to wait until your local node is synced, continue with a shared node for now. (If you are aware that your node is behind/off, you can continue with local anyway, or switch to a shared node.)"
   },
   "steps": {
     "java": "has java",
@@ -28,8 +28,8 @@
     "finished": "finished",
     "start": "start Qortal Core",
     "install": "install and start Qortal Core",
-    "continuePublic": "continue with public node",
-    "continueLocal": "continue with Local",
+    "continuePublic": "continue with shared node",
+    "continueLocal": "continue with local node",
     "openSetup": "open local setup",
     "goToDownloads": "go to downloads",
     "resetKey": "reset apikey",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "using your local core",
-    "description": "you may proceed with the public node if you wish, but we strongly recommend using your local node for the best experience. (If you are attempting to access with no connectivity, you may continue with public without a connection.)",
+    "description": "you may proceed with the shared node if you wish, but we strongly recommend using your local node for the best experience. (If you are attempting to access with no connectivity, you may continue with shared without a connection.)",
     "subTitle": "advantages of using a local node:",
     "point1": "full decentralized access",
     "point2": "faster downloads",
     "point3": "user-controlled data",
-    "publicExplanation": " The public node you connect to is actually a privately operated node that has been made publicly accessible. While convenient, it comes with certain limitations compared to running your own."
+    "publicExplanation": " The shared node you connect to is a privately operated node that has been made accessible to the community. While convenient, it comes with certain limitations compared to running your own node."
   },
   "invalidKey": {
     "title": "invalid apikey",

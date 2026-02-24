@@ -17,7 +17,7 @@
     "not_synchronized": "non synchronisé",
     "synchronized": "synchronisé",
     "synchronized_desc": "vous êtes maintenant synchronisé. vous pouvez continuer.",
-    "description": "Si vous ne souhaitez pas attendre que votre Local Node se synchronise, continuez pour l’instant avec public. (Si vous savez que votre node est en retard/éteint, vous pouvez tout de même continuer avec local ou passer au public node.)"
+    "description": "Si vous ne souhaitez pas attendre que votre nœud local se synchronise, continuez pour l’instant avec un nœud partagé. (Si vous savez que votre nœud est en retard/arrêté, vous pouvez tout de même continuer avec votre nœud local ou passer à un nœud partagé.)"
   },
   "steps": {
     "java": "Java installé",
@@ -28,12 +28,12 @@
     "finished": "terminé",
     "start": "démarrer Qortal Core",
     "install": "installer et démarrer Qortal Core",
-    "continuePublic": "continuer avec le nœud public",
+    "continuePublic": "continuer avec le nœud partagé",
     "openSetup": "ouvrir la configuration locale",
     "goToDownloads": "aller aux téléchargements",
     "resetKey": "réinitialiser la clé API",
     "continue": "continuer",
-    "continueLocal": "continuer avec Local"
+    "continueLocal": "continuer avec le nœud local"
   },
   "error": {
     "noJar": "le répertoire choisi ne contient pas de qortal.jar",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "utiliser votre nœud local",
-    "description": "Vous pouvez continuer avec le public node si vous le souhaitez, mais nous recommandons fortement d’utiliser votre local node pour une meilleure expérience. (Si vous tentez d’accéder sans connectivité, vous pouvez continuer avec public sans connexion.)",
+    "description": "Vous pouvez continuer avec le nœud partagé si vous le souhaitez, mais nous recommandons fortement d’utiliser votre nœud local pour la meilleure expérience. (Si vous tentez d’accéder sans connectivité, vous pouvez continuer avec le nœud partagé sans connexion.)",
     "subTitle": "avantages d’un nœud local :",
     "point1": "accès totalement décentralisé",
     "point2": "téléchargements plus rapides",
     "point3": "données contrôlées par l’utilisateur",
-    "publicExplanation": "Le nœud public auquel vous vous connectez est en réalité un nœud privé rendu accessible au public. Bien que pratique, il présente certaines limites par rapport à l'exécution du vôtre."
+    "publicExplanation": "Le nœud partagé auquel vous vous connectez est en réalité un nœud opéré de manière privée et rendu accessible à la communauté. Bien que pratique, il présente certaines limites par rapport à l’exécution de votre propre nœud."
   },
   "invalidKey": {
     "title": "clé API invalide",

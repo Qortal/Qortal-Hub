@@ -2,6 +2,7 @@ import {
   HTTP_LOCALHOST_12391,
   HTTPS_EXT_NODE_QORTAL_LINK,
 } from '../constants/constants';
+import i18n from '../i18n/i18n.ts';
 
 export const delay = (time: number) =>
   new Promise((_, reject) =>
@@ -35,10 +36,9 @@ export function updateMessageDetails(
 export const nodeDisplay = (url) => {
   switch (url) {
     case HTTP_LOCALHOST_12391:
-      // code block
-      return 'Local';
+      return i18n.t('auth:node.local_label', { defaultValue: 'local node' });
     case HTTPS_EXT_NODE_QORTAL_LINK:
-      return 'Public';
+      return i18n.t('auth:node.shared_label', { defaultValue: 'shared node' });
     default:
       return url;
   }

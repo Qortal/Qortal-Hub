@@ -100,7 +100,7 @@
       "use_private_service": "salattuun julkaisuun käytä palvelua, joka päättyy tunnukseen _PRIVATE",
       "user_qortal_name": "käyttäjällä ei ole Qortal-nimeä",
       "max_size_publish": "suurin sallittu tiedostokoko on {{size}} Gt tiedostoa kohden.",
-      "max_size_publish_public": "suurin sallittu tiedostokoko julkisella solmulla on {{size}} Mt. Käytä paikallista solmuasi suuremmille tiedostoille."
+      "max_size_publish_public": "suurin sallittu tiedostokoko jaetulla solmulla on {{size}} Mt. Käytä paikallista solmuasi suuremmille tiedostoille."
     },
     "generic": {
       "calculate_fee": "*{{ amount }} sats maksu on johdettu {{ rate }} satseista per kt, transaktiolle, jonka koko on noin 300 tavua.",
@@ -108,7 +108,7 @@
       "include_data_decrypt": "sisällytä tiedot salauksen purkamiseksi",
       "include_data_encrypt": "sisällytä tiedot salaamiseksi",
       "max_retry_transaction": "enimmäismäärä uudelleenyrityksiä saavutettu. Ohitetaan transaktio.",
-      "no_action_public_node": "tätä toimenpidettä ei voi suorittaa julkisen solmun kautta",
+      "no_action_public_node": "tätä toimenpidettä ei voi suorittaa jaetun solmun kautta",
       "private_service": "käytä yksityistä palvelua",
       "provide_group_id": "anna groupId",
       "read_transaction_carefully": "lue transaktio huolellisesti ennen hyväksymistä!",

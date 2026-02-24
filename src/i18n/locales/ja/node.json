@@ -17,7 +17,7 @@
     "not_synchronized": "未同期",
     "synchronized": "同期済み",
     "synchronized_desc": "現在同期されています。続行できます。",
-    "description": "Local Node の同期を待ちたくない場合は、とりあえず public で続行できます。 (node が遅れている／オフになっていると分かっている場合でも、local で続行するか、public node に切り替えることができます。)"
+    "description": "ローカルノードの同期を待ちたくない場合は、ひとまず共有ノードで続行できます。 (ノードが遅れている／停止していると分かっている場合でも、ローカルノードで続行するか、共有ノードに切り替えることができます。)"
   },
   "steps": {
     "java": "Java がある",
@@ -28,12 +28,12 @@
     "finished": "完了",
     "start": "Qortal Core を起動",
     "install": "Qortal Core をインストールして起動",
-    "continuePublic": "パブリックノードで続行",
+    "continuePublic": "共有ノードで続行",
     "openSetup": "ローカルセットアップを開く",
     "goToDownloads": "ダウンロードに移動",
     "resetKey": "APIキーをリセット",
     "continue": "続行",
-    "continueLocal": "Local で続行"
+    "continueLocal": "ローカルノードで続行"
   },
   "error": {
     "noJar": "選択されたディレクトリに qortal.jar が存在しません",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "ローカルノードの使用",
-    "description": "public node で続行することもできますが、最高の体験のためには local node を使用することを強く推奨します。 (接続がない状態でアクセスしようとしている場合は、public で接続なしのまま続行できます。)",
+    "description": "共有ノードで続行することもできますが、最高の体験のためにはローカルノードを使用することを強く推奨します。 (接続がない状態でアクセスしようとしている場合は、共有ノードで接続なしのまま続行できます。)",
     "subTitle": "ローカルノードを使用する利点：",
     "point1": "完全に分散化されたアクセス",
     "point2": "高速なダウンロード",
     "point3": "ユーザーが制御するデータ",
-    "publicExplanation": "接続するパブリックノードは、実際には公開されたプライベートノードです。便利ですが、自分でノードを実行する場合と比べて制限があります。"
+    "publicExplanation": "接続する共有ノードは、実際には個人または組織が運用し、コミュニティに公開しているノードです。便利ですが、自分でノードを実行する場合と比べて制限があります。"
   },
   "invalidKey": {
     "title": "無効な APIキー",

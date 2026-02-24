@@ -537,7 +537,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      {HTTP_LOCALHOST_12391} (Local node)
+                      {HTTP_LOCALHOST_12391} ({t('auth:node.local_label')})
                     </Typography>
 
                     <Box
@@ -598,7 +598,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      {HTTPS_EXT_NODE_QORTAL_LINK} (Public node)
+                      {HTTPS_EXT_NODE_QORTAL_LINK} ({t('auth:node.shared_label')})
                     </Typography>
 
                     <Box

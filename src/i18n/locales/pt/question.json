@@ -93,7 +93,6 @@
       "transaction_activity_summary": "erro no resumo de atividades de transações",
       "unknown_error": "erro desconhecido",
       "unknown_admin_action_type": "tipo de ação administrativa desconhecida: {{ type }}",
-
       "update_foreign_fee": "falha ao atualizar a taxa externa",
       "update_tradebot": "não foi possível atualizar o robô de troca",
       "upload_encryption": "falha no envio devido à falha na criptografia",
@@ -101,7 +100,7 @@
       "use_private_service": "para uma publicação criptografada, utilize um serviço que termine com _PRIVATE",
       "user_qortal_name": "o usuário não possui um nome na QDN",
       "max_size_publish": "o tamanho máximo permitido por arquivo é {{size}} GB.",
-      "max_size_publish_public": "o tamanho máximo permitido no nó público é {{size}} MB. Por favor, use seu nó local para arquivos maiores."
+      "max_size_publish_public": "o tamanho máximo permitido no nó compartilhado é {{size}} MB. Por favor, use seu nó local para arquivos maiores."
     },
     "generic": {
       "calculate_fee": "*a taxa de {{ amount }} sats é derivada de {{ rate }} sats por kb, para uma transação de aproximadamente 300 bytes.",
@@ -109,7 +108,7 @@
       "include_data_decrypt": "por favor, inclua os dados a serem descriptografados",
       "include_data_encrypt": "por favor, inclua os dados a serem criptografados",
       "max_retry_transaction": "número máximo de tentativas atingido. Pulando transação.",
-      "no_action_public_node": "esta ação não pode ser realizada através de um nó público",
+      "no_action_public_node": "esta ação não pode ser realizada através de um nó compartilhado",
       "private_service": "por favor, use um serviço privado",
       "provide_group_id": "por favor, forneça o groupId",
       "read_transaction_carefully": "leia a transação com atenção antes de aceitar!",

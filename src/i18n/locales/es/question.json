@@ -100,7 +100,7 @@
       "use_private_service": "para publicaciones cifradas, utilice un servicio que termine en _PRIVATE",
       "user_qortal_name": "el usuario no tiene un nombre Qortal",
       "max_size_publish": "el tamaño máximo permitido por archivo es de {{size}} GB.",
-      "max_size_publish_public": "el tamaño máximo permitido en el nodo público es de {{size}} MB. Utilice su nodo local para archivos más grandes."
+      "max_size_publish_public": "el tamaño máximo permitido en el nodo compartido es de {{size}} MB. Utilice su nodo local para archivos más grandes."
     },
     "generic": {
       "calculate_fee": "*La tarifa de {{ amount }} sats se deriva de {{ rate }} sats por KB, para una transacción de aproximadamente 300 bytes.",
@@ -108,7 +108,7 @@
       "include_data_decrypt": "por favor incluya los datos para descifrar",
       "include_data_encrypt": "por favor incluya los datos para cifrar",
       "max_retry_transaction": "se alcanzó el número máximo de reintentos. Saltando transacción.",
-      "no_action_public_node": "esta acción no se puede realizar a través de un nodo público",
+      "no_action_public_node": "esta acción no se puede realizar a través de un nodo compartido",
       "private_service": "por favor utilice un servicio privado",
       "provide_group_id": "por favor proporcione un groupId",
       "read_transaction_carefully": "¡lea cuidadosamente la transacción antes de aceptar!",

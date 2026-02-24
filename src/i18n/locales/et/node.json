@@ -9,7 +9,7 @@
     "paragraph1": "Qortal on detsentraliseeritud platvorm, mis annab sulle täieliku kontrolli oma andmete, rakenduste ja rahaasjade üle. Alustamiseks soovitame sul paigaldada **Qortal Core**'i, mis annab võrgule jõudu ja võimaldab kasutada kõiki Qortali funktsioone.",
     "paragraph2": "See seadistusviisard juhendab sind Qortal Core'i paigaldamisel ja seadistamisel sinu seadmes. Paigaldamisega jätkamiseks klõpsa **Järgmine**.",
     "note": "märkus edasijõudnud kasutajale",
-    "advanced": "kui sa kasutad kaughaaret (remote node), palun sulge see seadistusviisard ja klõpsa seejärel \"Vali kohandatud haare\""
+    "advanced": "kui sa kasutad kaugsõlme (remote node), palun sulge see seadistusviisard ja klõpsa seejärel \"Vali kohandatud sõlm\""
   },
   "sync": {
     "behind": "Sa oled {{count}} plokki maas.",
@@ -17,7 +17,7 @@
     "not_synchronized": "ei ole sünkroonitud",
     "synchronized": "sünkroonitud",
     "synchronized_desc": "sa oled nüüd sünkroonitud. võid jätkata.",
-    "description": "Kui sa ei soovi oodata, kuni sinu Local Node sünkroonib, jätka praegu public abil. (Kui tead, et sinu node on maas/maha jäänud, võid siiski jätkata local kaudu või lülituda public node peale.)"
+    "description": "Kui sa ei soovi oodata, kuni sinu kohalik sõlm sünkroonib, jätka praegu jagatud sõlmega. (Kui tead, et sinu sõlm on maas/maha jäänud, võid siiski jätkata kohaliku sõlmega või lülituda jagatud sõlmele.)"
   },
   "steps": {
     "java": "Java on olemas",
@@ -28,12 +28,12 @@
     "finished": "lõpetatud",
     "start": "käivita Qortal Core",
     "install": "paigalda ja käivita Qortal Core",
-    "continuePublic": "jätka avaliku haardega",
+    "continuePublic": "jätka jagatud sõlmega",
     "openSetup": "ava kohalik seadistus",
     "goToDownloads": "mine allalaadimistesse",
     "resetKey": "lähtesta API-võti",
     "continue": "jätka",
-    "continueLocal": "jätka Local’iga"
+    "continueLocal": "jätka kohaliku sõlmega"
   },
   "error": {
     "noJar": "valitud kaust ei sisalda qortal.jar-faili",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "kohaliku Core'i kasutamine",
-    "description": "Sa võid soovi korral jätkata public node’iga, kuid soovitame tungivalt kasutada oma local node’i parima kogemuse saamiseks. (Kui üritad ligi pääseda ilma ühenduseta, võid jätkata public kaudu ka ilma ühenduseta.)",
-    "subTitle": "kohaliku haarde kasutamise eelised:",
+    "description": "Sa võid soovi korral jätkata jagatud sõlmega, kuid soovitame tungivalt kasutada oma kohalikku sõlme parima kogemuse saamiseks. (Kui üritad ligi pääseda ilma ühenduseta, võid jätkata jagatud sõlmega ka ilma ühenduseta.)",
+    "subTitle": "kohaliku sõlme kasutamise eelised:",
     "point1": "täielik detsentraliseeritud juurdepääs",
     "point2": "kiiremad allalaadimised",
     "point3": "kasutaja kontrollitud andmed",
-    "publicExplanation": "Avalik haare, millega sa ühendud, on tegelikult eraviisiliselt hallatav haare, mis on tehtud avalikult kättesaadavaks. Kuigi see on mugav, kaasnevad sellega teatud piirangud võrreldes oma haarde käitamisega."
+    "publicExplanation": "Jagatud sõlm, millega sa ühendud, on tegelikult eraviisiliselt hallatav sõlm, mis on tehtud kogukonnale kättesaadavaks. Kuigi see on mugav, kaasnevad sellega teatud piirangud võrreldes oma sõlme käitamisega."
   },
   "invalidKey": {
     "title": "sobimatu API-võti",
@@ -76,7 +76,7 @@
   },
   "url": {
     "title": "sobimatu URL",
-    "description": "sobimatu URL või haare ei tööta"
+    "description": "sobimatu URL või sõlm ei tööta"
   },
   "confirmations": {
     "stop": "kas oled kindel, et soovid Core peatada?",

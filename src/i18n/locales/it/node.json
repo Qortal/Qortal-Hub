@@ -17,7 +17,7 @@
     "not_synchronized": "non sincronizzato",
     "synchronized": "sincronizzato",
     "synchronized_desc": "ora sei sincronizzato. puoi continuare.",
-    "description": "Se non vuoi aspettare che il tuo Local Node sia sincronizzato, continua con public per ora. (Se sai che il tuo node è indietro/spento, puoi comunque continuare con local oppure passare a un public node.)"
+    "description": "Se non vuoi aspettare che il tuo nodo locale sia sincronizzato, continua per ora con un nodo condiviso. (Se sai che il tuo nodo è indietro/spento, puoi comunque continuare con il nodo locale oppure passare a un nodo condiviso.)"
   },
   "steps": {
     "java": "ha Java",
@@ -28,12 +28,12 @@
     "finished": "completato",
     "start": "avvia Qortal Core",
     "install": "installa e avvia Qortal Core",
-    "continuePublic": "continua con nodo pubblico",
+    "continuePublic": "continua con nodo condiviso",
     "openSetup": "apri configurazione locale",
     "goToDownloads": "vai ai download",
     "resetKey": "reimposta apikey",
     "continue": "continua",
-    "continueLocal": "continua con Local"
+    "continueLocal": "continua con nodo locale"
   },
   "error": {
     "noJar": "la directory scelta non contiene un file qortal.jar",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "utilizzo del tuo core locale",
-    "description": "Puoi procedere con il public node se lo desideri, ma consigliamo vivamente di usare il tuo local node per la migliore esperienza. (Se stai tentando di accedere senza connettività, puoi continuare con public senza connessione.)",
+    "description": "Puoi procedere con il nodo condiviso se lo desideri, ma consigliamo vivamente di usare il tuo nodo locale per la migliore esperienza. (Se stai tentando di accedere senza connettività, puoi continuare con il nodo condiviso anche senza connessione.)",
     "subTitle": "vantaggi dell'utilizzo di un nodo locale:",
     "point1": "accesso completamente decentralizzato",
     "point2": "download più veloci",
     "point3": "dati controllati dall'utente",
-    "publicExplanation": "Il nodo pubblico a cui ti connetti è in realtà un nodo privato reso accessibile pubblicamente. Sebbene conveniente, ha alcune limitazioni rispetto all'esecuzione di uno proprio."
+    "publicExplanation": "Il nodo condiviso a cui ti connetti è in realtà un nodo gestito privatamente e reso accessibile alla community. Sebbene conveniente, ha alcune limitazioni rispetto all’esecuzione del tuo nodo."
   },
   "invalidKey": {
     "title": "apikey non valida",

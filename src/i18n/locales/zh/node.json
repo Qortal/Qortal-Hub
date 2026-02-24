@@ -17,7 +17,7 @@
     "not_synchronized": "未同步",
     "synchronized": "已同步",
     "synchronized_desc": "您现在已同步，可以继续。",
-    "description": "如果你不想等待你的 Local Node 完成同步，可以先使用 public 继续。 (如果你知道你的 node 落后/离线，你仍然可以继续使用 local，或切换到 public node。)"
+    "description": "如果你不想等待你的本地节点完成同步，可以先使用共享节点继续。 (如果你知道你的节点落后/离线，你仍然可以继续使用本地节点，或切换到共享节点。)"
   },
   "steps": {
     "java": "已安装 Java",
@@ -28,12 +28,12 @@
     "finished": "已完成",
     "start": "启动 Qortal Core",
     "install": "安装并启动 Qortal Core",
-    "continuePublic": "继续使用公共节点",
+    "continuePublic": "继续使用共享节点",
     "openSetup": "打开本地设置",
     "goToDownloads": "前往下载",
     "resetKey": "重置 API 密钥",
     "continue": "继续",
-    "continueLocal": "继续使用 Local"
+    "continueLocal": "继续使用本地节点"
   },
   "error": {
     "noJar": "所选目录不包含 qortal.jar",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "使用你的本地核心",
-    "description": "如果你愿意，你可以继续使用 public node，但我们强烈建议使用你的 local node 以获得最佳体验。 (如果你在没有连接的情况下尝试访问，你可以在无连接时继续使用 public。)",
+    "description": "如果你愿意，你可以继续使用共享节点，但我们强烈建议使用你的本地节点以获得最佳体验。 (如果你在没有连接的情况下尝试访问，你可以在无连接时继续使用共享节点。)",
     "subTitle": "使用本地节点的优点：",
     "point1": "完全去中心化访问",
     "point2": "下载更快",
     "point3": "用户控制的数据",
-    "publicExplanation": "你连接的公共节点实际上是一个对外开放的私人节点。虽然方便，但相比自己运行节点有一些限制。"
+    "publicExplanation": "你连接的共享节点实际上是一个由私人运营并向社区开放的节点。虽然方便，但相比自己运行节点有一些限制。"
   },
   "invalidKey": {
     "title": "无效的 API 密钥",

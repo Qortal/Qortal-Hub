@@ -17,7 +17,7 @@
     "not_synchronized": "no sincronizado",
     "synchronized": "sincronizado",
     "synchronized_desc": "ahora estás sincronizado. puedes continuar.",
-    "description": "Si no deseas esperar a que tu Local Node se sincronice, continúa con public por ahora. (Si sabes que tu node está atrasado/apagado, puedes continuar con local igualmente o cambiar a un public node.)"
+    "description": "Si no deseas esperar a que tu nodo local se sincronice, continúa por ahora con un nodo compartido. (Si sabes que tu nodo está atrasado/apagado, igualmente puedes continuar con tu nodo local o cambiar a un nodo compartido.)"
   },
   "steps": {
     "java": "tiene Java",
@@ -28,12 +28,12 @@
     "finished": "finalizado",
     "start": "iniciar Qortal Core",
     "install": "instalar e iniciar Qortal Core",
-    "continuePublic": "continuar con nodo público",
+    "continuePublic": "continuar con nodo compartido",
     "openSetup": "abrir configuración local",
     "goToDownloads": "ir a descargas",
     "resetKey": "restablecer clave API",
     "continue": "continuar",
-    "continueLocal": "continuar con Local"
+    "continueLocal": "continuar con nodo local"
   },
   "error": {
     "noJar": "el directorio seleccionado no contiene un qortal.jar",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "usar tu núcleo local",
-    "description": "Puedes continuar con el public node si lo deseas, pero recomendamos encarecidamente usar tu local node para la mejor experiencia. (Si estás intentando acceder sin conectividad, puedes continuar con public sin conexión.)",
+    "description": "Puedes continuar con el nodo compartido si lo deseas, pero recomendamos encarecidamente usar tu nodo local para la mejor experiencia. (Si estás intentando acceder sin conectividad, puedes continuar con el nodo compartido sin conexión.)",
     "subTitle": "ventajas de usar un nodo local:",
     "point1": "acceso completamente descentralizado",
     "point2": "descargas más rápidas",
     "point3": "datos controlados por el usuario",
-    "publicExplanation": "El nodo público al que te conectas es en realidad un nodo privado puesto a disposición pública. Aunque conveniente, tiene ciertas limitaciones frente a ejecutar tu propio nodo."
+    "publicExplanation": "El nodo compartido al que te conectas es en realidad un nodo operado de forma privada y puesto a disposición de la comunidad. Aunque es conveniente, tiene ciertas limitaciones frente a ejecutar tu propio nodo."
   },
   "invalidKey": {
     "title": "clave API inválida",

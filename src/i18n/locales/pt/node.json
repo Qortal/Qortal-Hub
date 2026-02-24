@@ -17,7 +17,7 @@
     "not_synchronized": "não sincronizado",
     "synchronized": "sincronizado",
     "synchronized_desc": "você agora está sincronizado. pode continuar.",
-    "description": "Se você não quiser esperar até que seu Local Node esteja sincronizado, continue com public por enquanto. (Se você sabe que seu node está atrasado/desligado, pode continuar com local mesmo assim ou mudar para um public node.)"
+    "description": "Se você não quiser esperar até que seu nó local esteja sincronizado, continue com um nó compartilhado por enquanto. (Se você sabe que seu nó está atrasado/desligado, pode continuar com o nó local mesmo assim ou mudar para um nó compartilhado.)"
   },
   "steps": {
     "java": "tem Java",
@@ -28,12 +28,12 @@
     "finished": "concluído",
     "start": "iniciar Qortal Core",
     "install": "instalar e iniciar o Qortal Core",
-    "continuePublic": "continuar com nó público",
+    "continuePublic": "continuar com nó compartilhado",
     "openSetup": "abrir configuração local",
     "goToDownloads": "ir para downloads",
     "resetKey": "redefinir chave API",
     "continue": "continuar",
-    "continueLocal": "continuar com Local"
+    "continueLocal": "continuar com nó local"
   },
   "error": {
     "noJar": "o diretório escolhido não contém um qortal.jar",
@@ -50,12 +50,12 @@
   },
   "recommendation": {
     "title": "usando seu nó local",
-    "description": "Você pode prosseguir com o public node se desejar, mas recomendamos fortemente usar seu local node para a melhor experiência. (Se você estiver tentando acessar sem conectividade, pode continuar com public sem conexão.)",
+    "description": "Você pode prosseguir com o nó compartilhado se desejar, mas recomendamos fortemente usar seu nó local para a melhor experiência. (Se você estiver tentando acessar sem conectividade, pode continuar com o nó compartilhado sem conexão.)",
     "subTitle": "vantagens de usar um nó local:",
     "point1": "acesso totalmente descentralizado",
     "point2": "downloads mais rápidos",
     "point3": "dados controlados pelo usuário",
-    "publicExplanation": "O nó público ao qual você se conecta é, na verdade, um nó privado disponibilizado publicamente. Embora seja conveniente, possui certas limitações em comparação com executar o seu próprio."
+    "publicExplanation": "O nó compartilhado ao qual você se conecta é, na verdade, um nó operado privadamente e disponibilizado para a comunidade. Embora seja conveniente, possui certas limitações em comparação com executar o seu próprio."
   },
   "invalidKey": {
     "title": "chave API inválida",
