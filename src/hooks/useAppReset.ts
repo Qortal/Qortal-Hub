@@ -1,21 +1,35 @@
 import { useCallback } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
 import {
+  addressInfoControllerAtom,
+  blobControllerAtom,
   canSaveSettingToQdnAtom,
+  enabledDevModeAtom,
+  fullScreenAtom,
   globalDownloadsAtom,
   groupAnnouncementsAtom,
+  groupChatTimestampsAtom,
+  groupInvitesCacheAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
-  groupChatTimestampsAtom,
+  hasSettingsChangedAtom,
+  isDisabledEditorEnterAtom,
+  isOpenBlockedModalAtom,
+  isRunningPublicNodeAtom,
+  joinRequestsCacheAtom,
   lastPaymentSeenTimestampAtom,
   mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
+  navigationControllerAtom,
   oldPinnedAppsAtom,
+  promotionTimeIntervalAtom,
+  promotionsAtom,
   qMailLastEnteredTimestampAtom,
   resourceDownloadControllerAtom,
+  selectedGroupIdAtom,
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
@@ -23,6 +37,13 @@ import {
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
+import {
+  appCategoryFilterAtom,
+  appSearchQueryAtom,
+  appSortAtom,
+  appStatusFilterAtom,
+  currentAppsTabAtom,
+} from '../atoms/appsAtoms';
 
 /**
  * Encapsulates all atom resets and global-downloads cleanup.
@@ -30,6 +51,9 @@ import {
  */
 export function useAppReset() {
   const globalDownloadsValue = useAtomValue(globalDownloadsAtom);
+
+  const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
+  const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
 
   const resetAtomSortablePinnedAppsAtom = useResetAtom(sortablePinnedAppsAtom);
   const resetAtomCanSaveSettingToQdnAtom = useResetAtom(
@@ -68,6 +92,27 @@ export function useAppReset() {
   );
   const resetGlobalDownloadsAtom = useResetAtom(globalDownloadsAtom);
 
+  const resetAddressInfoControllerAtom = useResetAtom(addressInfoControllerAtom);
+  const resetBlobControllerAtom = useResetAtom(blobControllerAtom);
+  const resetNavigationControllerAtom = useResetAtom(navigationControllerAtom);
+  const resetEnabledDevModeAtom = useResetAtom(enabledDevModeAtom);
+  const resetFullScreenAtom = useResetAtom(fullScreenAtom);
+  const resetHasSettingsChangedAtom = useResetAtom(hasSettingsChangedAtom);
+  const resetIsDisabledEditorEnterAtom = useResetAtom(isDisabledEditorEnterAtom);
+  const resetIsOpenBlockedModalAtom = useResetAtom(isOpenBlockedModalAtom);
+  const resetIsRunningPublicNodeAtom = useResetAtom(isRunningPublicNodeAtom);
+  const resetSelectedGroupIdAtom = useResetAtom(selectedGroupIdAtom);
+  const resetPromotionsAtom = useResetAtom(promotionsAtom);
+  const resetPromotionTimeIntervalAtom = useResetAtom(
+    promotionTimeIntervalAtom
+  );
+
+  const resetAppSortAtom = useResetAtom(appSortAtom);
+  const resetAppCategoryFilterAtom = useResetAtom(appCategoryFilterAtom);
+  const resetAppStatusFilterAtom = useResetAtom(appStatusFilterAtom);
+  const resetAppSearchQueryAtom = useResetAtom(appSearchQueryAtom);
+  const resetCurrentAppsTabAtom = useResetAtom(currentAppsTabAtom);
+
   const resetAllRecoil = useCallback(() => {
     if (globalDownloadsValue && typeof globalDownloadsValue === 'object') {
       Object.values(globalDownloadsValue).forEach((entry: any) => {
@@ -76,6 +121,8 @@ export function useAppReset() {
         if (entry?.retryTimeout) clearTimeout(entry.retryTimeout);
       });
     }
+    setGroupInvitesCache(null);
+    setJoinRequestsCache(null);
     resetAtomSortablePinnedAppsAtom();
     resetAtomCanSaveSettingToQdnAtom();
     resetAtomSettingsQDNLastUpdatedAtom();
@@ -96,8 +143,27 @@ export function useAppReset() {
     resetMyGroupsWhereIAmAdminAtom();
     resetResourceDownloadControllerAtom();
     resetGlobalDownloadsAtom();
+    resetAddressInfoControllerAtom();
+    resetBlobControllerAtom();
+    resetNavigationControllerAtom();
+    resetEnabledDevModeAtom();
+    resetFullScreenAtom();
+    resetHasSettingsChangedAtom();
+    resetIsDisabledEditorEnterAtom();
+    resetIsOpenBlockedModalAtom();
+    resetIsRunningPublicNodeAtom();
+    resetSelectedGroupIdAtom();
+    resetPromotionsAtom();
+    resetPromotionTimeIntervalAtom();
+    resetAppSortAtom();
+    resetAppCategoryFilterAtom();
+    resetAppStatusFilterAtom();
+    resetAppSearchQueryAtom();
+    resetCurrentAppsTabAtom();
   }, [
     globalDownloadsValue,
+    setGroupInvitesCache,
+    setJoinRequestsCache,
     resetAtomSortablePinnedAppsAtom,
     resetAtomCanSaveSettingToQdnAtom,
     resetAtomSettingsQDNLastUpdatedAtom,
@@ -118,6 +184,23 @@ export function useAppReset() {
     resetMyGroupsWhereIAmAdminAtom,
     resetResourceDownloadControllerAtom,
     resetGlobalDownloadsAtom,
+    resetAddressInfoControllerAtom,
+    resetBlobControllerAtom,
+    resetNavigationControllerAtom,
+    resetEnabledDevModeAtom,
+    resetFullScreenAtom,
+    resetHasSettingsChangedAtom,
+    resetIsDisabledEditorEnterAtom,
+    resetIsOpenBlockedModalAtom,
+    resetIsRunningPublicNodeAtom,
+    resetSelectedGroupIdAtom,
+    resetPromotionsAtom,
+    resetPromotionTimeIntervalAtom,
+    resetAppSortAtom,
+    resetAppCategoryFilterAtom,
+    resetAppStatusFilterAtom,
+    resetAppSearchQueryAtom,
+    resetCurrentAppsTabAtom,
   ]);
 
   return { resetAllRecoil };
