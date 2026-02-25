@@ -18,6 +18,7 @@ import { useAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
+import { titleBarIconButtonProps } from '../Desktop/CustomTitleBar';
 
 export const TaskManager = ({ getUserInfo }) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
@@ -199,11 +200,19 @@ export const TaskManager = ({ getUserInfo }) => {
     <>
       {!open && (
         <IconButton
+          disableFocusRipple
+          disableRipple
+          tabIndex={-1}
           onClick={handleClick}
+          size="small"
           sx={{
             bgcolor: theme.palette.primary.main,
             color: theme.palette.text.primary,
             ':hover': { bgcolor: theme.palette.primary },
+            '&.MuiIconButton-root': {
+              width: 26,
+              height: 26,
+            },
           }}
         >
           {txList.some((item) => !item.done) ? (

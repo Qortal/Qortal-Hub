@@ -2,17 +2,22 @@ import { Box, ButtonBase, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
-import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
+import {
+  enabledDevModeAtom,
+  hasUnreadGroupsAtom,
+  isNewTabWindowAtom,
+} from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import ThemeSelector from '../Theme/ThemeSelector';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
-import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
 import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
 import { executeEvent } from '../../utils/events';
+import { appHeighOffsetPx } from './CustomTitleBar';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -21,17 +26,16 @@ export const DesktopSideBar = ({
   hasUnreadDirects,
   isDirects,
   toggleSideViewGroups,
-  hasUnreadGroups,
   isGroups,
   isApps,
   setDesktopViewMode,
   desktopViewMode,
-  myName,
   lastQappViewMode,
   mode,
+  setMode,
 }) => {
   const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
-
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -51,7 +55,7 @@ export const DesktopSideBar = ({
         display: 'flex',
         flexDirection: 'column',
         gap: '25px',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: 'auto', // must adapt to the chosen language
       }}
     >
@@ -67,8 +71,15 @@ export const DesktopSideBar = ({
 
       <ButtonBase
         sx={{
+          borderRadius: '8px',
           height: '60px',
           width: '60px',
+          ...(desktopViewMode === 'home' && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
         }}
         onClick={() => {
           goToHome();
@@ -85,6 +96,17 @@ export const DesktopSideBar = ({
       </ButtonBase>
 
       <ButtonBase
+        sx={{
+          borderRadius: '8px',
+          height: '60px',
+          width: '60px',
+          ...(isApps && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
+        }}
         onClick={() => {
           isApps
             ? executeEvent('newTabWindow', {})
@@ -94,6 +116,8 @@ export const DesktopSideBar = ({
         <IconWrapper
           label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
           disableWidth
+          noBackground
+          selected={isApps}
         >
           <AppsIcon
             color={
@@ -105,6 +129,17 @@ export const DesktopSideBar = ({
       </ButtonBase>
 
       <ButtonBase
+        sx={{
+          borderRadius: '8px',
+          height: '60px',
+          width: '60px',
+          ...(desktopViewMode === 'chat' && {
+            backgroundColor: theme.palette.action.selected,
+          }),
+          '&:hover': {
+            backgroundColor: theme.palette.action.hover,
+          },
+        }}
         onClick={() => {
           setDesktopViewMode('chat');
         }}
@@ -119,6 +154,8 @@ export const DesktopSideBar = ({
           }
           label={t('core:chat', { postProcess: 'capitalizeFirstChar' })}
           disableWidth
+          noBackground
+          selected={desktopViewMode === 'chat'}
         >
           <MessagingIconFilled
             height={30}
@@ -133,10 +170,19 @@ export const DesktopSideBar = ({
         </IconWrapper>
       </ButtonBase>
 
-      <Save isDesktop disableWidth myName={myName} />
-
       {isEnabledDevMode && (
         <ButtonBase
+          sx={{
+            borderRadius: '8px',
+            height: '60px',
+            width: '60px',
+            ...(desktopViewMode === 'dev' && {
+              backgroundColor: theme.palette.action.selected,
+            }),
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+            },
+          }}
           onClick={() => {
             desktopViewMode === 'dev'
               ? executeEvent('devModeNewTabWindow', {})
@@ -146,6 +192,8 @@ export const DesktopSideBar = ({
           <IconWrapper
             label={t('core:dev', { postProcess: 'capitalizeFirstChar' })}
             disableWidth
+            noBackground
+            selected={desktopViewMode === 'dev'}
           >
             <AppsIcon
               height={30}

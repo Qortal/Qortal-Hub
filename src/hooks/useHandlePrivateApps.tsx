@@ -1,25 +1,23 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { executeEvent } from '../utils/events';
-import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../App';
+import { getBaseApiReact } from '../App';
 import { createEndpoint } from '../background/background.ts';
 import {
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import { base64ToUint8Array } from '../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 export const useHandlePrivateApps = () => {
   const [status, setStatus] = useState('');
-  const {
-    openSnackGlobal,
-    setOpenSnackGlobal,
-    infoSnackCustom,
-    setInfoSnackCustom,
-  } = useContext(QORTAL_APP_CONTEXT);
+  const [openSnackGlobal, setOpenSnackGlobal] = useAtom(openSnackGlobalAtom);
+  const [infoSnackCustom, setInfoSnackCustom] = useAtom(infoSnackGlobalAtom);
   const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
   const { t } = useTranslation([

@@ -10,33 +10,35 @@ export interface OfficialAppConfig {
 }
 
 export const officialAppsConfig = {
-  // Apps featured in the carousel (top 5)
-  featured: ['q-tube', 'q-mail', 'q-blog', 'q-trade', 'q-shop'],
+  // Apps featured in the carousel
+  featured: ['Q-Tube', 'Quitter', 'Q-Mail', 'Q-Search', 'Q-Trade', 'Q-Wallets'],
 
   // All official apps with metadata
   all: [
-    { name: 'q-tube', icon: 'video', featured: true },
-    { name: 'q-blog', icon: 'article', featured: true },
-    { name: 'q-mail', icon: 'mail', featured: true },
-    { name: 'q-trade', icon: 'swap', featured: true },
-    { name: 'q-shop', icon: 'shopping', featured: true },
-    { name: 'q-share', icon: 'share' },
-    { name: 'q-support', icon: 'support' },
-    { name: 'q-fund', icon: 'fund' },
-    { name: 'q-manager', icon: 'settings' },
-    { name: 'q-mintership', icon: 'mint' },
-    { name: 'q-wallets', icon: 'wallet' },
-    { name: 'q-search', icon: 'search' },
-    { name: 'q-node', icon: 'node' },
-    { name: 'names', icon: 'badge' },
-    { name: 'q-follow', icon: 'follow' },
-    { name: 'q-assets', icon: 'assets' },
-    { name: 'quitter', icon: 'social' },
+    { name: 'Q-Blog', icon: 'article', featured: true },
+    { name: 'Q-Mail', icon: 'mail', featured: true },
+    { name: 'Q-Trade', icon: 'swap', featured: true },
+    { name: 'Q-Tube', icon: 'video', featured: true },
+    { name: 'Q-Wallets', icon: 'wallet', featured: true },
+    { name: 'Quitter', icon: 'social', featured: true },
+    { name: 'Names', icon: 'badge' },
+    { name: 'Q-Assets', icon: 'assets' },
+    { name: 'Q-Follow', icon: 'follow' },
+    { name: 'Q-Fund', icon: 'fund' },
+    { name: 'Q-Manager', icon: 'settings' },
+    { name: 'Q-Mintership', icon: 'mint' },
+    { name: 'Q-Node', icon: 'node' },
+    { name: 'Q-Search', icon: 'search' },
+    { name: 'Q-Share', icon: 'share' },
+    { name: 'Q-Shop', icon: 'shopping' },
+    { name: 'Q-Support', icon: 'support' },
   ] as OfficialAppConfig[],
 };
 
-// Helper to get list of all official app names
-export const officialAppList = officialAppsConfig.all.map((app) => app.name);
+// Helper to get list of all official app names (lowercase for comparison)
+export const officialAppList = officialAppsConfig.all.map((app) =>
+  app.name.toLowerCase()
+);
 
 // Helper to check if an app is official
 export const isOfficialApp = (appName: string): boolean => {
@@ -45,5 +47,13 @@ export const isOfficialApp = (appName: string): boolean => {
 
 // Helper to check if an app is featured
 export const isFeaturedApp = (appName: string): boolean => {
-  return officialAppsConfig.featured.includes(appName?.toLowerCase());
+  return officialAppsConfig.featured
+    .map((n) => n.toLowerCase())
+    .includes(appName?.toLowerCase());
 };
+
+// Default pinned apps derived from the official apps list
+export const defaultPinnedApps = officialAppsConfig.all.map((app) => ({
+  name: app.name,
+  service: 'APP',
+}));

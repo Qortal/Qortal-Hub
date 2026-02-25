@@ -7,12 +7,15 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import {
   decodeBase64ForUIChatMessages,
   objectToBase64,
 } from '../../qdn/encryption/group-encryption';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
+import './chat.css';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
@@ -51,10 +54,13 @@ import { ReplyPreview } from './MessageItem';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
 import ImageIcon from '@mui/icons-material/Image';
+import SendIcon from '@mui/icons-material/Send';
 import { messageHasImage } from '../../utils/chat';
 import { useTranslation } from 'react-i18next';
 
@@ -70,13 +76,15 @@ export const ChatGroup = ({
   hide,
   handleSecretKeyCreationInProgress,
   triedToFetchSecretKey,
-  myName,
-  balance,
   getTimestampEnterChatParent,
   hideView,
   isPrivate,
 }) => {
-  const { isUserBlocked, show } = useContext(QORTAL_APP_CONTEXT);
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const myName = userInfo?.name;
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const { isUserBlocked } = useBlockedAddresses(true);
   const [messages, setMessages] = useState([]);
   const [chatReferences, setChatReferences] = useState({});
   const [isSending, setIsSending] = useState(false);
@@ -275,7 +283,7 @@ export const ChatGroup = ({
         window
           .sendMessage('decryptSingle', {
             data: encryptedMessages,
-            secretKeyObject: secretKey,
+            secretKeyObject: secretKeyRef.current,
           })
           .then((response) => {
             if (!response?.error) {
@@ -333,7 +341,6 @@ export const ChatGroup = ({
                     };
                   });
                 setMessages((prev) => [...prev, ...formatted]);
-
                 setChatReferences((prev) => {
                   const organizedChatReferences = { ...prev };
                   combineUIAndExtensionMsgs
@@ -658,7 +665,7 @@ export const ChatGroup = ({
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingGroupSocket, 45000); // Ping every 45 seconds
+          groupSocketTimeoutRef.current = setTimeout(pingGroupSocket, 20000); // Ping every 20 seconds
         } else {
           middletierFunc(JSON.parse(e.data), selectedGroup);
           setIsLoading(false);
@@ -708,6 +715,17 @@ export const ChatGroup = ({
     initWebsocketMessageGroup();
     hasInitializedWebsocket.current = true;
   }, [secretKey, isPrivate]);
+
+  useEffect(() => {
+    const logoutEventFunc = () => {
+      forceCloseWebSocket();
+    };
+    subscribeToEvent('logout-event', logoutEventFunc);
+    return () => {
+      unsubscribeFromEvent('logout-event', logoutEventFunc);
+      forceCloseWebSocket();
+    };
+  }, []);
 
   useEffect(() => {
     const notifications = messages.filter(
@@ -971,9 +989,12 @@ export const ChatGroup = ({
           chatReference,
         };
         addToQueue(sendMessageFunc, messageObj, 'chat', selectedGroup);
-        setTimeout(() => {
-          executeEvent('sent-new-message-group', {});
-        }, 150);
+        if (!onEditMessage) {
+          setTimeout(() => {
+            executeEvent('sent-new-message-group', {});
+          }, 150);
+        }
+
         clearEditorContent();
         setReplyMessage(null);
         setOnEditMessage(null);
@@ -1198,34 +1219,36 @@ export const ChatGroup = ({
       />
 
       {(!!secretKey || isPrivate === false) && (
-        <div
-          style={{
-            backgroundColor: theme.palette.background.surface,
-            border: `1px solid ${theme.palette.border.subtle}`,
-            borderRadius: '10px',
+        <Box
+          sx={{
+            alignItems: 'flex-end',
+            backgroundColor: theme.palette.background.default,
+            border: `1px solid ${theme.palette.divider}`,
+            borderRadius: '8px',
             bottom: isFocusedParent ? '0px' : 'unset',
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'row',
             flexShrink: 0,
+            gap: '12px',
             minHeight: '150px',
             overflow: 'hidden',
-            padding: '20px',
+            padding: '16px 20px 20px',
             position: isFocusedParent ? 'fixed' : 'relative',
             top: isFocusedParent ? '0px' : 'unset',
             width: '100%',
             zIndex: isFocusedParent ? 5 : 'unset',
           }}
         >
-          <div
-            style={{
+          <Box
+            sx={{
               display: 'flex',
               flexDirection: 'column',
-              flexGrow: 1,
+              flex: 1,
               flexShrink: 0,
               justifyContent: 'flex-end',
+              minWidth: 0,
               overflow: 'auto',
-              width: 'calc(100% - 100px)',
             }}
           >
             <Box
@@ -1429,16 +1452,12 @@ export const ChatGroup = ({
                 </Typography>
               </Box>
             )}
-          </div>
+          </Box>
 
           <Box
             sx={{
-              display: 'flex',
               flexShrink: 0,
-              gap: '10px',
-              justifyContent: 'center',
-              position: 'relative',
-              width: '100px',
+              paddingBottom: '2px',
             }}
           >
             <CustomButton
@@ -1446,36 +1465,49 @@ export const ChatGroup = ({
                 if (isSending) return;
                 sendMessage();
               }}
-              style={{
-                alignSelf: 'center',
-                background: isSending
-                  ? theme.palette.background.default
+              sx={{
+                alignItems: 'center',
+                backgroundColor: isSending
+                  ? theme.palette.action.disabledBackground
                   : theme.palette.background.paper,
+                border: '1px solid',
+                borderColor: theme.palette.divider,
+                borderRadius: '8px',
+                color: theme.palette.text.primary,
                 cursor: isSending ? 'default' : 'pointer',
-                flexShrink: 0,
-                marginTop: 'auto',
-                minWidth: 'auto',
-                padding: '5px',
-                width: '100px',
+                display: 'inline-flex',
+                gap: '6px',
+                fontSize: '14px',
+                fontWeight: 500,
+                justifyContent: 'center',
+                minHeight: '44px',
+                minWidth: '88px',
+                padding: '10px 16px',
+                position: 'relative',
+                transition:
+                  'background-color 0.2s ease, border-color 0.2s ease',
+                '&:hover': isSending
+                  ? {}
+                  : {
+                      backgroundColor: theme.palette.action.hover,
+                      borderColor: theme.palette.divider,
+                    },
               }}
             >
-              {isSending && (
+              {isSending ? (
                 <CircularProgress
                   size={18}
-                  sx={{
-                    color: theme.palette.text.primary,
-                    left: '50%',
-                    marginLeft: '-12px',
-                    marginTop: '-12px',
-                    position: 'absolute',
-                    top: '50%',
-                  }}
+                  sx={{ color: theme.palette.text.secondary }}
                 />
+              ) : (
+                <>
+                  <SendIcon sx={{ fontSize: '18px' }} />
+                  Send
+                </>
               )}
-              {` Send`}
             </CustomButton>
           </Box>
-        </div>
+        </Box>
       )}
 
       {isOpenQManager !== null && (
@@ -1492,7 +1524,7 @@ export const ChatGroup = ({
                 ? 'block'
                 : 'none',
             height: '600px',
-            maxHeight: '100vh',
+            maxHeight: `calc(100vh - ${appHeighOffsetPx})`,
             maxWidth: '100vw',
             overflow: 'hidden',
             position: 'fixed',

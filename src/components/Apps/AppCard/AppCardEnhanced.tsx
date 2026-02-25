@@ -1,9 +1,11 @@
 import { Avatar, useTheme } from '@mui/material';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../../App';
 import LogoSelected from '../../../assets/svgs/LogoSelected.svg';
 import {
+  isAppPinnedAtomFamily,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../../atoms/global';
@@ -26,13 +28,15 @@ import {
   AppCircle,
 } from '../Apps-styles';
 
+const PINNED_KEY_SEP = '\0';
+
 interface AppCardEnhancedProps {
   app: any;
   myName: string;
   isFromCategory?: boolean;
 }
 
-export const AppCardEnhanced = ({
+const AppCardEnhancedInner = ({
   app,
   myName,
   isFromCategory = false,
@@ -41,80 +45,81 @@ export const AppCardEnhanced = ({
   const { t } = useTranslation(['core']);
   const isInstalled = app?.status?.status === 'READY';
 
-  const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
-    sortablePinnedAppsAtom
+  const pinnedKey = useMemo(
+    () => `${app?.service ?? ''}${PINNED_KEY_SEP}${app?.name ?? ''}`,
+    [app?.name, app?.service]
   );
+  const isSelectedAppPinned = useAtomValue(isAppPinnedAtomFamily(pinnedKey));
+  const setSortablePinnedApps = useSetAtom(sortablePinnedAppsAtom);
   const setSettingsLocalLastUpdated = useSetAtom(settingsLocalLastUpdatedAtom);
 
-  const isSelectedAppPinned = !!sortablePinnedApps?.find(
-    (item) => item?.name === app?.name && item?.service === app?.service
-  );
-
-  const handleCardClick = () => {
+  const handleCardClick = useCallback(() => {
     if (isFromCategory) {
       executeEvent('selectedAppInfoCategory', { data: app });
     } else {
       executeEvent('selectedAppInfo', { data: app });
     }
-  };
+  }, [app, isFromCategory]);
 
-  const handlePinClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSortablePinnedApps((prev) => {
-      let updatedApps;
-
-      if (isSelectedAppPinned) {
-        updatedApps = prev.filter(
-          (item) =>
-            !(item?.name === app?.name && item?.service === app?.service)
+  const handlePinClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const name = app?.name;
+      const service = app?.service;
+      setSortablePinnedApps((prev) => {
+        const isPinned = !!prev?.find(
+          (item) => item?.name === name && item?.service === service
         );
-      } else {
-        updatedApps = [
-          ...prev,
-          {
-            name: app?.name,
-            service: app?.service,
-          },
-        ];
-      }
+        const updatedApps = isPinned
+          ? prev.filter(
+              (item) => !(item?.name === name && item?.service === service)
+            )
+          : [...(prev ?? []), { name, service }];
+        saveToLocalStorage(
+          'ext_saved_settings',
+          'sortablePinnedApps',
+          updatedApps
+        );
+        return updatedApps;
+      });
+      setSettingsLocalLastUpdated(Date.now());
+    },
+    [
+      app?.name,
+      app?.service,
+      setSortablePinnedApps,
+      setSettingsLocalLastUpdated,
+    ]
+  );
 
-      saveToLocalStorage(
-        'ext_saved_settings',
-        'sortablePinnedApps',
-        updatedApps
-      );
-      return updatedApps;
-    });
-    setSettingsLocalLastUpdated(Date.now());
-  };
+  const handleOpenClick = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      executeEvent('addTab', { data: app });
+    },
+    [app]
+  );
 
-  const handleOpenClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    executeEvent('addTab', { data: app });
-  };
-
-  // Truncate description to 100 characters
-  const truncatedDescription = app?.metadata?.description
-    ? app.metadata.description.length > 100
-      ? `${app.metadata.description.substring(0, 100)}...`
-      : app.metadata.description
-    : t('core:message.generic.no_description', {
+  const truncatedDescription = useMemo(() => {
+    const desc = app?.metadata?.description;
+    if (!desc)
+      return t('core:message.generic.no_description', {
         postProcess: 'capitalizeFirstChar',
       });
+    return desc.length > 100 ? `${desc.substring(0, 100)}...` : desc;
+  }, [app?.metadata?.description, t]);
 
-  // Get tags (max 3) - tags can be a string or an array
-  const rawTags = app?.metadata?.tags;
-  const tags: string[] = rawTags
-    ? typeof rawTags === 'string'
-      ? rawTags
-          .split(',')
-          .map((t: string) => t.trim())
-          .filter(Boolean)
-          .slice(0, 3)
-      : Array.isArray(rawTags)
-        ? rawTags.slice(0, 3)
-        : []
-    : [];
+  const tags = useMemo((): string[] => {
+    const rawTags = app?.metadata?.tags;
+    if (!rawTags) return [];
+    if (typeof rawTags === 'string')
+      return rawTags
+        .split(',')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+    return Array.isArray(rawTags) ? rawTags.slice(0, 3) : [];
+  }, [app?.metadata?.tags]);
 
   return (
     <AppCardEnhancedContainer onClick={handleCardClick}>
@@ -220,3 +225,5 @@ export const AppCardEnhanced = ({
     </AppCardEnhancedContainer>
   );
 };
+
+export const AppCardEnhanced = memo(AppCardEnhancedInner);

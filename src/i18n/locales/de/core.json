@@ -22,6 +22,7 @@
     "choose_name": "Wählen Sie einen Namen",
     "close": "schließen",
     "close_chat": "Direkten Chat schließen",
+    "confirm": "bestätigen",
     "continue": "weitermachen",
     "continue_logout": "Melden Sie sich weiter an",
     "copy_link": "Link kopieren",
@@ -50,7 +51,6 @@
     "join": "verbinden",
     "leave_comment": "Kommentar hinterlassen",
     "load_announcements": "ältere Ankündigungen laden",
-    "login": "Login",
     "logout": "Abmelden",
     "new": {
       "chat": "neuer Chat",
@@ -78,6 +78,8 @@
     "save_disk": "Speichern auf der Festplatte",
     "search": "suchen",
     "search_apps": "Suche nach Apps",
+    "search_apps_or_link": "Apps durchsuchen oder qortal://-Link eingeben",
+    "open_as_qortal_link": "Als Qortal-Link öffnen",
     "search_groups": "Suche nach Gruppen",
     "search_chat_text": "Chattext suchen",
     "see_qr_code": "Siehe QR -Code",
@@ -128,6 +130,7 @@
   "contact_other": "Kontakte",
   "core": {
     "block_height": "Blockhöhe",
+    "data_peers": "QDN (Daten) Peers",
     "information": "Kerninformationen",
     "peers": "Gefahrene Kollegen",
     "version": "Kernversion"
@@ -171,6 +174,7 @@
   "last_height": "letzte Höhe",
   "level": "Ebene",
   "library": "Bibliothek",
+  "explore": "Entdecken",
   "list": {
     "bans": "Liste der Verbote",
     "groups": "Liste der Gruppen",
@@ -189,6 +193,7 @@
   "message": {
     "error": {
       "address_not_found": "Ihre Adresse wurde nicht gefunden",
+      "app_already_voted": "Du hast bereits für diese App abgestimmt",
       "app_need_name": "Ihre App benötigt einen Namen",
       "build_app": "Private App kann nicht erstellen",
       "decrypt_app": "Private App kann nicht entschlüsseln '",
@@ -242,9 +247,10 @@
       "editing_message": "Bearbeitungsnachricht",
       "encrypted": "verschlüsselt",
       "encrypted_not": "nicht verschlüsselt",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "betrag: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "App -Daten abrufen",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "Holen Sie sich QORT mit dem CrossChain -Handelsportal von Qortal",
       "minimal_qort_balance": "Wenn du mindestens {{ quantity }} QORT auf deinem Guthaben hast, kannst du Chatnachrichten nahezu in Echtzeit senden.",
       "mentioned": "erwähnt",
@@ -256,7 +262,7 @@
       "name_preview": "Sie benötigen einen Namen, um die Vorschau zu verwenden",
       "name_publish": "Sie benötigen einen Qortalnamen, um zu veröffentlichen",
       "name_rate": "Sie benötigen einen Namen, um zu bewerten.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Dein Guthaben beträgt {{ balance }} QORT. Für die Namensregistrierung wird eine Gebühr von {{ fee }} QORT fällig.",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "Keine Daten für das Bild",
       "no_description": "Keine Beschreibung",
@@ -362,9 +368,9 @@
   "option": "Option",
   "option_no": "Keine Optionen",
   "option_other": "Optionen",
-  "page": {
-    "last": "zuletzt",
+  "pagination": {
     "first": "Erste",
+    "last": "zuletzt",
     "next": "nächste",
     "previous": "vorherige"
   },
@@ -394,7 +400,9 @@
     "status": "Status",
     "status_ready": "bereit (installiert)",
     "status_not_installed": "nicht installiert",
-    "tags": "Tags"
+    "tags": "Tags",
+    "size": "Größe",
+    "updated": "aktualisiert"
   },
   "filter": {
     "all": "alle",
@@ -407,6 +415,18 @@
   },
   "receiver": "Empfänger",
   "sender": "Absender",
+  "details_for_address": "Details zur Adresse",
+  "total_in_orders": "Gesamt in Aufträgen",
+  "total_received": "Gesamt erhalten",
+  "total_sent": "Gesamt gesendet",
+  "total_blocks_minted": "Gesamt gemünzte Blöcke",
+  "remaining_to_level": "Verbleibend bis Level {{level}}",
+  "blocks": "Blöcke",
+  "days_of_minting": "Tage Münzen",
+  "payments_count": "Zahlungen ({{count}})",
+  "trades_count": "Trades ({{count}})",
+  "items_per_page": "Einträge pro Seite:",
+  "pagination_of": "{{from}}-{{to}} von {{total}}",
   "server": "Server",
   "service_type": "Service -Typ",
   "settings": "Einstellungen",
@@ -418,6 +438,7 @@
     "recently_updated": "kürzlich aktualisiert"
   },
   "tabs": {
+    "add_private": "+ Private App",
     "categories": "Kategorien",
     "community_apps": "Community-Apps",
     "my_apps": "meine Apps",

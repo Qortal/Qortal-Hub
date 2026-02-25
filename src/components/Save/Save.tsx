@@ -12,7 +12,7 @@ import {
   Box,
   Button,
   ButtonBase,
-  Popover,
+  Dialog,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -81,7 +81,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
   const [infoSnack, setInfoSnack] = useState(null);
   const [oldPinnedApps, setOldPinnedApps] = useAtom(oldPinnedAppsAtom);
 
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [openDialog, setOpenDialog] = useState(false);
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const theme = useTheme();
   const { t } = useTranslation([
@@ -161,7 +161,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
         const fee = await getFee('ARBITRARY');
 
         await show({
-          message: t('core:message.generic.publish_qnd', {
+          message: t('core:message.question.publish_qdn', {
             postProcess: 'capitalizeFirstChar',
           }),
           publishFee: fee.fee + ' QORT',
@@ -217,41 +217,59 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
       setIsLoading(false);
     }
   };
-  const handlePopupClick = (event) => {
-    event.stopPropagation(); // Prevent parent onClick from firing
-    setAnchorEl(event.currentTarget);
+  const handleDialogOpen = (event) => {
+    event.stopPropagation();
+    setOpenDialog(true);
   };
 
   const revertChanges = () => {
     setPinnedApps(oldPinnedApps);
     saveToLocalStorage('ext_saved_settings', 'sortablePinnedApps', null);
-    setAnchorEl(null);
+    setOpenDialog(false);
   };
 
   return (
     <>
-      <ButtonBase onClick={handlePopupClick} disabled={isLoading}>
+      <ButtonBase
+        onClick={handleDialogOpen}
+        disabled={isLoading}
+        sx={{ marginBottom: '2px' }}
+      >
         {isDesktop ? (
-          <IconWrapper
-            disableWidth={disableWidth}
-            label={t('core:action.save', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            selected={false}
-            color={
-              hasChanged && !isLoading
-                ? '#5EB049'
-                : theme.palette.text.secondary
-            }
-          >
+          disableWidth ? (
+            <IconWrapper
+              disableWidth={disableWidth}
+              label={t('core:action.save', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              selected={false}
+              color={
+                hasChanged && !isLoading
+                  ? '#5EB049'
+                  : theme.palette.text.secondary
+              }
+            >
+              <SaveIcon
+                color={
+                  hasChanged && !isLoading
+                    ? '#5EB049'
+                    : theme.palette.text.secondary
+                }
+                height={18}
+                width={18}
+              />
+            </IconWrapper>
+          ) : (
             <SaveIcon
               color={
                 hasChanged && !isLoading
                   ? '#5EB049'
                   : theme.palette.text.secondary
               }
+              height={18}
+              width={18}
             />
-          </IconWrapper>
+          )
         ) : (
           <SaveIcon
             color={
@@ -259,28 +277,17 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
                 ? '#5EB049'
                 : theme.palette.text.secondary
             }
+            height={18}
+            width={18}
           />
         )}
       </ButtonBase>
 
-      <Popover
-        open={!!anchorEl}
-        anchorEl={anchorEl}
-        onClose={() => setAnchorEl(null)} // Close popover on click outside
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        sx={{
-          width: '300px',
-          maxWidth: '90%',
-          maxHeight: '80%',
-          overflow: 'auto',
-        }}
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="sm"
+        fullWidth
       >
         {isUsingImportExportSettings && (
           <Box
@@ -625,7 +632,7 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
             </ButtonBase>
           </Box>
         </Box>
-      </Popover>
+      </Dialog>
       <CustomizedSnackbars
         duration={3500}
         open={openSnack}

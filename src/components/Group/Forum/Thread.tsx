@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
 import {
   Avatar,
   Box,
@@ -596,11 +598,9 @@ export const Thread = ({
           currentThread={currentThread}
           messageCallback={messageCallback}
           members={members}
-          userInfo={userInfo}
           getSecretKey={getSecretKey}
           closeCallback={closeCallback}
           postReply={postReply}
-          myName={userInfo?.name}
           publishCallback={setTempData}
           setPostReply={setPostReply}
           isPrivate={isPrivate}
@@ -701,7 +701,9 @@ export const Thread = ({
               disabled={!hasFirstPage}
               variant="contained"
             >
-              {t('core:page.first', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:pagination.first', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
 
             <Button
@@ -720,7 +722,9 @@ export const Thread = ({
               disabled={!hasPreviousPage}
               variant="contained"
             >
-              {t('core:page.previous', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:pagination.previous', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
 
             <Button
@@ -739,7 +743,9 @@ export const Thread = ({
               disabled={!hasNextPage}
               variant="contained"
             >
-              {t('core:page.next', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:pagination.next', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
 
             <Button
@@ -758,7 +764,9 @@ export const Thread = ({
               disabled={!hasLastPage}
               variant="contained"
             >
-              {t('core:page.last', { postProcess: 'capitalizeFirstChar' })}
+              {t('core:pagination.last', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Button>
           </Box>
 
@@ -1016,7 +1024,9 @@ export const Thread = ({
                 disabled={!hasFirstPage}
                 variant="contained"
               >
-                {t('core:page.first', { postProcess: 'capitalizeFirstChar' })}
+                {t('core:pagination.first', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Button>
 
               <Button
@@ -1035,7 +1045,7 @@ export const Thread = ({
                 disabled={!hasPreviousPage}
                 variant="contained"
               >
-                {t('core:page.previous', {
+                {t('core:pagination.previous', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Button>
@@ -1056,7 +1066,9 @@ export const Thread = ({
                 disabled={!hasNextPage}
                 variant="contained"
               >
-                {t('core:page.next', { postProcess: 'capitalizeFirstChar' })}
+                {t('core:pagination.next', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Button>
 
               <Button
@@ -1075,7 +1087,9 @@ export const Thread = ({
                 disabled={!hasLastPage}
                 variant="contained"
               >
-                {t('core:page.last', { postProcess: 'capitalizeFirstChar' })}
+                {t('core:pagination.last', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Button>
             </Box>
 

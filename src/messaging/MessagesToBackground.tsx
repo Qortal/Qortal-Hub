@@ -24,7 +24,7 @@ window.addEventListener('message', (event) => {
   }
 });
 
-export const sendMessageBackground = (
+export const sendMessageBackground = async (
   action,
   data = {},
   timeout = TIME_MINUTES_10_IN_MILLISECONDS,
@@ -32,7 +32,7 @@ export const sendMessageBackground = (
   appInfo,
   skipAuth
 ) => {
-  return new Promise((resolve, reject) => {
+  const response_2 = await new Promise((resolve, reject) => {
     const requestId = generateRequestId(); // Unique ID for each request
     callbackMap.set(requestId, { resolve, reject }); // Store both resolve and reject callbacks
     const targetOrigin = window.location.origin;
@@ -62,26 +62,25 @@ export const sendMessageBackground = (
 
     // Adjust resolve/reject to clear the timeout when a response arrives
     callbackMap.set(requestId, {
-      resolve: (response) => {
+      resolve: (response_1) => {
         clearTimeout(timeoutId); // Clear the timeout if the response is received in time
-        resolve(response);
+        resolve(response_1);
       },
-      reject: (error) => {
+      reject: (error_1) => {
         clearTimeout(timeoutId); // Clear the timeout if an error occurs
-        reject(error);
+        reject(error_1);
       },
     });
-  }).then((response) => {
-    // Return payload or error based on response content
-    if (response?.payload !== null && response?.payload !== undefined) {
-      return response.payload;
-    } else if (response?.error) {
-      return {
-        error: response.error,
-        message: response?.message || 'An error occurred',
-      };
-    }
   });
+  // Return payload or error based on response content
+  if (response_2?.payload !== null && response_2?.payload !== undefined) {
+    return response_2.payload;
+  } else if (response_2?.error || response_2?.message) {
+    return {
+      error: response_2.error,
+      message: response_2?.message || response_2?.error || 'An error occurred',
+    };
+  }
 };
 
 // Attach to window for global access

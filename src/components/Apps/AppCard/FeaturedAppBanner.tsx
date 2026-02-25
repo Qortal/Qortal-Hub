@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import {
   Avatar,
   Box,
@@ -37,16 +37,16 @@ const FeaturedCard = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: '10px',
-  padding: '16px',
+  gap: '8px',
+  padding: '12px',
   borderRadius: '12px',
   backgroundColor: theme.palette.background.paper,
   border: `1px solid ${theme.palette.divider}`,
-  width: '220px',
-  minWidth: '180px',
-  maxWidth: '220px',
-  flex: '1 1 180px',
-  minHeight: '190px',
+  width: '170px',
+  minWidth: '140px',
+  maxWidth: '170px',
+  flex: '1 1 140px',
+  minHeight: '175px',
   cursor: 'pointer',
   transition: 'all 0.2s ease',
   '&:hover': {
@@ -66,19 +66,19 @@ const CardAvatar = styled(Box)(({ theme }) => ({
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  width: '70px',
-  height: '70px',
+  width: '55px',
+  height: '55px',
   borderRadius: '12px',
   backgroundColor: theme.palette.background.default,
   flexShrink: 0,
   [theme.breakpoints.down('sm')]: {
-    width: '55px',
-    height: '55px',
+    width: '50px',
+    height: '50px',
   },
 }));
 
 const CardTitle = styled(Typography)(({ theme }) => ({
-  fontSize: '16px',
+  fontSize: '14px',
   fontWeight: 600,
   color: theme.palette.text.primary,
   textAlign: 'center',
@@ -87,7 +87,7 @@ const CardTitle = styled(Typography)(({ theme }) => ({
   whiteSpace: 'nowrap',
   width: '100%',
   [theme.breakpoints.down('sm')]: {
-    fontSize: '14px',
+    fontSize: '13px',
   },
 }));
 
@@ -123,7 +123,21 @@ interface FeaturedAppBannerProps {
   featuredApps: any[];
 }
 
-export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
+function featuredAppsAreEqual(
+  prev: FeaturedAppBannerProps,
+  next: FeaturedAppBannerProps
+): boolean {
+  if (prev.featuredApps === next.featuredApps) return true;
+  const a = prev.featuredApps;
+  const b = next.featuredApps;
+  if (!a || !b || a.length !== b.length) return false;
+  return a.every(
+    (app: any, i: number) =>
+      b[i]?.name === app?.name && b[i]?.service === app?.service
+  );
+}
+
+const FeaturedAppBannerInner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const [startIndex, setStartIndex] = useState(0);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -135,10 +149,10 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
 
   // Determine number of visible cards based on screen size
   const getVisibleCount = () => {
-    if (isXSmall) return 1;
-    if (isSmall) return 2;
-    if (isMedium) return 3;
-    return 4; // Large screens
+    if (isXSmall) return 2;
+    if (isSmall) return 3;
+    if (isMedium) return 4;
+    return 6; // Large screens
   };
 
   const visibleCount = getVisibleCount();
@@ -162,24 +176,24 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
   const canGoBack = startIndex > 0;
   const canGoForward = startIndex + visibleCount < featuredApps.length;
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => {
     setStartIndex((prev) => Math.max(0, prev - 1));
-  };
+  }, []);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setStartIndex((prev) =>
       Math.min(featuredApps.length - visibleCount, prev + 1)
     );
-  };
+  }, [featuredApps.length, visibleCount]);
 
-  const handleOpenApp = (app: any, e: React.MouseEvent) => {
+  const handleOpenApp = useCallback((app: any, e: React.MouseEvent) => {
     e.stopPropagation();
     executeEvent('addTab', { data: app });
-  };
+  }, []);
 
-  const handleViewDetails = (app: any) => {
+  const handleViewDetails = useCallback((app: any) => {
     executeEvent('selectedAppInfo', { data: app });
-  };
+  }, []);
 
   return (
     <CarouselContainer>
@@ -207,8 +221,8 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
               <CardAvatar>
                 <Avatar
                   sx={{
-                    height: { xs: '40px', sm: '50px' },
-                    width: { xs: '40px', sm: '50px' },
+                    height: { xs: '36px', sm: '42px' },
+                    width: { xs: '36px', sm: '42px' },
                     '& img': {
                       objectFit: 'fill',
                     },
@@ -277,3 +291,10 @@ export const FeaturedAppBanner = ({ featuredApps }: FeaturedAppBannerProps) => {
     </CarouselContainer>
   );
 };
+
+FeaturedAppBannerInner.displayName = 'FeaturedAppBanner';
+
+export const FeaturedAppBanner = memo(
+  FeaturedAppBannerInner,
+  featuredAppsAreEqual
+);

@@ -1,9 +1,4 @@
-import { Fragment, useContext, useEffect, useState } from 'react';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import Divider from '@mui/material/Divider';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Avatar from '@mui/material/Avatar';
 import Typography from '@mui/material/Typography';
 import {
@@ -21,12 +16,21 @@ import {
 import { CustomButton, Label } from '../styles/App-styles.ts';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
+import PersonIcon from '@mui/icons-material/Person';
 import { Spacer } from '../common/Spacer.tsx';
+import {
+  deleteAvatar,
+  loadAvatar,
+  resizeImageToAvatar,
+  saveAvatar,
+} from '../utils/avatarStorage.ts';
 import {
   getWallets,
   storeWallets,
   walletVersion,
 } from '../background/background.ts';
+import { getPrimaryNameForAvatar } from './Group/groupApi';
+import { getBaseApiReactForAvatar } from '../App';
 import { useModal } from '../hooks/useModal.tsx';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet.ts';
 import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
@@ -34,7 +38,8 @@ import { crypto } from '../constants/decryptWallet.ts';
 import { LoadingButton } from '@mui/lab';
 import { PasswordField } from './index.ts';
 import { HtmlTooltip } from './NotAuthenticated.tsx';
-import { QORTAL_APP_CONTEXT } from '../App.tsx';
+import { useAtomValue } from 'jotai';
+import { hasSeenGettingStartedAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
 
 const parsefilenameQortal = (filename) => {
@@ -47,10 +52,15 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   const [seedValue, setSeedValue] = useState('');
   const [seedName, setSeedName] = useState('');
   const [seedError, setSeedError] = useState('');
-  const { hasSeenGettingStarted } = useContext(QORTAL_APP_CONTEXT);
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
   const [password, setPassword] = useState('');
   const [isOpenSeedModal, setIsOpenSeedModal] = useState(false);
   const [isLoadingEncryptSeed, setIsLoadingEncryptSeed] = useState(false);
+  const [primaryNamesByAddress, setPrimaryNamesByAddress] = useState<
+    Record<string, string>
+  >({});
+  const fetchingAddressesRef = useRef<Set<string>>(new Set());
+  const observerRef = useRef<IntersectionObserver | null>(null);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -60,6 +70,48 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     'tutorial',
   ]);
   const { isShow, onCancel, onOk, show } = useModal();
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target as HTMLElement;
+          const address = el.getAttribute('data-address');
+          if (!address || fetchingAddressesRef.current.has(address)) return;
+          fetchingAddressesRef.current.add(address);
+          getPrimaryNameForAvatar(address)
+            .then((name) => {
+              if (name) {
+                setPrimaryNamesByAddress((prev) =>
+                  prev[address] === undefined
+                    ? { ...prev, [address]: name }
+                    : prev
+                );
+              }
+            })
+            .catch(() => {})
+            .finally(() => {
+              fetchingAddressesRef.current.delete(address);
+              observerRef.current?.unobserve(el);
+            });
+        });
+      },
+      { rootMargin: '100px', threshold: 0.01 }
+    );
+    return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    };
+  }, []);
+
+  const registerCardRef = useCallback((address: string) => {
+    return (el: HTMLElement | null) => {
+      if (!el) return;
+      el.setAttribute('data-address', address);
+      observerRef.current?.observe(el);
+    };
+  }, []);
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: {
@@ -284,31 +336,36 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
       )}
 
       {wallets?.length > 0 && (
-        <List
+        <Box
           sx={{
-            backgroundColor: theme.palette.background.paper,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px',
             maxHeight: '60vh',
-            maxWidth: '500px',
-            overflowX: 'hidden',
             overflowY: 'auto',
             width: '100%',
+            maxWidth: '700px',
+            padding: '8px',
           }}
         >
           {wallets?.map((wallet, idx) => {
             return (
-              <>
-                <WalletItem
-                  setSelectedWallet={selectedWalletFunc}
-                  key={wallet?.address0}
-                  wallet={wallet}
-                  idx={idx}
-                  updateWalletItem={updateWalletItem}
-                />
-                <Divider variant="inset" component="li" />
-              </>
+              <WalletItem
+                setSelectedWallet={selectedWalletFunc}
+                key={wallet?.address0}
+                wallet={wallet}
+                idx={idx}
+                updateWalletItem={updateWalletItem}
+                primaryName={
+                  wallet?.address0
+                    ? primaryNamesByAddress[wallet.address0]
+                    : undefined
+                }
+                registerCardRef={registerCardRef}
+              />
             );
           })}
-        </List>
+        </Box>
       )}
 
       <Box
@@ -538,7 +595,14 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
   );
 };
 
-const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
+const WalletItem = ({
+  wallet,
+  updateWalletItem,
+  idx,
+  setSelectedWallet,
+  primaryName,
+  registerCardRef,
+}) => {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const [isEdit, setIsEdit] = useState(false);
@@ -559,94 +623,160 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
       setNote(wallet.note);
     }
   }, [wallet]);
+
+  const qortalAvatarSrc =
+    primaryName &&
+    `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`;
+  const displayAvatarSrc = qortalAvatarSrc || undefined;
+  const displayName =
+    primaryName ||
+    wallet?.name ||
+    (wallet?.filename ? parsefilenameQortal(wallet.filename) : null) ||
+    'No name';
+
   return (
-    <>
-      <ButtonBase
-        onClick={() => {
-          setSelectedWallet(wallet);
-        }}
+    <Box
+      ref={wallet?.address0 ? registerCardRef(wallet.address0) : undefined}
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '16px',
+        borderRadius: '12px',
+        backgroundColor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.divider}`,
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        cursor: isEdit ? 'default' : 'pointer',
+        minHeight: '180px',
+        ...(isEdit
+          ? { gridColumn: '1 / -1' }
+          : {
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: theme.shadows[4],
+              },
+            }),
+      }}
+      onClick={() => {
+        if (!isEdit) setSelectedWallet(wallet);
+      }}
+    >
+      {/* Card header: avatar + edit button */}
+      <Box
         sx={{
-          width: '100%',
-          padding: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 1.5,
         }}
       >
-        <ListItem
-          sx={{
-            bgcolor: theme.palette.background.default,
-            flexGrow: 1,
-            '&:hover': {
-              backgroundColor: theme.palette.action.hover,
-              transform: 'scale(1.01)',
-            },
-            transition: 'all 0.1s ease-in-out',
-          }}
-          alignItems="flex-start"
+        <Avatar
+          alt={displayName}
+          src={displayAvatarSrc}
+          sx={{ width: 56, height: 56 }}
         >
-          <ListItemAvatar>
-            <Avatar alt="" src="/static/images/avatar/1.jpg" />
-          </ListItemAvatar>
-
-          <ListItemText
-            primary={
-              wallet?.name
-                ? wallet.name
-                : wallet?.filename
-                  ? parsefilenameQortal(wallet?.filename)
-                  : 'No name'
-            }
-            secondary={
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <Typography
-                  component="span"
-                  variant="body2"
-                  sx={{ color: theme.palette.text.primary, display: 'inline' }}
-                >
-                  {wallet?.address0}
-                </Typography>
-                {wallet?.note}
-                <Typography
-                  sx={{
-                    textAlign: 'end',
-                    marginTop: '5px',
-                  }}
-                >
-                  {t('core:action.login', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-            }
-          />
-        </ListItem>
-
+          <PersonIcon sx={{ fontSize: 32 }} />
+        </Avatar>
         <IconButton
           sx={{
-            alignSelf: 'flex-start',
-            bgcolor: theme.palette.background.default,
             color: theme.palette.text.primary,
           }}
           onClick={(e) => {
             e.stopPropagation();
             setIsEdit(true);
           }}
-          edge="end"
           aria-label={t('core:action.edit', {
             postProcess: 'capitalizeFirstChar',
           })}
         >
           <EditIcon />
         </IconButton>
-      </ButtonBase>
+      </Box>
+
+      {/* Card body: name, address, note */}
+      <Typography
+        sx={{
+          fontSize: '16px',
+          fontWeight: 600,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          color: theme.palette.text.primary,
+        }}
+      >
+        {displayName}
+      </Typography>
+
+      <Typography
+        sx={{
+          fontSize: '13px',
+          color: theme.palette.text.secondary,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          mt: 0.5,
+        }}
+      >
+        {wallet?.address0}
+      </Typography>
+
+      {wallet?.note && (
+        <Typography
+          sx={{
+            fontSize: '13px',
+            color: theme.palette.text.secondary,
+            fontStyle: 'italic',
+            mt: 0.5,
+          }}
+        >
+          {wallet.note}
+        </Typography>
+      )}
+
+      {/* Card footer: choose button */}
+      {!isEdit && (
+        <Box
+          sx={{
+            mt: 'auto',
+            pt: 1.5,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <ButtonBase
+            sx={{
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              borderRadius: '20px',
+              padding: '6px 24px',
+              fontSize: '13px',
+              fontWeight: 500,
+              transition: 'filter 0.2s ease, transform 0.1s ease',
+              '&:hover': {
+                filter: 'brightness(1.2)',
+                transform: 'scale(1.05)',
+              },
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedWallet(wallet);
+            }}
+          >
+            {t('core:action.choose', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </ButtonBase>
+        </Box>
+      )}
+
+      {/* Edit mode panel */}
       {isEdit && (
         <Box
           sx={{
-            padding: '8px',
+            mt: 2,
+            pt: 2,
+            borderTop: `1px solid ${theme.palette.divider}`,
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <Label>
             {t('core:name', {
@@ -746,6 +876,6 @@ const WalletItem = ({ wallet, updateWalletItem, idx, setSelectedWallet }) => {
           </Box>
         </Box>
       )}
-    </>
+    </Box>
   );
 };

@@ -31,6 +31,7 @@ export const MainAvatar = ({ myName, balance, setOpenSnack, setInfoSnack }) => {
 
   const [anchorEl, setAnchorEl] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
   // Handle child element click to open Popover
   const handleChildClick = (event) => {
     event.stopPropagation(); // Prevent parent onClick from firing

@@ -22,6 +22,7 @@
     "choose_name": "اختر اسم",
     "close": "إغلاق",
     "close_chat": "غلق الدردشة",
+    "confirm": "تأكيد",
     "continue": "متابعة",
     "continue_logout": "متابعة الخروج",
     "copy_link": "نسخ الرابط",
@@ -50,7 +51,6 @@
     "join": "انضمام",
     "leave_comment": "ترك تعليق",
     "load_announcements": "تحميل إعلانات أقدم",
-    "login": "تسجيل دخول",
     "logout": "تسجيل خروج",
     "new": {
       "chat": "دردشة جديدة",
@@ -78,6 +78,8 @@
     "save_disk": "حفظ على القرص",
     "search": "بحث",
     "search_apps": "بحث عن تطبيقات",
+    "search_apps_or_link": "البحث عن التطبيقات أو إدخال رابط qortal://",
+    "open_as_qortal_link": "فتح كرابط Qortal",
     "search_groups": "بحث عن جروبات",
     "search_chat_text": "بحث في نص الدردشة",
     "see_qr_code": "عرض كود QR",
@@ -128,6 +130,7 @@
   "contact_other": "اتصالات",
   "core": {
     "block_height": "رقم البلوك",
+    "data_peers": "أقران QDN (البيانات)",
     "information": "معلومات السرفر",
     "peers": "السيرفرات المتصلة",
     "version": "نسخة السرفر"
@@ -171,6 +174,7 @@
   "last_height": "آخر ارتفاع",
   "level": "مستوى",
   "library": "مكتبة",
+  "explore": "استكشاف",
   "list": {
     "bans": "قائمة المحظورين",
     "groups": "قائمة الجروبات",
@@ -189,6 +193,7 @@
   "message": {
     "error": {
       "address_not_found": "لم يتم العثور على عنوانك",
+      "app_already_voted": "لقد قمت بالتصويت لهذا التطبيق بالفعل",
       "app_need_name": "تطبيقك يحتاج إلى اسم",
       "build_app": "غير قادر على بناء تطبيق خاص",
       "decrypt_app": "غير قادر على فك تشفير التطبيق الخاص",
@@ -243,9 +248,10 @@
       "editing_message": "جاري تعديل الرسالة",
       "encrypted_not": "غير مشفر",
       "encrypted": "مشفر",
-      "fee_qort": "الرسوم: {{ message }} كورتال",
+      "amount_qort": "المبلغ: {{ amount }} كورتال",
+      "fee_qort": "الرسوم: {{ fee }} كورتال",
       "fetching_data": "جاري جلب بيانات التطبيق",
-      "foreign_fee": "رسوم العملات الأجنبية: {{ message }}",
+      "foreign_fee": "رسوم العملات الأجنبية: {{ fee }}",
       "get_qort_trade_portal": "احصل على كورتال من بوابة التبادل عبر السلاسل",
       "mentioned": "تم الإشارة إليك",
       "message_with_image": "هذه الرسالة تحتوي بالفعل على صورة",
@@ -364,9 +370,9 @@
   "option": "خيار",
   "option_no": "لا توجد خيارات",
   "option_other": "خيارات",
-  "page": {
-    "last": "آخر",
+  "pagination": {
     "first": "أول",
+    "last": "آخر",
     "next": "تالي",
     "previous": "سابق"
   },
@@ -396,7 +402,9 @@
     "status": "الحالة",
     "status_ready": "جاهز (مثبت)",
     "status_not_installed": "غير مثبت",
-    "tags": "الوسوم"
+    "tags": "الوسوم",
+    "size": "الحجم",
+    "updated": "تم التحديث"
   },
   "filter": {
     "all": "الكل",
@@ -409,6 +417,18 @@
   },
   "receiver": "المستقبِل",
   "sender": "المرسِل",
+  "details_for_address": "تفاصيل العنوان",
+  "total_in_orders": "الإجمالي في الطلبات",
+  "total_received": "إجمالي المستلم",
+  "total_sent": "إجمالي المرسل",
+  "total_blocks_minted": "إجمالي الكتل المُنتَجة",
+  "remaining_to_level": "المتبقي للمستوى {{level}}",
+  "blocks": "كتل",
+  "days_of_minting": "أيام الإنتاج",
+  "payments_count": "المدفوعات ({{count}})",
+  "trades_count": "المعاملات ({{count}})",
+  "items_per_page": "عناصر لكل صفحة:",
+  "pagination_of": "{{from}}-{{to}} من {{total}}",
   "server": "الخادم",
   "service_type": "نوع الخدمة",
   "settings": "الإعدادات",
@@ -420,6 +440,7 @@
     "recently_updated": "تم تحديثها مؤخراً"
   },
   "tabs": {
+    "add_private": "+ تطبيق خاص",
     "categories": "الفئات",
     "community_apps": "تطبيقات المجتمع",
     "my_apps": "تطبيقاتي",

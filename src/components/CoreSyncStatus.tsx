@@ -10,7 +10,7 @@ import { manifestData } from './NotAuthenticated';
 import { useAtom } from 'jotai';
 import { nodeInfosAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { isLocalNodeUrl } from '../constants/constants';
 
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
@@ -60,6 +60,7 @@ export const CoreSyncStatus = () => {
       isMintingPossible = false,
       height = 0,
       numberOfConnections = 0,
+      numberOfDataConnections = 0,
     } = nodeInfos;
     const buildVersion = coreInfos?.buildVersion
       ? coreInfos?.buildVersion.substring(0, 20)
@@ -142,6 +143,13 @@ export const CoreSyncStatus = () => {
           </h4>
 
           <h4 className="lineHeight">
+            {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+            <span style={{ color: '#03a9f4' }}>
+              {numberOfDataConnections || ''}
+            </span>
+          </h4>
+
+          <h4 className="lineHeight">
             {t('auth:node.using', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -149,7 +157,7 @@ export const CoreSyncStatus = () => {
             <span
               style={{
                 color: '#03a9f4',
-                ...(nodeBase === HTTP_LOCALHOST_12391 && {
+                ...(isLocalNodeUrl(nodeBase) && {
                   fontWeight: 'bold',
                   color: theme.palette.other.positive,
                 }),

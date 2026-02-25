@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useAtomValue } from 'jotai';
 import { Box, Typography, styled, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { AppLibrarySubTitle, AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { AppCardEnhanced, FeaturedAppBanner } from '../AppCard';
-import { officialAppList } from '../config/officialApps';
-import { getBaseApiReact } from '../../../App';
+import { isFeaturedApp, officialAppList } from '../config/officialApps';
+import {
+  featuredRatingsMapAtomFamily,
+  getCacheKey,
+  useAppRatings,
+} from '../../../hooks/useAppRatings';
 
 const AppsGrid = styled(Box)({
   display: 'grid',
@@ -25,158 +30,92 @@ const SectionHeader = styled(Box)({
 interface OfficialAppsTabProps {
   availableQapps: any[];
   myName?: string;
+  searchValue?: string;
 }
-
-interface AppRating {
-  name: string;
-  averageRating: number;
-  ratingCount: number;
-}
-
-// Fetch rating for a single app
-const fetchAppRating = async (
-  appName: string,
-  service: string
-): Promise<AppRating> => {
-  try {
-    const pollName = `app-library-${service}-rating-${appName}`;
-    const url = `${getBaseApiReact()}/polls/${pollName}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      return { name: appName, averageRating: 0, ratingCount: 0 };
-    }
-
-    const voteCountsUrl = `${getBaseApiReact()}/polls/votes/${pollName}`;
-    const votesResponse = await fetch(voteCountsUrl);
-
-    if (!votesResponse.ok) {
-      return { name: appName, averageRating: 0, ratingCount: 0 };
-    }
-
-    const votesData = await votesResponse.json();
-    const voteCount = votesData.voteCounts || [];
-
-    // Filter out initial value votes
-    const ratingVotes = voteCount.filter(
-      (vote: any) => !vote.optionName.startsWith('initialValue-')
-    );
-
-    // Check for initial value
-    const initialValueVote = voteCount.find((vote: any) =>
-      vote.optionName.startsWith('initialValue-')
-    );
-
-    if (initialValueVote) {
-      const initialRating = parseInt(
-        initialValueVote.optionName.replace('initialValue-', ''),
-        10
-      );
-      if (!isNaN(initialRating)) {
-        ratingVotes.push({
-          optionName: initialRating.toString(),
-          voteCount: 1,
-        });
-      }
-    }
-
-    // Calculate average rating
-    let totalScore = 0;
-    let totalVotes = 0;
-
-    ratingVotes.forEach((vote: any) => {
-      const rating = parseInt(vote.optionName, 10);
-      if (!isNaN(rating)) {
-        totalScore += rating * vote.voteCount;
-        totalVotes += vote.voteCount;
-      }
-    });
-
-    const averageRating = totalVotes > 0 ? totalScore / totalVotes : 0;
-
-    return {
-      name: appName,
-      averageRating,
-      ratingCount: totalVotes,
-    };
-  } catch (error) {
-    return { name: appName, averageRating: 0, ratingCount: 0 };
-  }
-};
 
 export const OfficialAppsTab = ({
   availableQapps,
   myName = '',
+  searchValue = '',
 }: OfficialAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
-  const [appRatings, setAppRatings] = useState<Map<string, AppRating>>(
-    new Map()
-  );
-  const [ratingsLoaded, setRatingsLoaded] = useState(false);
+  const { fetchRating } = useAppRatings();
+  const fetchedAppsRef = useRef<Set<string>>(new Set());
 
-  // Filter to get only official apps
+  // Filter to get only official apps, then apply search
   const officialApps = useMemo(() => {
-    return availableQapps.filter(
+    let result = availableQapps.filter(
       (app) =>
         app.service === 'APP' &&
         officialAppList.includes(app?.name?.toLowerCase())
     );
-  }, [availableQapps]);
 
-  // Fetch ratings for all official apps
-  useEffect(() => {
-    const fetchAllRatings = async () => {
-      const ratingsMap = new Map<string, AppRating>();
-
-      // Fetch ratings in parallel with a limit
-      const promises = officialApps.map((app) =>
-        fetchAppRating(app.name, app.service)
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
       );
-
-      const results = await Promise.all(promises);
-
-      results.forEach((rating) => {
-        ratingsMap.set(rating.name.toLowerCase(), rating);
-      });
-
-      setAppRatings(ratingsMap);
-      setRatingsLoaded(true);
-    };
-
-    if (officialApps.length > 0) {
-      fetchAllRatings();
     }
-  }, [officialApps]);
 
-  // Get top 4 apps by rating for the featured section
+    return result;
+  }, [availableQapps, searchValue]);
+
+  // Featured app list (stable so we can subscribe only to their ratings)
+  const featuredAppsBase = useMemo(
+    () => officialApps.filter((app) => isFeaturedApp(app.name)),
+    [officialApps]
+  );
+
+  // Stable key string for the set of featured app cache keys (order-independent)
+  const featuredKeysStable = useMemo(() => {
+    const keys = featuredAppsBase.map((a) =>
+      getCacheKey(a.name, a.service)
+    );
+    return [...new Set(keys)].sort().join(',');
+  }, [featuredAppsBase]);
+
+  // Subscribe only to featured apps' ratings – re-render only when one of these changes
+  const ratingsForFeaturedMap = useAtomValue(
+    featuredRatingsMapAtomFamily(featuredKeysStable)
+  );
+
+  // Fetch ratings for official apps (limited set ~17 apps) - only once per app
+  useEffect(() => {
+    officialApps.forEach((app) => {
+      const key = getCacheKey(app.name, app.service);
+      if (!fetchedAppsRef.current.has(key)) {
+        fetchedAppsRef.current.add(key);
+        fetchRating(app.name, app.service);
+      }
+    });
+  }, [officialApps, fetchRating]);
+
+  // Get featured apps sorted by rating (depends only on featured ratings map)
   const featuredApps = useMemo(() => {
-    if (!ratingsLoaded || appRatings.size === 0) {
-      // Return first 4 apps while loading
-      return officialApps.slice(0, 4);
-    }
-
-    // Sort by average rating (highest first), then by rating count
-    const sortedApps = [...officialApps].sort((a, b) => {
-      const ratingA = appRatings.get(a.name.toLowerCase());
-      const ratingB = appRatings.get(b.name.toLowerCase());
+    return [...featuredAppsBase].sort((a, b) => {
+      const keyA = getCacheKey(a.name, a.service);
+      const keyB = getCacheKey(b.name, b.service);
+      const ratingA = ratingsForFeaturedMap[keyA];
+      const ratingB = ratingsForFeaturedMap[keyB];
 
       const avgA = ratingA?.averageRating || 0;
       const avgB = ratingB?.averageRating || 0;
 
-      // Primary sort by average rating
       if (avgB !== avgA) {
         return avgB - avgA;
       }
 
-      // Secondary sort by rating count
-      const countA = ratingA?.ratingCount || 0;
-      const countB = ratingB?.ratingCount || 0;
+      const countA = ratingA?.totalVotes || 0;
+      const countB = ratingB?.totalVotes || 0;
       return countB - countA;
     });
-
-    return sortedApps.slice(0, 4);
-  }, [officialApps, appRatings, ratingsLoaded]);
+  }, [featuredAppsBase, ratingsForFeaturedMap]);
 
   return (
     <AppsWidthLimiter>

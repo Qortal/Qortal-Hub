@@ -1,13 +1,13 @@
 import { useContext, useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
 import { Box, CircularProgress, Input, useTheme } from '@mui/material';
 import ShortUniqueId from 'short-unique-id';
 import {
   CloseContainer,
   ComposeContainer,
   ComposeP,
-  InstanceFooter,
   InstanceListContainer,
-  InstanceListHeader,
   NewMessageHeaderP,
   NewMessageInputRow,
   NewMessageSendButton,
@@ -24,6 +24,7 @@ import {
 } from '../../../App';
 import { getFee } from '../../../background/background';
 import TipTap from '../../Chat/TipTap';
+import '../../Chat/chat.css';
 import { MessageDisplay } from '../../Chat/MessageDisplay';
 import { CustomizedSnackbars } from '../../Snackbar/Snackbar';
 import { saveTempPublish } from '../../Chat/GroupAnnouncements';
@@ -136,14 +137,14 @@ export const NewThread = ({
   currentThread,
   isMessage = false,
   publishCallback,
-  userInfo,
   getSecretKey,
   closeCallback,
   postReply,
-  myName,
   setPostReply,
   isPrivate,
 }: NewMessageProps) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const myName = userInfo?.name;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -428,23 +429,26 @@ export const NewThread = ({
       <ReusableModal
         open={isOpen}
         customStyles={{
-          maxHeight: '95vh',
-          maxWidth: '950px',
-          height: '700px',
-          borderRadius: '12px 12px 0px 0px',
-          background: theme.palette.background.paper,
-          padding: '0px',
-          gap: '0px',
+          maxHeight: '90vh',
+          maxWidth: '640px',
+          width: '90%',
+          borderRadius: '16px',
+          backgroundColor: theme.palette.background.paper,
+          padding: 0,
+          gap: 0,
+          boxShadow: theme.shadows[24],
+          border: '1px solid',
+          borderColor: theme.palette.divider,
         }}
       >
-        <InstanceListHeader
+        <Box
           sx={{
-            height: '50px',
-            padding: '20px 42px',
-            flexDirection: 'row',
             alignItems: 'center',
+            borderBottom: '1px solid',
+            borderColor: theme.palette.divider,
+            display: 'flex',
             justifyContent: 'space-between',
-            backgroundColor: theme.palette.background.paper,
+            padding: '16px 24px',
           }}
         >
           <NewMessageHeaderP>
@@ -457,39 +461,30 @@ export const NewThread = ({
                 })}
           </NewMessageHeaderP>
 
-          <CloseContainer
-            sx={{
-              height: '40px',
-            }}
-            onClick={closeModal}
-          >
+          <CloseContainer onClick={closeModal}>
             <CloseIcon
-              sx={{
-                color: theme.palette.text.primary,
-              }}
+              sx={{ color: theme.palette.text.secondary, fontSize: 22 }}
             />
           </CloseContainer>
-        </InstanceListHeader>
+        </Box>
 
         <InstanceListContainer
           sx={{
             backgroundColor: theme.palette.background.paper,
-            padding: '20px 42px',
-            height: 'calc(100% - 165px)',
-            flexShrink: 0,
+            padding: '24px',
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflow: 'auto',
           }}
         >
           {!isMessage && (
             <>
-              <Spacer height="10px" />
-
+              <Spacer height="8px" />
               <NewMessageInputRow>
                 <Input
                   id="standard-adornment-name"
                   value={threadTitle}
-                  onChange={(e) => {
-                    setThreadTitle(e.target.value);
-                  }}
+                  onChange={(e) => setThreadTitle(e.target.value)}
                   placeholder={t('core:thread_title', {
                     postProcess: 'capitalizeFirstChar',
                   })}
@@ -498,41 +493,38 @@ export const NewThread = ({
                   autoCorrect="off"
                   sx={{
                     width: '100%',
+                    fontFamily: 'Inter',
+                    fontSize: '18px',
                     '& .MuiInput-input::placeholder': {
-                      fontSize: '20px',
-                      fontStyle: 'normal',
-                      fontWeight: 400,
-                      lineHeight: '120%', // 24px
-                      letterSpacing: '0.15px',
-                      opacity: 1,
+                      opacity: 0.7,
                     },
-                    '&:focus': {
-                      outline: 'none',
-                    },
-                    // Add any additional styles for the input here
+                    '&:focus': { outline: 'none' },
                   }}
                 />
               </NewMessageInputRow>
             </>
           )}
 
-          {postReply && postReply.textContentV2 && (
+          {postReply?.textContentV2 && (
             <Box
               sx={{
                 width: '100%',
                 maxHeight: '120px',
                 overflow: 'auto',
+                mt: 1,
               }}
             >
-              <MessageDisplay htmlContent={postReply?.textContentV2} />
+              <MessageDisplay htmlContent={postReply.textContentV2} />
             </Box>
           )}
 
-          <Spacer height="30px" />
+          <Spacer height="20px" />
 
           <Box
             sx={{
-              maxHeight: '40vh',
+              minHeight: '200px',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <TipTap
@@ -540,62 +532,63 @@ export const NewThread = ({
               onEnter={sendMail}
               disableEnter
               overrideMobile
-              customEditorHeight="240px"
+              customEditorHeight={240}
+              composerStyle
+              maxHeightOffset={120}
             />
           </Box>
         </InstanceListContainer>
 
-        <InstanceFooter
+        <Box
           sx={{
             alignItems: 'center',
-            backgroundColor: theme.palette.background.paper,
-            height: '90px',
-            padding: '20px 42px',
+            borderTop: '1px solid',
+            borderColor: theme.palette.divider,
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '16px 24px',
           }}
         >
-          <NewMessageSendButton onClick={sendMail}>
+          <NewMessageSendButton
+            onClick={sendMail}
+            aria-busy={isSending}
+            sx={{ opacity: isSending ? 0.8 : 1 }}
+          >
             {isSending && (
-              <Box
+              <CircularProgress
+                size={20}
                 sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  height: '100%',
-                  justifyContent: 'center',
+                  color: theme.palette.text.secondary,
                   position: 'absolute',
-                  width: '100%',
+                  left: '50%',
+                  top: '50%',
+                  marginTop: '-10px',
+                  marginLeft: '-10px',
                 }}
-              >
-                <CircularProgress
-                  sx={{
-                    color: theme.palette.text.primary,
-                  }}
-                  size={'12px'}
-                />
-              </Box>
+              />
             )}
-
-            <NewMessageSendP>
+            <NewMessageSendP
+              sx={{ visibility: isSending ? 'hidden' : 'visible' }}
+            >
               {isMessage
-                ? t('core:action.post', {
-                    postProcess: 'capitalizeFirstChar',
-                  })
+                ? t('core:action.post', { postProcess: 'capitalizeFirstChar' })
                 : t('core:action.create_thread', {
                     postProcess: 'capitalizeFirstChar',
                   })}
             </NewMessageSendP>
-
-            {isMessage ? (
-              <SendNewMessage />
-            ) : (
-              <CreateThreadIcon
-                color={theme.palette.text.primary}
-                opacity={1}
-                height="25px"
-                width="25px"
-              />
-            )}
+            {!isSending &&
+              (isMessage ? (
+                <SendNewMessage />
+              ) : (
+                <CreateThreadIcon
+                  color={theme.palette.text.primary}
+                  opacity={1}
+                  height="20px"
+                  width="20px"
+                />
+              ))}
           </NewMessageSendButton>
-        </InstanceFooter>
+        </Box>
       </ReusableModal>
 
       <CustomizedSnackbars

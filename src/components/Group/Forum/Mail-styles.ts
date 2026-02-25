@@ -1,10 +1,11 @@
 import { Typography, Box } from '@mui/material';
 import { styled } from '@mui/system';
+import { appHeighOffset } from '../../Desktop/CustomTitleBar';
 
 export const MailContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  height: 'calc(100vh - 78px)',
+  height: `calc(100vh - ${78 + appHeighOffset}px)`,
   overflow: 'hidden',
   width: '100%',
 }));
@@ -66,13 +67,14 @@ export const MailBodyInnerScroll = styled(Box)`
 
 export const ComposeContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
+  borderRadius: '10px',
   cursor: 'pointer',
   display: 'flex',
-  gap: '7px',
+  gap: '8px',
   height: '100%',
   justifyContent: 'center',
-  transition: '0.2s background-color',
-  width: '150px',
+  padding: '10px 14px',
+  transition: 'background-color 0.2s ease',
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
   },
@@ -87,7 +89,9 @@ export const ComposeContainerBlank = styled(Box)(({ theme }) => ({
 }));
 
 export const ComposeP = styled(Typography)(({ theme }) => ({
-  fontSize: '15px',
+  color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '14px',
   fontWeight: 500,
 }));
 
@@ -147,14 +151,19 @@ export const InstanceP = styled(Typography)(({ theme }) => ({
   fontWeight: 500,
 }));
 
-export const InstanceListParent = styled(Typography)(({ theme }) => ({
-  border: '1px solid rgba(0, 0, 0, 0.1)',
+export const InstanceListParent = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  border: '1px solid',
+  borderColor: theme.palette.divider,
+  borderRadius: '12px',
+  boxShadow: theme.shadows[4],
   display: 'flex',
   flexDirection: 'column',
-  maxHeight: '325px',
-  minHeight: '246px',
-  padding: '10px 0px 7px 0px',
-  width: '425px', // only one width now
+  maxHeight: '320px',
+  minHeight: 'unset',
+  overflow: 'hidden',
+  padding: '8px 0',
+  width: '220px',
 }));
 
 export const InstanceListHeader = styled(Typography)(({ theme }) => ({
@@ -280,16 +289,20 @@ export const NewMessageCloseImg = styled('img')({
 
 export const NewMessageHeaderP = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.primary,
-  fontSize: '18px',
+  fontFamily: 'Inter',
+  fontSize: '20px',
   fontWeight: 600,
+  letterSpacing: '-0.02em',
+  lineHeight: 1.3,
 }));
 
 export const NewMessageInputRow = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  borderBottom: '3px solid rgba(237, 239, 241, 1)',
+  borderBottom: '1px solid',
+  borderColor: theme.palette.divider,
   display: 'flex',
   justifyContent: 'space-between',
-  paddingBottom: '6px',
+  paddingBottom: '8px',
   width: '100%',
 }));
 
@@ -341,31 +354,39 @@ export const NewMessageAttachmentImg = styled('img')({
 
 export const NewMessageSendButton = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  border: `1px solid ${theme.palette.border.main}`, // you can replace with theme.palette.divider or whatever you want later
-  borderRadius: '4px',
-  color: theme.palette.text.primary, // replace later with theme.palette.text.primary if needed
+  backgroundColor: theme.palette.background.paper,
+  border: '1px solid',
+  borderColor: theme.palette.divider,
+  borderRadius: '8px',
+  color: theme.palette.text.primary,
   cursor: 'pointer',
   display: 'inline-flex',
+  fontFamily: 'Inter',
   gap: '8px',
   justifyContent: 'center',
-  minWidth: '120px',
-  padding: '8px 16px 8px 12px',
+  minHeight: '44px',
+  minWidth: '100px',
+  padding: '10px 20px',
   position: 'relative',
-  transition: 'all 0.2s',
+  transition: 'background-color 0.2s ease, border-color 0.2s ease',
   width: 'fit-content',
   '&:hover': {
-    backgroundColor: theme.palette.action.hover, // replace with theme value if needed
+    backgroundColor: theme.palette.action.hover,
+    borderColor: theme.palette.divider,
+  },
+  '&:disabled, &[aria-busy="true"]': {
+    cursor: 'default',
+    opacity: 0.7,
   },
 }));
 
-export const NewMessageSendP = styled(Typography)`
-  font-family: Roboto;
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 500;
-  letter-spacing: -0.16px;
-  line-height: 120%; /* 19.2px */
-`;
+export const NewMessageSendP = styled(Typography)(({ theme }) => ({
+  fontFamily: 'Inter',
+  fontSize: '14px',
+  fontWeight: 500,
+  letterSpacing: '-0.01em',
+  lineHeight: 1.4,
+}));
 
 export const ShowMessageNameP = styled(Typography)`
   font-family: Roboto;
@@ -482,6 +503,7 @@ export const ThreadContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   maxWidth: '95%',
+  padding: '0 24px 24px',
   width: '100%',
 }));
 
@@ -493,27 +515,32 @@ export const GroupNameP = styled(Typography)`
   line-height: 120%; /* 30px */
 `;
 
-export const AllThreadP = styled(Typography)`
-  font-size: 20px;
-  font-style: normal;
-  font-weight: 400;
-  letter-spacing: 0.15px;
-  line-height: 120%; /* 24px */
-`;
+export const AllThreadP = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '17px',
+  fontWeight: 600,
+  letterSpacing: '-0.01em',
+  lineHeight: 1.3,
+}));
 
 export const SingleThreadParent = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.paper, // or remove if you want no background by default
-  borderRadius: '35px 4px 4px 35px',
+  backgroundColor: theme.palette.background.paper,
+  border: '1px solid',
+  borderColor: theme.palette.divider,
+  borderRadius: '14px',
+  boxShadow: theme.shadows[1],
   cursor: 'pointer',
   display: 'flex',
-  height: '76px',
-  marginBottom: '5px',
-  padding: '13px',
+  minHeight: '76px',
+  marginBottom: '10px',
+  padding: '16px 18px',
   position: 'relative',
-  transition: '0.2s all',
+  transition: 'box-shadow 0.2s, background-color 0.2s',
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
+    boxShadow: theme.shadows[2],
   },
 }));
 
@@ -531,68 +558,69 @@ export const SingleTheadMessageParent = styled(Box)(({ theme }) => ({
 export const ThreadInfoColumn = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
-  gap: '2px',
+  gap: '4px',
   height: '100%',
   justifyContent: 'center',
-  marginLeft: '10px',
-  width: '170px',
+  marginLeft: '14px',
+  minWidth: '120px',
+  flexShrink: 0,
 }));
 
-export const ThreadInfoColumnNameP = styled(Typography)`
-  font-family: Roboto;
-  font-size: 16px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
+export const ThreadInfoColumnNameP = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '14px',
+  fontWeight: 600,
+  lineHeight: 1.3,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}));
 
 export const ThreadInfoColumnbyP = styled('span')(({ theme }) => ({
   color: theme.palette.text.secondary,
-  fontFamily: 'Roboto',
-  fontSize: '16px',
-  fontStyle: 'normal',
+  fontFamily: 'Inter',
+  fontSize: '14px',
   fontWeight: 500,
-  lineHeight: 'normal',
+  lineHeight: 1.3,
 }));
 
 export const ThreadInfoColumnTime = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.secondary,
-  fontFamily: 'Roboto',
-  fontSize: '15px',
-  fontStyle: 'normal',
+  fontFamily: 'Inter',
+  fontSize: '13px',
   fontWeight: 500,
-  lineHeight: 'normal',
+  lineHeight: 1.3,
 }));
 
-export const ThreadSingleTitle = styled(Typography)`
-  font-family: Roboto;
-  font-size: 23px;
-  font-style: normal;
-  font-weight: 700;
-  line-height: normal;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: wrap;
-`;
+export const ThreadSingleTitle = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.primary,
+  fontFamily: 'Inter',
+  fontSize: '16px',
+  fontWeight: 600,
+  lineHeight: 1.4,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  display: '-webkit-box',
+  '-webkit-line-clamp': 2,
+  '-webkit-box-orient': 'vertical',
+}));
 
-export const ThreadSingleLastMessageP = styled(Typography)`
-  font-family: Roboto;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 600;
-  line-height: normal;
-`;
+export const ThreadSingleLastMessageP = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  fontFamily: 'Inter',
+  fontSize: '13px',
+  fontWeight: 500,
+  lineHeight: 1.3,
+}));
 
-export const ThreadSingleLastMessageSpanP = styled('span')`
-  font-family: Roboto;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: normal;
-`;
+export const ThreadSingleLastMessageSpanP = styled('span')(({ theme }) => ({
+  color: theme.palette.text.secondary,
+  fontFamily: 'Inter',
+  fontSize: '13px',
+  fontWeight: 400,
+  lineHeight: 1.3,
+}));
 
 export const GroupContainer = styled(Box)`
   overflow: auto;
@@ -602,17 +630,14 @@ export const GroupContainer = styled(Box)`
 
 export const CloseContainer = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  borderRadius: '0px 12px 0px 0px',
+  borderRadius: '50%',
   cursor: 'pointer',
   display: 'flex',
-  height: '50px',
+  height: '40px',
   justifyContent: 'center',
-  overflow: 'hidden',
-  position: 'absolute',
-  right: '0px',
-  top: '0px',
-  transition: '0.2s background-color',
-  width: '50px',
+  minWidth: '40px',
+  transition: 'background-color 0.2s ease',
+  width: '40px',
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
   },

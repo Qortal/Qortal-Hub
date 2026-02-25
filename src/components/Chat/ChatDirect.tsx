@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom, balanceAtom } from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
+import './chat.css';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
-import { Box, ButtonBase, Input, Typography, useTheme } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  ClickAwayListener,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Paper,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import SendIcon from '@mui/icons-material/Send';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
 import { getNameInfo } from '../Group/Group';
-import { Spacer } from '../../common/Spacer';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
   getBaseApiReact,
@@ -26,12 +44,15 @@ import ShortUniqueId from 'short-unique-id';
 import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { ReplyPreview } from './MessageItem';
 import { useTranslation } from 'react-i18next';
+import { useNameSearch } from '../../hooks/useNameSearch';
+import { validateAddress } from '../../utils/validateAddress';
 import {
   MAX_SIZE_MESSAGE,
   MESSAGE_LIMIT_WARNING,
   MIN_REQUIRED_QORTS,
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -42,11 +63,12 @@ export const ChatDirect = ({
   setSelectedDirect,
   setNewChat,
   getTimestampEnterChat,
-  myName,
-  balance,
   close,
   setMobileViewModeKeepOpen,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const myName = userInfo?.name;
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -61,6 +83,11 @@ export const ChatDirect = ({
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [directToValue, setDirectToValue] = useState('');
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const nameSearchInputRef = useRef<HTMLDivElement>(null);
+  const searchQuery = directToValue.trim().length >= 1 ? directToValue.trim() : '';
+  const { results: nameSearchResults, isLoading: nameSearchLoading } =
+    useNameSearch(searchQuery, 15);
   const hasInitialized = useRef(false);
   const [isLoading, setIsLoading] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
@@ -78,7 +105,7 @@ export const ChatDirect = ({
     editorRef.current = editorInstance;
   };
   const publicKeyOfRecipientRef = useRef(null);
-  
+
   const handleReaction = useCallback(
     async (reaction, chatMessage, reactionState = true) => {
       try {
@@ -103,7 +130,11 @@ export const ChatDirect = ({
 
         const sendMessageFunc = async () => {
           return await sendChatDirect(
-            { chatReference: chatMessage.signature, messageText: '', otherData },
+            {
+              chatReference: chatMessage.signature,
+              messageText: '',
+              otherData,
+            },
             selectedDirect?.address,
             publicKeyOfRecipient,
             false
@@ -120,7 +151,12 @@ export const ChatDirect = ({
           },
           chatReference: chatMessage.signature,
         };
-        addToQueue(sendMessageFunc, messageObj, 'chat-direct', selectedDirect?.address);
+        addToQueue(
+          sendMessageFunc,
+          messageObj,
+          'chat-direct',
+          selectedDirect?.address
+        );
       } catch (error) {
         const errorMsg = error?.message || error;
         setInfoSnack({
@@ -134,7 +170,14 @@ export const ChatDirect = ({
         resumeAllQueues();
       }
     },
-    [isSending, balance, selectedDirect?.address, publicKeyOfRecipient, myName, myAddress]
+    [
+      isSending,
+      balance,
+      selectedDirect?.address,
+      publicKeyOfRecipient,
+      myName,
+      myAddress,
+    ]
   );
 
   const getPublicKeyFunc = async (address) => {
@@ -314,7 +357,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction/edit item:', error, item);
+                        console.error(
+                          'Error processing reaction/edit item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -419,7 +466,11 @@ export const ChatDirect = ({
                           }
                         }
                       } catch (error) {
-                        console.error('Error processing reaction item:', error, item);
+                        console.error(
+                          'Error processing reaction item:',
+                          error,
+                          item
+                        );
                       }
                     });
                   return organizedChatReferences;
@@ -484,7 +535,7 @@ export const ChatDirect = ({
       try {
         if (e.data === 'pong') {
           clearTimeout(timeoutIdRef.current);
-          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, 45000); // Ping every 45 seconds
+          groupSocketTimeoutRef.current = setTimeout(pingWebSocket, 20000); // Ping every 20 seconds
         } else {
           middletierFunc(
             JSON.parse(e.data),
@@ -528,6 +579,47 @@ export const ChatDirect = ({
       unsubscribeFromEvent('setDirectToValueNewChat', setDirectChatValueFunc);
     };
   }, []);
+
+  type NameOrAddressOption = string | { name: string; address: string };
+  const nameOptions = useMemo((): NameOrAddressOption[] => {
+    const trimmed = directToValue.trim();
+    if (validateAddress(trimmed)) return [trimmed];
+    return nameSearchResults ?? [];
+  }, [directToValue, nameSearchResults]);
+
+  const handleSelectNameOrAddress = useCallback(
+    async (option: NameOrAddressOption | null) => {
+      if (!option) return;
+      if (typeof option === 'string') {
+        const address = option;
+        let name: string | null = null;
+        try {
+          name = await getNameInfo(address);
+        } catch {
+          name = address;
+        }
+        setSelectedDirect({
+          address,
+          name: name ?? address,
+          timestamp: Date.now(),
+          sender: myAddress,
+          senderName: myName,
+        });
+        setNewChat(null);
+      } else {
+        setSelectedDirect({
+          address: option.address,
+          name: option.name,
+          timestamp: Date.now(),
+          sender: myAddress,
+          senderName: myName,
+        });
+        setNewChat(null);
+      }
+      setDirectToValue('');
+    },
+    [myAddress, myName, setSelectedDirect, setNewChat]
+  );
 
   useEffect(() => {
     if (hasInitializedWebsocket.current || isNewChat) return;
@@ -757,56 +849,255 @@ export const ChatDirect = ({
         background: theme.palette.background.default,
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: '100%',
       }}
     >
+      {/* Header: back button + optional new-chat title */}
       <Box
-        onClick={close}
         sx={{
           alignItems: 'center',
-          alignSelf: 'center',
-          background: theme.palette.background.default,
-          borderRadius: '3px',
-          cursor: 'pointer',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
-          gap: '5px',
-          margin: '10px 0px',
-          padding: '4px 6px',
-          width: 'fit-content',
+          flexShrink: 0,
+          gap: '8px',
+          padding: '12px 16px',
+          width: '100%',
         }}
       >
-        <ArrowBackIcon
+        <ButtonBase
+          onClick={close}
           sx={{
-            color: theme.palette.text.primary,
-            fontSize: '20px',
-          }}
-        />
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '14px',
+            alignItems: 'center',
+            borderRadius: '8px',
+            color: theme.palette.text.secondary,
+            display: 'flex',
+            gap: '6px',
+            padding: '6px 10px',
+            transition: 'background-color 0.15s ease, color 0.15s ease',
+            '&:hover': {
+              backgroundColor: theme.palette.action.hover,
+              color: theme.palette.text.primary,
+            },
           }}
         >
-          {t('core:action.close_chat', { postProcess: 'capitalizeFirstChar' })}
-        </Typography>
+          <ArrowBackIcon sx={{ fontSize: '20px' }} />
+          <Typography sx={{ fontSize: '14px', fontWeight: 500 }}>
+            {t('core:action.close_chat', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </ButtonBase>
+        {isNewChat && (
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '13px',
+              fontWeight: 500,
+              marginLeft: '8px',
+            }}
+          >
+            {t('core:action.new.chat', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+        )}
       </Box>
 
       {isNewChat && (
         <>
-          <Spacer height="30px" />
-
-          <Input
+        <ClickAwayListener onClickAway={() => setSuggestionsOpen(false)}>
+          <Box
+            ref={nameSearchInputRef}
             sx={{
-              fontSize: '18px',
-              padding: '5px',
+              flexShrink: 0,
+              padding: '20px 16px 16px',
+              position: 'relative',
+              width: '100%',
             }}
-            placeholder={t('auth:message.generic.name_address', {
+          >
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder={t('auth:message.generic.name_address', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              value={directToValue}
+              onChange={(e) => {
+                setDirectToValue(e.target.value);
+                setSuggestionsOpen(true);
+              }}
+              onFocus={() => setSuggestionsOpen(true)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === 'Enter' &&
+                  directToValue.trim() &&
+                  validateAddress(directToValue.trim())
+                ) {
+                  e.preventDefault();
+                  handleSelectNameOrAddress(directToValue.trim());
+                  setSuggestionsOpen(false);
+                }
+              }}
+              autoFocus
+              slotProps={{
+                htmlInput: {
+                  'aria-label': t('auth:message.generic.name_address', {
+                    postProcess: 'capitalizeFirstChar',
+                  }),
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchRoundedIcon
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '22px',
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+                endAdornment: nameSearchLoading ? (
+                  <InputAdornment position="end">
+                    <CircularProgress size={20} />
+                  </InputAdornment>
+                ) : null,
+                sx: {
+                  backgroundColor: theme.palette.background.paper,
+                  borderRadius: '14px',
+                  fontFamily: 'Inter',
+                  fontSize: '15px',
+                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                  '& fieldset': {
+                    borderColor: theme.palette.divider,
+                    borderRadius: '14px',
+                    transition: 'border-color 0.2s ease',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: theme.palette.text.secondary,
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderWidth: '2px',
+                    borderColor: theme.palette.primary.main,
+                    boxShadow: `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(25, 118, 210, 0.12)'}`,
+                  },
+                },
+              }}
+            />
+            {suggestionsOpen && (nameOptions.length > 0 || nameSearchLoading) && (
+              <Paper
+                elevation={8}
+                sx={{
+                  position: 'absolute',
+                  left: 16,
+                  right: 16,
+                  top: '100%',
+                  marginTop: 8,
+                  maxHeight: 300,
+                  overflow: 'hidden',
+                  overflowY: 'auto',
+                  zIndex: 1400,
+                  borderRadius: '14px',
+                  border: `1px solid ${theme.palette.divider}`,
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 8px 32px rgba(0,0,0,0.4)'
+                    : '0 8px 32px rgba(0,0,0,0.12)',
+                  '&::-webkit-scrollbar': { width: 8 },
+                  '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: theme.palette.divider,
+                    borderRadius: 4,
+                  },
+                }}
+              >
+                {nameSearchLoading && nameOptions.length === 0 ? (
+                  <Box
+                    sx={{
+                      py: 3,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 1.5,
+                    }}
+                  >
+                    <CircularProgress size={22} />
+                    <Typography variant="body2" color="text.secondary">
+                      {t('core:loading.generic', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <List disablePadding sx={{ py: 0.5 }}>
+                    {nameOptions.map((opt) => {
+                      const label =
+                        typeof opt === 'string' ? opt : opt.name;
+                      const key =
+                        typeof opt === 'string' ? opt : opt.address;
+                      const initial = (label || '?').charAt(0).toUpperCase();
+                      return (
+                        <ListItem key={key} disablePadding sx={{ px: 1 }}>
+                          <ListItemButton
+                            onClick={() => {
+                              const valueToSet =
+                                typeof opt === 'string' ? opt : opt.name;
+                              setDirectToValue(valueToSet);
+                              setSuggestionsOpen(false);
+                            }}
+                            sx={{
+                              borderRadius: '10px',
+                              py: 1.25,
+                              px: 1.5,
+                              mx: 0.5,
+                              transition: 'background-color 0.15s ease',
+                              '&:hover': {
+                                backgroundColor: theme.palette.action.hover,
+                              },
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 36,
+                                height: 36,
+                                mr: 1.5,
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                bgcolor: theme.palette.primary.main,
+                                color: theme.palette.primary.contrastText,
+                              }}
+                            >
+                              {initial}
+                            </Avatar>
+                            <ListItemText
+                              primary={label}
+                              primaryTypographyProps={{
+                                fontWeight: 500,
+                                fontSize: '0.9375rem',
+                              }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                )}
+              </Paper>
+            )}
+          </Box>
+        </ClickAwayListener>
+        <Box sx={{ padding: '0 16px 20px', width: '100%' }}>
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '13px',
+              lineHeight: 1.4,
+              paddingLeft: '4px',
+            }}
+          >
+            {t('auth:message.generic.insert_name_address', {
               postProcess: 'capitalizeFirstChar',
             })}
-            value={directToValue}
-            onChange={(e) => setDirectToValue(e.target.value)}
-          />
+          </Typography>
+        </Box>
         </>
       )}
 
@@ -823,16 +1114,20 @@ export const ChatDirect = ({
       />
 
       <Box
-        style={{
+        sx={{
+          alignItems: 'flex-end',
           backgroundColor: theme.palette.background.default,
+          borderTop: '1px solid',
+          borderColor: 'divider',
           bottom: isFocusedParent ? '0px' : 'unset',
           boxSizing: 'border-box',
           display: 'flex',
           flexDirection: 'row',
           flexShrink: 0,
+          gap: '12px',
           minHeight: '150px',
           overflow: 'hidden',
-          padding: '20px',
+          padding: '16px 20px 20px',
           position: isFocusedParent ? 'fixed' : 'relative',
           top: isFocusedParent ? '0px' : 'unset',
           width: '100%',
@@ -840,14 +1135,14 @@ export const ChatDirect = ({
         }}
       >
         <Box
-          style={{
+          sx={{
             display: 'flex',
             flexDirection: 'column',
-            flexGrow: 1,
+            flex: 1,
             flexShrink: 0,
             justifyContent: 'flex-end',
+            minWidth: 0,
             overflow: 'auto',
-            width: 'calc(100% - 100px)',
           }}
         >
           {replyMessage && (
@@ -857,7 +1152,7 @@ export const ChatDirect = ({
                 display: 'flex',
                 gap: '5px',
                 justifyContent: 'flex-end',
-                width: 'calc(100% - 100px)',
+                width: '100%',
               }}
             >
               <ReplyPreview message={replyMessage} />
@@ -933,12 +1228,8 @@ export const ChatDirect = ({
 
         <Box
           sx={{
-            display: 'flex',
             flexShrink: 0,
-            gap: '10px',
-            justifyContent: 'center',
-            position: 'relative',
-            width: '100px',
+            paddingBottom: '2px',
           }}
         >
           <CustomButton
@@ -946,33 +1237,45 @@ export const ChatDirect = ({
               if (isSending) return;
               sendMessage();
             }}
-            style={{
-              alignSelf: 'center',
-              background: isSending
-                ? theme.palette.background.default
+            sx={{
+              alignItems: 'center',
+              backgroundColor: isSending
+                ? theme.palette.action.disabledBackground
                 : theme.palette.background.paper,
+              border: '1px solid',
+              borderColor: theme.palette.divider,
+              borderRadius: '8px',
+              color: theme.palette.text.primary,
               cursor: isSending ? 'default' : 'pointer',
-              flexShrink: 0,
-              marginTop: 'auto',
-              minWidth: 'auto',
-              padding: '5px',
-              width: '100px',
+              display: 'inline-flex',
+              gap: '6px',
+              fontSize: '14px',
+              fontWeight: 500,
+              justifyContent: 'center',
+              minHeight: '44px',
+              minWidth: '88px',
+              padding: '10px 16px',
+              position: 'relative',
+              transition: 'background-color 0.2s ease, border-color 0.2s ease',
+              '&:hover': isSending
+                ? {}
+                : {
+                    backgroundColor: theme.palette.action.hover,
+                    borderColor: theme.palette.divider,
+                  },
             }}
           >
-            {isSending && (
+            {isSending ? (
               <CircularProgress
                 size={18}
-                sx={{
-                  color: theme.palette.text.primary,
-                  left: '50%',
-                  marginLeft: '-12px',
-                  marginTop: '-12px',
-                  position: 'absolute',
-                  top: '50%',
-                }}
+                sx={{ color: theme.palette.text.secondary }}
               />
+            ) : (
+              <>
+                <SendIcon sx={{ fontSize: '18px' }} />
+                Send
+              </>
             )}
-            {` Send`}
           </CustomButton>
         </Box>
       </Box>

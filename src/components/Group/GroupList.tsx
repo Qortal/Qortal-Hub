@@ -6,10 +6,10 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Typography,
   useTheme,
 } from '@mui/material';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { IconWrapper } from '../Desktop/DesktopFooter';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { ContextMenu } from '../ContextMenu';
@@ -25,8 +25,11 @@ import {
   groupAnnouncementSelector,
   groupChatTimestampSelector,
   groupPropertySelector,
+  groupsAnnHasUnreadAtom,
+  groupChatHasUnreadAtom,
   groupsOwnerNamesSelector,
   isRunningPublicNodeAtom,
+  memberGroupsAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
 import { timeDifferenceForNotificationChats } from './Group';
@@ -35,15 +38,12 @@ import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
-export const GroupList = ({
+const GroupListInner = ({
   selectGroupFunc,
   setDesktopSideView,
-  groupChatHasUnread,
-  groupsAnnHasUnread,
   desktopSideView,
   directChatHasUnread,
   chatMode,
-  groups,
   selectedGroup,
   getUserSettings,
   setOpenAddGroup,
@@ -59,26 +59,35 @@ export const GroupList = ({
     'tutorial',
   ]);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
+  const groups = useAtomValue(memberGroupsAtom);
+  const groupChatHasUnread = useAtomValue(groupChatHasUnreadAtom);
+  const groupsAnnHasUnread = useAtomValue(groupsAnnHasUnreadAtom);
 
   return (
     <Box
       sx={{
         alignItems: 'flex-start',
         background: theme.palette.background.surface,
-        borderRadius: '0px 15px 15px 0px',
+        borderRadius: '0 12px 12px 0',
+        borderLeft: '1px solid',
+        borderColor: 'divider',
+        boxShadow: '6px 0 20px rgba(0,0,0,0.18), 2px 0 8px rgba(0,0,0,0.08)',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '0px 2px',
-        width: '380px',
+        padding: '0',
+        width: '400px',
       }}
     >
       <Box
         sx={{
-          alignItems: 'center',
+          alignItems: 'stretch',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
           gap: '10px',
           justifyContent: 'center',
+          padding: '14px 12px',
           width: '100%',
         }}
       >
@@ -86,64 +95,159 @@ export const GroupList = ({
           onClick={() => {
             setDesktopSideView('groups');
           }}
+          sx={{
+            position: 'relative',
+            borderRadius: '12px',
+            flex: 1,
+            minWidth: 0,
+            padding: '14px 12px',
+            backgroundColor:
+              desktopSideView === 'groups'
+                ? theme.palette.action.selected
+                : 'transparent',
+            transition: 'background-color 0.15s ease',
+            '&:hover': {
+              backgroundColor:
+                desktopSideView === 'groups'
+                  ? theme.palette.action.selected
+                  : theme.palette.action.hover,
+            },
+          }}
         >
-          <IconWrapper
-            color={
-              groupChatHasUnread || groupsAnnHasUnread
-                ? theme.palette.other.unread
-                : desktopSideView === 'groups'
-                  ? theme.palette.text.primary
-                  : theme.palette.text.secondary
-            }
-            label={t('group:group.group_other', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            selected={desktopSideView === 'groups'}
-            customWidth="75px"
+          {(groupChatHasUnread || groupsAnnHasUnread) && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                backgroundColor: theme.palette.primary.main,
+                border: `2px solid ${theme.palette.background.paper}`,
+              }}
+              aria-hidden
+            />
+          )}
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              justifyContent: 'center',
+              width: '100%',
+            }}
           >
             <HubsIcon
-              height={24}
+              height={26}
+              width={26}
               color={
                 groupChatHasUnread || groupsAnnHasUnread
-                  ? theme.palette.other.unread
+                  ? theme.palette.primary.main
                   : desktopSideView === 'groups'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
             />
-          </IconWrapper>
+            <Typography
+              sx={{
+                color:
+                  groupChatHasUnread || groupsAnnHasUnread
+                    ? theme.palette.primary.main
+                    : desktopSideView === 'groups'
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary,
+                fontFamily: 'Inter',
+                fontSize: '13px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('group:group.group_other', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         </ButtonBase>
 
         <ButtonBase
           onClick={() => {
             setDesktopSideView('directs');
           }}
+          sx={{
+            position: 'relative',
+            borderRadius: '12px',
+            flex: 1,
+            minWidth: 0,
+            padding: '14px 12px',
+            backgroundColor:
+              desktopSideView === 'directs'
+                ? theme.palette.action.selected
+                : 'transparent',
+            transition: 'background-color 0.15s ease',
+            '&:hover': {
+              backgroundColor:
+                desktopSideView === 'directs'
+                  ? theme.palette.action.selected
+                  : theme.palette.action.hover,
+            },
+          }}
         >
-          <IconWrapper
-            customWidth="75px"
-            color={
-              directChatHasUnread
-                ? theme.palette.other.unread
-                : desktopSideView === 'directs'
-                  ? theme.palette.text.primary
-                  : theme.palette.text.secondary
-            }
-            label={t('group:group.messaging', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            selected={desktopSideView === 'directs'}
+          {directChatHasUnread && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                backgroundColor: theme.palette.primary.main,
+                border: `2px solid ${theme.palette.background.paper}`,
+              }}
+              aria-hidden
+            />
+          )}
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              justifyContent: 'center',
+              width: '100%',
+            }}
           >
             <MessagingIcon
-              height={24}
+              height={26}
+              width={26}
               color={
                 directChatHasUnread
-                  ? theme.palette.other.unread
+                  ? theme.palette.primary.main
                   : desktopSideView === 'directs'
                     ? theme.palette.text.primary
                     : theme.palette.text.secondary
               }
             />
-          </IconWrapper>
+            <Typography
+              sx={{
+                color: directChatHasUnread
+                  ? theme.palette.primary.main
+                  : desktopSideView === 'directs'
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary,
+                fontFamily: 'Inter',
+                fontSize: '13px',
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {t('group:group.dm', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+          </Box>
         </ButtonBase>
       </Box>
 
@@ -155,6 +259,7 @@ export const GroupList = ({
           flexGrow: 1,
           left: chatMode === 'directs' && '-1000px',
           overflowY: 'auto',
+          padding: '12px 8px',
           position: chatMode === 'directs' && 'fixed',
           visibility: chatMode === 'directs' && 'hidden',
           width: '100%',
@@ -163,6 +268,7 @@ export const GroupList = ({
         <List
           sx={{
             width: '100%',
+            padding: 0,
           }}
           className="group-list"
           dense={false}
@@ -172,7 +278,7 @@ export const GroupList = ({
               selectGroupFunc={selectGroupFunc}
               key={group.groupId}
               group={group}
-              selectedGroup={selectedGroup}
+              selectedGroupId={selectedGroup?.groupId ?? null}
               getUserSettings={getUserSettings}
               myAddress={myAddress}
             />
@@ -182,53 +288,79 @@ export const GroupList = ({
 
       <Box
         sx={{
+          borderTop: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
           gap: '10px',
           justifyContent: 'center',
-          padding: '10px',
+          padding: '16px 12px',
           width: '100%',
         }}
       >
-        <>
+        <CustomButton
+          onClick={() => {
+            setOpenAddGroup(true);
+          }}
+          sx={{
+            flex: 1,
+            gap: '8px',
+            padding: '10px 16px',
+          }}
+        >
+          <AddCircleOutlineIcon
+            sx={{
+              color: theme.palette.text.primary,
+              fontSize: '20px',
+            }}
+          />
+          {t('group:group.group', { postProcess: 'capitalizeFirstChar' })}
+        </CustomButton>
+
+        {!isRunningPublicNode && (
           <CustomButton
             onClick={() => {
-              setOpenAddGroup(true);
+              setIsOpenBlockedUserModal(true);
+            }}
+            sx={{
+              minWidth: 'unset',
+              padding: '10px',
             }}
           >
-            <AddCircleOutlineIcon
+            <PersonOffIcon
               sx={{
                 color: theme.palette.text.secondary,
+                fontSize: '22px',
               }}
             />
-            {t('group:group.group', { postProcess: 'capitalizeFirstChar' })}
           </CustomButton>
-
-          {!isRunningPublicNode && (
-            <CustomButton
-              onClick={() => {
-                setIsOpenBlockedUserModal(true);
-              }}
-              sx={{
-                minWidth: 'unset',
-                padding: '10px',
-              }}
-            >
-              <PersonOffIcon
-                sx={{
-                  color: theme.palette.text.secondary,
-                }}
-              />
-            </CustomButton>
-          )}
-        </>
+        )}
       </Box>
     </Box>
   );
 };
 
+GroupListInner.displayName = 'GroupList';
+
+export const GroupList = memo(GroupListInner);
+
+interface GroupItemProps {
+  selectGroupFunc: (group: any) => void;
+  group: any;
+  selectedGroupId: string | null;
+  getUserSettings: () => Promise<any>;
+  myAddress: string;
+}
+
 const GroupItem = memo(
-  ({ selectGroupFunc, group, selectedGroup, getUserSettings, myAddress }) => {
+  ({
+    selectGroupFunc,
+    group,
+    selectedGroupId,
+    getUserSettings,
+    myAddress,
+  }: GroupItemProps) => {
     const theme = useTheme();
+    const { t } = useTranslation(['core', 'group']);
     const ownerName = useAtomValue(groupsOwnerNamesSelector(group?.groupId));
     const announcement = useAtomValue(
       groupAnnouncementSelector(group?.groupId)
@@ -278,21 +410,30 @@ const GroupItem = memo(
       setPreviewSrc(null);
     }, [setIsPreviewOpen, setPreviewSrc]);
 
+    const isSelected = group?.groupId === selectedGroupId;
+
     return (
       <ListItem
         onClick={selectGroupHandler}
         sx={{
-          display: 'flex',
-          background:
-            group?.groupId === selectedGroup?.groupId &&
-            theme.palette.action.selected,
-          borderRadius: '2px',
+          borderRadius: '10px',
           cursor: 'pointer',
+          display: 'flex',
           flexDirection: 'column',
-          padding: '10px',
+          marginBottom: '6px',
+          padding: '12px 14px',
           width: '100%',
+          backgroundColor: isSelected
+            ? theme.palette.action.selected
+            : 'transparent',
+          borderLeft: isSelected
+            ? `3px solid ${theme.palette.primary.main}`
+            : '3px solid transparent',
+          transition: 'background-color 0.15s ease, border-color 0.15s ease',
           '&:hover': {
-            backgroundColor: 'action.hover',
+            backgroundColor: isSelected
+              ? theme.palette.action.selected
+              : theme.palette.action.hover,
           },
         }}
       >
@@ -301,13 +442,16 @@ const GroupItem = memo(
             sx={{
               alignItems: 'center',
               display: 'flex',
+              gap: '20px',
               width: '100%',
             }}
           >
-            <ListItemAvatar>
+            <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
               {ownerName ? (
                 <Avatar
                   sx={{
+                    height: 40,
+                    width: 40,
                     ...getClickableAvatarSx(theme, isAvatarLoaded),
                   }}
                   alt={group?.groupName?.charAt(0)}
@@ -335,8 +479,10 @@ const GroupItem = memo(
                   {group?.groupName?.charAt(0).toUpperCase()}
                 </Avatar>
               ) : (
-                <Avatar alt={group?.groupName?.charAt(0)}>
-                  {' '}
+                <Avatar
+                  alt={group?.groupName?.charAt(0)}
+                  sx={{ height: 40, width: 40 }}
+                >
                   {group?.groupName?.charAt(0).toUpperCase() || 'G'}
                 </Avatar>
               )}
@@ -346,31 +492,36 @@ const GroupItem = memo(
               primary={group.groupId === '0' ? 'General' : group.groupName}
               secondary={
                 !group?.timestamp
-                  ? 'no messages'
-                  : `last message: ${formatEmailDate(group?.timestamp)}`
+                  ? t('core:message.generic.no_messages', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('group:last_message_date', {
+                      date: formatEmailDate(group?.timestamp),
+                    })
               }
-              slotProps={{
-                primary: {
-                  style: {
-                    color:
-                      group?.groupId === selectedGroup?.groupId &&
-                      theme.palette.text.primary,
-                    fontSize: '16px',
-                  },
+              primaryTypographyProps={{
+                sx: {
+                  color: theme.palette.text.primary,
+                  fontFamily: 'Inter',
+                  fontSize: '15px',
+                  fontWeight: 600,
+                  lineHeight: 1.3,
                 },
-                secondary: {
-                  style: {
-                    color:
-                      group?.groupId === selectedGroup?.groupId &&
-                      theme.palette.text.primary,
-                    fontSize: '12px',
-                  },
+              }}
+              secondaryTypographyProps={{
+                sx: {
+                  color: theme.palette.text.secondary,
+                  fontFamily: 'Inter',
+                  fontSize: '12px',
+                  lineHeight: 1.4,
+                  marginTop: '3px',
                 },
               }}
               sx={{
-                width: '150px',
-                fontFamily: 'Inter',
-                fontSize: '16px',
+                flex: 1,
+                minWidth: 0,
+                margin: 0,
+                overflow: 'hidden',
               }}
             />
 
@@ -378,20 +529,21 @@ const GroupItem = memo(
               <CampaignIcon
                 sx={{
                   color: theme.palette.other.unread,
-                  marginRight: '5px',
-                  marginBottom: 'auto',
+                  fontSize: '20px',
+                  flexShrink: 0,
                 }}
               />
             )}
 
             <Box
               sx={{
+                alignItems: 'center',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '5px',
-                justifyContent: 'flex-start',
-                height: '100%',
-                marginBottom: 'auto',
+                gap: '6px',
+                flexShrink: 0,
+                justifyContent: 'center',
+                marginLeft: '4px',
               }}
             >
               {group?.data &&
@@ -405,6 +557,7 @@ const GroupItem = memo(
                   <MarkChatUnreadIcon
                     sx={{
                       color: theme.palette.other.unread,
+                      fontSize: '18px',
                     }}
                   />
                 )}
@@ -413,7 +566,7 @@ const GroupItem = memo(
                 <LockIcon
                   sx={{
                     color: theme.palette.other.positive,
-                    marginBottom: 'auto',
+                    fontSize: '18px',
                   }}
                 />
               )}

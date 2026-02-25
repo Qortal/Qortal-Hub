@@ -22,11 +22,6 @@ import {
 } from '@mui/material';
 import { useDropzone } from 'react-dropzone';
 import { useHandlePrivateApps } from '../../hooks/useHandlePrivateApps';
-import {
-  groupsPropertiesAtom,
-  memberGroupsAtom,
-  myGroupsWhereIAmAdminAtom,
-} from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
 import {
   AppCircle,
@@ -41,7 +36,14 @@ import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
 import { fileToBase64 } from '../../utils/fileReading';
 import { objectToBase64 } from '../../qdn/encryption/group-encryption';
 import { getFee } from '../../background/background.ts';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  groupsPropertiesAtom,
+  infoSnackGlobalAtom,
+  memberGroupsAtom,
+  myGroupsWhereIAmAdminAtom,
+  openSnackGlobalAtom,
+} from '../../atoms/global';
 import { useTranslation } from 'react-i18next';
 import { useSortedMyNames } from '../../hooks/useSortedMyNames';
 import { Label } from '../../styles/App-styles.ts';
@@ -69,8 +71,9 @@ export const AppsPrivate = ({ myName, myAddress }) => {
   }, [myGroupsWhereIAmAdminFromGlobal, groupsProperties]);
 
   const [isOpenPrivateModal, setIsOpenPrivateModal] = useState(false);
-  const { show, setInfoSnackCustom, setOpenSnackGlobal } =
-    useContext(QORTAL_APP_CONTEXT);
+  const { show } = useContext(QORTAL_APP_CONTEXT);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const [memberGroups] = useAtom(memberGroupsAtom);
 
   const theme = useTheme();

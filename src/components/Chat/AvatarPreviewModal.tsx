@@ -1,5 +1,7 @@
 import { Box, Modal, useTheme } from '@mui/material';
 import type { MouseEvent, SyntheticEvent } from 'react';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+
 type AvatarPreviewModalProps = {
   alt?: string;
   onClose: () => void;

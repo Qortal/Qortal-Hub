@@ -190,11 +190,54 @@ export const AppsNavBarDesktop = ({
               }}
               disabled={isDisableBackButton}
               sx={{
+                alignItems: 'center',
+                borderRadius: '50%',
+                display: 'flex',
+                height: '36px',
+                justifyContent: 'center',
                 opacity: !isDisableBackButton ? 1 : 0.1,
                 cursor: !isDisableBackButton ? 'pointer' : 'default',
+                width: '36px',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: theme.palette.action.hover,
+                },
               }}
             >
               <NavBack />
+            </ButtonBase>
+
+            <ButtonBase
+              onClick={() => {
+                if (selectedTab?.refreshFunc) {
+                  selectedTab.refreshFunc(selectedTab?.tabId);
+                } else {
+                  executeEvent('refreshApp', {
+                    tabId: selectedTab?.tabId,
+                  });
+                }
+              }}
+              disabled={!selectedTab || !isApps}
+              sx={{
+                alignItems: 'center',
+                borderRadius: '50%',
+                display: 'flex',
+                height: '36px',
+                justifyContent: 'center',
+                marginTop: '20px',
+                opacity: selectedTab && isApps ? 1 : 0.1,
+                cursor: selectedTab && isApps ? 'pointer' : 'default',
+                width: '36px',
+                '&:hover:not(.Mui-disabled)': {
+                  backgroundColor: theme.palette.action.hover,
+                },
+              }}
+            >
+              <RefreshIcon
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '34px',
+                }}
+              />
             </ButtonBase>
 
             <Tabs
@@ -252,6 +295,17 @@ export const AppsNavBarDesktop = ({
               setSelectedTab(null);
               executeEvent('newTabWindow', {});
             }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
+            }}
           >
             <NavAdd
               style={{
@@ -265,6 +319,17 @@ export const AppsNavBarDesktop = ({
             onClick={(e) => {
               if (!selectedTab) return;
               handleClick(e);
+            }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '50%',
+              display: 'flex',
+              height: '36px',
+              justifyContent: 'center',
+              width: '36px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+              },
             }}
           >
             <NavMoreMenu
@@ -408,46 +473,6 @@ export const AppsNavBarDesktop = ({
                     postProcess: 'capitalizeFirstChar',
                   })
             }
-          />
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            if (selectedTab?.refreshFunc) {
-              selectedTab.refreshFunc(selectedTab?.tabId);
-            } else {
-              executeEvent('refreshApp', {
-                tabId: selectedTab?.tabId,
-              });
-            }
-            handleClose();
-          }}
-        >
-          <ListItemIcon
-            sx={{
-              minWidth: '24px !important',
-              marginRight: '5px',
-            }}
-          >
-            <RefreshIcon
-              height={20}
-              sx={{
-                color: theme.palette.text.primary,
-              }}
-            />
-          </ListItemIcon>
-
-          <ListItemText
-            sx={{
-              '& .MuiTypography-root': {
-                fontSize: '12px',
-                fontWeight: 600,
-                color: theme.palette.text.primary,
-              },
-            }}
-            primary={t('core:action.refresh', {
-              postProcess: 'capitalizeFirstChar',
-            })}
           />
         </MenuItem>
 

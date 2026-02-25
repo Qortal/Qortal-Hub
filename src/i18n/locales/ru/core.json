@@ -22,6 +22,7 @@
     "choose_name": "Выберите имя",
     "close": "закрывать",
     "close_chat": "Близкий прямой чат",
+    "confirm": "подтвердить",
     "continue": "продолжать",
     "continue_logout": "Продолжайте выходить в систему",
     "copy_link": "Ссылка копирования",
@@ -50,7 +51,6 @@
     "join": "присоединиться",
     "leave_comment": "оставить комментарий",
     "load_announcements": "загрузить старые объявления",
-    "login": "авторизоваться",
     "logout": "выход",
     "new": {
       "chat": "новый чат",
@@ -78,6 +78,8 @@
     "save_disk": "сохранить на диск",
     "search": "поиск",
     "search_apps": "Поиск приложений",
+    "search_apps_or_link": "Поиск приложений или введите ссылку qortal://",
+    "open_as_qortal_link": "Открыть как ссылку Qortal",
     "search_groups": "Поиск групп",
     "search_chat_text": "Поиск текста чата",
     "see_qr_code": "Смотрите QR -код",
@@ -128,6 +130,7 @@
   "contact_other": "контакты",
   "core": {
     "block_height": "высота блока",
+    "data_peers": "QDN (данные) узлы",
     "information": "Основная информация",
     "peers": "Подключенные сверстники",
     "version": "Основная версия"
@@ -171,6 +174,7 @@
   "last_height": "Последняя высота",
   "level": "уровень",
   "library": "библиотека",
+  "explore": "Обзор",
   "list": {
     "bans": "Список запретов",
     "groups": "Список групп",
@@ -189,6 +193,7 @@
   "message": {
     "error": {
       "address_not_found": "Ваш адрес не был найден",
+      "app_already_voted": "Вы уже проголосовали за это приложение",
       "app_need_name": "Ваше приложение нужно имя",
       "build_app": "Невозможно создать частное приложение",
       "decrypt_app": "Невозможно расшифровать частное приложение '",
@@ -243,9 +248,10 @@
       "editing_message": "Редактирование сообщения",
       "encrypted": "зашифровано",
       "encrypted_not": "не шифровано",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "сумма: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "Извлечение данных приложения",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "Получить Qort, используя торговый портал Qortal's Crosschain",
       "minimal_qort_balance": "Наличие как минимум {{ quantity }} QORT на вашем балансе позволяет отправлять сообщения в чате практически мгновенно.",
       "mentioned": "упомянул",
@@ -257,7 +263,7 @@
       "name_preview": "вам нужно имя для использования предварительного просмотра",
       "name_publish": "вам нужно имя Qortal для публикации",
       "name_rate": "Вам нужно имя, чтобы оценить.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Ваш баланс: {{ balance }} QORT. Для регистрации имени требуется комиссия {{ fee }} QORT.",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "Нет данных для изображения",
       "no_description": "Нет описания",
@@ -363,9 +369,9 @@
   "option": "вариант",
   "option_no": "Нет вариантов",
   "option_other": "параметры",
-  "page": {
-    "last": "последний",
+  "pagination": {
     "first": "первый",
+    "last": "последний",
     "next": "следующий",
     "previous": "предыдущий"
   },
@@ -395,7 +401,9 @@
     "status": "статус",
     "status_ready": "готово (установлено)",
     "status_not_installed": "не установлено",
-    "tags": "теги"
+    "tags": "теги",
+    "size": "размер",
+    "updated": "обновлено"
   },
   "filter": {
     "all": "все",
@@ -408,6 +416,18 @@
   },
   "receiver": "приемник",
   "sender": "отправитель",
+  "details_for_address": "Подробности адреса",
+  "total_in_orders": "Всего в заказах",
+  "total_received": "Всего получено",
+  "total_sent": "Всего отправлено",
+  "total_blocks_minted": "Всего создано блоков",
+  "remaining_to_level": "Осталось до уровня {{level}}",
+  "blocks": "блоки",
+  "days_of_minting": "дней майнинга",
+  "payments_count": "Платежи ({{count}})",
+  "trades_count": "Сделки ({{count}})",
+  "items_per_page": "Записей на странице:",
+  "pagination_of": "{{from}}-{{to}} из {{total}}",
   "server": "сервер",
   "service_type": "тип обслуживания",
   "settings": "настройки",
@@ -419,6 +439,7 @@
     "recently_updated": "недавно обновлённые"
   },
   "tabs": {
+    "add_private": "+ частное приложение",
     "categories": "категории",
     "community_apps": "приложения сообщества",
     "my_apps": "мои приложения",

@@ -1,5 +1,5 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
-import { commonThemeOptions } from './theme-common';
+import { commonThemeOptions, getCommonGlobalStyles } from './theme-common';
 
 export const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
@@ -63,52 +63,13 @@ export const darkThemeOptions: ThemeOptions = {
           '--background-surface': theme.palette.background.surface,
           '--videoplayer-bg': 'rgba(31, 32, 35, 1)',
         },
-
-        '*, *::before, *::after': {
-          boxSizing: 'border-box',
-        },
-
-        html: {
-          padding: 0,
-          margin: 0,
-        },
-
-        body: {
-          padding: 0,
-          margin: 0,
-          wordBreak: 'break-word',
-        },
-        '::-webkit-scrollbar-track': {
-          backgroundColor: 'transparent',
-        },
-
-        '::-webkit-scrollbar-track:hover': {
-          backgroundColor: 'transparent',
-        },
-
-        '::-webkit-scrollbar': {
-          width: '16px',
-          height: '10px',
-        },
-
-        '::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.primary.main,
-          borderRadius: '8px',
-          backgroundClip: 'content-box',
-          border: '4px solid transparent',
-          transition: '0.3s background-color',
-        },
-
-        '::-webkit-scrollbar-thumb:hover': {
-          backgroundColor: theme.palette.primary.light,
-        },
+        ...getCommonGlobalStyles(theme),
       }),
     },
 
     MuiIcon: {
       defaultProps: {
         style: {
-          color: 'rgb(255, 255, 255)',
           opacity: 0.5,
         },
       },
@@ -116,10 +77,10 @@ export const darkThemeOptions: ThemeOptions = {
 
     MuiPaper: {
       styleOverrides: {
-        root: {
-          backgroundColor: 'rgb(77, 80, 85)',
-          color: 'rgb(255, 255, 255)',
-        },
+        root: ({ theme }) => ({
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+        }),
       },
     },
   },

@@ -1,10 +1,12 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
+  isLocalNodeUrl,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
-import { useAtom, useSetAtom } from 'jotai';
+import { isLocalPrivateHttpsUrl } from '../utils/helpers';
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
   balanceAtom,
@@ -54,17 +56,26 @@ export const useAuth = () => {
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
+  const extState = useAtomValue(extStateAtom);
   const [enableAuthWhenSyncing] = useAtom(enableAuthWhenSyncingAtom);
-  const [authenticatePassword, setAuthenticatePassword] = useAtom(
-    authenticatePasswordAtom
-  );
+  const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
+  const store = useStore();
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
 
-  const useLocalNode = selectedNode?.url === HTTP_LOCALHOST_12391;
+  const useLocalNode = isLocalNodeUrl(selectedNode?.url);
 
-  const checkIfLocalIsRunning = useCallback(async () => {
+  useEffect(() => {
+    if (extState === 'not-authenticated') {
+      if (balanceSetIntervalRef) {
+        clearInterval(balanceSetIntervalRef);
+        balanceSetIntervalRef = null;
+      }
+    }
+  }, [extState]);
+
+  const checkIfLocalIsRunning = useCallback(async (baseUrl: string) => {
     try {
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+      const res = await fetch(baseUrl + '/admin/status');
       if (res?.ok) return true;
       return false;
     } catch (error) {
@@ -74,9 +85,12 @@ export const useAuth = () => {
 
   const generateApiKey = useCallback(async () => {
     try {
-      const res = await fetch(`${HTTP_LOCALHOST_12391}/admin/apikey/generate`, {
-        method: 'POST',
-      });
+      const res = await fetch(
+        `${getDefaultLocalNodeUrl()}/admin/apikey/generate`,
+        {
+          method: 'POST',
+        }
+      );
       if (!res.ok) {
         return null;
       }
@@ -93,19 +107,26 @@ export const useAuth = () => {
       const isElectron = !!window?.coreSetup;
       const validatedNodeInfo = currentNode;
 
+      const isLocalPrivateHttps = isLocalPrivateHttpsUrl(
+        validatedNodeInfo?.url
+      );
+      let baseUrl = validatedNodeInfo?.url;
+      if (isLocalPrivateHttps && baseUrl) {
+        baseUrl = baseUrl.replace(/^https:\/\//i, 'http://');
+      }
       try {
-        const isLocal = validatedNodeInfo?.url === HTTP_LOCALHOST_12391;
+        const isLocal = isLocalNodeUrl(validatedNodeInfo?.url);
         if (isLocal) {
           const runningRes = isElectron
             ? await window.coreSetup.isCoreRunning()
-            : await checkIfLocalIsRunning();
+            : await checkIfLocalIsRunning(baseUrl);
           if (!runningRes && !disablePopup) {
             setIsOpenCoreSetup(false);
             setIsOpenRecommendation(true);
             return { isValid: false, validatedNodeInfo };
           }
           if (isLocal && isElectron && !disablePopup) {
-            const statusAvailable = await checkIfLocalIsRunning();
+            const statusAvailable = await checkIfLocalIsRunning(baseUrl);
             if (!statusAvailable) {
               const endpointsReady = await actions.show();
               if (!endpointsReady) {
@@ -124,9 +145,7 @@ export const useAuth = () => {
         if (!isLocal) {
           let isUrlGood = true;
           try {
-            const resUrlCheck = await fetch(
-              `${validatedNodeInfo?.url}/admin/status`
-            );
+            const resUrlCheck = await fetch(`${baseUrl}/admin/status`);
             if (!resUrlCheck.ok) {
               isUrlGood = false;
             }
@@ -144,7 +163,7 @@ export const useAuth = () => {
 
         let isValid = false;
 
-        const url = `${validatedNodeInfo?.url}/admin/settings/localAuthBypassEnabled`;
+        const url = `${baseUrl}/admin/settings/localAuthBypassEnabled`;
         const response = await fetch(url);
 
         // Assuming the response is in plain text and will be 'true' or 'false'
@@ -153,7 +172,7 @@ export const useAuth = () => {
           isValid = true;
         } else {
           try {
-            const url2 = `${validatedNodeInfo?.url}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
+            const url2 = `${baseUrl}/admin/apikey/test?apiKey=${validatedNodeInfo?.apikey}`;
             const response2 = await fetch(url2);
 
             // Assuming the response is in plain text and will be 'true' or 'false'
@@ -179,6 +198,20 @@ export const useAuth = () => {
           setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
         }
 
+        if (isValid && isElectron && isLocalPrivateHttps) {
+          try {
+            const result = await window.electronAPI?.ensureCertForBase?.(
+              validatedNodeInfo?.url,
+              validatedNodeInfo?.apikey ?? ''
+            );
+            if (!result?.success) {
+              throw new Error('Failed to ensure cert for base');
+            }
+          } catch (err) {
+            throw new Error('Failed to ensure cert for base');
+          }
+        }
+
         return { isValid, validatedNodeInfo };
       } catch (error) {
         return { isValid: false, validatedNodeInfo };
@@ -197,7 +230,7 @@ export const useAuth = () => {
 
   const validateLocalApiKey = useCallback(async (apiKey) => {
     try {
-      const url2 = `${HTTP_LOCALHOST_12391}/admin/apikey/test?apiKey=${apiKey}`;
+      const url2 = `${getDefaultLocalNodeUrl()}/admin/apikey/test?apiKey=${apiKey}`;
       const response2 = await fetch(url2);
 
       // Assuming the response is in plain text and will be 'true' or 'false'
@@ -229,7 +262,7 @@ export const useAuth = () => {
       if (useLocalNode) {
         const payload = {
           apikey: '',
-          url: HTTP_LOCALHOST_12391,
+          url: getDefaultLocalNodeUrl(),
         };
         const { isValid, validatedNodeInfo } = await validateApiKey(payload);
 
@@ -315,7 +348,7 @@ export const useAuth = () => {
   const isSyncedLocal = useCallback(async () => {
     try {
       if (!useLocalNode) return true;
-      const res = await fetch(HTTP_LOCALHOST_12391 + '/admin/status');
+      const res = await fetch(getDefaultLocalNodeUrl() + '/admin/status');
       if (!res?.ok) return false;
       const data = await res.json();
       if (data?.syncPercent !== 100) {
@@ -343,11 +376,12 @@ export const useAuth = () => {
           res();
         }, 250);
       });
+      const password = store.get(authenticatePasswordAtom);
       window
         .sendMessage(
           'decryptWallet',
           {
-            password: authenticatePassword,
+            password,
             wallet: rawWallet,
           },
           TIME_MINUTES_2_IN_MILLISECONDS
@@ -357,6 +391,7 @@ export const useAuth = () => {
             setAuthenticatePassword('');
             setExtstate('authenticated');
             setWalletToBeDecryptedError('');
+            window.sendMessage('startNotificationCheck').catch(() => {});
 
             window
               .sendMessage('userInfo')
@@ -394,10 +429,10 @@ export const useAuth = () => {
         });
     },
     [
+      store,
       setIsLoading,
       setAuthenticatePassword,
       setExtstate,
-      authenticatePassword,
       setUserInfo,
       setRawWallet,
       setWalletToBeDecryptedError,
@@ -439,15 +474,28 @@ export const useAuth = () => {
     }
   }, [selectedNode, validateApiKey, handleSaveNodeInfo]);
 
-  return {
-    validateApiKey,
-    isNodeValid,
-    handleSaveNodeInfo,
-    authenticate,
-    getBalanceFunc,
-    resetApikey,
-    validateLocalApiKey,
-    validateApiKeyFromRegistration,
-    saveCustomNodes,
-  };
+  return useMemo(
+    () => ({
+      validateApiKey,
+      isNodeValid,
+      handleSaveNodeInfo,
+      authenticate,
+      getBalanceFunc,
+      resetApikey,
+      validateLocalApiKey,
+      validateApiKeyFromRegistration,
+      saveCustomNodes,
+    }),
+    [
+      validateApiKey,
+      isNodeValid,
+      handleSaveNodeInfo,
+      authenticate,
+      getBalanceFunc,
+      resetApikey,
+      validateLocalApiKey,
+      validateApiKeyFromRegistration,
+      saveCustomNodes,
+    ]
+  );
 };

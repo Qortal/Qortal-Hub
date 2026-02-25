@@ -22,6 +22,7 @@
     "choose_name": "escolher um nome",
     "close": "fechar",
     "close_chat": "fechar Conversa Direta",
+    "confirm": "confirmar",
     "continue": "continuar",
     "continue_logout": "continuar com o logout",
     "copy_link": "copiar link",
@@ -50,7 +51,6 @@
     "join": "juntar",
     "leave_comment": "deixar comentario",
     "load_announcements": "carregar anuncios mais antigos",
-    "login": "login",
     "logout": "logout",
     "new": {
       "chat": "nova conversa",
@@ -78,6 +78,8 @@
     "save_disk": "savar no disco",
     "search": "buscar",
     "search_apps": "buscar apps",
+    "search_apps_or_link": "Pesquisar apps ou inserir link qortal://",
+    "open_as_qortal_link": "Abrir como link Qortal",
     "search_groups": "buscar grupos",
     "search_chat_text": "buscar texto na conversa",
     "see_qr_code": "ver código QR",
@@ -128,6 +130,7 @@
   "contact_other": "contatos",
   "core": {
     "block_height": "altura do bloco",
+    "data_peers": "peers QDN (dados)",
     "information": "informação do nó",
     "peers": "nós conectados",
     "version": "versão do nó"
@@ -171,6 +174,7 @@
   "last_height": "altura total",
   "level": "nivel",
   "library": "biblioteca",
+  "explore": "Explorar",
   "list": {
     "bans": "lista de banidos",
     "groups": "lista de grupos",
@@ -189,6 +193,7 @@
   "message": {
     "error": {
       "address_not_found": "seu endereço não foi encontrado",
+      "app_already_voted": "Você já votou neste aplicativo",
       "app_need_name": "seu aplicativo precisa de um nome",
       "build_app": "não foi possível construir o aplicativo privado",
       "decrypt_app": "não foi possível descriptografar o aplicativo privado",
@@ -243,9 +248,10 @@
       "editing_message": "editando mensagem",
       "encrypted_not": "não criptografado",
       "encrypted": "criptografado",
-      "fee_qort": "taxa: {{ message }} QORTs",
+      "amount_qort": "quantia: {{ amount }} QORT",
+      "fee_qort": "taxa: {{ fee }} QORTs",
       "fetching_data": "buscando dados do aplicativo",
-      "foreign_fee": "taxa externa: {{ message }}",
+      "foreign_fee": "taxa externa: {{ fee }}",
       "get_qort_trade_portal": "obtenha QORTs usando o portal de troca crosschain do Qortal",
       "mentioned": "mencionado",
       "message_with_image": "esta mensagem já possui uma imagem",
@@ -363,9 +369,9 @@
   "option": "opção",
   "option_no": "sem opção",
   "option_other": "opções",
-  "page": {
-    "last": "última",
+  "pagination": {
     "first": "primeira",
+    "last": "última",
     "next": "próxima",
     "previous": "anterior"
   },
@@ -395,7 +401,9 @@
     "status": "status",
     "status_ready": "pronto (instalado)",
     "status_not_installed": "não instalado",
-    "tags": "tags"
+    "tags": "tags",
+    "size": "tamanho",
+    "updated": "atualizado"
   },
   "filter": {
     "all": "todos",
@@ -408,6 +416,18 @@
   },
   "receiver": "destinatário",
   "sender": "remetente",
+  "details_for_address": "Detalhes do endereço",
+  "total_in_orders": "Total em pedidos",
+  "total_received": "Total recebido",
+  "total_sent": "Total enviado",
+  "total_blocks_minted": "Total de blocos minerados",
+  "remaining_to_level": "Restante para nível {{level}}",
+  "blocks": "blocos",
+  "days_of_minting": "dias de mineração",
+  "payments_count": "Pagamentos ({{count}})",
+  "trades_count": "Trocas ({{count}})",
+  "items_per_page": "Itens por página:",
+  "pagination_of": "{{from}}-{{to}} de {{total}}",
   "server": "servidor",
   "service_type": "tipo de serviço",
   "settings": "configurações",
@@ -419,6 +439,7 @@
     "recently_updated": "atualizados recentemente"
   },
   "tabs": {
+    "add_private": "+ app privado",
     "categories": "categorias",
     "community_apps": "apps da comunidade",
     "my_apps": "meus apps",

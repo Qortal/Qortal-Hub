@@ -22,6 +22,7 @@
     "choose_name": "vali nimi",
     "close": "sulge",
     "close_chat": "sulge vestlus",
+    "confirm": "kinnita",
     "continue": "jätka",
     "continue_logout": "jätkan välja logimist",
     "copy_link": "kopeeri link",
@@ -50,7 +51,6 @@
     "join": "liitu",
     "leave_comment": "jäta kommentaar",
     "load_announcements": "laadi vanemad teadaanded",
-    "login": "logi sisse",
     "logout": "logi välja",
     "new": {
       "chat": "uus vestlus",
@@ -78,6 +78,8 @@
     "save_disk": "salvesta kettale",
     "search": "otsi",
     "search_apps": "otsi rakendusi",
+    "search_apps_or_link": "Otsi rakendusi või sisesta qortal:// link",
+    "open_as_qortal_link": "Ava Qortal lingina",
     "search_groups": "otsi gruppe",
     "search_chat_text": "otsi vestlustest teksti",
     "see_qr_code": "vaata QR-koodi",
@@ -128,6 +130,7 @@
   "contact_other": "kontaktid",
   "core": {
     "block_height": "ploki kõrgus",
+    "data_peers": "QDN (andmed) sõlmed",
     "information": "Sõlme info",
     "peers": "ühendatud sõlmed",
     "version": "Sõlme versioon"
@@ -171,6 +174,7 @@
   "last_height": "viimane kõrgus",
   "level": "tase",
   "library": "teek",
+  "explore": "Uurima",
   "list": {
     "bans": "keelude nimekiri",
     "groups": "gruppide nimekiri",
@@ -189,6 +193,7 @@
   "message": {
     "error": {
       "address_not_found": "sinu aadressi ei leitud",
+      "app_already_voted": "Oled selle rakenduse poolt juba hääletanud",
       "app_need_name": "sinu rakendus vajab nime",
       "build_app": "privaatset rakendust ei saa koostada",
       "decrypt_app": "privaatset rakendust ei saa dekrüpteerida",
@@ -243,9 +248,10 @@
       "editing_message": "sõnumi muutmine",
       "encrypted_not": "pole krüpteeritud",
       "encrypted": "krüpteeritud",
-      "fee_qort": "tasu: {{ message }} QORT",
+      "amount_qort": "summa: {{ amount }} QORT",
+      "fee_qort": "tasu: {{ fee }} QORT",
       "fetching_data": "laadin rakenduse andmeid",
-      "foreign_fee": "välismaine tasu: {{ message }}",
+      "foreign_fee": "välismaine tasu: {{ fee }}",
       "get_qort_trade_portal": "hanki QORT Qortali rist-ahela kaubandusportaali kaudu",
       "mentioned": "mainitud",
       "message_with_image": "selles sõnumis on juba pilt",
@@ -363,9 +369,9 @@
   "option": "valik",
   "option_no": "valikuid ei ole",
   "option_other": "valikud",
-  "page": {
-    "last": "viimane",
+  "pagination": {
     "first": "esimene",
+    "last": "viimane",
     "next": "järgmine",
     "previous": "eelmine"
   },
@@ -395,7 +401,9 @@
     "status": "olek",
     "status_ready": "valmis (paigaldatud)",
     "status_not_installed": "paigaldamata",
-    "tags": "sildid"
+    "tags": "sildid",
+    "size": "suurus",
+    "updated": "uuendatud"
   },
   "filter": {
     "all": "kõik",
@@ -408,6 +416,18 @@
   },
   "receiver": "saaja",
   "sender": "saatja",
+  "details_for_address": "Aadressi üksikasjad",
+  "total_in_orders": "Tellimuste kogusumma",
+  "total_received": "Kokku saadud",
+  "total_sent": "Kokku saadetud",
+  "total_blocks_minted": "Kokku löödud plokke",
+  "remaining_to_level": "Jäänud tasemeni {{level}}",
+  "blocks": "plokid",
+  "days_of_minting": "löömise päevi",
+  "payments_count": "Maksed ({{count}})",
+  "trades_count": "Tehingud ({{count}})",
+  "items_per_page": "Üksusi lehel:",
+  "pagination_of": "{{from}}-{{to}} / {{total}}",
   "server": "server",
   "service_type": "teenuse tüüp",
   "settings": "seaded",
@@ -419,6 +439,7 @@
     "recently_updated": "hiljuti uuendatud"
   },
   "tabs": {
+    "add_private": "+ privaatne rakendus",
     "categories": "kategooriad",
     "community_apps": "kogukonna rakendused",
     "my_apps": "minu rakendused",

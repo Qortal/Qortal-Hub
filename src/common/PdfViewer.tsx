@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { subscribeToEvent, unsubscribeFromEvent } from "../utils/events";
 import { Box, Button } from "@mui/material";
+import { appHeighOffsetPx } from "../components/Desktop/CustomTitleBar";
 
 export const PdfViewer = () => {
   const [pdfUrl, setPdfUrl] = useState("");
@@ -40,7 +41,7 @@ export const PdfViewer = () => {
     <Box
       sx={{
         position: "fixed",
-        height: "100vh",
+        height: `calc(100vh - ${appHeighOffsetPx})`,
         width: "100vw",
         backgroundColor: 'var(--Mail-Background)',
         zIndex: 990000000
@@ -70,7 +71,7 @@ export const PdfViewer = () => {
         src={`/pdfjs/web/viewer.html?file=${pdfUrl}`}
         style={{
           width: "100vw",
-          height: "calc(100vh - 50px)",
+          height: `calc(100vh - ${appHeighOffsetPx} - 50px)`,
           display: "fixed",
           left: 0,
         }}

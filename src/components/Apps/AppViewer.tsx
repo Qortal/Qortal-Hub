@@ -7,6 +7,7 @@ import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 type AppViewerProps = {
   app: any;
@@ -334,7 +335,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         <iframe
           ref={iframeRef}
           style={{
-            height: '100vh',
+            height: `100vh`,
             border: 'none',
             width: '100%',
           }}

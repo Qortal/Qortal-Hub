@@ -22,6 +22,7 @@
     "choose_name": "choose a name",
     "close": "close",
     "close_chat": "close Direct Chat",
+    "confirm": "confirm",
     "continue": "continue",
     "continue_logout": "continue to logout",
     "copy_link": "copy link",
@@ -50,7 +51,6 @@
     "join": "join",
     "leave_comment": "leave comment",
     "load_announcements": "load older announcements",
-    "login": "login",
     "logout": "logout",
     "new": {
       "chat": "new chat",
@@ -73,11 +73,14 @@
     "remove": "remove",
     "remove_reaction": "remove reaction",
     "return_apps_dashboard": "return to Apps Dashboard",
+    "resize": "resize",
     "return": "return",
     "save": "save",
     "save_disk": "save to disk",
     "search": "search",
     "search_apps": "search for apps",
+    "search_apps_or_link": "Search apps or enter qortal:// link",
+    "open_as_qortal_link": "Open as Qortal link",
     "search_groups": "search for groups",
     "search_chat_text": "search chat text",
     "see_qr_code": "see QR code",
@@ -128,6 +131,7 @@
   "contact_other": "contacts",
   "core": {
     "block_height": "block height",
+    "data_peers": "QDN (data) peers",
     "information": "core information",
     "peers": "connected peers",
     "version": "core version"
@@ -171,6 +175,7 @@
   "last_height": "last height",
   "level": "level",
   "library": "library",
+  "explore": "explore",
   "list": {
     "bans": "list of bans",
     "groups": "list of groups",
@@ -189,6 +194,7 @@
   "message": {
     "error": {
       "address_not_found": "your address was not found",
+      "app_already_voted": "you have already voted for this app",
       "app_need_name": "your app needs a name",
       "build_app": "unable to build private app",
       "decrypt_app": "unable to decrypt private app'",
@@ -243,9 +249,10 @@
       "editing_message": "editing message",
       "encrypted_not": "not encrypted",
       "encrypted": "encrypted",
-      "fee_qort": "fee: {{ message }} QORT",
+      "amount_qort": "amount: {{ amount }} QORT",
+      "fee_qort": "fee: {{ fee }} QORT",
       "fetching_data": "fetching app data",
-      "foreign_fee": "foreign fee: {{ message }}",
+      "foreign_fee": "foreign fee: {{ fee }}",
       "get_qort_trade_portal": "get QORT using Qortal's crosschain trade portal",
       "mentioned": "mentioned",
       "message_with_image": "this message already has an image",
@@ -257,7 +264,7 @@
       "name_preview": "you need a name to use preview",
       "name_publish": "you need a Qortal name to publish",
       "name_rate": "you need a name to rate.",
-      "name_registration": "your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
+      "name_registration": "Your balance is {{ balance }} QORT. A name registration requires a {{ fee }} QORT fee",
       "name_unavailable": "{{ name }} is unavailable",
       "no_data_image": "no data for image",
       "no_description": "no description",
@@ -283,6 +290,7 @@
       "rating": "rating for {{ service }} {{ name }}",
       "register_name": "you need a registered Qortal name to save your pinned apps to QDN.",
       "replied_to": "replied to {{ person }}",
+      "replied_to_you": "↩ replied to you",
       "revert_default": "revert to default",
       "revert_qdn": "revert to QDN",
       "save_qdn": "save to QDN",
@@ -294,6 +302,7 @@
       "settings": "you are using the export/import way of saving settings.",
       "space_for_admins": "sorry, this space is only for Admins.",
       "unread_messages": "unread messages below",
+      "replying_to": "replying to {{name}}",
       "unsaved_changes": "you have unsaved changes to your pinned apps. Save them to QDN.",
       "updating": "updating",
       "wait": "please wait"
@@ -364,9 +373,9 @@
   "option": "option",
   "option_no": "no options",
   "option_other": "options",
-  "page": {
-    "last": "last",
+  "pagination": {
     "first": "first",
+    "last": "last",
     "next": "next",
     "previous": "previous"
   },
@@ -393,10 +402,12 @@
     "ratings_count": "{{count}} ratings",
     "rate_this_app": "rate this app",
     "service": "service",
+    "size": "size",
     "status": "status",
     "status_ready": "ready (installed)",
     "status_not_installed": "not installed",
-    "tags": "tags"
+    "tags": "tags",
+    "updated": "updated"
   },
   "filter": {
     "all": "all",
@@ -409,6 +420,18 @@
   },
   "receiver": "receiver",
   "sender": "sender",
+  "details_for_address": "Details for address",
+  "total_in_orders": "Total in orders",
+  "total_received": "Total received",
+  "total_sent": "Total sent",
+  "total_blocks_minted": "Total blocks minted",
+  "remaining_to_level": "Remaining to level {{level}}",
+  "blocks": "blocks",
+  "days_of_minting": "days of minting",
+  "payments_count": "Payments ({{count}})",
+  "trades_count": "Trades ({{count}})",
+  "items_per_page": "Items per page:",
+  "pagination_of": "{{from}}-{{to}} of {{total}}",
   "server": "server",
   "service_type": "service type",
   "settings": "settings",
@@ -420,6 +443,7 @@
     "recently_updated": "recently updated"
   },
   "tabs": {
+    "add_private": "+ private app",
     "categories": "categories",
     "community_apps": "community apps",
     "my_apps": "my apps",

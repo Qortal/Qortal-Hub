@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { Box, LinearProgress, Rating, styled, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { getBaseApiReact } from '../../../App';
 import { StarFilledIcon } from '../../../assets/Icons/StarFilled';
 import { StarEmptyIcon } from '../../../assets/Icons/StarEmpty';
+import { useAppRating } from '../../../hooks/useAppRatings';
 
 interface RatingDistribution {
   rating: number;
@@ -110,102 +110,59 @@ export const AppRatingBreakdown = ({
   onRate,
 }: AppRatingBreakdownProps) => {
   const { t } = useTranslation(['core']);
-  const [averageRating, setAverageRating] = useState(0);
-  const [totalVotes, setTotalVotes] = useState(0);
-  const [distribution, setDistribution] = useState<RatingDistribution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const hasCalledRef = useRef(false);
 
-  const fetchRatingData = useCallback(async (name: string, service: string) => {
-    try {
-      hasCalledRef.current = true;
-      setIsLoading(true);
-      const pollName = `app-library-${service}-rating-${name}`;
-      const url = `${getBaseApiReact()}/polls/${pollName}`;
+  // Use centralized rating store
+  const { rating, isLoading } = useAppRating(app?.name, app?.service);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const responseData = await response.json();
-
-      if (responseData?.message?.includes('POLL_NO_EXISTS')) {
-        setIsLoading(false);
-        return;
-      }
-
-      if (responseData?.pollName) {
-        const urlVotes = `${getBaseApiReact()}/polls/votes/${pollName}`;
-        const responseVotes = await fetch(urlVotes, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        const votesData = await responseVotes.json();
-        const voteCount = votesData.voteCounts || [];
-
-        // Separate regular votes from initial value
-        const ratingVotes = voteCount.filter(
-          (vote: any) => !vote.optionName.startsWith('initialValue-')
-        );
-        const initialValueVote = voteCount.find((vote: any) =>
-          vote.optionName.startsWith('initialValue-')
-        );
-
-        // Build distribution for ratings 1-5
-        const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-
-        ratingVotes.forEach((vote: any) => {
-          const rating = parseInt(vote.optionName, 10);
-          if (rating >= 1 && rating <= 5) {
-            counts[rating] = vote.voteCount;
-          }
-        });
-
-        // Add initial value vote
-        if (initialValueVote) {
-          const initialRating = parseInt(
-            initialValueVote.optionName.split('-')[1],
-            10
-          );
-          if (initialRating >= 1 && initialRating <= 5) {
-            counts[initialRating] += 1;
-          }
-        }
-
-        // Calculate totals
-        let total = 0;
-        let weightedSum = 0;
-        Object.entries(counts).forEach(([rating, count]) => {
-          total += count;
-          weightedSum += parseInt(rating) * count;
-        });
-
-        setTotalVotes(total);
-        setAverageRating(total > 0 ? weightedSum / total : 0);
-
-        // Build distribution array (sorted 5 to 1)
-        const dist: RatingDistribution[] = [5, 4, 3, 2, 1].map((rating) => ({
-          rating,
-          count: counts[rating],
-          percentage: total > 0 ? (counts[rating] / total) * 100 : 0,
-        }));
-
-        setDistribution(dist);
-      }
-    } catch (error) {
-      console.error('Error fetching rating breakdown:', error);
-    } finally {
-      setIsLoading(false);
+  // Compute distribution from voteCounts
+  const { averageRating, totalVotes, distribution } = useMemo(() => {
+    if (!rating) {
+      return { averageRating: 0, totalVotes: 0, distribution: [] };
     }
-  }, []);
 
-  useEffect(() => {
-    if (hasCalledRef.current) return;
-    if (!app?.name || !app?.service) return;
-    fetchRatingData(app.name, app.service);
-  }, [fetchRatingData, app?.name, app?.service]);
+    const voteCounts = rating.voteCounts || [];
+
+    // Build counts for ratings 1-5
+    const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    // Process regular votes first, then add initial value on top
+    // (order matters: initialValue uses +=, regular uses =)
+    voteCounts.forEach((vote) => {
+      if (!vote.optionName.startsWith('initialValue-')) {
+        const ratingValue = parseInt(vote.optionName, 10);
+        if (ratingValue >= 1 && ratingValue <= 5) {
+          counts[ratingValue] = vote.voteCount;
+        }
+      }
+    });
+    voteCounts.forEach((vote) => {
+      if (vote.optionName.startsWith('initialValue-')) {
+        const initialRating = parseInt(vote.optionName.split('-')[1], 10);
+        if (initialRating >= 1 && initialRating <= 5) {
+          counts[initialRating] += 1;
+        }
+      }
+    });
+
+    // Calculate total
+    let total = 0;
+    Object.values(counts).forEach((count) => {
+      total += count;
+    });
+
+    // Build distribution array (sorted 5 to 1)
+    const dist: RatingDistribution[] = [5, 4, 3, 2, 1].map((r) => ({
+      rating: r,
+      count: counts[r],
+      percentage: total > 0 ? (counts[r] / total) * 100 : 0,
+    }));
+
+    return {
+      averageRating: rating.averageRating,
+      totalVotes: total,
+      distribution: dist,
+    };
+  }, [rating]);
 
   if (isLoading) {
     return (
@@ -243,10 +200,7 @@ export const AppRatingBreakdown = ({
           {distribution.map((item) => (
             <RatingRow key={item.rating}>
               <RatingLabel>{item.rating}</RatingLabel>
-              <ProgressBar
-                variant="determinate"
-                value={item.percentage}
-              />
+              <ProgressBar variant="determinate" value={item.percentage} />
               <CountLabel>({item.count})</CountLabel>
             </RatingRow>
           ))}
@@ -268,6 +222,14 @@ export const AppRatingBreakdown = ({
             size="large"
             icon={<StarFilledIcon />}
             emptyIcon={<StarEmptyIcon />}
+            sx={{
+              '& .MuiRating-iconHover svg path': {
+                fill: '#FFD700',
+              },
+              '& .MuiRating-iconHover': {
+                transform: 'scale(1.3)',
+              },
+            }}
           />
         </RateSection>
       )}

@@ -5,17 +5,18 @@ import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import AppIcon from '../../assets/svgs/AppIcon.svg';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
-import { enabledDevModeAtom } from '../../atoms/global';
-import { useAtom } from 'jotai';
+import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 export const IconWrapper = ({
   children,
   label,
-  color,
-  selected,
-  disableWidth,
-  customWidth,
+  color = undefined,
+  selected = false,
+  disableWidth = undefined,
+  customWidth = undefined,
+  noBackground = false,
 }) => {
   const theme = useTheme();
 
@@ -23,10 +24,11 @@ export const IconWrapper = ({
     <Box
       sx={{
         alignItems: 'center',
-        backgroundColor: selected
-          ? theme.palette.action.selected
-          : 'transparent',
-        borderRadius: '50%',
+        backgroundColor:
+          noBackground ? 'transparent' : selected
+            ? theme.palette.action.selected
+            : 'transparent',
+        borderRadius: noBackground ? 0 : '50%',
         color: color ? color : theme.palette.text.primary,
         display: 'flex',
         flexDirection: 'column',
@@ -56,7 +58,6 @@ export const IconWrapper = ({
 
 export const DesktopFooter = ({
   goToHome,
-  hasUnreadGroups,
   hasUnreadDirects,
   isHome,
   isGroups,
@@ -69,6 +70,7 @@ export const DesktopFooter = ({
   setIsOpenSideViewGroups,
 }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+  const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -158,7 +160,7 @@ export const DesktopFooter = ({
           }}
         >
           <IconWrapper
-            label={t('group:group.messaging', {
+            label={t('group:group.dm', {
               postProcess: 'capitalizeFirstChar',
             })}
             selected={isDirects}

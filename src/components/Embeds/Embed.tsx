@@ -132,16 +132,23 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const getImage = async ({ identifier, name, service }, key, parsedData) => {
+  const getImage = async (
+    { identifier, name, service },
+    key,
+    parsedData,
+    forceRefresh = false
+  ) => {
     try {
-      if (blobUrl?.blobUrl) {
+      if (!forceRefresh && blobUrl?.blobUrl) {
         return blobUrl?.blobUrl;
       }
       let numberOfTries = 0;
       let imageFinalUrl = null;
+      let hasTriggeredDownload = false;
 
       const tryToGetImageStatus = async () => {
-        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}?build=true`;
+        // First, check status WITHOUT build parameter
+        const urlStatus = `${getBaseApiReact()}/arbitrary/resource/status/${service}/${name}/${identifier}`;
 
         const responseStatus = await fetch(urlStatus, {
           method: 'GET',
@@ -151,7 +158,27 @@ export const Embed = ({ embedLink }) => {
         });
 
         const responseData = await responseStatus.json();
-        if (responseData?.status === 'READY') {
+
+        // If not ready and haven't triggered download yet, trigger it ONCE with async=true
+        if (responseData?.status !== 'READY' && !hasTriggeredDownload) {
+          hasTriggeredDownload = true;
+          const urlAsync = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
+
+          // Trigger download but don't wait for response
+          fetch(urlAsync, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }).catch((error) => {
+            console.debug('Failed to trigger async download:', error);
+          });
+        }
+
+        if (
+          responseData?.status === 'READY' ||
+          responseData?.status === 'DOWNLOADED'
+        ) {
           if (parsedData?.encryptionType) {
             const urlData = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?encoding=base64`;
 
@@ -222,14 +249,13 @@ export const Embed = ({ embedLink }) => {
               );
             }
           } else {
-            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}?async=true`;
-            // If parsedData is used here, it must be defined somewhere
+            imageFinalUrl = `${getBaseApiReact()}/arbitrary/${service}/${name}/${identifier}`;
           }
         }
       };
 
       // Retry logic
-      while (!imageFinalUrl && numberOfTries < 3) {
+      while (!imageFinalUrl && numberOfTries < 5) {
         await tryToGetImageStatus();
         if (!imageFinalUrl) {
           numberOfTries++;
@@ -264,7 +290,7 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const handleImage = async (parsedData) => {
+  const handleImage = async (parsedData, forceRefresh = false) => {
     try {
       setIsLoading(true);
       setErrorMsg('');
@@ -281,7 +307,8 @@ export const Embed = ({ embedLink }) => {
           identifier: parsedData?.identifier,
         },
         parsedData?.key,
-        parsedData
+        parsedData,
+        forceRefresh
       );
 
       setImageUrl(image);
@@ -341,10 +368,10 @@ export const Embed = ({ embedLink }) => {
     }
   };
 
-  const fetchImage = () => {
+  const fetchImage = (forceRefresh = false) => {
     try {
       const parsedData = parseQortalLink(embedLink);
-      handleImage(parsedData);
+      handleImage(parsedData, forceRefresh);
     } catch (error) {
       setErrorMsg(
         error?.message ||
@@ -353,6 +380,17 @@ export const Embed = ({ embedLink }) => {
           })
       );
     }
+  };
+
+  const refreshImage = () => {
+    if (keyIdentifier) {
+      setBlobs((prev) => {
+        const next = { ...prev };
+        delete next[keyIdentifier];
+        return next;
+      });
+    }
+    fetchImage(true);
   };
 
   const openExternal = () => {
@@ -404,7 +442,7 @@ export const Embed = ({ embedLink }) => {
           image={imageUrl}
           owner={parsedData?.name}
           fetchImage={fetchImage}
-          refresh={fetchImage}
+          refresh={refreshImage}
           setInfoSnack={setInfoSnack}
           setOpenSnack={setOpenSnack}
           external={external}
@@ -419,7 +457,6 @@ export const Embed = ({ embedLink }) => {
           resourceData={resourceData}
           resourceDetails={resourceDetails}
           owner={parsedData?.name}
-          refresh={fetchImage}
           setInfoSnack={setInfoSnack}
           setOpenSnack={setOpenSnack}
           external={external}

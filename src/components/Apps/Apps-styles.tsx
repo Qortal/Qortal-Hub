@@ -246,13 +246,15 @@ export const AppInfoUserName = styled(Typography)(({ theme }) => ({
   textAlign: 'start',
 }));
 
+export const APPS_BOTTOM_NAV_HEIGHT_PX = 60;
+
 export const AppsNavBarParent = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.default,
   bottom: 0,
   color: theme.palette.text.primary,
   display: 'flex',
-  height: '60px',
+  height: `${APPS_BOTTOM_NAV_HEIGHT_PX}px`,
   justifyContent: 'space-between',
   padding: '0px 10px',
   position: 'fixed',

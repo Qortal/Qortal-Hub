@@ -12,10 +12,12 @@ export const useWebsocketStatus = () => {
   const lastPopup = useRef<null | number>(null);
 
   const setNodeInfos = useSetAtom(nodeInfosAtom);
-  const socketRef = useRef(null); // WebSocket reference
-  const groupSocketTimeoutRef = useRef(null); // Group Socket Timeout reference
+  const socketRef = useRef(null);
+  const timeoutIdRef = useRef(null); // No-pong timeout (close if no pong in 5s)
+  const groupSocketTimeoutRef = useRef(null); // Next ping in 45s
   const forceCloseWebSocket = () => {
     if (socketRef.current) {
+      clearTimeout(timeoutIdRef.current);
       clearTimeout(groupSocketTimeoutRef.current);
       socketRef.current.close(1000, 'forced');
       socketRef.current = null;
@@ -39,6 +41,22 @@ export const useWebsocketStatus = () => {
   };
 
   useEffect(() => {
+    const pingHeads = () => {
+      try {
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          socketRef.current.send('ping');
+          timeoutIdRef.current = setTimeout(() => {
+            if (socketRef.current) {
+              socketRef.current.close();
+              clearTimeout(groupSocketTimeoutRef.current);
+            }
+          }, 5000); // Close if no pong in 5 seconds
+        }
+      } catch (error) {
+        console.error('Error during ping:', error);
+      }
+    };
+
     const initWebsocketMessageGroup = async () => {
       forceCloseWebSocket(); // Ensure we close any existing connection
 
@@ -46,8 +64,17 @@ export const useWebsocketStatus = () => {
         const socketLink = `${getBaseApiReactSocket()}/websockets/admin/status`;
         socketRef.current = new WebSocket(socketLink);
 
+        socketRef.current.onopen = () => {
+          setTimeout(pingHeads, 50); // Initial ping
+        };
+
         socketRef.current.onmessage = (e) => {
           try {
+            if (e.data === 'pong') {
+              clearTimeout(timeoutIdRef.current);
+              groupSocketTimeoutRef.current = setTimeout(pingHeads, 20000); // Ping every 20 seconds
+              return;
+            }
             const data = JSON.parse(e.data);
             if (data?.height) {
               setNodeInfos(data);
@@ -58,6 +85,7 @@ export const useWebsocketStatus = () => {
         };
 
         socketRef.current.onclose = (event) => {
+          clearTimeout(timeoutIdRef.current);
           clearTimeout(groupSocketTimeoutRef.current);
           setNodeInfos({});
           console.warn(`WebSocket closed: ${event.reason || 'unknown reason'}`);
@@ -74,6 +102,7 @@ export const useWebsocketStatus = () => {
 
         socketRef.current.onerror = (error) => {
           console.error('WebSocket error:', error);
+          clearTimeout(timeoutIdRef.current);
           clearTimeout(groupSocketTimeoutRef.current);
           if (socketRef.current) {
             socketRef.current.close();

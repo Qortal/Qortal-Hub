@@ -17,6 +17,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import CloseIcon from '@mui/icons-material/Close';
 import { decodeIfEncoded } from '../../utils/decode';
 import { useTranslation } from 'react-i18next';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 export const ImageCard = ({
   image,
@@ -249,7 +250,7 @@ export function ImageViewer({ src = null, alt = '' }) {
             margin: 0,
             maxWidth: '100%',
             width: '100%',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx})`,
             overflow: 'hidden', // Prevent scrollbars
           },
         }}
