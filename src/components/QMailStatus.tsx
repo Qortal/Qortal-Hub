@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
-import { isLessThanOneWeekOld } from './Group/QMailMessages';
+import { isLessThanOneWeekOld } from './Group/qmailUtils';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
