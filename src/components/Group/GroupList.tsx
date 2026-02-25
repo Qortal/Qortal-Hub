@@ -14,7 +14,7 @@ import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { ContextMenu } from '../ContextMenu';
 import { getBaseApiReact } from '../../App';
-import { formatEmailDate } from './QMailMessages';
+import { formatEmailDate } from './qmailUtils';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import LockIcon from '@mui/icons-material/Lock';

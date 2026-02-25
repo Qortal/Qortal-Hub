@@ -64,6 +64,7 @@ import {
   myGroupsWhereIAmAdminAtom,
   selectedGroupIdAtom,
   timestampEnterDataAtom,
+  userInfoAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
@@ -77,6 +78,7 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
+import { useQMailFetch } from '../../hooks/useQMailFetch';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
 import {
@@ -282,6 +284,8 @@ export const Group = ({
   useWebsocketStatus();
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
+  const userInfo = useAtomValue(userInfoAtom);
+  useQMailFetch(userInfo?.name, userInfo?.address);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);

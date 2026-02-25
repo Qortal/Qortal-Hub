@@ -21,7 +21,7 @@ import {
 import { CustomButton } from '../../styles/App-styles';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
-import { formatEmailDate } from './QMailMessages';
+import { formatEmailDate } from './qmailUtils';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 
