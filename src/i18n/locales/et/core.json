@@ -79,6 +79,7 @@
     "search": "otsi",
     "search_apps": "otsi rakendusi",
     "search_apps_or_link": "Otsi rakendusi või sisesta qortal:// link",
+    "refetch_apps_websites_list": "Laadi rakenduste ja veebisaitide nimekiri uuesti",
     "open_as_qortal_link": "Ava Qortal lingina",
     "search_groups": "otsi gruppe",
     "search_chat_text": "otsi vestlustest teksti",

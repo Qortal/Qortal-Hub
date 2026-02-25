@@ -5,7 +5,16 @@ import {
   AppsLibraryContainer,
   AppsWidthLimiter,
 } from './Apps-styles';
-import { Box, ButtonBase, InputBase, styled, useTheme } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  IconButton,
+  InputBase,
+  Tooltip,
+  styled,
+  useTheme,
+} from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { QappLibraryText } from '../../assets/Icons/QappLibraryText.tsx';
 import { Spacer } from '../../common/Spacer';
 import { executeEvent } from '../../utils/events';
@@ -52,6 +61,7 @@ export const AppsLibraryDesktop = ({
   myAddress,
   isShow,
   categories,
+  getQapps,
 }) => {
   const [currentTab, setCurrentTab] = useState<AppsLibraryTabValue>('official');
   const [searchValue, setSearchValue] = useState('');
@@ -219,22 +229,44 @@ export const AppsLibraryDesktop = ({
                 justifyContent: 'center',
               }}
             >
-              <SearchContainer>
-                <SearchIcon sx={{ color: theme.palette.text.secondary }} />
-                <InputBase
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  sx={{ flex: 1, ml: 1, fontSize: '14px' }}
-                  placeholder={t('core:action.search_apps', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                />
-                {searchValue && (
-                  <ButtonBase onClick={() => setSearchValue('')}>
-                    <img src={IconClearInput} alt="clear" />
-                  </ButtonBase>
-                )}
-              </SearchContainer>
+              {currentTab !== 'private' && (
+                <>
+                  <SearchContainer>
+                    <SearchIcon sx={{ color: theme.palette.text.secondary }} />
+                    <InputBase
+                      value={searchValue}
+                      onChange={(e) => setSearchValue(e.target.value)}
+                      sx={{ flex: 1, ml: 1, fontSize: '14px' }}
+                      placeholder={t('core:action.search_apps', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    />
+                    {searchValue && (
+                      <ButtonBase onClick={() => setSearchValue('')}>
+                        <img src={IconClearInput} alt="clear" />
+                      </ButtonBase>
+                    )}
+                  </SearchContainer>
+
+                  {getQapps && (
+                    <Tooltip
+                      title={t('core:action.refetch_apps_websites_list', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    >
+                      <IconButton
+                        onClick={() => getQapps()}
+                        aria-label={t('core:action.refetch_apps_websites_list', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                        sx={{ color: theme.palette.text.secondary }}
+                      >
+                        <RefreshIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </>
+              )}
 
               {currentTab === 'community' && (
                 <>

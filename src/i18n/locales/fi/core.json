@@ -79,6 +79,7 @@
     "search": "etsi",
     "search_apps": "etsi sovelluksia",
     "search_apps_or_link": "Etsi sovelluksia tai syötä qortal://-linkki",
+    "refetch_apps_websites_list": "Hae sovellus- ja verkkosivulista uudelleen",
     "open_as_qortal_link": "Ava Qortal-linkkinä",
     "search_groups": "etsi ryhmiä",
     "search_chat_text": "etsi keskustelusta",
