@@ -7,7 +7,11 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
   styled,
   Switch,
   TextField,
@@ -75,9 +79,13 @@ export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
   },
 }));
 
+type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
+
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+  const [closeAction, setCloseAction] = useState<CloseAction>('ask');
+  const [platform, setPlatform] = useState<string>('');
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -147,6 +155,30 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   useEffect(() => {
     getUserSettings();
   }, [getUserSettings]);
+
+  const loadAppSettings = useCallback(async () => {
+    if (typeof window.electronAPI?.getAppSettings !== 'function') return;
+    const settings = await window.electronAPI.getAppSettings();
+    if (settings?.closeAction) setCloseAction(settings.closeAction);
+    if (typeof window.electronAPI?.getPlatform === 'function') {
+      const p = await window.electronAPI.getPlatform();
+      setPlatform(p || '');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (window?.electronAPI) loadAppSettings();
+  }, [loadAppSettings]);
+
+  const handleCloseActionChange = useCallback(
+    async (value: CloseAction) => {
+      setCloseAction(value);
+      if (typeof window.electronAPI?.setAppSettings === 'function') {
+        await window.electronAPI.setAppSettings({ closeAction: value });
+      }
+    },
+    []
+  );
 
   return (
     <Fragment>
@@ -226,6 +258,52 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                 postProcess: 'capitalizeFirstChar',
               })}
             />
+          )}
+
+          {window?.electronAPI && (
+            <FormControl
+              sx={{
+                color: theme.palette.text.primary,
+                minWidth: 280,
+              }}
+              size="small"
+            >
+              <InputLabel id="close-action-label">
+                {t('core:close_window_behavior', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </InputLabel>
+              <Select
+                labelId="close-action-label"
+                value={closeAction}
+                label={t('core:close_window_behavior', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                onChange={(e) =>
+                  handleCloseActionChange(e.target.value as CloseAction)
+                }
+              >
+                <MenuItem value="ask">
+                  {t('core:close_always_ask', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </MenuItem>
+                <MenuItem value="minimizeToTray">
+                  {platform === 'darwin'
+                    ? t('core:close_minimize_to_dock', {
+                        postProcess: 'capitalizeFirstChar',
+                      })
+                    : t('core:close_minimize_to_tray', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                </MenuItem>
+                <MenuItem value="quit">
+                  {t('core:close_quit_completely', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </MenuItem>
+              </Select>
+            </FormControl>
           )}
 
           {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}

@@ -207,12 +207,27 @@ export class ElectronCapacitorApp {
       );
     }
 
-    // Ask user how they want to close the window
+    // Close window: use saved preference (from SharedSettingsFilePath) or ask user.
+    // Must call event.preventDefault() synchronously so the window does not close before we decide.
     this.MainWindow.on('close', async (event) => {
       if (!isQuitting) {
         event.preventDefault();
 
-        // Determine platform-specific text
+        const appSettings = await readAppSettings();
+        const closeAction = appSettings.closeAction ?? 'ask';
+
+        if (closeAction === 'minimizeToTray') {
+          this.MainWindow.hide();
+          return;
+        }
+        if (closeAction === 'quit') {
+          setIsQuitting(true);
+          app.quit();
+          return;
+        }
+
+        // closeAction === 'ask': show dialog
+
         const backgroundText =
           process.platform === 'darwin'
             ? 'Minimize to Dock'
@@ -233,14 +248,11 @@ export class ElectronCapacitorApp {
         });
 
         if (choice.response === 0) {
-          // Minimize to background
           this.MainWindow.hide();
         } else if (choice.response === 1) {
-          // Quit completely
           setIsQuitting(true);
           app.quit();
         }
-        // If response === 2 (Cancel), do nothing
       }
     });
 
@@ -612,6 +624,41 @@ export async function getSharedSettingsFilePath(
   return path.join(dir, fileName);
 }
 
+// App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray preference
+const APP_SETTINGS_FILENAME = 'app-settings.json';
+
+export type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
+
+export interface AppSettings {
+  closeAction?: CloseAction;
+}
+
+const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask' };
+
+export async function readAppSettings(): Promise<AppSettings> {
+  try {
+    const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
+    const raw = await fs.promises.readFile(filePath, 'utf-8').catch(() => null);
+    if (!raw) return { ...DEFAULT_APP_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      ...DEFAULT_APP_SETTINGS,
+      ...parsed,
+      closeAction:
+        parsed.closeAction && ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
+          ? (parsed.closeAction as CloseAction)
+          : DEFAULT_APP_SETTINGS.closeAction,
+    };
+  } catch {
+    return { ...DEFAULT_APP_SETTINGS };
+  }
+}
+
+async function writeAppSettings(settings: AppSettings): Promise<void> {
+  const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
+  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+}
+
 // READ handler
 ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
   try {
@@ -640,6 +687,21 @@ ipcMain.handle(
       loggerError(`Error in walletStorage:write for "${fileName}"`, err);
       throw err;
     }
+  }
+);
+
+// App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray
+ipcMain.handle('appSettings:get', async () => {
+  return readAppSettings();
+});
+
+ipcMain.handle(
+  'appSettings:set',
+  async (_event, partial: Partial<AppSettings>) => {
+    const current = await readAppSettings();
+    const next: AppSettings = { ...current, ...partial };
+    await writeAppSettings(next);
+    return next;
   }
 );
 

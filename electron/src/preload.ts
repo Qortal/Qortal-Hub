@@ -23,6 +23,9 @@ try {
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     showAppMenu: (x?: number, y?: number) =>
       ipcRenderer.invoke('window:showAppMenu', { x, y }),
+    getAppSettings: () => ipcRenderer.invoke('appSettings:get'),
+    setAppSettings: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit' }) =>
+      ipcRenderer.invoke('appSettings:set', settings),
   });
 
   // Expose other utility functions
