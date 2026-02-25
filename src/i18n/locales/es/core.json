@@ -79,6 +79,7 @@
     "search": "buscar",
     "search_apps": "Buscar aplicaciones",
     "search_apps_or_link": "Buscar aplicaciones o introducir enlace qortal://",
+    "refetch_apps_websites_list": "Volver a cargar lista de aplicaciones y sitios web",
     "open_as_qortal_link": "Abrir como enlace Qortal",
     "search_groups": "buscar grupos",
     "search_chat_text": "Search Chat Text",

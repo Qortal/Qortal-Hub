@@ -39,7 +39,8 @@ import {
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
-import { useAtom, useAtomValue } from 'jotai';
+import { publishEditTargetAtom } from '../../atoms/appsAtoms';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
@@ -49,6 +50,8 @@ const uid = new ShortUniqueId({ length: 8 });
 
 export const AppsDesktop = ({ mode, setMode, show }) => {
   const userInfo = useAtomValue(userInfoAtom);
+  const publishEditTarget = useAtomValue(publishEditTargetAtom);
+  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
   const myName = userInfo?.name;
   const myAddress = userInfo?.address;
   const [availableQapps, setAvailableQapps] = useState([]);
@@ -250,6 +253,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
         mode === 'publish-app' ||
         mode === 'publish-website'
       ) {
+        setPublishEditTarget(null);
         setMode('library');
       }
     } else if (selectedTab?.tabId) {
@@ -489,9 +493,15 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             categories={categories}
             myAddress={myAddress}
             myName={myName}
-            initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
+            initialName={publishEditTarget?.name}
+            initialAppType={
+              publishEditTarget?.service ??
+              (mode === 'publish-website' ? 'WEBSITE' : 'APP')
+            }
             isAppTypeLocked={
-              mode === 'publish-app' || mode === 'publish-website'
+              mode === 'publish-app' ||
+              mode === 'publish-website' ||
+              !!publishEditTarget
             }
           />
         )}

@@ -79,6 +79,7 @@
     "search": "検索",
     "search_apps": "アプリを検索します",
     "search_apps_or_link": "アプリを検索または qortal:// リンクを入力",
+    "refetch_apps_websites_list": "アプリとウェブサイトのリストを再取得",
     "open_as_qortal_link": "Qortal リンクとして開く",
     "search_groups": "グループを検索します",
     "search_chat_text": "チャットテキストを検索します",
