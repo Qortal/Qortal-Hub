@@ -149,8 +149,8 @@ export const GroupMail = ({
         ? handleUnencryptedPublishes([data])
         : await decryptPublishes([{ data }], secretKey);
 
-    const messageData = response[0];
-    return messageData.decryptedData;
+    const messageData = response?.[0];
+    return messageData?.decryptedData;
   };
 
   const updateThreadActivity = async ({

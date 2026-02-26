@@ -93,24 +93,18 @@ export const GroupJoinRequests = ({
       if (!silent) setLoading(false);
       return;
     }
+    if (!myAddress) return;
     try {
       if (!silent) setLoading(true);
-      const res = await Promise.all(
-        myGroupsWhereIAmAdmin.map(async (group) => {
-          const joinRequestResponse =
-            await requestQueueGroupJoinRequests.enqueue(() => {
-              return fetch(
-                `${getBaseApiReact()}/groups/joinrequests/${group.groupId}`
-              );
-            });
-
-          const joinRequestData = await joinRequestResponse.json();
-          return {
-            group,
-            data: joinRequestData,
-          };
-        })
+      const response = await fetch(
+        `${getBaseApiReact()}/groups/joinrequests/admin/${myAddress}`
       );
+      const raw: Array<{ group: any; joinRequests: Array<{ groupId: number; joiner: string }> }> =
+        await response.json();
+      const res = raw.map((item) => ({
+        group: item.group,
+        data: item.joinRequests ?? [],
+      }));
       setGroupsWithJoinRequests(res);
       setJoinRequestsCache({
         data: res,

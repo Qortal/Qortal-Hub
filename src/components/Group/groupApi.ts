@@ -146,26 +146,21 @@ export const getGroupAdmins = async (
     `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
   );
   const groupData = await response.json();
-  const members: string[] = [];
+  const names: string[] = [];
   const membersAddresses: string[] = [];
   const both: { name: string; address: string }[] = [];
 
-  const getMemNames = groupData?.members?.map(async (member: { member?: string }) => {
+  groupData?.members?.forEach((member: { member?: string; primaryName?: string }) => {
     if (member?.member) {
-      const name = await requestQueueAdminMemberNames.enqueue(() =>
-        getNameInfo(member.member as string)
-      );
-      if (name) {
-        members.push(name);
-        both.push({ name, address: member.member });
-      }
       membersAddresses.push(member.member);
+      if (member.primaryName) {
+        names.push(member.primaryName);
+        both.push({ name: member.primaryName, address: member.member });
+      }
     }
-    return true;
   });
-  await Promise.all(getMemNames || []);
 
-  return { names: members, addresses: membersAddresses, both };
+  return { names, addresses: membersAddresses, both };
 };
 
 export const getNames = async (

@@ -71,7 +71,6 @@ import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
-import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
@@ -835,25 +834,6 @@ export const Group = ({
     }
   }, []);
 
-  const getOwnerNameForGroup = async (owner: string, groupId: string) => {
-    if (groupId == '0') return; // general group has id=0
-    try {
-      if (!owner) return;
-      if (groupsOwnerNamesRef.current[groupId]) return;
-      const name = await requestQueueMemberNames.enqueue(() => {
-        return getNameInfo(owner);
-      });
-      if (name) {
-        groupsOwnerNamesRef.current[groupId] = name;
-        setGroupsOwnerNames((prev) => {
-          return { ...prev, [groupId]: name };
-        });
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
   useEffect(() => {
     groupsPropertiesRef.current = groupsProperties;
   }, [groupsProperties]);
@@ -869,44 +849,37 @@ export const Group = ({
         return result;
       }, {});
       setGroupsProperties(transformToObject);
+
+      // Use ownerPrimaryName from API when present (no fallback — missing means no primary name)
+      const ownerNamesFromApi: Record<string, string> = {};
       Object.keys(transformToObject).forEach((key) => {
-        getOwnerNameForGroup(transformToObject[key]?.owner || '', key);
+        const item = transformToObject[key];
+        if (item?.ownerPrimaryName) {
+          ownerNamesFromApi[key] = item.ownerPrimaryName;
+          groupsOwnerNamesRef.current[key] = item.ownerPrimaryName;
+        }
       });
+      if (Object.keys(ownerNamesFromApi).length > 0) {
+        setGroupsOwnerNames((prev) => ({ ...prev, ...ownerNamesFromApi }));
+      }
     } catch (error) {
       console.log(error);
     }
   }, []);
 
   const getGroupsWhereIAmAMember = useCallback(
-    async (groups) => {
+    async (_groups) => {
+      if (!myAddress) return;
       try {
-        const groupsAsAdmin = [];
-        const getAllGroupsAsAdmin = groups
-          .filter((item) => item.groupId !== '0')
-          .map(async (group) => {
-            const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(
-              () => {
-                return fetch(
-                  `${getBaseApiReact()}/groups/members/${group.groupId}?limit=0&onlyAdmins=true`
-                );
-              }
-            );
-            const isAdminData = await isAdminResponse.json();
-
-            const findMyself = isAdminData?.members?.find(
-              (member) => member.member === myAddress
-            );
-
-            if (findMyself) {
-              groupsAsAdmin.push(group);
-            }
-            return true;
-          });
-
-        await Promise.all(getAllGroupsAsAdmin);
+        const response = await fetch(
+          `${getBaseApiReact()}/groups/member/${myAddress}?adminOnly=true`
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const groupsAsAdmin = Array.isArray(data) ? data : (data?.groups ?? []);
         setMyGroupsWhereIAmAdmin(groupsAsAdmin);
       } catch (error) {
-        console.error();
+        console.error(error);
       }
     },
     [myAddress]

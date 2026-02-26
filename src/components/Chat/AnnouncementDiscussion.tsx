@@ -77,7 +77,8 @@ export const AnnouncementDiscussion = ({
           ? handleUnencryptedPublishes([data])
           : await decryptPublishes([{ data }], secretKey);
 
-      const messageData = response[0];
+      const messageData = response?.[0];
+      if (!messageData) return;
       setData((prev) => {
         return {
           ...prev,

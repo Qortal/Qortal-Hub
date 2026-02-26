@@ -93,8 +93,8 @@ const getEncryptedResource = async (
       ? handleUnencryptedPublishes([data])
       : await decryptPublishes([{ data }], secretKey);
 
-  const messageData = response[0];
-  return messageData.decryptedData;
+  const messageData = response?.[0];
+  return messageData?.decryptedData;
 };
 
 export const Thread = ({

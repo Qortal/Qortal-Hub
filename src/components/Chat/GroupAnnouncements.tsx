@@ -87,7 +87,7 @@ export const getTempPublish = async () => {
 
 export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
   try {
-    return await new Promise((res, rej) => {
+    return await new Promise((res) => {
       window
         .sendMessage('decryptSingleForPublishes', {
           data: encryptedMessages,
@@ -95,18 +95,20 @@ export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
           skipDecodeBase64: true,
         })
         .then((response) => {
-          if (!response?.error) {
+          if (!response?.error && Array.isArray(response)) {
             res(response);
             return;
           }
-          rej(response.error);
+          res([]);
         })
         .catch((error) => {
-          rej(error.message || 'An error occurred');
+          console.log(error);
+          res([]);
         });
     });
   } catch (error) {
     console.log(error);
+    return [];
   }
 };
 
