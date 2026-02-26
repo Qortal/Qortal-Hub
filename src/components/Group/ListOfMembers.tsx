@@ -390,18 +390,18 @@ const ListOfMembers = ({
               >
                 <ListItemAvatar>
                   <Avatar
-                    alt={member?.name || member?.member}
+                    alt={member?.primaryName || member?.member}
                     src={
-                      member?.name
-                        ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.name}/qortal_avatar?async=true`
+                      member?.primaryName
+                        ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
                         : ''
                     }
                   />
                 </ListItemAvatar>
 
                 <ListItemText
-                  id={member?.name || member?.member}
-                  primary={member?.name || member?.member}
+                  id={member?.primaryName || member?.member}
+                  primary={member?.primaryName || member?.member}
                 />
                 {member?.isAdmin && (
                   <Typography
