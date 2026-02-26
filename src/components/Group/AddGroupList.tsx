@@ -35,7 +35,6 @@ import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
 import { memberGroupsAtom, txListAtom } from '../../atoms/global';
 import { formatTimestamp } from '../../utils/time.ts';
-import { getNameInfo } from './groupApi';
 import { Spacer } from '../../common/Spacer.tsx';
 
 const cache = new CellMeasurerCache({
@@ -83,8 +82,8 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
         const data = await res.json();
         if (cancelled || !data?.owner) return;
         setOwnerAddress(data.owner);
-        const name = await getNameInfo(data.owner);
-        if (!cancelled) setOwnerPrimaryName(name || null);
+        if (!cancelled && data.ownerPrimaryName)
+          setOwnerPrimaryName(data.ownerPrimaryName);
       } catch (err) {
         if (!cancelled) {
           setOwnerAddress(null);
@@ -269,9 +268,7 @@ export const AddGroupList = ({ setInfoSnack, setOpenSnack }) => {
   const rowRenderer = ({ index, key, parent, style }) => {
     const group = filteredItems[index];
     const memberCount = group?.memberCount ?? 0;
-    const createdDate = group?.created
-      ? formatTimestamp(group.created)
-      : '—';
+    const createdDate = group?.created ? formatTimestamp(group.created) : '—';
 
     return (
       <CellMeasurer
