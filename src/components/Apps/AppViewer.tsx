@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
@@ -32,6 +33,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
 
     const [url, setUrl] = useState('');
     const { themeMode } = useThemeContext();
+    const muiTheme = useTheme();
     const { i18n, t } = useTranslation([
       'auth',
       'core',
@@ -40,6 +42,46 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       'tutorial',
     ]);
     const currentLang = i18n.language;
+    const resolvedPalette = useMemo(() => {
+      try {
+        return JSON.parse(JSON.stringify(muiTheme.palette));
+      } catch (err) {
+        console.error('Failed to serialize theme palette for iframe:', err);
+        return null;
+      }
+    }, [muiTheme]);
+
+    const postMessageToIframe = useCallback(
+      (payload) => {
+        const iframe = iframeRef?.current;
+        if (!iframe || !iframe?.src) return;
+
+        try {
+          const targetOrigin = new URL(iframe.src).origin;
+          iframe.contentWindow?.postMessage(payload, targetOrigin);
+        } catch (err) {
+          console.error('Failed to send message to iframe:', err);
+        }
+      },
+      [iframeRef]
+    );
+
+    const sendThemeToIframe = useCallback(() => {
+      postMessageToIframe({
+        action: 'THEME_CHANGED',
+        theme: themeMode,
+        palette: resolvedPalette,
+        requestedHandler: 'UI',
+      });
+    }, [postMessageToIframe, themeMode, resolvedPalette]);
+
+    const sendLanguageToIframe = useCallback(() => {
+      postMessageToIframe({
+        action: 'LANGUAGE_CHANGED',
+        language: currentLang,
+        requestedHandler: 'UI',
+      });
+    }, [postMessageToIframe, currentLang]);
 
     useEffect(() => {
       if (app?.isPreview) return;
@@ -95,38 +137,12 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     }, [app, path, isDevMode, themeMode, currentLang]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
-      try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          { action: 'THEME_CHANGED', theme: themeMode, requestedHandler: 'UI' },
-          targetOrigin
-        );
-      } catch (err) {
-        console.error('Failed to send theme change to iframe:', err);
-      }
-    }, [themeMode]);
+      sendThemeToIframe();
+    }, [sendThemeToIframe]);
 
     useEffect(() => {
-      const iframe = iframeRef?.current;
-      if (!iframe || !iframe?.src) return;
-
-      try {
-        const targetOrigin = new URL(iframe.src).origin;
-        iframe.contentWindow?.postMessage(
-          {
-            action: 'LANGUAGE_CHANGED',
-            language: currentLang,
-            requestedHandler: 'UI',
-          },
-          targetOrigin
-        );
-      } catch (err) {
-        console.error('Failed to send language change to iframe:', err);
-      }
-    }, [currentLang]);
+      sendLanguageToIframe();
+    }, [sendLanguageToIframe]);
 
     const removeTrailingSlash = (str) => str.replace(/\/$/, '');
 
@@ -298,6 +314,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       navigateBackInIframe();
     };
 
+    const handleIframeLoad = useCallback(() => {
+      sendThemeToIframe();
+      sendLanguageToIframe();
+    }, [sendThemeToIframe, sendLanguageToIframe]);
+
     useEffect(() => {
       if (!app?.tabId) return;
       subscribeToEvent(`navigateBackApp-${app?.tabId}`, navigateBackAppFunc);
@@ -341,6 +362,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           }}
           id="browser-iframe"
           src={defaultUrl}
+          onLoad={handleIframeLoad}
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write"
         ></iframe>
