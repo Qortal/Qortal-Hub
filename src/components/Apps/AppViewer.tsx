@@ -50,6 +50,37 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         return null;
       }
     }, [muiTheme]);
+    const encodedThemePalette = useMemo(() => {
+      if (!resolvedPalette) return null;
+      try {
+        return encodeURIComponent(JSON.stringify(resolvedPalette));
+      } catch (err) {
+        console.error('Failed to encode theme palette for iframe URL:', err);
+        return null;
+      }
+    }, [resolvedPalette]);
+
+    const appendThemeQueryParams = useCallback(
+      (
+        baseUrl: string,
+        extraParams: Record<string, string | number | boolean | null | undefined> = {}
+      ) => {
+        const serializedParams = [
+          `theme=${themeMode}`,
+          `lang=${currentLang}`,
+          ...(encodedThemePalette
+            ? [`themePalette=${encodedThemePalette}`]
+            : []),
+          ...Object.entries(extraParams)
+            .filter(([, value]) => value !== null && value !== undefined)
+            .map(([key, value]) => `${key}=${value}`),
+        ];
+
+        const separator = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${separator}${serializedParams.join('&')}`;
+      },
+      [themeMode, currentLang, encodedThemePalette]
+    );
 
     const postMessageToIframe = useCallback(
       (payload) => {
@@ -86,25 +117,37 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     useEffect(() => {
       if (app?.isPreview) return;
       if (isDevMode) {
-        setUrl(app?.url + `?theme=${themeMode}&lang=${currentLang}`);
+        if (!app?.url) return;
+        setUrl(appendThemeQueryParams(app?.url));
         return;
-      }
-      let hasQueryParam = false;
-      if (app?.path && app.path.includes('?')) {
-        hasQueryParam = true;
       }
 
       setUrl(
-        `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}${hasQueryParam ? '&' : '?'}theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}`
+        appendThemeQueryParams(
+          `${getBaseApiReact()}/render/${app?.service}/${app?.name}${app?.path != null ? `/${app?.path}` : ''}`,
+          {
+            identifier:
+              app?.identifier != null && app?.identifier != 'null'
+                ? app?.identifier
+                : '',
+          }
+        )
       );
-    }, [app?.service, app?.name, app?.identifier, app?.path, app?.isPreview]);
+    }, [
+      app?.service,
+      app?.name,
+      app?.identifier,
+      app?.path,
+      app?.isPreview,
+      appendThemeQueryParams,
+    ]);
 
     useEffect(() => {
       if (app?.isPreview && app?.url) {
         resetHistory();
-        setUrl(app.url + `&theme=${themeMode}&lang=${currentLang}`);
+        setUrl(appendThemeQueryParams(app.url));
       }
-    }, [app?.url, app?.isPreview]);
+    }, [app?.url, app?.isPreview, appendThemeQueryParams]);
 
     const defaultUrl = useMemo(() => {
       return url;
@@ -116,14 +159,18 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         if (isDevMode) {
           resetHistory();
           if (!app?.isPreview || app?.isPrivate) {
-            setUrl(
-              app?.url +
-                `?time=${Date.now()}&theme=${themeMode}&lang=${currentLang}`
-            );
+            if (!app?.url) return;
+            setUrl(appendThemeQueryParams(app?.url, { time: Date.now() }));
           }
           return;
         }
-        const constructUrl = `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null ? app?.identifier : ''}&time=${new Date().getMilliseconds()}`;
+        const constructUrl = appendThemeQueryParams(
+          `${getBaseApiReact()}/render/${app?.service}/${app?.name}${path != null ? path : ''}`,
+          {
+            identifier: app?.identifier != null ? app?.identifier : '',
+            time: new Date().getMilliseconds(),
+          }
+        );
         setUrl(constructUrl);
       }
     };
@@ -134,7 +181,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       return () => {
         unsubscribeFromEvent('refreshApp', refreshAppFunc);
       };
-    }, [app, path, isDevMode, themeMode, currentLang]);
+    }, [app, path, isDevMode, themeMode, currentLang, appendThemeQueryParams]);
 
     useEffect(() => {
       sendThemeToIframe();
@@ -296,12 +343,25 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         } catch (error) {
           if (isDevMode) {
             setUrl(
-              `${url}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+              appendThemeQueryParams(`${url}${previousPath != null ? previousPath : ''}`, {
+                time: new Date().getMilliseconds(),
+                isManualNavigation: false,
+              })
             );
             return;
           }
           setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            appendThemeQueryParams(
+              `${getBaseApiReact()}/render/${app?.service}/${app?.name}${previousPath != null ? previousPath : ''}`,
+              {
+                identifier:
+                  app?.identifier != null && app?.identifier != 'null'
+                    ? app?.identifier
+                    : '',
+                time: new Date().getMilliseconds(),
+                isManualNavigation: false,
+              }
+            )
           );
           // iframeRef.current.contentWindow.location.href = previousPath; // Fallback URL update
         }
@@ -329,7 +389,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           navigateBackAppFunc
         );
       };
-    }, [app, history, themeMode, currentLang]);
+    }, [app, history, themeMode, currentLang, appendThemeQueryParams]);
 
     // Function to navigate back in iframe
     const navigateForwardInIframe = async () => {
