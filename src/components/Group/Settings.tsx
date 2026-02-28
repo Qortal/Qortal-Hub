@@ -1,15 +1,13 @@
 import CloseIcon from '@mui/icons-material/Close';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
+  alpha,
   Box,
   Button,
   DialogActions,
   DialogContent,
   DialogContentText,
   DialogTitle,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
   MenuItem,
   Select,
   styled,
@@ -38,7 +36,6 @@ import {
   openSnackGlobalAtom,
 } from '../../atoms/global';
 import { walletVersion } from '../../background/background.ts';
-import { Spacer } from '../../common/Spacer';
 import { TransitionUp } from '../../common/Transitions.tsx';
 import Base58 from '../../encryption/Base58.ts';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
@@ -217,97 +214,165 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
 
         <Box
           sx={{
+            bgcolor: theme.palette.background.default,
             color: theme.palette.text.primary,
             display: 'flex',
             flexDirection: 'column',
             flexGrow: 1,
-            gap: '20px',
             overflowY: 'auto',
-            padding: '20px',
+            p: 2,
           }}
         >
-          <FormControlLabel
-            sx={{
-              color: theme.palette.text.primary,
-            }}
-            control={
-              <LocalNodeSwitch checked={checked} onChange={handleChange} />
-            }
-            label={t('group:action.disable_push_notifications', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          />
+          <Box
+            sx={{ maxWidth: 560, mx: 'auto', py: 3, px: 1, width: '100%' }}
+          >
 
-
-
-          {window?.electronAPI && (
-            <FormControlLabel
-              control={
-                <LocalNodeSwitch
-                  checked={isEnabledDevMode}
-                  onChange={(e) => {
-                    setIsEnabledDevMode(e.target.checked);
-                    localStorage.setItem(
-                      'isEnabledDevMode',
-                      JSON.stringify(e.target.checked)
-                    );
-                  }}
-                />
-              }
-              label={t('core:action.enable_dev_mode', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            />
-          )}
-
-          {window?.electronAPI && (
-            <FormControl
+            {/* Notifications */}
+            <Box
               sx={{
-                color: theme.palette.text.primary,
-                minWidth: 280,
+                borderRadius: 2,
+                overflow: 'hidden',
+                border: 1,
+                borderColor: alpha(theme.palette.divider, 0.4),
+                bgcolor: alpha(theme.palette.background.default, 0.5),
+                mb: 3,
               }}
-              size="small"
             >
-              <InputLabel id="close-action-label">
-                {t('core:close_window_behavior', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </InputLabel>
-              <Select
-                labelId="close-action-label"
-                value={closeAction}
-                label={t('core:close_window_behavior', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                onChange={(e) =>
-                  handleCloseActionChange(e.target.value as CloseAction)
-                }
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  px: 2,
+                  py: 1.25,
+                }}
               >
-                <MenuItem value="ask">
-                  {t('core:close_always_ask', {
+                <Typography variant="body2" color="text.secondary">
+                  {t('group:action.disable_push_notifications', {
                     postProcess: 'capitalizeFirstChar',
                   })}
-                </MenuItem>
-                <MenuItem value="minimizeToTray">
-                  {platform === 'darwin'
-                    ? t('core:close_minimize_to_dock', {
-                        postProcess: 'capitalizeFirstChar',
-                      })
-                    : t('core:close_minimize_to_tray', {
+                </Typography>
+                <LocalNodeSwitch checked={checked} onChange={handleChange} />
+              </Box>
+            </Box>
+
+            {/* Electron-only app settings */}
+            {window?.electronAPI && (
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  border: 1,
+                  borderColor: alpha(theme.palette.divider, 0.4),
+                  bgcolor: alpha(theme.palette.background.default, 0.5),
+                  mb: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {t('core:action.enable_dev_mode', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                  <LocalNodeSwitch
+                    checked={isEnabledDevMode}
+                    onChange={(e) => {
+                      setIsEnabledDevMode(e.target.checked);
+                      localStorage.setItem(
+                        'isEnabledDevMode',
+                        JSON.stringify(e.target.checked)
+                      );
+                    }}
+                  />
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1.5,
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {t('core:close_window_behavior', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                  <Select
+                    size="small"
+                    value={closeAction}
+                    onChange={(e) =>
+                      handleCloseActionChange(e.target.value as CloseAction)
+                    }
+                    sx={{ minWidth: 180, borderRadius: 2 }}
+                  >
+                    <MenuItem value="ask">
+                      {t('core:close_always_ask', {
                         postProcess: 'capitalizeFirstChar',
                       })}
-                </MenuItem>
-                <MenuItem value="quit">
-                  {t('core:close_quit_completely', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </MenuItem>
-              </Select>
-            </FormControl>
-          )}
+                    </MenuItem>
+                    <MenuItem value="minimizeToTray">
+                      {platform === 'darwin'
+                        ? t('core:close_minimize_to_dock', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:close_minimize_to_tray', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                    </MenuItem>
+                    <MenuItem value="quit">
+                      {t('core:close_quit_completely', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </MenuItem>
+                  </Select>
+                </Box>
+              </Box>
+            )}
 
-          {isEnabledDevMode && <ExportPrivateKey rawWallet={rawWallet} />}
-          <ThemeManager />
+            {/* Security — Export private key (dev mode only) */}
+            {isEnabledDevMode && (
+              <Box
+                sx={{
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  border: 1,
+                  borderColor: alpha(theme.palette.divider, 0.4),
+                  bgcolor: alpha(theme.palette.background.default, 0.5),
+                  mb: 3,
+                  px: 2,
+                  py: 1.5,
+                }}
+              >
+                <ExportPrivateKey rawWallet={rawWallet} />
+              </Box>
+            )}
+
+            {/* Appearance — Theme Manager */}
+            <Box
+              sx={{
+                borderRadius: 2,
+                border: 1,
+                borderColor: alpha(theme.palette.divider, 0.4),
+                bgcolor: alpha(theme.palette.background.default, 0.5),
+                overflow: 'hidden',
+              }}
+            >
+              <ThemeManager />
+            </Box>
+
+          </Box>
         </Box>
       </Dialog>
     </Fragment>
@@ -373,9 +438,7 @@ const ExportPrivateKey = ({ rawWallet }) => {
     <>
       <Button
         variant="contained"
-        sx={{
-          width: '200px',
-        }}
+        size="small"
         onClick={() => setIsOpen(true)}
       >
         {t('group:action.export_private_key', {
@@ -391,10 +454,8 @@ const ExportPrivateKey = ({ rawWallet }) => {
         <DialogTitle
           id="alert-dialog-title"
           sx={{
-            textAlign: 'center',
             color: theme.palette.text.primary,
-            fontWeight: 'bold',
-            opacity: 1,
+            fontWeight: 700,
           }}
         >
           {t('group:action.export_password', {
@@ -404,30 +465,38 @@ const ExportPrivateKey = ({ rawWallet }) => {
 
         <DialogContent
           sx={{
-            flexDirection: 'column',
             display: 'flex',
-            gap: '10px',
+            flexDirection: 'column',
+            gap: 2,
+            minWidth: 320,
           }}
         >
-          <DialogContentText id="alert-dialog-description">
+          <DialogContentText
+            id="alert-dialog-description"
+            variant="body2"
+            color="text.secondary"
+          >
             {t('group:message.generic.secure_place', {
               postProcess: 'capitalizeFirstChar',
             })}
           </DialogContentText>
-
-          <Spacer height="20px" />
 
           <TextField
             autoFocus
             type="password"
             value={password}
             autoComplete="off"
+            size="small"
             onChange={(e) => setPassword(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': { borderRadius: 2 },
+            }}
           />
 
           {privateKey && (
             <Button
               variant="outlined"
+              size="small"
               onClick={() => {
                 navigator.clipboard.writeText(privateKey);
                 setInfoSnackCustom({
@@ -439,30 +508,38 @@ const ExportPrivateKey = ({ rawWallet }) => {
 
                 setOpenSnackGlobal(true);
               }}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
             >
               {t('group:action.copy_private_key', {
                 postProcess: 'capitalizeFirstChar',
               })}{' '}
-              <ContentCopyIcon color="primary" />
+              <ContentCopyIcon fontSize="small" sx={{ ml: 0.5 }} />
             </Button>
           )}
         </DialogContent>
 
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
-            variant="contained"
+            variant="outlined"
+            size="small"
             onClick={() => {
               setIsOpen(false);
               setPassword('');
               setPrivateKey('');
             }}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
           >
             {t('core:action.cancel', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>
 
-          <Button variant="contained" onClick={exportPrivateKeyFunc}>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={exportPrivateKeyFunc}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
+          >
             {t('core:action.decrypt', {
               postProcess: 'capitalizeFirstChar',
             })}
