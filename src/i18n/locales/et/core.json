@@ -62,7 +62,7 @@
     "open": "ava",
     "pin": "kinnita",
     "pin_app": "kinnita rakendus",
-    "pin_from_dashboard": "kinnita juhtpaneelilt",
+    "pin_to_dashboard": "kinnita juhtpaneelile",
     "post": "postita",
     "post_message": "postita sõnum",
     "publish": "avalda",

@@ -62,7 +62,7 @@
     "open": "apri",
     "pin": "blocca",
     "pin_app": "blocca app",
-    "pin_from_dashboard": "pin dalla dashboard",
+    "pin_to_dashboard": "fissa alla dashboard",
     "post": "posta",
     "post_message": "posta messaggio",
     "publish": "pubblica",

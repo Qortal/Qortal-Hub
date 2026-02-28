@@ -402,7 +402,7 @@ export const AppInfo = ({ app, myName }) => {
                   ? t('core:action.unpin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })
-                  : t('core:action.pin_from_dashboard', {
+                  : t('core:action.pin_to_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })}
               </AppButtonText>
