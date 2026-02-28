@@ -52,7 +52,7 @@ import {
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const requestQueuePromos = new RequestQueueWithPromise(3);
+export const requestQueuePromos = new RequestQueueWithPromise(8);
 
 export function utf8ToBase64(inputString: string): string {
   // Encode the string as UTF-8
@@ -143,9 +143,11 @@ export const ListOfGroupPromotions = ({
         },
       });
       const responseData = await response.json();
+
       const data: any[] = [];
       const uniqueGroupIds = new Set();
       const oneWeekAgo = Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
+      const abortController = new AbortController();
 
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
@@ -155,6 +157,7 @@ export const ListOfGroupPromotions = ({
             }/${promo.identifier}`;
             const response = await fetch(url, {
               method: 'GET',
+              signal: abortController.signal,
             });
 
             try {
@@ -173,7 +176,9 @@ export const ListOfGroupPromotions = ({
                 }
               }
             } catch (error) {
-              console.error('Error fetching promo:', error);
+              if ((error as Error)?.name !== 'AbortError') {
+                console.error('Error fetching promo:', error);
+              }
             }
           });
         }
@@ -181,7 +186,14 @@ export const ListOfGroupPromotions = ({
         return true;
       });
 
-      await Promise.all(getPromos);
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          abortController.abort();
+          resolve();
+        }, 5000);
+      });
+
+      await Promise.race([Promise.all(getPromos), timeoutPromise]);
       const groupWithInfo = await getGroupNames(
         data.sort((a, b) => b.created - a.created)
       );
