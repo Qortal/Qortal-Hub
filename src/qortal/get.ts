@@ -119,6 +119,7 @@ import {
 import i18n from 'i18next';
 import aesjs from 'aes-js';
 import { roundUpToDecimals } from '../utils/numberFunctions.ts';
+import { normalizeFilename } from '../utils/downloadFromLocation.ts';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -2962,7 +2963,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       const endpoint = isEncrypted
         ? await createEndpoint(locationUrl)
         : await createEndpoint(
-            locationUrl + `?attachment=true&attachmentFilename=${filename}`
+            locationUrl +
+              `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
           );
       const response = await fetch(endpoint);
 
@@ -3241,7 +3243,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
         try {
           const response = await fetch(
             await createEndpoint(
-              locationUrl + `?attachment=true&attachmentFilename=${filename}`
+              locationUrl +
+                `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
             )
           );
 
@@ -3273,7 +3276,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       } else {
         // Direct download using anchor tag
         const endpoint = await createEndpoint(
-          locationUrl + `?attachment=true&attachmentFilename=${filename}`
+          locationUrl +
+            `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
         );
         const a = document.createElement('a');
         a.href = endpoint;
