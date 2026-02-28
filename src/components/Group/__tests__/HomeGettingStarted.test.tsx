@@ -169,7 +169,7 @@ describe('HomeGettingStarted', () => {
     });
   });
 
-  it('persists completed status to localStorage when all steps are done', async () => {
+  it('persists completed status to localStorage when all steps are done (per-account)', async () => {
     await act(async () => {
       renderComponent(
         { name: 'alice', address: 'QADDR' },
@@ -179,12 +179,12 @@ describe('HomeGettingStarted', () => {
     });
 
     await waitFor(() => {
-      expect(localStorage.getItem(LS_KEY)).toBe('completed');
+      expect(localStorage.getItem(`${LS_KEY}_QADDR`)).toBe('completed');
     });
   });
 
-  it('hides the section immediately when localStorage already has completed status', () => {
-    localStorage.setItem(LS_KEY, 'completed');
+  it('hides the section immediately when localStorage already has completed status for this account', () => {
+    localStorage.setItem(`${LS_KEY}_QADDR`, 'completed');
     renderComponent({ name: null, address: 'QADDR' }, 0);
     expect(screen.queryByText('Getting Started')).not.toBeInTheDocument();
   });

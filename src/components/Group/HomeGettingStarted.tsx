@@ -52,15 +52,25 @@ export const HomeGettingStarted = ({
   const [hasAvatar, setHasAvatar] = useState(false);
   const [checkingAvatar, setCheckingAvatar] = useState(false);
   const [openQortsDialog, setOpenQortsDialog] = useState(false);
-  const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem(LS_KEY) === 'completed'
-  );
+  const [dismissed, setDismissed] = useState<boolean | null>(null);
   /** Fallback: cumulative QORT from payments endpoint when balance < 6 and not completed in localStorage */
   const [paymentsFallbackTotal, setPaymentsFallbackTotal] = useState<
     number | null
   >(null);
 
   const name = userInfo?.name;
+  const userAddress = userInfo?.address;
+
+  // When we have an address, sync dismissed from per-account localStorage. null = unknown (behaves like dismissed).
+  useEffect(() => {
+    if (userAddress == null) {
+      setDismissed(null);
+      return;
+    }
+    setDismissed(
+      localStorage.getItem(`${LS_KEY}_${userAddress}`) === 'completed'
+    );
+  }, [userAddress]);
 
   // Step completion flags: balance >= 6 OR (fallback) cumulative payments to user's address >= 6
   const hasQorts =
@@ -76,9 +86,8 @@ export const HomeGettingStarted = ({
     !hasName;
 
   // Fallback for "6 QORT" step: when balance < 6 and not completed in localStorage, check payments to user's address
-  const userAddress = userInfo?.address;
   useEffect(() => {
-    if (dismissed || !userAddress) return;
+    if (dismissed !== false || !userAddress) return;
     const balanceNum = balance != null ? Number(balance) : null;
     if (balanceNum != null && balanceNum >= MIN_BALANCE_FOR_QORTS) return;
 
@@ -132,10 +141,17 @@ export const HomeGettingStarted = ({
     return () => unsubscribeFromEvent('avatarUploaded', onUploaded);
   }, [checkAvatar]);
 
-  // Once all steps are complete, persist and hide the section
+  // Once all steps are complete, persist and hide the section (per-account)
   useEffect(() => {
-    if (!checkingAvatar && hasQorts && hasName && hasAvatar && !dismissed) {
-      localStorage.setItem(LS_KEY, 'completed');
+    if (
+      !checkingAvatar &&
+      hasQorts &&
+      hasName &&
+      hasAvatar &&
+      dismissed === false &&
+      userAddress
+    ) {
+      localStorage.setItem(`${LS_KEY}_${userAddress}`, 'completed');
       setDismissed(true);
       onGettingStartedComplete?.();
     }
@@ -145,6 +161,7 @@ export const HomeGettingStarted = ({
     hasName,
     hasAvatar,
     dismissed,
+    userAddress,
     onGettingStartedComplete,
   ]);
 
@@ -182,7 +199,7 @@ export const HomeGettingStarted = ({
   );
 
   // Hidden once the user has completed all steps (persisted across sessions)
-  if (dismissed) return null;
+  if (dismissed !== false) return null;
 
   return (
     <>
