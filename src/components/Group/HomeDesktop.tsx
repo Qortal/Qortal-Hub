@@ -56,7 +56,7 @@ export const HomeDesktop = ({
   const name = userInfo?.name;
 
   const [activeTab, setActiveTab] = useState<HomeTab>('user');
-  const [activityTab, setActivityTab] = useState<ActivityTab>('promotions');
+  const [activityTab, setActivityTab] = useState<ActivityTab>('requests');
   const [requestsCount, setRequestsCount] = useState(0);
   const [invitesCount, setInvitesCount] = useState(0);
   const [promotionsCount, setPromotionsCount] = useState(0);
