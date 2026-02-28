@@ -1,6 +1,48 @@
 import aesjs from 'aes-js';
 import { createEndpoint } from '../background/background.ts';
 
+export function normalizeFilename(
+  input: string,
+  maxLength: number = 120
+): string {
+  if (!input) return 'file';
+
+  // Separate extension
+  const lastDot = input.lastIndexOf('.');
+  const hasExtension = lastDot > 0;
+  const namePart = hasExtension ? input.slice(0, lastDot) : input;
+  const extension = hasExtension ? input.slice(lastDot).toLowerCase() : '';
+
+  // Normalize unicode (é → e)
+  let normalized = namePart.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Replace curly quotes/dashes with ASCII equivalents
+  normalized = normalized
+    .replace(/[’‘]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, '-');
+
+  // Remove anything not safe (keep letters, numbers, space, dash, underscore)
+  normalized = normalized.replace(/[^a-zA-Z0-9 _-]/g, '');
+
+  // Convert spaces to underscore
+  normalized = normalized.replace(/\s+/g, '_');
+
+  // Collapse multiple underscores
+  normalized = normalized.replace(/_+/g, '_');
+
+  // Trim leading/trailing underscores or dashes
+  normalized = normalized.replace(/^[_-]+|[_-]+$/g, '');
+
+  // Enforce max length (preserve extension)
+  const allowedNameLength = maxLength - extension.length;
+  if (normalized.length > allowedNameLength) {
+    normalized = normalized.slice(0, allowedNameLength);
+  }
+
+  return normalized + extension;
+}
+
 interface DownloadFromLocationParams {
   filename: string;
   location: {
@@ -27,7 +69,7 @@ interface DownloadResult {
 /**
  * Downloads and optionally decrypts a file from QDN location
  * No permissions, no UI notifications - just pure download logic
- * 
+ *
  * @param params - Download parameters
  * @returns Promise with download result
  */
@@ -112,7 +154,8 @@ export async function downloadFromLocation(
         const endpoint = isEncrypted
           ? await createEndpoint(locationUrl)
           : await createEndpoint(
-              locationUrl + `?attachment=true&attachmentFilename=${filename}`
+              locationUrl +
+                `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
             );
         const response = await fetch(endpoint);
 
@@ -381,7 +424,8 @@ export async function downloadFromLocation(
           try {
             const response = await fetch(
               await createEndpoint(
-                locationUrl + `?attachment=true&attachmentFilename=${filename}`
+                locationUrl +
+                  `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
               )
             );
 
@@ -406,7 +450,8 @@ export async function downloadFromLocation(
         } else {
           // Direct download using anchor tag
           const endpoint = await createEndpoint(
-            locationUrl + `?attachment=true&attachmentFilename=${filename}`
+            locationUrl +
+              `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
           );
           const a = document.createElement('a');
           a.href = endpoint;
