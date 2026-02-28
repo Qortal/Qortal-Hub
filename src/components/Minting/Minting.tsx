@@ -8,7 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   IconButton,
   Snackbar,
   Tab,
@@ -33,7 +32,6 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { getFee } from '../../background/background.ts';
-import { Spacer } from '../../common/Spacer';
 import { FidgetSpinner } from 'react-loader-spinner';
 import { useModal } from '../../hooks/useModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
