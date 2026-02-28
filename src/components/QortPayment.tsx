@@ -1,11 +1,13 @@
-import { Box, CircularProgress, useTheme } from '@mui/material';
-import { useState } from 'react';
 import {
-  CustomButton,
-  CustomInput,
-  CustomLabel,
-  TextP,
-} from '../styles/App-styles';
+  alpha,
+  Box,
+  Button,
+  CircularProgress,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { useState } from 'react';
 import { Spacer } from '../common/Spacer';
 import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
@@ -94,148 +96,185 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
   };
 
   return (
-    <>
-      <Box
-        sx={{
-          alignItems: 'flex-start',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <TextP
-          sx={{
-            fontSize: '20px',
-            fontWeight: 600,
-            lineHeight: '24px',
-            textAlign: 'start',
-          }}
-        >
-          {t('core:action.transfer_qort', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </TextP>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        flexGrow: 1,
+        overflowY: 'auto',
+        p: 2,
+      }}
+    >
+      <Box sx={{ maxWidth: 480, mx: 'auto', py: 3, px: 1, width: '100%' }}>
 
-        <Spacer height="35px" />
+        {/* Page title + balance */}
+        <Box sx={{ mb: 3 }}>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}
+          >
+            {t('core:action.transfer_qort', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
 
-        <TextP
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '20px',
-            fontWeight: 600,
-            lineHeight: '16px',
-            textAlign: 'start',
-          }}
-        >
-          {t('core:balance', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </TextP>
+          <Spacer height="12px" />
 
-        <TextP
-          sx={{
-            fontSize: '20px',
-            fontWeight: 700,
-            lineHeight: '24px',
-            textAlign: 'start',
-          }}
-        >
-          {balance?.toFixed(2)} QORT
-        </TextP>
-      </Box>
-
-      <Spacer height="35px" />
-
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <CustomLabel htmlFor="standard-adornment-name">
-          {t('core:to', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomLabel>
-
-        <Spacer height="5px" />
-
-        <CustomInput
-          id="standard-adornment-name"
-          value={paymentTo}
-          onChange={(e) => setPaymentTo(e.target.value)}
-          autoComplete="off"
-        />
-
-        <Spacer height="6px" />
-
-        <CustomLabel htmlFor="standard-adornment-amount">
-          {t('core:amount', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomLabel>
-
-        <Spacer height="5px" />
-
-        <BoundedNumericTextField
-          value={paymentAmount}
-          minValue={0}
-          maxValue={+balance}
-          allowDecimals={true}
-          initialValue={'0'}
-          allowNegatives={false}
-          afterChange={(e: string) => setPaymentAmount(+e)}
-        />
-
-        <Spacer height="6px" />
-
-        <CustomLabel htmlFor="standard-adornment-password">
-          {t('auth:wallet.password_confirmation', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomLabel>
-
-        <Spacer height="5px" />
-
-        <PasswordField
-          id="standard-adornment-password"
-          value={paymentPassword}
-          onChange={(e) => setPaymentPassword(e.target.value)}
-          autoComplete="off"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (isLoadingSendCoin) return;
-              sendCoinFunc();
-            }
-          }}
-        />
-      </Box>
-
-      <Spacer height="10px" />
-
-      <ErrorText>{sendPaymentError}</ErrorText>
-
-      <Spacer height="25px" />
-
-      <CustomButton
-        sx={{
-          cursor: isLoadingSendCoin ? 'default' : 'pointer',
-        }}
-        onClick={() => {
-          if (isLoadingSendCoin) return;
-          sendCoinFunc();
-        }}
-      >
-        {isLoadingSendCoin && (
-          <CircularProgress
-            size={16}
+          <Box
             sx={{
-              color: theme.palette.text.primary,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 2,
+              py: 1.25,
+              borderRadius: 2,
+              border: 1,
+              borderColor: alpha(theme.palette.divider, 0.4),
+              bgcolor: alpha(theme.palette.background.default, 0.5),
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              {t('core:balance', { postProcess: 'capitalizeFirstChar' })}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, ml: 'auto' }}
+            >
+              {balance?.toFixed(2)} QORT
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Recipient */}
+        <Box
+          sx={{
+            borderRadius: 2,
+            border: 1,
+            borderColor: alpha(theme.palette.divider, 0.4),
+            bgcolor: alpha(theme.palette.background.default, 0.5),
+            mb: 2,
+            px: 2,
+            py: 1.5,
+          }}
+        >
+          <Typography
+            component="label"
+            htmlFor="payment-to"
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            {t('core:to', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+          <TextField
+            id="payment-to"
+            value={paymentTo}
+            onChange={(e) => setPaymentTo(e.target.value)}
+            autoComplete="off"
+            variant="outlined"
+            size="small"
+            fullWidth
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                bgcolor: theme.palette.background.default,
+              },
             }}
           />
-        )}
-        {t('core:action.send', { postProcess: 'capitalizeFirstChar' })}
-      </CustomButton>
-    </>
+        </Box>
+
+        {/* Amount */}
+        <Box
+          sx={{
+            borderRadius: 2,
+            border: 1,
+            borderColor: alpha(theme.palette.divider, 0.4),
+            bgcolor: alpha(theme.palette.background.default, 0.5),
+            mb: 2,
+            px: 2,
+            py: 1.5,
+          }}
+        >
+          <Typography
+            component="label"
+            htmlFor="payment-amount"
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
+          </Typography>
+          <BoundedNumericTextField
+            value={paymentAmount}
+            minValue={0}
+            maxValue={+balance}
+            allowDecimals={true}
+            initialValue={'0'}
+            allowNegatives={false}
+            afterChange={(e: string) => setPaymentAmount(+e)}
+          />
+        </Box>
+
+        {/* Password */}
+        <Box
+          sx={{
+            borderRadius: 2,
+            border: 1,
+            borderColor: alpha(theme.palette.divider, 0.4),
+            bgcolor: alpha(theme.palette.background.default, 0.5),
+            mb: 2,
+            px: 2,
+            py: 1.5,
+          }}
+        >
+          <Typography
+            component="label"
+            htmlFor="payment-password"
+            variant="body2"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 1 }}
+          >
+            {t('auth:wallet.password_confirmation', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+          <PasswordField
+            id="payment-password"
+            value={paymentPassword}
+            onChange={(e) => setPaymentPassword(e.target.value)}
+            autoComplete="off"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (isLoadingSendCoin) return;
+                sendCoinFunc();
+              }
+            }}
+          />
+        </Box>
+
+        <ErrorText>{sendPaymentError}</ErrorText>
+
+        <Spacer height="16px" />
+
+        <Button
+          variant="contained"
+          fullWidth
+          disabled={isLoadingSendCoin}
+          onClick={() => {
+            if (isLoadingSendCoin) return;
+            sendCoinFunc();
+          }}
+          sx={{ borderRadius: 2, py: 1.25 }}
+          startIcon={
+            isLoadingSendCoin ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : null
+          }
+        >
+          {t('core:action.send', { postProcess: 'capitalizeFirstChar' })}
+        </Button>
+
+      </Box>
+    </Box>
   );
 };
