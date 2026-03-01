@@ -446,9 +446,16 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         (header) => header.toLowerCase() === 'access-control-allow-origin'
       );
 
-      // Prepare response headers
+      // Prepare response headers: remove any existing CSP (e.g. from node over HTTPS)
+      // so only our permissive CSP is applied and qapps (e.g. extract7z) can use eval.
+      const cspHeaderLower = 'content-security-policy';
+      const filtered = Object.fromEntries(
+        Object.entries(details.responseHeaders).filter(
+          ([key]) => key.toLowerCase() !== cspHeaderLower
+        )
+      );
       const responseHeaders: Record<string, string | string[]> = {
-        ...details.responseHeaders,
+        ...filtered,
         'Content-Security-Policy': [csp],
       };
 
