@@ -342,7 +342,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           id="browser-iframe"
           src={defaultUrl}
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
-          allow="fullscreen; clipboard-read; clipboard-write"
+          allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"
         ></iframe>
       </Box>
     );
