@@ -3,7 +3,7 @@ import { useSetAtom } from 'jotai';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
 import { getBaseApiReact } from '../App';
 
-const QMAIL_POLL_INTERVAL_MS = 300000; // 5 minutes
+const QMAIL_POLL_INTERVAL_MS = 150000; // 2.5 minutes
 
 /**
  * Fetches Q-mail list and last-entered timestamp, stores in global atoms,
