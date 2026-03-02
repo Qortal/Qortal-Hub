@@ -29,6 +29,7 @@ import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import {
+  memberGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
@@ -91,6 +92,7 @@ export const ListOfGroupPromotions = ({
   const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
+  const [memberGroups] = useAtom(memberGroupsAtom);
   const [isExpanded, setIsExpanded] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
@@ -496,6 +498,11 @@ export const ListOfGroupPromotions = ({
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                 const index = virtualRow.index;
                 const promotion = promotions[index];
+                const isMember =
+                  memberGroups?.some(
+                    (g: { groupId?: number }) =>
+                      +g?.groupId === +promotion?.groupId
+                  ) ?? false;
                 return (
                   <div
                     data-index={virtualRow.index}
@@ -603,6 +610,21 @@ export const ListOfGroupPromotions = ({
                                 })}
                                 : {promotion?.memberCount ?? 0}
                               </Typography>
+                              {isMember && (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    display: 'block',
+                                    mt: 1,
+                                    color: theme.palette.other.positive,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {t('group:message.generic.already_in_group', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                </Typography>
+                              )}
                             </Box>
                             <Box sx={{ px: 2.5, py: 2 }}>
                               <Typography
@@ -669,19 +691,21 @@ export const ListOfGroupPromotions = ({
                                   postProcess: 'capitalizeFirstChar',
                                 })}
                               </Button>
-                              <LoadingButton
-                                loading={isLoadingJoinGroup}
-                                loadingPosition="start"
-                                variant="contained"
-                                onClick={() =>
-                                  handleJoinGroup(promotion, promotion?.isOpen)
-                                }
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                              >
-                                {t('core:action.join', {
-                                  postProcess: 'capitalizeFirstChar',
-                                })}
-                              </LoadingButton>
+                              {!isMember && (
+                                <LoadingButton
+                                  loading={isLoadingJoinGroup}
+                                  loadingPosition="start"
+                                  variant="contained"
+                                  onClick={() =>
+                                    handleJoinGroup(promotion, promotion?.isOpen)
+                                  }
+                                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                                >
+                                  {t('core:action.join', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                </LoadingButton>
+                              )}
                             </Box>
                           </Box>
                         </Popover>
@@ -758,34 +782,34 @@ export const ListOfGroupPromotions = ({
                               flexShrink: 0,
                             }}
                           >
-                            <Box
-                              sx={{
-                                px: 1,
-                                py: 0.35,
-                                borderRadius: '6px',
-                                bgcolor: promotion?.isOpen
-                                  ? `${theme.palette.other.danger}18`
-                                  : `${theme.palette.other.positive}18`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 0.4,
-                              }}
-                            >
-                              {promotion?.isOpen === true ? (
-                                <NoEncryptionGmailerrorredIcon
-                                  sx={{
-                                    fontSize: 14,
-                                    color: theme.palette.other.danger,
-                                  }}
-                                />
-                              ) : (
-                                <LockIcon
-                                  sx={{
-                                    fontSize: 14,
-                                    color: theme.palette.other.positive,
-                                  }}
-                                />
-                              )}
+<Box
+                            sx={{
+                              px: 1,
+                              py: 0.35,
+                              borderRadius: '6px',
+                              bgcolor: promotion?.isOpen
+                                ? `${theme.palette.other.danger}18`
+                                : `${theme.palette.other.positive}18`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.4,
+                            }}
+                          >
+                            {promotion?.isOpen === true ? (
+                              <NoEncryptionGmailerrorredIcon
+                                sx={{
+                                  fontSize: 14,
+                                  color: theme.palette.other.danger,
+                                }}
+                              />
+                            ) : (
+                              <LockIcon
+                                sx={{
+                                  fontSize: 14,
+                                  color: theme.palette.other.positive,
+                                }}
+                              />
+                            )}
                               <Typography
                                 variant="caption"
                                 fontWeight={600}
@@ -800,26 +824,45 @@ export const ListOfGroupPromotions = ({
                                     })}
                               </Typography>
                             </Box>
-                            <Button
-                              variant="outlined"
-                              size="small"
-                              onClick={(e) =>
-                                handlePopoverOpen(e, promotion?.groupId)
-                              }
-                              sx={{
-                                textTransform: 'none',
-                                fontWeight: 600,
-                                fontSize: '0.8rem',
-                                py: 0.5,
-                                px: 1.25,
-                                borderRadius: '8px',
-                                minWidth: 'auto',
-                              }}
-                            >
-                              {t('core:action.join', {
-                                postProcess: 'capitalizeFirstChar',
-                              })}
-                            </Button>
+                            {isMember ? (
+                              <Typography
+                                variant="caption"
+                                fontWeight={600}
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  color: theme.palette.other.positive,
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: '6px',
+                                  bgcolor: `${theme.palette.other.positive}18`,
+                                }}
+                              >
+                                {t('group:message.generic.already_in_group', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Typography>
+                            ) : (
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={(e) =>
+                                  handlePopoverOpen(e, promotion?.groupId)
+                                }
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  py: 0.5,
+                                  px: 1.25,
+                                  borderRadius: '8px',
+                                  minWidth: 'auto',
+                                }}
+                              >
+                                {t('core:action.join', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Button>
+                            )}
                           </Box>
                         </Box>
 
