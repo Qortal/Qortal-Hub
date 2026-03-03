@@ -2,10 +2,10 @@
 
 # Remove all conf made by Qortal Hub
 
-# Remove apt repository source list when user uninstalls app
-if grep ^ /etc/apt/sources.list /etc/apt/sources.list.d/* | grep qortal-hub.list; then
-	sudo rm /etc/apt/sources.list.d/qortal-hub.list;
-fi
+# Remove apt repository source list and keyring when user uninstalls app
+sudo rm -f /etc/apt/sources.list.d/qortal.list
+sudo rm -f /etc/apt/sources.list.d/qortal-hub.list
+sudo rm -f /etc/apt/keyrings/qortal-hub.gpg
 
 # Get the root user
 if [ $SUDO_USER ];
