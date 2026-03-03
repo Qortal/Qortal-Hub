@@ -53,10 +53,12 @@ import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
   chatWidgetClosedAtom,
+  enabledDevModeAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
+  isDisabledEditorEnterAtom,
   isOpenBlockedModalAtom,
   isRunningPublicNodeAtom,
   memberGroupsAtom,
@@ -251,6 +253,26 @@ export const Group = ({
   const [groupChatTimestamps, setGroupChatTimestamps] = useAtom(
     groupChatTimestampsAtom
   );
+  const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
+
+  useEffect(() => {
+    const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
+    if (isDevModeFromStorage) {
+      setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
+    }
+    try {
+      const val = localStorage.getItem('settings-disable-editor-enter');
+      if (val) {
+        const parsedVal = JSON.parse(val);
+        if (parsedVal === false || parsedVal === true) {
+          setIsDisabledEditorEnter(parsedVal);
+        }
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
   const [avatarPreviewData, setAvatarPreviewData] = useState<{
     alt: string;
