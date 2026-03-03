@@ -5,7 +5,7 @@ export const DOWNLOAD_PATH = app.getPath('downloads');
 const GITHUB_QORTAL_RELEASES_URL: string =
   'https://github.com/qortal/qortal/releases';
 
-const DOWNLOAD_QORTAL_URL: string = 'https://download.qortal.online';
+const DOWNLOAD_QORTAL_URL: string = 'https://java.qortal.org';
 const CLOUD_QORTAL_URL: string = 'https://cloud.qortal.org/s';
 
 export const winjar = String.raw`C:\Program Files\Qortal\qortal.jar`;
