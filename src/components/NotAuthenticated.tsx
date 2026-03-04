@@ -1,10 +1,4 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Spacer } from '../common/Spacer';
 import { CustomButton, TextP, TextSpan } from '../styles/App-styles';
 import {
@@ -46,7 +40,7 @@ import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.6.1',
+  version: '1.0.0',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -104,8 +98,8 @@ export const NotAuthenticated = ({
         if (customNodes) {
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
-            const findLocalIndex = copyPrev?.findIndex(
-              (item) => isLocalNodeUrl(item?.url)
+            const findLocalIndex = copyPrev?.findIndex((item) =>
+              isLocalNodeUrl(item?.url)
             );
             if (findLocalIndex === -1) {
               copyPrev.unshift({
@@ -484,6 +478,7 @@ export const NotAuthenticated = ({
             }}
           >
             {t('auth:build_version', { postProcess: 'capitalizeFirstChar' })}:
+            {` `}
             {manifestData?.version}
           </Typography>
         </Box>
@@ -903,8 +898,8 @@ export const NotAuthenticated = ({
                   if (customNodes) {
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
-                      const findLocalIndex = copyPrev?.findIndex(
-                        (item) => isLocalNodeUrl(item?.url)
+                      const findLocalIndex = copyPrev?.findIndex((item) =>
+                        isLocalNodeUrl(item?.url)
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
