@@ -60,11 +60,9 @@ import {
   authenticatePasswordAtom,
   balanceAtom,
   enableAuthWhenSyncingAtom,
-  enabledDevModeAtom,
   extStateAtom,
   hasSettingsChangedAtom,
   infoSnackGlobalAtom,
-  isDisabledEditorEnterAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
   isRunningPublicNodeAtom,
@@ -248,10 +246,7 @@ function App() {
   const getIndividualUserInfo = useHandleUserInfo();
   useRetrieveDataLocalStorage(userInfo?.address);
   useQortalGetSaveSettings(userInfo?.name, extState === 'authenticated');
-  const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
   const setEnableAuthWhenSyncing = useSetAtom(enableAuthWhenSyncingAtom);
-
-  const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
 
   const [isOpenMinting, setIsOpenMinting] = useState(false);
   const generatorRef = useRef(null);
@@ -262,10 +257,6 @@ function App() {
   };
 
   useEffect(() => {
-    const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
-    if (isDevModeFromStorage) {
-      setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
-    }
     const enableAuthWhenSyncingFromStorage = localStorage.getItem(
       'enableAuthWhenSyncing'
     );
@@ -358,20 +349,6 @@ function App() {
       holdRefExtState.current = extState;
     }
   }, [extState]);
-
-  useEffect(() => {
-    try {
-      const val = localStorage.getItem('settings-disable-editor-enter');
-      if (val) {
-        const parsedVal = JSON.parse(val);
-        if (parsedVal === false || parsedVal === true) {
-          setIsDisabledEditorEnter(parsedVal);
-        }
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  }, []);
 
   const address = useMemo(() => {
     if (!rawWallet?.address0) return '';
