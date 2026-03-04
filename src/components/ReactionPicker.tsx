@@ -95,7 +95,7 @@ export const ReactionPicker = ({ onReaction }) => {
               position: 'absolute',
               top: pickerPosition.top,
               left: pickerPosition.left,
-              zIndex: 1000,
+              zIndex: 1400,
             }}
           >
             <Picker

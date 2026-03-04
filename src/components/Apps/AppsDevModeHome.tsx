@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import {
   AppCircle,
   AppCircleContainer,
@@ -20,7 +20,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { Add } from '@mui/icons-material';
-import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
 import { executeEvent } from '../../utils/events';
 import { Spacer } from '../../common/Spacer';
 import { useModal } from '../../hooks/useModal.tsx';
@@ -28,8 +28,13 @@ import { createEndpoint, isUsingLocal } from '../../background/background.ts';
 import ShortUniqueId from 'short-unique-id';
 import swaggerSVG from '../../assets/svgs/swagger.svg';
 import { useTranslation } from 'react-i18next';
-import { HTTP_LOCALHOST_12391, LOCALHOST } from '../../constants/constants.ts';
-import { devServerDomainAtom, devServerPortAtom } from '../../atoms/global.ts';
+import { getDefaultLocalNodeUrl, LOCALHOST } from '../../constants/constants.ts';
+import {
+  devServerDomainAtom,
+  devServerPortAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+} from '../../atoms/global.ts';
 import { useAtom } from 'jotai';
 import { Label } from '../../styles/App-styles.ts';
 
@@ -54,12 +59,8 @@ export const AppsDevModeHome = ({
     'tutorial',
   ]);
   const { isShow, onCancel, onOk, show, message } = useModal();
-  const {
-    openSnackGlobal,
-    setOpenSnackGlobal,
-    infoSnackCustom,
-    setInfoSnackCustom,
-  } = useContext(QORTAL_APP_CONTEXT);
+  const [openSnackGlobal, setOpenSnackGlobal] = useAtom(openSnackGlobalAtom);
+  const [infoSnackCustom, setInfoSnackCustom] = useAtom(infoSnackGlobalAtom);
 
   const handleSelectFile = async (existingFilePath) => {
     const filePath = existingFilePath || (await window.electron.selectFile());
@@ -175,7 +176,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: HTTP_LOCALHOST_12391 + previewPath,
+            url: getDefaultLocalNodeUrl() + previewPath,
             isPreview: true,
             filePath,
             refreshFunc: (tabId) => {
@@ -188,7 +189,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: HTTP_LOCALHOST_12391 + previewPath,
+          url: getDefaultLocalNodeUrl() + previewPath,
           isPreview: true,
           filePath,
           refreshFunc: (tabId) => {
@@ -261,7 +262,7 @@ export const AppsDevModeHome = ({
       if (tabId) {
         executeEvent('appsDevModeUpdateTab', {
           data: {
-            url: HTTP_LOCALHOST_12391 + previewPath,
+            url: getDefaultLocalNodeUrl() + previewPath,
             isPreview: true,
             directoryPath,
             refreshFunc: (tabId) => {
@@ -274,7 +275,7 @@ export const AppsDevModeHome = ({
       }
       executeEvent('appsDevModeAddTab', {
         data: {
-          url: HTTP_LOCALHOST_12391 + previewPath,
+          url: getDefaultLocalNodeUrl() + previewPath,
           isPreview: true,
           directoryPath,
           refreshFunc: (tabId) => {
@@ -423,7 +424,7 @@ export const AppsDevModeHome = ({
           onClick={() => {
             executeEvent('appsDevModeAddTab', {
               data: {
-                url: HTTP_LOCALHOST_12391,
+                url: getDefaultLocalNodeUrl(),
                 isPreview: false,
                 customIcon: swaggerSVG,
               },

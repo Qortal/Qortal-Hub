@@ -150,18 +150,6 @@ export const ManageMembers = ({
     }
   };
 
-  const getMembersWithNames = useCallback(async (groupId) => {
-    try {
-      setIsLoadingMembers(true);
-      const res = await getGroupMembers(groupId);
-      const resWithNames = await getNames(res.members);
-      setMembersWithNames(resWithNames);
-      setIsLoadingMembers(false);
-    } catch (error) {
-      console.log(error);
-    }
-  }, []);
-
   const getMembers = async (groupId) => {
     try {
       const res = await getGroupMembers(groupId);
@@ -396,15 +384,6 @@ export const ManageMembers = ({
                 width: '100%',
               }}
             >
-              <Button
-                variant="contained"
-                onClick={() => getMembersWithNames(selectedGroup?.groupId)}
-              >
-                {t('group:action.load_members', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-
               <Spacer height="10px" />
 
               <ListOfMembers

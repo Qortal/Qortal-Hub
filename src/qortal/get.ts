@@ -118,6 +118,8 @@ import {
 } from '../utils/decode.ts';
 import i18n from 'i18next';
 import aesjs from 'aes-js';
+import { roundUpToDecimals } from '../utils/numberFunctions.ts';
+import { normalizeFilename } from '../utils/downloadFromLocation.ts';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -165,11 +167,6 @@ export async function retryTransaction(
       );
     }
   }
-}
-
-function roundUpToDecimals(number, decimals = 8) {
-  const factor = Math.pow(10, decimals); // Create a factor based on the number of decimals
-  return Math.ceil(+number * factor) / factor;
 }
 
 export const _createPoll = async (
@@ -262,6 +259,10 @@ const _deployAt = async (
       }),
       text3: i18n.t('question:description', {
         description: description,
+        postProcess: 'capitalizeFirstChar',
+      }),
+      highlightedText: i18n.t('core:message.generic.amount_qort', {
+        amount: amount,
         postProcess: 'capitalizeFirstChar',
       }),
       fee: fee.fee,
@@ -1139,24 +1140,56 @@ export const deleteHostedData = async (data, isFromExtension) => {
 
   if (accepted) {
     const { hostedData } = data;
+    const failures: {
+      service: string;
+      name: string;
+      identifier: string;
+      status: number;
+      error: string;
+    }[] = [];
 
     for (const hostedDataItem of hostedData) {
       try {
         const url = await createEndpoint(
           `/arbitrary/resource/${hostedDataItem.service}/${hostedDataItem.name}/${hostedDataItem.identifier}`
         );
-        await fetch(url, {
+        const response = await fetch(url, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
           },
         });
+        if (!response.ok) {
+          let errorText = '';
+          try {
+            errorText = await response.text();
+          } catch (_) {
+            // ignore body read errors
+          }
+          failures.push({
+            service: hostedDataItem.service,
+            name: hostedDataItem.name,
+            identifier: hostedDataItem.identifier,
+            status: response.status,
+            error: errorText,
+          });
+        }
       } catch (error) {
-        console.log(error);
+        failures.push({
+          service: hostedDataItem.service,
+          name: hostedDataItem.name,
+          identifier: hostedDataItem.identifier,
+          status: 0,
+          error: error?.message || String(error),
+        });
       }
     }
 
-    return true;
+    return {
+      deletedCount: hostedData.length - failures.length,
+      failedCount: failures.length,
+      failures,
+    };
   } else {
     throw new Error(
       i18n.t('question:message.generic.user_declined_delete_hosted_resources', {
@@ -1165,6 +1198,7 @@ export const deleteHostedData = async (data, isFromExtension) => {
     );
   }
 };
+
 export const decryptData = async (data) => {
   const { encryptedData, publicKey } = data;
 
@@ -2929,7 +2963,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       const endpoint = isEncrypted
         ? await createEndpoint(locationUrl)
         : await createEndpoint(
-            locationUrl + `?attachment=true&attachmentFilename=${filename}`
+            locationUrl +
+              `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
           );
       const response = await fetch(endpoint);
 
@@ -3208,7 +3243,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
         try {
           const response = await fetch(
             await createEndpoint(
-              locationUrl + `?attachment=true&attachmentFilename=${filename}`
+              locationUrl +
+                `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
             )
           );
 
@@ -3240,7 +3276,8 @@ async function saveFileFromLocation(data, isFromExtension, snackMethods) {
       } else {
         // Direct download using anchor tag
         const endpoint = await createEndpoint(
-          locationUrl + `?attachment=true&attachmentFilename=${filename}`
+          locationUrl +
+            `?attachment=true&attachmentFilename=${encodeURIComponent(normalizeFilename(filename))}`
         );
         const a = document.createElement('a');
         a.href = endpoint;
@@ -5531,10 +5568,6 @@ export const sendCoin = async (data, isFromExtension) => {
     }
   }
 };
-
-function calculateFeeFromRate(feePerKb, sizeInBytes) {
-  return (feePerKb / 1000) * sizeInBytes;
-}
 
 const getBuyingFees = async (foreignBlockchain) => {
   const ticker = SELLER_FOREIGN_FEE[foreignBlockchain].ticker;

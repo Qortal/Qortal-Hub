@@ -21,6 +21,14 @@ export type AppsLibraryTab =
   | 'official';
 export const currentAppsTabAtom = atomWithReset<AppsLibraryTab>('official');
 
+// When opening AppPublish from "Update" on a published app card, pass name + service
+export type PublishEditTarget = {
+  name: string;
+  service: 'APP' | 'WEBSITE';
+};
+export const publishEditTargetAtom =
+  atomWithReset<PublishEditTarget | null>(null);
+
 // Helper function to filter and sort apps
 export const filterAndSortApps = (
   apps: any[],

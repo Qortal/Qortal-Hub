@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Popover,
   Button,
@@ -7,7 +7,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { executeEvent } from '../utils/events';
-import { QORTAL_APP_CONTEXT } from '../App';
+import { useBlockedAddresses } from '../hooks/useBlockUsers';
 import { useAtom } from 'jotai';
 import { isRunningPublicNodeAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
@@ -181,7 +181,7 @@ const BlockUser = ({ address, name, handleClose }) => {
   const [isAlreadyBlocked, setIsAlreadyBlocked] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const { isUserBlocked, addToBlockList, removeBlockFromList } =
-    useContext(QORTAL_APP_CONTEXT);
+    useBlockedAddresses(true);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',

@@ -1,7 +1,7 @@
 import i18n from '../../i18n/i18n';
 import { AddressLevelEntry } from './Minting';
 
-const accountTargetBlocks = (level: number): number | undefined => {
+export const accountTargetBlocks = (level: number): number | undefined => {
   if (level === 0) {
     return 7200;
   } else if (level === 1) {

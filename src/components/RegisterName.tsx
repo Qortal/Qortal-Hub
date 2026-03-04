@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  List,
   TextField,
   Typography,
   useTheme,
 } from '@mui/material';
-import { Spacer } from '../common/Spacer';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { getBaseApiReact } from '../App';
 import { getFee } from '../background/background.ts';
-import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import { BarSpinner } from '../common/Spinners/BarSpinner/BarSpinner';
 import CheckIcon from '@mui/icons-material/Check';
@@ -25,7 +22,6 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useSetAtom } from 'jotai';
 import { txListAtom } from '../atoms/global';
 import { useTranslation } from 'react-i18next';
-import { Label } from '../styles/App-styles.ts';
 
 enum NameAvailability {
   NULL = 'null',
@@ -209,101 +205,137 @@ export const RegisterName = ({
     }
   };
 
+  const hasInsufficientBalance =
+    !balance || (nameFee && balance && +balance < +nameFee);
+  const isRegisterDisabled =
+    !registerNameValue.trim() ||
+    isLoadingRegisterName ||
+    isNameAvailable !== NameAvailability.AVAILABLE ||
+    !balance ||
+    (nameFee && balance && +balance < +nameFee);
+
   return (
     <Dialog
       open={isOpen}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
+      aria-labelledby="register-name-dialog-title"
+      aria-describedby="register-name-dialog-description"
+      maxWidth="sm"
+      fullWidth
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: '16px',
+            overflow: 'hidden',
+            bgcolor: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
+            boxShadow: theme.shadows[24],
+          },
+        },
+      }}
     >
       <DialogTitle
-        id="alert-dialog-title"
+        id="register-name-dialog-title"
         sx={{
+          pb: 2.5,
+          pt: 2.5,
+          px: 2.5,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          fontWeight: 600,
+          fontSize: '1.125rem',
           textAlign: 'center',
           color: theme.palette.text.primary,
-          fontWeight: 'bold',
-          opacity: 1,
+          textTransform: 'none',
         }}
       >
         {t('core:action.register_name', {
-          postProcess: 'capitalizeAll',
+          postProcess: 'capitalizeFirstChar',
         })}
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent id="register-name-dialog-description" sx={{ px: 2.5 }}>
         <Box
           sx={{
-            alignItems: 'center',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
-            height: '500px',
-            maxHeight: '90vh',
-            maxWidth: '90vw',
-            padding: '10px',
-            width: '400px',
+            gap: 2.5,
+            maxWidth: 400,
+            mx: 'auto',
+            pt: 1,
+            pb: 1,
           }}
         >
-          <Label>
-            {t('core:action.choose_name', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Label>
+          <Box>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ mb: 1, display: 'block', fontWeight: 600 }}
+            >
+              {t('core:action.choose_name', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <TextField
+              autoComplete="off"
+              autoFocus
+              fullWidth
+              variant="outlined"
+              size="medium"
+              onChange={(e) => setRegisterNameValue(e.target.value)}
+              value={registerNameValue}
+              placeholder={t('core:action.choose_name', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor:
+                    theme.palette.background?.default ??
+                    'rgba(255,255,255,0.04)',
+                },
+              }}
+            />
+          </Box>
 
-          <TextField
-            autoComplete="off"
-            autoFocus
-            onChange={(e) => setRegisterNameValue(e.target.value)}
-            value={registerNameValue}
-            placeholder={t('core:action.choose_name', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          />
-          {(!balance || (nameFee && balance && balance < nameFee)) && (
-            <>
-              <Spacer height="10px" />
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: '5px',
-                  alignItems: 'center',
-                }}
-              >
-                <ErrorIcon
-                  sx={{
-                    color: theme.palette.text.primary,
-                  }}
-                />
-
-                <Typography>
-                  {t('core:message.generic.name_registration', {
-                    balance: balance ?? 0,
-                    fee: nameFee,
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-
-              <Spacer height="10px" />
-            </>
+          {hasInsufficientBalance && (
+            <Alert
+              severity="warning"
+              icon={<InfoOutlinedIcon fontSize="small" />}
+              sx={{
+                borderRadius: '10px',
+                '& .MuiAlert-message': { fontSize: '0.8125rem' },
+              }}
+            >
+              {t('core:message.generic.name_registration', {
+                balance: balance ?? 0,
+                fee: nameFee != null ? Number(nameFee).toFixed(2) : nameFee,
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Alert>
           )}
-
-          <Spacer height="5px" />
 
           {isNameAvailable === NameAvailability.AVAILABLE && (
             <Box
               sx={{
-                alignItems: 'center',
                 display: 'flex',
-                gap: '5px',
+                alignItems: 'center',
+                gap: 1,
+                py: 1,
+                px: 1.5,
+                borderRadius: '10px',
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? `${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}30`
+                    : `${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}18`,
+                border: `1px solid ${theme.palette.success?.main ?? theme.palette.other?.positive ?? '#2e7d32'}50`,
               }}
             >
               <CheckIcon
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
+                sx={{ color: 'success.main', fontSize: 22, flexShrink: 0 }}
               />
-              <Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
+              >
                 {t('core:message.generic.name_available', {
                   name: registerNameValue,
                   postProcess: 'capitalizeFirstChar',
@@ -316,16 +348,25 @@ export const RegisterName = ({
             <Box
               sx={{
                 display: 'flex',
-                gap: '5px',
                 alignItems: 'center',
+                gap: 1,
+                py: 1,
+                px: 1.5,
+                borderRadius: '10px',
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? `${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}28`
+                    : `${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}14`,
+                border: `1px solid ${theme.palette.error?.main ?? theme.palette.other?.danger ?? '#d32f2f'}50`,
               }}
             >
               <ErrorIcon
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
+                sx={{ color: 'error.main', fontSize: 22, flexShrink: 0 }}
               />
-              <Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
+              >
                 {t('core:message.generic.name_unavailable', {
                   name: registerNameValue,
                   postProcess: 'capitalizeFirstChar',
@@ -338,13 +379,20 @@ export const RegisterName = ({
             <Box
               sx={{
                 display: 'flex',
-                gap: '5px',
                 alignItems: 'center',
+                gap: 1,
+                py: 1,
+                px: 1.5,
+                borderRadius: '10px',
+                bgcolor: theme.palette.action.hover,
+                border: `1px solid ${theme.palette.divider}`,
               }}
             >
               <BarSpinner width="16px" color={theme.palette.text.primary} />
-
-              <Typography>
+              <Typography
+                variant="body2"
+                sx={{ color: theme.palette.text.primary, fontWeight: 500 }}
+              >
                 {t('core:message.generic.name_checking', {
                   postProcess: 'capitalizeFirstChar',
                 })}
@@ -352,80 +400,83 @@ export const RegisterName = ({
             </Box>
           )}
 
-          <Spacer height="25px" />
-
-          <Typography
-            sx={{
-              textDecoration: 'underline',
-            }}
-          >
-            {t('core:message.generic.name_benefits', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-
-          <List
-            sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}
-            aria-label={t('core:contact_other', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          >
-            <ListItem disablePadding>
-              <ListItemIcon>
-                <RadioButtonCheckedIcon
+          <Box sx={{ pt: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 600 }}>
+              {t('core:message.generic.name_benefits', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              <Box
+                sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
+              >
+                <CheckCircleOutlineIcon
                   sx={{
-                    color: theme.palette.text.primary,
+                    color: theme.palette.primary.main,
+                    fontSize: 20,
+                    mt: 0.15,
+                    flexShrink: 0,
                   }}
                 />
-              </ListItemIcon>
-              <ListItemText
-                primary={t('core:message.generic.publish_data', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              />
-            </ListItem>
-
-            <ListItem disablePadding>
-              <ListItemIcon>
-                <RadioButtonCheckedIcon
+                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                  {t('core:message.generic.publish_data', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </Box>
+              <Box
+                sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start' }}
+              >
+                <CheckCircleOutlineIcon
                   sx={{
-                    color: theme.palette.text.primary,
+                    color: theme.palette.primary.main,
+                    fontSize: 20,
+                    mt: 0.15,
+                    flexShrink: 0,
                   }}
                 />
-              </ListItemIcon>
-              <ListItemText
-                primary={t('core:message.generic.secure_ownership', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              />
-            </ListItem>
-          </List>
+                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                  {t('core:message.generic.secure_ownership', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
         </Box>
       </DialogContent>
 
-      <DialogActions>
+      <DialogActions
+        sx={{
+          px: 2.5,
+          py: 2.5,
+          pt: 3,
+          gap: 1.5,
+          borderTop: `1px solid ${theme.palette.divider}`,
+        }}
+      >
         <Button
           disabled={isLoadingRegisterName}
-          variant="contained"
+          variant="outlined"
           onClick={() => {
             setIsOpen(false);
             setRegisterNameValue('');
           }}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
         >
           {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
         </Button>
-
         <Button
-          disabled={
-            !registerNameValue.trim() ||
-            isLoadingRegisterName ||
-            isNameAvailable !== NameAvailability.AVAILABLE ||
-            !balance ||
-            (balance && nameFee && +balance < +nameFee)
-          }
+          disabled={isRegisterDisabled}
           variant="contained"
           onClick={registerName}
           autoFocus
+          sx={{
+            textTransform: 'none',
+            fontWeight: 600,
+            borderRadius: '10px',
+            minWidth: 140,
+          }}
         >
           {t('core:action.register_name', {
             postProcess: 'capitalizeFirstChar',

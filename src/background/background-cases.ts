@@ -960,9 +960,7 @@ export async function getLocalApiKeyNotElectronCase() {
 export async function setApiKeyCase(request, event) {
   try {
     const payload = request.payload;
-    if (window?.walletStorage && payload?.url) {
-      await window.walletStorage.set('apiKey', payload);
-    }
+
     storeData('apiKey', payload);
     event.source.postMessage(
       {
@@ -1215,7 +1213,7 @@ export async function setGroupDataCase(request, event) {
 export async function getGroupDataSingleCase(request, event) {
   try {
     const { groupId } = request.payload;
-    const response = await getGroupDataSingle({ groupId });
+    const response = await getGroupDataSingle(groupId);
 
     event.source.postMessage(
       {

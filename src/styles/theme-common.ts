@@ -1,3 +1,55 @@
+import { Theme } from '@mui/material/styles';
+
+/**
+ * Returns the common MuiCssBaseline global styles shared by both themes.
+ * Each theme should merge its own `:root` CSS variables with this result.
+ */
+export const getCommonGlobalStyles = (theme: Theme) => ({
+  '*, *::before, *::after': {
+    boxSizing: 'border-box',
+  },
+
+  html: {
+    padding: 0,
+    margin: 0,
+  },
+
+  body: {
+    padding: 0,
+    margin: 0,
+    wordBreak: 'break-word',
+  },
+
+  '::-webkit-scrollbar-track': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+  },
+
+  '::-webkit-scrollbar-track:hover': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+  },
+
+  '::-webkit-scrollbar': {
+    width: '10px',
+    height: '10px',
+  },
+
+  '::-webkit-scrollbar-thumb': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.2)',
+    borderRadius: '5px',
+    border: '2px solid transparent',
+    backgroundClip: 'content-box',
+    transition: 'background-color 0.2s ease',
+  },
+
+  '::-webkit-scrollbar-thumb:hover': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
+  },
+
+  '::-webkit-scrollbar-thumb:active': {
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.4)',
+  },
+});
+
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
@@ -75,10 +127,10 @@ const commonThemeOptions = {
 
     MuiDialog: {
       styleOverrides: {
-        paper: {
-          backgroundColor: 'background.paper',
-          color: 'text.primary',
-        },
+        paper: ({ theme }: { theme: Theme }) => ({
+          backgroundColor: theme.palette.background.paper,
+          color: theme.palette.text.primary,
+        }),
       },
     },
 

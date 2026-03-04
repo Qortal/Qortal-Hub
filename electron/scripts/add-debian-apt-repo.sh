@@ -23,10 +23,9 @@ update-desktop-database /usr/share/applications || true
 if ! which curl; then sudo apt-get --yes install curl; fi
 
 # Install apt repository source list if it does not exist
-if ! grep ^ /etc/apt/sources.list /etc/apt/sources.list.d/* | grep qortal-hub.list; then
-  curl -sS https://update.qortal-hub.org/qortal-hub.gpg | sudo apt-key add -
-  sudo rm -rf /usr/share/keyrings/qortal-hub.gpg
-  sudo apt-key export E191E7C3 | sudo gpg --dearmour -o /usr/share/keyrings/qortal-hub.gpg
-  sudo rm -rf /etc/apt/sources.list.d/qortal-hub.list
-  echo 'deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/qortal-hub.gpg] https://update.qortal-hub.org/ ./ ' | sudo tee  /etc/apt/sources.list.d/qortal-hub.list
+if [ ! -f /etc/apt/sources.list.d/qortal.list ]; then
+  sudo mkdir -p /etc/apt/keyrings && \
+  curl -fsSL https://hubdeb.qortal.org/qortal-hub.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/qortal-hub.gpg && \
+  echo "deb [signed-by=/etc/apt/keyrings/qortal-hub.gpg] https://hubdeb.qortal.org ./" | sudo tee /etc/apt/sources.list.d/qortal.list && \
+  sudo rm -rf /var/lib/apt/lists/* && sudo apt update
 fi

@@ -14,6 +14,7 @@ export const useNameSearch = (value: string, limit = 20) => {
       try {
         if (!name) {
           setNameList([]);
+          setIsLoading(false);
           return;
         }
 
@@ -39,10 +40,15 @@ export const useNameSearch = (value: string, limit = 20) => {
   );
   // Debounce logic
   useEffect(() => {
+    if (!value) {
+      setNameList([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     const handler = setTimeout(() => {
       checkIfNameExisits(value, limit);
-    }, 500);
+    }, 300);
 
     // Cleanup timeout if searchValue changes before the timeout completes
     return () => {

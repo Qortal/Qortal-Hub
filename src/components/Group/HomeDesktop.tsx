@@ -1,37 +1,46 @@
-import { Box, Divider, Typography, useTheme } from '@mui/material';
+import { Box, Button, CircularProgress, IconButton, useTheme } from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { useEffect, useMemo, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import {
+  groupInvitesCacheAtom,
+  joinRequestsCacheAtom,
+  userInfoAtom,
+  balanceAtom,
+  memberGroupsAtom,
+} from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
-import { ThingsToDoInitial } from './ThingsToDoInitial';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
-import { QortPrice } from '../QortPrice';
-import ExploreIcon from '@mui/icons-material/Explore';
-import { Explore } from '../Explore/Explore';
-import { NewUsersCTA } from '../NewUsersCTA';
+import { HomeProfileCard } from './HomeProfileCard';
+import { HomeGettingStarted, GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
+import { HomeFeaturedApps } from './HomeFeaturedApps';
+import { HomeFeaturedGroups } from './HomeFeaturedGroups';
+import { HomeDeveloperTab } from './HomeDeveloperTab';
 import { useTranslation } from 'react-i18next';
 
 import {
   AnimatePresence,
-  m,
   LazyMotion,
   domAnimation,
   useReducedMotion,
   motion,
-  cubicBezier,
-  Variants,
 } from 'framer-motion';
 
-const MotionBox = m(Box);
+type HomeTab = 'user' | 'developer';
+type ActivityTab = 'requests' | 'invites' | 'promotions';
+
+// Temporarily hide User/Developer toggle — only User mode is shown (no option visible)
+const SHOW_USER_DEVELOPER_TOGGLE = false;
+
+// Temporarily hide Most active groups section — no render, no API calls
+const SHOW_MOST_ACTIVE_GROUPS = false;
 
 export const HomeDesktop = ({
   refreshHomeDataFunc,
   myAddress,
-  name,
   isLoadingGroups,
-  balance,
-  userInfo,
-  groups,
   setGroupSection,
   setSelectedGroup,
   getTimestampEnterChat,
@@ -41,39 +50,57 @@ export const HomeDesktop = ({
   setDesktopViewMode,
   desktopViewMode,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const balance = useAtomValue(balanceAtom);
+  const groups = useAtomValue(memberGroupsAtom);
+  const name = userInfo?.name;
+
+  const [activeTab, setActiveTab] = useState<HomeTab>('user');
+  const [activityTab, setActivityTab] = useState<ActivityTab>('requests');
+  const [requestsCount, setRequestsCount] = useState(0);
+  const [invitesCount, setInvitesCount] = useState(0);
+  const [promotionsCount, setPromotionsCount] = useState(0);
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
+  const [showMostActiveGroups, setShowMostActiveGroups] = useState(
+    () => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed'
+  );
+  const [requestsCountLoading, setRequestsCountLoading] = useState(true);
+  const [invitesCountLoading, setInvitesCountLoading] = useState(true);
 
   const reduce = useReducedMotion();
-
-  const { t } = useTranslation([
-    'auth',
-    'core',
-    'group',
-    'question',
-    'tutorial',
-  ]);
+  const { t } = useTranslation(['core', 'group', 'tutorial']);
   const theme = useTheme();
+  const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
+  const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
+
+  const handleRefreshGroupActivity = () => {
+    setGroupInvitesCache(null);
+    setJoinRequestsCache(null);
+  };
 
   useEffect(() => {
-    if (balance && +balance >= 4.5) {
-      setChecked1(true);
-    }
+    if (balance && +balance >= 4.5) setChecked1(true);
   }, [balance]);
 
   useEffect(() => {
     if (name) setChecked2(true);
   }, [name]);
 
-  const isLoaded = useMemo(() => {
-    if (userInfo !== null) return true;
-    return false;
-  }, [userInfo]);
+  const isLoaded = useMemo(() => userInfo !== null, [userInfo]);
 
-  const hasDoneNameAndBalanceAndIsLoaded = useMemo(() => {
-    if (isLoaded && checked1 && checked2) return true;
-    return false;
-  }, [checked1, isLoaded, checked2]);
+  const hasDoneNameAndBalanceAndIsLoaded = useMemo(
+    () => isLoaded && checked1 && checked2,
+    [checked1, isLoaded, checked2]
+  );
+
+  const sharedGroupNavProps = {
+    getTimestampEnterChat,
+    setDesktopViewMode,
+    setGroupSection,
+    setMobileViewMode,
+    setSelectedGroup,
+  };
 
   return (
     <LazyMotion features={domAnimation}>
@@ -104,172 +131,271 @@ export const HomeDesktop = ({
                 alignItems: 'flex-start',
                 display: 'flex',
                 flexDirection: 'column',
+                gap: '16px',
                 height: '100%',
                 maxWidth: '1036px',
+                padding: '0 10px',
                 width: '100%',
               }}
             >
-              <Typography
-                sx={{
-                  color: theme.palette.text.primary,
-                  fontWeight: 400,
-                  fontSize: userInfo?.name?.length > 15 ? '16px' : '20px',
-                  padding: '10px',
-                }}
-              >
-                {t('core:welcome', { postProcess: 'capitalizeFirstChar' })}
-                {userInfo?.name ? (
-                  <span
-                    style={{
-                      fontStyle: 'italic',
-                    }}
-                  >{`, ${userInfo?.name}`}</span>
-                ) : null}
-              </Typography>
+              {/* Profile card — always visible */}
+              <HomeProfileCard />
 
-              <Spacer height="30px" />
-
-              {!isLoadingGroups && (
+              {/* Tab switcher — temporarily hidden when SHOW_USER_DEVELOPER_TOGGLE is false */}
+              {SHOW_USER_DEVELOPER_TOGGLE && (
                 <Box
                   sx={{
+                    alignSelf: 'center',
+                    bgcolor: theme.palette.background.paper,
+                    borderRadius: '50px',
                     display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '20px',
-                    justifyContent: 'center',
-                    width: '100%',
+                    gap: '4px',
+                    padding: '4px',
                   }}
                 >
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      flexWrap: 'wrap',
-                      gap: '20px',
-                    }}
-                  >
-                    <Box
+                  {(['user', 'developer'] as HomeTab[]).map((tab) => (
+                    <Button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      size="small"
+                      disableElevation
                       sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        width: '330px',
+                        bgcolor:
+                          activeTab === tab
+                            ? theme.palette.primary.main
+                            : 'transparent',
+                        borderRadius: '50px',
+                        color:
+                          activeTab === tab
+                            ? theme.palette.primary.contrastText
+                            : theme.palette.text.secondary,
+                        fontSize: '0.85rem',
+                        fontWeight: activeTab === tab ? 600 : 400,
+                        minWidth: '100px',
+                        px: 2,
+                        textTransform: 'none',
+                        '&:hover': {
+                          bgcolor:
+                            activeTab === tab
+                              ? theme.palette.primary.dark
+                              : theme.palette.action.hover,
+                        },
                       }}
                     >
-                      <ThingsToDoInitial
-                        balance={balance}
-                        myAddress={myAddress}
-                        name={userInfo?.name}
-                        userInfo={userInfo}
-                        hasGroups={
-                          groups?.filter((item) => item?.groupId !== '0')
-                            .length !== 0
-                        }
-                      />
-                    </Box>
-
-                    {desktopViewMode === 'home' && (
-                      <>
-                        {hasDoneNameAndBalanceAndIsLoaded && (
-                          <>
-                            <Box
-                              sx={{
-                                alignItems: 'center',
-                                display: 'flex',
-                                justifyContent: 'center',
-                                width: '330px',
-                              }}
-                            >
-                              <GroupJoinRequests
-                                setGroupSection={setGroupSection}
-                                setSelectedGroup={setSelectedGroup}
-                                getTimestampEnterChat={getTimestampEnterChat}
-                                setOpenManageMembers={setOpenManageMembers}
-                                myAddress={myAddress}
-                                groups={groups}
-                                setMobileViewMode={setMobileViewMode}
-                                setDesktopViewMode={setDesktopViewMode}
-                              />
-                            </Box>
-
-                            <Box
-                              sx={{
-                                alignItems: 'center',
-                                display: 'flex',
-                                justifyContent: 'center',
-                                width: '330px',
-                              }}
-                            >
-                              <GroupInvites
-                                setOpenAddGroup={setOpenAddGroup}
-                                myAddress={myAddress}
-                                groups={groups}
-                                setMobileViewMode={setMobileViewMode}
-                              />
-                            </Box>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </Box>
-                  <QortPrice />
+                      {t(`tutorial:home.tab_${tab}`, {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                    </Button>
+                  ))}
                 </Box>
               )}
 
-              {!isLoadingGroups && (
+              {/* ── USER TAB ── */}
+              {activeTab === 'user' && (
                 <>
-                  <Spacer height="60px" />
+                  <HomeGettingStarted onGettingStartedComplete={() => setShowMostActiveGroups(true)} />
+                  <HomeFeaturedApps />
+                  {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
 
-                  <Divider
-                    color="secondary"
-                    sx={{
-                      width: '100%',
-                    }}
-                  >
+                  {/* ── GROUP ACTIVITY SECTION ── */}
+                  {!isLoadingGroups && hasDoneNameAndBalanceAndIsLoaded && (
                     <Box
                       sx={{
-                        alignItems: 'center',
+                        bgcolor: theme.palette.background.paper,
+                        borderRadius: '12px',
                         display: 'flex',
-                        gap: '10px',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '16px 20px',
+                        width: '100%',
                       }}
                     >
-                      <ExploreIcon
+                      {/* Section title and refresh */}
+                      <Box
                         sx={{
-                          color: theme.palette.text.primary,
-                        }}
-                      />
-                      <Typography
-                        sx={{
-                          fontSize: '1rem',
+                          alignItems: 'center',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          width: '100%',
                         }}
                       >
-                        {t('tutorial:initial.explore', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
+                        <Box
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {t('tutorial:home.group_activity', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Box>
+                        <IconButton
+                          aria-label={t('core:action.refresh', {
+                            postProcess: 'capitalizeFirstChar',
+                            defaultValue: 'Refresh',
+                          })}
+                          onClick={handleRefreshGroupActivity}
+                          size="small"
+                          sx={{ color: theme.palette.text.secondary }}
+                        >
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+
+                      {/* Tab bar */}
+                      <Box
+                        sx={{
+                          alignSelf: 'center',
+                          bgcolor: theme.palette.background.default,
+                          borderRadius: '50px',
+                          display: 'flex',
+                          gap: '4px',
+                          padding: '4px',
+                        }}
+                      >
+                        {(
+                          [
+                            {
+                              key: 'requests' as ActivityTab,
+                              label: t('group:join_requests', { postProcess: 'capitalizeFirstChar' }),
+                              count: requestsCount,
+                              countLoading: requestsCountLoading,
+                            },
+                            {
+                              key: 'invites' as ActivityTab,
+                              label: t('group:group.invites', { postProcess: 'capitalizeFirstChar' }),
+                              count: invitesCount,
+                              countLoading: invitesCountLoading,
+                            },
+                            {
+                              key: 'promotions' as ActivityTab,
+                              label: t('group:group.promotions', { postProcess: 'capitalizeFirstChar' }),
+                              count: promotionsCount,
+                              countLoading: false,
+                            },
+                          ]
+                        ).map(({ key, label, count, countLoading }) => (
+                          <Button
+                            key={key}
+                            onClick={() => setActivityTab(key)}
+                            size="small"
+                            disableElevation
+                            sx={{
+                              bgcolor:
+                                activityTab === key
+                                  ? theme.palette.primary.main
+                                  : 'transparent',
+                              borderRadius: '50px',
+                              color:
+                                activityTab === key
+                                  ? theme.palette.primary.contrastText
+                                  : theme.palette.text.secondary,
+                              fontSize: '0.82rem',
+                              fontWeight: activityTab === key ? 600 : 400,
+                              px: 2,
+                              textTransform: 'none',
+                              whiteSpace: 'nowrap',
+                              '&:hover': {
+                                bgcolor:
+                                  activityTab === key
+                                    ? theme.palette.primary.dark
+                                    : theme.palette.action.hover,
+                              },
+                            }}
+                          >
+                            {label}
+                            {countLoading ? (
+                              <Box
+                                component="span"
+                                sx={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  ml: '6px',
+                                }}
+                              >
+                                <CircularProgress
+                                  size={14}
+                                  thickness={4}
+                                  sx={{
+                                    color:
+                                      activityTab === key
+                                        ? 'rgba(255,255,255,0.9)'
+                                        : theme.palette.primary.contrastText,
+                                  }}
+                                />
+                              </Box>
+                            ) : (
+                              count > 0 && (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    bgcolor:
+                                      activityTab === key
+                                        ? 'rgba(255,255,255,0.25)'
+                                        : theme.palette.primary.main,
+                                    borderRadius: '50px',
+                                    color:
+                                      activityTab === key
+                                        ? theme.palette.primary.contrastText
+                                        : theme.palette.primary.contrastText,
+                                    display: 'inline-block',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    lineHeight: 1,
+                                    ml: '6px',
+                                    px: '6px',
+                                    py: '2px',
+                                  }}
+                                >
+                                  {count}
+                                </Box>
+                              )
+                            )}
+                          </Button>
+                        ))}
+                      </Box>
+
+                      {/* Tab content: mount all so each can report its count; hide inactive */}
+                      <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
+                        <GroupJoinRequests
+                          compact
+                          onCountChange={setRequestsCount}
+                          onLoadingChange={setRequestsCountLoading}
+                          setGroupSection={setGroupSection}
+                          setSelectedGroup={setSelectedGroup}
+                          getTimestampEnterChat={getTimestampEnterChat}
+                          setOpenManageMembers={setOpenManageMembers}
+                          myAddress={myAddress}
+                          groups={groups}
+                          setMobileViewMode={setMobileViewMode}
+                          setDesktopViewMode={setDesktopViewMode}
+                        />
+                      </Box>
+                      <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
+                        <GroupInvites
+                          compact
+                          onCountChange={setInvitesCount}
+                          onLoadingChange={setInvitesCountLoading}
+                          setOpenAddGroup={setOpenAddGroup}
+                          myAddress={myAddress}
+                        />
+                      </Box>
+                      <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
+                        <ListOfGroupPromotions
+                          compact
+                          onCountChange={setPromotionsCount}
+                        />
+                      </Box>
                     </Box>
-                  </Divider>
-
-                  {!hasDoneNameAndBalanceAndIsLoaded && (
-                    <Spacer height="40px" />
                   )}
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '20px',
-                      justifyContent: 'center',
-                      width: '100%',
-                    }}
-                  >
-                    {hasDoneNameAndBalanceAndIsLoaded && (
-                      <ListOfGroupPromotions />
-                    )}
 
-                    <Explore setDesktopViewMode={setDesktopViewMode} />
-                  </Box>
-
-                  <NewUsersCTA balance={balance} />
                 </>
+              )}
+
+              {/* ── DEVELOPER TAB ── */}
+              {activeTab === 'developer' && (
+                <HomeDeveloperTab {...sharedGroupNavProps} />
               )}
             </Box>
 

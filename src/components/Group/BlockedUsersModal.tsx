@@ -11,8 +11,8 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useContext, useEffect, useState } from 'react';
-import { getBaseApiReact, QORTAL_APP_CONTEXT } from '../../App';
+import { useEffect, useState } from 'react';
+import { getBaseApiReact } from '../../App';
 import { Spacer } from '../../common/Spacer';
 import CloseIcon from '@mui/icons-material/Close';
 
@@ -24,9 +24,14 @@ import {
 import { validateAddress } from '../../utils/validateAddress';
 import { getNameInfo, requestQueueMemberNames } from './Group';
 import { useModal } from '../../hooks/useModal';
-import { isOpenBlockedModalAtom } from '../../atoms/global';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
+import {
+  infoSnackGlobalAtom,
+  isOpenBlockedModalAtom,
+  openSnackGlobalAtom,
+} from '../../atoms/global';
 import InfoIcon from '@mui/icons-material/Info';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 
 export const BlockedUsersModal = () => {
@@ -49,9 +54,9 @@ export const BlockedUsersModal = () => {
     getAllBlockedUsers,
     removeBlockFromList,
     addToBlockList,
-    setOpenSnackGlobal,
-    setInfoSnackCustom,
-  } = useContext(QORTAL_APP_CONTEXT);
+  } = useBlockedAddresses(true);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
 
   const [blockedUsers, setBlockedUsers] = useState({
     addresses: {},

@@ -1,7 +1,6 @@
 import {
   createRef,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -9,7 +8,8 @@ import {
 } from 'react';
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
-import { QORTAL_APP_CONTEXT, getBaseApiReact } from '../../App';
+import { getBaseApiReact } from '../../App';
+import { useHandleTutorials } from '../../hooks/useHandleTutorials';
 import { AppInfo } from './AppInfo';
 import {
   executeEvent,
@@ -21,6 +21,7 @@ import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
+import { RatingsCacheInitializer } from '../../hooks/useAppRatings';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import {
@@ -33,25 +34,26 @@ import {
   DialogTitle,
   useTheme,
 } from '@mui/material';
-import { enabledDevModeAtom, isNewTabWindowAtom } from '../../atoms/global';
-import { useAtom } from 'jotai';
+import {
+  enabledDevModeAtom,
+  isNewTabWindowAtom,
+  userInfoAtom,
+} from '../../atoms/global';
+import { publishEditTargetAtom } from '../../atoms/appsAtoms';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
+import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const AppsDesktop = ({
-  mode,
-  setMode,
-  show,
-  myName,
-  goToHome,
-  hasUnreadDirects,
-  hasUnreadGroups,
-  setDesktopViewMode,
-  desktopViewMode,
-  myAddress,
-}) => {
+export const AppsDesktop = ({ mode, setMode, show }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const publishEditTarget = useAtomValue(publishEditTargetAtom);
+  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
+  const myName = userInfo?.name;
+  const myAddress = userInfo?.address;
   const [availableQapps, setAvailableQapps] = useState([]);
   const [selectedAppInfo, setSelectedAppInfo] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -61,7 +63,7 @@ export const AppsDesktop = ({
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-  const { showTutorial } = useContext(QORTAL_APP_CONTEXT);
+  const { showTutorial } = useHandleTutorials();
   const theme = useTheme();
   const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
   const [pendingTabToRemove, setPendingTabToRemove] = useState(null);
@@ -246,7 +248,12 @@ export const AppsDesktop = ({
         } else {
           setMode('home');
         }
-      } else if (mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') {
+      } else if (
+        mode === 'publish' ||
+        mode === 'publish-app' ||
+        mode === 'publish-website'
+      ) {
+        setPublishEditTarget(null);
         setMode('library');
       }
     } else if (selectedTab?.tabId) {
@@ -428,12 +435,13 @@ export const AppsDesktop = ({
         position: !show && 'fixed',
       }}
     >
+      <RatingsCacheInitializer />
       {mode === 'home' && (
         <Box
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: `calc(100vh - ${appHeighOffsetPx} )`,
             overflow: 'auto',
             width: '100%',
           }}
@@ -458,6 +466,7 @@ export const AppsDesktop = ({
         hasPublishApp={!!(myApp || myWebsite)}
         isShow={mode === 'library' && !selectedTab}
         myName={myName}
+        myAddress={myAddress}
         setMode={setMode}
       />
 
@@ -476,15 +485,26 @@ export const AppsDesktop = ({
         myName={myName}
       />
 
-      {(mode === 'publish' || mode === 'publish-app' || mode === 'publish-website') && !selectedTab && (
-        <AppPublish
-          categories={categories}
-          myAddress={myAddress}
-          myName={myName}
-          initialAppType={mode === 'publish-website' ? 'WEBSITE' : 'APP'}
-          isAppTypeLocked={mode === 'publish-app' || mode === 'publish-website'}
-        />
-      )}
+      {(mode === 'publish' ||
+        mode === 'publish-app' ||
+        mode === 'publish-website') &&
+        !selectedTab && (
+          <AppPublish
+            categories={categories}
+            myAddress={myAddress}
+            myName={myName}
+            initialName={publishEditTarget?.name}
+            initialAppType={
+              publishEditTarget?.service ??
+              (mode === 'publish-website' ? 'WEBSITE' : 'APP')
+            }
+            isAppTypeLocked={
+              mode === 'publish-app' ||
+              mode === 'publish-website' ||
+              !!publishEditTarget
+            }
+          />
+        )}
 
       {tabs.map((tab) => {
         if (!iframeRefs.current[tab.tabId]) {
@@ -508,7 +528,7 @@ export const AppsDesktop = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              height: '100vh',
+              height: `calc(100vh - ${appHeighOffsetPx} )`,
               overflow: 'auto',
               width: '100%',
             }}

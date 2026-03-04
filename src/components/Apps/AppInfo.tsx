@@ -115,7 +115,7 @@ export const AppInfo = ({ app, myName }) => {
       if (hasPublishedRating === false) {
         const pollName = `app-library-${app.service}-rating-${app.name}`;
         const pollOptions = [`1, 2, 3, 4, 5, initialValue-${rating}`];
-        const pollDescription = t('core:message.error.generic', {
+        const pollDescription = t('core:message.generic.rating', {
           name: app.name,
           service: app.service,
           postProcess: 'capitalizeFirstChar',
@@ -150,7 +150,7 @@ export const AppInfo = ({ app, myName }) => {
               }
             })
             .catch((error: any) => {
-              console.error('Failed qortalRequest', error);
+              rej(error);
             });
         });
       } else {
@@ -194,18 +194,28 @@ export const AppInfo = ({ app, myName }) => {
               }
             })
             .catch((error: any) => {
-              console.error('Failed qortalRequest', error);
+              rej(error);
             });
         });
       }
     } catch (error: any) {
-      setInfoSnack({
-        type: 'error',
-        message:
-          error?.message ||
+      const errorMessage =
+        typeof error === 'string' ? error : error?.message || '';
+      let snackMessage: string;
+      if (errorMessage.includes('ALREADY_VOTED_FOR_THAT_OPTION')) {
+        snackMessage = t('core:message.error.app_already_voted', {
+          postProcess: 'capitalizeFirstChar',
+        });
+      } else {
+        snackMessage =
+          errorMessage ||
           t('core:message.error.rate', {
             postProcess: 'capitalizeFirstChar',
-          }),
+          });
+      }
+      setInfoSnack({
+        type: 'error',
+        message: snackMessage,
       });
       setOpenSnack(true);
     }
@@ -392,7 +402,7 @@ export const AppInfo = ({ app, myName }) => {
                   ? t('core:action.unpin_from_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })
-                  : t('core:action.pin_from_dashboard', {
+                  : t('core:action.pin_to_dashboard', {
                       postProcess: 'capitalizeFirstChar',
                     })}
               </AppButtonText>

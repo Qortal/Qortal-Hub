@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { log, warn } = require('./logger');
 
 module.exports = async function afterPack(context) {
   const { appOutDir, electronPlatformName } = context;
@@ -10,11 +11,11 @@ module.exports = async function afterPack(context) {
 
   const chromeSandbox = path.join(appOutDir, 'chrome-sandbox');
   if (!fs.existsSync(chromeSandbox)) {
-    console.log('ℹ️ chrome-sandbox not found, skipping.');
+    log('ℹ️ chrome-sandbox not found, skipping.');
     return;
   }
 
-  console.log('🔧 Fixing chrome-sandbox permissions...');
+  log('🔧 Fixing chrome-sandbox permissions...');
   try {
     // Set setuid bit (rwsr-xr-x)
     execSync(`chmod 4755 "${chromeSandbox}"`, { stdio: 'inherit' });
@@ -23,13 +24,13 @@ module.exports = async function afterPack(context) {
     // try {
     //   execSync(`chown root:root "${chromeSandbox}"`, { stdio: 'inherit' });
     // } catch (e) {
-    //   console.warn(
+    //   warn(
     //     '⚠️ chown root:root failed (not running as root?). AppImage may refuse to run the sandbox.'
     //   );
     // }
 
-    console.log('✅ chrome-sandbox permissions fixed.');
+    log('✅ chrome-sandbox permissions fixed.');
   } catch (e) {
-    console.warn('⚠️ Failed to set chrome-sandbox permissions:', e.message);
+    warn('⚠️ Failed to set chrome-sandbox permissions:', e.message);
   }
 };

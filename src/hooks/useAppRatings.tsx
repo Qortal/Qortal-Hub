@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtomValue, useSetAtom } from 'jotai';
+import { atomFamily } from 'jotai/utils';
 import { getBaseApiReact } from '../App';
 import { RATING_CACHE_TTL } from '../constants/constants';
 import type { AppRatingData, VoteCount } from '../types/ratings';
@@ -8,8 +9,28 @@ import {
   saveRatingsCacheToDB,
 } from '../utils/ratingsIndexedDB';
 
-// Jotai atom for centralized ratings store
-const ratingsStoreAtom = atom<Map<string, AppRatingData>>(new Map());
+// Jotai atom for centralized ratings store (export for consumers that need full store, e.g. OfficialAppsTab)
+export const ratingsStoreAtom = atom<Map<string, AppRatingData>>(new Map());
+
+/** Derived atom family: each card subscribes only to its own rating. Key: getCacheKey(name, service). */
+export const ratingForAppAtomFamily = atomFamily((key: string) =>
+  atom((get) => get(ratingsStoreAtom).get(key) || null)
+);
+
+/**
+ * Derived atom family: subscribes only to ratings for the given cache keys (e.g. featured app keys).
+ * Key: comma-separated sorted cache keys. Use so only those apps' rating updates trigger re-renders.
+ */
+export const featuredRatingsMapAtomFamily = atomFamily((keysJson: string) =>
+  atom((get) => {
+    const keys = keysJson ? keysJson.split(',').filter(Boolean) : [];
+    const entries = keys.map(
+      (k) =>
+        [k, get(ratingForAppAtomFamily(k)) as AppRatingData | null] as const
+    );
+    return Object.fromEntries(entries) as Record<string, AppRatingData | null>;
+  })
+);
 
 // Set to track in-flight requests (prevents duplicate fetches)
 const pendingRequests = new Set<string>();
@@ -24,8 +45,16 @@ let batchFetchCallback: ((keys: string[]) => void) | null = null;
 // Map from lowercased cache key to original name/service (preserves casing for API calls)
 const keyToOriginalCase = new Map<string, { name: string; service: string }>();
 
-// Generate cache key for an app
-const getCacheKey = (name: string, service: string): string => {
+// Shared ref for current store state (used by useAppRatings and initializer; avoids N refs and keeps hydrate in sync)
+const ratingsStoreRef: { current: Map<string, AppRatingData> } = {
+  current: new Map(),
+};
+
+// Run load-from-DB + hydrate only once per app session (guards initializer effect)
+let ratingsCacheHydrated = false;
+
+// Generate cache key for an app (exported for consumers that need to subscribe to specific app ratings)
+export const getCacheKey = (name: string, service: string): string => {
   return `${service.toLowerCase()}-${name.toLowerCase()}`;
 };
 
@@ -164,24 +193,29 @@ const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
   );
 };
 
-export const useAppRatings = () => {
-  const [ratingsStore, setRatingsStore] = useAtom(ratingsStoreAtom);
-  const initializedRef = useRef(false);
-  // Use ref to access current store value without causing callback recreation
-  const ratingsStoreRef = useRef(ratingsStore);
-  ratingsStoreRef.current = ratingsStore;
-
-  // Initialize: load cache from IndexedDB
+/**
+ * Runs the ratings cache load from IndexedDB and hydrates the store once per app session.
+ * Mount once (e.g. in AppsDesktop); uses only useSetAtom so it does not re-render when the store updates.
+ */
+function RatingsCacheInitializerInner() {
+  const setRatingsStore = useSetAtom(ratingsStoreAtom);
   useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
+    if (ratingsCacheHydrated) return;
+    ratingsCacheHydrated = true;
     loadRatingsCacheFromDB().then((cached) => {
       if (cached.size > 0) {
+        ratingsStoreRef.current = cached;
         setRatingsStore(cached);
       }
     });
   }, [setRatingsStore]);
+  return null;
+}
+
+export const RatingsCacheInitializer = RatingsCacheInitializerInner;
+
+export const useAppRatings = () => {
+  const setRatingsStore = useSetAtom(ratingsStoreAtom);
 
   // Fetch a single rating - stable callback that doesn't change on store updates
   const fetchRating = useCallback(
@@ -210,6 +244,7 @@ export const useAppRatings = () => {
             const next = new Map(prev);
             next.set(key, data);
             saveRatingsCacheToDB(next);
+            ratingsStoreRef.current = next;
             return next;
           });
           return data;
@@ -262,6 +297,7 @@ export const useAppRatings = () => {
           }
         });
         saveRatingsCacheToDB(next);
+        ratingsStoreRef.current = next;
         return next;
       });
     },
@@ -295,15 +331,6 @@ export const useAppRatings = () => {
     []
   );
 
-  // Get rating data for an app
-  const getRating = useCallback(
-    (name: string, service: string): AppRatingData | null => {
-      const key = getCacheKey(name, service);
-      return ratingsStore.get(key) || null;
-    },
-    [ratingsStore]
-  );
-
   // Invalidate a rating (force refresh on next access)
   const invalidateRating = useCallback(
     (name: string, service: string) => {
@@ -312,10 +339,19 @@ export const useAppRatings = () => {
         const next = new Map(prev);
         next.delete(key);
         saveRatingsCacheToDB(next);
+        ratingsStoreRef.current = next;
         return next;
       });
     },
     [setRatingsStore]
+  );
+
+  const getRating = useCallback(
+    (name: string, service: string): AppRatingData | null => {
+      const key = getCacheKey(name, service);
+      return ratingsStoreRef.current.get(key) || null;
+    },
+    []
   );
 
   return {
@@ -323,33 +359,25 @@ export const useAppRatings = () => {
     fetchRating,
     registerVisibility,
     invalidateRating,
-    ratingsStore,
   };
 };
 
-// Hook for a single app rating (convenience wrapper)
+// Hook for a single app rating (convenience wrapper) - narrow subscription so only this app's rating triggers re-render
 export const useAppRating = (name?: string, service?: string) => {
-  const { getRating, fetchRating, registerVisibility, invalidateRating } =
-    useAppRatings();
+  const { fetchRating, registerVisibility, invalidateRating } = useAppRatings();
   const containerRef = useRef<HTMLDivElement>(null);
   const registeredRef = useRef(false);
 
-  const rating = name && service ? getRating(name, service) : null;
+  const key = name && service ? getCacheKey(name, service) : '';
+  const rating = useAtomValue(ratingForAppAtomFamily(key));
 
-  // Register for visibility-based fetching only if not already cached
+  // Register for visibility-based fetching once when mounted (no rating in deps to avoid effect churn)
   useEffect(() => {
     if (!name || !service || registeredRef.current) return;
-
-    // Skip registration if rating is already cached and valid
-    if (rating && Date.now() - rating.lastFetched < RATING_CACHE_TTL) {
-      return;
-    }
-
     registeredRef.current = true;
 
     const cleanup = registerVisibility(containerRef.current, name, service);
 
-    // Fallback: fetch immediately if IntersectionObserver isn't available
     if (!cleanup && typeof IntersectionObserver === 'undefined') {
       fetchRating(name, service);
     }
@@ -358,7 +386,7 @@ export const useAppRating = (name?: string, service?: string) => {
       cleanup?.();
       registeredRef.current = false;
     };
-  }, [name, service, rating, registerVisibility, fetchRating]);
+  }, [name, service, registerVisibility, fetchRating]);
 
   const refresh = useCallback(() => {
     if (name && service) {

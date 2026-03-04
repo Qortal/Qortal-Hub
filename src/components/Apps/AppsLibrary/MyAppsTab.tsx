@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
+  CircularProgress,
   Divider,
   Typography,
   styled,
@@ -11,6 +12,10 @@ import { useTranslation } from 'react-i18next';
 import AppsIcon from '@mui/icons-material/Apps';
 import LanguageIcon from '@mui/icons-material/Language';
 import AddIcon from '@mui/icons-material/Add';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { userInfoAtom } from '../../../atoms/global';
+import { publishEditTargetAtom } from '../../../atoms/appsAtoms';
+import { getBaseApiReact } from '../../../App';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { Spacer } from '../../../common/Spacer';
 import { PublishedAppCard } from '../AppCard';
@@ -19,6 +24,7 @@ interface MyAppsTabProps {
   myName: string;
   availableQapps: any[];
   setMode: (mode: string) => void;
+  searchValue?: string;
 }
 
 const SectionContainer = styled(Box)({
@@ -83,30 +89,110 @@ export const MyAppsTab = ({
   myName,
   availableQapps,
   setMode,
+  searchValue = '',
 }: MyAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const userInfo = useAtomValue(userInfoAtom);
+  const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
+  const myAddress = userInfo?.address ?? null;
+  const [myNames, setMyNames] = useState<string[]>([]);
+  const [namesLoaded, setNamesLoaded] = useState(false);
 
-  // Find user's published apps and websites
+  const getNames = useCallback(async () => {
+    if (!myAddress) {
+      setMyNames([]);
+      setNamesLoaded(true);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${getBaseApiReact()}/names/address/${myAddress}?limit=0`
+      );
+      const data = await res.json();
+      setMyNames(data?.map((item: { name: string }) => item.name) ?? []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setNamesLoaded(true);
+    }
+  }, [myAddress]);
+
+  useEffect(() => {
+    setNamesLoaded(false);
+    getNames();
+  }, [getNames]);
+
+  // Find user's published apps and websites (all names), applying search filter
   const myApps = useMemo(() => {
-    if (!myName || !availableQapps) return [];
-    return availableQapps.filter(
+    if (!myNames.length || !availableQapps) return [];
+    const nameSet = new Set(myNames);
+    let result = availableQapps.filter(
       (app) =>
-        app.name === myName &&
+        nameSet.has(app.name) &&
         (app.service === 'APP' || app.service?.includes('APP'))
     );
-  }, [myName, availableQapps]);
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+    return result;
+  }, [myNames, availableQapps, searchValue]);
 
   const myWebsites = useMemo(() => {
-    if (!myName || !availableQapps) return [];
-    return availableQapps.filter(
+    if (!myNames.length || !availableQapps) return [];
+    const nameSet = new Set(myNames);
+    let result = availableQapps.filter(
       (app) =>
-        app.name === myName &&
+        nameSet.has(app.name) &&
         (app.service === 'WEBSITE' || app.service?.includes('WEBSITE'))
     );
-  }, [myName, availableQapps]);
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
+      result = result.filter(
+        (app) =>
+          app.name.toLowerCase().includes(searchLower) ||
+          (app?.metadata?.title &&
+            app.metadata.title.toLowerCase().includes(searchLower)) ||
+          (app?.metadata?.description &&
+            app.metadata.description.toLowerCase().includes(searchLower))
+      );
+    }
+    return result;
+  }, [myNames, availableQapps, searchValue]);
 
-  if (!myName) {
+  const isLoadingNames = myAddress != null && !namesLoaded;
+  const hasNoNames =
+    myAddress != null && namesLoaded && myNames.length === 0;
+
+  if (isLoadingNames) {
+    return (
+      <AppsWidthLimiter>
+        <EmptyStateBox>
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography
+            sx={{
+              fontSize: '14px',
+              color: theme.palette.text.secondary,
+            }}
+          >
+            {t('core:loading.generic', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </EmptyStateBox>
+      </AppsWidthLimiter>
+    );
+  }
+
+  if (!myAddress || hasNoNames) {
     return (
       <AppsWidthLimiter>
         <EmptyStateBox>
@@ -154,7 +240,17 @@ export const MyAppsTab = ({
                 <PublishedAppCard
                   key={`${app.service}-${app.name}`}
                   app={app}
-                  onUpdate={() => setMode('publish')}
+                  onUpdate={() => {
+                    setPublishEditTarget({
+                      name: app.name,
+                      service:
+                        app.service === 'WEBSITE' ||
+                        app.service?.includes?.('WEBSITE')
+                          ? 'WEBSITE'
+                          : 'APP',
+                    });
+                    setMode('publish');
+                  }}
                 />
               ))}
             </Box>
@@ -176,7 +272,17 @@ export const MyAppsTab = ({
                 <PublishedAppCard
                   key={`${site.service}-${site.name}`}
                   app={site}
-                  onUpdate={() => setMode('publish')}
+                  onUpdate={() => {
+                    setPublishEditTarget({
+                      name: site.name,
+                      service:
+                        site.service === 'WEBSITE' ||
+                        site.service?.includes?.('WEBSITE')
+                          ? 'WEBSITE'
+                          : 'APP',
+                    });
+                    setMode('publish');
+                  }}
                 />
               ))}
             </Box>

@@ -1,11 +1,4 @@
-import {
-  Fragment,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Spacer } from '../common/Spacer';
 import { CustomButton, TextP, TextSpan } from '../styles/App-styles';
 import {
@@ -30,19 +23,24 @@ import { CustomizedSnackbars } from './Snackbar/Snackbar';
 import { cleanUrl, gateways } from '../background/background.ts';
 import Tooltip, { TooltipProps, tooltipClasses } from '@mui/material/Tooltip';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_APP_CONTEXT } from '../App';
 import {
-  HTTP_LOCALHOST_12391,
+  getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
   LOCALHOST_12391,
 } from '../constants/constants.ts';
-import { useAtom } from 'jotai';
-import { selectedNodeInfoAtom, statusesAtom } from '../atoms/global.ts';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+  hasSeenGettingStartedAtom,
+  selectedNodeInfoAtom,
+  statusesAtom,
+} from '../atoms/global.ts';
+import { useHandleTutorials } from '../hooks/useHandleTutorials';
 import { useAuth } from '../hooks/useAuth.tsx';
 import { nodeDisplay } from '../utils/helpers.ts';
 
 export const manifestData = {
-  version: '0.6.1',
+  version: '1.0.0',
 };
 
 export const HtmlTooltip = styled(({ className, ...props }: TooltipProps) => (
@@ -78,8 +76,8 @@ export const NotAuthenticated = ({
   const [enteredApiKey, setEnteredApiKey] = useState('');
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const [customNodeToSaveIndex, setCustomNodeToSaveIndex] = useState(null);
-  const { showTutorial, hasSeenGettingStarted } =
-    useContext(QORTAL_APP_CONTEXT);
+  const { showTutorial } = useHandleTutorials();
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -100,17 +98,17 @@ export const NotAuthenticated = ({
         if (customNodes) {
           setCustomNodes((prev) => {
             const copyPrev = [...prev];
-            const findLocalIndex = copyPrev?.findIndex(
-              (item) => item?.url === HTTP_LOCALHOST_12391
+            const findLocalIndex = copyPrev?.findIndex((item) =>
+              isLocalNodeUrl(item?.url)
             );
             if (findLocalIndex === -1) {
               copyPrev.unshift({
-                url: HTTP_LOCALHOST_12391,
+                url: getDefaultLocalNodeUrl(),
                 apikey: text,
               });
             } else {
               copyPrev[findLocalIndex] = {
-                url: HTTP_LOCALHOST_12391,
+                url: getDefaultLocalNodeUrl(),
                 apikey: text,
               };
             }
@@ -333,11 +331,11 @@ export const NotAuthenticated = ({
           </CustomButton>
         </HtmlTooltip>
       </Box>
-      <Spacer height="15px" />
+      <Spacer height="24px" />
       <Typography
         sx={{
           fontSize: '12px',
-          ...(selectedNode?.url === HTTP_LOCALHOST_12391 && {
+          ...(isLocalNodeUrl(selectedNode?.url) && {
             fontWeight: 'bold',
             color: theme.palette.other.positive,
           }),
@@ -347,24 +345,25 @@ export const NotAuthenticated = ({
         {nodeDisplay(selectedNode?.url)}
       </Typography>
       <>
-        <Spacer height="15px" />
+        <Spacer height="24px" />
 
         <Box
           sx={{
             alignItems: 'center',
-            borderRadius: '8px',
+            borderRadius: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
-            outlineStyle: 'solid',
-            outlineWidth: '0.5px',
+            gap: '14px',
+            border: `1px solid ${theme.palette.divider}`,
             padding: '20px 30px',
+            backgroundColor: theme.palette.background.paper,
           }}
         >
           <>
             <Typography
               sx={{
                 textDecoration: 'underline',
+                fontWeight: 600,
               }}
             >
               {t('auth:advanced_users', { postProcess: 'capitalizeFirstChar' })}
@@ -393,7 +392,7 @@ export const NotAuthenticated = ({
                         validateApiKey(currentNode);
                       } else {
                         setCurrentNode({
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                         });
                         setUseLocalNode(false);
                         window
@@ -431,7 +430,7 @@ export const NotAuthenticated = ({
                 }
               />
             </Box> */}
-            {/* {currentNode?.url === HTTP_LOCALHOST_12391 && (
+            {/* {currentNode?.url === getDefaultLocalNodeUrl() && (
               <>
                 <Button
                   onClick={() => setShowSelectApiKey(true)}
@@ -479,6 +478,7 @@ export const NotAuthenticated = ({
             }}
           >
             {t('auth:build_version', { postProcess: 'capitalizeFirstChar' })}:
+            {` `}
             {manifestData?.version}
           </Typography>
         </Box>
@@ -537,7 +537,7 @@ export const NotAuthenticated = ({
                         fontSize: '14px',
                       }}
                     >
-                      {HTTP_LOCALHOST_12391} (Local node)
+                      {getDefaultLocalNodeUrl()} (Local node)
                     </Typography>
 
                     <Box
@@ -549,13 +549,13 @@ export const NotAuthenticated = ({
                       }}
                     >
                       <Button
-                        disabled={selectedNode?.url === HTTP_LOCALHOST_12391}
+                        disabled={isLocalNodeUrl(selectedNode?.url)}
                         size="small"
                         onClick={() => {
                           setMode('list');
                           setShow(false);
                           const payload = {
-                            url: HTTP_LOCALHOST_12391,
+                            url: getDefaultLocalNodeUrl(),
                             apikey: '',
                           };
                           window
@@ -735,7 +735,7 @@ export const NotAuthenticated = ({
                             onClick={async () => {
                               if (node?.url === selectedNode?.url) {
                                 await handleSaveNodeInfo({
-                                  url: HTTP_LOCALHOST_12391,
+                                  url: getDefaultLocalNodeUrl(),
                                   apikey: '',
                                 });
                               }
@@ -898,17 +898,17 @@ export const NotAuthenticated = ({
                   if (customNodes) {
                     setCustomNodes((prev) => {
                       const copyPrev = [...prev];
-                      const findLocalIndex = copyPrev?.findIndex(
-                        (item) => item?.url === HTTP_LOCALHOST_12391
+                      const findLocalIndex = copyPrev?.findIndex((item) =>
+                        isLocalNodeUrl(item?.url)
                       );
                       if (findLocalIndex === -1) {
                         copyPrev.unshift({
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                           apikey: enteredApiKey,
                         });
                       } else {
                         copyPrev[findLocalIndex] = {
-                          url: HTTP_LOCALHOST_12391,
+                          url: getDefaultLocalNodeUrl(),
                           apikey: enteredApiKey,
                         };
                       }

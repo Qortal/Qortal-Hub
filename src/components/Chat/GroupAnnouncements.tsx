@@ -7,12 +7,15 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useAtomValue } from 'jotai';
+import { userInfoAtom } from '../../atoms/global';
 import { uint8ArrayToObject } from '../../encryption/encryption.ts';
 import {
   base64ToUint8Array,
   objectToBase64,
 } from '../../qdn/encryption/group-encryption';
 import Tiptap from './TipTap';
+import './chat.css';
 import { CustomButton } from '../../styles/App-styles';
 import CircularProgress from '@mui/material/CircularProgress';
 import { getFee } from '../../background/background.ts';
@@ -35,6 +38,7 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { addDataPublishesFunc, getDataPublishesFunc } from '../Group/Group';
 import { useTranslation } from 'react-i18next';
 import { TIME_SECONDS_20_IN_MILLISECONDS } from '../../constants/constants.ts';
+import { appHeighOffset } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -83,7 +87,7 @@ export const getTempPublish = async () => {
 
 export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
   try {
-    return await new Promise((res, rej) => {
+    return await new Promise((res) => {
       window
         .sendMessage('decryptSingleForPublishes', {
           data: encryptedMessages,
@@ -91,18 +95,20 @@ export const decryptPublishes = async (encryptedMessages: any[], secretKey) => {
           skipDecodeBase64: true,
         })
         .then((response) => {
-          if (!response?.error) {
+          if (!response?.error && Array.isArray(response)) {
             res(response);
             return;
           }
-          rej(response.error);
+          res([]);
         })
         .catch((error) => {
-          rej(error.message || 'An error occurred');
+          console.log(error);
+          res([]);
         });
     });
   } catch (error) {
     console.log(error);
+    return [];
   }
 };
 
@@ -131,9 +137,10 @@ export const GroupAnnouncements = ({
   handleNewEncryptionNotification,
   isAdmin,
   hide,
-  myName,
   isPrivate,
 }) => {
+  const userInfo = useAtomValue(userInfoAtom);
+  const myName = userInfo?.name;
   const [messages, setMessages] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -545,7 +552,7 @@ export const GroupAnnouncements = ({
         style={{
           display: 'flex',
           flexDirection: 'column',
-          height: 'calc(100vh - 70px)',
+          height: `calc(100vh - ${70 + appHeighOffset}px)`,
           left: hide && '-1000px',
           position: hide && 'fixed',
           visibility: hide && 'hidden',
@@ -567,61 +574,67 @@ export const GroupAnnouncements = ({
   }
 
   return (
-    <div
-      style={{
+    <Box
+      sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 70px)',
+        height: `calc(100vh - ${70 + appHeighOffset}px)`,
         left: hide && '-1000px',
         position: hide && 'fixed',
         visibility: hide && 'hidden',
         width: '100%',
       }}
     >
-      <div
-        style={{
+      <Box
+        sx={{
+          alignItems: 'center',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
           display: 'flex',
-          flexDirection: 'column',
           flexShrink: 0,
-          position: 'relative',
+          gap: '12px',
+          justifyContent: 'center',
+          padding: '16px 24px',
           width: '100%',
         }}
       >
-        <Box
+        <CampaignIcon
           sx={{
-            alignItems: 'center',
-            display: 'flex',
-            fontSize: '20px',
-            gap: '20px',
-            justifyContent: 'center',
-            padding: '25px',
-            width: '100%',
+            color: theme.palette.primary.main,
+            fontSize: '24px',
+          }}
+        />
+        <Typography
+          sx={{
+            fontFamily: 'Inter',
+            fontSize: '17px',
+            fontWeight: 600,
+            letterSpacing: '-0.01em',
+            color: theme.palette.text.primary,
           }}
         >
-          <CampaignIcon
-            sx={{
-              fontSize: '30px',
-            }}
-          />
           {t('group:message.generic.group_announcement', {
             postProcess: 'capitalizeFirstChar',
           })}
-        </Box>
+        </Typography>
+      </Box>
 
-        <Spacer height={'25px'} />
-      </div>
+      <Spacer height={'8px'} />
 
       {!isLoading && combinedListTempAndReal?.length === 0 && (
         <Box
           sx={{
             display: 'flex',
             justifyContent: 'center',
+            padding: '24px',
             width: '100%',
           }}
         >
           <Typography
             sx={{
-              fontSize: '16px',
+              color: theme.palette.text.secondary,
+              fontFamily: 'Inter',
+              fontSize: '15px',
             }}
           >
             {t('group:message.generic.no_announcement', {
@@ -644,26 +657,27 @@ export const GroupAnnouncements = ({
       />
 
       {isAdmin && (
-        <div
-          style={{
-            backgroundColor: theme.palette.background.default,
-            bottom: isFocusedParent ? '0px' : 'unset',
+        <Box
+          sx={{
+            borderTop: '1px solid',
+            borderColor: 'divider',
+            bottom: isFocusedParent ? 0 : 'unset',
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
             flexShrink: 0,
             maxHeight: '400px',
-            minHeight: '150px',
+            minHeight: '120px',
             overflow: 'hidden',
-            padding: '20px',
+            padding: '12px 16px 16px',
             position: isFocusedParent ? 'fixed' : 'relative',
-            top: isFocusedParent ? '0px' : 'unset',
+            top: isFocusedParent ? 0 : 'unset',
             width: '100%',
             zIndex: isFocusedParent ? 5 : 'unset',
           }}
         >
-          <div
-            style={{
+          <Box
+            sx={{
               display: 'flex',
               flexDirection: 'column',
               flexGrow: 1,
@@ -674,20 +688,23 @@ export const GroupAnnouncements = ({
               setEditorRef={setEditorRef}
               onEnter={publishAnnouncement}
               disableEnter
-              maxHeightOffset="40px"
+              composerStyle
+              maxHeightOffset={40}
               isFocusedParent={isFocusedParent}
               setIsFocusedParent={setIsFocusedParent}
             />
-          </div>
+          </Box>
 
           <Box
             sx={{
+              alignItems: 'center',
               display: 'flex',
               flexShrink: 0,
               gap: '10px',
-              justifyContent: 'center',
+              justifyContent: 'flex-end',
+              marginTop: '12px',
               position: 'relative',
-              width: '100&',
+              width: '100%',
             }}
           >
             {isFocusedParent && (
@@ -699,16 +716,23 @@ export const GroupAnnouncements = ({
                   setTimeout(() => {
                     triggerRerender();
                   }, 300);
-                  // Unfocus the editor
                 }}
-                style={{
+                sx={{
                   alignSelf: 'center',
-                  background: theme.palette.other.danger,
+                  backgroundColor: theme.palette.background.paper,
+                  border: '1px solid',
+                  borderColor: theme.palette.divider,
+                  borderRadius: '8px',
+                  color: theme.palette.text.primary,
                   cursor: isSending ? 'default' : 'pointer',
                   flexShrink: 0,
+                  fontFamily: 'Inter',
                   fontSize: '14px',
-                  marginTop: 'auto',
-                  padding: '5px',
+                  padding: '10px 16px',
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                    borderColor: theme.palette.divider,
+                  },
                 }}
               >
                 {t('core:action.close', { postProcess: 'capitalizeFirstChar' })}
@@ -720,23 +744,39 @@ export const GroupAnnouncements = ({
                 if (isSending) return;
                 publishAnnouncement();
               }}
-              style={{
-                alignSelf: 'center',
-                background: isSending
-                  ? theme.palette.background.default
+              sx={{
+                alignItems: 'center',
+                backgroundColor: isSending
+                  ? theme.palette.action.disabledBackground
                   : theme.palette.background.paper,
+                border: '1px solid',
+                borderColor: theme.palette.divider,
+                borderRadius: '8px',
+                color: isSending
+                  ? theme.palette.text.disabled
+                  : theme.palette.text.primary,
                 cursor: isSending ? 'default' : 'pointer',
+                display: 'inline-flex',
                 flexShrink: 0,
+                fontFamily: 'Inter',
                 fontSize: '14px',
-                marginTop: 'auto',
-                padding: '5px',
+                fontWeight: 500,
+                minHeight: '44px',
+                minWidth: '88px',
+                padding: '10px 20px',
+                transition:
+                  'background-color 0.2s ease, border-color 0.2s ease',
+                '&:hover': !isSending && {
+                  backgroundColor: theme.palette.action.hover,
+                  borderColor: theme.palette.divider,
+                },
               }}
             >
               {isSending && (
                 <CircularProgress
                   size={18}
                   sx={{
-                    color: theme.palette.text.primary,
+                    color: theme.palette.text.secondary,
                     left: '50%',
                     marginLeft: '-12px',
                     marginTop: '-12px',
@@ -750,7 +790,7 @@ export const GroupAnnouncements = ({
               })}
             </CustomButton>
           </Box>
-        </div>
+        </Box>
       )}
 
       <CustomizedSnackbars
@@ -768,6 +808,6 @@ export const GroupAnnouncements = ({
           }),
         }}
       />
-    </div>
+    </Box>
   );
 };

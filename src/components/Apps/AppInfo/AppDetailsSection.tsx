@@ -1,5 +1,6 @@
 import { Box, Chip, styled, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { formatBytes } from '../../../utils/numberFunctions';
 
 interface AppDetailsSectionProps {
   app: any;
@@ -137,6 +138,15 @@ export const AppDetailsSection = ({ app }: AppDetailsSectionProps) => {
 
       <DetailRow>
         <DetailLabel>
+          {t('core:app_detail.size', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </DetailLabel>
+        <DetailValue>{formatBytes(app?.size)}</DetailValue>
+      </DetailRow>
+
+      <DetailRow>
+        <DetailLabel>
           {t('core:app_detail.status', { postProcess: 'capitalizeFirstChar' })}
         </DetailLabel>
         <StatusBadge status={statusKey}>
@@ -158,6 +168,15 @@ export const AppDetailsSection = ({ app }: AppDetailsSectionProps) => {
           })}
         </DetailLabel>
         <DetailValue>{formatDate(app?.created)}</DetailValue>
+      </DetailRow>
+
+      <DetailRow>
+        <DetailLabel>
+          {t('core:app_detail.updated', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </DetailLabel>
+        <DetailValue>{formatDate(app?.updated)}</DetailValue>
       </DetailRow>
     </DetailsContainer>
   );

@@ -1,3 +1,5 @@
+import { isElectron } from '../utils/platform';
+
 // Qortal TX types
 const TX_TYPES = {
   1: 'Genesis',
@@ -201,10 +203,23 @@ export const HTTPS_EXT_NODE_QORTAL_LINK: string =
   'https://ext-node.qortal.link';
 
 export const HTTP_LOCALHOST_12391: string = 'http://127.0.0.1:12391';
+export const HTTPS_LOCALHOST_12391: string = 'https://127.0.0.1:12391';
 export const HTTPS_QORT_TRADE: string = 'https://www.qort.trade';
 export const HTTPS_TRADE_NODE: string = 'https://appnode.qortal.org';
 export const LOCALHOST: string = '127.0.0.1';
 export const LOCALHOST_12391: string = '127.0.0.1:12391';
+
+/** Default local node URL: HTTPS in Electron, HTTP on web. */
+export const getDefaultLocalNodeUrl = (): string => {
+  if (isElectron()) {
+    return HTTPS_LOCALHOST_12391;
+  }
+  return HTTP_LOCALHOST_12391;
+};
+
+/** True if the URL is the local node (either http or https). */
+export const isLocalNodeUrl = (url: string | undefined): boolean =>
+  url === HTTP_LOCALHOST_12391 || url === HTTPS_LOCALHOST_12391;
 export const MESSAGE_LIMIT_WARNING: number = 750; // bytes
 export const QORTAL_PROTOCOL: string = 'qortal://';
 
@@ -264,6 +279,8 @@ export const TIME_SECONDS_10_IN_MILLISECONDS: number =
   10 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_20_IN_MILLISECONDS: number =
   20 * TIME_SECONDS_1_IN_MILLISECONDS;
+export const TIME_SECONDS_30_IN_MILLISECONDS: number =
+  30 * TIME_SECONDS_1_IN_MILLISECONDS;
 export const TIME_SECONDS_40_IN_MILLISECONDS: number =
   40 * TIME_SECONDS_1_IN_MILLISECONDS;
 

@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+  hasSeenGettingStartedAtom,
+  openTutorialModalAtom,
+  shownTutorialsAtom,
+} from '../atoms/global';
 import { saveToLocalStorage } from '../components/Apps/AppsNavBarDesktop';
 import creationImg from '../components/Tutorials/img/creation.webp';
 import dashboardImg from '../components/Tutorials/img/dashboard.webp';
@@ -30,8 +36,8 @@ const checkIfGatewayIsOnline = async () => {
 };
 
 export const useHandleTutorials = () => {
-  const [openTutorialModal, setOpenTutorialModal] = useState<any>(null);
-  const [shownTutorials, setShowTutorials] = useState(null);
+  const [openTutorialModal, setOpenTutorialModal] = useAtom(openTutorialModalAtom);
+  const [shownTutorials, setShowTutorials] = useAtom(shownTutorialsAtom);
   const { t } = useTranslation(['core', 'tutorial']);
 
   useEffect(() => {
@@ -54,7 +60,7 @@ export const useHandleTutorials = () => {
     };
 
     fetchShownTutorials();
-  }, []);
+  }, [setShowTutorials]);
 
   const saveShowTutorial = useCallback(
     async (type) => {
@@ -75,7 +81,7 @@ export const useHandleTutorials = () => {
         console.error('Failed to save tutorial state:', error);
       }
     },
-    [shownTutorials]
+    [shownTutorials, setShowTutorials]
   );
 
   const showTutorial = useCallback(
@@ -213,17 +219,22 @@ export const useHandleTutorials = () => {
     },
     [shownTutorials]
   );
+  const hasSeenGettingStarted = useAtomValue(hasSeenGettingStartedAtom);
+
   return useMemo(
     () => ({
       showTutorial,
-      hasSeenGettingStarted:
-        shownTutorials === null
-          ? null
-          : !!(shownTutorials || {})['getting-started'],
+      hasSeenGettingStarted,
       openTutorialModal,
       setOpenTutorialModal,
       shownTutorialsInitiated: !!shownTutorials,
     }),
-    [showTutorial, openTutorialModal, setOpenTutorialModal, shownTutorials]
+    [
+      showTutorial,
+      hasSeenGettingStarted,
+      openTutorialModal,
+      setOpenTutorialModal,
+      shownTutorials,
+    ]
   );
 };

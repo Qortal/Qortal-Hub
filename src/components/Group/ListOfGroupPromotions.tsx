@@ -29,6 +29,7 @@ import { Spacer } from '../../common/Spacer';
 import { CustomLoader } from '../../common/CustomLoader';
 import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import {
+  memberGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
@@ -52,7 +53,7 @@ import {
 
 const uid = new ShortUniqueId({ length: 8 });
 
-export const requestQueuePromos = new RequestQueueWithPromise(3);
+export const requestQueuePromos = new RequestQueueWithPromise(8);
 
 export function utf8ToBase64(inputString: string): string {
   // Encode the string as UTF-8
@@ -71,7 +72,13 @@ export function getGroupId(str) {
   return match ? match[1] : null;
 }
 
-export const ListOfGroupPromotions = () => {
+export const ListOfGroupPromotions = ({
+  compact = false,
+  onCountChange,
+}: {
+  compact?: boolean;
+  onCountChange?: (count: number) => void;
+} = {}) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const [openPopoverIndex, setOpenPopoverIndex] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
@@ -85,6 +92,7 @@ export const ListOfGroupPromotions = () => {
   const [promotionTimeInterval, setPromotionTimeInterval] = useAtom(
     promotionTimeIntervalAtom
   );
+  const [memberGroups] = useAtom(memberGroupsAtom);
   const [isExpanded, setIsExpanded] = useState(false);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
@@ -109,8 +117,8 @@ export const ListOfGroupPromotions = () => {
       [promotions]
     ),
     getScrollElement: () => listRef.current,
-    estimateSize: () => 80, // Provide an estimated height of items, adjust this as needed
-    overscan: 10, // Number of items to render outside the visible area to improve smoothness
+    estimateSize: () => 130,
+    overscan: 8,
   });
 
   useEffect(() => {
@@ -126,6 +134,7 @@ export const ListOfGroupPromotions = () => {
 
   const getPromotions = useCallback(async () => {
     try {
+      setLoading(true);
       setPromotionTimeInterval(Date.now());
       const identifier = `group-promotions-ui24-`;
       const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT&identifier=${identifier}&limit=100&includemetadata=false&reverse=true&prefix=true`;
@@ -136,9 +145,11 @@ export const ListOfGroupPromotions = () => {
         },
       });
       const responseData = await response.json();
+
       const data: any[] = [];
       const uniqueGroupIds = new Set();
       const oneWeekAgo = Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
+      const abortController = new AbortController();
 
       const getPromos = responseData?.map(async (promo: any) => {
         if (promo?.size < 200 && promo.created > oneWeekAgo) {
@@ -148,6 +159,7 @@ export const ListOfGroupPromotions = () => {
             }/${promo.identifier}`;
             const response = await fetch(url, {
               method: 'GET',
+              signal: abortController.signal,
             });
 
             try {
@@ -157,10 +169,7 @@ export const ListOfGroupPromotions = () => {
 
                 // Check if this groupId has already been processed
                 if (!uniqueGroupIds.has(groupId)) {
-                  // Add the groupId to the set
                   uniqueGroupIds.add(groupId);
-
-                  // Push the item to data
                   data.push({
                     data: responseData,
                     groupId,
@@ -169,7 +178,9 @@ export const ListOfGroupPromotions = () => {
                 }
               }
             } catch (error) {
-              console.error('Error fetching promo:', error);
+              if ((error as Error)?.name !== 'AbortError') {
+                console.error('Error fetching promo:', error);
+              }
             }
           });
         }
@@ -177,13 +188,31 @@ export const ListOfGroupPromotions = () => {
         return true;
       });
 
-      await Promise.all(getPromos);
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          abortController.abort();
+          resolve();
+        }, 5000);
+      });
+
+      await Promise.race([Promise.all(getPromos), timeoutPromise]);
       const groupWithInfo = await getGroupNames(
         data.sort((a, b) => b.created - a.created)
       );
-      setPromotions(groupWithInfo);
+      // One promotion per unique name (promoter): keep the latest by created
+      const sorted = [...groupWithInfo].sort(
+        (a, b) => (b.created || 0) - (a.created || 0)
+      );
+      const latestByName = new Map();
+      for (const p of sorted) {
+        const n = p?.name;
+        if (n != null && !latestByName.has(n)) latestByName.set(n, p);
+      }
+      setPromotions(Array.from(latestByName.values()));
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -374,492 +403,629 @@ export const ListOfGroupPromotions = () => {
     }
   };
 
-  return (
+  // Report count to parent when in compact mode
+  useEffect(() => {
+    onCountChange?.(promotions.length);
+  }, [promotions.length, onCountChange]);
+
+  const promotionsList = (
     <Box
       sx={{
-        alignItems: 'center',
+        bgcolor: 'background.paper',
+        borderRadius: compact ? 0 : '16px',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
-        marginTop: '20px',
-        width: '100%',
+        maxHeight: compact ? undefined : '700px',
+        maxWidth: compact ? '100%' : '90%',
+        padding: compact ? '16px 0' : '24px 0',
+        width: compact ? '100%' : '750px',
+        border: compact
+          ? 'none'
+          : `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
       }}
     >
-      <Box
-        sx={{
+      {loading && promotions.length === 0 && (
+        <Box
+          sx={{
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            py: 4,
+          }}
+        >
+          <CustomLoader />
+        </Box>
+      )}
+
+      {!loading && promotions.length === 0 && (
+        <Box
+          sx={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            py: 6,
+            px: 2,
+          }}
+        >
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ textAlign: 'center' }}
+          >
+            {t('group:message.generic.no_display', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Typography>
+        </Box>
+      )}
+
+      <div
+        style={{
+          height: '600px',
+          position: 'relative',
           display: 'flex',
-          gap: '20px',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
           width: '100%',
         }}
       >
-        <ButtonBase
-          sx={{
-            alignSelf: isExpanded && 'flex-start',
-            display: 'flex',
-            flexDirection: 'row',
-            gap: '10px',
-            justifyContent: 'flex-start',
-            padding: `0px ${isExpanded ? '24px' : '20px'}`,
-          }}
-          onClick={() => setIsExpanded((prev) => !prev)}
-        >
-          <Typography
-            sx={{
-              fontSize: '1rem',
-            }}
-          >
-            {t('group:group.promotions', {
-              postProcess: 'capitalizeFirstChar',
-            })}{' '}
-            {promotions.length > 0 && ` (${promotions.length})`}
-          </Typography>
-
-          {isExpanded ? (
-            <ExpandLessIcon
-              sx={{
-                marginLeft: 'auto',
-              }}
-            />
-          ) : (
-            <ExpandMoreIcon
-              sx={{
-                marginLeft: 'auto',
-              }}
-            />
-          )}
-        </ButtonBase>
-
-        <Box
+        <div
+          ref={listRef}
+          className="scrollable-container"
           style={{
-            width: '330px',
+            flexGrow: 1,
+            overflow: 'auto',
+            position: 'relative',
+            display: 'flex',
+            height: '0px',
           }}
-        />
-      </Box>
-
-      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-        <>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              maxWidth: '90%',
-              padding: '0px 20px',
-              width: '750px',
+        >
+          <div
+            style={{
+              height: rowVirtualizer.getTotalSize(),
+              width: '100%',
             }}
           >
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                justifyContent: 'space-between',
-                width: '100%',
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: '13px',
-                  fontWeight: 600,
-                }}
-              ></Typography>
-
-              <Button
-                variant="contained"
-                onClick={() => setIsShowModal(true)}
-                sx={{
-                  fontSize: '12px',
-                }}
-              >
-                {t('group:action.add_promotion', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-              </Button>
-            </Box>
-
-            <Spacer height="10px" />
-          </Box>
-
-          <Box
-            sx={{
-              bgcolor: 'background.paper',
-              borderRadius: '19px',
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: '700px',
-              maxWidth: '90%',
-              padding: '20px 0px',
-              width: '750px',
-            }}
-          >
-            {loading && promotions.length === 0 && (
-              <Box
-                sx={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                <CustomLoader />
-              </Box>
-            )}
-
-            {!loading && promotions.length === 0 && (
-              <Box
-                sx={{
-                  width: '100%',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  height: '100%',
-                }}
-              >
-                <Typography
-                  sx={{
-                    fontSize: '11px',
-                    fontWeight: 400,
-                    color: 'rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  {t('group:message.generic.no_display', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
-              </Box>
-            )}
-
             <div
               style={{
-                height: '600px',
-                position: 'relative',
-                display: 'flex',
-                flexDirection: 'column',
+                position: 'absolute',
+                top: 0,
+                left: 0,
                 width: '100%',
               }}
             >
-              <div
-                ref={listRef}
-                className="scrollable-container"
-                style={{
-                  flexGrow: 1,
-                  overflow: 'auto',
-                  position: 'relative',
-                  display: 'flex',
-                  height: '0px',
-                }}
-              >
-                <div
-                  style={{
-                    height: rowVirtualizer.getTotalSize(),
-                    width: '100%',
-                  }}
-                >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const index = virtualRow.index;
+                const promotion = promotions[index];
+                const isMember =
+                  memberGroups?.some(
+                    (g: { groupId?: number }) =>
+                      +g?.groupId === +promotion?.groupId
+                  ) ?? false;
+                return (
                   <div
+                    data-index={virtualRow.index}
+                    ref={rowVirtualizer.measureElement}
+                    key={promotion?.identifier}
                     style={{
+                      left: '50%',
+                      overscrollBehavior: 'none',
+                      padding: '6px 20px',
                       position: 'absolute',
                       top: 0,
-                      left: 0,
+                      transform: `translateY(${virtualRow.start}px) translateX(-50%)`,
                       width: '100%',
                     }}
                   >
-                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                      const index = virtualRow.index;
-                      const promotion = promotions[index];
-                      return (
-                        <div
-                          data-index={virtualRow.index} //needed for dynamic row height measurement
-                          ref={rowVirtualizer.measureElement} //measure dynamic row height
-                          key={promotion?.identifier}
-                          style={{
-                            alignItems: 'center',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '5px',
-                            left: '50%', // Move to the center horizontally
-                            overscrollBehavior: 'none',
-                            padding: '10px 0',
-                            position: 'absolute',
-                            top: 0,
-                            transform: `translateY(${virtualRow.start}px) translateX(-50%)`, // Adjust for centering
-                            width: '100%', // Control width (90% of the parent)
+                    <ErrorBoundary
+                      fallback={
+                        <Typography variant="body2" color="text.secondary">
+                          {t('group:message.generic.invalid_data', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      }
+                    >
+                      <Box
+                        sx={{
+                          width: '100%',
+                          borderRadius: '12px',
+                          border: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
+                          bgcolor:
+                            theme.palette.background?.surface ??
+                            'rgba(255,255,255,0.04)',
+                          p: 1.75,
+                          transition: 'border-color 0.2s, box-shadow 0.2s',
+                          '&:hover': {
+                            borderColor:
+                              theme.palette.border?.main ??
+                              'rgba(255,255,255,0.12)',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                          },
+                        }}
+                      >
+                        <Popover
+                          open={openPopoverIndex === promotion?.groupId}
+                          anchorEl={popoverAnchor}
+                          onClose={(reason) => {
+                            if (reason === 'backdropClick') return;
+                            handlePopoverClose();
+                          }}
+                          anchorOrigin={{
+                            vertical: 'top',
+                            horizontal: 'center',
+                          }}
+                          transformOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'center',
+                          }}
+                          slotProps={{
+                            paper: {
+                              sx: {
+                                mt: 1,
+                                borderRadius: '16px',
+                                overflow: 'hidden',
+                                boxShadow: '0 12px 40px rgba(0,0,0,0.28)',
+                                border: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
+                              },
+                            },
                           }}
                         >
-                          <ErrorBoundary
-                            fallback={
-                              <Typography>
-                                {t('group:message.generic.invalid_data', {
+                          <Box sx={{ width: 360, overflow: 'hidden' }}>
+                            <Box
+                              sx={{
+                                px: 2.5,
+                                pt: 2.5,
+                                pb: 1.5,
+                                bgcolor:
+                                  theme.palette.background?.default ??
+                                  'rgba(0,0,0,0.2)',
+                                borderBottom: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block', mb: 0.5 }}
+                              >
+                                {t('group:group.name', {
                                   postProcess: 'capitalizeFirstChar',
                                 })}
                               </Typography>
-                            }
-                          >
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                width: '100%',
-                                padding: '0px 20px',
-                              }}
-                            >
-                              <Popover
-                                open={openPopoverIndex === promotion?.groupId}
-                                anchorEl={popoverAnchor}
-                                onClose={(reason) => {
-                                  if (reason === 'backdropClick') {
-                                    // Prevent closing on backdrop click
-                                    return;
-                                  }
-                                  handlePopoverClose(); // Close only on other events like Esc key press
-                                }}
-                                anchorOrigin={{
-                                  vertical: 'top',
-                                  horizontal: 'center',
-                                }}
-                                transformOrigin={{
-                                  vertical: 'bottom',
-                                  horizontal: 'center',
-                                }}
-                                style={{ marginTop: '8px' }}
+                              <Typography
+                                variant="h6"
+                                fontWeight={700}
+                                sx={{ lineHeight: 1.3 }}
                               >
-                                <Box
-                                  sx={{
-                                    width: '325px',
-                                    height: 'auto',
-                                    maxHeight: '400px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '10px',
-                                    padding: '10px',
-                                  }}
-                                >
-                                  <Typography
-                                    sx={{
-                                      fontSize: '13px',
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    {t('group:group.name', {
-                                      postProcess: 'capitalizeFirstChar',
-                                    })}
-                                    : {` ${promotion?.groupName}`}
-                                  </Typography>
-
-                                  <Typography
-                                    sx={{
-                                      fontSize: '13px',
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    {t('group:group.member_number', {
-                                      postProcess: 'capitalizeFirstChar',
-                                    })}
-                                    : {` ${promotion?.memberCount}`}
-                                  </Typography>
-
-                                  {promotion?.description && (
-                                    <Typography
-                                      sx={{
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {promotion?.description}
-                                    </Typography>
-                                  )}
-
-                                  {promotion?.isOpen === false && (
-                                    <Typography
-                                      sx={{
-                                        fontSize: '13px',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {t('group:message.generic.closed_group', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })}
-                                    </Typography>
-                                  )}
-
-                                  <Spacer height="5px" />
-
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      gap: '20px',
-                                      alignItems: 'center',
-                                      width: '100%',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    <LoadingButton
-                                      loading={isLoadingJoinGroup}
-                                      loadingPosition="start"
-                                      variant="contained"
-                                      onClick={handlePopoverClose}
-                                    >
-                                      {t('core:action.close', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })}
-                                    </LoadingButton>
-
-                                    <LoadingButton
-                                      loading={isLoadingJoinGroup}
-                                      loadingPosition="start"
-                                      variant="contained"
-                                      onClick={() =>
-                                        handleJoinGroup(
-                                          promotion,
-                                          promotion?.isOpen
-                                        )
-                                      }
-                                    >
-                                      {t('core:action.join', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })}
-                                    </LoadingButton>
-                                  </Box>
-                                </Box>
-                              </Popover>
-
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  width: '100%',
-                                }}
+                                {promotion?.groupName}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mt: 0.75 }}
                               >
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '15px',
-                                  }}
-                                >
-                                  <Avatar
-                                    sx={{
-                                      backgroundColor: '#27282c',
-                                      color: theme.palette.text.primary,
-                                    }}
-                                    alt={promotion?.name}
-                                    src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${
-                                      promotion?.name
-                                    }/qortal_avatar?async=true`}
-                                  >
-                                    {promotion?.name?.charAt(0)}
-                                  </Avatar>
-
-                                  <Typography
-                                    sx={{
-                                      fontWight: 600,
-                                      fontFamily: 'Inter',
-                                    }}
-                                  >
-                                    {promotion?.name}
-                                  </Typography>
-                                </Box>
-
+                                {t('group:group.member_number', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                                : {promotion?.memberCount ?? 0}
+                              </Typography>
+                              {isMember && (
                                 <Typography
+                                  variant="caption"
                                   sx={{
-                                    fontWight: 600,
-                                    fontFamily: 'Inter',
-                                  }}
-                                >
-                                  {promotion?.groupName}
-                                </Typography>
-                              </Box>
-
-                              <Spacer height="20px" />
-
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  gap: '20px',
-                                  alignItems: 'center',
-                                }}
-                              >
-                                {promotion?.isOpen === false && (
-                                  <LockIcon
-                                    sx={{
-                                      color: theme.palette.other.positive,
-                                    }}
-                                  />
-                                )}
-
-                                {promotion?.isOpen === true && (
-                                  <NoEncryptionGmailerrorredIcon
-                                    sx={{
-                                      color: theme.palette.other.danger,
-                                    }}
-                                  />
-                                )}
-
-                                <Typography
-                                  sx={{
-                                    fontSize: '15px',
+                                    display: 'block',
+                                    mt: 1,
+                                    color: theme.palette.other.positive,
                                     fontWeight: 600,
                                   }}
                                 >
-                                  {promotion?.isOpen
-                                    ? t('group:group.public', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })
-                                    : t('group:group.private', {
-                                        postProcess: 'capitalizeFirstChar',
-                                      })}
-                                </Typography>
-                              </Box>
-
-                              <Spacer height="20px" />
-
-                              <Typography
-                                sx={{
-                                  fontWight: 600,
-                                  fontFamily: 'Inter',
-                                }}
-                              >
-                                {promotion?.data}
-                              </Typography>
-
-                              <Spacer height="20px" />
-
-                              <Box
-                                sx={{
-                                  display: 'flex',
-                                  justifyContent: 'center',
-                                  width: '100%',
-                                }}
-                              >
-                                <Button
-                                  // variant="contained"
-                                  onClick={(event) =>
-                                    handlePopoverOpen(event, promotion?.groupId)
-                                  }
-                                  sx={{
-                                    fontSize: '12px',
-                                    color: theme.palette.text.primary,
-                                  }}
-                                >
-                                  {t('group:action.join_group', {
+                                  {t('group:message.generic.already_in_group', {
                                     postProcess: 'capitalizeFirstChar',
                                   })}
-                                  : {` ${promotion?.groupName}`}
-                                </Button>
-                              </Box>
+                                </Typography>
+                              )}
                             </Box>
+                            <Box sx={{ px: 2.5, py: 2 }}>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{
+                                  display: 'block',
+                                  mb: 0.75,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {t('group:group.description', {
+                                  postProcess: 'capitalizeFirstChar',
+                                  defaultValue: 'Description',
+                                })}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: theme.palette.text.secondary,
+                                  lineHeight: 1.5,
+                                  minHeight: '2.5em',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 4,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {promotion?.description ||
+                                  promotion?.data ||
+                                  t('group:message.generic.no_description', {
+                                    postProcess: 'capitalizeFirstChar',
+                                    defaultValue: 'No description',
+                                  })}
+                              </Typography>
+                              {promotion?.isOpen === false && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block', mt: 1 }}
+                                >
+                                  {t('group:message.generic.closed_group', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                </Typography>
+                              )}
+                            </Box>
+                            <Box
+                              sx={{
+                                px: 2.5,
+                                pb: 2.5,
+                                pt: 0,
+                                display: 'flex',
+                                gap: 1.5,
+                                justifyContent: 'flex-end',
+                              }}
+                            >
+                              <Button
+                                variant="outlined"
+                                onClick={handlePopoverClose}
+                                sx={{ textTransform: 'none', fontWeight: 600 }}
+                              >
+                                {t('core:action.close', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Button>
+                              {!isMember && (
+                                <LoadingButton
+                                  loading={isLoadingJoinGroup}
+                                  loadingPosition="start"
+                                  variant="contained"
+                                  onClick={() =>
+                                    handleJoinGroup(promotion, promotion?.isOpen)
+                                  }
+                                  sx={{ textTransform: 'none', fontWeight: 600 }}
+                                >
+                                  {t('core:action.join', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                </LoadingButton>
+                              )}
+                            </Box>
+                          </Box>
+                        </Popover>
 
-                            <Spacer height="50px" />
-                          </ErrorBoundary>
-                        </div>
-                      );
-                    })}
+                        {/* Card header: avatar + owner + group + badge + member count + Join */}
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: 1,
+                            mb: 1,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1.25,
+                              minWidth: 0,
+                              flex: 1,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                backgroundColor: theme.palette.background.paper,
+                                color: theme.palette.text.primary,
+                                border: `1px solid ${theme.palette.border?.subtle ?? 'rgba(255,255,255,0.08)'}`,
+                                flexShrink: 0,
+                              }}
+                              alt={promotion?.name}
+                              src={`${getBaseApiReact()}/arbitrary/THUMBNAIL/${promotion?.name}/qortal_avatar?async=true`}
+                            >
+                              {promotion?.name?.charAt(0)}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: '0.9rem',
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {promotion?.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: 'block' }}
+                              >
+                                {promotion?.groupName}
+                              </Typography>
+                              {promotion?.memberCount != null && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ display: 'block', mt: 0.25 }}
+                                >
+                                  {t('group:group.member_number', {
+                                    postProcess: 'capitalizeFirstChar',
+                                  })}
+                                  : {promotion.memberCount}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.75,
+                              flexShrink: 0,
+                            }}
+                          >
+<Box
+                            sx={{
+                              px: 1,
+                              py: 0.35,
+                              borderRadius: '6px',
+                              bgcolor: promotion?.isOpen
+                                ? `${theme.palette.other.danger}18`
+                                : `${theme.palette.other.positive}18`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 0.4,
+                            }}
+                          >
+                            {promotion?.isOpen === true ? (
+                              <NoEncryptionGmailerrorredIcon
+                                sx={{
+                                  fontSize: 14,
+                                  color: theme.palette.other.danger,
+                                }}
+                              />
+                            ) : (
+                              <LockIcon
+                                sx={{
+                                  fontSize: 14,
+                                  color: theme.palette.other.positive,
+                                }}
+                              />
+                            )}
+                              <Typography
+                                variant="caption"
+                                fontWeight={600}
+                                sx={{ fontSize: '0.7rem', color: 'inherit' }}
+                              >
+                                {promotion?.isOpen
+                                  ? t('group:group.public', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })
+                                  : t('group:group.private', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })}
+                              </Typography>
+                            </Box>
+                            {isMember ? (
+                              <Typography
+                                variant="caption"
+                                fontWeight={600}
+                                sx={{
+                                  fontSize: '0.7rem',
+                                  color: theme.palette.other.positive,
+                                  px: 1,
+                                  py: 0.5,
+                                  borderRadius: '6px',
+                                  bgcolor: `${theme.palette.other.positive}18`,
+                                }}
+                              >
+                                {t('group:message.generic.already_in_group', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Typography>
+                            ) : (
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={(e) =>
+                                  handlePopoverOpen(e, promotion?.groupId)
+                                }
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  fontSize: '0.8rem',
+                                  py: 0.5,
+                                  px: 1.25,
+                                  borderRadius: '8px',
+                                  minWidth: 'auto',
+                                }}
+                              >
+                                {t('core:action.join', {
+                                  postProcess: 'capitalizeFirstChar',
+                                })}
+                              </Button>
+                            )}
+                          </Box>
+                        </Box>
+
+                        {/* Description / URL */}
+                        {promotion?.data && (
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              fontSize: '0.8125rem',
+                              lineHeight: 1.4,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                            }}
+                          >
+                            {promotion?.data}
+                          </Typography>
+                        )}
+                      </Box>
+                    </ErrorBoundary>
                   </div>
-                </div>
-              </div>
+                );
+              })}
             </div>
-          </Box>
-        </>
-      </Collapse>
+          </div>
+        </div>
+      </div>
+    </Box>
+  );
+
+  return (
+    <Box
+      sx={{
+        alignItems: compact ? 'stretch' : 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        marginTop: compact ? '0' : '20px',
+        width: '100%',
+      }}
+    >
+      {!compact && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            width: '100%',
+          }}
+        >
+          <ButtonBase
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              py: 0.75,
+              px: 1,
+              borderRadius: '8px',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.06)' },
+            }}
+            onClick={() => setIsExpanded((prev) => !prev)}
+          >
+            <Typography sx={{ fontSize: '0.9375rem', fontWeight: 600 }}>
+              {t('group:group.promotions', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              {promotions.length > 0 && (
+                <Typography
+                  component="span"
+                  color="text.secondary"
+                  sx={{ ml: 0.5, fontWeight: 500 }}
+                >
+                  ({promotions.length})
+                </Typography>
+              )}
+            </Typography>
+            {isExpanded ? (
+              <ExpandLessIcon fontSize="small" />
+            ) : (
+              <ExpandMoreIcon fontSize="small" />
+            )}
+          </ButtonBase>
+        </Box>
+      )}
+
+      {compact && (
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            padding: '0 20px',
+            mb: 1.5,
+          }}
+        >
+          <Button
+            variant="contained"
+            onClick={() => setIsShowModal(true)}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '10px',
+              px: 2,
+              py: 1,
+              boxShadow: 'none',
+              '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.2)' },
+            }}
+          >
+            {t('group:action.add_promotion', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
+        </Box>
+      )}
+
+      {compact ? (
+        promotionsList
+      ) : (
+        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+          <>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                maxWidth: '90%',
+                padding: '0 20px',
+                width: '750px',
+              }}
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  width: '100%',
+                  mb: 1.5,
+                }}
+              >
+                <Button
+                  variant="contained"
+                  onClick={() => setIsShowModal(true)}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '10px',
+                    px: 2,
+                    py: 1,
+                    boxShadow: 'none',
+                    '&:hover': { boxShadow: '0 2px 12px rgba(0,0,0,0.2)' },
+                  }}
+                >
+                  {t('group:action.add_promotion', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Button>
+              </Box>
+            </Box>
+            {promotionsList}
+          </>
+        </Collapse>
+      )}
 
       <Spacer height="20px" />
 

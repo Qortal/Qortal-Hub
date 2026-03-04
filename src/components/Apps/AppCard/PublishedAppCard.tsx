@@ -243,6 +243,12 @@ export const PublishedAppCard = ({
           </Box>
 
           <MetaRow>
+            {app?.name && (
+              <MetaText>
+                {t('core:name', { postProcess: 'capitalizeFirstChar' })}:{' '}
+                {app.name}
+              </MetaText>
+            )}
             {app?.created && (
               <MetaText>
                 {t('core:app_detail.published', {

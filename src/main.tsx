@@ -13,9 +13,7 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <CssBaseline />
       <MessageQueueProvider>
-        <OnLaunchWrapper>
-          <App />
-        </OnLaunchWrapper>
+        <App />
       </MessageQueueProvider>
     </ThemeProvider>
   </>

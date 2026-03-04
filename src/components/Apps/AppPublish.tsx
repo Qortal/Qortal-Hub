@@ -77,6 +77,7 @@ interface AppPublishProps {
   categories: any;
   myAddress: any;
   myName: any;
+  initialName?: string;
   initialAppType?: 'APP' | 'WEBSITE';
   isAppTypeLocked?: boolean;
 }
@@ -85,11 +86,12 @@ export const AppPublish = ({
   categories,
   myAddress,
   myName,
+  initialName = '',
   initialAppType = 'APP',
   isAppTypeLocked = false,
 }: AppPublishProps) => {
   const [names, setNames] = useState([]);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -199,6 +201,10 @@ export const AppPublish = ({
   useEffect(() => {
     getNames();
   }, [getNames]);
+
+  useEffect(() => {
+    if (initialName) setName(initialName);
+  }, [initialName]);
 
   const mySortedNames = useSortedMyNames(names, myName);
   const activeTagInfo = useMemo(() => {

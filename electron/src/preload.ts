@@ -1,7 +1,8 @@
 // ------------------- User Preload starts here -------------------
 require('./rt/electron-rt');
 
-console.log('User Preload!');
+import { log as loggerLog, error as loggerError } from './logger';
+loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 
 try {
@@ -11,6 +12,20 @@ try {
     setAllowedDomains: (domains) => {
       ipcRenderer.send('set-allowed-domains', domains);
     },
+    ensureCertForBase: (baseUrl: string, apiKey?: string) =>
+      ipcRenderer.invoke('cert:ensureForBase', baseUrl, apiKey),
+    // Custom title bar window controls
+    windowMinimize: () => ipcRenderer.invoke('window:minimize'),
+    windowMaximize: () => ipcRenderer.invoke('window:maximize'),
+    windowClose: () => ipcRenderer.invoke('window:close'),
+    getWindowState: () =>
+      ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
+    getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
+    showAppMenu: (x?: number, y?: number) =>
+      ipcRenderer.invoke('window:showAppMenu', { x, y }),
+    getAppSettings: () => ipcRenderer.invoke('appSettings:get'),
+    setAppSettings: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit' }) =>
+      ipcRenderer.invoke('appSettings:set', settings),
   });
 
   // Expose other utility functions
@@ -163,5 +178,5 @@ try {
 
   ipcRenderer.send('test-ipc');
 } catch (error) {
-  console.log('error', error);
+  loggerError('error', error);
 }

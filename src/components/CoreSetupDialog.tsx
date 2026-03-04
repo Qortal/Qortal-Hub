@@ -30,11 +30,9 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import DownloadIcon from '@mui/icons-material/Download';
 import RocketLaunchIcon from '@mui/icons-material/RocketLaunch';
-import { QORTAL_APP_CONTEXT } from '../App';
 import { Trans, useTranslation } from 'react-i18next';
 import {
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -43,8 +41,12 @@ import {
 import { Spacer } from '../common/Spacer';
 import { useModal } from '../hooks/useModal';
 import { LocalNodeSwitch } from './Group/Settings';
-import { useAtom } from 'jotai';
-import { enableAuthWhenSyncingAtom } from '../atoms/global';
+import { useAtom, useSetAtom } from 'jotai';
+import {
+  enableAuthWhenSyncingAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+} from '../atoms/global';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -115,8 +117,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     verifyCoreNotRunningFunc,
     isWindows,
   } = props;
-  const { setOpenSnackGlobal, setInfoSnackCustom } =
-    useContext(QORTAL_APP_CONTEXT);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const [isExtended, setIsExtended] = useState(false);
   const [errorStop, setErrorStop] = useState('');
   const [errorDeleteDB, setErrorDeleteDB] = useState('');

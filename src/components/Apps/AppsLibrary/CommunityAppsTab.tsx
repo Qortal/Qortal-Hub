@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState, forwardRef, ComponentType } from 'react';
+import { useMemo, forwardRef } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useAtom } from 'jotai';
 import { VirtuosoGrid, GridComponents } from 'react-virtuoso';
 import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
-import { FilterBar, SortOption, StatusFilterOption } from '../Filters';
+import { SortOption, StatusFilterOption } from '../Filters';
 import { officialAppList } from '../config/officialApps';
-import { appSortAtom } from '../../../atoms/appsAtoms';
 
 const CARD_MIN_WIDTH = 320;
 const GRID_GAP = 16;
@@ -15,7 +13,10 @@ const GRID_GAP = 16;
 interface CommunityAppsTabProps {
   availableQapps: any[];
   myName: string;
-  categories?: Array<{ id: string; name: string }>;
+  searchValue: string;
+  sortValue: SortOption;
+  categoryValue: string;
+  statusValue: StatusFilterOption;
 }
 
 // Sorting functions
@@ -55,7 +56,8 @@ const gridComponents: GridComponents = {
     >
       {children}
     </Box>
-  )) as ComponentType,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  )) as any,
   Item: ({ children, ...props }) => (
     <Box
       {...props}
@@ -71,13 +73,11 @@ const gridComponents: GridComponents = {
 export const CommunityAppsTab = ({
   availableQapps,
   myName,
-  categories = [],
+  searchValue,
+  sortValue,
+  categoryValue,
+  statusValue,
 }: CommunityAppsTabProps) => {
-  const [searchValue, setSearchValue] = useState('');
-  const [debouncedValue, setDebouncedValue] = useState('');
-  const [sortOption, setSortOption] = useAtom(appSortAtom);
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilterOption>('all');
   const theme = useTheme();
   const { t } = useTranslation(['core']);
 
@@ -88,23 +88,13 @@ export const CommunityAppsTab = ({
     );
   }, [availableQapps]);
 
-  // Debounce search
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(searchValue);
-    }, 350);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchValue]);
-
   // Apply all filters and sorting
   const filteredAndSortedApps = useMemo(() => {
     let result = [...communityApps];
 
     // Apply search filter
-    if (debouncedValue) {
-      const searchLower = debouncedValue.toLowerCase();
+    if (searchValue) {
+      const searchLower = searchValue.toLowerCase();
       result = result.filter(
         (app) =>
           app.name.toLowerCase().includes(searchLower) ||
@@ -116,41 +106,27 @@ export const CommunityAppsTab = ({
     }
 
     // Apply category filter
-    if (categoryFilter !== 'all') {
+    if (categoryValue !== 'all') {
       result = result.filter(
-        (app) => app?.metadata?.category === categoryFilter
+        (app) => app?.metadata?.category === categoryValue
       );
     }
 
     // Apply status filter
-    if (statusFilter === 'installed') {
+    if (statusValue === 'installed') {
       result = result.filter((app) => app?.status?.status === 'READY');
-    } else if (statusFilter === 'not_installed') {
+    } else if (statusValue === 'not_installed') {
       result = result.filter((app) => app?.status?.status !== 'READY');
     }
 
     // Apply sorting
-    result = sortApps(result, sortOption);
+    result = sortApps(result, sortValue);
 
     return result;
-  }, [communityApps, debouncedValue, categoryFilter, statusFilter, sortOption]);
+  }, [communityApps, searchValue, categoryValue, statusValue, sortValue]);
 
   return (
     <AppsWidthLimiter sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      {/* Filter Bar */}
-      <FilterBar
-        searchValue={searchValue}
-        onSearchChange={setSearchValue}
-        sortValue={sortOption}
-        onSortChange={setSortOption}
-        categoryValue={categoryFilter}
-        onCategoryChange={setCategoryFilter}
-        categories={categories}
-        statusValue={statusFilter}
-        onStatusChange={setStatusFilter}
-      />
-
-      {/* Apps Grid with Virtualization */}
       {filteredAndSortedApps.length > 0 ? (
         <VirtuosoGrid
           style={{
@@ -173,7 +149,7 @@ export const CommunityAppsTab = ({
               />
             );
           }}
-          overscan={200}
+          overscan={20}
         />
       ) : (
         <Box

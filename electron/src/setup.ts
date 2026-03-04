@@ -21,6 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
+import { log as loggerLog, error as loggerError } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -39,6 +40,12 @@ import {
   stopCore,
 } from './core';
 import {
+  ensureCertForBase,
+  isLocalPrivateHost,
+  persistedLocalNodeCaExists,
+  setLocalNodeHttpsReady,
+} from './local-https-cert';
+import {
   startVideoServer,
   stopVideoServer,
   getVideoServerPort,
@@ -52,7 +59,9 @@ const path = require('path');
 const defaultDomains = [
   'capacitor-electron://-',
   'http://127.0.0.1:12391',
+  'https://127.0.0.1:12391',
   'ws://127.0.0.1:12391',
+  'wss://127.0.0.1:12391',
   'https://ext-node.qortal.link',
   'wss://ext-node.qortal.link',
   'https://appnode.qortal.org',
@@ -183,6 +192,7 @@ export class ElectronCapacitorApp {
       width: this.mainWindowState.width,
       height: this.mainWindowState.height,
       backgroundColor: '#27282c',
+      frame: false,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: true,
@@ -197,12 +207,27 @@ export class ElectronCapacitorApp {
       );
     }
 
-    // Ask user how they want to close the window
+    // Close window: use saved preference (from SharedSettingsFilePath) or ask user.
+    // Must call event.preventDefault() synchronously so the window does not close before we decide.
     this.MainWindow.on('close', async (event) => {
       if (!isQuitting) {
         event.preventDefault();
 
-        // Determine platform-specific text
+        const appSettings = await readAppSettings();
+        const closeAction = appSettings.closeAction ?? 'ask';
+
+        if (closeAction === 'minimizeToTray') {
+          this.MainWindow.hide();
+          return;
+        }
+        if (closeAction === 'quit') {
+          setIsQuitting(true);
+          app.quit();
+          return;
+        }
+
+        // closeAction === 'ask': show dialog
+
         const backgroundText =
           process.platform === 'darwin'
             ? 'Minimize to Dock'
@@ -223,14 +248,11 @@ export class ElectronCapacitorApp {
         });
 
         if (choice.response === 0) {
-          // Minimize to background
           this.MainWindow.hide();
         } else if (choice.response === 1) {
-          // Quit completely
           setIsQuitting(true);
           app.quit();
         }
-        // If response === 2 (Cancel), do nothing
       }
     });
 
@@ -315,6 +337,7 @@ export class ElectronCapacitorApp {
         return { action: 'allow' };
       }
     });
+
     this.MainWindow.webContents.on('will-navigate', (event, _newURL) => {
       if (!this.MainWindow.webContents.getURL().includes(this.customScheme)) {
         event.preventDefault();
@@ -348,10 +371,29 @@ export class ElectronCapacitorApp {
 export function setupContentSecurityPolicy(customScheme: string): void {
   session.defaultSession.webRequest.onHeadersReceived(
     (details: any, callback) => {
+      const expandedDomains = [...domainHolder.allowedDomains];
+      for (const d of domainHolder.allowedDomains) {
+        try {
+          const url = new URL(d);
+          if (isLocalPrivateHost(url.hostname)) {
+            const hostPort = url.port
+              ? `${url.hostname}:${url.port}`
+              : url.hostname;
+            expandedDomains.push(
+              `http://${hostPort}`,
+              `https://${hostPort}`,
+              `ws://${hostPort}`,
+              `wss://${hostPort}`
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const allowedSources = [
         "'self'",
         customScheme,
-        ...domainHolder.allowedDomains,
+        ...new Set(expandedDomains),
       ];
       const frameSources = [
         "'self'",
@@ -404,9 +446,16 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         (header) => header.toLowerCase() === 'access-control-allow-origin'
       );
 
-      // Prepare response headers
+      // Prepare response headers: remove any existing CSP (e.g. from node over HTTPS)
+      // so only our permissive CSP is applied and qapps (e.g. extract7z) can use eval.
+      const cspHeaderLower = 'content-security-policy';
+      const filtered = Object.fromEntries(
+        Object.entries(details.responseHeaders).filter(
+          ([key]) => key.toLowerCase() !== cspHeaderLower
+        )
+      );
       const responseHeaders: Record<string, string | string[]> = {
-        ...details.responseHeaders,
+        ...filtered,
         'Content-Security-Policy': [csp],
       };
 
@@ -472,6 +521,47 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   }
 });
 
+// Custom title bar: window controls (minimize, maximize, close)
+ipcMain.handle('window:minimize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+});
+
+ipcMain.handle('window:close', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window:isMaximized', () => {
+  const win = myCapacitorApp.getMainWindow();
+  return win != null && !win.isDestroyed() && win.isMaximized();
+});
+
+ipcMain.handle('window:getPlatform', () => process.platform);
+
+ipcMain.handle(
+  'window:showAppMenu',
+  (event, { x, y }: { x?: number; y?: number }) => {
+    const win = myCapacitorApp.getMainWindow();
+    const menu = Menu.getApplicationMenu();
+    if (menu && win && !win.isDestroyed()) {
+      menu.popup({
+        window: win,
+        x: x ?? 0,
+        y: y ?? 32,
+      });
+    }
+  }
+);
+
 ipcMain.handle('dialog:openFile', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -497,7 +587,7 @@ ipcMain.handle('fs:readFile', async (_, filePath) => {
 
     return fileBuffer;
   } catch (error) {
-    console.error('Error reading file:', error.message);
+    loggerError('Error reading file:', error.message);
     return null; // Return null on error
   }
 });
@@ -509,7 +599,7 @@ ipcMain.handle('fs:selectAndZip', async (_, path) => {
       properties: ['openDirectory'],
     });
     if (canceled || filePaths.length === 0) {
-      console.error('No directory selected');
+      loggerError('No directory selected');
       return null;
     }
 
@@ -541,6 +631,41 @@ export async function getSharedSettingsFilePath(
   return path.join(dir, fileName);
 }
 
+// App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray preference
+const APP_SETTINGS_FILENAME = 'app-settings.json';
+
+export type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
+
+export interface AppSettings {
+  closeAction?: CloseAction;
+}
+
+const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask' };
+
+export async function readAppSettings(): Promise<AppSettings> {
+  try {
+    const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
+    const raw = await fs.promises.readFile(filePath, 'utf-8').catch(() => null);
+    if (!raw) return { ...DEFAULT_APP_SETTINGS };
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      ...DEFAULT_APP_SETTINGS,
+      ...parsed,
+      closeAction:
+        parsed.closeAction && ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
+          ? (parsed.closeAction as CloseAction)
+          : DEFAULT_APP_SETTINGS.closeAction,
+    };
+  } catch {
+    return { ...DEFAULT_APP_SETTINGS };
+  }
+}
+
+async function writeAppSettings(settings: AppSettings): Promise<void> {
+  const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
+  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+}
+
 // READ handler
 ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
   try {
@@ -551,7 +676,7 @@ ipcMain.handle('walletStorage:read', async (_event, fileName: string) => {
 
     return fs.promises.readFile(filePath, 'utf-8');
   } catch (err) {
-    console.error(`Error in walletStorage:read for "${fileName}"`, err);
+    loggerError(`Error in walletStorage:read for "${fileName}"`, err);
     return null;
   }
 });
@@ -566,9 +691,24 @@ ipcMain.handle(
       await fs.promises.writeFile(filePath, contents, 'utf-8');
       return true;
     } catch (err) {
-      console.error(`Error in walletStorage:write for "${fileName}"`, err);
+      loggerError(`Error in walletStorage:write for "${fileName}"`, err);
       throw err;
     }
+  }
+);
+
+// App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray
+ipcMain.handle('appSettings:get', async () => {
+  return readAppSettings();
+});
+
+ipcMain.handle(
+  'appSettings:set',
+  async (_event, partial: Partial<AppSettings>) => {
+    const current = await readAppSettings();
+    const next: AppSettings = { ...current, ...partial };
+    await writeAppSettings(next);
+    return next;
   }
 );
 
@@ -599,7 +739,7 @@ ipcMain.handle(
         filePath: result.filePath,
       };
     } catch (err) {
-      console.error('Error in file:startStreamSave', err);
+      loggerError('Error in file:startStreamSave', err);
       throw err;
     }
   }
@@ -612,7 +752,7 @@ ipcMain.handle(
     try {
       const buffer = Buffer.from(chunk);
       const mode = append ? 'append' : 'write';
-      console.log(
+      loggerLog(
         `[IPC] Writing chunk to ${filePath}: ${buffer.length} bytes (${mode} mode)`
       );
 
@@ -624,11 +764,11 @@ ipcMain.handle(
 
       // Get file size after write to verify
       const stats = await fs.promises.stat(filePath);
-      console.log(`[IPC] File size after write: ${stats.size} bytes`);
+      loggerLog(`[IPC] File size after write: ${stats.size} bytes`);
 
       return true;
     } catch (err) {
-      console.error('[IPC] Error writing chunk to', filePath, ':', err);
+      loggerError('[IPC] Error writing chunk to', filePath, ':', err);
       throw err;
     }
   }
@@ -640,7 +780,7 @@ ipcMain.handle('file:deleteFile', async (_event, filePath: string) => {
     await fs.promises.unlink(filePath);
     return true;
   } catch (err) {
-    console.error('Error deleting file', filePath, err);
+    loggerError('Error deleting file', filePath, err);
     // Don't throw - file might not exist
     return false;
   }
@@ -699,7 +839,7 @@ ipcMain.handle('coreSetup:isCoreRunning', async () => {
         }
       }
     } catch (error) {
-      console.error(error);
+      loggerError(error);
     }
     const running = await isCoreRunning();
     if (running) {
@@ -897,6 +1037,22 @@ ipcMain.handle('coreSetup:getApiKey', async () => {
     return running;
   } catch (error) {}
 });
+
+ipcMain.handle(
+  'cert:ensureForBase',
+  async (_event, baseUrl: string, apiKey?: string) => {
+    const result = await ensureCertForBase(baseUrl, apiKey);
+    if (result.success) {
+      setLocalNodeHttpsReady(true);
+      session.defaultSession.clearCache().catch(() => {});
+      const win = myCapacitorApp.getMainWindow();
+      if (win && !win.isDestroyed()) {
+        win.webContents.session.clearCache().catch(() => {});
+      }
+    }
+    return result;
+  }
+);
 ipcMain.handle('coreSetup:resetApikey', async () => {
   try {
     const running = await resetApikey();
@@ -917,14 +1073,14 @@ ipcMain.handle('coreSetup:stopCore', async () => {
   try {
     return await stopCore();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 ipcMain.handle('coreSetup:bootstrap', async () => {
   try {
     return await bootstrap();
   } catch (error) {
-    console.error('error', error);
+    loggerError('error', error);
   }
 });
 
@@ -968,7 +1124,7 @@ ipcMain.handle('videoServer:start', async (_event, port?: number) => {
     const serverPort = await startVideoServer(port);
     return { success: true, port: serverPort };
   } catch (error) {
-    console.error('Failed to start video server:', error);
+    loggerError('Failed to start video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });
@@ -978,7 +1134,7 @@ ipcMain.handle('videoServer:stop', async () => {
     await stopVideoServer();
     return { success: true };
   } catch (error) {
-    console.error('Failed to stop video server:', error);
+    loggerError('Failed to stop video server:', error);
     return { success: false, error: (error as Error).message };
   }
 });

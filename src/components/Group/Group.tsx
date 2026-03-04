@@ -1,33 +1,21 @@
+import { Box, Typography } from '@mui/material';
 import {
-  Avatar,
-  Box,
-  ButtonBase,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+  lazy,
+  Profiler,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption';
-import { AddGroup } from './AddGroup';
-import CreateIcon from '@mui/icons-material/Create';
-import PersonOffIcon from '@mui/icons-material/PersonOff';
-
-import {
-  AuthenticatedContainerInnerRight,
-  CustomButton,
-} from '../../styles/App-styles';
 import { Spacer } from '../../common/Spacer';
-import { ManageMembers } from './ManageMembers';
-import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import {
   clearAllQueues,
-  getArbitraryEndpointReact,
   getBaseApiReact,
   pauseAllQueues,
   resumeAllQueues,
@@ -43,25 +31,34 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { RequestQueueWithPromise } from '../../utils/queue/queue';
 import { WebSocketActive } from './WebsocketActive';
+import {
+  getGroupAdmins,
+  getGroupMembers,
+  getNameInfo,
+  getPublishesFromAdmins,
+} from './groupApi';
+import { timeDifferenceForNotificationChats } from './groupConstants';
+import { decryptResource } from './groupDataPublishes';
+import { requestQueueMemberNames } from './groupQueues';
+import type { GroupProps } from './groupTypes';
+import { areKeysEqual, validateSecretKey } from './groupValidation';
 import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
-import { IconWrapper } from '../Desktop/DesktopFooter';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
 import { AppsDevMode } from '../Apps/AppsDevMode';
 import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
-import { HubsIcon } from '../../assets/Icons/HubsIcon';
-import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
-import { formatEmailDate } from './QMailMessages';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
   addressInfoControllerAtom,
+  chatWidgetClosedAtom,
+  enabledDevModeAtom,
   groupAnnouncementsAtom,
   groupChatTimestampsAtom,
   groupsOwnerNamesAtom,
   groupsPropertiesAtom,
+  isDisabledEditorEnterAtom,
   isOpenBlockedModalAtom,
   isRunningPublicNodeAtom,
   memberGroupsAtom,
@@ -69,321 +66,132 @@ import {
   myGroupsWhereIAmAdminAtom,
   selectedGroupIdAtom,
   timestampEnterDataAtom,
+  userInfoAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
-import { BlockedUsersModal } from './BlockedUsersModal';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
-import { useAtom, useSetAtom } from 'jotai';
-import { requestQueueGroupJoinRequests } from './GroupJoinRequests';
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
-import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
-import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+import { useQMailFetch } from '../../hooks/useQMailFetch';
+import { DirectsSidebar } from './DirectsSidebar';
+import { GlobalChatWidget } from './GlobalChatWidget';
+import {
+  AdminRowBox,
+  CenterBox,
+  ChatContentBox,
+  EncryptionKeyMessageDiv,
+  FloatingButtonContainerBox,
+  GroupRightSidebar,
+  InnerChatBox,
+  MainContentBox,
+  NewChatOverlay,
+  NoSelectionTypography,
+  NotPartGroupDiv,
+  RootBox,
+  SelectedDirectOverlay,
+  SelectedGroupWrapper,
+} from './Group.styles';
 
-export const getPublishesFromAdmins = async (admins: string[], groupId) => {
-  const queryString = admins.map((name) => `name=${name}`).join('&');
-  const url = `${getBaseApiReact()}${getArbitraryEndpointReact()}?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${
-    groupId
-  }&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`;
-  const response = await fetch(url);
+const LazyAddGroup = lazy(() =>
+  import('./AddGroup').then((m) => ({ default: m.AddGroup }))
+);
+const LazyManageMembers = lazy(() =>
+  import('./ManageMembers').then((m) => ({ default: m.ManageMembers }))
+);
+const LazyBlockedUsersModal = lazy(() =>
+  import('./BlockedUsersModal').then((m) => ({ default: m.BlockedUsersModal }))
+);
 
-  if (!response.ok) {
-    throw new Error('network error');
-  }
-  const adminData = await response.json();
+// Re-export for backward compatibility with existing imports from Group.tsx
+export {
+  getAllPublishesFromAdmins,
+  getGroupAdmins,
+  getGroupAdminsAddress,
+  getNameInfo,
+  getNames,
+  getNamesForAdmins,
+  getGroupMembers,
+  getPublishesFromAdmins,
+} from './groupApi';
+export { timeDifferenceForNotificationChats } from './groupConstants';
+export {
+  addDataPublishesFunc,
+  decryptResource,
+  getDataPublishesFunc,
+} from './groupDataPublishes';
+export {
+  requestQueueAdminMemberNames,
+  requestQueueMemberNames,
+} from './groupQueues';
+export type { GroupProps } from './groupTypes';
+export { validateSecretKey } from './groupValidation';
 
-  const filterId = adminData.filter(
-    (data: any) => data.identifier === `symmetric-qchat-group-${groupId}`
-  );
-
-  if (filterId?.length === 0) {
-    return false;
-  }
-
-  const sortedData = filterId.sort((a: any, b: any) => {
-    // Get the most recent date for both a and b
-    const dateA = a.updated ? new Date(a.updated) : new Date(a.created);
-    const dateB = b.updated ? new Date(b.updated) : new Date(b.created);
-
-    // Sort by most recent
-    return dateB.getTime() - dateA.getTime();
-  });
-
-  return sortedData[0];
-};
-interface GroupProps {
-  balance: number;
-  isFocused: boolean;
+/** Subscribes to memberGroupsAtom and runs effects (Group does not subscribe). */
+function MemberGroupsEffects({
+  getGroupsWhereIAmAMember,
+  getGroupsProperties,
+  myAddress,
+  groupsPropertiesRef,
+  hasInitializedWebsocketRef,
+}: {
+  getGroupsWhereIAmAMember: (groups: any[]) => Promise<void>;
+  getGroupsProperties: (address: string) => void;
   myAddress: string;
-  userInfo: any;
-}
-
-export const timeDifferenceForNotificationChats = 900000;
-export const requestQueueMemberNames = new RequestQueueWithPromise(5);
-export const requestQueueAdminMemberNames = new RequestQueueWithPromise(5);
-
-export const getGroupAdminsAddress = async (groupNumber: number) => {
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
-  );
-  const groupData = await response.json();
-  const members: any = [];
-  if (groupData && Array.isArray(groupData?.members)) {
-    for (const member of groupData.members) {
-      if (member.member) {
-        members.push(member?.member);
-      }
-    }
-
-    return members;
-  }
-};
-
-export function validateSecretKey(obj) {
-  // Check if the input is an object
-  if (typeof obj !== 'object' || obj === null) {
-    return false;
-  }
-
-  // Iterate over each key in the object
-  for (const key in obj) {
-    // Ensure the key is a string representation of a positive integer
-    if (!/^\d+$/.test(key)) {
-      return false;
-    }
-
-    // Get the corresponding value for the key
-    const value = obj[key];
-
-    // Check that value is an object and not null
-    if (typeof value !== 'object' || value === null) {
-      return false;
-    }
-
-    // Check for messageKey
-    if (!value.hasOwnProperty('messageKey')) {
-      return false;
-    }
-
-    // Ensure messageKey and nonce are non-empty strings
+  groupsPropertiesRef: React.MutableRefObject<Record<string, unknown>>;
+  hasInitializedWebsocketRef: React.MutableRefObject<boolean>;
+}) {
+  const memberGroups = useAtomValue(memberGroupsAtom);
+  useEffect(() => {
+    if (!myAddress) return;
     if (
-      typeof value.messageKey !== 'string' ||
-      value.messageKey.trim() === ''
+      !areKeysEqual(
+        memberGroups?.map((grp: any) => grp?.groupId),
+        Object.keys(groupsPropertiesRef.current || {})
+      )
     ) {
-      return false;
+      getGroupsProperties(myAddress);
+      getGroupsWhereIAmAMember(memberGroups || []);
     }
-  }
-
-  // If all checks passed, return true
-  return true;
-}
-
-export const getGroupMembers = async (groupNumber: number) => {
-  // const validApi = await findUsableApi();
-
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0`
-  );
-  const groupData = await response.json();
-  return groupData;
-};
-
-export const decryptResource = async (data: string, fromQortalRequest) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('decryptGroupEncryption', {
-          data,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          if (fromQortalRequest) {
-            rej({ error: response.error, message: response?.error });
-          } else {
-            rej(response.error);
-          }
-        })
-        .catch((error) => {
-          if (fromQortalRequest) {
-            rej({
-              message: error.message || 'An error occurred',
-              error: error.message || 'An error occurred',
-            });
-          } else {
-            rej(error.message || 'An error occurred');
-          }
-        });
+  }, [
+    memberGroups,
+    myAddress,
+    getGroupsWhereIAmAMember,
+    getGroupsProperties,
+    groupsPropertiesRef,
+  ]);
+  useEffect(() => {
+    if (
+      !myAddress ||
+      hasInitializedWebsocketRef.current ||
+      !memberGroups?.length
+    )
+      return;
+    window.sendMessage('setupGroupWebsocket', {}).catch((error: Error) => {
+      console.error(
+        'Failed to setup group websocket:',
+        error?.message || 'An error occurred'
+      );
     });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export const addDataPublishesFunc = async (data: string, groupId, type) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('addDataPublishes', {
-          data,
-          groupId,
-          type,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          rej(response.error);
-        })
-        .catch((error) => {
-          rej(error.message || 'An error occurred');
-        });
-    });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export const getDataPublishesFunc = async (groupId, type) => {
-  try {
-    return new Promise((res, rej) => {
-      window
-        .sendMessage('getDataPublishes', {
-          groupId,
-          type,
-        })
-        .then((response) => {
-          if (!response?.error) {
-            res(response);
-            return;
-          }
-          rej(response.error);
-        })
-        .catch((error) => {
-          rej(error.message || 'An error occurred');
-        });
-    });
-  } catch (error) {
-    console.log(error);
-  }
-};
-
-export async function getNameInfo(address: string) {
-  const response = await fetch(`${getBaseApiReact()}/names/primary/` + address);
-  const nameData = await response.json();
-
-  if (nameData?.name) {
-    return nameData?.name;
-  } else {
-    return '';
-  }
-}
-
-export const getGroupAdmins = async (groupNumber: number) => {
-  const response = await fetch(
-    `${getBaseApiReact()}/groups/members/${groupNumber}?limit=0&onlyAdmins=true`
-  );
-  const groupData = await response.json();
-  const members: any = [];
-  const membersAddresses = [];
-  const both = [];
-
-  const getMemNames = groupData?.members?.map(async (member) => {
-    if (member?.member) {
-      const name = await requestQueueAdminMemberNames.enqueue(() => {
-        return getNameInfo(member.member);
-      });
-      if (name) {
-        members.push(name);
-        both.push({ name, address: member.member });
-      }
-      membersAddresses.push(member.member);
-    }
-
-    return true;
-  });
-  await Promise.all(getMemNames);
-
-  return { names: members, addresses: membersAddresses, both };
-};
-
-export const getNames = async (listOfMembers) => {
-  // const validApi = await findUsableApi();
-
-  let members: any = [];
-
-  const getMemNames = listOfMembers.map(async (member) => {
-    if (member.member) {
-      const name = await requestQueueMemberNames.enqueue(() => {
-        return getNameInfo(member.member);
-      });
-      if (name) {
-        members.push({ ...member, name });
-      } else {
-        members.push({ ...member, name: '' });
-      }
-    }
-
-    return true;
-  });
-
-  await Promise.all(getMemNames);
-
-  return members;
-};
-
-export const getNamesForAdmins = async (admins) => {
-  let members: any = [];
-
-  const getMemNames = admins?.map(async (admin) => {
-    if (admin) {
-      const name = await requestQueueAdminMemberNames.enqueue(() => {
-        return getNameInfo(admin);
-      });
-      if (name) {
-        members.push({ address: admin, name });
-      }
-    }
-
-    return true;
-  });
-  await Promise.all(getMemNames);
-
-  return members;
-};
-
-function areKeysEqual(array1, array2) {
-  // If lengths differ, the arrays cannot be equal
-  if (array1?.length !== array2?.length) {
-    return false;
-  }
-
-  // Sort both arrays and compare their elements
-  const sortedArray1 = [...array1].sort();
-  const sortedArray2 = [...array2].sort();
-
-  return sortedArray1.every((key, index) => key === sortedArray2[index]);
+    hasInitializedWebsocketRef.current = true;
+  }, [myAddress, memberGroups, hasInitializedWebsocketRef]);
+  return null;
 }
 
 export const Group = ({
   myAddress,
-  isFocused,
-  userInfo,
-  balance,
   setIsOpenDrawerProfile,
   setDesktopViewMode,
   desktopViewMode,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
+  const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
   const [lastQappViewMode, setLastQappViewMode] = useState('apps');
   const [secretKey, setSecretKey] = useState(null);
   const [secretKeyPublishDate, setSecretKeyPublishDate] = useState(null);
@@ -395,9 +203,8 @@ export const Group = ({
     useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedDirect, setSelectedDirect] = useState(null);
-  const hasInitialized = useRef(false);
   const hasInitializedWebsocket = useRef(false);
-  const [groups, setGroups] = useState([]);
+  const memberGroupsRef = useRef<any[]>([]);
   const [directs, setDirects] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [adminsWithNames, setAdminsWithNames] = useState([]);
@@ -405,10 +212,8 @@ export const Group = ({
   const [groupOwner, setGroupOwner] = useState(null);
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [openAddGroup, setOpenAddGroup] = useState(false);
-  const [isInitialGroups, setIsInitialGroups] = useState(false);
   const [openManageMembers, setOpenManageMembers] = useState(false);
   const setMemberGroups = useSetAtom(memberGroupsAtom);
-  const lastGroupNotification = useRef<null | number>(null);
   const [timestampEnterData, setTimestampEnterData] = useAtom(
     timestampEnterDataAtom
   );
@@ -427,28 +232,47 @@ export const Group = ({
     groupAnnouncementsAtom
   );
   const [defaultThread, setDefaultThread] = useState(null);
-  const [isOpenDrawer, setIsOpenDrawer] = useState(false);
-  const setIsOpenBlockedUserModal = useSetAtom(isOpenBlockedModalAtom);
+  const [, setIsOpenDrawer] = useState(false);
+  const [isOpenBlockedModal, setIsOpenBlockedUserModal] = useAtom(
+    isOpenBlockedModalAtom
+  );
   const [hideCommonKeyPopup, setHideCommonKeyPopup] = useState(false);
   const [isLoadingGroupMessage, setIsLoadingGroupMessage] = useState('');
-  const [drawerMode, setDrawerMode] = useState('groups');
   const setMutedGroups = useSetAtom(mutedGroupsAtom);
   const [mobileViewMode, setMobileViewMode] = useState('home');
-  const [mobileViewModeKeepOpen, setMobileViewModeKeepOpen] = useState('');
-  const isFocusedRef = useRef(true);
+  const [, setMobileViewModeKeepOpen] = useState('');
   const timestampEnterDataRef = useRef({});
   const selectedGroupRef = useRef(null);
   const selectedDirectRef = useRef(null);
   const groupSectionRef = useRef(null);
-  const checkGroupInterval = useRef(null);
   const isLoadingOpenSectionFromNotification = useRef(false);
-  const setupGroupWebsocketInterval = useRef(null);
   const settimeoutForRefetchSecretKey = useRef(null);
+  const secretKeyRef = useRef(null);
   const { clearStatesMessageQueueProvider } = useMessageQueue();
   const initiatedGetMembers = useRef(false);
   const [groupChatTimestamps, setGroupChatTimestamps] = useAtom(
     groupChatTimestampsAtom
   );
+  const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
+  const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
+
+  useEffect(() => {
+    const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
+    if (isDevModeFromStorage) {
+      setIsEnabledDevMode(JSON.parse(isDevModeFromStorage));
+    }
+    try {
+      const val = localStorage.getItem('settings-disable-editor-enter');
+      if (val) {
+        const parsedVal = JSON.parse(val);
+        if (parsedVal === false || parsedVal === true) {
+          setIsDisabledEditorEnter(parsedVal);
+        }
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
   const [isRunningPublicNode] = useAtom(isRunningPublicNodeAtom);
   const [avatarPreviewData, setAvatarPreviewData] = useState<{
     alt: string;
@@ -481,6 +305,8 @@ export const Group = ({
   useWebsocketStatus();
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
+  const userInfo = useAtomValue(userInfoAtom);
+  useQMailFetch(userInfo?.name, userInfo?.address);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
@@ -495,25 +321,24 @@ export const Group = ({
 
   const setSelectedGroupId = useSetAtom(selectedGroupIdAtom);
 
-  const toggleSideViewDirects = () => {
+  const toggleSideViewDirects = useCallback(() => {
     if (isOpenSideViewGroups) {
       setIsOpenSideViewGroups(false);
     }
     setIsOpenSideViewDirects((prev) => !prev);
-  };
-  const toggleSideViewGroups = () => {
+  }, [isOpenSideViewGroups]);
+
+  const toggleSideViewGroups = useCallback(() => {
     if (isOpenSideViewDirects) {
       setIsOpenSideViewDirects(false);
     }
     setIsOpenSideViewGroups((prev) => !prev);
-  };
+  }, [isOpenSideViewDirects]);
 
   useEffect(() => {
     timestampEnterDataRef.current = timestampEnterData;
   }, [timestampEnterData]);
-  useEffect(() => {
-    isFocusedRef.current = isFocused;
-  }, [isFocused]);
+
   useEffect(() => {
     groupSectionRef.current = groupSection;
   }, [groupSection]);
@@ -524,6 +349,10 @@ export const Group = ({
   useEffect(() => {
     selectedDirectRef.current = selectedDirect;
   }, [selectedDirect]);
+
+  useEffect(() => {
+    secretKeyRef.current = secretKey;
+  }, [secretKey]);
 
   // Track view modes to prevent marking messages as read when not viewing chat
   const desktopViewModeRef = useRef(desktopViewMode);
@@ -546,7 +375,8 @@ export const Group = ({
     const wasInChatMode =
       prevDesktopViewModeRef.current === 'chat' ||
       prevMobileViewModeRef.current === 'chat';
-    const isNowInChatMode = desktopViewMode === 'chat' || mobileViewMode === 'chat';
+    const isNowInChatMode =
+      desktopViewMode === 'chat' || mobileViewMode === 'chat';
 
     // Only update timestamp when user RETURNS to chat (wasn't in chat, now is in chat)
     if (!wasInChatMode && isNowInChatMode) {
@@ -627,11 +457,8 @@ export const Group = ({
     }
   }, [setMutedGroups]);
 
-
-
   useEffect(() => {
     getUserSettings();
-
   }, [getUserSettings]);
 
   const getTimestampEnterChat = useCallback(async () => {
@@ -661,14 +488,14 @@ export const Group = ({
     }
   }, []);
 
-  const refreshHomeDataFunc = () => {
+  const refreshHomeDataFunc = useCallback(() => {
     setGroupSection('default');
     setTimeout(() => {
       setGroupSection('home');
     }, 300);
-  };
+  }, []);
 
-  const getGroupAnnouncements = async () => {
+  const getGroupAnnouncements = useCallback(async () => {
     try {
       return new Promise((res, rej) => {
         window
@@ -693,16 +520,16 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     if (myAddress) {
       getGroupAnnouncements();
       getTimestampEnterChat();
     }
-  }, [myAddress]);
+  }, [myAddress, getGroupAnnouncements, getTimestampEnterChat]);
 
-  const getGroupOwner = async (groupId) => {
+  const getGroupOwner = useCallback(async (groupId) => {
     if (groupId == '0') return; // general group has id=0
     try {
       const url = `${getBaseApiReact()}/groups/${groupId}`;
@@ -717,7 +544,7 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
+  }, []);
 
   const directChatHasUnread = useMemo(() => {
     let hasUnread = false;
@@ -736,45 +563,6 @@ export const Group = ({
     return hasUnread;
   }, [timestampEnterData, directs, myAddress]);
 
-  const groupChatHasUnread = useMemo(() => {
-    let hasUnread = false;
-    groups.forEach((group) => {
-      if (group?.groupId === '0') {
-        return;
-      }
-      if (
-        group?.data &&
-        group?.sender !== myAddress &&
-        group?.timestamp &&
-        groupChatTimestamps[group?.groupId] &&
-        ((!timestampEnterData[group?.groupId] &&
-          Date.now() - group?.timestamp < timeDifferenceForNotificationChats) ||
-          timestampEnterData[group?.groupId] < group?.timestamp)
-      ) {
-        hasUnread = true;
-      }
-    });
-    return hasUnread;
-  }, [
-    timestampEnterData,
-    groups,
-    myAddress,
-    groupChatTimestamps,
-  ]);
-
-  const groupsAnnHasUnread = useMemo(() => {
-    let hasUnread = false;
-    groups.forEach((group) => {
-      if (
-        groupAnnouncements[group?.groupId] &&
-        !groupAnnouncements[group?.groupId]?.seentimestamp
-      ) {
-        hasUnread = true;
-      }
-    });
-    return hasUnread;
-  }, [groupAnnouncements, groups]);
-
   const getSecretKey = useCallback(
     async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
       try {
@@ -791,12 +579,12 @@ export const Group = ({
 
         if (
           secretKeyToPublish &&
-          secretKey &&
+          secretKeyRef.current &&
           lastFetchedSecretKey.current &&
           Date.now() - lastFetchedSecretKey.current <
             TIME_MINUTES_10_IN_MILLISECONDS
         ) {
-          return secretKey;
+          return secretKeyRef.current;
         }
 
         if (loadingGroupParam) {
@@ -903,7 +691,6 @@ export const Group = ({
       }
     },
     [
-      secretKey,
       selectedGroup?.groupId,
       setIsLoadingGroup,
       setIsLoadingGroupMessage,
@@ -918,7 +705,81 @@ export const Group = ({
     ]
   );
 
-  const getAdminsForPublic = async (selectedGroup) => {
+  /** Fetch secret key for an arbitrary group (e.g. for widget). Same flow as full chat: try cache, then network; cache on success; retry on decrypt failure. */
+  const getSecretKeyForGroup = useCallback(
+    async (group: { groupId: string } | null): Promise<any> => {
+      if (!group?.groupId) return null;
+      const groupIdStr = String(group.groupId);
+      try {
+        // 1. Try cached key (same as full chat when it would use storage)
+        const cached: any = await window
+          .sendMessage('getGroupDataSingle', { groupId: groupIdStr })
+          .catch(() => null);
+        if (cached?.secretKeyData && !cached?.error) {
+          try {
+            const decryptedKey: any = await decryptResource(
+              cached.secretKeyData,
+              null
+            );
+            const dataint8Array = base64ToUint8Array(decryptedKey.data);
+            const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+            if (validateSecretKey(decryptedKeyToObject))
+              return decryptedKeyToObject;
+          } catch {
+            // Cached key invalid or decrypt failed, fall through to fetch
+          }
+        }
+
+        // 2. Fetch from network (same as full getSecretKey)
+        const groupIdNum = Number(group.groupId);
+        const { names, addresses, both } = await getGroupAdmins(groupIdNum);
+        if (!names?.length) return null;
+        const publish = await getPublishesFromAdmins(names, groupIdStr);
+        if (publish === false) {
+          return new Promise((resolve) => {
+            setTimeout(
+              () => resolve(getSecretKeyForGroup(group)),
+              TIME_MINUTES_2_IN_MILLISECONDS
+            );
+          });
+        }
+        const res = await fetch(
+          `${getBaseApiReact()}/arbitrary/DOCUMENT_PRIVATE/${publish.name}/${publish.identifier}?encoding=base64&rebuild=true`
+        );
+        const data = await res.text();
+        const decryptedKey: any = await decryptResource(data, null);
+        const dataint8Array = base64ToUint8Array(decryptedKey.data);
+        const decryptedKeyToObject = uint8ArrayToObject(dataint8Array);
+        if (!validateSecretKey(decryptedKeyToObject)) return null;
+
+        // 3. Cache for next time (same as full chat setGroupData)
+        window
+          .sendMessage('setGroupData', {
+            groupId: groupIdStr,
+            secretKeyData: data,
+            secretKeyResource: publish,
+            admins: { names, addresses, both },
+          })
+          .catch(() => {});
+
+        return decryptedKeyToObject;
+      } catch (e) {
+        if (e === 'Unable to decrypt data') {
+          return new Promise((resolve) => {
+            setTimeout(
+              () => resolve(getSecretKeyForGroup(group)),
+              TIME_MINUTES_2_IN_MILLISECONDS
+            );
+          });
+        }
+        console.error(e);
+        return null;
+      }
+    },
+    []
+  );
+
+  const getAdminsForPublic = useCallback(async (selectedGroup) => {
     try {
       const { names, addresses, both } = await getGroupAdmins(
         selectedGroup?.groupId
@@ -928,7 +789,7 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (selectedGroup && isPrivate !== null) {
@@ -945,7 +806,13 @@ export const Group = ({
         getAdminsForPublic(selectedGroup);
       }
     }
-  }, [selectedGroup, isPrivate]);
+  }, [
+    selectedGroup,
+    isPrivate,
+    getSecretKey,
+    getGroupOwner,
+    getAdminsForPublic,
+  ]);
 
   const getCountNewMesg = async (groupId, after) => {
     try {
@@ -959,7 +826,7 @@ export const Group = ({
     }
   };
 
-  const getLatestRegularChat = async (groups) => {
+  const getLatestRegularChat = useCallback(async (groups) => {
     try {
       const groupData = {};
 
@@ -987,26 +854,7 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
-
-  const getOwnerNameForGroup = async (owner: string, groupId: string) => {
-    if (groupId == '0') return; // general group has id=0
-    try {
-      if (!owner) return;
-      if (groupsOwnerNamesRef.current[groupId]) return;
-      const name = await requestQueueMemberNames.enqueue(() => {
-        return getNameInfo(owner);
-      });
-      if (name) {
-        groupsOwnerNamesRef.current[groupId] = name;
-        setGroupsOwnerNames((prev) => {
-          return { ...prev, [groupId]: name };
-        });
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  }, []);
 
   useEffect(() => {
     groupsPropertiesRef.current = groupsProperties;
@@ -1023,58 +871,41 @@ export const Group = ({
         return result;
       }, {});
       setGroupsProperties(transformToObject);
+
+      // Use ownerPrimaryName from API when present (no fallback — missing means no primary name)
+      const ownerNamesFromApi: Record<string, string> = {};
       Object.keys(transformToObject).forEach((key) => {
-        getOwnerNameForGroup(transformToObject[key]?.owner || '', key);
+        const item = transformToObject[key];
+        if (item?.ownerPrimaryName) {
+          ownerNamesFromApi[key] = item.ownerPrimaryName;
+          groupsOwnerNamesRef.current[key] = item.ownerPrimaryName;
+        }
       });
+      if (Object.keys(ownerNamesFromApi).length > 0) {
+        setGroupsOwnerNames((prev) => ({ ...prev, ...ownerNamesFromApi }));
+      }
     } catch (error) {
       console.log(error);
     }
   }, []);
 
-  const getGroupsWhereIAmAMember = useCallback(async (groups) => {
-    try {
-      let groupsAsAdmin = [];
-      const getAllGroupsAsAdmin = groups
-        .filter((item) => item.groupId !== '0')
-        .map(async (group) => {
-          const isAdminResponse = await requestQueueGroupJoinRequests.enqueue(
-            () => {
-              return fetch(
-                `${getBaseApiReact()}/groups/members/${group.groupId}?limit=0&onlyAdmins=true`
-              );
-            }
-          );
-          const isAdminData = await isAdminResponse.json();
-
-          const findMyself = isAdminData?.members?.find(
-            (member) => member.member === myAddress
-          );
-
-          if (findMyself) {
-            groupsAsAdmin.push(group);
-          }
-          return true;
-        });
-
-      await Promise.all(getAllGroupsAsAdmin);
-      setMyGroupsWhereIAmAdmin(groupsAsAdmin);
-    } catch (error) {
-      console.error();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!myAddress) return;
-    if (
-      !areKeysEqual(
-        groups?.map((grp) => grp?.groupId),
-        Object.keys(groupsPropertiesRef.current)
-      )
-    ) {
-      getGroupsProperties(myAddress);
-      getGroupsWhereIAmAMember(groups);
-    }
-  }, [groups, myAddress]);
+  const getGroupsWhereIAmAMember = useCallback(
+    async (_groups) => {
+      if (!myAddress) return;
+      try {
+        const response = await fetch(
+          `${getBaseApiReact()}/groups/member/${myAddress}?adminOnly=true`
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const groupsAsAdmin = Array.isArray(data) ? data : (data?.groups ?? []);
+        setMyGroupsWhereIAmAdmin(groupsAsAdmin);
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [myAddress]
+  );
 
   useEffect(() => {
     // Handler function for incoming messages
@@ -1084,12 +915,12 @@ export const Group = ({
       }
       const message = event.data;
       if (message?.action === 'SET_GROUPS') {
-        // Update the component state with the received 'sendqort' state
-        setGroups(sortArrayByTimestampAndGroupName(message.payload));
-        getLatestRegularChat(message.payload);
-        setMemberGroups(
-          message.payload?.filter((item) => item?.groupId !== '0')
-        );
+        const sortedFiltered = sortArrayByTimestampAndGroupName(
+          message.payload || []
+        ).filter((item: any) => item?.groupId !== '0');
+        setMemberGroups(sortedFiltered);
+        memberGroupsRef.current = sortedFiltered;
+        getLatestRegularChat(sortedFiltered);
 
         // Only mark messages as read if user is actually viewing the chat
         if (
@@ -1181,26 +1012,7 @@ export const Group = ({
     };
   }, []);
 
-  useEffect(() => {
-    if (
-      !myAddress ||
-      hasInitializedWebsocket.current ||
-      !groups ||
-      groups?.length === 0
-    )
-      return;
-
-    window.sendMessage('setupGroupWebsocket', {}).catch((error) => {
-      console.error(
-        'Failed to setup group websocket:',
-        error.message || 'An error occurred'
-      );
-    });
-
-    hasInitializedWebsocket.current = true;
-  }, [myAddress, groups]);
-
-  const getMembers = async (groupId) => {
+  const getMembers = useCallback(async (groupId) => {
     try {
       const res = await getGroupMembers(groupId);
       if (groupId !== selectedGroupRef.current?.groupId) return;
@@ -1208,7 +1020,7 @@ export const Group = ({
     } catch (error) {
       console.log(error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (
@@ -1258,149 +1070,144 @@ export const Group = ({
     triedToFetchSecretKey,
   ]);
 
-  const notifyAdmin = async (admin) => {
-    try {
-      setIsLoadingNotifyAdmin(true);
-      await new Promise((res, rej) => {
-        window
-          .sendMessage('notifyAdminRegenerateSecretKey', {
-            adminAddress: admin.address,
-            groupName: selectedGroup?.groupName,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              return;
-            }
-            rej(response.error);
-          })
-          .catch((error) => {
-            rej(
-              error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-            );
-          });
-      });
-      setInfoSnack({
-        type: 'success',
-        message: 'Successfully sent notification.',
-      });
-      setOpenSnack(true);
-    } catch (error) {
-      setInfoSnack({
-        type: 'error',
-        message: 'Unable to send notification',
-      });
-    } finally {
-      setIsLoadingNotifyAdmin(false);
-    }
-  };
-
-  const isUnreadChat = useMemo(() => {
-    const findGroup = groups
-      .filter((group) => group?.sender !== myAddress)
-      .find((gr) => gr?.groupId === selectedGroup?.groupId);
-    if (!findGroup) return false;
-    if (!findGroup?.data) return false;
-    return (
-      findGroup?.timestamp &&
-      groupChatTimestamps[findGroup?.groupId] &&
-      ((!timestampEnterData[selectedGroup?.groupId] &&
-        Date.now() - findGroup?.timestamp <
-          timeDifferenceForNotificationChats) ||
-        timestampEnterData?.[selectedGroup?.groupId] < findGroup?.timestamp)
-    );
-  }, [timestampEnterData, selectedGroup, groupChatTimestamps]);
+  const notifyAdmin = useCallback(
+    async (admin) => {
+      try {
+        setIsLoadingNotifyAdmin(true);
+        await new Promise((res, rej) => {
+          window
+            .sendMessage('notifyAdminRegenerateSecretKey', {
+              adminAddress: admin.address,
+              groupName: selectedGroup?.groupName,
+            })
+            .then((response) => {
+              if (!response?.error) {
+                res(response);
+                return;
+              }
+              rej(response.error);
+            })
+            .catch((error) => {
+              rej(
+                error.message ||
+                  t('core:message.error.generic', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+              );
+            });
+        });
+        setInfoSnack({
+          type: 'success',
+          message: 'Successfully sent notification.',
+        });
+        setOpenSnack(true);
+      } catch (error) {
+        setInfoSnack({
+          type: 'error',
+          message: 'Unable to send notification',
+        });
+      } finally {
+        setIsLoadingNotifyAdmin(false);
+      }
+    },
+    [selectedGroup?.groupName, t]
+  );
 
   const isUnread = useMemo(() => {
     if (!selectedGroup) return false;
     return (
       groupAnnouncements?.[selectedGroup?.groupId]?.seentimestamp === false
     );
-  }, [groupAnnouncements, selectedGroup, myAddress]);
+  }, [groupAnnouncements, selectedGroup]);
 
-  const openDirectChatFromNotification = (e) => {
-    if (isLoadingOpenSectionFromNotification.current) return;
-    isLoadingOpenSectionFromNotification.current = true;
-    const directAddress = e.detail?.from;
+  const openDirectChatFromNotification = useCallback(
+    (e) => {
+      if (isLoadingOpenSectionFromNotification.current) return;
+      isLoadingOpenSectionFromNotification.current = true;
+      const directAddress = e.detail?.from;
 
-    const findDirect = directs?.find(
-      (direct) => direct?.address === directAddress
-    );
-    if (findDirect?.address === selectedDirect?.address) {
-      isLoadingOpenSectionFromNotification.current = false;
-      return;
-    }
-    if (findDirect) {
-      setDesktopSideView('directs');
-      setDesktopViewMode('home');
-      setSelectedDirect(null);
-
-      setNewChat(false);
-
-      window
-        .sendMessage('addTimestampEnterChat', {
-          timestamp: Date.now(),
-          groupId: findDirect.address,
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to add timestamp:',
-            error.message || 'An error occurred'
-          );
-        });
-
-      setTimeout(() => {
-        setSelectedDirect(findDirect);
-        getTimestampEnterChat();
+      const findDirect = directs?.find(
+        (direct) => direct?.address === directAddress
+      );
+      if (findDirect?.address === selectedDirect?.address) {
         isLoadingOpenSectionFromNotification.current = false;
-      }, 200);
-    } else {
-      isLoadingOpenSectionFromNotification.current = false;
-    }
-  };
+        return;
+      }
+      if (findDirect) {
+        setDesktopSideView('directs');
+        setDesktopViewMode('home');
+        setSelectedDirect(null);
 
-  const openDirectChatFromInternal = (e) => {
-    const directAddress = e.detail?.address;
-    const name = e.detail?.name;
-    const findDirect = directs?.find(
-      (direct) => direct?.address === directAddress || direct?.name === name
-    );
+        setNewChat(false);
 
-    if (findDirect) {
-      setDesktopSideView('directs');
-      setSelectedDirect(null);
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: findDirect.address,
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
 
-      setNewChat(false);
+        setTimeout(() => {
+          setSelectedDirect(findDirect);
+          getTimestampEnterChat();
+          isLoadingOpenSectionFromNotification.current = false;
+        }, 200);
+      } else {
+        isLoadingOpenSectionFromNotification.current = false;
+      }
+    },
+    [directs, selectedDirect?.address, getTimestampEnterChat]
+  );
 
-      window
-        .sendMessage('addTimestampEnterChat', {
-          timestamp: Date.now(),
-          groupId: findDirect.address,
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to add timestamp:',
-            error.message || 'An error occurred'
-          );
-        });
+  const openDirectChatFromInternal = useCallback(
+    (e) => {
+      const directAddress = e.detail?.address;
+      const name = e.detail?.name;
+      const findDirect = directs?.find(
+        (direct) => direct?.address === directAddress || direct?.name === name
+      );
 
-      setTimeout(() => {
-        setSelectedDirect(findDirect);
-        getTimestampEnterChat();
-      }, 200);
-    } else {
-      setDesktopSideView('directs');
-      setNewChat(true);
-      setTimeout(() => {
-        executeEvent('setDirectToValueNewChat', {
-          directToValue: name || directAddress,
-        });
-      }, 500);
-    }
-  };
+      if (findDirect) {
+        setDesktopViewMode('chat');
+        setDesktopSideView('directs');
+        setSelectedDirect(null);
+
+        setNewChat(false);
+
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: findDirect.address,
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+
+        setTimeout(() => {
+          setSelectedDirect(findDirect);
+          getTimestampEnterChat();
+        }, 200);
+      } else {
+        setDesktopViewMode('chat');
+        setDesktopSideView('directs');
+        setNewChat(true);
+        setTimeout(() => {
+          executeEvent('setDirectToValueNewChat', {
+            directToValue: name || directAddress,
+          });
+        }, 500);
+      }
+    },
+    [directs, getTimestampEnterChat]
+  );
 
   useEffect(() => {
     subscribeToEvent('openDirectMessageInternal', openDirectChatFromInternal);
@@ -1419,39 +1226,47 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('openDirectMessage', openDirectChatFromNotification);
     };
-  }, [directs, selectedDirect]);
+  }, [
+    directs,
+    selectedDirect,
+    openDirectChatFromNotification,
+    openDirectChatFromInternal,
+  ]);
 
-  const handleMarkAsRead = (e) => {
-    const { groupId } = e.detail;
-    window
-      .sendMessage('addTimestampEnterChat', {
-        timestamp: Date.now(),
-        groupId,
-      })
-      .catch((error) => {
-        console.error(
-          'Failed to add timestamp:',
-          error.message || 'An error occurred'
-        );
-      });
+  const handleMarkAsRead = useCallback(
+    (e) => {
+      const { groupId } = e.detail;
+      window
+        .sendMessage('addTimestampEnterChat', {
+          timestamp: Date.now(),
+          groupId,
+        })
+        .catch((error) => {
+          console.error(
+            'Failed to add timestamp:',
+            error.message || 'An error occurred'
+          );
+        });
 
-    window
-      .sendMessage('addGroupNotificationTimestamp', {
-        timestamp: Date.now(),
-        groupId,
-      })
-      .catch((error) => {
-        console.error(
-          'Failed to add group notification timestamp:',
-          error.message || 'An error occurred'
-        );
-      });
+      window
+        .sendMessage('addGroupNotificationTimestamp', {
+          timestamp: Date.now(),
+          groupId,
+        })
+        .catch((error) => {
+          console.error(
+            'Failed to add group notification timestamp:',
+            error.message || 'An error occurred'
+          );
+        });
 
-    setTimeout(() => {
-      getGroupAnnouncements();
-      getTimestampEnterChat();
-    }, 200);
-  };
+      setTimeout(() => {
+        getGroupAnnouncements();
+        getTimestampEnterChat();
+      }, 200);
+    },
+    [getGroupAnnouncements, getTimestampEnterChat]
+  );
 
   useEffect(() => {
     subscribeToEvent('markAsRead', handleMarkAsRead);
@@ -1459,11 +1274,12 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('markAsRead', handleMarkAsRead);
     };
-  }, []);
+  }, [handleMarkAsRead]);
 
-  const resetAllStatesAndRefs = () => {
+  const resetAllStatesAndRefs = useCallback(() => {
     // Reset all useState values to their initial states
     setSecretKey(null);
+    secretKeyRef.current = null;
     lastFetchedSecretKey.current = null;
     setSecretKeyPublishDate(null);
     setSecretKeyDetails(null);
@@ -1472,7 +1288,8 @@ export const Group = ({
     setIsForceShowCreationKeyPopup(false);
     setSelectedGroup(null);
     setSelectedDirect(null);
-    setGroups([]);
+    setMemberGroups([]);
+    memberGroupsRef.current = [];
     setDirects([]);
     setAdmins([]);
     setAdminsWithNames([]);
@@ -1481,7 +1298,6 @@ export const Group = ({
     setTriedToFetchSecretKey(false);
     setHideCommonKeyPopup(false);
     setOpenAddGroup(false);
-    setIsInitialGroups(false);
     setOpenManageMembers(false);
     setTimestampEnterData({});
     setChatMode('groups');
@@ -1497,25 +1313,20 @@ export const Group = ({
     setDefaultThread(null);
     setMobileViewMode('home');
     // Reset all useRef values to their initial states
-    hasInitialized.current = false;
     hasInitializedWebsocket.current = false;
-    lastGroupNotification.current = null;
-    isFocusedRef.current = true;
     selectedGroupRef.current = null;
     selectedDirectRef.current = null;
     groupSectionRef.current = null;
-    checkGroupInterval.current = null;
     isLoadingOpenSectionFromNotification.current = false;
-    setupGroupWebsocketInterval.current = null;
     settimeoutForRefetchSecretKey.current = null;
     initiatedGetMembers.current = false;
     setDesktopViewMode('home');
-  };
+  }, []);
 
-  const logoutEventFunc = () => {
+  const logoutEventFunc = useCallback(() => {
     resetAllStatesAndRefs();
     clearStatesMessageQueueProvider();
-  };
+  }, [resetAllStatesAndRefs, clearStatesMessageQueueProvider]);
 
   useEffect(() => {
     subscribeToEvent('logout-event', logoutEventFunc);
@@ -1523,11 +1334,11 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('logout-event', logoutEventFunc);
     };
-  }, []);
+  }, [logoutEventFunc]);
 
-  const openAppsMode = () => {
+  const openAppsMode = useCallback(() => {
     setDesktopViewMode('apps');
-  };
+  }, []);
 
   useEffect(() => {
     subscribeToEvent('open-apps-mode', openAppsMode);
@@ -1535,11 +1346,11 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('open-apps-mode', openAppsMode);
     };
-  }, []);
+  }, [openAppsMode]);
 
-  const openDevMode = () => {
+  const openDevMode = useCallback(() => {
     setDesktopViewMode('dev');
-  };
+  }, []);
 
   useEffect(() => {
     subscribeToEvent('open-dev-mode', openDevMode);
@@ -1547,64 +1358,70 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('open-dev-mode', openDevMode);
     };
-  }, []);
+  }, [openDevMode]);
 
-  const openGroupChatFromNotification = (e) => {
-    if (isLoadingOpenSectionFromNotification.current) return;
+  const openGroupChatFromNotification = useCallback(
+    (e) => {
+      if (isLoadingOpenSectionFromNotification.current) return;
 
-    const groupId = e.detail?.from;
-    const findGroup = groups?.find((group) => +group?.groupId === +groupId);
-    if (findGroup?.groupId === selectedGroup?.groupId) {
-      isLoadingOpenSectionFromNotification.current = false;
-      setChatMode('groups');
-      setDesktopViewMode('chat');
-      return;
-    }
-    if (findGroup) {
-      setChatMode('groups');
-      setSelectedGroup(null);
-      setSelectedDirect(null);
-
-      setNewChat(false);
-      setSecretKey(null);
-      setGroupOwner(null);
-      lastFetchedSecretKey.current = null;
-      initiatedGetMembers.current = false;
-      setSecretKeyPublishDate(null);
-      setAdmins([]);
-      setSecretKeyDetails(null);
-      setAdminsWithNames([]);
-      setMembers([]);
-      setMemberCountFromSecretKeyData(null);
-      setIsForceShowCreationKeyPopup(false);
-      setTriedToFetchSecretKey(false);
-      setFirstSecretKeyInCreation(false);
-      setGroupSection('chat');
-      setDesktopViewMode('chat');
-
-      window
-        .sendMessage('addTimestampEnterChat', {
-          timestamp: Date.now(),
-          groupId: findGroup.groupId,
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to add timestamp:',
-            error.message || 'An error occurred'
-          );
-        });
-
-      setTimeout(() => {
-        setSelectedGroup(findGroup);
-        setMobileViewMode('group');
-        setDesktopSideView('groups');
-        getTimestampEnterChat();
+      const groupId = e.detail?.from;
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
+      if (findGroup?.groupId === selectedGroup?.groupId) {
         isLoadingOpenSectionFromNotification.current = false;
-      }, 350);
-    } else {
-      isLoadingOpenSectionFromNotification.current = false;
-    }
-  };
+        setChatMode('groups');
+        setDesktopViewMode('chat');
+        return;
+      }
+      if (findGroup) {
+        setChatMode('groups');
+        setSelectedGroup(null);
+        setSelectedDirect(null);
+
+        setNewChat(false);
+        setSecretKey(null);
+        secretKeyRef.current = null;
+        setGroupOwner(null);
+        lastFetchedSecretKey.current = null;
+        initiatedGetMembers.current = false;
+        setSecretKeyPublishDate(null);
+        setAdmins([]);
+        setSecretKeyDetails(null);
+        setAdminsWithNames([]);
+        setMembers([]);
+        setMemberCountFromSecretKeyData(null);
+        setIsForceShowCreationKeyPopup(false);
+        setTriedToFetchSecretKey(false);
+        setFirstSecretKeyInCreation(false);
+        setGroupSection('chat');
+        setDesktopViewMode('chat');
+
+        window
+          .sendMessage('addTimestampEnterChat', {
+            timestamp: Date.now(),
+            groupId: findGroup.groupId,
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
+
+        setTimeout(() => {
+          setSelectedGroup(findGroup);
+          setMobileViewMode('group');
+          setDesktopSideView('groups');
+          getTimestampEnterChat();
+          isLoadingOpenSectionFromNotification.current = false;
+        }, 350);
+      } else {
+        isLoadingOpenSectionFromNotification.current = false;
+      }
+    },
+    [selectedGroup?.groupId, getTimestampEnterChat]
+  );
 
   useEffect(() => {
     subscribeToEvent('openGroupMessage', openGroupChatFromNotification);
@@ -1612,51 +1429,57 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('openGroupMessage', openGroupChatFromNotification);
     };
-  }, [groups, selectedGroup]);
+  }, [openGroupChatFromNotification]);
 
-  const openGroupAnnouncementFromNotification = (e) => {
-    const groupId = e.detail?.from;
+  const openGroupAnnouncementFromNotification = useCallback(
+    (e) => {
+      const groupId = e.detail?.from;
 
-    const findGroup = groups?.find((group) => +group?.groupId === +groupId);
-    if (findGroup?.groupId === selectedGroup?.groupId) return;
-    if (findGroup) {
-      setChatMode('groups');
-      setSelectedGroup(null);
-      setSecretKey(null);
-      setGroupOwner(null);
-      lastFetchedSecretKey.current = null;
-      initiatedGetMembers.current = false;
-      setSecretKeyPublishDate(null);
-      setAdmins([]);
-      setSecretKeyDetails(null);
-      setAdminsWithNames([]);
-      setMembers([]);
-      setMemberCountFromSecretKeyData(null);
-      setIsForceShowCreationKeyPopup(false);
-      setTriedToFetchSecretKey(false);
-      setFirstSecretKeyInCreation(false);
-      setGroupSection('announcement');
-      setDesktopViewMode('chat');
-      window
-        .sendMessage('addGroupNotificationTimestamp', {
-          timestamp: Date.now(),
-          groupId: findGroup.groupId,
-        })
-        .catch((error) => {
-          console.error(
-            'Failed to add group notification timestamp:',
-            error.message || 'An error occurred'
-          );
-        });
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
+      if (findGroup?.groupId === selectedGroup?.groupId) return;
+      if (findGroup) {
+        setChatMode('groups');
+        setSelectedGroup(null);
+        setSecretKey(null);
+        secretKeyRef.current = null;
+        setGroupOwner(null);
+        lastFetchedSecretKey.current = null;
+        initiatedGetMembers.current = false;
+        setSecretKeyPublishDate(null);
+        setAdmins([]);
+        setSecretKeyDetails(null);
+        setAdminsWithNames([]);
+        setMembers([]);
+        setMemberCountFromSecretKeyData(null);
+        setIsForceShowCreationKeyPopup(false);
+        setTriedToFetchSecretKey(false);
+        setFirstSecretKeyInCreation(false);
+        setGroupSection('announcement');
+        setDesktopViewMode('chat');
+        window
+          .sendMessage('addGroupNotificationTimestamp', {
+            timestamp: Date.now(),
+            groupId: findGroup.groupId,
+          })
+          .catch((error) => {
+            console.error(
+              'Failed to add group notification timestamp:',
+              error.message || 'An error occurred'
+            );
+          });
 
-      setTimeout(() => {
-        setSelectedGroup(findGroup);
-        setMobileViewMode('group');
-        setDesktopSideView('groups');
-        getGroupAnnouncements();
-      }, 350);
-    }
-  };
+        setTimeout(() => {
+          setSelectedGroup(findGroup);
+          setMobileViewMode('group');
+          setDesktopSideView('groups');
+          getGroupAnnouncements();
+        }, 350);
+      }
+    },
+    [selectedGroup?.groupId, getGroupAnnouncements]
+  );
 
   useEffect(() => {
     subscribeToEvent(
@@ -1670,45 +1493,51 @@ export const Group = ({
         openGroupAnnouncementFromNotification
       );
     };
-  }, [groups, selectedGroup]);
+  }, [openGroupAnnouncementFromNotification]);
 
-  const openThreadNewPostFunc = (e) => {
-    const data = e.detail?.data;
-    const { groupId } = data;
-    const findGroup = groups?.find((group) => +group?.groupId === +groupId);
-    if (findGroup?.groupId === selectedGroup?.groupId) {
-      setGroupSection('forum');
-      setDefaultThread(data);
+  const openThreadNewPostFunc = useCallback(
+    (e) => {
+      const data = e.detail?.data;
+      const { groupId } = data;
+      const findGroup = memberGroupsRef.current?.find(
+        (group: any) => +group?.groupId === +groupId
+      );
+      if (findGroup?.groupId === selectedGroup?.groupId) {
+        setGroupSection('forum');
+        setDefaultThread(data);
 
-      return;
-    }
-    if (findGroup) {
-      setChatMode('groups');
-      setSelectedGroup(null);
-      setSecretKey(null);
-      setGroupOwner(null);
-      lastFetchedSecretKey.current = null;
-      initiatedGetMembers.current = false;
-      setSecretKeyPublishDate(null);
-      setAdmins([]);
-      setSecretKeyDetails(null);
-      setAdminsWithNames([]);
-      setMembers([]);
-      setMemberCountFromSecretKeyData(null);
-      setIsForceShowCreationKeyPopup(false);
-      setTriedToFetchSecretKey(false);
-      setFirstSecretKeyInCreation(false);
-      setGroupSection('forum');
-      setDefaultThread(data);
-      setDesktopViewMode('chat');
-      setTimeout(() => {
-        setSelectedGroup(findGroup);
-        setMobileViewMode('group');
-        setDesktopSideView('groups');
-        getGroupAnnouncements();
-      }, 350);
-    }
-  };
+        return;
+      }
+      if (findGroup) {
+        setChatMode('groups');
+        setSelectedGroup(null);
+        setSecretKey(null);
+        secretKeyRef.current = null;
+        setGroupOwner(null);
+        lastFetchedSecretKey.current = null;
+        initiatedGetMembers.current = false;
+        setSecretKeyPublishDate(null);
+        setAdmins([]);
+        setSecretKeyDetails(null);
+        setAdminsWithNames([]);
+        setMembers([]);
+        setMemberCountFromSecretKeyData(null);
+        setIsForceShowCreationKeyPopup(false);
+        setTriedToFetchSecretKey(false);
+        setFirstSecretKeyInCreation(false);
+        setGroupSection('forum');
+        setDefaultThread(data);
+        setDesktopViewMode('chat');
+        setTimeout(() => {
+          setSelectedGroup(findGroup);
+          setMobileViewMode('group');
+          setDesktopSideView('groups');
+          getGroupAnnouncements();
+        }, 350);
+      }
+    },
+    [selectedGroup?.groupId, getGroupAnnouncements]
+  );
 
   useEffect(() => {
     subscribeToEvent('openThreadNewPost', openThreadNewPostFunc);
@@ -1716,7 +1545,7 @@ export const Group = ({
     return () => {
       unsubscribeFromEvent('openThreadNewPost', openThreadNewPostFunc);
     };
-  }, [groups, selectedGroup]);
+  }, [openThreadNewPostFunc]);
 
   const handleSecretKeyCreationInProgress = useCallback(() => {
     setFirstSecretKeyInCreation(true);
@@ -1743,7 +1572,7 @@ export const Group = ({
     setAvatarPreviewData(null);
   }, [setAvatarPreviewData]);
 
-  const goToHome = async () => {
+  const goToHome = useCallback(async () => {
     setDesktopViewMode('home');
 
     await new Promise((res) => {
@@ -1751,9 +1580,9 @@ export const Group = ({
         res(null);
       }, 200);
     });
-  };
+  }, []);
 
-  const goToAnnouncements = async () => {
+  const goToAnnouncements = useCallback(async () => {
     setGroupSection('default');
     await new Promise((res) => {
       setTimeout(() => {
@@ -1778,20 +1607,19 @@ export const Group = ({
     setTimeout(() => {
       getGroupAnnouncements();
     }, 200);
-  };
+  }, [getGroupAnnouncements]);
 
-  const openDrawerGroups = () => {
+  const openDrawerGroups = useCallback(() => {
     setIsOpenDrawer(true);
-    setDrawerMode('groups');
-  };
+  }, []);
 
-  const goToThreads = () => {
+  const goToThreads = useCallback(() => {
     setSelectedDirect(null);
     setNewChat(false);
     setGroupSection('forum');
-  };
+  }, []);
 
-  const goToChat = async () => {
+  const goToChat = useCallback(async () => {
     setGroupSection('default');
     await new Promise((res) => {
       setTimeout(() => {
@@ -1818,324 +1646,41 @@ export const Group = ({
         getTimestampEnterChat();
       }, 200);
     }
-  };
+  }, [getTimestampEnterChat]);
 
-  const theme = useTheme();
+  const loadingGroupSnackbarInfo = useMemo(
+    () => ({
+      message:
+        isLoadingGroupMessage ||
+        t('group:message.generic.setting_group', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+    }),
+    [isLoadingGroupMessage, t]
+  );
 
-  const renderDirects = () => {
-    return (
-      <Box
-        style={{
-          alignItems: 'flex-start',
-          background: theme.palette.background.surface,
-          borderRadius: '0px 15px 15px 0px',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          width: '380px',
-          padding: '0px 2px',
-        }}
-      >
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            gap: '10px',
-            justifyContent: 'center',
-            width: '100%',
-          }}
-        >
-          <ButtonBase
-            onClick={() => {
-              setDesktopSideView('groups');
-            }}
-          >
-            <IconWrapper
-              color={
-                groupChatHasUnread || groupsAnnHasUnread
-                  ? theme.palette.other.unread
-                  : desktopSideView === 'groups'
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary
-              }
-              label={t('group:group.group_other', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              selected={desktopSideView === 'groups'}
-              customWidth="75px"
-            >
-              <HubsIcon
-                height={24}
-                color={
-                  groupChatHasUnread || groupsAnnHasUnread
-                    ? theme.palette.other.unread
-                    : desktopSideView === 'groups'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary
-                }
-              />
-            </IconWrapper>
-          </ButtonBase>
+  const loadingGroupsSnackbarInfo = useMemo(
+    () => ({
+      message: t('group:message.generic.setting_group', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    }),
+    [t]
+  );
 
-          <ButtonBase
-            onClick={() => {
-              setDesktopSideView('directs');
-            }}
-          >
-            <IconWrapper
-              customWidth="75px"
-              color={
-                directChatHasUnread
-                  ? theme.palette.other.unread
-                  : desktopSideView === 'directs'
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary
-              }
-              label={t('group:group.messaging', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              selected={desktopSideView === 'directs'}
-            >
-              <MessagingIcon
-                height={24}
-                color={
-                  directChatHasUnread
-                    ? theme.palette.other.unread
-                    : desktopSideView === 'directs'
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary
-                }
-              />
-            </IconWrapper>
-          </ButtonBase>
-        </Box>
+  const closeChatDirect = useCallback(() => {
+    setSelectedDirect(null);
+    setNewChat(false);
+  }, []);
 
-        <Box
-          sx={{
-            alignItems: 'flex-start',
-            display: 'flex',
-            flexDirection: 'column',
-            flexGrow: 1,
-            overflowY: 'auto',
-            width: '100%',
-          }}
-        >
-          {directs.map((direct: any) => {
-            const avatarUrl = getUserAvatarUrl(direct?.name);
-            const avatarKey = direct?.address || direct?.name || `${direct?.timestamp}-${direct?.sender}`;
-            const isAvatarLoaded = Boolean(
-              avatarUrl && avatarKey && directAvatarLoaded[avatarKey]
-            );
-
-            return (
-            <List
-              key={direct?.timestamp + direct?.sender}
-              sx={{
-                width: '100%',
-              }}
-              className="group-list"
-              dense={true}
-            >
-              <ListItem
-                onClick={() => {
-                  setSelectedDirect(null);
-                  setNewChat(false);
-                  setIsOpenDrawer(false);
-                  window
-                    .sendMessage('addTimestampEnterChat', {
-                      timestamp: Date.now(),
-                      groupId: direct.address,
-                    })
-                    .catch((error) => {
-                      console.error(
-                        'Failed to add timestamp:',
-                        error.message || 'An error occurred'
-                      );
-                    });
-
-                  setTimeout(() => {
-                    setSelectedDirect(direct);
-
-                    getTimestampEnterChat();
-                  }, 200);
-                }}
-                sx={{
-                  background:
-                    direct?.address === selectedDirect?.address &&
-                    theme.palette.background.surface,
-                  borderRadius: '2px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '2px',
-                  width: '100%',
-                }}
-              >
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    width: '100%',
-                  }}
-                >
-                  <ListItemAvatar>
-                    <Avatar
-                      sx={{
-                        background: theme.palette.background.surface,
-                        color: theme.palette.text.primary,
-                        ...getClickableAvatarSx(theme, isAvatarLoaded),
-                      }}
-                      alt={direct?.name || direct?.address}
-                      src={avatarUrl}
-                      onClick={(event) => {
-                        if (!avatarUrl || !isAvatarLoaded) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openAvatarPreview(
-                          avatarUrl,
-                          direct?.name || direct?.address
-                        );
-                      }}
-                      imgProps={{
-                        onLoad: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey]) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: true,
-                            };
-                          });
-                        },
-                        onError: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey] === false) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: false,
-                            };
-                          });
-                        },
-                      }}
-                    >
-                      {(direct?.name || direct?.address)?.charAt(0)}
-                    </Avatar>
-                  </ListItemAvatar>
-
-                  <ListItemText
-                    primary={direct?.name || direct?.address}
-                    secondary={
-                      !direct?.timestamp
-                        ? t('core:message.generic.no_messages', {
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                        : t('group:last_message_date', {
-                            date: formatEmailDate(direct?.timestamp),
-                            postProcess: 'capitalizeFirstChar',
-                          })
-                    }
-                    slotProps={{
-                      primary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          textWrap: 'wrap',
-                          overflow: 'hidden',
-                          fontSize: '16px',
-                        },
-                      },
-                      secondary: {
-                        style: {
-                          color:
-                            direct?.address === selectedDirect?.address &&
-                            theme.palette.text.primary,
-                          fontSize: '12px',
-                        },
-                      },
-                    }}
-                    sx={{
-                      width: '150px',
-                      fontFamily: 'Inter',
-                      fontSize: '16px',
-                    }}
-                  />
-
-                  {direct?.sender !== myAddress &&
-                    direct?.timestamp &&
-                    ((!timestampEnterData[direct?.address] &&
-                      Date.now() - direct?.timestamp <
-                        timeDifferenceForNotificationChats) ||
-                      timestampEnterData[direct?.address] <
-                        direct?.timestamp) && (
-                      <MarkChatUnreadIcon
-                        sx={{
-                          color: theme.palette.other.unread,
-                        }}
-                      />
-                    )}
-                </Box>
-              </ListItem>
-            </List>
-            );
-          })}
-        </Box>
-
-        <Box
-          sx={{
-            display: 'flex',
-            width: '100%',
-            gap: '10px',
-            justifyContent: 'center',
-            padding: '10px',
-          }}
-        >
-          <CustomButton
-            onClick={() => {
-              setNewChat(true);
-              setSelectedDirect(null);
-              setIsOpenDrawer(false);
-            }}
-          >
-            <CreateIcon
-              sx={{
-                color: theme.palette.text.primary,
-              }}
-            />
-            {t('core:action.new.chat', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </CustomButton>
-
-          {!isRunningPublicNode && (
-            <CustomButton
-              onClick={() => {
-                setIsOpenBlockedUserModal(true);
-              }}
-              sx={{
-                minWidth: 'unset',
-                padding: '10px',
-              }}
-            >
-              <PersonOffIcon
-                sx={{
-                  color: theme.palette.text.primary,
-                }}
-              />
-            </CustomButton>
-          )}
-        </Box>
-
-        <AvatarPreviewModal
-          open={Boolean(avatarPreviewData)}
-          src={avatarPreviewData?.src || null}
-          alt={avatarPreviewData?.alt}
-          onClose={closeAvatarPreview}
-        />
-      </Box>
-    );
-  };
+  const handleNotifyAdminClick = useCallback(
+    (e: { currentTarget: HTMLElement | null }) => {
+      const address = e.currentTarget?.getAttribute('data-admin-address');
+      const admin = adminsWithNames.find((a) => a?.address === address);
+      if (admin) notifyAdmin(admin);
+    },
+    [adminsWithNames, notifyAdmin]
+  );
 
   const selectGroupFunc = useCallback((group) => {
     setMobileViewMode('group');
@@ -2148,6 +1693,7 @@ export const Group = ({
     setSelectedGroup(null);
     setUserInfoForLevels({});
     setSecretKey(null);
+    secretKeyRef.current = null;
     lastFetchedSecretKey.current = null;
     setSecretKeyPublishDate(null);
     setAdmins([]);
@@ -2166,8 +1712,6 @@ export const Group = ({
     }, 200);
   }, []);
 
-
-
   return (
     <>
       <WebSocketActive
@@ -2182,15 +1726,14 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
 
-      <Box
-        style={{
-          alignItems: 'flex-start',
-          display: 'flex',
-          flexDirection: 'row',
-          height: '100%',
-          width: '100%',
-        }}
-      >
+      <RootBox>
+        <MemberGroupsEffects
+          getGroupsWhereIAmAMember={getGroupsWhereIAmAMember}
+          getGroupsProperties={getGroupsProperties}
+          myAddress={myAddress}
+          groupsPropertiesRef={groupsPropertiesRef}
+          hasInitializedWebsocketRef={hasInitializedWebsocket}
+        />
         <DesktopSideBar
           desktopViewMode={desktopViewMode}
           toggleSideViewGroups={toggleSideViewGroups}
@@ -2201,10 +1744,8 @@ export const Group = ({
           setDesktopSideView={setDesktopSideView}
           hasUnreadDirects={directChatHasUnread}
           isApps={desktopViewMode === 'apps'}
-          myName={userInfo?.name}
           isGroups={isOpenSideViewGroups}
           isDirects={isOpenSideViewDirects}
-          hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
           setDesktopViewMode={setDesktopViewMode}
           lastQappViewMode={lastQappViewMode}
         />
@@ -2213,14 +1754,9 @@ export const Group = ({
           <GroupList
             selectGroupFunc={selectGroupFunc}
             setDesktopSideView={setDesktopSideView}
-            groupChatHasUnread={groupChatHasUnread}
-            groupsAnnHasUnread={groupsAnnHasUnread}
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
             chatMode={chatMode}
-            groups={groups.filter((g) => g.groupId !== '0')
-
-            }
             selectedGroup={selectedGroup}
             getUserSettings={getUserSettings}
             setOpenAddGroup={setOpenAddGroup}
@@ -2229,91 +1765,72 @@ export const Group = ({
           />
         )}
 
-        {desktopViewMode === 'chat' &&
-          desktopSideView === 'directs' &&
-          renderDirects()}
-
-        <Box
-          sx={{
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-          }}
-        >
-          <AddGroup
-            address={myAddress}
-            open={openAddGroup}
-            setOpen={setOpenAddGroup}
+        {desktopViewMode === 'chat' && desktopSideView === 'directs' && (
+          <DirectsSidebar
+            setDesktopSideView={setDesktopSideView}
+            desktopSideView={desktopSideView}
+            directChatHasUnread={directChatHasUnread}
+            directs={directs}
+            getUserAvatarUrl={getUserAvatarUrl}
+            directAvatarLoaded={directAvatarLoaded}
+            setDirectAvatarLoaded={setDirectAvatarLoaded}
+            setSelectedDirect={setSelectedDirect}
+            setNewChat={setNewChat}
+            setIsOpenDrawer={setIsOpenDrawer}
+            getTimestampEnterChat={getTimestampEnterChat}
+            selectedDirect={selectedDirect}
+            timestampEnterData={timestampEnterData}
+            timeDifferenceForNotificationChats={
+              timeDifferenceForNotificationChats
+            }
+            myAddress={myAddress}
+            openAvatarPreview={openAvatarPreview}
+            avatarPreviewData={avatarPreviewData}
+            closeAvatarPreview={closeAvatarPreview}
+            isRunningPublicNode={isRunningPublicNode}
+            setIsOpenBlockedUserModal={setIsOpenBlockedUserModal}
           />
+        )}
+
+        <MainContentBox>
+          {openAddGroup && (
+            <Suspense fallback={null}>
+              <LazyAddGroup
+                address={myAddress}
+                open={openAddGroup}
+                setOpen={setOpenAddGroup}
+              />
+            </Suspense>
+          )}
 
           {newChat && (
             <>
-              <Box
-                sx={{
-                  background: theme.palette.background.surface,
-                  bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
-                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
-                  position: 'absolute',
-                  right: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  top: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  zIndex: 5,
-                }}
-              >
+              <NewChatOverlay isChatMode={desktopViewMode === 'chat'}>
                 <ChatDirect
                   myAddress={myAddress}
-                  myName={userInfo?.name}
                   isNewChat={newChat}
                   selectedDirect={undefined}
                   setSelectedDirect={setSelectedDirect}
                   setNewChat={setNewChat}
                   getTimestampEnterChat={getTimestampEnterChat}
-                  balance={balance}
-                  close={() => {
-                    setSelectedDirect(null);
-                    setNewChat(false);
-                  }}
+                  close={closeChatDirect}
                   setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
                 />
-              </Box>
+              </NewChatOverlay>
             </>
           )}
           {desktopViewMode === 'chat' && !selectedGroup && (
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                height: '100%',
-                justifyContent: 'center',
-                width: '100%',
-              }}
-            >
-              <Typography
-                sx={{
-                  fontSize: '14px',
-                  fontWeight: 400,
-                  color: theme.palette.text.primary,
-                }}
-              >
+            <CenterBox>
+              <NoSelectionTypography>
                 {t('group:message.generic.no_selection', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-              </Typography>
-            </Box>
+              </NoSelectionTypography>
+            </CenterBox>
           )}
 
-          <div
-            style={{
-              width: '100%',
-              display: selectedGroup ? 'block' : 'none',
-              opacity: !(desktopViewMode === 'chat' && selectedGroup) ? 0 : 1,
-              position: !(desktopViewMode === 'chat' && selectedGroup)
-                ? 'absolute'
-                : 'relative',
-              left: !(desktopViewMode === 'chat' && selectedGroup)
-                ? '-100000px'
-                : '0px',
-            }}
+          <SelectedGroupWrapper
+            isVisible={desktopViewMode === 'chat' && !!selectedGroup}
           >
             <DesktopHeader
               isPrivate={isPrivate}
@@ -2321,12 +1838,9 @@ export const Group = ({
               groupSection={groupSection}
               isUnread={isUnread}
               goToAnnouncements={goToAnnouncements}
-              isUnreadChat={isUnreadChat}
               goToChat={goToChat}
               goToThreads={goToThreads}
               setOpenManageMembers={setOpenManageMembers}
-              groupChatHasUnread={groupChatHasUnread}
-              groupsAnnHasUnread={groupsAnnHasUnread}
               directChatHasUnread={directChatHasUnread}
               chatMode={chatMode}
               openDrawerGroups={openDrawerGroups}
@@ -2335,9 +1849,7 @@ export const Group = ({
               mobileViewMode={mobileViewMode}
               setMobileViewMode={setMobileViewMode}
               setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
-              hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
               hasUnreadDirects={directChatHasUnread}
-              myName={userInfo?.name || null}
               isHome={groupSection === 'home'}
               isGroups={desktopSideView === 'groups'}
               isDirects={desktopSideView === 'directs'}
@@ -2345,19 +1857,11 @@ export const Group = ({
               hasUnreadAnnouncements={isUnread}
               isAnnouncement={groupSection === 'announcement'}
               isChat={groupSection === 'chat'}
-              hasUnreadChat={isUnreadChat}
               setGroupSection={setGroupSection}
               isForum={groupSection === 'forum'}
             />
 
-            <Box
-              sx={{
-                display: 'flex',
-                flexGrow: 1,
-                height: 'calc(100vh - 70px)',
-                position: 'relative',
-              }}
-            >
+            <ChatContentBox>
               {triedToFetchSecretKey && (
                 <ChatGroup
                   myAddress={myAddress}
@@ -2373,8 +1877,6 @@ export const Group = ({
                     handleSecretKeyCreationInProgress
                   }
                   triedToFetchSecretKey={triedToFetchSecretKey}
-                  myName={userInfo?.name}
-                  balance={balance}
                   getTimestampEnterChatParent={getTimestampEnterChat}
                 />
               )}
@@ -2382,22 +1884,13 @@ export const Group = ({
                 firstSecretKeyInCreation &&
                 triedToFetchSecretKey &&
                 !secretKeyPublishDate && (
-                  <div
-                    style={{
-                      alignItems: 'flex-start',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      height: '100%',
-                      padding: '20px',
-                      width: '100%',
-                    }}
-                  >
+                  <EncryptionKeyMessageDiv>
                     <Typography>
                       {t('group:message.generic.encryption_key', {
                         postProcess: 'capitalizeFirstChar',
                       })}
                     </Typography>
-                  </div>
+                  </EncryptionKeyMessageDiv>
                 )}
 
               {isPrivate &&
@@ -2407,17 +1900,7 @@ export const Group = ({
                 <>
                   {secretKeyPublishDate ||
                   (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
-                    <div
-                      style={{
-                        alignItems: 'flex-start',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        height: 'calc(100vh - 70px)',
-                        overflow: 'auto',
-                        padding: '20px',
-                        width: '100%',
-                      }}
-                    >
+                    <NotPartGroupDiv>
                       <Typography>
                         {t('group:message.generic.not_part_group', {
                           postProcess: 'capitalizeFirstChar',
@@ -2446,29 +1929,23 @@ export const Group = ({
 
                       {adminsWithNames.map((admin) => {
                         return (
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              gap: '20px',
-                              padding: '15px',
-                              alignItems: 'center',
-                            }}
-                          >
+                          <AdminRowBox key={admin?.address}>
                             <Typography>{admin?.name}</Typography>
                             <LoadingButton
+                              data-admin-address={admin?.address}
                               loading={isLoadingNotifyAdmin}
                               loadingPosition="start"
                               variant="contained"
-                              onClick={() => notifyAdmin(admin)}
+                              onClick={handleNotifyAdminClick}
                             >
                               {t('core:action.notify', {
                                 postProcess: 'capitalizeFirstChar',
                               })}
                             </LoadingButton>
-                          </Box>
+                          </AdminRowBox>
                         );
                       })}
-                    </div>
+                    </NotPartGroupDiv>
                   ) : null}
                 </>
               ) : admins.includes(myAddress) &&
@@ -2486,14 +1963,12 @@ export const Group = ({
                     handleNewEncryptionNotification={
                       setNewEncryptionNotification
                     }
-                    myName={userInfo?.name}
                     hide={groupSection !== 'announcement'}
                     isPrivate={isPrivate}
                   />
                   <GroupForum
                     myAddress={myAddress}
                     selectedGroup={selectedGroup}
-                    userInfo={userInfo}
                     getSecretKey={getSecretKey}
                     secretKey={secretKey}
                     setSecretKey={setSecretKey}
@@ -2505,31 +1980,18 @@ export const Group = ({
                   />
                   {groupSection === 'adminSpace' && (
                     <AdminSpace
-                      setIsForceShowCreationKeyPopup={
-                        setIsForceShowCreationKeyPopup
-                      }
                       adminsWithNames={adminsWithNames}
                       selectedGroup={selectedGroup?.groupId}
                       isOwner={groupOwner?.owner === myAddress}
                       myAddress={myAddress}
-                      userInfo={userInfo}
                       hide={groupSection !== 'adminSpace'}
                       isAdmin={admins.includes(myAddress)}
-                      balance={balance}
                     />
                   )}
                 </>
               )}
 
-              <Box
-                sx={{
-                  bottom: '25px',
-                  display: 'flex',
-                  position: 'absolute',
-                  right: '25px',
-                  zIndex: 100,
-                }}
-              >
+              <FloatingButtonContainerBox>
                 {((isPrivate &&
                   admins.includes(myAddress) &&
                   shouldReEncrypt &&
@@ -2545,7 +2007,6 @@ export const Group = ({
                     secretKeyDetails={secretKeyDetails}
                     myAddress={myAddress}
                     isOwner={groupOwner?.owner === myAddress}
-                    userInfo={userInfo}
                     setIsForceShowCreationKeyPopup={
                       setIsForceShowCreationKeyPopup
                     }
@@ -2556,44 +2017,32 @@ export const Group = ({
                     }
                   />
                 )}
-              </Box>
-            </Box>
+              </FloatingButtonContainerBox>
+            </ChatContentBox>
 
             {openManageMembers && (
-              <ManageMembers
-                selectedGroup={selectedGroup}
-                address={myAddress}
-                open={openManageMembers}
-                setOpen={setOpenManageMembers}
-                isAdmin={admins.includes(myAddress)}
-                isOwner={groupOwner?.owner === myAddress}
-              />
+              <Suspense fallback={null}>
+                <LazyManageMembers
+                  selectedGroup={selectedGroup}
+                  address={myAddress}
+                  open={openManageMembers}
+                  setOpen={setOpenManageMembers}
+                  isAdmin={admins.includes(myAddress)}
+                  isOwner={groupOwner?.owner === myAddress}
+                />
+              </Suspense>
             )}
-          </div>
-          <BlockedUsersModal />
+          </SelectedGroupWrapper>
+          {isOpenBlockedModal && (
+            <Suspense fallback={null}>
+              <LazyBlockedUsersModal />
+            </Suspense>
+          )}
 
           {selectedDirect && !newChat && (
             <>
-              <Box
-                sx={{
-                  background: theme.palette.background.default,
-                  bottom: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  left: !(desktopViewMode === 'chat') ? '-100000px' : '0px',
-                  opacity: !(desktopViewMode === 'chat') ? 0 : 1,
-                  position: 'absolute',
-                  right: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  top: !(desktopViewMode === 'chat') ? 'unset' : '0px',
-                  zIndex: 5,
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexGrow: 1,
-                    height: '100%',
-                    position: 'relative',
-                  }}
-                >
+              <SelectedDirectOverlay isChatMode={desktopViewMode === 'chat'}>
+                <InnerChatBox>
                   <ChatDirect
                     myAddress={myAddress}
                     isNewChat={newChat}
@@ -2601,36 +2050,18 @@ export const Group = ({
                     setSelectedDirect={setSelectedDirect}
                     setNewChat={setNewChat}
                     getTimestampEnterChat={getTimestampEnterChat}
-                    myName={userInfo?.name}
-                    close={() => {
-                      setSelectedDirect(null);
-
-                      setNewChat(false);
-                    }}
+                    close={closeChatDirect}
                     setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
                   />
-                </Box>
-              </Box>
+                </InnerChatBox>
+              </SelectedDirectOverlay>
             </>
           )}
 
           <AppsDesktop
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
             mode={appsMode}
             setMode={setAppsMode}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
             show={desktopViewMode === 'apps'}
-            myName={userInfo?.name}
-            myAddress={userInfo?.address}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
-            setDesktopViewMode={setDesktopViewMode}
-            isApps={desktopViewMode === 'apps'}
-            desktopViewMode={desktopViewMode}
           />
 
           <AppsDevMode
@@ -2642,23 +2073,17 @@ export const Group = ({
             setDesktopSideView={setDesktopSideView}
             hasUnreadDirects={directChatHasUnread}
             show={desktopViewMode === 'dev'}
-            myName={userInfo?.name}
             isGroups={isOpenSideViewGroups}
             isDirects={isOpenSideViewDirects}
-            hasUnreadGroups={groupChatHasUnread || groupsAnnHasUnread}
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
             isApps={desktopViewMode === 'apps'}
           />
 
           <HomeDesktop
-            name={userInfo?.name}
             refreshHomeDataFunc={refreshHomeDataFunc}
             myAddress={myAddress}
             isLoadingGroups={isLoadingGroups}
-            balance={balance}
-            userInfo={userInfo}
-            groups={groups}
             setGroupSection={setGroupSection}
             setSelectedGroup={setSelectedGroup}
             getTimestampEnterChat={getTimestampEnterChat}
@@ -2668,43 +2093,45 @@ export const Group = ({
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
           />
-        </Box>
+        </MainContentBox>
 
-        <AuthenticatedContainerInnerRight
-          sx={{
-            marginLeft: 'auto',
-            width: '31px',
-            padding: '5px',
-            display:
-              desktopViewMode === 'apps' ||
-              desktopViewMode === 'dev' ||
-              desktopViewMode === 'chat'
-                ? 'none'
-                : 'flex',
-          }}
-        ></AuthenticatedContainerInnerRight>
+        <GroupRightSidebar
+          hide={
+            desktopViewMode === 'apps' ||
+            desktopViewMode === 'dev' ||
+            desktopViewMode === 'chat'
+          }
+        />
 
         <LoadingSnackbar
           open={isLoadingGroup}
-          info={{
-            message:
-              isLoadingGroupMessage ||
-              t('group:message.generic.setting_group', {
-                postProcess: 'capitalizeFirstChar',
-              }),
-          }}
+          info={loadingGroupSnackbarInfo}
         />
 
         <LoadingSnackbar
           open={isLoadingGroups}
-          info={{
-            message: t('group:message.generic.setting_group', {
-              postProcess: 'capitalizeFirstChar',
-            }),
-          }}
+          info={loadingGroupsSnackbarInfo}
         />
         <WalletsAppWrapper />
-      </Box>
+
+        {!chatWidgetClosed && (
+          <GlobalChatWidget
+            directs={directs}
+            getUserAvatarUrl={getUserAvatarUrl}
+            directChatHasUnread={directChatHasUnread}
+            timestampEnterData={timestampEnterData}
+            timeDifferenceForNotificationChats={
+              timeDifferenceForNotificationChats
+            }
+            myAddress={myAddress}
+            directAvatarLoaded={directAvatarLoaded}
+            setDirectAvatarLoaded={setDirectAvatarLoaded}
+            getTimestampEnterChat={getTimestampEnterChat}
+            getSecretKeyForGroup={getSecretKeyForGroup}
+            onClose={() => setChatWidgetClosed(true)}
+          />
+        )}
+      </RootBox>
     </>
   );
 };

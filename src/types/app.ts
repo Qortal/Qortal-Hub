@@ -1,0 +1,16 @@
+export type extStates =
+  | 'authenticated'
+  | 'buy-order-submitted'
+  | 'create-wallet'
+  | 'download-wallet'
+  | 'group'
+  | 'not-authenticated'
+  | 'send-qort'
+  | 'transfer-success-regular'
+  | 'transfer-success-request'
+  | 'wallet-dropped'
+  | 'wallets'
+  | 'web-app-request-authentication'
+  | 'web-app-request-buy-order'
+  | 'web-app-request-connection'
+  | 'web-app-request-payment';

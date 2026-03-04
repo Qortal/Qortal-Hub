@@ -1,13 +1,13 @@
 import { useMemo } from 'react';
 import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
-import { isLessThanOneWeekOld } from './Group/QMailMessages';
+import { isLessThanOneWeekOld } from './Group/qmailUtils';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAtom } from 'jotai';
 
-export const QMailStatus = () => {
+export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   const { t } = useTranslation([
     'auth',
     'core',
@@ -35,7 +35,7 @@ export const QMailStatus = () => {
     return false;
   }, [lastEnteredTimestamp, mails]);
 
-  return (
+  const button = (
     <ButtonBase
       onClick={() => {
         executeEvent('addTab', { data: { service: 'APP', name: 'q-mail' } });
@@ -44,6 +44,7 @@ export const QMailStatus = () => {
       }}
       style={{
         position: 'relative',
+        ...(compact && { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }),
       }}
     >
       {hasNewMail && (
@@ -51,12 +52,11 @@ export const QMailStatus = () => {
           style={{
             backgroundColor: theme.palette.other.unread,
             borderRadius: '50%',
-            height: '15px',
+            height: compact ? '10px' : '15px',
             outline: '1px solid white',
             position: 'absolute',
-            right: '-7px',
-            top: '-7px',
-            width: '15px',
+            ...(compact ? { right: 4, top: 4 } : { right: -7, top: -7 }),
+            width: compact ? '10px' : '15px',
             zIndex: 1,
           }}
         />
@@ -76,9 +76,9 @@ export const QMailStatus = () => {
             })}
           </span>
         }
-        placement="left"
+        placement={compact ? 'bottom' : 'left'}
         arrow
-        sx={{ fontSize: '24' }}
+        sx={{ fontSize: compact ? '20' : '24' }}
         slotProps={{
           tooltip: {
             sx: {
@@ -96,9 +96,19 @@ export const QMailStatus = () => {
         <Mail
           sx={{
             color: theme.palette.text.secondary,
+            fontSize: compact ? 20 : undefined,
           }}
         />
       </Tooltip>
     </ButtonBase>
   );
+
+  if (compact) {
+    return (
+      <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {button}
+      </div>
+    );
+  }
+  return button;
 };
