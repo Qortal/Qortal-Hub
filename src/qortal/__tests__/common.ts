@@ -124,14 +124,16 @@ export const mimeTypesFactory = () => ({ mimeToExtensionMap: {} });
  * Functions that never call enqueue are unaffected by this behaviour.
  */
 export const queueFactory = () => ({
-  RequestQueueWithPromise: vi.fn().mockImplementation(() => ({
-    enqueue: vi.fn((fn: () => Promise<unknown>) => fn()),
-  })),
+  RequestQueueWithPromise: vi.fn().mockImplementation(function () {
+    return { enqueue: vi.fn((fn: () => Promise<unknown>) => fn()) };
+  }),
 });
 
 export const utilsFactory = () => ({ default: { some: vi.fn() } });
 export const shortUidFactory = () => ({
-  default: vi.fn().mockImplementation(() => ({ rnd: vi.fn(() => 'abc123') })),
+  default: vi.fn().mockImplementation(function () {
+    return { rnd: vi.fn(() => 'abc123') };
+  }),
 });
 export const decodeFactory = () => ({
   isValidBase64WithDecode: vi.fn(),
