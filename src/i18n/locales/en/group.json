@@ -171,5 +171,33 @@
       "user_joined": "user successfully joined!"
     }
   },
+  "subscription": {
+    "subscriptions": "subscriptions",
+    "auto_refresh": "Auto-refreshes every 5 mins",
+    "no_active": "No active subscriptions.",
+    "needs_payment_one": "{{count}} subscription needs payment",
+    "needs_payment_other": "{{count}} subscriptions need payment",
+    "by_owner": "by {{name}}",
+    "expires": "Expires {{when}}",
+    "status_due": "Due",
+    "status_active": "Active",
+    "managed_subscriptions": "Managed subscriptions",
+    "actions_needed_one": "{{count}} action needed",
+    "actions_needed_other": "{{count}} actions needed",
+    "member_one": "{{count}} member",
+    "member_other": "{{count}} members",
+    "pending_join_request_one": "{{count}} pending join request",
+    "pending_join_request_other": "{{count}} pending join requests",
+    "re_encryption_needed": "Re-encryption needed",
+    "time_soon": "soon",
+    "time_in_mins_one": "in {{count}} min",
+    "time_in_mins_other": "in {{count}} mins",
+    "time_in_hours_one": "in {{count}} hour",
+    "time_in_hours_other": "in {{count}} hours",
+    "time_in_days_one": "in {{count}} day",
+    "time_in_days_other": "in {{count}} days",
+    "time_in_months_one": "in {{count}} month",
+    "time_in_months_other": "in {{count}} months"
+  },
   "thread_posts": "new thread posts"
 }

@@ -171,5 +171,33 @@
       "user_joined": "usuário entrou com sucesso!"
     }
   },
+  "subscription": {
+    "subscriptions": "assinaturas",
+    "auto_refresh": "Atualiza automaticamente a cada 5 minutos",
+    "no_active": "Nenhuma assinatura ativa.",
+    "needs_payment_one": "{{count}} assinatura precisa de pagamento",
+    "needs_payment_other": "{{count}} assinaturas precisam de pagamento",
+    "by_owner": "por {{name}}",
+    "expires": "Expira {{when}}",
+    "status_due": "Vencido",
+    "status_active": "Ativo",
+    "managed_subscriptions": "Assinaturas gerenciadas",
+    "actions_needed_one": "{{count}} ação necessária",
+    "actions_needed_other": "{{count}} ações necessárias",
+    "member_one": "{{count}} membro",
+    "member_other": "{{count}} membros",
+    "pending_join_request_one": "{{count}} solicitação de adesão pendente",
+    "pending_join_request_other": "{{count}} solicitações de adesão pendentes",
+    "re_encryption_needed": "Re-criptografia necessária",
+    "time_soon": "em breve",
+    "time_in_mins_one": "em {{count}} minuto",
+    "time_in_mins_other": "em {{count}} minutos",
+    "time_in_hours_one": "em {{count}} hora",
+    "time_in_hours_other": "em {{count}} horas",
+    "time_in_days_one": "em {{count}} dia",
+    "time_in_days_other": "em {{count}} dias",
+    "time_in_months_one": "em {{count}} mês",
+    "time_in_months_other": "em {{count}} meses"
+  },
   "thread_posts": "novas postagens do tópico"
 }

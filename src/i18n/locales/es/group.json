@@ -170,5 +170,33 @@
       "user_joined": "¡usuario unido con éxito!"
     }
   },
+  "subscription": {
+    "subscriptions": "suscripciones",
+    "auto_refresh": "Se actualiza automáticamente cada 5 minutos",
+    "no_active": "No hay suscripciones activas.",
+    "needs_payment_one": "{{count}} suscripción necesita pago",
+    "needs_payment_other": "{{count}} suscripciones necesitan pago",
+    "by_owner": "por {{name}}",
+    "expires": "Expira {{when}}",
+    "status_due": "Vencido",
+    "status_active": "Activo",
+    "managed_subscriptions": "Suscripciones administradas",
+    "actions_needed_one": "{{count}} acción requerida",
+    "actions_needed_other": "{{count}} acciones requeridas",
+    "member_one": "{{count}} miembro",
+    "member_other": "{{count}} miembros",
+    "pending_join_request_one": "{{count}} solicitud de unión pendiente",
+    "pending_join_request_other": "{{count}} solicitudes de unión pendientes",
+    "re_encryption_needed": "Se requiere reencriptación",
+    "time_soon": "pronto",
+    "time_in_mins_one": "en {{count}} minuto",
+    "time_in_mins_other": "en {{count}} minutos",
+    "time_in_hours_one": "en {{count}} hora",
+    "time_in_hours_other": "en {{count}} horas",
+    "time_in_days_one": "en {{count}} día",
+    "time_in_days_other": "en {{count}} días",
+    "time_in_months_one": "en {{count}} mes",
+    "time_in_months_other": "en {{count}} meses"
+  },
   "thread_posts": "nuevas publicaciones del hilo"
 }

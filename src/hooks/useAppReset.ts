@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
+import { clearMemberGroupsPolling } from '../components/Group/SubscribedToActivity';
 import {
   addressInfoControllerAtom,
   blobControllerAtom,
@@ -23,6 +24,8 @@ import {
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
+  myMemberGroupsAtom,
+  myMemberGroupsLastFetchedAtom,
   navigationControllerAtom,
   oldPinnedAppsAtom,
   promotionTimeIntervalAtom,
@@ -88,6 +91,10 @@ export function useAppReset() {
   const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
     myGroupsWhereIAmAdminAtom
   );
+  const resetMyMemberGroupsAtom = useResetAtom(myMemberGroupsAtom);
+  const resetMyMemberGroupsLastFetchedAtom = useResetAtom(
+    myMemberGroupsLastFetchedAtom
+  );
   const resetResourceDownloadControllerAtom = useResetAtom(
     resourceDownloadControllerAtom
   );
@@ -143,6 +150,9 @@ export function useAppReset() {
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
     resetMyGroupsWhereIAmAdminAtom();
+    resetMyMemberGroupsAtom();
+    resetMyMemberGroupsLastFetchedAtom();
+    clearMemberGroupsPolling();
     resetResourceDownloadControllerAtom();
     resetGlobalDownloadsAtom();
     resetAddressInfoControllerAtom();
@@ -185,6 +195,8 @@ export function useAppReset() {
     resettxListAtomAtom,
     resetmemberGroupsAtomAtom,
     resetMyGroupsWhereIAmAdminAtom,
+    resetMyMemberGroupsAtom,
+    resetMyMemberGroupsLastFetchedAtom,
     resetResourceDownloadControllerAtom,
     resetGlobalDownloadsAtom,
     resetAddressInfoControllerAtom,

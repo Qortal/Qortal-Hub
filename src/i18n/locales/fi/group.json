@@ -170,5 +170,33 @@
       "user_joined": "käyttäjä liittyi onnistuneesti!"
     }
   },
+  "subscription": {
+    "subscriptions": "tilaukset",
+    "auto_refresh": "Päivittyy automaattisesti 5 minuutin välein",
+    "no_active": "Ei aktiivisia tilauksia.",
+    "needs_payment_one": "{{count}} tilaus vaatii maksun",
+    "needs_payment_other": "{{count}} tilausta vaatii maksun",
+    "by_owner": "tekijältä {{name}}",
+    "expires": "Vanhenee {{when}}",
+    "status_due": "Erääntynyt",
+    "status_active": "Aktiivinen",
+    "managed_subscriptions": "Hallitut tilaukset",
+    "actions_needed_one": "{{count}} toiminto vaaditaan",
+    "actions_needed_other": "{{count}} toimintoa vaaditaan",
+    "member_one": "{{count}} jäsen",
+    "member_other": "{{count}} jäsentä",
+    "pending_join_request_one": "{{count}} odottava liittymispyyntö",
+    "pending_join_request_other": "{{count}} odottavaa liittymispyyntöä",
+    "re_encryption_needed": "Uudelleensalaus tarvitaan",
+    "time_soon": "pian",
+    "time_in_mins_one": "{{count}} minuutin päästä",
+    "time_in_mins_other": "{{count}} minuutin päästä",
+    "time_in_hours_one": "{{count}} tunnin päästä",
+    "time_in_hours_other": "{{count}} tunnin päästä",
+    "time_in_days_one": "{{count}} päivän päästä",
+    "time_in_days_other": "{{count}} päivän päästä",
+    "time_in_months_one": "{{count}} kuukauden päästä",
+    "time_in_months_other": "{{count}} kuukauden päästä"
+  },
   "thread_posts": "uudet ketjun julkaisut"
 }

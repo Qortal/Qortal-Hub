@@ -1,7 +1,14 @@
-import { Box, Button, CircularProgress, IconButton, useTheme } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  useTheme,
+} from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
+import { triggerMemberGroupsFetch } from './SubscribedToActivity';
 import {
   groupInvitesCacheAtom,
   joinRequestsCacheAtom,
@@ -13,8 +20,12 @@ import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
+import { SubscribedToActivity } from './SubscribedToActivity';
 import { HomeProfileCard } from './HomeProfileCard';
-import { HomeGettingStarted, GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
+import {
+  HomeGettingStarted,
+  GETTING_STARTED_LS_KEY,
+} from './HomeGettingStarted';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
@@ -29,7 +40,7 @@ import {
 } from 'framer-motion';
 
 type HomeTab = 'user' | 'developer';
-type ActivityTab = 'requests' | 'invites' | 'promotions';
+type ActivityTab = 'requests' | 'invites' | 'promotions' | 'subscribed';
 
 // Temporarily hide User/Developer toggle — only User mode is shown (no option visible)
 const SHOW_USER_DEVELOPER_TOGGLE = false;
@@ -60,6 +71,7 @@ export const HomeDesktop = ({
   const [requestsCount, setRequestsCount] = useState(0);
   const [invitesCount, setInvitesCount] = useState(0);
   const [promotionsCount, setPromotionsCount] = useState(0);
+  const [subscriptionsPaymentCount, setSubscriptionsPaymentCount] = useState(0);
   const [checked1, setChecked1] = useState(false);
   const [checked2, setChecked2] = useState(false);
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(
@@ -77,6 +89,7 @@ export const HomeDesktop = ({
   const handleRefreshGroupActivity = () => {
     setGroupInvitesCache(null);
     setJoinRequestsCache(null);
+    triggerMemberGroupsFetch();
   };
 
   useEffect(() => {
@@ -193,9 +206,15 @@ export const HomeDesktop = ({
               {/* ── USER TAB ── */}
               {activeTab === 'user' && (
                 <>
-                  <HomeGettingStarted onGettingStartedComplete={() => setShowMostActiveGroups(true)} />
+                  <HomeGettingStarted
+                    onGettingStartedComplete={() =>
+                      setShowMostActiveGroups(true)
+                    }
+                  />
                   <HomeFeaturedApps />
-                  {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
+                  {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && (
+                    <HomeFeaturedGroups {...sharedGroupNavProps} />
+                  )}
 
                   {/* ── GROUP ACTIVITY SECTION ── */}
                   {!isLoadingGroups && hasDoneNameAndBalanceAndIsLoaded && (
@@ -254,110 +273,133 @@ export const HomeDesktop = ({
                           padding: '4px',
                         }}
                       >
-                        {(
-                          [
-                            {
-                              key: 'requests' as ActivityTab,
-                              label: t('group:join_requests', { postProcess: 'capitalizeFirstChar' }),
-                              count: requestsCount,
-                              countLoading: requestsCountLoading,
-                            },
-                            {
-                              key: 'invites' as ActivityTab,
-                              label: t('group:group.invites', { postProcess: 'capitalizeFirstChar' }),
-                              count: invitesCount,
-                              countLoading: invitesCountLoading,
-                            },
-                            {
-                              key: 'promotions' as ActivityTab,
-                              label: t('group:group.promotions', { postProcess: 'capitalizeFirstChar' }),
-                              count: promotionsCount,
-                              countLoading: false,
-                            },
-                          ]
-                        ).map(({ key, label, count, countLoading }) => (
-                          <Button
-                            key={key}
-                            onClick={() => setActivityTab(key)}
-                            size="small"
-                            disableElevation
-                            sx={{
-                              bgcolor:
-                                activityTab === key
-                                  ? theme.palette.primary.main
-                                  : 'transparent',
-                              borderRadius: '50px',
-                              color:
-                                activityTab === key
-                                  ? theme.palette.primary.contrastText
-                                  : theme.palette.text.secondary,
-                              fontSize: '0.82rem',
-                              fontWeight: activityTab === key ? 600 : 400,
-                              px: 2,
-                              textTransform: 'none',
-                              whiteSpace: 'nowrap',
-                              '&:hover': {
+                        {[
+                          {
+                            key: 'requests' as ActivityTab,
+                            label: t('group:join_requests', {
+                              postProcess: 'capitalizeFirstChar',
+                            }),
+                            count: requestsCount,
+                            countLoading: requestsCountLoading,
+                            countColor: undefined,
+                          },
+                          {
+                            key: 'invites' as ActivityTab,
+                            label: t('group:group.invites', {
+                              postProcess: 'capitalizeFirstChar',
+                            }),
+                            count: invitesCount,
+                            countLoading: invitesCountLoading,
+                            countColor: undefined,
+                          },
+                          {
+                            key: 'promotions' as ActivityTab,
+                            label: t('group:group.promotions', {
+                              postProcess: 'capitalizeFirstChar',
+                            }),
+                            count: promotionsCount,
+                            countLoading: false,
+                            countColor: undefined,
+                          },
+                          {
+                            key: 'subscribed' as ActivityTab,
+                            label: t('group:subscription.subscriptions', {
+                              postProcess: 'capitalizeFirstChar',
+                            }),
+                            count: subscriptionsPaymentCount,
+                            countLoading: false,
+                            countColor: theme.palette.warning.main,
+                          },
+                        ].map(
+                          ({ key, label, count, countLoading, countColor }) => (
+                            <Button
+                              key={key}
+                              onClick={() => setActivityTab(key)}
+                              size="small"
+                              disableElevation
+                              sx={{
                                 bgcolor:
                                   activityTab === key
-                                    ? theme.palette.primary.dark
-                                    : theme.palette.action.hover,
-                              },
-                            }}
-                          >
-                            {label}
-                            {countLoading ? (
-                              <Box
-                                component="span"
-                                sx={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  ml: '6px',
-                                }}
-                              >
-                                <CircularProgress
-                                  size={14}
-                                  thickness={4}
-                                  sx={{
-                                    color:
-                                      activityTab === key
-                                        ? 'rgba(255,255,255,0.9)'
-                                        : theme.palette.primary.contrastText,
-                                  }}
-                                />
-                              </Box>
-                            ) : (
-                              count > 0 && (
+                                    ? theme.palette.primary.main
+                                    : 'transparent',
+                                borderRadius: '50px',
+                                color:
+                                  activityTab === key
+                                    ? theme.palette.primary.contrastText
+                                    : theme.palette.text.secondary,
+                                fontSize: '0.82rem',
+                                fontWeight: activityTab === key ? 600 : 400,
+                                px: 2,
+                                textTransform: 'none',
+                                whiteSpace: 'nowrap',
+                                '&:hover': {
+                                  bgcolor:
+                                    activityTab === key
+                                      ? theme.palette.primary.dark
+                                      : theme.palette.action.hover,
+                                },
+                              }}
+                            >
+                              {label}
+                              {countLoading ? (
                                 <Box
                                   component="span"
                                   sx={{
-                                    bgcolor:
-                                      activityTab === key
-                                        ? 'rgba(255,255,255,0.25)'
-                                        : theme.palette.primary.main,
-                                    borderRadius: '50px',
-                                    color:
-                                      activityTab === key
-                                        ? theme.palette.primary.contrastText
-                                        : theme.palette.primary.contrastText,
-                                    display: 'inline-block',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    lineHeight: 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
                                     ml: '6px',
-                                    px: '6px',
-                                    py: '2px',
                                   }}
                                 >
-                                  {count}
+                                  <CircularProgress
+                                    size={14}
+                                    thickness={4}
+                                    sx={{
+                                      color:
+                                        activityTab === key
+                                          ? 'rgba(255,255,255,0.9)'
+                                          : theme.palette.primary.contrastText,
+                                    }}
+                                  />
                                 </Box>
-                              )
-                            )}
-                          </Button>
-                        ))}
+                              ) : (
+                                count > 0 && (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      bgcolor: countColor
+                                        ? activityTab === key
+                                          ? `${countColor}cc`
+                                          : countColor
+                                        : activityTab === key
+                                          ? 'rgba(255,255,255,0.25)'
+                                          : theme.palette.primary.main,
+                                      borderRadius: '50px',
+                                      color: theme.palette.primary.contrastText,
+                                      display: 'inline-block',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      lineHeight: 1,
+                                      ml: '6px',
+                                      px: '6px',
+                                      py: '2px',
+                                    }}
+                                  >
+                                    {count}
+                                  </Box>
+                                )
+                              )}
+                            </Button>
+                          )
+                        )}
                       </Box>
 
                       {/* Tab content: mount all so each can report its count; hide inactive */}
-                      <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
+                      <Box
+                        sx={{
+                          display:
+                            activityTab === 'requests' ? 'block' : 'none',
+                        }}
+                      >
                         <GroupJoinRequests
                           compact
                           onCountChange={setRequestsCount}
@@ -372,7 +414,11 @@ export const HomeDesktop = ({
                           setDesktopViewMode={setDesktopViewMode}
                         />
                       </Box>
-                      <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
+                      <Box
+                        sx={{
+                          display: activityTab === 'invites' ? 'block' : 'none',
+                        }}
+                      >
                         <GroupInvites
                           compact
                           onCountChange={setInvitesCount}
@@ -381,15 +427,30 @@ export const HomeDesktop = ({
                           myAddress={myAddress}
                         />
                       </Box>
-                      <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
+                      <Box
+                        sx={{
+                          display:
+                            activityTab === 'promotions' ? 'block' : 'none',
+                        }}
+                      >
                         <ListOfGroupPromotions
                           compact
                           onCountChange={setPromotionsCount}
                         />
                       </Box>
+                      <Box
+                        sx={{
+                          display:
+                            activityTab === 'subscribed' ? 'block' : 'none',
+                        }}
+                      >
+                        <SubscribedToActivity
+                          compact
+                          onPaymentCountChange={setSubscriptionsPaymentCount}
+                        />
+                      </Box>
                     </Box>
                   )}
-
                 </>
               )}
 

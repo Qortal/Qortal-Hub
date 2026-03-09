@@ -170,5 +170,33 @@
       "user_joined": "l'utente si è unito con successo!"
     }
   },
+  "subscription": {
+    "subscriptions": "abbonamenti",
+    "auto_refresh": "Aggiornamento automatico ogni 5 minuti",
+    "no_active": "Nessun abbonamento attivo.",
+    "needs_payment_one": "{{count}} abbonamento richiede pagamento",
+    "needs_payment_other": "{{count}} abbonamenti richiedono pagamento",
+    "by_owner": "di {{name}}",
+    "expires": "Scade {{when}}",
+    "status_due": "Scaduto",
+    "status_active": "Attivo",
+    "managed_subscriptions": "Abbonamenti gestiti",
+    "actions_needed_one": "{{count}} azione richiesta",
+    "actions_needed_other": "{{count}} azioni richieste",
+    "member_one": "{{count}} membro",
+    "member_other": "{{count}} membri",
+    "pending_join_request_one": "{{count}} richiesta di adesione in attesa",
+    "pending_join_request_other": "{{count}} richieste di adesione in attesa",
+    "re_encryption_needed": "Ri-cifratura necessaria",
+    "time_soon": "presto",
+    "time_in_mins_one": "tra {{count}} minuto",
+    "time_in_mins_other": "tra {{count}} minuti",
+    "time_in_hours_one": "tra {{count}} ora",
+    "time_in_hours_other": "tra {{count}} ore",
+    "time_in_days_one": "tra {{count}} giorno",
+    "time_in_days_other": "tra {{count}} giorni",
+    "time_in_months_one": "tra {{count}} mese",
+    "time_in_months_other": "tra {{count}} mesi"
+  },
   "thread_posts": "nuovi post di thread"
 }

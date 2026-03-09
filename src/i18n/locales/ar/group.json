@@ -171,5 +171,33 @@
       "user_joined": "تم انضمام المستخدم بنجاح!"
     }
   },
+  "subscription": {
+    "subscriptions": "الاشتراكات",
+    "auto_refresh": "يتجدد تلقائياً كل 5 دقائق",
+    "no_active": "لا توجد اشتراكات نشطة.",
+    "needs_payment_one": "{{count}} اشتراك يحتاج إلى دفع",
+    "needs_payment_other": "{{count}} اشتراكات تحتاج إلى دفع",
+    "by_owner": "بواسطة {{name}}",
+    "expires": "تنتهي {{when}}",
+    "status_due": "مستحق",
+    "status_active": "نشط",
+    "managed_subscriptions": "الاشتراكات المُدارة",
+    "actions_needed_one": "{{count}} إجراء مطلوب",
+    "actions_needed_other": "{{count}} إجراءات مطلوبة",
+    "member_one": "{{count}} عضو",
+    "member_other": "{{count}} أعضاء",
+    "pending_join_request_one": "{{count}} طلب انضمام معلّق",
+    "pending_join_request_other": "{{count}} طلبات انضمام معلّقة",
+    "re_encryption_needed": "إعادة التشفير مطلوبة",
+    "time_soon": "قريباً",
+    "time_in_mins_one": "خلال {{count}} دقيقة",
+    "time_in_mins_other": "خلال {{count}} دقائق",
+    "time_in_hours_one": "خلال {{count}} ساعة",
+    "time_in_hours_other": "خلال {{count}} ساعات",
+    "time_in_days_one": "خلال {{count}} يوم",
+    "time_in_days_other": "خلال {{count}} أيام",
+    "time_in_months_one": "خلال {{count}} شهر",
+    "time_in_months_other": "خلال {{count}} أشهر"
+  },
   "thread_posts": "بُوستات جديدة في الموضوع"
 }

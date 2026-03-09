@@ -170,5 +170,33 @@
       "user_joined": "用户成功加入！"
     }
   },
+  "subscription": {
+    "subscriptions": "订阅",
+    "auto_refresh": "每5分钟自动刷新",
+    "no_active": "没有活跃的订阅。",
+    "needs_payment_one": "{{count}}个订阅需要付款",
+    "needs_payment_other": "{{count}}个订阅需要付款",
+    "by_owner": "来自 {{name}}",
+    "expires": "{{when}}到期",
+    "status_due": "待付款",
+    "status_active": "活跃",
+    "managed_subscriptions": "管理的订阅",
+    "actions_needed_one": "需要{{count}}项操作",
+    "actions_needed_other": "需要{{count}}项操作",
+    "member_one": "{{count}}位成员",
+    "member_other": "{{count}}位成员",
+    "pending_join_request_one": "{{count}}个待处理的加入请求",
+    "pending_join_request_other": "{{count}}个待处理的加入请求",
+    "re_encryption_needed": "需要重新加密",
+    "time_soon": "即将",
+    "time_in_mins_one": "{{count}}分钟后",
+    "time_in_mins_other": "{{count}}分钟后",
+    "time_in_hours_one": "{{count}}小时后",
+    "time_in_hours_other": "{{count}}小时后",
+    "time_in_days_one": "{{count}}天后",
+    "time_in_days_other": "{{count}}天后",
+    "time_in_months_one": "{{count}}个月后",
+    "time_in_months_other": "{{count}}个月后"
+  },
   "thread_posts": "新主题消息"
 }

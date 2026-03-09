@@ -170,5 +170,33 @@
       "user_joined": "Benutzer ist erfolgreich beigetreten!"
     }
   },
+  "subscription": {
+    "subscriptions": "Abonnements",
+    "auto_refresh": "Wird alle 5 Minuten automatisch aktualisiert",
+    "no_active": "Keine aktiven Abonnements.",
+    "needs_payment_one": "{{count}} Abonnement benötigt Zahlung",
+    "needs_payment_other": "{{count}} Abonnements benötigen Zahlung",
+    "by_owner": "von {{name}}",
+    "expires": "Läuft ab {{when}}",
+    "status_due": "Fällig",
+    "status_active": "Aktiv",
+    "managed_subscriptions": "Verwaltete Abonnements",
+    "actions_needed_one": "{{count}} Aktion erforderlich",
+    "actions_needed_other": "{{count}} Aktionen erforderlich",
+    "member_one": "{{count}} Mitglied",
+    "member_other": "{{count}} Mitglieder",
+    "pending_join_request_one": "{{count}} ausstehende Beitrittsanfrage",
+    "pending_join_request_other": "{{count}} ausstehende Beitrittsanfragen",
+    "re_encryption_needed": "Neuverschlüsselung erforderlich",
+    "time_soon": "bald",
+    "time_in_mins_one": "in {{count}} Minute",
+    "time_in_mins_other": "in {{count}} Minuten",
+    "time_in_hours_one": "in {{count}} Stunde",
+    "time_in_hours_other": "in {{count}} Stunden",
+    "time_in_days_one": "in {{count}} Tag",
+    "time_in_days_other": "in {{count}} Tagen",
+    "time_in_months_one": "in {{count}} Monat",
+    "time_in_months_other": "in {{count}} Monaten"
+  },
   "thread_posts": "Neue Thread-Beiträge"
 }

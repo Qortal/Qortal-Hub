@@ -100,6 +100,11 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
 );
 
 export const txListAtom = atomWithReset([]);
+
+/** Groups the current user is a member of – refreshed every 5 minutes. */
+export const myMemberGroupsAtom = atomWithReset<any[]>([]);
+/** Unix-ms timestamp of the last successful fetch for myMemberGroupsAtom. */
+export const myMemberGroupsLastFetchedAtom = atomWithReset<number>(0);
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');

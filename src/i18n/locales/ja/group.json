@@ -170,5 +170,33 @@
       "user_joined": "ユーザーが正常に参加しました！"
     }
   },
+  "subscription": {
+    "subscriptions": "サブスクリプション",
+    "auto_refresh": "5分ごとに自動更新",
+    "no_active": "アクティブなサブスクリプションはありません。",
+    "needs_payment_one": "{{count}}件のサブスクリプションの支払いが必要です",
+    "needs_payment_other": "{{count}}件のサブスクリプションの支払いが必要です",
+    "by_owner": "{{name}} 提供",
+    "expires": "{{when}}に期限切れ",
+    "status_due": "支払い期限",
+    "status_active": "アクティブ",
+    "managed_subscriptions": "管理中のサブスクリプション",
+    "actions_needed_one": "{{count}}件のアクションが必要",
+    "actions_needed_other": "{{count}}件のアクションが必要",
+    "member_one": "{{count}}人のメンバー",
+    "member_other": "{{count}}人のメンバー",
+    "pending_join_request_one": "{{count}}件の参加リクエスト保留中",
+    "pending_join_request_other": "{{count}}件の参加リクエスト保留中",
+    "re_encryption_needed": "再暗号化が必要",
+    "time_soon": "まもなく",
+    "time_in_mins_one": "{{count}}分後",
+    "time_in_mins_other": "{{count}}分後",
+    "time_in_hours_one": "{{count}}時間後",
+    "time_in_hours_other": "{{count}}時間後",
+    "time_in_days_one": "{{count}}日後",
+    "time_in_days_other": "{{count}}日後",
+    "time_in_months_one": "{{count}}ヶ月後",
+    "time_in_months_other": "{{count}}ヶ月後"
+  },
   "thread_posts": "新しいスレッド投稿"
 }

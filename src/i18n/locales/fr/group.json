@@ -170,5 +170,33 @@
       "user_joined": "utilisateur ajouté avec succès !"
     }
   },
+  "subscription": {
+    "subscriptions": "abonnements",
+    "auto_refresh": "Actualisation automatique toutes les 5 minutes",
+    "no_active": "Aucun abonnement actif.",
+    "needs_payment_one": "{{count}} abonnement nécessite un paiement",
+    "needs_payment_other": "{{count}} abonnements nécessitent un paiement",
+    "by_owner": "par {{name}}",
+    "expires": "Expire {{when}}",
+    "status_due": "Dû",
+    "status_active": "Actif",
+    "managed_subscriptions": "Abonnements gérés",
+    "actions_needed_one": "{{count}} action requise",
+    "actions_needed_other": "{{count}} actions requises",
+    "member_one": "{{count}} membre",
+    "member_other": "{{count}} membres",
+    "pending_join_request_one": "{{count}} demande d'adhésion en attente",
+    "pending_join_request_other": "{{count}} demandes d'adhésion en attente",
+    "re_encryption_needed": "Re-chiffrement nécessaire",
+    "time_soon": "bientôt",
+    "time_in_mins_one": "dans {{count}} minute",
+    "time_in_mins_other": "dans {{count}} minutes",
+    "time_in_hours_one": "dans {{count}} heure",
+    "time_in_hours_other": "dans {{count}} heures",
+    "time_in_days_one": "dans {{count}} jour",
+    "time_in_days_other": "dans {{count}} jours",
+    "time_in_months_one": "dans {{count}} mois",
+    "time_in_months_other": "dans {{count}} mois"
+  },
   "thread_posts": "nouveaux messages du fil"
 }

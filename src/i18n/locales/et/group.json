@@ -170,5 +170,33 @@
       "user_joined": "kasutaja liitumine õnnestus!"
     }
   },
+  "subscription": {
+    "subscriptions": "tellimused",
+    "auto_refresh": "Värskendatakse automaatselt iga 5 minuti järel",
+    "no_active": "Aktiivseid tellimusi pole.",
+    "needs_payment_one": "{{count}} tellimus vajab makset",
+    "needs_payment_other": "{{count}} tellimust vajavad makset",
+    "by_owner": "autori {{name}} poolt",
+    "expires": "Aegub {{when}}",
+    "status_due": "Tähtaeg",
+    "status_active": "Aktiivne",
+    "managed_subscriptions": "Hallatud tellimused",
+    "actions_needed_one": "{{count}} toiming on vajalik",
+    "actions_needed_other": "{{count}} toimingut on vajalikud",
+    "member_one": "{{count}} liige",
+    "member_other": "{{count}} liiget",
+    "pending_join_request_one": "{{count}} ootel liitumistaotlus",
+    "pending_join_request_other": "{{count}} ootel liitumistaotlust",
+    "re_encryption_needed": "Vajalik on uuesti krüpteerimine",
+    "time_soon": "peagi",
+    "time_in_mins_one": "{{count}} minuti pärast",
+    "time_in_mins_other": "{{count}} minuti pärast",
+    "time_in_hours_one": "{{count}} tunni pärast",
+    "time_in_hours_other": "{{count}} tunni pärast",
+    "time_in_days_one": "{{count}} päeva pärast",
+    "time_in_days_other": "{{count}} päeva pärast",
+    "time_in_months_one": "{{count}} kuu pärast",
+    "time_in_months_other": "{{count}} kuu pärast"
+  },
   "thread_posts": "uued teemapostitused"
 }

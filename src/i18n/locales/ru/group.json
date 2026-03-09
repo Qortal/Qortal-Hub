@@ -170,5 +170,33 @@
       "user_joined": "пользователь успешно присоединился!"
     }
   },
+  "subscription": {
+    "subscriptions": "подписки",
+    "auto_refresh": "Автоматическое обновление каждые 5 минут",
+    "no_active": "Нет активных подписок.",
+    "needs_payment_one": "{{count}} подписка требует оплаты",
+    "needs_payment_other": "{{count}} подписок требуют оплаты",
+    "by_owner": "от {{name}}",
+    "expires": "Истекает {{when}}",
+    "status_due": "К оплате",
+    "status_active": "Активна",
+    "managed_subscriptions": "Управляемые подписки",
+    "actions_needed_one": "{{count}} действие требуется",
+    "actions_needed_other": "{{count}} действий требуется",
+    "member_one": "{{count}} участник",
+    "member_other": "{{count}} участников",
+    "pending_join_request_one": "{{count}} ожидающий запрос на вступление",
+    "pending_join_request_other": "{{count}} ожидающих запросов на вступление",
+    "re_encryption_needed": "Требуется повторное шифрование",
+    "time_soon": "скоро",
+    "time_in_mins_one": "через {{count}} минуту",
+    "time_in_mins_other": "через {{count}} минут",
+    "time_in_hours_one": "через {{count}} час",
+    "time_in_hours_other": "через {{count}} часов",
+    "time_in_days_one": "через {{count}} день",
+    "time_in_days_other": "через {{count}} дней",
+    "time_in_months_one": "через {{count}} месяц",
+    "time_in_months_other": "через {{count}} месяцев"
+  },
   "thread_posts": "новые сообщения темы"
 }
