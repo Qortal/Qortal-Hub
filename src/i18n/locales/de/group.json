@@ -86,6 +86,8 @@
       "invited_you": "hat dich eingeladen",
       "join_request_from": "Beitrittsanfrage von",
       "accept_join_request_confirm": "Anfrage annehmen, um sie zur Gruppe hinzuzufügen.",
+      "add_new_key_option": "Neuen Schlüssel hinzufügen (erhöht die Größe der Gruppenschlüssel)",
+      "add_new_key_sparingly": "Einen neuen Schlüssel nur sparsam hinzufügen, um die Größe der Gruppenschlüssel nicht zu erhöhen.",
       "group_key_created": "Erster Gruppenschlüssel erstellt.",
       "group_member_list_changed": "Mitgliederliste hat sich geändert. Bitte Verschlüsselungsschlüssel neu verschlüsseln.",
       "group_no_secret_key": "Es gibt keinen geheimen Gruppenschlüssel. Sei der erste Admin, der einen veröffentlicht!",

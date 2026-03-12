@@ -743,14 +743,18 @@ const Tiptap = ({
                   return schema.nodes.paragraph.create(null, Fragment.empty);
                 }
                 const parts = block.split('\n');
-                const content = parts.flatMap((t, i) =>
-                  i === 0
+                const content = parts.flatMap((t, i) => {
+                  // ProseMirror does not allow empty text nodes; skip empty parts
+                  if (t === '') {
+                    return i === 0 ? [] : [schema.nodes.hardBreak.create()];
+                  }
+                  return i === 0
                     ? [schema.text(t)]
                     : [
                         schema.nodes.hardBreak.create(),
                         schema.text(t),
-                      ]
-                );
+                      ];
+                });
                 return schema.nodes.paragraph.create(
                   null,
                   Fragment.from(content)

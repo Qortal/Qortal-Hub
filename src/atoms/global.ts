@@ -105,6 +105,15 @@ export const txListAtom = atomWithReset([]);
 export const myMemberGroupsAtom = atomWithReset<any[]>([]);
 /** Unix-ms timestamp of the last successful fetch for myMemberGroupsAtom. */
 export const myMemberGroupsLastFetchedAtom = atomWithReset<number>(0);
+
+/** Subscriptions the current user is subscribed to (fetched globally in the title bar). */
+export const mySubscriptionsAtom = atomWithReset<any[]>([]);
+/** Subscriptions belonging to groups the current user manages as admin. */
+export const managedSubscriptionsAtom = atomWithReset<any[]>([]);
+/** Whether the global subscription fetch is currently in progress. */
+export const subscriptionsLoadingAtom = atomWithReset<boolean>(false);
+/** Whether the global managed subscription fetch is currently in progress. */
+export const managedSubscriptionsLoadingAtom = atomWithReset<boolean>(false);
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');

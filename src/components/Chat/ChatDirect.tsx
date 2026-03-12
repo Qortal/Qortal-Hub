@@ -85,7 +85,8 @@ export const ChatDirect = ({
   const [directToValue, setDirectToValue] = useState('');
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const nameSearchInputRef = useRef<HTMLDivElement>(null);
-  const searchQuery = directToValue.trim().length >= 1 ? directToValue.trim() : '';
+  const searchQuery =
+    directToValue.trim().length >= 1 ? directToValue.trim() : '';
   const { results: nameSearchResults, isLoading: nameSearchLoading } =
     useNameSearch(searchQuery, 15);
   const hasInitialized = useRef(false);
@@ -905,199 +906,203 @@ export const ChatDirect = ({
 
       {isNewChat && (
         <>
-        <ClickAwayListener onClickAway={() => setSuggestionsOpen(false)}>
-          <Box
-            ref={nameSearchInputRef}
-            sx={{
-              flexShrink: 0,
-              padding: '20px 16px 16px',
-              position: 'relative',
-              width: '100%',
-            }}
-          >
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder={t('auth:message.generic.name_address', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-              value={directToValue}
-              onChange={(e) => {
-                setDirectToValue(e.target.value);
-                setSuggestionsOpen(true);
+          <ClickAwayListener onClickAway={() => setSuggestionsOpen(false)}>
+            <Box
+              ref={nameSearchInputRef}
+              sx={{
+                flexShrink: 0,
+                padding: '20px 16px 16px',
+                position: 'relative',
+                width: '100%',
               }}
-              onFocus={() => setSuggestionsOpen(true)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === 'Enter' &&
-                  directToValue.trim() &&
-                  validateAddress(directToValue.trim())
-                ) {
-                  e.preventDefault();
-                  handleSelectNameOrAddress(directToValue.trim());
-                  setSuggestionsOpen(false);
-                }
-              }}
-              autoFocus
-              slotProps={{
-                htmlInput: {
-                  'aria-label': t('auth:message.generic.name_address', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchRoundedIcon
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '22px',
-                      }}
-                    />
-                  </InputAdornment>
-                ),
-                endAdornment: nameSearchLoading ? (
-                  <InputAdornment position="end">
-                    <CircularProgress size={20} />
-                  </InputAdornment>
-                ) : null,
-                sx: {
-                  backgroundColor: theme.palette.background.paper,
-                  borderRadius: '14px',
-                  fontFamily: 'Inter',
-                  fontSize: '15px',
-                  transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-                  '& fieldset': {
-                    borderColor: theme.palette.divider,
-                    borderRadius: '14px',
-                    transition: 'border-color 0.2s ease',
-                  },
-                  '&:hover fieldset': {
-                    borderColor: theme.palette.text.secondary,
-                  },
-                  '&.Mui-focused fieldset': {
-                    borderWidth: '2px',
-                    borderColor: theme.palette.primary.main,
-                    boxShadow: `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(25, 118, 210, 0.12)'}`,
-                  },
-                },
-              }}
-            />
-            {suggestionsOpen && (nameOptions.length > 0 || nameSearchLoading) && (
-              <Paper
-                elevation={8}
-                sx={{
-                  position: 'absolute',
-                  left: 16,
-                  right: 16,
-                  top: '100%',
-                  marginTop: 8,
-                  maxHeight: 300,
-                  overflow: 'hidden',
-                  overflowY: 'auto',
-                  zIndex: 1400,
-                  borderRadius: '14px',
-                  border: `1px solid ${theme.palette.divider}`,
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 8px 32px rgba(0,0,0,0.4)'
-                    : '0 8px 32px rgba(0,0,0,0.12)',
-                  '&::-webkit-scrollbar': { width: 8 },
-                  '&::-webkit-scrollbar-thumb': {
-                    backgroundColor: theme.palette.divider,
-                    borderRadius: 4,
+            >
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder={t('auth:message.generic.name_address', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                value={directToValue}
+                onChange={(e) => {
+                  setDirectToValue(e.target.value);
+                  setSuggestionsOpen(true);
+                }}
+                onFocus={() => setSuggestionsOpen(true)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Enter' &&
+                    directToValue.trim() &&
+                    validateAddress(directToValue.trim())
+                  ) {
+                    e.preventDefault();
+                    handleSelectNameOrAddress(directToValue.trim());
+                    setSuggestionsOpen(false);
+                  }
+                }}
+                autoFocus
+                slotProps={{
+                  htmlInput: {
+                    'aria-label': t('auth:message.generic.name_address', {
+                      postProcess: 'capitalizeFirstChar',
+                    }),
                   },
                 }}
-              >
-                {nameSearchLoading && nameOptions.length === 0 ? (
-                  <Box
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchRoundedIcon
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '22px',
+                        }}
+                      />
+                    </InputAdornment>
+                  ),
+                  endAdornment: nameSearchLoading ? (
+                    <InputAdornment position="end">
+                      <CircularProgress size={20} />
+                    </InputAdornment>
+                  ) : null,
+                  sx: {
+                    backgroundColor: theme.palette.background.paper,
+                    borderRadius: '14px',
+                    fontFamily: 'Inter',
+                    fontSize: '15px',
+                    transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+                    '& fieldset': {
+                      borderColor: theme.palette.divider,
+                      borderRadius: '14px',
+                      transition: 'border-color 0.2s ease',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: theme.palette.text.secondary,
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderWidth: '2px',
+                      borderColor: theme.palette.primary.main,
+                      boxShadow: `0 0 0 3px ${theme.palette.mode === 'dark' ? 'rgba(25, 118, 210, 0.2)' : 'rgba(25, 118, 210, 0.12)'}`,
+                    },
+                  },
+                }}
+              />
+              {suggestionsOpen &&
+                (nameOptions.length > 0 || nameSearchLoading) && (
+                  <Paper
+                    elevation={8}
                     sx={{
-                      py: 3,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 1.5,
+                      position: 'absolute',
+                      left: 16,
+                      right: 16,
+                      top: '100%',
+                      marginTop: 8,
+                      maxHeight: 300,
+                      overflow: 'hidden',
+                      overflowY: 'auto',
+                      zIndex: 1400,
+                      borderRadius: '14px',
+                      border: `1px solid ${theme.palette.divider}`,
+                      boxShadow:
+                        theme.palette.mode === 'dark'
+                          ? '0 8px 32px rgba(0,0,0,0.4)'
+                          : '0 8px 32px rgba(0,0,0,0.12)',
+                      '&::-webkit-scrollbar': { width: 8 },
+                      '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: theme.palette.divider,
+                        borderRadius: 4,
+                      },
                     }}
                   >
-                    <CircularProgress size={22} />
-                    <Typography variant="body2" color="text.secondary">
-                      {t('core:loading.generic', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <List disablePadding sx={{ py: 0.5 }}>
-                    {nameOptions.map((opt) => {
-                      const label =
-                        typeof opt === 'string' ? opt : opt.name;
-                      const key =
-                        typeof opt === 'string' ? opt : opt.address;
-                      const initial = (label || '?').charAt(0).toUpperCase();
-                      return (
-                        <ListItem key={key} disablePadding sx={{ px: 1 }}>
-                          <ListItemButton
-                            onClick={() => {
-                              const valueToSet =
-                                typeof opt === 'string' ? opt : opt.name;
-                              setDirectToValue(valueToSet);
-                              setSuggestionsOpen(false);
-                            }}
-                            sx={{
-                              borderRadius: '10px',
-                              py: 1.25,
-                              px: 1.5,
-                              mx: 0.5,
-                              transition: 'background-color 0.15s ease',
-                              '&:hover': {
-                                backgroundColor: theme.palette.action.hover,
-                              },
-                            }}
-                          >
-                            <Avatar
-                              sx={{
-                                width: 36,
-                                height: 36,
-                                mr: 1.5,
-                                fontSize: '1rem',
-                                fontWeight: 600,
-                                bgcolor: theme.palette.primary.main,
-                                color: theme.palette.primary.contrastText,
-                              }}
-                            >
-                              {initial}
-                            </Avatar>
-                            <ListItemText
-                              primary={label}
-                              primaryTypographyProps={{
-                                fontWeight: 500,
-                                fontSize: '0.9375rem',
-                              }}
-                            />
-                          </ListItemButton>
-                        </ListItem>
-                      );
-                    })}
-                  </List>
+                    {nameSearchLoading && nameOptions.length === 0 ? (
+                      <Box
+                        sx={{
+                          py: 3,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 1.5,
+                        }}
+                      >
+                        <CircularProgress size={22} />
+                        <Typography variant="body2" color="text.secondary">
+                          {t('core:loading.generic', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <List disablePadding sx={{ py: 0.5 }}>
+                        {nameOptions.map((opt) => {
+                          const label =
+                            typeof opt === 'string' ? opt : opt.name;
+                          const key =
+                            typeof opt === 'string' ? opt : opt.address;
+                          const initial = (label || '?')
+                            .charAt(0)
+                            .toUpperCase();
+                          return (
+                            <ListItem key={key} disablePadding sx={{ px: 1 }}>
+                              <ListItemButton
+                                onClick={() => {
+                                  const valueToSet =
+                                    typeof opt === 'string' ? opt : opt.name;
+                                  setDirectToValue(valueToSet);
+                                  setSuggestionsOpen(false);
+                                }}
+                                sx={{
+                                  borderRadius: '10px',
+                                  py: 1.25,
+                                  px: 1.5,
+                                  mx: 0.5,
+                                  transition: 'background-color 0.15s ease',
+                                  '&:hover': {
+                                    backgroundColor: theme.palette.action.hover,
+                                  },
+                                }}
+                              >
+                                <Avatar
+                                  sx={{
+                                    width: 36,
+                                    height: 36,
+                                    mr: 1.5,
+                                    fontSize: '1rem',
+                                    fontWeight: 600,
+                                    bgcolor: theme.palette.primary.main,
+                                    color: theme.palette.primary.contrastText,
+                                  }}
+                                >
+                                  {initial}
+                                </Avatar>
+                                <ListItemText
+                                  primary={label}
+                                  primaryTypographyProps={{
+                                    fontWeight: 500,
+                                    fontSize: '0.9375rem',
+                                  }}
+                                />
+                              </ListItemButton>
+                            </ListItem>
+                          );
+                        })}
+                      </List>
+                    )}
+                  </Paper>
                 )}
-              </Paper>
-            )}
+            </Box>
+          </ClickAwayListener>
+          <Box sx={{ padding: '0 16px 20px', width: '100%' }}>
+            <Typography
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: '13px',
+                lineHeight: 1.4,
+                paddingLeft: '4px',
+              }}
+            >
+              {t('auth:message.generic.insert_name_address', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+            </Typography>
           </Box>
-        </ClickAwayListener>
-        <Box sx={{ padding: '0 16px 20px', width: '100%' }}>
-          <Typography
-            sx={{
-              color: theme.palette.text.secondary,
-              fontSize: '13px',
-              lineHeight: 1.4,
-              paddingLeft: '4px',
-            }}
-          >
-            {t('auth:message.generic.insert_name_address', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-        </Box>
         </>
       )}
 

@@ -5,41 +5,23 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useAtom, useAtomValue } from 'jotai';
-import { useEffect, useMemo, useRef } from 'react';
+import { useAtomValue } from 'jotai';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getBaseApiReact } from '../../App';
 import {
-  myMemberGroupsAtom,
-  myMemberGroupsLastFetchedAtom,
-  userInfoAtom,
+  managedSubscriptionsAtom,
+  managedSubscriptionsLoadingAtom,
+  mySubscriptionsAtom,
+  subscriptionsLoadingAtom,
 } from '../../atoms/global';
-import { useSubscriptionsFromGroups } from '../../subscriptions/useSubscriptionsFromGroups';
+import {
+  clearMemberGroupsPolling,
+  triggerMemberGroupsFetch,
+} from '../../subscriptions/useInitializeMySubscriptions';
 import { executeEvent } from '../../utils/events';
-import { useManagedSubscriptionsFromGroups } from '../../subscriptions/useSubscriptionsFromManagedGroups';
 
-const MEMBER_GROUPS_INTERVAL_MS = 5 * 60 * 1_000;
-
-// Module-level handle so the interval survives component unmounts.
-let _memberGroupsIntervalId: ReturnType<typeof setInterval> | null = null;
-
-// Module-level fetch callback – set by the component so external callers can
-// trigger an immediate re-fetch without needing the component to be mounted.
-let _doFetchMemberGroups: (() => void) | null = null;
-
-/** Trigger an immediate re-fetch of member groups from anywhere (e.g. refresh button). */
-export function triggerMemberGroupsFetch() {
-  _doFetchMemberGroups?.();
-}
-
-/** Called on logout to stop the polling interval and reset the timestamp. */
-export function clearMemberGroupsPolling() {
-  if (_memberGroupsIntervalId !== null) {
-    clearInterval(_memberGroupsIntervalId);
-    _memberGroupsIntervalId = null;
-  }
-  _doFetchMemberGroups = null;
-}
+// Re-export for backwards-compat (callers like useAppReset import these).
+export { clearMemberGroupsPolling, triggerMemberGroupsFetch };
 
 function useFormatTimeUntil() {
   const { t } = useTranslation(['group']);
@@ -72,85 +54,20 @@ export function SubscribedToActivity({
   const theme = useTheme();
   const { t } = useTranslation(['group']);
   const formatTimeUntil = useFormatTimeUntil();
-  const userInfo = useAtomValue(userInfoAtom);
-  const [myMemberGroups, setMyMemberGroups] = useAtom(myMemberGroupsAtom);
-  const [lastFetched, setLastFetched] = useAtom(myMemberGroupsLastFetchedAtom);
 
-  // Stable ref so the interval callback always sees the latest values.
-  const fetchRef = useRef<{
-    address: string | undefined;
-    setGroups: typeof setMyMemberGroups;
-    setLastFetched: typeof setLastFetched;
-  }>({ address: undefined, setGroups: setMyMemberGroups, setLastFetched });
+  // Read subscription data from global atoms (populated by useInitializeMySubscriptions in the title bar).
+  const mySubscriptions = useAtomValue(mySubscriptionsAtom);
+  const managedSubscriptions = useAtomValue(managedSubscriptionsAtom);
+  const loading = useAtomValue(subscriptionsLoadingAtom);
+  const managedLoading = useAtomValue(managedSubscriptionsLoadingAtom);
 
-  useEffect(() => {
-    fetchRef.current = {
-      address: userInfo?.address,
-      setGroups: setMyMemberGroups,
-      setLastFetched,
-    };
-  });
-
-  useEffect(() => {
-    async function fetchMemberGroups() {
-      const { address, setGroups, setLastFetched: setTs } = fetchRef.current;
-      if (!address) return;
-      try {
-        const res = await fetch(
-          `${getBaseApiReact()}/groups/member/${address}`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        setGroups(data);
-        setTs(Date.now());
-      } catch {
-        // silently ignore network errors
-      }
-    }
-
-    // Expose so external callers (e.g. refresh button) can trigger immediately.
-    _doFetchMemberGroups = fetchMemberGroups;
-
-    // Fetch immediately if never fetched or if stale (> 5 min since last fetch).
-    if (Date.now() - lastFetched >= MEMBER_GROUPS_INTERVAL_MS) {
-      fetchMemberGroups();
-    }
-
-    // Start a single shared interval the first time this component mounts.
-    if (_memberGroupsIntervalId === null) {
-      _memberGroupsIntervalId = setInterval(
-        fetchMemberGroups,
-        MEMBER_GROUPS_INTERVAL_MS
-      );
-    }
-
-    return () => {
-      // We intentionally leave _memberGroupsIntervalId running so the 5-min
-      // cadence is preserved even when this component unmounts.
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const myMemberGroupsWhereAdmin = useMemo(() => {
-    return myMemberGroups.filter((group) => group.isAdmin);
-  }, [myMemberGroups]);
-
-  const { mySubscriptions, loading } = useSubscriptionsFromGroups(
-    userInfo?.address,
-    userInfo?.name,
-    myMemberGroups
-  );
-
-  const { managedSubscriptions, loading: managedLoading } =
-    useManagedSubscriptionsFromGroups(
-      userInfo?.address,
-      userInfo?.name,
-      myMemberGroupsWhereAdmin
-    );
-
-  const totalManagedActions = managedSubscriptions.reduce(
-    (sum, entry) => sum + (entry.actions?.totalActions ?? 0),
-    0
+  const totalManagedActions = useMemo(
+    () =>
+      managedSubscriptions.reduce(
+        (sum, entry) => sum + (entry.actions?.totalActions ?? 0),
+        0
+      ),
+    [managedSubscriptions]
   );
 
   const totalNeedingPayment = mySubscriptions.filter(

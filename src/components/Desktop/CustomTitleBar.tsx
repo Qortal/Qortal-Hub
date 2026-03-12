@@ -25,6 +25,7 @@ import { Save } from '../Save/Save';
 import { TaskManager } from '../TaskManager/TaskManager';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
+import { SubscriptionsIcon } from './SubscriptionsIcon';
 
 const TITLE_BAR_HEIGHT = 32;
 /** Left offset so title-bar nav aligns with content vertical line (DesktopLeftSideBar width). */
@@ -477,6 +478,10 @@ export function CustomTitleBar(props?: {
           />
         </Box>
       </Tooltip>
+      <Box sx={{ width: 2 }} />
+      {rightNav.extState === 'authenticated' && (
+        <SubscriptionsIcon navIconSx={navIconSx} controlColor={controlColor} />
+      )}
       <Box sx={{ width: 2 }} />
       {rightNav.desktopViewMode !== 'home' && (
         <Tooltip

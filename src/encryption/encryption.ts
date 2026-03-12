@@ -113,6 +113,7 @@ export const encryptAndPublishSymmetricKeyGroupChat = async ({
   addKey?: boolean;
 }) => {
   try {
+    console.log('addKey', addKey);
     let shouldAddKey = addKey || false;
     let highestKey = 0;
     if (previousData) {

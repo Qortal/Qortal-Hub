@@ -401,7 +401,7 @@ export function useSubscriptionsFromGroups(
                 billingInterval:
                   intervalDaysToBillingInterval(resolvedIntervalDays),
                 nextPaymentDue,
-                link: `subscription/${subscriptionId}`,
+                link: ``,
                 status:
                   nextPaymentDue == null || Date.now() > nextPaymentDue
                     ? 'payment-needed'

@@ -33,6 +33,7 @@ const ListOfMembers = ({
   setOpenSnack,
   isAdmin,
   isOwner,
+  ownerAddress,
   show,
 }) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null); // Track which list item the popover is anchored to
@@ -403,16 +404,20 @@ const ListOfMembers = ({
                   id={member?.primaryName || member?.member}
                   primary={member?.primaryName || member?.member}
                 />
-                {member?.isAdmin && (
+                {(member?.isAdmin || member?.member === ownerAddress) && (
                   <Typography
                     sx={{
                       color: theme.palette.text.primary,
                       marginLeft: 'auto',
                     }}
                   >
-                    {t('core:admin', {
-                      postProcess: 'capitalizeFirstChar',
-                    })}
+                    {member?.member === ownerAddress
+                      ? t('group:group.owner', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('core:admin', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                   </Typography>
                 )}
               </ListItemButton>

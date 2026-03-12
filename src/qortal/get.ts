@@ -1646,13 +1646,13 @@ export const publishQDNResource = async (
   if (hasAppFee) {
     const feePayment = await getFee('PAYMENT');
 
-    (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
+    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
         label: i18n.t('question:accept_app_fee', {
           postProcess: 'capitalizeFirstChar',
         }),
-      });
+      }));
   }
   if (!!data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
@@ -1950,20 +1950,35 @@ export const publishMultipleQDNResources = async (
     hasAppFee = true;
   }
 
+  let paymentFeeAmount = 0;
   const handleDynamicValues = {};
   if (hasAppFee) {
     const feePayment = await getFee('PAYMENT');
+    paymentFeeAmount = +feePayment.fee;
 
-    (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
+    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
         label: i18n.t('question:accept_app_fee', {
           postProcess: 'capitalizeFirstChar',
         }),
-      });
+      }));
   }
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
+  }
+
+  const totalRequiredQort =
+    resources.length * +fee.fee +
+    paymentFeeAmount +
+    (hasAppFee && appFee ? +appFee : 0);
+  const balance = await getBalanceInfo();
+  if (+balance < totalRequiredQort) {
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // Check for session permission

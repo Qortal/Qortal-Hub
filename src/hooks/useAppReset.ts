@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useResetAtom } from 'jotai/utils';
-import { clearMemberGroupsPolling } from '../components/Group/SubscribedToActivity';
+import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   addressInfoControllerAtom,
   blobControllerAtom,
@@ -21,11 +21,14 @@ import {
   joinRequestsCacheAtom,
   lastPaymentSeenTimestampAtom,
   mailsAtom,
+  managedSubscriptionsAtom,
+  managedSubscriptionsLoadingAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
   myMemberGroupsAtom,
   myMemberGroupsLastFetchedAtom,
+  mySubscriptionsAtom,
   navigationControllerAtom,
   oldPinnedAppsAtom,
   promotionTimeIntervalAtom,
@@ -36,6 +39,7 @@ import {
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
+  subscriptionsLoadingAtom,
   timestampEnterDataAtom,
   txListAtom,
   isUsingImportExportSettingsAtom,
@@ -95,6 +99,12 @@ export function useAppReset() {
   const resetMyMemberGroupsLastFetchedAtom = useResetAtom(
     myMemberGroupsLastFetchedAtom
   );
+  const resetMySubscriptionsAtom = useResetAtom(mySubscriptionsAtom);
+  const resetManagedSubscriptionsAtom = useResetAtom(managedSubscriptionsAtom);
+  const resetSubscriptionsLoadingAtom = useResetAtom(subscriptionsLoadingAtom);
+  const resetManagedSubscriptionsLoadingAtom = useResetAtom(
+    managedSubscriptionsLoadingAtom
+  );
   const resetResourceDownloadControllerAtom = useResetAtom(
     resourceDownloadControllerAtom
   );
@@ -152,6 +162,10 @@ export function useAppReset() {
     resetMyGroupsWhereIAmAdminAtom();
     resetMyMemberGroupsAtom();
     resetMyMemberGroupsLastFetchedAtom();
+    resetMySubscriptionsAtom();
+    resetManagedSubscriptionsAtom();
+    resetSubscriptionsLoadingAtom();
+    resetManagedSubscriptionsLoadingAtom();
     clearMemberGroupsPolling();
     resetResourceDownloadControllerAtom();
     resetGlobalDownloadsAtom();
@@ -197,6 +211,10 @@ export function useAppReset() {
     resetMyGroupsWhereIAmAdminAtom,
     resetMyMemberGroupsAtom,
     resetMyMemberGroupsLastFetchedAtom,
+    resetMySubscriptionsAtom,
+    resetManagedSubscriptionsAtom,
+    resetSubscriptionsLoadingAtom,
+    resetManagedSubscriptionsLoadingAtom,
     resetResourceDownloadControllerAtom,
     resetGlobalDownloadsAtom,
     resetAddressInfoControllerAtom,

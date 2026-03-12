@@ -528,9 +528,7 @@ export const ChatList = ({
         {showScrollButton && (
           <Button
             onClick={() => scrollToBottom()}
-            startIcon={
-              <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-            }
+            startIcon={<KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />}
             sx={{
               ...scrollButtonSx,
               backgroundColor: theme.palette.primary.dark,
@@ -564,9 +562,7 @@ export const ChatList = ({
           ) : (
             <Button
               onClick={() => scrollToBottom()}
-              startIcon={
-                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
-              }
+              startIcon={<KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />}
               sx={scrollButtonSx}
             >
               {t('group:action.scroll_bottom', {

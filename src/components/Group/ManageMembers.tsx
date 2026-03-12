@@ -393,6 +393,7 @@ export const ManageMembers = ({
                 setInfoSnack={setInfoSnack}
                 isAdmin={isAdmin}
                 isOwner={isOwner}
+                ownerAddress={groupInfo?.owner}
                 show={show}
               />
             </Box>

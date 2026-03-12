@@ -86,6 +86,8 @@
       "invited_you": "on kutsunut sinut",
       "join_request_from": "Liittymispyyntö lähettäjältä",
       "accept_join_request_confirm": "Hyväksy tämä pyyntö lisätäksesi heidät ryhmään.",
+      "add_new_key_option": "Lisää uusi avain (kasvattaa ryhmän avainten kokoa)",
+      "add_new_key_sparingly": "Uuden avaimen lisääminen tulee tehdä säästeliäästi, jotta ryhmän avainten kokoa ei kasva.",
       "group_key_created": "ensimmäinen ryhmäavain luotu.",
       "group_member_list_changed": "ryhmän jäsenlista on muuttunut. Salaa salainen avain uudelleen.",
       "group_no_secret_key": "ryhmällä ei ole salaista avainta. Julkaise sellainen ensimmäisenä ylläpitäjänä!",

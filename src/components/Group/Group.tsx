@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Paper, Typography, useTheme } from '@mui/material';
 import {
   lazy,
   Profiler,
@@ -32,6 +32,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { WebSocketActive } from './WebsocketActive';
+import { WebSocketNotifications } from './WebsocketNotifications';
 import {
   getGroupAdmins,
   getGroupMembers,
@@ -82,6 +83,7 @@ import { useWebsocketStatus } from './useWebsocketStatus';
 import { useQMailFetch } from '../../hooks/useQMailFetch';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
   AdminRowBox,
   CenterBox,
@@ -93,6 +95,7 @@ import {
   MainContentBox,
   NewChatOverlay,
   NoSelectionTypography,
+  NotPartAdminListBox,
   NotPartGroupDiv,
   RootBox,
   SelectedDirectOverlay,
@@ -302,6 +305,7 @@ export const Group = ({
     'question',
     'tutorial',
   ]);
+  const theme = useTheme();
   useWebsocketStatus();
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
@@ -678,7 +682,11 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
         }
       } catch (error) {
-        if (error === 'Unable to decrypt data') {
+        console.log('error', error);
+        if (
+          error === 'Unable to decrypt data' ||
+          error === 'Unable to decrypt'
+        ) {
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
@@ -1668,6 +1676,15 @@ export const Group = ({
     [t]
   );
 
+  const notPartOfKeys = useMemo(() => {
+    return (
+      isPrivate &&
+      !admins.includes(myAddress) &&
+      !secretKey &&
+      triedToFetchSecretKey
+    );
+  }, [isPrivate, admins, myAddress, secretKey, triedToFetchSecretKey]);
+
   const closeChatDirect = useCallback(() => {
     setSelectedDirect(null);
     setNewChat(false);
@@ -1718,6 +1735,7 @@ export const Group = ({
         myAddress={myAddress}
         setIsLoadingGroups={setIsLoadingGroups}
       />
+      <WebSocketNotifications myAddress={myAddress} userName={userInfo?.name} />
 
       <CustomizedSnackbars
         open={openSnack}
@@ -1893,58 +1911,97 @@ export const Group = ({
                   </EncryptionKeyMessageDiv>
                 )}
 
-              {isPrivate &&
-              !admins.includes(myAddress) &&
-              !secretKey &&
-              triedToFetchSecretKey ? (
+              {notPartOfKeys ? (
                 <>
                   {secretKeyPublishDate ||
                   (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
                     <NotPartGroupDiv>
-                      <Typography>
-                        {t('group:message.generic.not_part_group', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-
-                      <Spacer height="25px" />
-
-                      <Typography>
-                        <strong>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          maxWidth: 480,
+                          p: 3,
+                          textAlign: 'center',
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderRadius: 2,
+                          mb: 3,
+                        }}
+                      >
+                        <LockOutlinedIcon
+                          sx={{
+                            fontSize: 48,
+                            color: theme.palette.text.secondary,
+                            mb: 2,
+                          }}
+                        />
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 500,
+                            mb: 1.5,
+                          }}
+                        >
+                          {t('group:message.generic.not_part_group', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: theme.palette.warning.main,
+                            fontWeight: 600,
+                            px: 1,
+                          }}
+                        >
                           {t('group:message.generic.only_encrypted', {
                             postProcess: 'capitalizeFirstChar',
                           })}
-                        </strong>
-                      </Typography>
-
-                      <Spacer height="25px" />
-
-                      <Typography>
-                        {t('group:message.generic.notify_admins', {
+                        </Typography>
+                      </Paper>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          mb: 2,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {t('group:message.error.notify_admins', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
-
-                      <Spacer height="25px" />
-
-                      {adminsWithNames.map((admin) => {
-                        return (
+                      <NotPartAdminListBox>
+                        {adminsWithNames.map((admin) => (
                           <AdminRowBox key={admin?.address}>
-                            <Typography>{admin?.name}</Typography>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontWeight: 500,
+                                color: theme.palette.text.primary,
+                              }}
+                            >
+                              {admin?.name}
+                            </Typography>
                             <LoadingButton
                               data-admin-address={admin?.address}
                               loading={isLoadingNotifyAdmin}
                               loadingPosition="start"
+                              size="small"
                               variant="contained"
                               onClick={handleNotifyAdminClick}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                              }}
                             >
                               {t('core:action.notify', {
                                 postProcess: 'capitalizeFirstChar',
                               })}
                             </LoadingButton>
                           </AdminRowBox>
-                        );
-                      })}
+                        ))}
+                      </NotPartAdminListBox>
                     </NotPartGroupDiv>
                   ) : null}
                 </>

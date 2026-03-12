@@ -87,6 +87,8 @@
       "invited_you": "has invited you",
       "join_request_from": "Join request from",
       "accept_join_request_confirm": "Accept this request to add them to the group.",
+      "add_new_key_option": "Add a new key (increases group key size)",
+      "add_new_key_sparingly": "Adding a new key should be done sparingly to avoid increasing the size of the group keys.",
       "group_key_created": "first group key created.",
       "group_member_list_changed": "the group member list has changed. Please re-encrypt the secret key.",
       "group_no_secret_key": "there is no group secret key. Be the first admin to publish one!",

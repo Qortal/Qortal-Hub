@@ -86,6 +86,8 @@
       "invited_you": "kutsus sind",
       "join_request_from": "Liitumistaotlus kasutajalt",
       "accept_join_request_confirm": "Nõustu selle taotlusega, et nad rühma lisada.",
+      "add_new_key_option": "Lisa uus võti (suurendab rühma võtmete mahtu)",
+      "add_new_key_sparingly": "Uue võtme lisamine tuleks teha säästlikult, et rühma võtmete maht ei kasvaks.",
       "group_key_created": "esimene rühma võti on loodud.",
       "group_member_list_changed": "rühma liikmete nimekiri on muutunud. Palun krüpteeri salavõti uuesti.",
       "group_no_secret_key": "rühma salavõtit ei ole. Ole esimene administraator, kes selle avaldab!",

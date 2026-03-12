@@ -86,6 +86,8 @@
       "invited_you": "があなたを招待しました",
       "join_request_from": "参加リクエスト送信者",
       "accept_join_request_confirm": "このリクエストを受け入れてグループに追加します。",
+      "add_new_key_option": "新しい鍵を追加する（グループ鍵のサイズが増えます）",
+      "add_new_key_sparingly": "新しい鍵の追加は控えめにし、グループ鍵のサイズが増えすぎないようにしてください。",
       "group_key_created": "最初のグループ鍵が作成されました。",
       "group_member_list_changed": "メンバーリストが変更されました。秘密鍵を再暗号化してください。",
       "group_no_secret_key": "グループの秘密鍵が存在しません。最初の管理者として公開してください！",

@@ -86,6 +86,8 @@
       "invited_you": "دعاك للجروب",
       "join_request_from": "طلب انضمام من",
       "accept_join_request_confirm": "اقبل الطلب ده عشان يتحط في الجروب.",
+      "add_new_key_option": "إضافة مفتاح جديد (يزيد حجم مفاتيح الجروب)",
+      "add_new_key_sparingly": "يفضل إضافة مفتاح جديد بحذر علشان حجم مفاتيح الجروب مايكبرش.",
       "group_key_created": "أول مفتاح جروب اتعمل",
       "group_member_list_changed": "قائمة الأعضاء اتغيرت، لازم تشفر المفتاح السري تاني",
       "group_no_secret_key": "مفيش مفتاح سري للجروب، كن أول أدمن ينشره",

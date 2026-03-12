@@ -86,6 +86,8 @@
       "invited_you": "ti ha invitato",
       "join_request_from": "Richiesta di adesione da",
       "accept_join_request_confirm": "Accetta questa richiesta per aggiungerli al gruppo.",
+      "add_new_key_option": "Aggiungi una nuova chiave (aumenta la dimensione delle chiavi del gruppo)",
+      "add_new_key_sparingly": "Aggiungere una nuova chiave con parsimonia per non aumentare la dimensione delle chiavi del gruppo.",
       "group_key_created": "creata la prima chiave di gruppo.",
       "group_member_list_changed": "l'elenco dei membri del gruppo è cambiato. Si prega di recriptare nuovamente la chiave segreta.",
       "group_no_secret_key": "non esiste una chiave segreta di gruppo. Potresti essere il primo amministratore a pubblicarne una!",

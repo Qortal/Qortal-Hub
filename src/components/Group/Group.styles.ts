@@ -45,12 +45,18 @@ export const InnerChatBox = styled(Box)({
   position: 'relative',
 });
 
-export const AdminRowBox = styled(Box)({
-  display: 'flex',
-  gap: '20px',
-  padding: '15px',
+export const AdminRowBox = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-});
+  borderRadius: theme.shape.borderRadius,
+  display: 'flex',
+  gap: theme.spacing(2),
+  justifyContent: 'space-between',
+  padding: theme.spacing(1.5, 2),
+  transition: 'background-color 0.2s ease',
+  '&:hover': {
+    backgroundColor: theme.palette.action.hover,
+  },
+}));
 
 export const ChatContentBox = styled(Box)({
   display: 'flex',
@@ -68,15 +74,26 @@ export const EncryptionKeyMessageDiv = styled('div')({
   width: '100%',
 });
 
-export const NotPartGroupDiv = styled('div')({
-  alignItems: 'flex-start',
+export const NotPartGroupDiv = styled('div')(({ theme }) => ({
+  alignItems: 'center',
   display: 'flex',
   flexDirection: 'column',
   height: `calc(100vh - ${70 + appHeighOffset}px)`,
   overflow: 'auto',
-  padding: '20px',
+  padding: theme.spacing(3),
   width: '100%',
-});
+}));
+
+export const NotPartAdminListBox = styled(Box)(({ theme }) => ({
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius * 2,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(0.5),
+  maxWidth: 420,
+  overflow: 'hidden',
+  width: '100%',
+}));
 
 export const NoSelectionTypography = styled(Typography)(({ theme }) => ({
   fontSize: '14px',

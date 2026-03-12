@@ -86,6 +86,8 @@
       "invited_you": "邀请了你",
       "join_request_from": "加入请求来自",
       "accept_join_request_confirm": "接受此请求以将其加入群组。",
+      "add_new_key_option": "添加新密钥（会增加群组密钥大小）",
+      "add_new_key_sparingly": "请谨慎添加新密钥，以免增加群组密钥体积。",
       "group_key_created": "群组初始密钥已创建",
       "group_member_list_changed": "成员列表已变更，请重新加密密钥",
       "group_no_secret_key": "尚无群组密钥，你可以作为管理员发布第一个！",
