@@ -368,6 +368,8 @@
   "sort": {
     "alphabetical": "aakkosjärjestys",
     "by_member": "jäsenen mukaan",
+    "highest_rated": "parhaiten arvioidut",
+    "most_rated": "eniten arvioidut",
     "newest": "uusimmat",
     "oldest": "vanhimmat",
     "recently_updated": "äskettäin päivitetyt"

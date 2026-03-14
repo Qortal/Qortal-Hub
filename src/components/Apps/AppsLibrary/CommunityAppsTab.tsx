@@ -34,6 +34,10 @@ const sortApps = (apps: any[], sortOption: SortOption): any[] => {
         const titleB = (b.metadata?.title || b.name || '').toLowerCase();
         return titleA.localeCompare(titleB);
       });
+    case 'highest_rated':
+      return sorted.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+    case 'most_rated':
+      return sorted.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
     default:
       return sorted;
   }

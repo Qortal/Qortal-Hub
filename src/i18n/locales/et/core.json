@@ -440,6 +440,8 @@
   "sort": {
     "alphabetical": "tähestikuline",
     "by_member": "liikme järgi",
+    "highest_rated": "kõrgeima hinnanguga",
+    "most_rated": "enim arvustatud",
     "newest": "uusimad",
     "oldest": "vanimad",
     "recently_updated": "hiljuti uuendatud"
@@ -484,7 +486,6 @@
   "tutorial": "õpetus",
   "unknown": "tundmatu",
   "url": "url",
-  "user_lookup": "kasutaja info otsing",
   "user_lookup": "kasutaja otsing",
   "video_embed": "video manustamine",
   "video_failed": "allalaadimine ebaõnnestus",

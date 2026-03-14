@@ -440,6 +440,8 @@
   "sort": {
     "alphabetical": "по алфавиту",
     "by_member": "членом",
+    "highest_rated": "с высоким рейтингом",
+    "most_rated": "с наибольшим количеством отзывов",
     "newest": "новейшие",
     "oldest": "старейшие",
     "recently_updated": "недавно обновлённые"

@@ -440,6 +440,8 @@
   "sort": {
     "alphabetical": "alphabétique",
     "by_member": "par membre",
+    "highest_rated": "mieux notées",
+    "most_rated": "plus évaluées",
     "newest": "plus récentes",
     "oldest": "plus anciennes",
     "recently_updated": "mises à jour récemment"
