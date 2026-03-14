@@ -332,7 +332,6 @@
       "reset_qdn": "don't like your current local changes? Would you like to reset to your saved QDN pinned apps?",
       "transfer_qort": "would you like to transfer {{ amount }} QORT"
     },
-
     "success": {
       "order_submitted": "your buy order was submitted",
       "published": "successfully published. Please wait a couple minutes for the network to propagate the changes.",
@@ -444,6 +443,8 @@
   "sort": {
     "alphabetical": "alphabetical",
     "by_member": "by member",
+    "highest_rated": "highest rated",
+    "most_rated": "most reviewed",
     "newest": "newest",
     "oldest": "oldest",
     "recently_updated": "recently updated"

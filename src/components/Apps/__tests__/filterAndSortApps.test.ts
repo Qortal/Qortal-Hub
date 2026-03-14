@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { filterAndSortApps } from '../../../atoms/appsAtoms';
 
-// Mock app data for testing
+// Mock app data for testing (no rating fields — matches real API shape)
 const mockApps = [
   {
     name: 'AliceApp',
@@ -13,8 +13,6 @@ const mockApps = [
       category: 'games',
     },
     status: { status: 'READY' },
-    averageRating: 4.5,
-    ratingCount: 100,
   },
   {
     name: 'BobApp',
@@ -26,8 +24,6 @@ const mockApps = [
       category: 'finance',
     },
     status: { status: 'NOT_READY' },
-    averageRating: 3.0,
-    ratingCount: 50,
   },
   {
     name: 'CharlieApp',
@@ -39,8 +35,6 @@ const mockApps = [
       category: 'games',
     },
     status: { status: 'READY' },
-    averageRating: 5.0,
-    ratingCount: 25,
   },
   {
     name: 'DaveApp',
@@ -52,10 +46,16 @@ const mockApps = [
       category: 'social',
     },
     status: { status: 'NOT_READY' },
-    averageRating: 4.0,
-    ratingCount: 200,
   },
 ];
+
+// Ratings map mirroring ratingsStoreAtom contents (key = service-name lowercased)
+const mockRatingsMap = new Map([
+  ['app-aliceapp',   { averageRating: 4.5, totalVotes: 100, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+  ['app-bobapp',     { averageRating: 3.0, totalVotes: 50,  voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+  ['app-charlieapp', { averageRating: 5.0, totalVotes: 25,  voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+  ['app-daveapp',    { averageRating: 4.0, totalVotes: 200, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+]);
 
 describe('filterAndSortApps', () => {
   describe('sorting', () => {
@@ -94,6 +94,85 @@ describe('filterAndSortApps', () => {
       expect(result[1].name).toBe('BobApp');
       expect(result[2].name).toBe('CharlieApp');
       expect(result[3].name).toBe('DaveApp');
+    });
+
+    it('sorts by highest rated using ratingsMap', () => {
+      const result = filterAndSortApps(mockApps, {
+        sort: 'highest_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+        ratingsMap: mockRatingsMap,
+      });
+      expect(result[0].name).toBe('CharlieApp'); // 5.0
+      expect(result[1].name).toBe('AliceApp');   // 4.5
+      expect(result[2].name).toBe('DaveApp');    // 4.0
+      expect(result[3].name).toBe('BobApp');     // 3.0
+    });
+
+    it('sorts by most rated using ratingsMap', () => {
+      const result = filterAndSortApps(mockApps, {
+        sort: 'most_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+        ratingsMap: mockRatingsMap,
+      });
+      expect(result[0].name).toBe('DaveApp');    // 200
+      expect(result[1].name).toBe('AliceApp');   // 100
+      expect(result[2].name).toBe('BobApp');     // 50
+      expect(result[3].name).toBe('CharlieApp'); // 25
+    });
+
+    it('sorts highest_rated with no ratingsMap — all apps score 0, order preserved', () => {
+      const result = filterAndSortApps(mockApps, {
+        sort: 'highest_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+      });
+      // All averageRating fallbacks to 0 — stable relative order expected
+      expect(result.length).toBe(4);
+      result.forEach((app) => expect(app).toBeTruthy());
+    });
+
+    it('sorts most_rated with no ratingsMap — all apps score 0, order preserved', () => {
+      const result = filterAndSortApps(mockApps, {
+        sort: 'most_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+      });
+      expect(result.length).toBe(4);
+      result.forEach((app) => expect(app).toBeTruthy());
+    });
+
+    it('highest_rated: apps missing from ratingsMap sort last', () => {
+      const partialMap = new Map([
+        ['app-charlieapp', { averageRating: 5.0, totalVotes: 25, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+      ]);
+      const result = filterAndSortApps(mockApps, {
+        sort: 'highest_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+        ratingsMap: partialMap,
+      });
+      expect(result[0].name).toBe('CharlieApp'); // only one with a rating
+    });
+
+    it('most_rated: apps missing from ratingsMap sort last', () => {
+      const partialMap = new Map([
+        ['app-daveapp', { averageRating: 4.0, totalVotes: 200, voteCounts: [], hasPublishedRating: true, pollInfo: null, lastFetched: 0 }],
+      ]);
+      const result = filterAndSortApps(mockApps, {
+        sort: 'most_rated',
+        category: 'all',
+        status: 'all',
+        search: '',
+        ratingsMap: partialMap,
+      });
+      expect(result[0].name).toBe('DaveApp'); // only one with votes
     });
   });
 

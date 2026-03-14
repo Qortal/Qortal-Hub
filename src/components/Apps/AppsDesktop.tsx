@@ -21,7 +21,7 @@ import { AppsParent } from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
 import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
-import { RatingsCacheInitializer } from '../../hooks/useAppRatings';
+import { RatingsCacheInitializer, useAppRatings } from '../../hooks/useAppRatings';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import {
@@ -64,6 +64,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
   const iframeRefs = useRef({});
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const { showTutorial } = useHandleTutorials();
+  const { refreshRatings } = useAppRatings();
   const theme = useTheme();
   const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
   const [pendingTabToRemove, setPendingTabToRemove] = useState(null);
@@ -462,7 +463,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       <AppsLibraryDesktop
         availableQapps={availableQapps}
         categories={categories}
-        getQapps={getQapps}
+        getQapps={async () => { await getQapps(); refreshRatings(); }}
         hasPublishApp={!!(myApp || myWebsite)}
         isShow={mode === 'library' && !selectedTab}
         myName={myName}

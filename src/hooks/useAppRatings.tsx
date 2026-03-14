@@ -53,6 +53,10 @@ const ratingsStoreRef: { current: Map<string, AppRatingData> } = {
 // Run load-from-DB + hydrate only once per app session (guards initializer effect)
 let ratingsCacheHydrated = false;
 
+// Set to true once the bulk fetch attempt has finished (success OR failure).
+// Used by batchFetchRatings to decide whether to wait or fall through to per-app fetches.
+let bulkFetchComplete = false;
+
 // Generate cache key for an app (exported for consumers that need to subscribe to specific app ratings)
 export const getCacheKey = (name: string, service: string): string => {
   return `${service.toLowerCase()}-${name.toLowerCase()}`;
@@ -159,6 +163,100 @@ const fetchRatingFromAPI = async (
   }
 };
 
+// Probe result for GET /polls/apps/ratings.
+// null  = not yet checked
+// true  = endpoint exists (updated node)
+// false = endpoint returned 404 (old node — use per-app fallback)
+let bulkEndpointAvailable: boolean | null = null;
+
+// Fetch all app ratings in a single call using the bulk endpoint.
+// Returns null when the node doesn't support the endpoint (404).
+const fetchAllRatingsFromAPI = async (): Promise<Map<
+  string,
+  AppRatingData
+> | null> => {
+  const url = `${getBaseApiReact()}/polls/apps/ratings`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.status === 404) {
+      bulkEndpointAvailable = false;
+      return null;
+    }
+
+    if (!response.ok) {
+      // Transient error — don't mark endpoint unavailable, will retry next session
+      return null;
+    }
+
+    const rawData: unknown = await response.json();
+    const now = Date.now();
+    const result = new Map<string, AppRatingData>();
+
+    // Normalise to a flat array regardless of response shape:
+    //   - top-level array:                [{key, value}, ...]
+    //   - { ratings: [{key, value}] }:    object with array of entries
+    //   - { ratings: [[{key,value},...]] } object with array-of-array (flatten one level)
+    //   - { ratings: {k: {key,value}} }:  object with record
+    let rawItems: unknown[] = Array.isArray(rawData)
+      ? rawData
+      : Array.isArray((rawData as any)?.ratings)
+      ? (rawData as any).ratings
+      : (rawData as any)?.ratings != null
+      ? Object.values((rawData as any).ratings)
+      : [];
+
+    // Flatten one extra nesting level if the first element is itself an array
+    if (rawItems.length > 0 && Array.isArray(rawItems[0])) {
+      rawItems = rawItems.flat(1);
+    }
+
+
+    if (rawItems.length === 0) {
+      // Could not extract any items — endpoint exists but format is unrecognised;
+      // don't mark it as available so per-app fallback is used instead.
+      return null;
+    }
+
+    bulkEndpointAvailable = true;
+
+    for (const rawItem of rawItems) {
+      // Each item may be a direct BulkRatingEntry or a {key, value} wrapper
+      const entry: any = (rawItem as any)?.value ?? rawItem;
+      if (!entry?.appName || !entry?.service || !Array.isArray(entry?.voteCounts)) continue;
+
+      const key = getCacheKey(entry.appName, entry.service);
+      const { averageRating, totalVotes } = calculateRating(entry.voteCounts);
+
+      result.set(key, {
+        averageRating,
+        totalVotes,
+        voteCounts: entry.voteCounts,
+        hasPublishedRating: true,
+        pollInfo: {
+          pollName: entry.pollName,
+          pollDescription: entry.description ?? '',
+          pollOptions: entry.voteCounts.map((v: VoteCount) => ({
+            optionName: v.optionName,
+          })),
+          owner: entry.owner,
+          published: entry.published,
+        },
+        lastFetched: now,
+      });
+    }
+
+    return result;
+  } catch {
+    // Network failure or parse error — don't mark endpoint unavailable
+    return null;
+  }
+};
+
 // Initialize shared observer
 const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
   if (sharedObserver) return;
@@ -202,12 +300,40 @@ function RatingsCacheInitializerInner() {
   useEffect(() => {
     if (ratingsCacheHydrated) return;
     ratingsCacheHydrated = true;
-    loadRatingsCacheFromDB().then((cached) => {
+
+    const initialize = async () => {
+      // Step 1: hydrate from IndexedDB (fast, local)
+      const cached = await loadRatingsCacheFromDB();
       if (cached.size > 0) {
         ratingsStoreRef.current = cached;
         setRatingsStore(cached);
       }
-    });
+
+      // Step 2: old node — intersection observer handles per-app lazy loads
+      if (bulkEndpointAvailable === false) {
+        bulkFetchComplete = true;
+        return;
+      }
+
+      // Step 3: attempt bulk fetch from node
+      const bulkData = await fetchAllRatingsFromAPI();
+      bulkFetchComplete = true; // mark complete regardless of success/failure
+
+      if (bulkData === null) return;
+
+      // Merge: bulk data wins for freshness; IndexedDB-only entries are kept
+      setRatingsStore((prev) => {
+        const next = new Map(prev);
+        bulkData.forEach((data, key) => {
+          next.set(key, data);
+        });
+        saveRatingsCacheToDB(next);
+        ratingsStoreRef.current = next;
+        return next;
+      });
+    };
+
+    initialize();
   }, [setRatingsStore]);
   return null;
 }
@@ -271,6 +397,42 @@ export const useAppRatings = () => {
       });
 
       if (keysToFetch.length === 0) return;
+
+      // Guard individual fetches based on bulk fetch state:
+      // - bulk still in-flight (!bulkFetchComplete): wait — it will cover all apps.
+      // - bulk succeeded (bulkEndpointAvailable === true): apps absent from the
+      //   store have no rating; cache a default so they don't re-trigger.
+      // - bulk failed / old node: fall through to per-app fetches below.
+      if (!bulkFetchComplete || bulkEndpointAvailable === true) {
+        if (bulkEndpointAvailable === true) {
+          const now = Date.now();
+          const unknownKeys = keysToFetch.filter(
+            (key) => !ratingsStoreRef.current.has(key)
+          );
+          if (unknownKeys.length > 0) {
+            setRatingsStore((prev) => {
+              const next = new Map(prev);
+              unknownKeys.forEach((key) => {
+                // Guard: skip if the bulk fetch updater has already written this
+                // key into React state (prev may be fresher than ratingsStoreRef).
+                if (prev.has(key)) return;
+                next.set(key, {
+                  averageRating: 0,
+                  totalVotes: 0,
+                  voteCounts: [],
+                  hasPublishedRating: false,
+                  pollInfo: null,
+                  lastFetched: now,
+                });
+              });
+              saveRatingsCacheToDB(next);
+              ratingsStoreRef.current = next;
+              return next;
+            });
+          }
+        }
+        return;
+      }
 
       // Fetch all in parallel
       const results = await Promise.all(
@@ -354,11 +516,39 @@ export const useAppRatings = () => {
     []
   );
 
+  // Clear the ratings cache and re-fetch from the bulk endpoint.
+  // Call this when the user explicitly refreshes the app/website list.
+  const refreshRatings = useCallback(async () => {
+    // Block batchFetchRatings from storing defaults until the new bulk fetch finishes
+    bulkFetchComplete = false;
+
+    // Wipe in-memory store and IndexedDB
+    ratingsStoreRef.current = new Map();
+    setRatingsStore(new Map());
+    saveRatingsCacheToDB(new Map());
+
+    const bulkData = await fetchAllRatingsFromAPI();
+    bulkFetchComplete = true;
+
+    if (!bulkData || bulkData.size === 0) return;
+
+    setRatingsStore((prev) => {
+      const next = new Map(prev);
+      bulkData.forEach((data, key) => {
+        next.set(key, data);
+      });
+      saveRatingsCacheToDB(next);
+      ratingsStoreRef.current = next;
+      return next;
+    });
+  }, [setRatingsStore]);
+
   return {
     getRating,
     fetchRating,
     registerVisibility,
     invalidateRating,
+    refreshRatings,
   };
 };
 
