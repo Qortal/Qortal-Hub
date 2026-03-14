@@ -3,7 +3,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { getBaseApiReact } from '../App';
 import { RATING_CACHE_TTL } from '../constants/constants';
-import type { AppRatingData, VoteCount } from '../types/ratings';
+import type { AppRatingData, VoteCount, BulkRatingsResponse } from '../types/ratings';
 import {
   loadRatingsCacheFromDB,
   saveRatingsCacheToDB,
@@ -159,6 +159,70 @@ const fetchRatingFromAPI = async (
   }
 };
 
+// Probe result for GET /polls/apps/ratings.
+// null  = not yet checked
+// true  = endpoint exists (updated node)
+// false = endpoint returned 404 (old node — use per-app fallback)
+let bulkEndpointAvailable: boolean | null = null;
+
+// Fetch all app ratings in a single call using the bulk endpoint.
+// Returns null when the node doesn't support the endpoint (404).
+const fetchAllRatingsFromAPI = async (): Promise<Map<
+  string,
+  AppRatingData
+> | null> => {
+  const url = `${getBaseApiReact()}/polls/apps/ratings`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (response.status === 404) {
+      bulkEndpointAvailable = false;
+      return null;
+    }
+
+    if (!response.ok) {
+      // Transient error — don't mark endpoint unavailable, will retry next session
+      return null;
+    }
+
+    bulkEndpointAvailable = true;
+    const data: BulkRatingsResponse = await response.json();
+    const now = Date.now();
+    const result = new Map<string, AppRatingData>();
+
+    Object.values(data.ratings).forEach((entry) => {
+      const key = getCacheKey(entry.appName, entry.service);
+      const { averageRating, totalVotes } = calculateRating(entry.voteCounts);
+
+      result.set(key, {
+        averageRating,
+        totalVotes,
+        voteCounts: entry.voteCounts,
+        hasPublishedRating: true,
+        pollInfo: {
+          pollName: entry.pollName,
+          pollDescription: entry.description ?? '',
+          pollOptions: entry.voteCounts.map((v) => ({
+            optionName: v.optionName,
+          })),
+          owner: entry.owner,
+          published: entry.published,
+        },
+        lastFetched: now,
+      });
+    });
+
+    return result;
+  } catch {
+    // Network failure — don't mark endpoint unavailable
+    return null;
+  }
+};
+
 // Initialize shared observer
 const initializeObserver = (onBatchFetch: (keys: string[]) => void) => {
   if (sharedObserver) return;
@@ -202,12 +266,35 @@ function RatingsCacheInitializerInner() {
   useEffect(() => {
     if (ratingsCacheHydrated) return;
     ratingsCacheHydrated = true;
-    loadRatingsCacheFromDB().then((cached) => {
+
+    const initialize = async () => {
+      // Step 1: hydrate from IndexedDB (fast, local)
+      const cached = await loadRatingsCacheFromDB();
       if (cached.size > 0) {
         ratingsStoreRef.current = cached;
         setRatingsStore(cached);
       }
-    });
+
+      // Step 2: old node — intersection observer handles per-app lazy loads
+      if (bulkEndpointAvailable === false) return;
+
+      // Step 3: attempt bulk fetch from node
+      const bulkData = await fetchAllRatingsFromAPI();
+      if (bulkData === null) return;
+
+      // Merge: bulk data wins for freshness; IndexedDB-only entries are kept
+      setRatingsStore((prev) => {
+        const next = new Map(prev);
+        bulkData.forEach((data, key) => {
+          next.set(key, data);
+        });
+        saveRatingsCacheToDB(next);
+        ratingsStoreRef.current = next;
+        return next;
+      });
+    };
+
+    initialize();
   }, [setRatingsStore]);
   return null;
 }
