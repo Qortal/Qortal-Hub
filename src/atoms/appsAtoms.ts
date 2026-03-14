@@ -1,5 +1,6 @@
 import { atom } from 'jotai';
 import { atomWithReset } from 'jotai/utils';
+import type { AppRatingData } from '../types/ratings';
 
 // Types
 export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated';
@@ -38,9 +39,13 @@ export const filterAndSortApps = (
     status: StatusFilterOption;
     search: string;
     installedApps?: Set<string>;
+    ratingsMap?: Map<string, AppRatingData>;
   }
 ) => {
-  const { sort, category, status, search, installedApps = new Set() } = options;
+  const { sort, category, status, search, installedApps = new Set(), ratingsMap } = options;
+  // Derive cache key the same way getCacheKey does (service-name, lowercased)
+  const getRatingKey = (app: any) =>
+    `${(app.service ?? '').toLowerCase()}-${(app.name ?? '').toLowerCase()}`;
 
   let filtered = [...apps];
 
@@ -84,10 +89,18 @@ export const filterAndSortApps = (
       });
       break;
     case 'highest_rated':
-      filtered.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
+      filtered.sort((a, b) => {
+        const ratingA = ratingsMap?.get(getRatingKey(a))?.averageRating ?? a.averageRating ?? 0;
+        const ratingB = ratingsMap?.get(getRatingKey(b))?.averageRating ?? b.averageRating ?? 0;
+        return ratingB - ratingA;
+      });
       break;
     case 'most_rated':
-      filtered.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
+      filtered.sort((a, b) => {
+        const votesA = ratingsMap?.get(getRatingKey(a))?.totalVotes ?? a.totalVotes ?? a.ratingCount ?? 0;
+        const votesB = ratingsMap?.get(getRatingKey(b))?.totalVotes ?? b.totalVotes ?? b.ratingCount ?? 0;
+        return votesB - votesA;
+      });
       break;
     default:
       break;

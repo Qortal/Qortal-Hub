@@ -1,4 +1,5 @@
 import { useMemo, forwardRef } from 'react';
+import { useAtomValue } from 'jotai';
 import { Box, Typography, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid, GridComponents } from 'react-virtuoso';
@@ -6,6 +7,8 @@ import { AppsWidthLimiter } from '../Apps-styles';
 import { AppCardEnhanced } from '../AppCard';
 import { SortOption, StatusFilterOption } from '../Filters';
 import { officialAppList } from '../config/officialApps';
+import { filterAndSortApps } from '../../../atoms/appsAtoms';
+import { ratingsStoreAtom } from '../../../hooks/useAppRatings';
 
 const CARD_MIN_WIDTH = 320;
 const GRID_GAP = 16;
@@ -18,30 +21,6 @@ interface CommunityAppsTabProps {
   categoryValue: string;
   statusValue: StatusFilterOption;
 }
-
-// Sorting functions
-const sortApps = (apps: any[], sortOption: SortOption): any[] => {
-  const sorted = [...apps];
-
-  switch (sortOption) {
-    case 'newest':
-      return sorted.sort((a, b) => (b.created || 0) - (a.created || 0));
-    case 'oldest':
-      return sorted.sort((a, b) => (a.created || 0) - (b.created || 0));
-    case 'alphabetical':
-      return sorted.sort((a, b) => {
-        const titleA = (a.metadata?.title || a.name || '').toLowerCase();
-        const titleB = (b.metadata?.title || b.name || '').toLowerCase();
-        return titleA.localeCompare(titleB);
-      });
-    case 'highest_rated':
-      return sorted.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
-    case 'most_rated':
-      return sorted.sort((a, b) => (b.ratingCount || 0) - (a.ratingCount || 0));
-    default:
-      return sorted;
-  }
-};
 
 // Virtuoso grid components
 const gridComponents: GridComponents = {
@@ -84,6 +63,7 @@ export const CommunityAppsTab = ({
 }: CommunityAppsTabProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
+  const ratingsStore = useAtomValue(ratingsStoreAtom);
 
   // Filter out official apps to show only community apps
   const communityApps = useMemo(() => {
@@ -92,42 +72,16 @@ export const CommunityAppsTab = ({
     );
   }, [availableQapps]);
 
-  // Apply all filters and sorting
+  // Apply all filters and sorting (ratings-aware)
   const filteredAndSortedApps = useMemo(() => {
-    let result = [...communityApps];
-
-    // Apply search filter
-    if (searchValue) {
-      const searchLower = searchValue.toLowerCase();
-      result = result.filter(
-        (app) =>
-          app.name.toLowerCase().includes(searchLower) ||
-          (app?.metadata?.title &&
-            app.metadata.title.toLowerCase().includes(searchLower)) ||
-          (app?.metadata?.description &&
-            app.metadata.description.toLowerCase().includes(searchLower))
-      );
-    }
-
-    // Apply category filter
-    if (categoryValue !== 'all') {
-      result = result.filter(
-        (app) => app?.metadata?.category === categoryValue
-      );
-    }
-
-    // Apply status filter
-    if (statusValue === 'installed') {
-      result = result.filter((app) => app?.status?.status === 'READY');
-    } else if (statusValue === 'not_installed') {
-      result = result.filter((app) => app?.status?.status !== 'READY');
-    }
-
-    // Apply sorting
-    result = sortApps(result, sortValue);
-
-    return result;
-  }, [communityApps, searchValue, categoryValue, statusValue, sortValue]);
+    return filterAndSortApps(communityApps, {
+      sort: sortValue,
+      category: categoryValue,
+      status: statusValue,
+      search: searchValue,
+      ratingsMap: ratingsStore,
+    });
+  }, [communityApps, searchValue, categoryValue, statusValue, sortValue, ratingsStore]);
 
   return (
     <AppsWidthLimiter sx={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
