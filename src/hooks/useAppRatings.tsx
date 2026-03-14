@@ -385,6 +385,9 @@ export const useAppRatings = () => {
             setRatingsStore((prev) => {
               const next = new Map(prev);
               unknownKeys.forEach((key) => {
+                // Guard: skip if the bulk fetch updater has already written this
+                // key into React state (prev may be fresher than ratingsStoreRef).
+                if (prev.has(key)) return;
                 next.set(key, {
                   averageRating: 0,
                   totalVotes: 0,
