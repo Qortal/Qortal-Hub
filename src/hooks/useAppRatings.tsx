@@ -174,6 +174,8 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
   const url = `${getBaseApiReact()}/polls/apps/ratings`;
 
   try {
+    console.log('Fetching all ratings...');
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -358,6 +360,38 @@ export const useAppRatings = () => {
       });
 
       if (keysToFetch.length === 0) return;
+
+      // If the bulk endpoint is available or still in-flight, skip individual fetches.
+      // - null: bulk fetch is in progress; it will cover all apps.
+      // - true: bulk fetch succeeded; apps absent from the store have no rating.
+      //   Cache a default entry so they don't re-trigger on future visibility.
+      if (bulkEndpointAvailable !== false) {
+        if (bulkEndpointAvailable === true) {
+          const now = Date.now();
+          const unknownKeys = keysToFetch.filter(
+            (key) => !ratingsStoreRef.current.has(key)
+          );
+          if (unknownKeys.length > 0) {
+            setRatingsStore((prev) => {
+              const next = new Map(prev);
+              unknownKeys.forEach((key) => {
+                next.set(key, {
+                  averageRating: 0,
+                  totalVotes: 0,
+                  voteCounts: [],
+                  hasPublishedRating: false,
+                  pollInfo: null,
+                  lastFetched: now,
+                });
+              });
+              saveRatingsCacheToDB(next);
+              ratingsStoreRef.current = next;
+              return next;
+            });
+          }
+        }
+        return;
+      }
 
       // Fetch all in parallel
       const results = await Promise.all(
