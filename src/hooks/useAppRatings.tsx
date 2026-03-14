@@ -53,6 +53,10 @@ const ratingsStoreRef: { current: Map<string, AppRatingData> } = {
 // Run load-from-DB + hydrate only once per app session (guards initializer effect)
 let ratingsCacheHydrated = false;
 
+// Set to true once the bulk fetch attempt has finished (success OR failure).
+// Used by batchFetchRatings to decide whether to wait or fall through to per-app fetches.
+let bulkFetchComplete = false;
+
 // Generate cache key for an app (exported for consumers that need to subscribe to specific app ratings)
 export const getCacheKey = (name: string, service: string): string => {
   return `${service.toLowerCase()}-${name.toLowerCase()}`;
@@ -278,10 +282,15 @@ function RatingsCacheInitializerInner() {
       }
 
       // Step 2: old node — intersection observer handles per-app lazy loads
-      if (bulkEndpointAvailable === false) return;
+      if (bulkEndpointAvailable === false) {
+        bulkFetchComplete = true;
+        return;
+      }
 
       // Step 3: attempt bulk fetch from node
       const bulkData = await fetchAllRatingsFromAPI();
+      bulkFetchComplete = true; // mark complete regardless of success/failure
+
       if (bulkData === null) return;
 
       // Merge: bulk data wins for freshness; IndexedDB-only entries are kept
@@ -361,11 +370,12 @@ export const useAppRatings = () => {
 
       if (keysToFetch.length === 0) return;
 
-      // If the bulk endpoint is available or still in-flight, skip individual fetches.
-      // - null: bulk fetch is in progress; it will cover all apps.
-      // - true: bulk fetch succeeded; apps absent from the store have no rating.
-      //   Cache a default entry so they don't re-trigger on future visibility.
-      if (bulkEndpointAvailable !== false) {
+      // Guard individual fetches based on bulk fetch state:
+      // - bulk still in-flight (!bulkFetchComplete): wait — it will cover all apps.
+      // - bulk succeeded (bulkEndpointAvailable === true): apps absent from the
+      //   store have no rating; cache a default so they don't re-trigger.
+      // - bulk failed / old node: fall through to per-app fetches below.
+      if (!bulkFetchComplete || bulkEndpointAvailable === true) {
         if (bulkEndpointAvailable === true) {
           const now = Date.now();
           const unknownKeys = keysToFetch.filter(
