@@ -26,8 +26,10 @@ import {
   ConnectionRequestScreen,
   CountdownOverlay,
   CreateWalletView,
+  ElectronPersistentStorageHydration,
   InfoDialog,
   NotAuthenticatedFooter,
+  NotificationPermissionSlideDown,
   PaymentPublishDialog,
   PaymentRequestScreen,
   QortalRequestExtensionDialog,
@@ -136,6 +138,13 @@ function App() {
   const [requestConnection, setRequestConnection] = useState<any>(null);
   const [requestBuyOrder, setRequestBuyOrder] = useState<any>(null);
   const [userInfo, setUserInfo] = useAtom(userInfoAtom);
+  useEffect(() => {
+    const w = window as Window & { __qortalCurrentAddress?: string | null };
+    w.__qortalCurrentAddress = userInfo?.address ?? null;
+    return () => {
+      delete w.__qortalCurrentAddress;
+    };
+  }, [userInfo?.address]);
   const [balance, setBalance] = useAtom(balanceAtom);
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
@@ -994,6 +1003,7 @@ function App() {
       <PdfViewer />
 
       <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
+        <ElectronPersistentStorageHydration />
         <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (
@@ -1212,6 +1222,7 @@ function App() {
           onCancel={onCancelUnsavedChanges}
           onConfirm={() => onOkUnsavedChanges(undefined)}
         />
+        {isMainWindow && <NotificationPermissionSlideDown />}
         {isShowQortalRequestExtension && isMainWindow && (
           <QortalRequestExtensionDialog
             open={isShowQortalRequestExtension}

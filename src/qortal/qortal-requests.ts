@@ -76,6 +76,11 @@ import {
   playEncryptedMedia,
   cleanupEncryptedMedia,
   cleanupEncryptedMediaByTabId,
+  addNotificationSubscriptions,
+  getNotificationPermission,
+  getNotificationSubscriptions,
+  markNotificationSeenInApp,
+  removeNotificationSubscriptions,
 } from './get.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
@@ -109,16 +114,26 @@ export const isRunningGateway = async () => {
   return isGateway;
 };
 
+const getAppStorage = () =>
+  typeof window !== 'undefined' &&
+  (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+
 export async function setPermission(key, value) {
   try {
-    // Get the existing qortalRequestPermissions object
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const qortalRequestPermissions =
+        (await appStorage.get('qortalRequestPermissions')) || {};
+      qortalRequestPermissions[key] = value;
+      await appStorage.set(
+        'qortalRequestPermissions',
+        qortalRequestPermissions
+      );
+      return;
+    }
     const qortalRequestPermissions =
       (await getLocalStorage('qortalRequestPermissions')) || {};
-
-    // Update the permission
     qortalRequestPermissions[key] = value;
-
-    // Save the updated object back to storage
     await setLocalStorage('qortalRequestPermissions', qortalRequestPermissions);
   } catch (error) {
     console.error('Error setting permission:', error);
@@ -127,12 +142,15 @@ export async function setPermission(key, value) {
 
 export async function getPermission(key) {
   try {
-    // Get the qortalRequestPermissions object from storage
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const qortalRequestPermissions =
+        (await appStorage.get('qortalRequestPermissions')) || {};
+      return qortalRequestPermissions[key] ?? null;
+    }
     const qortalRequestPermissions =
       (await getLocalStorage('qortalRequestPermissions')) || {};
-
-    // Return the value for the given key, or null if it doesn't exist
-    return qortalRequestPermissions[key] || null;
+    return qortalRequestPermissions[key] ?? null;
   } catch (error) {
     console.error('Error getting permission:', error);
     return null;
@@ -175,6 +193,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
+  'NOTIFICATION_PERMISSION',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -323,6 +342,36 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: 'Unable to get user account',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_PERMISSION': {
+        try {
+          const res = await getNotificationPermission({
+            isFromExtension,
+            appInfo,
+            skipAuth,
+          });
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to get notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin
@@ -1622,6 +1671,110 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_ADD': {
+        try {
+          const res = await addNotificationSubscriptions(request.payload, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_ADD failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_GET': {
+        try {
+          const res = await getNotificationSubscriptions(request.payload, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_GET failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_MARK_SEEN': {
+        try {
+          const res = markNotificationSeenInApp(request.payload, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_MARK_SEEN failed',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_REMOVE': {
+        try {
+          const res = await removeNotificationSubscriptions(request.payload, appInfo);
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'NOTIFICATION_REMOVE failed',
               type: 'backgroundMessageResponse',
             },
             event.origin

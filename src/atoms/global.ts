@@ -12,6 +12,7 @@ import { Steps } from '../components/CoreSetupDialog';
 import { LOCALHOST } from '../constants/constants';
 import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
+import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -43,7 +44,6 @@ export const isDisabledEditorEnterAtom = atomWithReset(false);
 export const isOpenBlockedModalAtom = atomWithReset(false);
 export const isRunningPublicNodeAtom = atomWithReset(false);
 export const isUsingImportExportSettingsAtom = atomWithReset(null);
-export const lastPaymentSeenTimestampAtom = atomWithReset(null);
 export const mailsAtom = atomWithReset([]);
 export const memberGroupsAtom = atomWithReset([]);
 export const mutedGroupsAtom = atomWithReset([]);
@@ -62,7 +62,9 @@ export type GroupInvitesCache = {
   fetchedAt: number;
   address: string;
 } | null;
-export const groupInvitesCacheAtom = atom<GroupInvitesCache>(null) as PrimitiveAtom<GroupInvitesCache>;
+export const groupInvitesCacheAtom = atom<GroupInvitesCache>(
+  null
+) as PrimitiveAtom<GroupInvitesCache>;
 
 /** Cache for join requests (admin list). Invalidated after TTL or explicit refresh. */
 export type JoinRequestsCache = {
@@ -70,7 +72,9 @@ export type JoinRequestsCache = {
   fetchedAt: number;
   adminGroupIds: number[];
 } | null;
-export const joinRequestsCacheAtom = atom<JoinRequestsCache>(null) as PrimitiveAtom<JoinRequestsCache>;
+export const joinRequestsCacheAtom = atom<JoinRequestsCache>(
+  null
+) as PrimitiveAtom<JoinRequestsCache>;
 export const qMailLastEnteredTimestampAtom = atomWithReset(null);
 export const resourceDownloadControllerAtom = atomWithReset({});
 export const globalDownloadsAtom = atomWithReset<
@@ -92,14 +96,128 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
   x: number;
   width: number;
   height: number;
-} | null>(
-  'qortal_chat_widget_bounds',
-  null,
-  undefined,
-  { getOnInit: true }
+} | null>('qortal_chat_widget_bounds', null, undefined, { getOnInit: true });
+
+/** Persisted: custom websocket notification subscriptions. Sent as a second subscribe action when the notifications socket connects. */
+export type CustomWebsocketSubscription = {
+  event: string;
+  resourceFilter?: {
+    service: string;
+    identifier: string;
+    name?: string;
+    excludeBlocked?: boolean;
+    mode?: string;
+  };
+  filters?: Record<string, string>;
+  image?: string;
+  link?: string;
+  notificationId?: string;
+  appName?: string;
+  appService?: string;
+  message?: Record<string, string>;
+  [key: string]: unknown;
+};
+// When in Electron, use appStorage-backed persistence; otherwise Jotai uses localStorage (undefined = default).
+const electronStorage = getElectronPersistentStorage();
+
+/** Persisted: custom WS subscriptions per user address (key: qortal_custom_ws_subscriptions). */
+export const CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY = 'qortal_custom_ws_subscriptions';
+export const customWebsocketSubscriptionsByAddressAtom = atomWithStorage<
+  Record<string, CustomWebsocketSubscription[]>
+>(
+  CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY,
+  {},
+  electronStorage as any
 );
 
+/** Persisted: keys of notifications already "seen in app" (excluded from unread count). */
+export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
+  'qortal_notification_seen_in_app';
+export const notificationSeenInAppKeysAtom = atomWithStorage<string[]>(
+  NOTIFICATION_SEEN_IN_APP_STORAGE_KEY,
+  [],
+  electronStorage as any
+);
+
+/** Stable key for a notification (for "seen in app" matching). */
+export function getNotificationSeenKey(notification: {
+  event?: string;
+  data?: { signature?: string; identifier?: string; created?: unknown };
+  appName?: string;
+  appService?: string;
+  notificationId?: string;
+}): string {
+  if (notification?.event === 'PAYMENT_RECEIVED') {
+    return `PAYMENT_RECEIVED-${notification?.data?.signature ?? ''}`;
+  }
+  if (notification?.event === 'RESOURCE_PUBLISHED') {
+    const appName = notification?.appName ?? '';
+    const appService = notification?.appService ?? 'APP';
+    const notificationId = notification?.notificationId ?? '';
+    const id =
+      notification?.data?.identifier ??
+      notification?.data?.created ??
+      '';
+    return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}-${id}`;
+  }
+  return `other-${notification?.event ?? ''}-${Date.now()}`;
+}
+
+/** Prefix key (app + notificationId only); when app marks by notificationId, we add this. */
+export function getNotificationSeenPrefixKey(notification: {
+  event?: string;
+  appName?: string;
+  appService?: string;
+  notificationId?: string;
+}): string {
+  if (notification?.event === 'RESOURCE_PUBLISHED') {
+    const appName = notification?.appName ?? '';
+    const appService = notification?.appService ?? 'APP';
+    const notificationId = notification?.notificationId ?? '';
+    return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
+  }
+  return getNotificationSeenKey(notification as any);
+}
+
+/** Build prefix for a subscription (same shape as getNotificationSeenPrefixKey). */
+function getSubscriptionSeenPrefix(sub: CustomWebsocketSubscription): string {
+  const appName = (sub.appName as string) ?? '';
+  const appService = (sub.appService as string) ?? 'APP';
+  const notificationId = (sub.notificationId as string) ?? '';
+  return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
+}
+
+/** Keep only seen-in-app keys that still match a rule in customWebsocketSubscriptions. */
+export function filterSeenInAppKeysByRules(
+  seenKeys: string[],
+  customSubscriptions: CustomWebsocketSubscription[]
+): string[] {
+  if (!Array.isArray(seenKeys) || seenKeys.length === 0) return [];
+  const validPrefixes = new Set(
+    (customSubscriptions ?? []).map(getSubscriptionSeenPrefix)
+  );
+  if (validPrefixes.size === 0) return [];
+  return seenKeys.filter((key) => {
+    if (validPrefixes.has(key)) return true;
+    for (const prefix of validPrefixes) {
+      if (key.startsWith(prefix + '-')) return true;
+    }
+    return false;
+  });
+}
+
 export const txListAtom = atomWithReset([]);
+
+/** Notifications per user address (in-memory only; repopulated from WebSocket). */
+export const notificationsByAddressAtom = atomWithReset<Record<string, any[]>>({});
+
+/** Persisted: timestamp when user last "saw all" notifications, per address (Electron: appStorage). */
+export const SEEN_ALL_NOTIFICATIONS_STORAGE_KEY = 'qortal_seen_all_notifications';
+export const seenAllNotificationsByAddressAtom = atomWithStorage<Record<string, number | null>>(
+  SEEN_ALL_NOTIFICATIONS_STORAGE_KEY,
+  {},
+  electronStorage as any
+);
 
 /** Groups the current user is a member of – refreshed every 5 minutes. */
 export const myMemberGroupsAtom = atomWithReset<any[]>([]);
@@ -119,6 +237,59 @@ export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');
 export const extStateAtom = atomWithReset<extStates>('not-authenticated');
 export const userInfoAtom = atomWithReset<any>(null);
+
+/** Current user's custom WS subscriptions (derived from customWebsocketSubscriptionsByAddressAtom by address). */
+export const customWebsocketSubscriptionsAtom = atom(
+  (get) => {
+    const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return [];
+    return (byAddress[address] ?? []) as CustomWebsocketSubscription[];
+  },
+  (get, set, update: CustomWebsocketSubscription[] | ((prev: CustomWebsocketSubscription[]) => CustomWebsocketSubscription[])) => {
+    const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    const prev = (byAddress[address] ?? []) as CustomWebsocketSubscription[];
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(customWebsocketSubscriptionsByAddressAtom, { ...byAddress, [address]: next });
+  }
+);
+
+/** Current user's notifications (derived from notificationsByAddressAtom by address). */
+export const paymentNotificationsAtom = atom(
+  (get) => {
+    const byAddress = get(notificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return [];
+    return (byAddress[address] ?? []) as any[];
+  },
+  (get, set, update: any[] | ((prev: any[]) => any[])) => {
+    const byAddress = get(notificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    const prev = (byAddress[address] ?? []) as any[];
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(notificationsByAddressAtom, { ...byAddress, [address]: next });
+  }
+);
+
+/** Current user's "seen all notifications" timestamp (derived from seenAllNotificationsByAddressAtom by address). */
+export const lastPaymentSeenTimestampAtom = atom(
+  (get) => {
+    const byAddress = get(seenAllNotificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return null;
+    return (byAddress[address] ?? null) as number | null;
+  },
+  (get, set, value: number | null) => {
+    const byAddress = get(seenAllNotificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    set(seenAllNotificationsByAddressAtom, { ...byAddress, [address]: value });
+  }
+);
+
 export const rawWalletAtom = atomWithReset<any>(null);
 export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
 export const balanceAtom = atomWithReset<any>(null);

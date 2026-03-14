@@ -41,6 +41,12 @@ export function useAppMessageHandler(
         executeEvent('openThreadNewPost', {
           data: message.payload?.data,
         });
+      } else if (message.action === 'NOTIFICATION_PERMISSION_REQUEST') {
+        executeEvent('show-notification-permission', {
+          requestId: message.requestId,
+          appInfo: message.appInfo,
+          payload: message.payload,
+        });
       } else if (
         message.action === 'QORTAL_REQUEST_PERMISSION' &&
         message?.isFromExtension

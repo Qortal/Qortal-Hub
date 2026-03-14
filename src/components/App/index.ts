@@ -16,3 +16,5 @@ export { InfoDialog } from './InfoDialog';
 export { UnsavedChangesDialog } from './UnsavedChangesDialog';
 export { QortalRequestExtensionDialog } from './QortalRequestExtensionDialog';
 export type { MessageQortalRequestExtension } from './QortalRequestExtensionDialog';
+export { NotificationPermissionSlideDown } from './NotificationPermissionSlideDown';
+export { ElectronPersistentStorageHydration } from './ElectronPersistentStorageHydration';

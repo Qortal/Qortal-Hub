@@ -86,6 +86,19 @@ try {
     },
   });
 
+  // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
+  contextBridge.exposeInMainWorld('appStorage', {
+    get: async (key) => {
+      return ipcRenderer.invoke('persistentStore:get', key);
+    },
+    set: async (key, value) => {
+      return ipcRenderer.invoke('persistentStore:set', key, value);
+    },
+    delete: async (key) => {
+      return ipcRenderer.invoke('persistentStore:delete', key);
+    },
+  });
+
   // Expose it
   contextBridge.exposeInMainWorld('coreSetup', {
     isCoreRunning: async () => {

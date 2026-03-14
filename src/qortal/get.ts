@@ -443,6 +443,9 @@ function getFileFromContentScript(fileId) {
 
 const responseResolvers = new Map();
 
+/** Resolvers for the custom notification-permission slide-down UI (key: requestId) */
+const notificationPermissionResolvers = new Map();
+
 const handleMessage = (event) => {
   const { action, requestId, result } = event.data;
 
@@ -454,6 +457,14 @@ const handleMessage = (event) => {
     // Resolve the stored promise with the result
     responseResolvers.get(requestId)(result || false);
     responseResolvers.delete(requestId); // Clean up after resolving
+  }
+
+  if (
+    action === 'NOTIFICATION_PERMISSION_RESPONSE' &&
+    notificationPermissionResolvers.has(requestId)
+  ) {
+    notificationPermissionResolvers.get(requestId)(result || false);
+    notificationPermissionResolvers.delete(requestId);
   }
 };
 
@@ -574,6 +585,84 @@ export const getUserAccount = async ({
       i18n.t('auth:message.error.fetch_user_account', {
         postProcess: 'capitalizeFirstChar',
       })
+    );
+  }
+};
+
+export const getNotificationPermission = async ({
+  isFromExtension,
+  appInfo,
+  skipAuth,
+}) => {
+  try {
+    const value =
+      (await getPermission(`qAPPNotification-${appInfo?.name}`)) || false;
+    let skip = false;
+    if (value) skip = true;
+    if (skipAuth) skip = true;
+    let hadSessionPermissions = false;
+    if (
+      appInfo?.tabId &&
+      appInfo?.name &&
+      hasSessionPermission(appInfo.tabId, appInfo.name, 'NOTIFICATION_PERMISSION')
+    ) {
+      skip = true;
+      hadSessionPermissions = true;
+    }
+
+    let resPermission;
+    if (!skip) {
+      resPermission = await new Promise((resolve) => {
+        const requestId = `notificationPermission_${Date.now()}`;
+        notificationPermissionResolvers.set(requestId, resolve);
+        const payload = {
+          text1: i18n.t('question:permission.notification', {
+            defaultValue: 'Allow this app to send you Hub notifications?',
+            postProcess: 'capitalizeFirstChar',
+          }),
+        };
+        window.postMessage(
+          {
+            action: 'NOTIFICATION_PERMISSION_REQUEST',
+            requestId,
+            appInfo,
+            payload,
+          },
+          window.location.origin
+        );
+        setTimeout(() => {
+          if (notificationPermissionResolvers.has(requestId)) {
+            notificationPermissionResolvers.get(requestId)(false);
+            notificationPermissionResolvers.delete(requestId);
+          }
+        }, TIME_MINUTES_1_IN_MILLISECONDS);
+      });
+    }
+
+    const { accepted = false } = resPermission || {};
+    if (resPermission && accepted) {
+      setPermission(`qAPPNotification-${appInfo?.name}`, true);
+    }
+    if (accepted || skip) {
+      if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
+        setSessionPermissions(appInfo.tabId, appInfo.name, [
+          'NOTIFICATION_PERMISSION',
+        ]);
+      }
+      return { granted: true };
+    } else {
+      throw new Error(
+        i18n.t('question:message.generic.user_declined_request', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      );
+    }
+  } catch (error) {
+    throw new Error(
+      error?.message ||
+        i18n.t('auth:message.error.fetch_user_account', {
+          postProcess: 'capitalizeFirstChar',
+        })
     );
   }
 };
@@ -5006,6 +5095,287 @@ export const getArrrSyncStatus = async () => {
         })
     );
   }
+};
+
+const CUSTOM_WS_SUBSCRIPTIONS_KEY = 'qortal_custom_ws_subscriptions';
+
+/** Current user address for address-scoped storage (set by app when user logs in). */
+function getCurrentAddress(): string | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as Window & { __qortalCurrentAddress?: string | null };
+  return w.__qortalCurrentAddress ?? null;
+}
+
+function getAppStorage() {
+  if (typeof window === 'undefined') return undefined;
+  return (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+}
+
+function parseSubscriptionsRecord(value: unknown): Record<string, any[]> {
+  if (value != null && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, any[]>;
+  if (Array.isArray(value)) return { __legacy: value };
+  return {};
+}
+
+async function getStoredCustomSubscriptions() {
+  const address = getCurrentAddress();
+  const appStorage = getAppStorage();
+  if (appStorage) {
+    try {
+      const value = await appStorage.get(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(value);
+      if (!address) return [];
+      return Array.isArray(record[address]) ? record[address] : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+    if (!raw) return [];
+    const value = JSON.parse(raw);
+    const record = parseSubscriptionsRecord(value);
+    if (!address) return [];
+    return Array.isArray(record[address]) ? record[address] : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+async function setStoredCustomSubscriptions(list: any[]) {
+  const address = getCurrentAddress();
+  const appStorage = getAppStorage();
+  if (appStorage) {
+    try {
+      const value = await appStorage.get(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(value);
+      if (address) record[address] = list;
+      await appStorage.set(CUSTOM_WS_SUBSCRIPTIONS_KEY, record);
+    } catch (err) {
+      console.error('[get.ts] setStoredCustomSubscriptions appStorage failed:', err);
+    }
+  } else if (typeof localStorage !== 'undefined' && address) {
+    try {
+      const raw = localStorage.getItem(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(raw ? JSON.parse(raw) : null);
+      record[address] = list;
+      localStorage.setItem(CUSTOM_WS_SUBSCRIPTIONS_KEY, JSON.stringify(record));
+    } catch (err) {
+      console.error('[get.ts] setStoredCustomSubscriptions localStorage failed:', err);
+    }
+  }
+  executeEvent('custom-ws-subscriptions-updated', list);
+}
+
+export const addNotificationSubscriptions = async (payload, appInfo) => {
+  if (
+    !appInfo?.tabId ||
+    !appInfo?.name ||
+    !hasSessionPermission(appInfo.tabId, appInfo.name, 'NOTIFICATION_PERMISSION')
+  ) {
+    throw new Error('Notification permission required. Call NOTIFICATION_PERMISSION first.');
+  }
+  const notifications = payload?.notifications;
+  if (!Array.isArray(notifications) || notifications.length === 0) {
+    throw new Error('notifications must be a non-empty array');
+  }
+  const appName = appInfo?.name ?? '';
+  const appService = appInfo?.service ?? 'APP';
+
+  const toSubscription = (item) => {
+    if (
+      !item ||
+      typeof item.notificationId !== 'string' ||
+      !item.notificationId.trim()
+    ) {
+      throw new Error('Each item must have a non-empty notificationId');
+    }
+    if (typeof item.link !== 'string' || !item.link.trim()) {
+      throw new Error('Each item must have a non-empty link');
+    }
+    const filters = item.filters;
+    if (
+      !filters ||
+      typeof filters !== 'object' ||
+      Object.keys(filters).length === 0 ||
+      typeof filters.service !== 'string' ||
+      !filters.service.trim()
+    ) {
+      throw new Error(
+        'Each item must have non-empty filters with at least service'
+      );
+    }
+    const message = item.message;
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      typeof message.en !== 'string' ||
+      !message.en.trim()
+    ) {
+      throw new Error("Each item must have message with at least 'en'");
+    }
+    return {
+      event: 'RESOURCE_PUBLISHED',
+      resourceFilter: {
+        service: filters.service,
+        identifier:
+          typeof filters.identifier === 'string' ? filters.identifier : '',
+        ...(typeof filters.name === 'string' && { name: filters.name }),
+        ...(filters.excludeBlocked !== undefined && {
+          excludeBlocked: !!filters.excludeBlocked,
+        }),
+        ...(typeof filters.mode === 'string' && { mode: filters.mode }),
+      },
+      image: typeof item.image === 'string' ? item.image : undefined,
+      link: item.link.trim(),
+      notificationId: item.notificationId.trim(),
+      appName,
+      appService,
+      message: { ...message },
+    };
+  };
+
+  const transformed = notifications.map(toSubscription);
+  const key = (sub) => `${sub.notificationId}-${sub.appName}-${sub.appService}`;
+  const current = await getStoredCustomSubscriptions();
+  const byKey = new Map(current.map((s) => [key(s), s]));
+  transformed.forEach((s) => byKey.set(key(s), s));
+  const merged = Array.from(byKey.values());
+  await setStoredCustomSubscriptions(merged);
+  return true;
+};
+
+export const removeNotificationSubscriptions = async (payload, appInfo) => {
+  const appName = appInfo?.name ?? '';
+  const appService = appInfo?.service ?? 'APP';
+  const notificationIds = payload?.notificationIds;
+  const idsSet =
+    Array.isArray(notificationIds) && notificationIds.length > 0
+      ? new Set(notificationIds.map((id) => String(id).trim()))
+      : null;
+
+  const current = await getStoredCustomSubscriptions();
+  const toUnsubscribe = [];
+  const filtered = current.filter((sub) => {
+    const sameApp =
+      (sub.appName ?? '') === appName &&
+      (sub.appService ?? 'APP') === appService;
+    if (!sameApp) return true;
+    if (idsSet == null) {
+      toUnsubscribe.push({
+        notificationId: sub.notificationId ?? '',
+        appName: sub.appName ?? '',
+        appService: sub.appService ?? 'APP',
+      });
+      return false;
+    }
+    if (idsSet.has(sub.notificationId ?? '')) {
+      toUnsubscribe.push({
+        notificationId: sub.notificationId ?? '',
+        appName: sub.appName ?? '',
+        appService: sub.appService ?? 'APP',
+      });
+      return false;
+    }
+    return true;
+  });
+  await setStoredCustomSubscriptions(filtered);
+  if (toUnsubscribe.length > 0) {
+    executeEvent('custom-ws-unsubscribe', toUnsubscribe);
+  }
+  return true;
+};
+
+const NOTIFICATION_SEEN_IN_APP_KEY = 'qortal_notification_seen_in_app';
+
+function getStoredSeenInAppKeys() {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_SEEN_IN_APP_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function setStoredSeenInAppKeys(keys) {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(keys));
+  }
+  executeEvent('notification-seen-in-app-updated', keys);
+}
+
+/**
+ * Mark notifications as "seen in app".
+ * Payload: { notificationIds: (string | { notificationId: string, identifier?: string })[] }.
+ * App name/service from appInfo.
+ * - String: add prefix key only (all with that notificationId).
+ * - Object with optional identifier: add prefix key; if identifier present, also add full key for that item.
+ */
+export const markNotificationSeenInApp = (payload, appInfo) => {
+  const notificationIds = payload?.notificationIds;
+  if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
+    return [];
+  }
+  const appName = appInfo?.name ?? '';
+  const appService = appInfo?.service ?? 'APP';
+  const current = getStoredSeenInAppKeys();
+  const set = new Set(current);
+  notificationIds.forEach((item) => {
+    const notificationId =
+      typeof item === 'string'
+        ? String(item).trim()
+        : (item && typeof item === 'object' && item.notificationId != null
+            ? String(item.notificationId).trim()
+            : '');
+    if (!notificationId) return;
+    const prefixKey = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
+    set.add(prefixKey);
+    const identifier =
+      item && typeof item === 'object' && item.identifier != null
+        ? String(item.identifier).trim()
+        : '';
+    if (identifier) {
+      set.add(`${prefixKey}-${identifier}`);
+    }
+  });
+  const merged = Array.from(set);
+  setStoredSeenInAppKeys(merged);
+  return merged;
+};
+
+/** Returns notification rules for the app in the same format as NOTIFICATION_ADD (image, link, notificationId, message, filters). */
+export const getNotificationSubscriptions = async (_payload, appInfo) => {
+  const appName = appInfo?.name ?? '';
+  const appService = appInfo?.service ?? 'APP';
+  const current = await getStoredCustomSubscriptions();
+  const forApp = current.filter(
+    (sub) =>
+      (sub.appName ?? '') === appName && (sub.appService ?? 'APP') === appService
+  );
+  return forApp.map((sub) => {
+    const rf = sub.resourceFilter ?? {};
+    const filters = {
+      service: typeof rf.service === 'string' ? rf.service : '',
+      identifier: typeof rf.identifier === 'string' ? rf.identifier : '',
+    };
+    if (typeof rf.name === 'string') filters.name = rf.name;
+    if (rf.excludeBlocked !== undefined) filters.excludeBlocked = !!rf.excludeBlocked;
+    if (typeof rf.mode === 'string') filters.mode = rf.mode;
+    return {
+      image: typeof sub.image === 'string' ? sub.image : undefined,
+      link: typeof sub.link === 'string' ? sub.link : '',
+      notificationId: typeof sub.notificationId === 'string' ? sub.notificationId : '',
+      message:
+        sub.message && typeof sub.message === 'object'
+          ? { ...sub.message }
+          : { en: '' },
+      filters,
+    };
+  });
 };
 
 export const sendCoin = async (data, isFromExtension) => {

@@ -17,6 +17,7 @@ import {
 import { log as loggerLog, error as loggerError } from './logger';
 import {
   ElectronCapacitorApp,
+  flushPersistentStore,
   setupContentSecurityPolicy,
   setupReloadWatcher,
 } from './setup';
@@ -193,6 +194,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
 // Set isQuitting flag before the app quits
 app.on('before-quit', () => {
   setIsQuitting(true);
+  flushPersistentStore();
 });
 
 // Handle when all of our windows are close (platforms have their own expectations).

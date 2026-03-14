@@ -697,6 +697,89 @@ ipcMain.handle(
   }
 );
 
+// Persistent store: in-memory cache + debounced writes to persistent-store.json
+const PERSISTENT_STORE_FILENAME = 'persistent-store.json';
+const PERSISTENT_STORE_DEBOUNCE_MS = 250;
+
+let persistentStoreCache: Record<string, unknown> | null = null;
+let persistentStoreSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+
+async function loadPersistentStore(): Promise<Record<string, unknown>> {
+  if (persistentStoreCache !== null) return persistentStoreCache;
+  try {
+    const filePath = await getSharedSettingsFilePath(PERSISTENT_STORE_FILENAME);
+    const stats = await fs.promises.stat(filePath).catch(() => null);
+    if (!stats?.isFile()) {
+      persistentStoreCache = {};
+      return persistentStoreCache;
+    }
+    const raw = await fs.promises.readFile(filePath, 'utf-8');
+    persistentStoreCache = (JSON.parse(raw) as Record<string, unknown>) || {};
+  } catch (err) {
+    loggerError('Error loading persistent store', err);
+    persistentStoreCache = {};
+  }
+  return persistentStoreCache;
+}
+
+function schedulePersistentStoreSave(): void {
+  if (persistentStoreSaveTimeout !== null) clearTimeout(persistentStoreSaveTimeout);
+  persistentStoreSaveTimeout = setTimeout(async () => {
+    persistentStoreSaveTimeout = null;
+    if (persistentStoreCache === null) return;
+    try {
+      const filePath = await getSharedSettingsFilePath(PERSISTENT_STORE_FILENAME);
+      await fs.promises.writeFile(
+        filePath,
+        JSON.stringify(persistentStoreCache, null, 2),
+        'utf-8'
+      );
+    } catch (err) {
+      loggerError('Error saving persistent store', err);
+    }
+  }, PERSISTENT_STORE_DEBOUNCE_MS);
+}
+
+export function flushPersistentStore(): void {
+  if (persistentStoreSaveTimeout !== null) {
+    clearTimeout(persistentStoreSaveTimeout);
+    persistentStoreSaveTimeout = null;
+  }
+  if (persistentStoreCache === null) return;
+  try {
+    const dir = join(app.getPath('appData'), 'qortal-hub');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, PERSISTENT_STORE_FILENAME);
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify(persistentStoreCache, null, 2),
+      'utf-8'
+    );
+  } catch (err) {
+    loggerError('Error flushing persistent store', err);
+  }
+}
+
+ipcMain.handle('persistentStore:get', async (_event, key: string) => {
+  const store = await loadPersistentStore();
+  return store[key];
+});
+
+ipcMain.handle(
+  'persistentStore:set',
+  async (_event, key: string, value: unknown) => {
+    const store = await loadPersistentStore();
+    store[key] = value;
+    schedulePersistentStoreSave();
+  }
+);
+
+ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
+  const store = await loadPersistentStore();
+  delete store[key];
+  schedulePersistentStoreSave();
+});
+
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray
 ipcMain.handle('appSettings:get', async () => {
   return readAppSettings();

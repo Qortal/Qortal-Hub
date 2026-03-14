@@ -1,5 +1,10 @@
 declare global {
   interface Window {
+    appStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
     coreSetup?: unknown;
     electronAPI?: {
       openExternal?: (url: string) => void;

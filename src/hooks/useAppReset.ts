@@ -82,8 +82,10 @@ export function useAppReset() {
   );
   const resetAtomMailsAtom = useResetAtom(mailsAtom);
   const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
-  const resetLastPaymentSeenTimestampAtom = useResetAtom(
-    lastPaymentSeenTimestampAtom
+  const setLastPaymentSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
+  const resetLastPaymentSeenTimestampAtom = useCallback(
+    () => setLastPaymentSeenTimestamp(null),
+    [setLastPaymentSeenTimestamp]
   );
   const resetGroupsOwnerNamesAtom = useResetAtom(groupsOwnerNamesAtom);
   const resetGroupAnnouncementsAtom = useResetAtom(groupAnnouncementsAtom);

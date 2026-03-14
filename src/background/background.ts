@@ -3369,10 +3369,7 @@ function setupMessageListener() {
                 clearInterval(notificationCheckInterval);
                 notificationCheckInterval = null;
               }
-              if (paymentsCheckInterval) {
-                clearInterval(paymentsCheckInterval);
-                paymentsCheckInterval = null;
-              }
+
               groupSecretkeys = {};
               const wallet = await getSaveWallet();
               const address = wallet.address0;
@@ -3566,82 +3563,37 @@ export const checkNewMessages = async () => {
   }
 };
 
-export const checkPaymentsForNotifications = async (address) => {
+export const fireOsNotificationPayment = async (
+  notification,
+  title,
+  messageBody,
+  icon
+) => {
   try {
     const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
     if (isDisableNotifications) return;
-    let latestPayment = null;
-    const savedtimestamp = await getTimestampLatestPayment();
 
-    const url = await createEndpoint(
-      `/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
+    const notificationId = encodeURIComponent(
+      'payment_notification_' + Date.now() + '_type=payment-announcement'
     );
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    const body = messageBody;
+
+    const notification = new window.Notification(title, {
+      body,
+      icon,
+      data: { id: notificationId },
     });
 
-    const responseData = await response.json();
+    notification.onclick = () => {
+      handleNotificationClick(notificationId);
+      notification.close();
+    };
 
-    const latestTx = responseData.filter(
-      (tx) => tx?.creatorAddress !== address && tx?.recipient === address
-    )[0];
-    if (!latestTx) {
-      return; // continue to the next group
-    }
-    if (
-      checkDifference(latestTx.timestamp) &&
-      (!savedtimestamp || latestTx.timestamp > savedtimestamp)
-    ) {
-      if (latestTx.timestamp) {
-        latestPayment = latestTx;
-        await addTimestampLatestPayment(latestTx.timestamp);
-      }
-
-      // save new timestamp
-    }
-
-    if (latestPayment) {
-      // Create a unique notification ID with type and group announcement details
-      const notificationId = encodeURIComponent(
-        'payment_notification_' + Date.now() + '_type=payment-announcement'
-      );
-
-      const title = 'New payment!';
-      const body = `You have received a new payment of ${latestPayment?.amount} QORT`;
-
-      // Create and show the notification
-      const notification = new window.Notification(title, {
-        body,
-        icon: window.location.origin + '/qortal192.png',
-        data: { id: notificationId },
-      });
-
-      // Handle notification click with specific actions based on `notificationId`
-      notification.onclick = () => {
-        handleNotificationClick(notificationId);
-        notification.close(); // Clean up the notification on click
-      };
-
-      // Automatically close the notification after 5 seconds if it’s not clicked
-      setTimeout(() => {
-        notification.close();
-      }, 10000); // Close after 5 seconds
-
-      const targetOrigin = window.location.origin;
-
-      window.postMessage(
-        {
-          action: 'SET_PAYMENT_ANNOUNCEMENT',
-          payload: latestPayment,
-        },
-        targetOrigin
-      );
-    }
+    setTimeout(() => {
+      notification.close();
+    }, 10000);
   } catch (error) {
     console.error(error);
   }
@@ -3814,7 +3766,6 @@ export const checkThreads = async (bringBack) => {
 };
 
 let notificationCheckInterval;
-let paymentsCheckInterval;
 
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
@@ -3833,21 +3784,6 @@ const createNotificationCheck = () => {
         console.error('Error checking notifications:', error);
       }
     }, TIME_MINUTES_10_IN_MILLISECONDS);
-  }
-
-  if (!paymentsCheckInterval) {
-    paymentsCheckInterval = setInterval(async () => {
-      try {
-        // This would replace the Chrome alarm callback
-        const wallet = await getSaveWallet();
-        const address = wallet?.address0;
-        if (!address) return;
-
-        checkPaymentsForNotifications(address);
-      } catch (error) {
-        console.error('Error checking payments:', error);
-      }
-    }, TIME_MINUTES_3_IN_MILLISECONDS);
   }
 };
 
