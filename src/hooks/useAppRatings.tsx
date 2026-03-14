@@ -3,7 +3,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 import { atomFamily } from 'jotai/utils';
 import { getBaseApiReact } from '../App';
 import { RATING_CACHE_TTL } from '../constants/constants';
-import type { AppRatingData, VoteCount, BulkRatingsResponse } from '../types/ratings';
+import type { AppRatingData, VoteCount } from '../types/ratings';
 import {
   loadRatingsCacheFromDB,
   saveRatingsCacheToDB,
@@ -178,8 +178,6 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
   const url = `${getBaseApiReact()}/polls/apps/ratings`;
 
   try {
-    console.log('Fetching all ratings...');
-    
     const response = await fetch(url, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -195,12 +193,42 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
       return null;
     }
 
-    bulkEndpointAvailable = true;
-    const data: BulkRatingsResponse = await response.json();
+    const rawData: unknown = await response.json();
     const now = Date.now();
     const result = new Map<string, AppRatingData>();
 
-    Object.values(data.ratings).forEach((entry) => {
+    // Normalise to a flat array regardless of response shape:
+    //   - top-level array:                [{key, value}, ...]
+    //   - { ratings: [{key, value}] }:    object with array of entries
+    //   - { ratings: [[{key,value},...]] } object with array-of-array (flatten one level)
+    //   - { ratings: {k: {key,value}} }:  object with record
+    let rawItems: unknown[] = Array.isArray(rawData)
+      ? rawData
+      : Array.isArray((rawData as any)?.ratings)
+      ? (rawData as any).ratings
+      : (rawData as any)?.ratings != null
+      ? Object.values((rawData as any).ratings)
+      : [];
+
+    // Flatten one extra nesting level if the first element is itself an array
+    if (rawItems.length > 0 && Array.isArray(rawItems[0])) {
+      rawItems = rawItems.flat(1);
+    }
+
+
+    if (rawItems.length === 0) {
+      // Could not extract any items — endpoint exists but format is unrecognised;
+      // don't mark it as available so per-app fallback is used instead.
+      return null;
+    }
+
+    bulkEndpointAvailable = true;
+
+    for (const rawItem of rawItems) {
+      // Each item may be a direct BulkRatingEntry or a {key, value} wrapper
+      const entry: any = (rawItem as any)?.value ?? rawItem;
+      if (!entry?.appName || !entry?.service || !Array.isArray(entry?.voteCounts)) continue;
+
       const key = getCacheKey(entry.appName, entry.service);
       const { averageRating, totalVotes } = calculateRating(entry.voteCounts);
 
@@ -212,7 +240,7 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
         pollInfo: {
           pollName: entry.pollName,
           pollDescription: entry.description ?? '',
-          pollOptions: entry.voteCounts.map((v) => ({
+          pollOptions: entry.voteCounts.map((v: VoteCount) => ({
             optionName: v.optionName,
           })),
           owner: entry.owner,
@@ -220,11 +248,11 @@ const fetchAllRatingsFromAPI = async (): Promise<Map<
         },
         lastFetched: now,
       });
-    });
+    }
 
     return result;
   } catch {
-    // Network failure — don't mark endpoint unavailable
+    // Network failure or parse error — don't mark endpoint unavailable
     return null;
   }
 };
@@ -488,11 +516,39 @@ export const useAppRatings = () => {
     []
   );
 
+  // Clear the ratings cache and re-fetch from the bulk endpoint.
+  // Call this when the user explicitly refreshes the app/website list.
+  const refreshRatings = useCallback(async () => {
+    // Block batchFetchRatings from storing defaults until the new bulk fetch finishes
+    bulkFetchComplete = false;
+
+    // Wipe in-memory store and IndexedDB
+    ratingsStoreRef.current = new Map();
+    setRatingsStore(new Map());
+    saveRatingsCacheToDB(new Map());
+
+    const bulkData = await fetchAllRatingsFromAPI();
+    bulkFetchComplete = true;
+
+    if (!bulkData || bulkData.size === 0) return;
+
+    setRatingsStore((prev) => {
+      const next = new Map(prev);
+      bulkData.forEach((data, key) => {
+        next.set(key, data);
+      });
+      saveRatingsCacheToDB(next);
+      ratingsStoreRef.current = next;
+      return next;
+    });
+  }, [setRatingsStore]);
+
   return {
     getRating,
     fetchRating,
     registerVisibility,
     invalidateRating,
+    refreshRatings,
   };
 };
 
