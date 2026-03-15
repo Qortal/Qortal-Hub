@@ -20,7 +20,6 @@ import {
   isRunningPublicNodeAtom,
   joinRequestsCacheAtom,
   lastPaymentSeenTimestampAtom,
-  mailsAtom,
   managedSubscriptionsAtom,
   managedSubscriptionsLoadingAtom,
   memberGroupsAtom,
@@ -80,7 +79,6 @@ export function useAppReset() {
   const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
     qMailLastEnteredTimestampAtom
   );
-  const resetAtomMailsAtom = useResetAtom(mailsAtom);
   const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
   const setLastPaymentSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
   const resetLastPaymentSeenTimestampAtom = useCallback(
@@ -151,7 +149,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom();
     resetAtomIsUsingImportExportSettingsAtom();
     resetAtomQMailLastEnteredTimestampAtom();
-    resetAtomMailsAtom();
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
     resetGroupsOwnerNamesAtom();
@@ -200,7 +197,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom,
     resetAtomIsUsingImportExportSettingsAtom,
     resetAtomQMailLastEnteredTimestampAtom,
-    resetAtomMailsAtom,
     resetGroupPropertiesAtom,
     resetLastPaymentSeenTimestampAtom,
     resetGroupsOwnerNamesAtom,

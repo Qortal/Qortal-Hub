@@ -540,6 +540,14 @@ ipcMain.handle('window:close', () => {
   if (win && !win.isDestroyed()) win.close();
 });
 
+ipcMain.handle('window:focus', () => {
+  const win = myCapacitorApp.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    win.show();
+    win.focus();
+  }
+});
+
 ipcMain.handle('window:isMaximized', () => {
   const win = myCapacitorApp.getMainWindow();
   return win != null && !win.isDestroyed() && win.isMaximized();

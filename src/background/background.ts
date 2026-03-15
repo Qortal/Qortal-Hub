@@ -1,5 +1,6 @@
 // @ts-nocheck
 import '../qortal/qortal-requests.ts';
+import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
@@ -136,7 +137,15 @@ export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 
+/** Payload for general-notification OS clicks (open q-app or wallets). Cleared after use or after 10s. */
+const generalNotificationPayloadById = new Map();
+
 function handleNotificationClick(notificationId) {
+  // Focus the app window when on Electron (e.g. after clicking an OS notification)
+  if (typeof window?.electronAPI?.focusWindow === 'function') {
+    window.electronAPI.focusWindow();
+  }
+
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
@@ -147,6 +156,9 @@ function handleNotificationClick(notificationId) {
     '_type=group-announcement_'
   );
   const isNewThreadPost = decodedNotificationId.includes('_type=thread-post_');
+  const isGeneralNotification = decodedNotificationId.includes(
+    '_type=general-notification'
+  );
 
   // Helper function to extract parameter values safely
   function getParameterValue(id, key) {
@@ -155,7 +167,16 @@ function handleNotificationClick(notificationId) {
   }
   const targetOrigin = window.location.origin;
   // Handle specific notification types and post the message accordingly
-  if (isDirect) {
+  if (isGeneralNotification) {
+    const payload = generalNotificationPayloadById.get(notificationId);
+    generalNotificationPayloadById.delete(notificationId);
+    if (payload) {
+      window.postMessage(
+        { action: 'NOTIFICATION_OPEN_APP', payload },
+        targetOrigin
+      );
+    }
+  } else if (isDirect) {
     const fromValue = getParameterValue(decodedNotificationId, '_from');
     window.postMessage(
       { action: 'NOTIFICATION_OPEN_DIRECT', payload: { from: fromValue } },
@@ -3564,35 +3585,52 @@ export const checkNewMessages = async () => {
 };
 
 export const fireOsNotificationPayment = async (
-  notification,
+  notificationPayload,
   title,
   messageBody,
-  icon
+  icon,
+  qortalLink
 ) => {
   try {
     const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
     if (isDisableNotifications) return;
 
+    if (
+      notificationPayload?.event === 'RESOURCE_PUBLISHED' &&
+      notificationPayload?.appName
+    ) {
+      const osPushDisabled = await getNotificationOsPushDisabled(
+        notificationPayload.appName
+      );
+      if (osPushDisabled) return;
+    }
+
     const notificationId = encodeURIComponent(
-      'payment_notification_' + Date.now() + '_type=payment-announcement'
+      'general_notification_' + Date.now() + '_type=general-notification'
+    );
+
+    generalNotificationPayloadById.set(
+      notificationId,
+      qortalLink ? { link: qortalLink } : { openWallets: true }
     );
 
     const body = messageBody;
 
-    const notification = new window.Notification(title, {
+    const osNotification = new window.Notification(title, {
       body,
       icon,
       data: { id: notificationId },
     });
 
-    notification.onclick = () => {
+    osNotification.onclick = () => {
       handleNotificationClick(notificationId);
-      notification.close();
+      osNotification.close();
     };
 
     setTimeout(() => {
-      notification.close();
+      generalNotificationPayloadById.delete(notificationId);
+      osNotification.close();
     }, 10000);
   } catch (error) {
     console.error(error);

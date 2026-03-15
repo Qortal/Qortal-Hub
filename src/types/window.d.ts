@@ -16,6 +16,7 @@ declare global {
       windowMinimize?: () => void;
       windowMaximize?: () => Promise<void>;
       windowClose?: () => void;
+      focusWindow?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => void;

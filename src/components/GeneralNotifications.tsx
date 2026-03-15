@@ -6,15 +6,21 @@ import {
   ButtonBase,
   Card,
   Collapse,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   List,
   ListItemButton,
   MenuItem,
   Popover,
+  Switch,
   Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
+import SettingsIcon from '@mui/icons-material/Settings';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
@@ -33,13 +39,21 @@ import {
   paymentNotificationsAtom,
   lastPaymentSeenTimestampAtom,
   notificationSeenInAppKeysAtom,
+  customWebsocketSubscriptionsAtom,
   getNotificationSeenKey,
   getNotificationSeenPrefixKey,
 } from '../atoms/global';
+import {
+  getAppsWithNotificationPermission,
+  getNotificationOsPushDisabledMap,
+  setNotificationOsPushDisabled,
+  setPermission,
+} from '../qortal/qortal-requests';
 import { checkDifference } from '../background/background';
 import { getBaseApiReact } from '../App';
 import LogoSelected from '../assets/svgs/LogoSelected.svg';
 import { extractComponents } from './Chat/MessageDisplay';
+import { Spacer } from '../common/Spacer';
 
 const PAYMENT_EVENT = 'PAYMENT_RECEIVED';
 const RESOURCE_EVENT = 'RESOURCE_PUBLISHED';
@@ -95,6 +109,24 @@ function isNotificationSeenInApp(notification, seenInAppKeysSet) {
   return seenInAppKeysSet.has(key) || seenInAppKeysSet.has(prefixKey);
 }
 
+/** Pick message in current language, else en, else first available. Reactive when lang/fallback change. */
+function getNotificationMessageReactive(
+  messageObj: Record<string, string> | undefined,
+  currentLang: string,
+  fallback: string
+): string {
+  if (!messageObj || typeof messageObj !== 'object') return fallback;
+  const lang = (currentLang || 'en').split('-')[0];
+  const current = messageObj[lang];
+  if (typeof current === 'string' && current.trim()) return current.trim();
+  const en = messageObj.en;
+  if (typeof en === 'string' && en.trim()) return en.trim();
+  const first = Object.values(messageObj).find(
+    (v) => typeof v === 'string' && (v as string).trim()
+  );
+  return typeof first === 'string' ? (first as string).trim() : fallback;
+}
+
 export const GeneralNotifications = ({
   address,
   tooltipPlacement = 'left',
@@ -122,6 +154,18 @@ export const GeneralNotifications = ({
   );
   const seenInAppKeys = useAtomValue(notificationSeenInAppKeysAtom);
   const setSeenInAppKeys = useSetAtom(notificationSeenInAppKeysAtom);
+  const customSubscriptions = useAtomValue(customWebsocketSubscriptionsAtom);
+  const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
+
+  const [notificationSettingsModalOpen, setNotificationSettingsModalOpen] =
+    useState(false);
+  const [notificationSettingsApps, setNotificationSettingsApps] = useState<
+    string[]
+  >([]);
+  const [notificationOsPushDisabledMap, setNotificationOsPushDisabledMap] =
+    useState<Record<string, boolean>>({});
+  const [notificationSettingsLoading, setNotificationSettingsLoading] =
+    useState(false);
 
   const seenInAppKeysSet = useMemo(
     () => (Array.isArray(seenInAppKeys) ? new Set(seenInAppKeys) : new Set()),
@@ -151,9 +195,7 @@ export const GeneralNotifications = ({
       const ts = getNotificationTimestamp(n);
       const unseenByTimestamp = !lastEnteredTimestampPayment
         ? ts != null && checkDifference(ts)
-        : ts != null &&
-          checkDifference(ts) &&
-          ts > lastEnteredTimestampPayment;
+        : ts != null && checkDifference(ts) && ts > lastEnteredTimestampPayment;
       if (!unseenByTimestamp) return false;
       return !isNotificationSeenInApp(n, seenInAppKeysSet);
     };
@@ -182,7 +224,7 @@ export const GeneralNotifications = ({
     setExpandedGroup(null);
   };
 
-  const { t } = useTranslation([
+  const { t, i18n } = useTranslation([
     'auth',
     'core',
     'group',
@@ -217,7 +259,7 @@ export const GeneralNotifications = ({
                 textTransform: 'uppercase',
               }}
             >
-              {t('core:payment_notification')}
+              {t('core:message.generic.notifications')}
             </span>
           }
           placement={tooltipPlacement}
@@ -289,9 +331,40 @@ export const GeneralNotifications = ({
             maxWidth: '100%',
             overflow: 'auto',
             padding: 2,
+            position: 'relative',
             width: 420,
           }}
         >
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              position: 'absolute',
+              top: 8,
+              right: 8,
+            }}
+          >
+            <IconButton
+              size="small"
+              onClick={() => {
+                setNotificationSettingsModalOpen(true);
+                setNotificationSettingsLoading(true);
+                Promise.all([
+                  getAppsWithNotificationPermission(),
+                  getNotificationOsPushDisabledMap(),
+                ])
+                  .then(([apps, disabledMap]) => {
+                    setNotificationSettingsApps(apps);
+                    setNotificationOsPushDisabledMap(disabledMap || {});
+                  })
+                  .finally(() => setNotificationSettingsLoading(false));
+              }}
+              sx={{ color: theme.palette.text.secondary }}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Spacer height="20px" />
           {notifications.length === 0 && (
             <Typography sx={{ userSelect: 'none' }}>
               {t('core:message.generic.no_notifications')}
@@ -401,8 +474,7 @@ export const GeneralNotifications = ({
                         isNotificationUnseen(
                           data,
                           lastEnteredTimestampPayment
-                        ) &&
-                        !isNotificationSeenInApp(data, seenInAppKeysSet);
+                        ) && !isNotificationSeenInApp(data, seenInAppKeysSet);
 
                       if (eventTypePublish) {
                         return (
@@ -422,6 +494,9 @@ export const GeneralNotifications = ({
                               },
                             }}
                             onClick={() => {
+                              if (hasNewNotifications) {
+                                setLastEnteredTimestampPayment(Date.now());
+                              }
                               setAnchorEl(null);
                               if (data?.link) {
                                 const res = extractComponents(data.link);
@@ -496,9 +571,18 @@ export const GeneralNotifications = ({
                               </Box>
                               <Typography
                                 variant="body2"
-                                sx={{ fontWeight: 500, lineHeight: 1.4 }}
+                                sx={{
+                                  fontWeight: 500,
+                                  lineHeight: 1.4,
+                                  wordBreak: 'break-word',
+                                  whiteSpace: 'normal',
+                                }}
                               >
-                                {data?.message?.en ?? 'New notification'}
+                                {getNotificationMessageReactive(
+                                  data?.message,
+                                  i18n.language ?? 'en',
+                                  t('core:message.generic.new_notification')
+                                )}
                               </Typography>
                               <Typography
                                 variant="caption"
@@ -533,6 +617,9 @@ export const GeneralNotifications = ({
                               },
                             }}
                             onClick={() => {
+                              if (hasNewNotifications) {
+                                setLastEnteredTimestampPayment(Date.now());
+                              }
                               setAnchorEl(null);
                               executeEvent('openWalletsApp', {});
                             }}
@@ -614,6 +701,130 @@ export const GeneralNotifications = ({
           })}
         </Box>
       </Popover>
+
+      <Dialog
+        open={notificationSettingsModalOpen}
+        onClose={() => setNotificationSettingsModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {t('core:message.generic.notification_settings', {
+            defaultValue: 'Notification settings',
+          })}
+        </DialogTitle>
+        <DialogContent>
+          {notificationSettingsLoading ? (
+            <Typography color="text.secondary">
+              {t('core:message.generic.loading', {
+                defaultValue: 'Loading...',
+              })}
+            </Typography>
+          ) : notificationSettingsApps.length === 0 ? (
+            <Typography color="text.secondary">
+              {t('core:message.generic.no_notification_apps', {
+                defaultValue: 'No apps have notification permission yet.',
+              })}
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {notificationSettingsApps.map((appName) => {
+                const osPushDisabled =
+                  notificationOsPushDisabledMap[appName] === true;
+                return (
+                  <Box
+                    key={appName}
+                    sx={{
+                      alignItems: 'center',
+                      borderBottom: 1,
+                      borderColor: 'divider',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      py: 1.5,
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontWeight: 500 }}>{appName}</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        {t('core:message.generic.disable_os_push', {
+                          defaultValue: 'Disable OS push',
+                        })}
+                      </Typography>
+                      <Switch
+                        checked={osPushDisabled}
+                        onChange={async (_, checked) => {
+                          await setNotificationOsPushDisabled(appName, checked);
+                          setNotificationOsPushDisabledMap((prev) => ({
+                            ...prev,
+                            [appName]: checked,
+                          }));
+                        }}
+                        size="small"
+                      />
+                    </Box>
+                    <ButtonBase
+                      sx={{
+                        color: 'error.main',
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                      }}
+                      onClick={async () => {
+                        const toRemove = (customSubscriptions ?? []).filter(
+                          (s) =>
+                            s?.event === 'RESOURCE_PUBLISHED' &&
+                            s?.appName === appName
+                        );
+                        const notificationIds = toRemove
+                          .map((s) => s?.notificationId ?? '')
+                          .filter(Boolean);
+                        await setPermission(
+                          `qAPPNotification-${appName}`,
+                          false
+                        );
+                        setCustomSubscriptions((prev) =>
+                          (prev ?? []).filter(
+                            (s) =>
+                              !(
+                                s?.event === 'RESOURCE_PUBLISHED' &&
+                                s?.appName === appName
+                              )
+                          )
+                        );
+                        if (notificationIds.length > 0) {
+                          executeEvent(
+                            'custom-ws-unsubscribe',
+                            notificationIds
+                          );
+                        }
+                        executeEvent(
+                          'notifications-websocket-reconnect',
+                          undefined
+                        );
+                        setNotificationSettingsApps((prev) =>
+                          prev.filter((a) => a !== appName)
+                        );
+                        setNotificationOsPushDisabledMap((prev) => {
+                          const next = { ...prev };
+                          delete next[appName];
+                          return next;
+                        });
+                      }}
+                    >
+                      {t('core:message.generic.revoke_permission', {
+                        defaultValue: 'Revoke permission',
+                      })}
+                    </ButtonBase>
+                  </Box>
+                );
+              })}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

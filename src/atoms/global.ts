@@ -44,7 +44,6 @@ export const isDisabledEditorEnterAtom = atomWithReset(false);
 export const isOpenBlockedModalAtom = atomWithReset(false);
 export const isRunningPublicNodeAtom = atomWithReset(false);
 export const isUsingImportExportSettingsAtom = atomWithReset(null);
-export const mailsAtom = atomWithReset([]);
 export const memberGroupsAtom = atomWithReset([]);
 export const mutedGroupsAtom = atomWithReset([]);
 export const myGroupsWhereIAmAdminAtom = atomWithReset([]);

@@ -1,11 +1,19 @@
 import { useMemo } from 'react';
-import { mailsAtom, qMailLastEnteredTimestampAtom } from '../atoms/global';
+import {
+  paymentNotificationsAtom,
+  qMailLastEnteredTimestampAtom,
+} from '../atoms/global';
 import { isLessThanOneWeekOld } from './Group/qmailUtils';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
+
+function toTimestampMs(v: number | undefined | null): number | null {
+  if (v == null || typeof v !== 'number') return v ?? null;
+  return v < 1e12 ? v * 1000 : v;
+}
 
 export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   const { t } = useTranslation([
@@ -20,20 +28,31 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   const [lastEnteredTimestamp, setLastEnteredTimestamp] = useAtom(
     qMailLastEnteredTimestampAtom
   );
-  const [mails, setMails] = useAtom(mailsAtom);
+  const notifications = useAtomValue(paymentNotificationsAtom);
+
+  const latestQMailCreated = useMemo(() => {
+    const qMail = (notifications ?? []).find(
+      (n) =>
+        n?.event === 'RESOURCE_PUBLISHED' &&
+        (n?.notificationId === 'q-mail-notification' || n?.appName === 'Q-Mail')
+    );
+    if (!qMail) return null;
+    const raw =
+      qMail?.data?.timestamp ?? qMail?.data?.created ?? qMail?.timestamp;
+    return toTimestampMs(raw);
+  }, [notifications]);
 
   const hasNewMail = useMemo(() => {
-    if (mails?.length === 0) return false;
-    const latestMail = mails[0];
-    if (!lastEnteredTimestamp && isLessThanOneWeekOld(latestMail?.created))
+    if (latestQMailCreated == null) return false;
+    if (!lastEnteredTimestamp && isLessThanOneWeekOld(latestQMailCreated))
       return true;
     if (
-      lastEnteredTimestamp < latestMail?.created &&
-      isLessThanOneWeekOld(latestMail?.created)
+      lastEnteredTimestamp < latestQMailCreated &&
+      isLessThanOneWeekOld(latestQMailCreated)
     )
       return true;
     return false;
-  }, [lastEnteredTimestamp, mails]);
+  }, [lastEnteredTimestamp, latestQMailCreated]);
 
   const button = (
     <ButtonBase

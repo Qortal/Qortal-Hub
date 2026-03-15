@@ -1,6 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
 import { getBaseApiReact, getBaseApiReactSocket } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import i18n, { supportedLanguages } from '../../i18n/i18n';
+
+/** Message object with "You got a new qmail" in all supported languages (for Q-Mail subscription). */
+function getNewQmailMessage(): Record<string, string> {
+  const message: Record<string, string> = {};
+  for (const lng of Object.keys(supportedLanguages)) {
+    message[lng] = i18n.t('core:message.generic.new_qmail', { lng });
+  }
+  return message;
+}
+
+/** Picks message in current language, else en, else first available; not reactive. */
+function getNotificationMessage(
+  messageObj: Record<string, string> | undefined
+): string {
+  const fallback = 'New notification';
+  if (!messageObj || typeof messageObj !== 'object') return fallback;
+  const lang = (i18n.language || 'en').split('-')[0];
+  const current = messageObj[lang];
+  if (typeof current === 'string' && current.trim()) return current.trim();
+  const en = messageObj.en;
+  if (typeof en === 'string' && en.trim()) return en.trim();
+  const first = Object.values(messageObj).find(
+    (v) => typeof v === 'string' && (v as string).trim()
+  );
+  return typeof first === 'string' ? (first as string).trim() : fallback;
+}
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   extStateAtom,
@@ -10,6 +37,7 @@ import {
   filterSeenInAppKeysByRules,
 } from '../../atoms/global';
 import { fireOsNotificationPayment } from '../../background/background';
+import { getPermission } from '../../qortal/qortal-requests';
 
 export const WebSocketNotifications = ({ myAddress, userName }) => {
   const extState = useAtomValue(extStateAtom);
@@ -27,6 +55,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
   const pingTimeoutRef = useRef(null);
+  const initWebsocketRef = useRef<(() => Promise<void>) | null>(null);
 
   const forceCloseWebSocket = () => {
     if (socketRef.current) {
@@ -47,6 +76,19 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
     return () => {
       unsubscribeFromEvent('logout-event', logoutEventFunc);
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      forceCloseWebSocket();
+      setSocketOpen(false);
+      if (initWebsocketRef.current) {
+        setTimeout(() => initWebsocketRef.current?.(), 0);
+      }
+    };
+    subscribeToEvent('notifications-websocket-reconnect', handler);
+    return () =>
+      unsubscribeFromEvent('notifications-websocket-reconnect', handler);
   }, []);
 
   useEffect(() => {
@@ -103,6 +145,25 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
   useEffect(() => {
     if (!myAddress || extState === 'not-authenticated' || !userName) return;
 
+    /** Remove RESOURCE_PUBLISHED rules whose appName does not have qAPPNotification permission. */
+    const filterSubscriptionsByNotificationPermission = async (
+      subscriptions
+    ) => {
+      if (!Array.isArray(subscriptions)) return [];
+      const result = [];
+      for (const sub of subscriptions) {
+        if (sub?.event !== 'RESOURCE_PUBLISHED') {
+          result.push(sub);
+          continue;
+        }
+        const appName = sub?.appName;
+        if (!appName) continue;
+        const allowed = await getPermission(`qAPPNotification-${appName}`);
+        if (allowed === true) result.push(sub);
+      }
+      return result;
+    };
+
     const pingHeads = () => {
       try {
         if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -157,9 +218,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                   notificationId: 'q-mail-notification',
                   appName: 'Q-Mail',
                   appService: 'APP',
-                  message: {
-                    en: 'You got a new qmail',
-                  },
+                  message: getNewQmailMessage(),
                 },
               ],
             })
@@ -168,6 +227,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
             socketRef.current.send(
               JSON.stringify({
                 action: 'notification-history',
+                paymentReceivedLimit: 5,
               })
             );
           }, 1000);
@@ -196,9 +256,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                 });
                 fireOsNotificationPayment(
                   tx,
-                  'New Payment Received',
-                  `You have received a new payment of ${tx?.data?.amount} QORT`,
-                  `${getBaseApiReact()}/arbitrary/THUMBNAIL/Q-Wallets/qortal_avatar?async=true`
+                  i18n.t('core:message.generic.new_payment_received'),
+                  i18n.t('core:message.generic.new_payment_body', {
+                    amount: tx?.data?.amount ?? 0,
+                  }),
+                  `${getBaseApiReact()}/arbitrary/THUMBNAIL/Q-Wallets/qortal_avatar?async=true`,
+                  tx?.link
                 );
               }
               if (data?.event === 'RESOURCE_PUBLISHED' && data?.data) {
@@ -217,9 +280,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                 });
                 fireOsNotificationPayment(
                   tx,
-                  `New notification from ${tx.appName}`,
-                  tx.message.en,
-                  `${getBaseApiReact()}/${tx.image}`
+                  i18n.t('core:message.generic.new_notification_from', {
+                    appName: tx.appName ?? 'App',
+                  }),
+                  getNotificationMessage(tx.message),
+                  `${getBaseApiReact()}/${tx.image}`,
+                  tx?.link
                 );
               }
             }
@@ -254,9 +320,18 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       }
     };
 
-    initWebsocketNotifications();
+    initWebsocketRef.current = initWebsocketNotifications;
+
+    (async () => {
+      const filtered = await filterSubscriptionsByNotificationPermission(
+        customSubscriptions ?? []
+      );
+      setCustomSubscriptions(filtered);
+      initWebsocketNotifications();
+    })();
 
     return () => {
+      initWebsocketRef.current = null;
       forceCloseWebSocket();
     };
   }, [myAddress, extState, userName]);

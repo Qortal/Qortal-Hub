@@ -157,6 +157,71 @@ export async function getPermission(key) {
   }
 }
 
+/** Returns the full permissions object (for listing apps with notification permission). */
+export async function getQortalRequestPermissions() {
+  try {
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      return (await appStorage.get('qortalRequestPermissions')) || {};
+    }
+    return (await getLocalStorage('qortalRequestPermissions')) || {};
+  } catch (error) {
+    console.error('Error getting permissions:', error);
+    return {};
+  }
+}
+
+/** App names that have qAPPNotification-<appName> === true. */
+export async function getAppsWithNotificationPermission() {
+  const perms = await getQortalRequestPermissions();
+  const apps = [];
+  for (const key of Object.keys(perms)) {
+    if (key.startsWith('qAPPNotification-') && perms[key] === true) {
+      apps.push(key.replace(/^qAPPNotification-/, ''));
+    }
+  }
+  return apps;
+}
+
+const QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY =
+  'qortalNotificationOsPushDisabled';
+
+/** Map of appName -> true if OS push is disabled for that app. */
+export async function getNotificationOsPushDisabledMap() {
+  try {
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const map =
+        (await appStorage.get(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY)) || {};
+      return typeof map === 'object' && !Array.isArray(map) ? map : {};
+    }
+    const raw = await getData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY);
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function getNotificationOsPushDisabled(appName) {
+  const map = await getNotificationOsPushDisabledMap();
+  return map[appName] === true;
+}
+
+export async function setNotificationOsPushDisabled(appName, disabled) {
+  try {
+    const map = await getNotificationOsPushDisabledMap();
+    map[appName] = !!disabled;
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      await appStorage.set(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
+      return;
+    }
+    await storeData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
+  } catch (error) {
+    console.error('Error setting notification OS push disabled:', error);
+  }
+}
+
 // In-memory storage for session permissions
 const sessionPermissionsStore = new Map<
   string,

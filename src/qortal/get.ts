@@ -604,7 +604,11 @@ export const getNotificationPermission = async ({
     if (
       appInfo?.tabId &&
       appInfo?.name &&
-      hasSessionPermission(appInfo.tabId, appInfo.name, 'NOTIFICATION_PERMISSION')
+      hasSessionPermission(
+        appInfo.tabId,
+        appInfo.name,
+        'NOTIFICATION_PERMISSION'
+      )
     ) {
       skip = true;
       hadSessionPermissions = true;
@@ -649,7 +653,7 @@ export const getNotificationPermission = async ({
           'NOTIFICATION_PERMISSION',
         ]);
       }
-      return { granted: true };
+      return true;
     } else {
       throw new Error(
         i18n.t('question:message.generic.user_declined_request', {
@@ -5108,11 +5112,19 @@ function getCurrentAddress(): string | null {
 
 function getAppStorage() {
   if (typeof window === 'undefined') return undefined;
-  return (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+  return (
+    window as {
+      appStorage?: {
+        get: (k: string) => Promise<unknown>;
+        set: (k: string, v: unknown) => Promise<void>;
+      };
+    }
+  ).appStorage;
 }
 
 function parseSubscriptionsRecord(value: unknown): Record<string, any[]> {
-  if (value != null && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, any[]>;
+  if (value != null && typeof value === 'object' && !Array.isArray(value))
+    return value as Record<string, any[]>;
   if (Array.isArray(value)) return { __legacy: value };
   return {};
 }
@@ -5153,7 +5165,10 @@ async function setStoredCustomSubscriptions(list: any[]) {
       if (address) record[address] = list;
       await appStorage.set(CUSTOM_WS_SUBSCRIPTIONS_KEY, record);
     } catch (err) {
-      console.error('[get.ts] setStoredCustomSubscriptions appStorage failed:', err);
+      console.error(
+        '[get.ts] setStoredCustomSubscriptions appStorage failed:',
+        err
+      );
     }
   } else if (typeof localStorage !== 'undefined' && address) {
     try {
@@ -5162,19 +5177,86 @@ async function setStoredCustomSubscriptions(list: any[]) {
       record[address] = list;
       localStorage.setItem(CUSTOM_WS_SUBSCRIPTIONS_KEY, JSON.stringify(record));
     } catch (err) {
-      console.error('[get.ts] setStoredCustomSubscriptions localStorage failed:', err);
+      console.error(
+        '[get.ts] setStoredCustomSubscriptions localStorage failed:',
+        err
+      );
     }
   }
   executeEvent('custom-ws-subscriptions-updated', list);
+}
+
+/** Allowed filter keys and their types for notification subscription resourceFilter. */
+const NOTIFICATION_FILTER_SPEC = {
+  service: 'string',
+  query: 'string',
+  identifier: 'string',
+  names: 'arrayOfString',
+  title: 'string',
+  description: 'string',
+  keywords: 'arrayOfString',
+  prefix: 'boolean',
+  defaultResource: 'boolean',
+  minLevel: 'integer',
+  followedOnly: 'boolean',
+  excludeBlocked: 'boolean',
+  after: 'long',
+  before: 'long',
+  mode: 'string', // ALL | ANY, internal
+};
+
+function validateNotificationFilters(filters) {
+  if (filters == null || typeof filters !== 'object') return;
+  for (const [key, value] of Object.entries(filters)) {
+    if (!(key in NOTIFICATION_FILTER_SPEC)) {
+      throw new Error(`Unknown filter key: "${key}"`);
+    }
+    if (value === undefined || value === null) continue;
+    const type = NOTIFICATION_FILTER_SPEC[key];
+    switch (type) {
+      case 'string':
+        if (typeof value !== 'string') {
+          throw new Error(`Filter "${key}" must be a string`);
+        }
+        break;
+      case 'arrayOfString':
+        if (!Array.isArray(value)) {
+          throw new Error(`Filter "${key}" must be an array of strings`);
+        }
+        if (value.some((v) => typeof v !== 'string')) {
+          throw new Error(`Filter "${key}" must be an array of strings`);
+        }
+        break;
+      case 'boolean':
+        if (typeof value !== 'boolean') {
+          throw new Error(`Filter "${key}" must be a boolean`);
+        }
+        break;
+      case 'integer':
+      case 'long':
+        if (typeof value !== 'number' || !Number.isInteger(value)) {
+          throw new Error(`Filter "${key}" must be an integer`);
+        }
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 export const addNotificationSubscriptions = async (payload, appInfo) => {
   if (
     !appInfo?.tabId ||
     !appInfo?.name ||
-    !hasSessionPermission(appInfo.tabId, appInfo.name, 'NOTIFICATION_PERMISSION')
+    !hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'NOTIFICATION_PERMISSION'
+    )
   ) {
-    throw new Error('Notification permission required. Call NOTIFICATION_PERMISSION first.');
+    throw new Error(
+      'Notification permission required. Call NOTIFICATION_PERMISSION first.'
+    );
   }
   const notifications = payload?.notifications;
   if (!Array.isArray(notifications) || notifications.length === 0) {
@@ -5195,17 +5277,10 @@ export const addNotificationSubscriptions = async (payload, appInfo) => {
       throw new Error('Each item must have a non-empty link');
     }
     const filters = item.filters;
-    if (
-      !filters ||
-      typeof filters !== 'object' ||
-      Object.keys(filters).length === 0 ||
-      typeof filters.service !== 'string' ||
-      !filters.service.trim()
-    ) {
-      throw new Error(
-        'Each item must have non-empty filters with at least service'
-      );
+    if (!filters || typeof filters !== 'object') {
+      throw new Error('Each item must have filters (object)');
     }
+    validateNotificationFilters(filters);
     const message = item.message;
     if (
       !message ||
@@ -5217,16 +5292,7 @@ export const addNotificationSubscriptions = async (payload, appInfo) => {
     }
     return {
       event: 'RESOURCE_PUBLISHED',
-      resourceFilter: {
-        service: filters.service,
-        identifier:
-          typeof filters.identifier === 'string' ? filters.identifier : '',
-        ...(typeof filters.name === 'string' && { name: filters.name }),
-        ...(filters.excludeBlocked !== undefined && {
-          excludeBlocked: !!filters.excludeBlocked,
-        }),
-        ...(typeof filters.mode === 'string' && { mode: filters.mode }),
-      },
+      resourceFilter: { ...filters, mode: filters.mode ?? 'ALL' },
       image: typeof item.image === 'string' ? item.image : undefined,
       link: item.link.trim(),
       notificationId: item.notificationId.trim(),
@@ -5328,9 +5394,9 @@ export const markNotificationSeenInApp = (payload, appInfo) => {
     const notificationId =
       typeof item === 'string'
         ? String(item).trim()
-        : (item && typeof item === 'object' && item.notificationId != null
-            ? String(item.notificationId).trim()
-            : '');
+        : item && typeof item === 'object' && item.notificationId != null
+          ? String(item.notificationId).trim()
+          : '';
     if (!notificationId) return;
     const prefixKey = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
     set.add(prefixKey);
@@ -5354,7 +5420,8 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
   const current = await getStoredCustomSubscriptions();
   const forApp = current.filter(
     (sub) =>
-      (sub.appName ?? '') === appName && (sub.appService ?? 'APP') === appService
+      (sub.appName ?? '') === appName &&
+      (sub.appService ?? 'APP') === appService
   );
   return forApp.map((sub) => {
     const rf = sub.resourceFilter ?? {};
@@ -5363,12 +5430,14 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
       identifier: typeof rf.identifier === 'string' ? rf.identifier : '',
     };
     if (typeof rf.name === 'string') filters.name = rf.name;
-    if (rf.excludeBlocked !== undefined) filters.excludeBlocked = !!rf.excludeBlocked;
+    if (rf.excludeBlocked !== undefined)
+      filters.excludeBlocked = !!rf.excludeBlocked;
     if (typeof rf.mode === 'string') filters.mode = rf.mode;
     return {
       image: typeof sub.image === 'string' ? sub.image : undefined,
       link: typeof sub.link === 'string' ? sub.link : '',
-      notificationId: typeof sub.notificationId === 'string' ? sub.notificationId : '',
+      notificationId:
+        typeof sub.notificationId === 'string' ? sub.notificationId : '',
       message:
         sub.message && typeof sub.message === 'object'
           ? { ...sub.message }

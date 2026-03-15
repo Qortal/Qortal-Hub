@@ -80,7 +80,6 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
-import { useQMailFetch } from '../../hooks/useQMailFetch';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -310,7 +309,6 @@ export const Group = ({
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
   const userInfo = useAtomValue(userInfoAtom);
-  useQMailFetch(userInfo?.name, userInfo?.address);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);

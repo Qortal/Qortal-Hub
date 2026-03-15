@@ -18,6 +18,7 @@ try {
     windowMinimize: () => ipcRenderer.invoke('window:minimize'),
     windowMaximize: () => ipcRenderer.invoke('window:maximize'),
     windowClose: () => ipcRenderer.invoke('window:close'),
+    focusWindow: () => ipcRenderer.invoke('window:focus'),
     getWindowState: () =>
       ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
