@@ -2,10 +2,15 @@ import { useEffect, useRef } from 'react';
 import { useSetAtom } from 'jotai';
 import {
   customWebsocketSubscriptionsByAddressAtom,
-  notificationSeenInAppKeysAtom,
+  filterSeenInAppRecordByAge,
+  notificationSeenInAppKeysRecordAtom,
+  parseSeenInAppStored,
   seenAllNotificationsByAddressAtom,
 } from '../../atoms/global';
-import { ELECTRON_PERSISTENT_ATOM_KEYS } from '../../utils/electronPersistentStorage';
+import {
+  hydrateElectronPersistentCache,
+  ELECTRON_PERSISTENT_ATOM_KEYS,
+} from '../../utils/electronPersistentStorage';
 
 /**
  * When running in Electron, loads persisted values from appStorage and sets
@@ -13,7 +18,7 @@ import { ELECTRON_PERSISTENT_ATOM_KEYS } from '../../utils/electronPersistentSto
  */
 export function ElectronPersistentStorageHydration() {
   const setCustomSubscriptionsByAddress = useSetAtom(customWebsocketSubscriptionsByAddressAtom);
-  const setSeenInAppKeys = useSetAtom(notificationSeenInAppKeysAtom);
+  const setSeenInAppRecord = useSetAtom(notificationSeenInAppKeysRecordAtom);
   const setSeenAllNotificationsByAddress = useSetAtom(seenAllNotificationsByAddressAtom);
   const hydratedRef = useRef(false);
 
@@ -24,6 +29,7 @@ export function ElectronPersistentStorageHydration() {
     hydratedRef.current = true;
 
     (async () => {
+      await hydrateElectronPersistentCache();
       const [subsPayload, seen, seenAllPayload] = await Promise.all([
         appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.customWsSubscriptionsByAddress),
         appStorage.get(ELECTRON_PERSISTENT_ATOM_KEYS.notificationSeenInApp),
@@ -36,12 +42,15 @@ export function ElectronPersistentStorageHydration() {
           setCustomSubscriptionsByAddress(subsPayload as Record<string, import('../../atoms/global').CustomWebsocketSubscription[]>);
         }
       }
-      if (Array.isArray(seen)) setSeenInAppKeys(seen);
+      if (seen != null && typeof seen === 'object' && !Array.isArray(seen)) {
+        const record = filterSeenInAppRecordByAge(parseSeenInAppStored(seen));
+        if (Object.keys(record).length > 0) setSeenInAppRecord(record);
+      }
       if (seenAllPayload != null && typeof seenAllPayload === 'object' && !Array.isArray(seenAllPayload)) {
         setSeenAllNotificationsByAddress(seenAllPayload as Record<string, number | null>);
       }
     })();
-  }, [setCustomSubscriptionsByAddress, setSeenInAppKeys, setSeenAllNotificationsByAddress]);
+  }, [setCustomSubscriptionsByAddress, setSeenInAppRecord, setSeenAllNotificationsByAddress]);
 
   return null;
 }

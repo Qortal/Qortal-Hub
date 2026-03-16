@@ -214,7 +214,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                     mode: 'ALL',
                   },
                   image: `/arbitrary/THUMBNAIL/Q-Mail/qortal_avatar?async=true`,
-                  link: 'qortal://app/q-mail',
+                  link: 'qortal://app/Q-Mail',
                   notificationId: 'q-mail-notification',
                   appName: 'Q-Mail',
                   appService: 'APP',

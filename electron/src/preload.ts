@@ -20,13 +20,16 @@ try {
     windowClose: () => ipcRenderer.invoke('window:close'),
     focusWindow: () => ipcRenderer.invoke('window:focus'),
     getWindowState: () =>
-      ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
+      ipcRenderer
+        .invoke('window:isMaximized')
+        .then((isMaximized: boolean) => ({ isMaximized })),
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     showAppMenu: (x?: number, y?: number) =>
       ipcRenderer.invoke('window:showAppMenu', { x, y }),
     getAppSettings: () => ipcRenderer.invoke('appSettings:get'),
-    setAppSettings: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit' }) =>
-      ipcRenderer.invoke('appSettings:set', settings),
+    setAppSettings: (settings: {
+      closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+    }) => ipcRenderer.invoke('appSettings:set', settings),
   });
 
   // Expose other utility functions

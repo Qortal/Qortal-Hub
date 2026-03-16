@@ -26,6 +26,7 @@ import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import AppsIcon from '@mui/icons-material/Apps';
+import CloseIcon from '@mui/icons-material/Close';
 import { formatDate } from '../utils/time';
 import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
 import {
@@ -89,8 +90,8 @@ function toTimestampMs(v) {
 
 function getNotificationTimestamp(notification) {
   const raw =
-    notification?.data?.timestamp ??
     notification?.data?.created ??
+    notification?.data?.timestamp ??
     notification?.timestamp;
   return toTimestampMs(raw);
 }
@@ -106,6 +107,7 @@ function isNotificationSeenInApp(notification, seenInAppKeysSet) {
   if (!seenInAppKeysSet || !seenInAppKeysSet.size) return false;
   const key = getNotificationSeenKey(notification);
   const prefixKey = getNotificationSeenPrefixKey(notification);
+  console.log('seenInAppKeysSet', seenInAppKeysSet, key, prefixKey);
   return seenInAppKeysSet.has(key) || seenInAppKeysSet.has(prefixKey);
 }
 
@@ -156,7 +158,7 @@ export const GeneralNotifications = ({
   const setSeenInAppKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const customSubscriptions = useAtomValue(customWebsocketSubscriptionsAtom);
   const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
-
+  console.log('seenInAppKeys', seenInAppKeys);
   const [notificationSettingsModalOpen, setNotificationSettingsModalOpen] =
     useState(false);
   const [notificationSettingsApps, setNotificationSettingsApps] = useState<
@@ -173,7 +175,20 @@ export const GeneralNotifications = ({
   );
 
   useEffect(() => {
-    const handler = (e) => setSeenInAppKeys(e.detail ?? []);
+    const handler = (e) => {
+      const detail = e.detail;
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'address' in detail &&
+        'keys' in detail
+      ) {
+        console.log('detail', detail);
+        setSeenInAppKeys({ address: detail.address, keys: detail.keys });
+      } else if (Array.isArray(detail)) {
+        setSeenInAppKeys(detail);
+      }
+    };
     subscribeToEvent('notification-seen-in-app-updated', handler);
     return () =>
       unsubscribeFromEvent('notification-seen-in-app-updated', handler);
@@ -199,6 +214,7 @@ export const GeneralNotifications = ({
       if (!unseenByTimestamp) return false;
       return !isNotificationSeenInApp(n, seenInAppKeysSet);
     };
+    console.log('notifications', notifications, seenInAppKeysSet);
     return notifications.filter(isUnseen).length;
   }, [notifications, lastEnteredTimestampPayment, seenInAppKeysSet]);
 
@@ -669,7 +685,7 @@ export const GeneralNotifications = ({
                                     fontWeight: 500,
                                   }}
                                 >
-                                  {formatDate(tx?.timestamp)}
+                                  {formatDate(tx?.created ?? tx?.timestamp)}
                                 </Typography>
                               </Box>
                               <Typography
@@ -708,10 +724,25 @@ export const GeneralNotifications = ({
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pr: 1,
+          }}
+        >
           {t('core:message.generic.notification_settings', {
             defaultValue: 'Notification settings',
           })}
+          <IconButton
+            aria-label="close"
+            onClick={() => setNotificationSettingsModalOpen(false)}
+            size="small"
+            sx={{ ml: 1 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
         </DialogTitle>
         <DialogContent>
           {notificationSettingsLoading ? (

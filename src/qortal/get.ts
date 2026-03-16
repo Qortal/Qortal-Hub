@@ -107,6 +107,7 @@ import DeleteTradeOffer from '../transactions/TradeBotDeleteRequest.ts';
 import signTradeBotTransaction from '../transactions/signTradeBotTransaction.ts';
 import { createTransaction } from '../transactions/transactions.ts';
 import { executeEvent } from '../utils/events.ts';
+import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
 import { fileToBase64 } from '../utils/fileReading/index.ts';
 import { mimeToExtensionMap } from '../utils/memeTypes.ts';
 import { RequestQueueWithPromise } from '../utils/queue/queue.ts';
@@ -5197,7 +5198,6 @@ const NOTIFICATION_FILTER_SPEC = {
   keywords: 'arrayOfString',
   prefix: 'boolean',
   defaultResource: 'boolean',
-  minLevel: 'integer',
   followedOnly: 'boolean',
   excludeBlocked: 'boolean',
   after: 'long',
@@ -5354,28 +5354,93 @@ export const removeNotificationSubscriptions = async (payload, appInfo) => {
 };
 
 const NOTIFICATION_SEEN_IN_APP_KEY = 'qortal_notification_seen_in_app';
+const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
-function getStoredSeenInAppKeys() {
-  if (typeof localStorage === 'undefined') return [];
+/** Stored shape: address -> notificationKey -> timestamp. Electron: appStorage (sync read from cache); else localStorage. */
+function getStoredSeenInAppRecord(): Record<string, Record<string, number>> {
+  const appStorage = getAppStorage();
+  const electronStorage = getElectronPersistentStorage();
+  let raw: string | null | unknown = null;
+  if (appStorage != null && electronStorage != null) {
+    raw = (electronStorage as any).getItem(NOTIFICATION_SEEN_IN_APP_KEY, null);
+  } else if (typeof localStorage !== 'undefined') {
+    raw = localStorage.getItem(NOTIFICATION_SEEN_IN_APP_KEY);
+  }
+  if (raw == null) return {};
   try {
-    const raw = localStorage.getItem(NOTIFICATION_SEEN_IN_APP_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown =
+      typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const obj = parsed as Record<string, unknown>;
+    const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+    const result: Record<string, Record<string, number>> = {};
+    for (const [addr, inner] of Object.entries(obj)) {
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+        const keyRecord: Record<string, number> = {};
+        for (const [k, t] of Object.entries(inner)) {
+          if (typeof t === 'number' && t > cutoff) keyRecord[k] = t;
+        }
+        if (Object.keys(keyRecord).length > 0) result[addr] = keyRecord;
+      }
+    }
+    return result;
   } catch (_) {
-    return [];
+    return {};
   }
 }
 
-function setStoredSeenInAppKeys(keys) {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(keys));
+function getStoredSeenInAppKeys(address: string | null): string[] {
+  if (!address) return [];
+  const record = getStoredSeenInAppRecord();
+  const byAddr = record[address] ?? {};
+  const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+  return Object.keys(byAddr).filter(
+    (k) => typeof byAddr[k] === 'number' && byAddr[k] > cutoff
+  );
+}
+
+function setStoredSeenInAppKeys(
+  address: string | null,
+  keys: string[]
+): string[] {
+  if (!address || keys.length === 0) return [];
+  const record = getStoredSeenInAppRecord();
+  const now = Date.now();
+  const cutoff = now - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+  record[address] = record[address] ?? {};
+  for (const k of keys) record[address][k] = record[address][k] ?? now;
+  const pruned: Record<string, Record<string, number>> = {};
+  for (const [addr, inner] of Object.entries(record)) {
+    const filtered = Object.fromEntries(
+      Object.entries(inner).filter(
+        ([, t]) => typeof t === 'number' && t > cutoff
+      )
+    );
+    if (Object.keys(filtered).length > 0) pruned[addr] = filtered;
   }
-  executeEvent('notification-seen-in-app-updated', keys);
+  const appStorage = getAppStorage();
+  const electronStorage = getElectronPersistentStorage();
+  if (appStorage != null && electronStorage != null) {
+    (electronStorage as any).setItem(NOTIFICATION_SEEN_IN_APP_KEY, pruned);
+    appStorage
+      .set(NOTIFICATION_SEEN_IN_APP_KEY, pruned)
+      .catch((err) =>
+        console.error('[get.ts] setStoredSeenInAppKeys appStorage failed:', err)
+      );
+  } else if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(pruned));
+  }
+  const keysList = Object.keys(record[address] ?? {}).filter(
+    (k) => typeof record[address][k] === 'number' && record[address][k] > cutoff
+  );
+  executeEvent('notification-seen-in-app-updated', { address, keys: keysList });
+  return keysList;
 }
 
 /**
- * Mark notifications as "seen in app".
+ * Mark notifications as "seen in app" for the current address.
  * Payload: { notificationIds: (string | { notificationId: string, identifier?: string })[] }.
  * App name/service from appInfo.
  * - String: add prefix key only (all with that notificationId).
@@ -5386,9 +5451,11 @@ export const markNotificationSeenInApp = (payload, appInfo) => {
   if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
     return [];
   }
-  const appName = appInfo?.name ?? '';
+  const address = getCurrentAddress();
+  if (!address) return [];
+  const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
-  const current = getStoredSeenInAppKeys();
+  const current = getStoredSeenInAppKeys(address);
   const set = new Set(current);
   notificationIds.forEach((item) => {
     const notificationId =
@@ -5399,18 +5466,18 @@ export const markNotificationSeenInApp = (payload, appInfo) => {
           : '';
     if (!notificationId) return;
     const prefixKey = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
-    set.add(prefixKey);
     const identifier =
       item && typeof item === 'object' && item.identifier != null
         ? String(item.identifier).trim()
         : '';
     if (identifier) {
       set.add(`${prefixKey}-${identifier}`);
+    } else {
+      set.add(prefixKey);
     }
   });
   const merged = Array.from(set);
-  setStoredSeenInAppKeys(merged);
-  return merged;
+  return setStoredSeenInAppKeys(address, merged);
 };
 
 /** Returns notification rules for the app in the same format as NOTIFICATION_ADD (image, link, notificationId, message, filters). */

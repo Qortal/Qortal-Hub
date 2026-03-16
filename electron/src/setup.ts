@@ -55,6 +55,7 @@ import {
 const AdmZip = require('adm-zip');
 const fs = require('fs');
 const path = require('path');
+const writeFileAtomic = require('write-file-atomic');
 
 const defaultDomains = [
   'capacitor-electron://-',
@@ -660,7 +661,8 @@ export async function readAppSettings(): Promise<AppSettings> {
       ...DEFAULT_APP_SETTINGS,
       ...parsed,
       closeAction:
-        parsed.closeAction && ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
+        parsed.closeAction &&
+        ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
     };
@@ -671,7 +673,11 @@ export async function readAppSettings(): Promise<AppSettings> {
 
 async function writeAppSettings(settings: AppSettings): Promise<void> {
   const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
-  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+  await fs.promises.writeFile(
+    filePath,
+    JSON.stringify(settings, null, 2),
+    'utf-8'
+  );
 }
 
 // READ handler
@@ -705,64 +711,78 @@ ipcMain.handle(
   }
 );
 
-// Persistent store: in-memory cache + debounced writes to persistent-store.json
-const PERSISTENT_STORE_FILENAME = 'persistent-store.json';
-const PERSISTENT_STORE_DEBOUNCE_MS = 250;
+// Persistent store: shared across instances via atomic writes to appData/qortal-hub/
+// Uses write-file-atomic to prevent partial writes corrupting the file.
+// On set/delete: read-from-disk → merge → atomic write, so concurrent instances
+// never overwrite each other's keys (only a simultaneous write of the *same* key
+// by two instances at the exact same moment could still race, which is acceptable).
+const PERSISTENT_STORE_FILENAME = 'qortal-persistent-store.json';
 
 let persistentStoreCache: Record<string, unknown> | null = null;
-let persistentStoreSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let persistentStoreLoadedFromDisk = false;
+
+function getPersistentStoreFilePath(): string {
+  const dir = path.join(app.getPath('appData'), 'qortal-hub');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, PERSISTENT_STORE_FILENAME);
+}
+
+function parsePersistentStoreRaw(raw: string): Record<string, unknown> {
+  const trimmed = raw?.trim() ?? '';
+  if (trimmed === '') return {};
+  try {
+    return (JSON.parse(trimmed) as Record<string, unknown>) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
+async function readPersistentStoreFromDisk(): Promise<Record<string, unknown>> {
+  try {
+    const filePath = getPersistentStoreFilePath();
+    const stats = await fs.promises.stat(filePath).catch(() => null);
+    if (!stats?.isFile()) return {};
+    const raw = await fs.promises.readFile(filePath, 'utf-8');
+    return parsePersistentStoreRaw(raw);
+  } catch (err) {
+    loggerError('Error reading persistent store from disk', err);
+    return {};
+  }
+}
 
 async function loadPersistentStore(): Promise<Record<string, unknown>> {
   if (persistentStoreCache !== null) return persistentStoreCache;
-  try {
-    const filePath = await getSharedSettingsFilePath(PERSISTENT_STORE_FILENAME);
-    const stats = await fs.promises.stat(filePath).catch(() => null);
-    if (!stats?.isFile()) {
-      persistentStoreCache = {};
-      return persistentStoreCache;
-    }
-    const raw = await fs.promises.readFile(filePath, 'utf-8');
-    persistentStoreCache = (JSON.parse(raw) as Record<string, unknown>) || {};
-  } catch (err) {
-    loggerError('Error loading persistent store', err);
-    persistentStoreCache = {};
-  }
+  const data = await readPersistentStoreFromDisk();
+  const hadData = Object.keys(data).length > 0;
+  persistentStoreCache = data;
+  if (hadData) persistentStoreLoadedFromDisk = true;
   return persistentStoreCache;
 }
 
-function schedulePersistentStoreSave(): void {
-  if (persistentStoreSaveTimeout !== null) clearTimeout(persistentStoreSaveTimeout);
-  persistentStoreSaveTimeout = setTimeout(async () => {
-    persistentStoreSaveTimeout = null;
-    if (persistentStoreCache === null) return;
-    try {
-      const filePath = await getSharedSettingsFilePath(PERSISTENT_STORE_FILENAME);
-      await fs.promises.writeFile(
-        filePath,
-        JSON.stringify(persistentStoreCache, null, 2),
-        'utf-8'
-      );
-    } catch (err) {
-      loggerError('Error saving persistent store', err);
-    }
-  }, PERSISTENT_STORE_DEBOUNCE_MS);
-}
 
 export function flushPersistentStore(): void {
-  if (persistentStoreSaveTimeout !== null) {
-    clearTimeout(persistentStoreSaveTimeout);
-    persistentStoreSaveTimeout = null;
-  }
   if (persistentStoreCache === null) return;
+  if (
+    !persistentStoreLoadedFromDisk &&
+    Object.keys(persistentStoreCache).length === 0
+  ) {
+    return;
+  }
   try {
-    const dir = join(app.getPath('appData'), 'qortal-hub');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const filePath = join(dir, PERSISTENT_STORE_FILENAME);
-    fs.writeFileSync(
-      filePath,
-      JSON.stringify(persistentStoreCache, null, 2),
-      'utf-8'
-    );
+    const filePath = getPersistentStoreFilePath();
+    // Read current on-disk state, merge our cache on top, write atomically (sync).
+    let onDisk: Record<string, unknown> = {};
+    if (fs.existsSync(filePath)) {
+      try {
+        onDisk = parsePersistentStoreRaw(fs.readFileSync(filePath, 'utf-8'));
+      } catch (_) {
+        onDisk = {};
+      }
+    }
+    const merged = { ...onDisk, ...persistentStoreCache };
+    writeFileAtomic.sync(filePath, JSON.stringify(merged, null, 2), {
+      encoding: 'utf8',
+    });
   } catch (err) {
     loggerError('Error flushing persistent store', err);
   }
@@ -776,16 +796,39 @@ ipcMain.handle('persistentStore:get', async (_event, key: string) => {
 ipcMain.handle(
   'persistentStore:set',
   async (_event, key: string, value: unknown) => {
-    const store = await loadPersistentStore();
-    store[key] = value;
-    schedulePersistentStoreSave();
+    // Read-merge-write: fetch fresh disk state, merge the new key, write atomically.
+    // This ensures concurrent instances don't clobber each other's unrelated keys.
+    const onDisk = await readPersistentStoreFromDisk();
+    onDisk[key] = value;
+    try {
+      const filePath = getPersistentStoreFilePath();
+      await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+        encoding: 'utf8',
+      });
+    } catch (err) {
+      loggerError('Error writing persistent store (set)', err);
+    }
+    // Keep local cache in sync.
+    if (persistentStoreCache === null) persistentStoreCache = {};
+    persistentStoreCache[key] = value;
+    persistentStoreLoadedFromDisk = true;
   }
 );
 
 ipcMain.handle('persistentStore:delete', async (_event, key: string) => {
-  const store = await loadPersistentStore();
-  delete store[key];
-  schedulePersistentStoreSave();
+  // Read-merge-write: fetch fresh disk state, remove the key, write atomically.
+  const onDisk = await readPersistentStoreFromDisk();
+  delete onDisk[key];
+  try {
+    const filePath = getPersistentStoreFilePath();
+    await writeFileAtomic(filePath, JSON.stringify(onDisk, null, 2), {
+      encoding: 'utf8',
+    });
+  } catch (err) {
+    loggerError('Error writing persistent store (delete)', err);
+  }
+  // Keep local cache in sync.
+  if (persistentStoreCache !== null) delete persistentStoreCache[key];
 });
 
 // App settings (stored in SharedSettingsFilePath) - e.g. close/minimize to tray

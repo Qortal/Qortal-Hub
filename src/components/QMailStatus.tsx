@@ -1,19 +1,17 @@
 import { useMemo } from 'react';
 import {
+  getNotificationSeenKey,
+  getNotificationSeenPrefixKey,
+  notificationSeenInAppKeysRecordAtom,
   paymentNotificationsAtom,
   qMailLastEnteredTimestampAtom,
+  userInfoAtom,
 } from '../atoms/global';
-import { isLessThanOneWeekOld } from './Group/qmailUtils';
 import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { executeEvent } from '../utils/events';
 import { Mail } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useAtomValue } from 'jotai';
-
-function toTimestampMs(v: number | undefined | null): number | null {
-  if (v == null || typeof v !== 'number') return v ?? null;
-  return v < 1e12 ? v * 1000 : v;
-}
 
 export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   const { t } = useTranslation([
@@ -29,41 +27,79 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
     qMailLastEnteredTimestampAtom
   );
   const notifications = useAtomValue(paymentNotificationsAtom);
-
-  const latestQMailCreated = useMemo(() => {
-    const qMail = (notifications ?? []).find(
-      (n) =>
-        n?.event === 'RESOURCE_PUBLISHED' &&
-        (n?.notificationId === 'q-mail-notification' || n?.appName === 'Q-Mail')
-    );
-    if (!qMail) return null;
-    const raw =
-      qMail?.data?.timestamp ?? qMail?.data?.created ?? qMail?.timestamp;
-    return toTimestampMs(raw);
-  }, [notifications]);
+  const seenInAppRecord = useAtomValue(notificationSeenInAppKeysRecordAtom);
+  console.log('seenInAppRecord', seenInAppRecord);
+  const address = useAtomValue(userInfoAtom)?.address;
+  console.log('address100', address);
+  const qMailNotifications = useMemo(
+    () =>
+      (notifications ?? []).filter(
+        (n) =>
+          n?.event === 'RESOURCE_PUBLISHED' &&
+          (n?.notificationId === 'q-mail-notification' ||
+            n?.appName === 'Q-Mail')
+      ),
+    [notifications]
+  );
 
   const hasNewMail = useMemo(() => {
-    if (latestQMailCreated == null) return false;
-    if (!lastEnteredTimestamp && isLessThanOneWeekOld(latestQMailCreated))
-      return true;
-    if (
-      lastEnteredTimestamp < latestQMailCreated &&
-      isLessThanOneWeekOld(latestQMailCreated)
-    )
-      return true;
-    return false;
-  }, [lastEnteredTimestamp, latestQMailCreated]);
+    const getNotificationTimestamp = (n) => {
+      const raw = n?.data?.created ?? n?.data?.timestamp ?? n?.timestamp;
+      const v = raw != null && typeof raw === 'number' ? raw : null;
+      if (v == null) return null;
+      return v < 1e12 ? v * 1000 : v;
+    };
+    const record: Record<
+      string,
+      Record<string, number>
+    > = typeof seenInAppRecord === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(seenInAppRecord);
+          } catch {
+            return {};
+          }
+        })()
+      : (seenInAppRecord ?? {});
+    const byAddress = (address && record[address]) ?? {};
+    const isUnseen = (n) => {
+      if (
+        n?.notificationId !== 'q-mail-notification' &&
+        n?.appName !== 'Q-Mail'
+      ) {
+        return false;
+      }
+      const createdTs = getNotificationTimestamp(n);
+      console.log('createdTs', createdTs);
+      if (createdTs == null) return false;
+      const key = getNotificationSeenKey(n);
+      const prefixKey = getNotificationSeenPrefixKey(n);
+      const seenTs = Math.max(
+        (byAddress[key] as number) ?? 0,
+        (byAddress[prefixKey] as number) ?? 0
+      );
+      console.log('seenTs', seenTs, createdTs);
+      return createdTs > seenTs;
+    };
+    return qMailNotifications.filter(isUnseen).length > 0;
+  }, [qMailNotifications, seenInAppRecord, address]);
 
   const button = (
     <ButtonBase
       onClick={() => {
-        executeEvent('addTab', { data: { service: 'APP', name: 'q-mail' } });
+        executeEvent('addTab', { data: { service: 'APP', name: 'Q-Mail' } });
         executeEvent('open-apps-mode', {});
         setLastEnteredTimestamp(Date.now());
       }}
       style={{
         position: 'relative',
-        ...(compact && { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }),
+        ...(compact && {
+          width: 32,
+          height: 32,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }),
       }}
     >
       {hasNewMail && (
@@ -124,7 +160,16 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
 
   if (compact) {
     return (
-      <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
         {button}
       </div>
     );
