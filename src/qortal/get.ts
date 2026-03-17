@@ -1610,6 +1610,18 @@ export const publishQDNResource = async (
       })
     );
   }
+
+  if (
+    typeof data.identifier === 'string' &&
+    data.identifier.trim().startsWith('symmetric-qchat-group-')
+  ) {
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
   const appFee = data?.appFee ? +data.appFee : undefined;
@@ -1916,6 +1928,21 @@ export const publishMultipleQDNResources = async (
       })
     );
   }
+
+  const FORBIDDEN_IDENTIFIER_PREFIX = 'symmetric-qchat-group-';
+  const hasForbiddenIdentifier = resources.some(
+    (resource) =>
+      typeof resource?.identifier === 'string' &&
+      resource.identifier.trim().startsWith(FORBIDDEN_IDENTIFIER_PREFIX)
+  );
+  if (hasForbiddenIdentifier) {
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   const isPublicNode = await isRunningGateway();
   if (isPublicNode) {
     const hasOversizedFilePublicNode = resources.some((resource) => {
@@ -5262,7 +5289,7 @@ export const addNotificationSubscriptions = async (payload, appInfo) => {
   if (!Array.isArray(notifications) || notifications.length === 0) {
     throw new Error('notifications must be a non-empty array');
   }
-  const appName = appInfo?.name ?? '';
+  const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
 
   const toSubscription = (item) => {
@@ -5313,7 +5340,7 @@ export const addNotificationSubscriptions = async (payload, appInfo) => {
 };
 
 export const removeNotificationSubscriptions = async (payload, appInfo) => {
-  const appName = appInfo?.name ?? '';
+  const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
   const notificationIds = payload?.notificationIds;
   const idsSet =
@@ -5325,7 +5352,7 @@ export const removeNotificationSubscriptions = async (payload, appInfo) => {
   const toUnsubscribe = [];
   const filtered = current.filter((sub) => {
     const sameApp =
-      (sub.appName ?? '') === appName &&
+      (sub.appName ?? '').toLowerCase() === appName &&
       (sub.appService ?? 'APP') === appService;
     if (!sameApp) return true;
     if (idsSet == null) {
@@ -5482,12 +5509,12 @@ export const markNotificationSeenInApp = (payload, appInfo) => {
 
 /** Returns notification rules for the app in the same format as NOTIFICATION_ADD (image, link, notificationId, message, filters). */
 export const getNotificationSubscriptions = async (_payload, appInfo) => {
-  const appName = appInfo?.name ?? '';
+  const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
   const current = await getStoredCustomSubscriptions();
   const forApp = current.filter(
     (sub) =>
-      (sub.appName ?? '') === appName &&
+      (sub.appName ?? '').toLowerCase() === appName &&
       (sub.appService ?? 'APP') === appService
   );
   return forApp.map((sub) => {

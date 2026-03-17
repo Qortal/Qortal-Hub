@@ -275,6 +275,7 @@ export const listOfAllQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+  'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];
@@ -351,6 +352,7 @@ export const UIQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+  'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];

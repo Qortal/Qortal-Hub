@@ -82,6 +82,7 @@ import {
   markNotificationSeenInApp,
   removeNotificationSubscriptions,
 } from './get.ts';
+import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
 
@@ -2211,6 +2212,35 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'UPDATE_SUBSCRIPTIONS': {
+        try {
+          if (appInfo?.name?.toLowerCase() !== 'subscriptions') {
+            throw new Error('UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app');
+          }
+          triggerMemberGroupsFetch();
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: { ok: true },
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to update subscriptions',
               type: 'backgroundMessageResponse',
             },
             event.origin

@@ -399,63 +399,153 @@ export const MessageItemComponent = ({
               width: '100%',
             }}
           >
-            {/* Header: sender name + timestamp + edited label inline */}
+            {/* Header: sender name + timestamp + edited label inline, toolbar on the right */}
             <Box
               sx={{
                 alignItems: 'center',
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: '8px',
+                justifyContent: 'space-between',
+                minHeight: '32px',
               }}
             >
-              <WrapperUserAction
-                disabled={myAddress === message?.sender}
-                address={message?.sender}
-                name={message?.senderName}
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  minWidth: 0,
+                }}
               >
-                <Typography
-                  sx={{
-                    color: isOwn
-                      ? theme.palette.primary.main
-                      : theme.palette.text.primary,
-                    fontFamily: 'Inter',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    lineHeight: 1.3,
-                  }}
+                <WrapperUserAction
+                  disabled={myAddress === message?.sender}
+                  address={message?.sender}
+                  name={message?.senderName}
                 >
-                  {message?.senderName || message?.sender}
-                </Typography>
-              </WrapperUserAction>
+                  <Typography
+                    sx={{
+                      color: isOwn
+                        ? theme.palette.primary.main
+                        : theme.palette.text.primary,
+                      fontFamily: 'Inter',
+                      fontSize: '14px',
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {message?.senderName || message?.sender}
+                  </Typography>
+                </WrapperUserAction>
 
-              {!isUpdating && !isTemp && (
-                <Typography
+                {!isUpdating && !isTemp && (
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      flexShrink: 0,
+                      fontFamily: 'Inter',
+                      fontSize: '11px',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {formatTimestamp(message.timestamp)}
+                  </Typography>
+                )}
+
+                {message?.isEdit && !isUpdating && !isTemp && (
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontFamily: 'Inter',
+                      fontSize: '11px',
+                      fontStyle: 'italic',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {t('core:message.generic.edited', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Action toolbar in header row so it never overlaps message body */}
+              {!isShowingAsReply && (
+                <Box
+                  className="message-item-toolbar"
                   sx={{
-                    color: theme.palette.text.secondary,
+                    alignItems: 'center',
+                    backgroundColor: theme.palette.background.paper,
+                    border: '1px solid',
+                    borderColor: theme.palette.divider,
+                    borderRadius: '8px',
+                    boxShadow: theme.shadows[2],
+                    display: 'flex',
                     flexShrink: 0,
-                    fontFamily: 'Inter',
-                    fontSize: '11px',
-                    lineHeight: 1,
+                    gap: '2px',
+                    padding: '3px 6px',
+                    transition: 'opacity 0.15s ease',
+                    zIndex: 2,
                   }}
                 >
-                  {formatTimestamp(message.timestamp)}
-                </Typography>
-              )}
+                  {message?.sender === myAddress &&
+                    (!message?.isNotEncrypted || isPrivate === false) && (
+                      <Tooltip title="Edit" disableFocusListener>
+                        <ButtonBase
+                          sx={{
+                            borderRadius: '6px',
+                            color: theme.palette.text.secondary,
+                            padding: '4px',
+                            '&:hover': {
+                              backgroundColor: theme.palette.action.hover,
+                              color: theme.palette.text.primary,
+                            },
+                          }}
+                          onClick={() => {
+                            onEdit(message);
+                          }}
+                        >
+                          <EditIcon sx={{ fontSize: '18px' }} />
+                        </ButtonBase>
+                      </Tooltip>
+                    )}
 
-              {message?.isEdit && !isUpdating && !isTemp && (
-                <Typography
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontFamily: 'Inter',
-                    fontSize: '11px',
-                    fontStyle: 'italic',
-                    lineHeight: 1,
-                  }}
-                >
-                  {t('core:message.generic.edited', {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
-                </Typography>
+                  <Tooltip title="Reply" disableFocusListener>
+                    <ButtonBase
+                      sx={{
+                        borderRadius: '6px',
+                        color: theme.palette.text.secondary,
+                        padding: '4px',
+                        '&:hover': {
+                          backgroundColor: theme.palette.action.hover,
+                          color: theme.palette.text.primary,
+                        },
+                      }}
+                      onClick={() => {
+                        onReply(message);
+                      }}
+                    >
+                      <ReplyIcon sx={{ fontSize: '18px' }} />
+                    </ButtonBase>
+                  </Tooltip>
+
+                  {handleReaction && (
+                    <ReactionPicker
+                      onReaction={(val) => {
+                        if (
+                          reactions &&
+                          reactions[val] &&
+                          reactions[val]?.find((item) => item?.sender === myAddress)
+                        ) {
+                          handleReaction(val, message, false);
+                        } else {
+                          handleReaction(val, message, true);
+                        }
+                      }}
+                    />
+                  )}
+                </Box>
               )}
             </Box>
 
@@ -948,86 +1038,6 @@ export const MessageItemComponent = ({
               </Popover>
             )}
           </Box>
-
-          {/* Floating action toolbar — visible on hover (via CSS so only one row is hovered) */}
-          {!isShowingAsReply && (
-            <Box
-              className="message-item-toolbar"
-              sx={{
-                alignItems: 'center',
-                backgroundColor: theme.palette.background.paper,
-                border: '1px solid',
-                borderColor: theme.palette.divider,
-                borderRadius: '8px',
-                boxShadow: theme.shadows[2],
-                display: 'flex',
-                gap: '2px',
-                padding: '3px 6px',
-                position: 'absolute',
-                right: '16px',
-                top: '4px',
-                transition: 'opacity 0.15s ease',
-                zIndex: 2,
-              }}
-            >
-              {message?.sender === myAddress &&
-                (!message?.isNotEncrypted || isPrivate === false) && (
-                  <Tooltip title="Edit" disableFocusListener>
-                    <ButtonBase
-                      sx={{
-                        borderRadius: '6px',
-                        color: theme.palette.text.secondary,
-                        padding: '4px',
-                        '&:hover': {
-                          backgroundColor: theme.palette.action.hover,
-                          color: theme.palette.text.primary,
-                        },
-                      }}
-                      onClick={() => {
-                        onEdit(message);
-                      }}
-                    >
-                      <EditIcon sx={{ fontSize: '18px' }} />
-                    </ButtonBase>
-                  </Tooltip>
-                )}
-
-              <Tooltip title="Reply" disableFocusListener>
-                <ButtonBase
-                  sx={{
-                    borderRadius: '6px',
-                    color: theme.palette.text.secondary,
-                    padding: '4px',
-                    '&:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                      color: theme.palette.text.primary,
-                    },
-                  }}
-                  onClick={() => {
-                    onReply(message);
-                  }}
-                >
-                  <ReplyIcon sx={{ fontSize: '18px' }} />
-                </ButtonBase>
-              </Tooltip>
-
-              {handleReaction && (
-                <ReactionPicker
-                  onReaction={(val) => {
-                    if (
-                      reactions &&
-                      reactions[val] &&
-                      reactions[val]?.find((item) => item?.sender === myAddress)
-                    ) {
-                      handleReaction(val, message, false);
-                    } else {
-                      handleReaction(val, message, true);
-                    }
-                  }}
-                />
-              )}
-            </Box>
-          )}
         </Box>
         <AvatarPreviewModal
           open={isAvatarPreviewOpen}
