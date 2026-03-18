@@ -46,6 +46,7 @@ import {
 } from '../atoms/global';
 import {
   getAppsWithNotificationPermission,
+  getNotificationPermissionKey,
   getNotificationOsPushDisabledMap,
   setNotificationOsPushDisabled,
   setPermission,
@@ -520,7 +521,13 @@ export const GeneralNotifications = ({
                                   const { service, name, identifier, path } =
                                     res;
                                   executeEvent('addTab', {
-                                    data: { service, name, identifier, path },
+                                    data: {
+                                      service,
+                                      name,
+                                      identifier,
+                                      path,
+                                      navigateIfAlreadyOpen: true,
+                                    },
                                   });
                                   executeEvent('open-apps-mode', {});
                                 }
@@ -813,7 +820,7 @@ export const GeneralNotifications = ({
                           .map((s) => s?.notificationId ?? '')
                           .filter(Boolean);
                         await setPermission(
-                          `qAPPNotification-${appName}`,
+                          getNotificationPermissionKey(appName),
                           false
                         );
                         setCustomSubscriptions((prev) =>

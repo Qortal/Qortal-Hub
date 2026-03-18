@@ -119,22 +119,81 @@ const getAppStorage = () =>
   typeof window !== 'undefined' &&
   (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
 
+const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
+
+function normalizeNotificationPermissionAppName(appName: unknown): string {
+  return String(appName ?? '').trim().toLowerCase();
+}
+
+export function getNotificationPermissionKey(appName: unknown): string {
+  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAppName(appName)}`;
+}
+
+function isNotificationPermissionKey(key: unknown): key is string {
+  return typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX);
+}
+
+function normalizePermissionKey(key: unknown): string {
+  if (!isNotificationPermissionKey(key)) return String(key ?? '');
+  return getNotificationPermissionKey(
+    key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+  );
+}
+
+function migrateNotificationPermissionKeys(
+  permissions: Record<string, unknown>,
+  normalizedKey: string
+): Record<string, unknown> {
+  if (!isNotificationPermissionKey(normalizedKey)) return permissions;
+  const normalizedAppName = normalizeNotificationPermissionAppName(
+    normalizedKey.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+  );
+  const next = { ...permissions };
+  for (const key of Object.keys(next)) {
+    if (!isNotificationPermissionKey(key)) continue;
+    const keyAppName = normalizeNotificationPermissionAppName(
+      key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+    );
+    if (keyAppName === normalizedAppName && key !== normalizedKey) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
+function toPermissionRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export async function setPermission(key, value) {
   try {
+    const normalizedKey = normalizePermissionKey(key);
     const appStorage = getAppStorage();
     if (appStorage) {
-      const qortalRequestPermissions =
-        (await appStorage.get('qortalRequestPermissions')) || {};
-      qortalRequestPermissions[key] = value;
+      const rawPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      const qortalRequestPermissions = migrateNotificationPermissionKeys(
+        rawPermissions,
+        normalizedKey
+      );
+      qortalRequestPermissions[normalizedKey] = value;
       await appStorage.set(
         'qortalRequestPermissions',
         qortalRequestPermissions
       );
       return;
     }
-    const qortalRequestPermissions =
-      (await getLocalStorage('qortalRequestPermissions')) || {};
-    qortalRequestPermissions[key] = value;
+    const rawPermissions = toPermissionRecord(
+      await getLocalStorage('qortalRequestPermissions')
+    );
+    const qortalRequestPermissions = migrateNotificationPermissionKeys(
+      rawPermissions,
+      normalizedKey
+    );
+    qortalRequestPermissions[normalizedKey] = value;
     await setLocalStorage('qortalRequestPermissions', qortalRequestPermissions);
   } catch (error) {
     console.error('Error setting permission:', error);
@@ -143,15 +202,18 @@ export async function setPermission(key, value) {
 
 export async function getPermission(key) {
   try {
+    const normalizedKey = normalizePermissionKey(key);
     const appStorage = getAppStorage();
     if (appStorage) {
-      const qortalRequestPermissions =
-        (await appStorage.get('qortalRequestPermissions')) || {};
-      return qortalRequestPermissions[key] ?? null;
+      const qortalRequestPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      return qortalRequestPermissions[normalizedKey] ?? null;
     }
-    const qortalRequestPermissions =
-      (await getLocalStorage('qortalRequestPermissions')) || {};
-    return qortalRequestPermissions[key] ?? null;
+    const qortalRequestPermissions = toPermissionRecord(
+      await getLocalStorage('qortalRequestPermissions')
+    );
+    return qortalRequestPermissions[normalizedKey] ?? null;
   } catch (error) {
     console.error('Error getting permission:', error);
     return null;
@@ -178,7 +240,11 @@ export async function getAppsWithNotificationPermission() {
   const apps = [];
   for (const key of Object.keys(perms)) {
     if (key.startsWith('qAPPNotification-') && perms[key] === true) {
-      apps.push(key.replace(/^qAPPNotification-/, ''));
+      apps.push(
+        normalizeNotificationPermissionAppName(
+          key.replace(/^qAPPNotification-/, '')
+        )
+      );
     }
   }
   return apps;

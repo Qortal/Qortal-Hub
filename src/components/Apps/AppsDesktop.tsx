@@ -271,6 +271,29 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
 
   const addTabFunc = (e) => {
     const data = e.detail?.data;
+
+    if (data?.navigateIfAlreadyOpen) {
+      const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
+      const existingTab = tabs.find(
+        (tab) =>
+          tab.service === tabIdentity.service &&
+          tab.name?.toLowerCase() === tabIdentity.name?.toLowerCase() &&
+          (tabIdentity.identifier == null ||
+            tab.identifier === tabIdentity.identifier)
+      );
+
+      if (existingTab) {
+        setSelectedTab(existingTab);
+        setMode('viewer');
+        setIsNewTabWindow(false);
+
+        if (path) {
+          executeEvent(`navigateToPath-${existingTab.tabId}`, { path });
+        }
+        return;
+      }
+    }
+
     const newTab = {
       ...data,
       tabId: uid.rnd(),

@@ -262,7 +262,7 @@ export const notificationSeenInAppKeysAtom = atom(
     const record = { ...full };
     record[address] = { ...(record[address] ?? {}) };
     const now = Date.now();
-    for (const k of keys) record[address][k] = record[address][k] ?? now;
+    for (const k of keys) record[address][k] = now;
     const pruned = filterSeenInAppRecordByAge(record);
     set(notificationSeenInAppKeysRecordAtom, pruned);
   }

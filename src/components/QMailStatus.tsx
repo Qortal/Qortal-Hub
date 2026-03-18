@@ -65,7 +65,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
     const isUnseen = (n) => {
       if (
         n?.notificationId !== 'q-mail-notification' &&
-        n?.appName !== 'Q-Mail'
+        n?.appName?.toLowerCase() !== 'q-mail'
       ) {
         return false;
       }
@@ -87,7 +87,13 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   const button = (
     <ButtonBase
       onClick={() => {
-        executeEvent('addTab', { data: { service: 'APP', name: 'Q-Mail' } });
+        executeEvent('addTab', {
+          data: {
+            service: 'APP',
+            name: 'Q-Mail',
+            navigateIfAlreadyOpen: true,
+          },
+        });
         executeEvent('open-apps-mode', {});
         setLastEnteredTimestamp(Date.now());
       }}

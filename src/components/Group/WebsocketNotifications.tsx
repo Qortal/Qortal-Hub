@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { getBaseApiReact, getBaseApiReactSocket } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import i18n, { supportedLanguages } from '../../i18n/i18n';
+import { useAtomValue, useSetAtom } from 'jotai';
+import {
+  extStateAtom,
+  paymentNotificationsAtom,
+  customWebsocketSubscriptionsAtom,
+  notificationSeenInAppKeysAtom,
+  filterSeenInAppKeysByRules,
+} from '../../atoms/global';
+import { fireOsNotificationPayment } from '../../background/background';
+import {
+  getNotificationPermissionKey,
+  getPermission,
+} from '../../qortal/qortal-requests';
 
 /** Message object with "You got a new qmail" in all supported languages (for Q-Mail subscription). */
 function getNewQmailMessage(): Record<string, string> {
@@ -28,16 +41,6 @@ function getNotificationMessage(
   );
   return typeof first === 'string' ? (first as string).trim() : fallback;
 }
-import { useAtomValue, useSetAtom } from 'jotai';
-import {
-  extStateAtom,
-  paymentNotificationsAtom,
-  customWebsocketSubscriptionsAtom,
-  notificationSeenInAppKeysAtom,
-  filterSeenInAppKeysByRules,
-} from '../../atoms/global';
-import { fireOsNotificationPayment } from '../../background/background';
-import { getPermission } from '../../qortal/qortal-requests';
 
 export const WebSocketNotifications = ({ myAddress, userName }) => {
   const extState = useAtomValue(extStateAtom);
@@ -158,7 +161,9 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         }
         const appName = sub?.appName;
         if (!appName) continue;
-        const allowed = await getPermission(`qAPPNotification-${appName}`);
+        const allowed = await getPermission(
+          getNotificationPermissionKey(appName)
+        );
         if (allowed === true) result.push(sub);
       }
       return result;
@@ -189,6 +194,16 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       try {
         const query = `qortal_qmail_${userName.slice(0, 20)}_${currentAddress.slice(-6)}_mail_`;
         const socketLink = `${getBaseApiReactSocket()}/websockets/notifications`;
+        const NOTIFICATION_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+        const getNotificationCreatorTimestamp = (n: { data?: { created?: number; timestamp?: number }; timestamp?: number }) =>
+          n?.data?.created ?? n?.data?.timestamp ?? n?.timestamp;
+        const trimNotificationsToLast3Days = <T extends { data?: { created?: number; timestamp?: number }; timestamp?: number }>(list: T[]): T[] => {
+          const cutoff = Date.now() - NOTIFICATION_AGE_MS;
+          return list.filter((n) => {
+            const ts = getNotificationCreatorTimestamp(n);
+            return ts == null || ts >= cutoff;
+          }) as T[];
+        };
         socketRef.current = new WebSocket(socketLink);
 
         socketRef.current.onopen = () => {
@@ -224,10 +239,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
             })
           );
           setTimeout(() => {
+            const after = Date.now() - 3 * 24 * 60 * 60 * 1000; // 3 days ago (ms)
             socketRef.current.send(
               JSON.stringify({
                 action: 'notification-history',
                 paymentReceivedLimit: 5,
+                after,
               })
             );
           }, 1000);
@@ -243,16 +260,17 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               const data = JSON.parse(e.data);
               console.log('Notification websocket message:', data);
               if (data?.type === 'history' && data?.results) {
-                setPaymentNotifications(data.results);
+                setPaymentNotifications(trimNotificationsToLast3Days(data.results));
               }
               if (data?.event === 'PAYMENT_RECEIVED' && data?.data) {
                 const tx = data;
                 setPaymentNotifications((prev) => {
-                  const alreadyExists = prev.some(
+                  const trimmed = trimNotificationsToLast3Days(prev);
+                  const alreadyExists = trimmed.some(
                     (n) => n.signature === tx.data?.signature
                   );
-                  if (alreadyExists) return prev;
-                  return [tx, ...prev];
+                  if (alreadyExists) return trimmed;
+                  return [tx, ...trimmed];
                 });
                 fireOsNotificationPayment(
                   tx,
@@ -270,13 +288,14 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                   tx.data = { ...tx.data, created: Date.now() };
                 }
                 setPaymentNotifications((prev) => {
-                  const alreadyExists = prev.some(
+                  const trimmed = trimNotificationsToLast3Days(prev);
+                  const alreadyExists = trimmed.some(
                     (n) =>
                       n?.event === 'RESOURCE_PUBLISHED' &&
                       n?.data?.identifier === tx.data?.identifier
                   );
-                  if (alreadyExists) return prev;
-                  return [tx, ...prev];
+                  if (alreadyExists) return trimmed;
+                  return [tx, ...trimmed];
                 });
                 fireOsNotificationPayment(
                   tx,

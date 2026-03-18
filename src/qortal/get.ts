@@ -94,6 +94,7 @@ import {
 } from '../qdn/encryption/group-encryption.ts';
 import { publishData } from '../qdn/publish/publish.ts';
 import {
+  getNotificationPermissionKey,
   getPermission,
   isRunningGateway,
   setPermission,
@@ -597,7 +598,7 @@ export const getNotificationPermission = async ({
 }) => {
   try {
     const value =
-      (await getPermission(`qAPPNotification-${appInfo?.name}`)) || false;
+      (await getPermission(getNotificationPermissionKey(appInfo?.name))) || false;
     let skip = false;
     if (value) skip = true;
     if (skipAuth) skip = true;
@@ -646,7 +647,7 @@ export const getNotificationPermission = async ({
 
     const { accepted = false } = resPermission || {};
     if (resPermission && accepted) {
-      setPermission(`qAPPNotification-${appInfo?.name}`, true);
+      setPermission(getNotificationPermissionKey(appInfo?.name), true);
     }
     if (accepted || skip) {
       if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
@@ -5437,7 +5438,7 @@ function setStoredSeenInAppKeys(
   const now = Date.now();
   const cutoff = now - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
   record[address] = record[address] ?? {};
-  for (const k of keys) record[address][k] = record[address][k] ?? now;
+  for (const k of keys) record[address][k] = now;
   const pruned: Record<string, Record<string, number>> = {};
   for (const [addr, inner] of Object.entries(record)) {
     const filtered = Object.fromEntries(
@@ -6622,7 +6623,15 @@ export const openNewTab = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         })
       );
-    executeEvent('addTab', { data: { service, name, identifier, path } });
+    executeEvent('addTab', {
+      data: {
+        service,
+        name,
+        identifier,
+        path,
+        ...(data.navigateIfAlreadyOpen && { navigateIfAlreadyOpen: true }),
+      },
+    });
     executeEvent('open-apps-mode', {});
     return true;
   } else {
