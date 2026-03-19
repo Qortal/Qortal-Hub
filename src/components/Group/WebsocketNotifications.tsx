@@ -58,6 +58,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null);
   const pingTimeoutRef = useRef(null);
+  const listOfMyNamesRef = useRef<string[]>([]);
   const initWebsocketRef = useRef<(() => Promise<void>) | null>(null);
 
   const forceCloseWebSocket = () => {
@@ -192,6 +193,12 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
       if (currentAddress !== myAddressRef.current) return;
 
       try {
+        const getNamesUrl = `${getBaseApiReact()}/names/address/${currentAddress}?limit=0`;
+        const namesResponse = await fetch(getNamesUrl);
+        const namesData = await namesResponse.json();
+        listOfMyNamesRef.current = namesData.map(
+          (n: { name: string }) => n.name
+        );
         const query = `qortal_qmail_${userName.slice(0, 20)}_${currentAddress.slice(-6)}_mail_`;
         const socketLink = `${getBaseApiReactSocket()}/websockets/notifications`;
         const NOTIFICATION_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -269,9 +276,14 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               const data = JSON.parse(e.data);
 
               if (data?.type === 'history' && data?.results) {
-                setPaymentNotifications(
-                  trimNotificationsToLast3Days(data.results)
+                const filtered = data.results.filter(
+                  (n) =>
+                    !(
+                      n?.event === 'RESOURCE_PUBLISHED' &&
+                      listOfMyNamesRef.current.includes(n?.data?.name)
+                    )
                 );
+                setPaymentNotifications(trimNotificationsToLast3Days(filtered));
               }
               if (data?.event === 'PAYMENT_RECEIVED' && data?.data) {
                 const tx = data;
@@ -295,6 +307,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               }
               if (data?.event === 'RESOURCE_PUBLISHED' && data?.data) {
                 const tx = { ...data };
+                if (listOfMyNamesRef.current.includes(tx?.data?.name)) return;
                 if (tx.data && tx.data.created == null) {
                   tx.data = { ...tx.data, created: Date.now() };
                 }

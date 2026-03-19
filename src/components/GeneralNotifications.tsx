@@ -343,6 +343,11 @@ export const GeneralNotifications = ({
           vertical: 'top',
           horizontal: 'right',
         }}
+        PaperProps={{
+          sx: {
+            left: '70px !important',
+          },
+        }}
       >
         <Box
           sx={{
