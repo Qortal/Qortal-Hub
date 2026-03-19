@@ -108,7 +108,6 @@ function isNotificationSeenInApp(notification, seenInAppKeysSet) {
   if (!seenInAppKeysSet || !seenInAppKeysSet.size) return false;
   const key = getNotificationSeenKey(notification);
   const prefixKey = getNotificationSeenPrefixKey(notification);
-  console.log('seenInAppKeysSet', seenInAppKeysSet, key, prefixKey);
   return seenInAppKeysSet.has(key) || seenInAppKeysSet.has(prefixKey);
 }
 
@@ -159,7 +158,6 @@ export const GeneralNotifications = ({
   const setSeenInAppKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const customSubscriptions = useAtomValue(customWebsocketSubscriptionsAtom);
   const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
-  console.log('seenInAppKeys', seenInAppKeys);
   const [notificationSettingsModalOpen, setNotificationSettingsModalOpen] =
     useState(false);
   const [notificationSettingsApps, setNotificationSettingsApps] = useState<
@@ -184,7 +182,6 @@ export const GeneralNotifications = ({
         'address' in detail &&
         'keys' in detail
       ) {
-        console.log('detail', detail);
         setSeenInAppKeys({ address: detail.address, keys: detail.keys });
       } else if (Array.isArray(detail)) {
         setSeenInAppKeys(detail);
@@ -215,7 +212,7 @@ export const GeneralNotifications = ({
       if (!unseenByTimestamp) return false;
       return !isNotificationSeenInApp(n, seenInAppKeysSet);
     };
-    console.log('notifications', notifications, seenInAppKeysSet);
+
     return notifications.filter(isUnseen).length;
   }, [notifications, lastEnteredTimestampPayment, seenInAppKeysSet]);
 
@@ -337,6 +334,14 @@ export const GeneralNotifications = ({
             setLastEnteredTimestampPayment(Date.now());
           }
           setAnchorEl(null);
+        }}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
         }}
       >
         <Box

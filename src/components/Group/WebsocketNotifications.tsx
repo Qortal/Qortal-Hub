@@ -195,9 +195,18 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
         const query = `qortal_qmail_${userName.slice(0, 20)}_${currentAddress.slice(-6)}_mail_`;
         const socketLink = `${getBaseApiReactSocket()}/websockets/notifications`;
         const NOTIFICATION_AGE_MS = 3 * 24 * 60 * 60 * 1000;
-        const getNotificationCreatorTimestamp = (n: { data?: { created?: number; timestamp?: number }; timestamp?: number }) =>
-          n?.data?.created ?? n?.data?.timestamp ?? n?.timestamp;
-        const trimNotificationsToLast3Days = <T extends { data?: { created?: number; timestamp?: number }; timestamp?: number }>(list: T[]): T[] => {
+        const getNotificationCreatorTimestamp = (n: {
+          data?: { created?: number; timestamp?: number };
+          timestamp?: number;
+        }) => n?.data?.created ?? n?.data?.timestamp ?? n?.timestamp;
+        const trimNotificationsToLast3Days = <
+          T extends {
+            data?: { created?: number; timestamp?: number };
+            timestamp?: number;
+          },
+        >(
+          list: T[]
+        ): T[] => {
           const cutoff = Date.now() - NOTIFICATION_AGE_MS;
           return list.filter((n) => {
             const ts = getNotificationCreatorTimestamp(n);
@@ -258,9 +267,11 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
               pingTimeoutRef.current = setTimeout(pingHeads, 20000);
             } else {
               const data = JSON.parse(e.data);
-              console.log('Notification websocket message:', data);
+
               if (data?.type === 'history' && data?.results) {
-                setPaymentNotifications(trimNotificationsToLast3Days(data.results));
+                setPaymentNotifications(
+                  trimNotificationsToLast3Days(data.results)
+                );
               }
               if (data?.event === 'PAYMENT_RECEIVED' && data?.data) {
                 const tx = data;

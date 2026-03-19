@@ -338,8 +338,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           setTimeout(() => {
             frameWindow.removeEventListener('message', handleNavigationSuccess);
             reject(new Error('navigation_timeout'));
-          }, 200);
-
+          }, 250);
           iframeRef.current.contentWindow.postMessage(
             {
               action: 'NAVIGATE_TO_PATH',
@@ -360,7 +359,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
             return;
           }
           setUrl(
-            `${getBaseApiReact()}/render/${app?.service}/${app?.name}${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
+            `${getBaseApiReact()}/render/${app?.service}/${app?.name}/${targetPath}?theme=${themeMode}&lang=${currentLang}&identifier=${app?.identifier != null && app?.identifier != 'null' ? app?.identifier : ''}&time=${new Date().getMilliseconds()}&isManualNavigation=false`
           );
         }
       },
@@ -372,7 +371,10 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       subscribeToEvent(`navigateToPath-${app?.tabId}`, navigateToPathFunc);
 
       return () => {
-        unsubscribeFromEvent(`navigateToPath-${app?.tabId}`, navigateToPathFunc);
+        unsubscribeFromEvent(
+          `navigateToPath-${app?.tabId}`,
+          navigateToPathFunc
+        );
       };
     }, [app?.tabId, navigateToPathFunc]);
 

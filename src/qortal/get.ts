@@ -673,6 +673,32 @@ export const getNotificationPermission = async ({
   }
 };
 
+/**
+ * Read-only: whether the app has Hub notification permission (stored grant and/or
+ * current session), without showing a permission prompt. Matches what NOTIFICATION_ADD
+ * requires (session) plus persistent grant from a prior NOTIFICATION_PERMISSION accept.
+ */
+export const notificationHasPermission = async ({
+  appInfo,
+  skipAuth,
+}: {
+  appInfo?: { name?: string; tabId?: number };
+  skipAuth?: boolean;
+}) => {
+  if (skipAuth) return true;
+  if (!appInfo?.name) return false;
+  const stored =
+    (await getPermission(getNotificationPermissionKey(appInfo.name))) === true;
+  const session =
+    appInfo.tabId != null &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'NOTIFICATION_PERMISSION'
+    );
+  return stored || session;
+};
+
 export const sessionPermissions = async (data, isFromExtension, appInfo) => {
   try {
     const { permissions = [] } = data;

@@ -45,6 +45,7 @@ import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
+import { flushSync } from 'react-dom';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -283,12 +284,16 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       );
 
       if (existingTab) {
-        setSelectedTab(existingTab);
-        setMode('viewer');
-        setIsNewTabWindow(false);
+        flushSync(() => {
+          setSelectedTab(existingTab);
+          setMode('viewer');
+          setIsNewTabWindow(false);
+        });
 
         if (path) {
-          executeEvent(`navigateToPath-${existingTab.tabId}`, { path });
+          setTimeout(() => {
+            executeEvent(`navigateToPath-${existingTab.tabId}`, { path });
+          }, 100);
         }
         return;
       }

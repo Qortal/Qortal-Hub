@@ -79,6 +79,7 @@ import {
   addNotificationSubscriptions,
   getNotificationPermission,
   getNotificationSubscriptions,
+  notificationHasPermission,
   markNotificationSeenInApp,
   removeNotificationSubscriptions,
 } from './get.ts';
@@ -504,6 +505,36 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message ?? 'Unable to get notification permission',
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'NOTIFICATION_HAS_PERMISSION': {
+        try {
+          const res = await notificationHasPermission({
+            appInfo,
+            skipAuth,
+          });
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: res,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error:
+                error?.message ?? 'Unable to read notification permission',
               type: 'backgroundMessageResponse',
             },
             event.origin

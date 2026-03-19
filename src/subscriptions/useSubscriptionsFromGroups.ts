@@ -261,7 +261,7 @@ export function useSubscriptionsFromGroups(
             .filter((g) => g.owner !== address && !g.isOpen)
             .map(async (g) => {
               const ownerPrimaryName = g.ownerPrimaryName;
-              console.log('ownerPrimaryName', ownerPrimaryName);
+
               if (!ownerPrimaryName) return null;
 
               const subscriptionId = getSubscriptionIdForGroup(g.groupId);
@@ -271,18 +271,17 @@ export function useSubscriptionsFromGroups(
                 console.log('error', error);
                 return null;
               }
-              console.log('subscriptionId', subscriptionId);
+
               const { indexIdentifier, detailsIdentifier } =
                 await buildSubscriptionIdentifiers(subscriptionId);
-              console.log('indexIdentifier', indexIdentifier);
-              console.log('detailsIdentifier', detailsIdentifier);
+
               const matches = await fetch(
                 `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT&identifier=${indexIdentifier}&name=${ownerPrimaryName}&limit=1&exactmatchnames=true&prefix=true`
               );
               if (!matches.ok) return null;
               const matchesData = await matches.json();
               if (!matchesData || matchesData.length === 0) return null;
-              console.log('matchesData', matchesData);
+
               const detailsRes = await fetch(
                 `${getBaseApiReact()}/arbitrary/DOCUMENT/${encodeURIComponent(ownerPrimaryName)}/${encodeURIComponent(detailsIdentifier)}`
               );

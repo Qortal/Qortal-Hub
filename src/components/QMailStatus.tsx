@@ -28,9 +28,9 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   );
   const notifications = useAtomValue(paymentNotificationsAtom);
   const seenInAppRecord = useAtomValue(notificationSeenInAppKeysRecordAtom);
-  console.log('seenInAppRecord', seenInAppRecord);
+
   const address = useAtomValue(userInfoAtom)?.address;
-  console.log('address100', address);
+
   const qMailNotifications = useMemo(
     () =>
       (notifications ?? []).filter(
@@ -70,7 +70,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
         return false;
       }
       const createdTs = getNotificationTimestamp(n);
-      console.log('createdTs', createdTs);
+
       if (createdTs == null) return false;
       const key = getNotificationSeenKey(n);
       const prefixKey = getNotificationSeenPrefixKey(n);
@@ -78,7 +78,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
         (byAddress[key] as number) ?? 0,
         (byAddress[prefixKey] as number) ?? 0
       );
-      console.log('seenTs', seenTs, createdTs);
+
       return createdTs > seenTs;
     };
     return qMailNotifications.filter(isUnseen).length > 0;
