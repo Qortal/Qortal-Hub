@@ -54,6 +54,9 @@ const TabComponent = ({ isSelected, app }) => {
             sx={{
               height: '28px',
               width: '28px',
+              '& img': {
+                objectFit: 'unset',
+              },
             }}
             alt={app?.name}
             src={
