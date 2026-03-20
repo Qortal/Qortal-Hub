@@ -8,7 +8,7 @@ export const publicSaltSubscriptionApp =
 
 // ─── inline types ────────────────────────────────────────────────────────────
 
-type BillingInterval = 'hourly' | 'daily' | 'monthly' | 'yearly';
+type BillingInterval = 'monthly';
 
 type GroupAccessType = 'private';
 
@@ -148,10 +148,7 @@ export async function buildSubscriptionIdentifiers(subscriptionId: string) {
   };
 }
 
-function intervalDaysToBillingInterval(intervalDays: number): BillingInterval {
-  if (intervalDays < 0.1) return 'hourly';
-  if (intervalDays === 1) return 'daily';
-  if (intervalDays >= 365) return 'yearly';
+function intervalDaysToBillingInterval(_intervalDays: number): BillingInterval {
   return 'monthly';
 }
 
@@ -172,11 +169,8 @@ function parseOnChainIndexData(
   const parts = decoded.trim().split('|');
   if (parts.length < 5 || parts[0] !== 'qsub1') return null;
   const amt = parseFloat(parts[2]);
-  let intervalDays = parseFloat(parts[3]);
-  if (Number.isNaN(amt) || Number.isNaN(intervalDays) || intervalDays < 0)
-    return null;
-  if (intervalDays === 0) intervalDays = 1 / 24;
-  return { priceQort: amt, intervalDays };
+  if (Number.isNaN(amt)) return null;
+  return { priceQort: amt, intervalDays: 30 };
 }
 
 async function fetchSubscriptionIndexPrice(
@@ -300,10 +294,7 @@ export function useSubscriptionsFromGroups(
                 details && anyDetails?.amountQort != null
                   ? Number(anyDetails.amountQort)
                   : null;
-              const detailsIntervalDays =
-                details && typeof anyDetails?.intervalDays === 'number'
-                  ? anyDetails.intervalDays
-                  : 30;
+              const detailsIntervalDays = 30;
               if (!title || !detailsAmountQort || !detailsIntervalDays)
                 return null;
               // Resolve locked-in price/interval/expiry from subscriber's PRODUCT record.
@@ -351,7 +342,7 @@ export function useSubscriptionsFromGroups(
                     );
                     if (indexData) {
                       priceQort = indexData.priceQort;
-                      resolvedIntervalDays = indexData.intervalDays;
+                      resolvedIntervalDays = 30;
                     }
 
                     try {

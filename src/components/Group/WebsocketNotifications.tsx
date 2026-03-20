@@ -327,7 +327,7 @@ export const WebSocketNotifications = ({ myAddress, userName }) => {
                     appName: tx.appName ?? 'App',
                   }),
                   getNotificationMessage(tx.message),
-                  `${getBaseApiReact()}/${tx.image}`,
+                  `${getBaseApiReact()}${tx.image}`,
                   tx?.link
                 );
               }
