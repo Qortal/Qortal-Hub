@@ -1,13 +1,15 @@
 import * as net from 'net';
 import * as tls from 'tls';
+import * as http from 'http';
 import * as crypto from 'crypto';
 import * as os from 'os';
 import { EventEmitter } from 'events';
 import { generate as generateCert } from 'selfsigned';
 import { log as loggerLog, error as loggerError } from './logger';
 
-export const DEFAULT_P2P_PORT = 62362;
+export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
+export const DEFAULT_API_PORT = 62390;
 
 const MAX_RELAY_HOPS = 10;
 const SEEN_MESSAGE_TTL_MS = 60_000;
@@ -48,6 +50,9 @@ export interface P2PPeerInfo {
   port: number;
   connected: boolean;
   outbound: boolean;
+  /** True if the remote peer has at least one active inbound connection,
+   *  meaning their port is reachable from the internet. */
+  canAcceptInbound: boolean;
 }
 
 export interface P2PNetworkOptions {
@@ -70,6 +75,10 @@ interface PeerRecord extends P2PPeerInfo {
   /** Set to true when this peer is intentionally dropped (e.g. duplicate
    *  tie-break).  Prevents onClose from scheduling a reconnect. */
   abortReconnect?: boolean;
+  /** Unix-ms timestamp when the handshake completed (peer became connected). */
+  connectedAt?: number;
+  /** Unix-ms timestamp of the last pong received from this peer. */
+  lastPingAt?: number;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -115,6 +124,7 @@ function isPrivateIP(host: string): boolean {
 
 export class P2PNetwork extends EventEmitter {
   private server: tls.Server | null = null;
+  private apiServer: http.Server | null = null;
   private peers = new Map<string, PeerRecord>();
   /** id → absolute expiry timestamp */
   private seenMessages = new Map<string, number>();
@@ -124,6 +134,15 @@ export class P2PNetwork extends EventEmitter {
   /** TLS transport credentials — generated once per run in start(). */
   private tlsKey = '';
   private tlsCert = '';
+
+  /** Set permanently to true the first time any inbound peer completes its
+   *  handshake.  Once true it never resets — it proves this node's listen
+   *  port was reachable at least once during this session. */
+  private everHadInbound = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private upnpClient: any = null;
+  /** Set to true in stop() so a concurrent setupUPnP() knows to tear down immediately. */
+  private upnpStopped = false;
 
   private readonly port: number;
   private readonly maxPeers: number;
@@ -174,8 +193,11 @@ export class P2PNetwork extends EventEmitter {
   async start(): Promise<void> {
     await this.generateTLSCredentials();
     await this.listenForInbound();
+    this.upnpStopped = false;
+    this.setupUPnP(); // fire-and-forget — UPnP failure must never block startup
     this.scheduleSeenCleanup();
     this.schedulePing();
+    this.startApiServer();
     for (const addr of this.initialPeers) {
       this.connectToPeer(addr);
     }
@@ -185,6 +207,9 @@ export class P2PNetwork extends EventEmitter {
   }
 
   stop(): void {
+    // Signal any in-progress setupUPnP() to abort immediately.
+    this.upnpStopped = true;
+
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.cleanupTimer) clearInterval(this.cleanupTimer);
     this.pingTimer = null;
@@ -197,6 +222,26 @@ export class P2PNetwork extends EventEmitter {
     this.peers.clear();
     this.server?.close();
     this.server = null;
+    this.apiServer?.close();
+    this.apiServer = null;
+
+    // Best-effort UPnP teardown — unmap the port so we don't leave a stale
+    // mapping on the router.  Fire-and-forget (stop() stays synchronous).
+    if (this.upnpClient) {
+      const client = this.upnpClient;
+      this.upnpClient = null;
+      client
+        .unmap({
+          publicPort: this.port,
+          privatePort: this.port,
+          protocol: 'TCP',
+        })
+        .catch(() => {
+          /* best-effort */
+        })
+        .finally(() => client.destroy().catch(() => {}));
+    }
+
     loggerLog('[P2P] Stopped.');
   }
 
@@ -241,12 +286,13 @@ export class P2PNetwork extends EventEmitter {
 
   getPeers(): P2PPeerInfo[] {
     return Array.from(this.peers.values()).map(
-      ({ id, host, port, connected, outbound }) => ({
+      ({ id, host, port, connected, outbound, canAcceptInbound }) => ({
         id,
         host,
         port,
         connected,
         outbound,
+        canAcceptInbound,
       })
     );
   }
@@ -272,6 +318,84 @@ export class P2PNetwork extends EventEmitter {
     let n = 0;
     for (const p of this.peers.values()) if (p.connected) n++;
     return n;
+  }
+
+  /** Returns true if this node has ever successfully accepted an inbound
+   *  connection, proving the listen port has been reachable at least once. */
+  private hasInboundPeer(): boolean {
+    return this.everHadInbound;
+  }
+
+  // ── UPnP ────────────────────────────────────────────────────────────────────
+
+  /**
+   * Attempt to open an inbound TCP port mapping on the local router via UPnP.
+   * This makes the node reachable from the internet without the user needing to
+   * configure manual port forwarding.
+   *
+   * Runs asynchronously after start() so that UPnP unavailability (no router
+   * support, firewall, etc.) never delays or blocks the P2P network.
+   * On success, the mapping auto-renews until stop() is called.
+   */
+  private async setupUPnP(): Promise<void> {
+    try {
+      // Dynamic import bridges the ESM-only package into our CommonJS build.
+      // Wrapping in new Function() prevents the TypeScript CommonJS compiler
+      // from rewriting import() to require() — require() fails on ESM packages.
+      const load = new Function('return import("@silentbot1/nat-api")');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { default: NatAPI } = (await load()) as { default: any };
+
+      // Bail out if stop() was called while we were loading the module.
+      if (this.upnpStopped) return;
+
+      const client = new NatAPI({
+        enableUPNP: true,
+        enablePMP: false, // NAT-PMP is less common; skip for simplicity
+        autoUpdate: true, // library handles lease renewal automatically
+        ttl: 7200, // 2-hour lease; renewed ~10 min before expiry
+        description: 'Qortal Hub P2P',
+      });
+
+      const result = await client.map({
+        publicPort: this.port,
+        privatePort: this.port,
+        protocol: 'TCP',
+        ttl: 7200,
+        description: 'Qortal Hub P2P',
+      });
+
+      // If stop() raced with the async map() call, tear down and return.
+      if (this.upnpStopped) {
+        client
+          .unmap({
+            publicPort: this.port,
+            privatePort: this.port,
+            protocol: 'TCP',
+          })
+          .catch(() => {});
+        client.destroy().catch(() => {});
+        return;
+      }
+
+      if (result === false) {
+        loggerLog(
+          `[P2P] UPnP: mapping failed for port ${this.port}/TCP. ` +
+            'Manual port forwarding may be needed for inbound connections.'
+        );
+        await client.destroy().catch(() => {});
+        return;
+      }
+
+      this.upnpClient = client;
+      loggerLog(`[P2P] UPnP: port ${this.port}/TCP mapped successfully.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      loggerLog(
+        `[P2P] UPnP: not available (${msg}). ` +
+          'Manual port forwarding may be needed for inbound connections.'
+      );
+    }
   }
 
   // ── Server ──────────────────────────────────────────────────────────────────
@@ -334,6 +458,7 @@ export class P2PNetwork extends EventEmitter {
       socket,
       connected: false,
       outbound: false,
+      canAcceptInbound: false,
       reconnectAttempts: 0,
       buffer: '',
     };
@@ -372,6 +497,7 @@ export class P2PNetwork extends EventEmitter {
       socket: null as unknown as tls.TLSSocket, // filled in synchronously below
       connected: false,
       outbound: true,
+      canAcceptInbound: false,
       reconnectAttempts: existing?.reconnectAttempts ?? 0,
       buffer: '',
     };
@@ -509,6 +635,7 @@ export class P2PNetwork extends EventEmitter {
         });
         break;
       case 'pong':
+        peer.lastPingAt = Date.now();
         break;
       case 'peers':
         // Point-to-point only — never relay, never deduplicate via seenMessages.
@@ -532,6 +659,7 @@ export class P2PNetwork extends EventEmitter {
       Number.isInteger(handshakeData.port)
         ? handshakeData.port
         : undefined;
+    const advertisedCanAcceptInbound = handshakeData?.canAcceptInbound === true;
 
     // Reject self-connections: same nodeId means we somehow connected to
     // ourselves (shouldn't happen, but guard it anyway).
@@ -602,6 +730,11 @@ export class P2PNetwork extends EventEmitter {
     this.removePeerReferences(peer);
     peer.id = remoteNodeId;
     peer.connected = true;
+    peer.canAcceptInbound = advertisedCanAcceptInbound;
+    peer.connectedAt = Date.now();
+    // Latch: once we've successfully accepted an inbound connection our port
+    // is proven reachable — remember it for the rest of this session.
+    if (!peer.outbound) this.everHadInbound = true;
     this.peers.set(remoteNodeId, peer);
     loggerLog(
       `[P2P] Handshake complete with ${remoteNodeId.slice(0, 8)}… (${peer.dialAddr || peer.host})`
@@ -728,6 +861,7 @@ export class P2PNetwork extends EventEmitter {
       from: this.nodeId,
       data: {
         port: this.port,
+        canAcceptInbound: this.hasInboundPeer(),
       },
       hops: 0,
       timestamp: Date.now(),
@@ -773,6 +907,86 @@ export class P2PNetwork extends EventEmitter {
       }
     }, SEEN_MESSAGE_TTL_MS);
     this.cleanupTimer.unref();
+  }
+
+  // ── Local HTTP API ────────────────────────────────────────────────────────
+
+  private startApiServer(): void {
+    const now = () => Date.now();
+
+    const connectedPeers = (): PeerRecord[] =>
+      Array.from(this.peers.values()).filter((p) => p.connected);
+
+    const formatAge = (ms: number): string => {
+      const totalSec = Math.floor(ms / 1000);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      return `${mins}m ${secs}s`;
+    };
+
+    const sendJson = (
+      res: http.ServerResponse,
+      body: unknown,
+      status = 200
+    ): void => {
+      const json = JSON.stringify(body, null, 2);
+      res.writeHead(status, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(json),
+      });
+      res.end(json);
+    };
+
+    this.apiServer = http.createServer((req, res) => {
+      const url = req.url ?? '';
+
+      if (url === '/hub/peers/summary') {
+        const peers = connectedPeers();
+        const inbound = peers.filter((p) => !p.outbound).length;
+        const outbound = peers.filter((p) => p.outbound).length;
+        sendJson(res, {
+          totalConnected: peers.length,
+          inbound,
+          outbound,
+          nodeId: this.nodeId,
+          listenAddress: `0.0.0.0:${this.port}`,
+        });
+        return;
+      }
+
+      if (url === '/hub/peers') {
+        const t = now();
+        const peers = connectedPeers().map((p) => {
+          const ageMs = p.connectedAt != null ? t - p.connectedAt : 0;
+          const lastPingSec =
+            p.lastPingAt != null ? Math.floor((t - p.lastPingAt) / 1000) : null;
+          return {
+            nodeId: p.id,
+            address: p.dialAddr || `${p.host}:${p.port}`,
+            direction: p.outbound ? 'OUTBOUND' : 'INBOUND',
+            connectedWhen: p.connectedAt ?? null,
+            ageMinutes: Math.floor(ageMs / 60_000),
+            age: formatAge(ageMs),
+            lastPing: lastPingSec,
+            canAcceptInbound: p.canAcceptInbound,
+          };
+        });
+        sendJson(res, peers);
+        return;
+      }
+
+      sendJson(res, { error: 'Not found' }, 404);
+    });
+
+    this.apiServer.listen(DEFAULT_API_PORT, '127.0.0.1', () => {
+      loggerLog(
+        `[P2P] API server listening on http://127.0.0.1:${DEFAULT_API_PORT}`
+      );
+    });
+
+    this.apiServer.on('error', (err: NodeJS.ErrnoException) => {
+      loggerError(`[P2P] API server error: ${err.message}`);
+    });
   }
 
   private schedulePing(): void {

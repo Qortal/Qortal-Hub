@@ -187,7 +187,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   try {
     const p2pNetwork = await startP2PNetwork({
       port: DEFAULT_P2P_PORT,
-      initialPeers: ['127.0.0.1:62361', '127.0.0.1:62362'],
+      initialPeers: ['qortal.home.ro:62361'],
     });
     attachP2PListeners(p2pNetwork);
     loggerLog(`[P2P] Auto-started on port ${DEFAULT_P2P_PORT}`);

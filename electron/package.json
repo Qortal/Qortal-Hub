@@ -37,6 +37,7 @@
     "electron:make-all": "npm run build && electron-builder build -c ./electron-builder.config.win.json --publish=never -w && electron-builder build -c ./electron-builder.config.lin.json --publish=never -l && electron-builder build -c ./electron-builder.config.arm.json --publish=never --linux --arm64"
   },
   "dependencies": {
+    "@silentbot1/nat-api": "^0.4.9",
     "@capacitor-community/electron": "^5.0.0",
     "adm-zip": "^0.5.16",
     "chokidar": "^4.0.3",
