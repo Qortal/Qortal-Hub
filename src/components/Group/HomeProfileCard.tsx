@@ -1,10 +1,14 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import {
   Avatar,
+  Badge,
   Box,
   Button,
   ButtonBase,
   IconButton,
+  ListItemIcon,
+  Menu,
+  MenuItem,
   Popover,
   Tooltip,
   Typography,
@@ -13,6 +17,7 @@ import {
 import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ErrorIcon from '@mui/icons-material/Error';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import PersonIcon from '@mui/icons-material/Person';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SendIcon from '@mui/icons-material/Send';
@@ -26,6 +31,8 @@ import {
   openSnackGlobalAtom,
   infoSnackGlobalAtom,
 } from '../../atoms/global';
+import { onlineAddressesAtom, isIdleAtom, type SelectableStatus } from '../../atoms/presence';
+import { statusDotColor, useMyStatus, useStatus } from '../../hooks/usePresence';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background.ts';
 import ImageUploader from '../../common/ImageUploader';
@@ -87,6 +94,24 @@ export const HomeProfileCard = () => {
       : null);
 
   const formattedBalance = balance != null ? Number(balance).toFixed(2) : '—';
+
+  // ── Presence ──────────────────────────────────────────────────────────────
+  const selfStatus = useStatus(address);
+  const isSelfOnline = selfStatus !== null;
+  const [myStatus, setMyStatus] = useMyStatus();
+  const isIdle = useAtomValue(isIdleAtom);
+  const onlineAddresses = useAtomValue(onlineAddressesAtom);
+  const totalOnline = onlineAddresses.size;
+
+  const [statusMenuAnchor, setStatusMenuAnchor] =
+    useState<HTMLElement | null>(null);
+
+  const STATUS_OPTIONS: { value: SelectableStatus; label: string; color: string }[] = [
+    { value: 'online',  label: 'Online',  color: '#44b700' },
+    { value: 'away',    label: 'Away',    color: '#f59e0b' },
+    { value: 'busy',    label: 'Busy',    color: '#ef4444' },
+    { value: 'offline', label: 'Offline', color: '#9e9e9e' },
+  ];
 
   const handleCopyAddress = () => {
     if (!address) return;
@@ -205,13 +230,33 @@ export const HomeProfileCard = () => {
             onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
             sx={{ borderRadius: '50%' }}
           >
-            <Avatar
-              src={avatarUrl ?? undefined}
-              onError={() => setAvatarError(true)}
-              sx={{ height: 56, width: 56 }}
+            <Badge
+              overlap="circular"
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              badgeContent={
+                <Box
+                  sx={{
+                    width: 13,
+                    height: 13,
+                    borderRadius: '50%',
+                    bgcolor: myStatus === 'offline' || !isSelfOnline
+                      ? theme.palette.grey[500]
+                      : isIdle
+                        ? '#78909c'
+                        : statusDotColor(myStatus),
+                    border: `2px solid ${theme.palette.background.paper}`,
+                  }}
+                />
+              }
             >
-              <PersonIcon sx={{ fontSize: 32 }} />
-            </Avatar>
+              <Avatar
+                src={avatarUrl ?? undefined}
+                onError={() => setAvatarError(true)}
+                sx={{ height: 56, width: 56 }}
+              >
+                <PersonIcon sx={{ fontSize: 32 }} />
+              </Avatar>
+            </Badge>
           </ButtonBase>
           <ButtonBase onClick={(e) => setAvatarAnchorEl(e.currentTarget)}>
             <Typography
@@ -228,19 +273,93 @@ export const HomeProfileCard = () => {
           </ButtonBase>
         </Box>
 
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '1rem',
-            fontWeight: 600,
-            maxWidth: '140px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {name ?? `${address?.slice(0, 8) ?? ''}…`}
-        </Typography>
+        <Box>
+          <Typography
+            sx={{
+              color: theme.palette.text.primary,
+              fontSize: '1rem',
+              fontWeight: 600,
+              maxWidth: '140px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {name ?? `${address?.slice(0, 8) ?? ''}…`}
+          </Typography>
+
+          {/* Clickable status label opens the status picker */}
+          <Tooltip title="Change status" disableInteractive>
+            <ButtonBase
+              onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
+              sx={{ borderRadius: '4px', mt: '2px' }}
+            >
+              <Typography
+                sx={{
+                  color: myStatus === 'offline' || !isSelfOnline
+                    ? theme.palette.text.disabled
+                    : isIdle
+                      ? '#78909c'
+                      : statusDotColor(myStatus),
+                  fontSize: '0.72rem',
+                  fontWeight: 500,
+                  px: '2px',
+                  '&:hover': { opacity: 0.8 },
+                }}
+              >
+                {myStatus === 'offline' || !isSelfOnline
+                  ? '● Offline'
+                  : isIdle
+                    ? '● Idle'
+                    : `● ${STATUS_OPTIONS.find((o) => o.value === myStatus)?.label ?? 'Online'}`}
+              </Typography>
+            </ButtonBase>
+          </Tooltip>
+
+          {/* Status picker menu */}
+          <Menu
+            anchorEl={statusMenuAnchor}
+            open={Boolean(statusMenuAnchor)}
+            onClose={() => setStatusMenuAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            slotProps={{
+              paper: {
+                sx: {
+                  borderRadius: '10px',
+                  minWidth: 140,
+                  boxShadow: theme.shadows[6],
+                },
+              },
+            }}
+          >
+            {STATUS_OPTIONS.map((opt) => (
+              <MenuItem
+                key={opt.value}
+                selected={myStatus === opt.value}
+                onClick={() => {
+                  setMyStatus(opt.value);
+                  setStatusMenuAnchor(null);
+                }}
+                sx={{ gap: '10px', py: '8px' }}
+              >
+                <ListItemIcon sx={{ minWidth: 'unset' }}>
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: opt.color,
+                    }}
+                  />
+                </ListItemIcon>
+                <Typography sx={{ fontSize: '0.85rem' }}>
+                  {opt.label}
+                </Typography>
+              </MenuItem>
+            ))}
+          </Menu>
+        </Box>
       </Box>
 
       {/* Center: Address (copy on click) */}
@@ -305,6 +424,36 @@ export const HomeProfileCard = () => {
             />
           </Box>
         </Tooltip>
+
+        {/* Total users online */}
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: '5px',
+            mt: '2px',
+          }}
+        >
+          <PeopleAltIcon
+            sx={{
+              color: totalOnline > 0
+                ? theme.palette.success.main
+                : theme.palette.text.disabled,
+              fontSize: '0.85rem',
+            }}
+          />
+          <Typography
+            sx={{
+              color: totalOnline > 0
+                ? theme.palette.text.secondary
+                : theme.palette.text.disabled,
+              fontSize: '0.72rem',
+            }}
+          >
+            {totalOnline}{' '}
+            {totalOnline === 1 ? 'user online' : 'users online'}
+          </Typography>
+        </Box>
       </Box>
 
       {/* Right: Balance + actions (vertical) */}

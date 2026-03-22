@@ -96,6 +96,7 @@ import {
   TIME_SECONDS_10_IN_MILLISECONDS,
 } from './constants/constants.ts';
 import { CoreSetup } from './components/CoreSetup.tsx';
+import { usePresence } from './hooks/usePresence';
 import { useAuth } from './hooks/useAuth.tsx';
 import type { extStates } from './types/app';
 import { AppContextInterface, QORTAL_APP_CONTEXT } from './context/AppContext';
@@ -247,6 +248,7 @@ function App() {
     validateApiKeyFromRegistration,
   } = useAuth();
   useBlockedAddressesLoader(extState === 'authenticated');
+  usePresence();
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

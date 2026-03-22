@@ -1,3 +1,4 @@
+import nacl from '../encryption/nacl-fast';
 import {
   addDataPublishes,
   addEnteredQmailTimestamp,
@@ -2145,6 +2146,53 @@ export async function getRewardSharePrivateKeyCase(request, event) {
       {
         requestId: request.requestId,
         action: 'getRewardSharePrivateKey',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Signs a presence message payload using the authenticated user's Ed25519
+ * private key. The renderer passes the fields to sign; this case canonicalises
+ * them (sorted keys → JSON → UTF-8) and returns a Base58-encoded signature.
+ *
+ * Expected request.payload shape:
+ *   { type, address, publicKey, sessionId, timestamp, clientVersion? }
+ */
+export async function signPresenceMessageCase(request, event) {
+  try {
+    const resKeyPair = await getKeyPair();
+    const privateKeyBytes = Base58.decode(resKeyPair.privateKey);
+
+    // Build canonical signed data — keys sorted alphabetically, then
+    // JSON-stringify and UTF-8 encode. Must match canonicalizeForSigning()
+    // in electron/src/presence.ts exactly.
+    const fields = request.payload as Record<string, unknown>;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(fields).sort()) {
+      sorted[key] = fields[key];
+    }
+    const messageBytes = new TextEncoder().encode(JSON.stringify(sorted));
+    const signature = nacl.sign.detached(messageBytes, privateKeyBytes);
+    const signatureBase58 = Base58.encode(signature);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'signPresenceMessage',
+        payload: { signature: signatureBase58 },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'signPresenceMessage',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

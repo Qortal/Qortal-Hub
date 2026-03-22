@@ -20,7 +20,11 @@ import {
   flushPersistentStore,
   setupContentSecurityPolicy,
   setupReloadWatcher,
+  attachP2PListeners,
+  attachPresenceListeners,
 } from './setup';
+import { startP2PNetwork, DEFAULT_P2P_PORT } from './p2p-network';
+import { startPresenceManager } from './presence';
 
 import * as net from 'net';
 
@@ -142,9 +146,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     if (!(await isPortTaken(port))) {
       // First instance — use default Electron behavior
       if (i === 0) {
-        loggerLog(
-          `🟢 Using default userData path: ${app.getPath('userData')}`
-        );
+        loggerLog(`🟢 Using default userData path: ${app.getPath('userData')}`);
       } else {
         const instanceName = `qortal-instance-${i + 1}`;
         const userDataPath = path.join(app.getPath('appData'), instanceName);
@@ -179,6 +181,24 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   loadPersistedLocalNodeCa();
 
   await myCapacitorApp.init();
+
+  // Auto-start the P2P network with default settings.
+  // The renderer can reconfigure it at any time via window.p2pNetwork.start().
+  try {
+    const p2pNetwork = await startP2PNetwork({
+      port: DEFAULT_P2P_PORT,
+      initialPeers: ['127.0.0.1:62361', '127.0.0.1:62362'],
+    });
+    attachP2PListeners(p2pNetwork);
+    loggerLog(`[P2P] Auto-started on port ${DEFAULT_P2P_PORT}`);
+
+    // Start the presence manager, wired to the P2P network.
+    const pm = startPresenceManager(p2pNetwork);
+    attachPresenceListeners(pm);
+    loggerLog('[Presence] Manager auto-started.');
+  } catch (err) {
+    loggerError('[P2P] Auto-start failed:', err);
+  }
 
   // Also set on main window session (same as default when no partition; ensures activate/recreate path is covered)
   const mainWindow = myCapacitorApp.getMainWindow();

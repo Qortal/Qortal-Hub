@@ -1,5 +1,6 @@
 import {
   Avatar,
+  Badge,
   Box,
   ButtonBase,
   List,
@@ -24,6 +25,9 @@ import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './qmailUtils';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+import { useOnlineAddresses, statusDotColor } from '../../hooks/usePresence';
+import { useAtomValue } from 'jotai';
+import { statusMapAtom } from '../../atoms/presence';
 
 export interface DirectsSidebarProps {
   setDesktopSideView: (view: 'groups' | 'directs') => void;
@@ -78,6 +82,8 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
 
   const theme = useTheme();
   const { t } = useTranslation();
+  const onlineAddresses = useOnlineAddresses();
+  const statusMap = useAtomValue(statusMapAtom);
 
   return (
     <Box
@@ -359,50 +365,67 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   }}
                 >
                   <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
-                    <Avatar
+                    <Badge
+                      overlap="circular"
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                      variant="dot"
+                      invisible={!onlineAddresses.has(direct?.address)}
                       sx={{
-                        height: 40,
-                        width: 40,
-                        background: theme.palette.background.surface,
-                        color: theme.palette.text.primary,
-                        ...getClickableAvatarSx(theme, isAvatarLoaded),
-                      }}
-                      alt={direct?.name || direct?.address}
-                      src={avatarUrl}
-                      onClick={(event) => {
-                        if (!avatarUrl || !isAvatarLoaded) return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openAvatarPreview(
-                          avatarUrl,
-                          direct?.name || direct?.address
-                        );
-                      }}
-                      imgProps={{
-                        onLoad: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey]) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: true,
-                            };
-                          });
-                        },
-                        onError: () => {
-                          if (!avatarKey) return;
-                          setDirectAvatarLoaded((prev) => {
-                            if (prev[avatarKey] === false) return prev;
-                            return {
-                              ...prev,
-                              [avatarKey]: false,
-                            };
-                          });
+                        '& .MuiBadge-dot': {
+                          backgroundColor: statusDotColor(statusMap.get(direct?.address) ?? null),
+                          border: `2px solid ${theme.palette.background.paper}`,
+                          borderRadius: '50%',
+                          height: 10,
+                          minWidth: 10,
+                          width: 10,
                         },
                       }}
                     >
-                      {(direct?.name || direct?.address)?.charAt(0)}
-                    </Avatar>
+                      <Avatar
+                        sx={{
+                          height: 40,
+                          width: 40,
+                          background: theme.palette.background.surface,
+                          color: theme.palette.text.primary,
+                          ...getClickableAvatarSx(theme, isAvatarLoaded),
+                        }}
+                        alt={direct?.name || direct?.address}
+                        src={avatarUrl}
+                        onClick={(event) => {
+                          if (!avatarUrl || !isAvatarLoaded) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          openAvatarPreview(
+                            avatarUrl,
+                            direct?.name || direct?.address
+                          );
+                        }}
+                        imgProps={{
+                          onLoad: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey]) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: true,
+                              };
+                            });
+                          },
+                          onError: () => {
+                            if (!avatarKey) return;
+                            setDirectAvatarLoaded((prev) => {
+                              if (prev[avatarKey] === false) return prev;
+                              return {
+                                ...prev,
+                                [avatarKey]: false,
+                              };
+                            });
+                          },
+                        }}
+                      >
+                        {(direct?.name || direct?.address)?.charAt(0)}
+                      </Avatar>
+                    </Badge>
                   </ListItemAvatar>
 
                   <ListItemText

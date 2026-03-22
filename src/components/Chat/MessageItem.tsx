@@ -11,6 +11,7 @@ import { useInView } from 'react-intersection-observer';
 import { MessageDisplay } from './MessageDisplay';
 import {
   Avatar,
+  Badge,
   Box,
   Button,
   ButtonBase,
@@ -57,6 +58,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { ReactionsMap } from './ChatList';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
+import { useStatus, statusDotColor } from '../../hooks/usePresence';
 import { getClickableAvatarSx } from './clickableAvatarStyles';
 
 const getBadgeImg = (level) => {
@@ -267,6 +269,7 @@ export const MessageItemComponent = ({
     (!message?.text || message?.text === '<p></p>');
 
   const isOwn = message?.sender === myAddress;
+  const senderStatus = useStatus(message?.sender);
   const isRepliedToMe =
     reply?.sender === myAddress || replyExpiredMeta?.sender === myAddress;
 
@@ -359,30 +362,47 @@ export const MessageItemComponent = ({
                 address={message?.sender}
                 name={message?.senderName}
               >
-                <Avatar
+                <Badge
+                  overlap="circular"
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  variant="dot"
+                  invisible={!senderStatus}
                   sx={{
-                    backgroundColor: alpha(theme.palette.text.primary, 0.06),
-                    color: theme.palette.text.primary,
-                    height: '38px',
-                    width: '38px',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    ...getClickableAvatarSx(theme, isAvatarLoaded),
-                  }}
-                  alt={message?.senderName}
-                  src={userAvatarUrl}
-                  onClick={handleAvatarPreview}
-                  imgProps={{
-                    onLoad: () => {
-                      setIsAvatarLoaded(true);
-                    },
-                    onError: () => {
-                      setIsAvatarLoaded(false);
+                    '& .MuiBadge-dot': {
+                      backgroundColor: statusDotColor(senderStatus),
+                      border: `2px solid ${theme.palette.background.paper}`,
+                      borderRadius: '50%',
+                      height: 10,
+                      minWidth: 10,
+                      width: 10,
                     },
                   }}
                 >
-                  {message?.senderName?.charAt(0)}
-                </Avatar>
+                  <Avatar
+                    sx={{
+                      backgroundColor: alpha(theme.palette.text.primary, 0.06),
+                      color: theme.palette.text.primary,
+                      height: '38px',
+                      width: '38px',
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      ...getClickableAvatarSx(theme, isAvatarLoaded),
+                    }}
+                    alt={message?.senderName}
+                    src={userAvatarUrl}
+                    onClick={handleAvatarPreview}
+                    imgProps={{
+                      onLoad: () => {
+                        setIsAvatarLoaded(true);
+                      },
+                      onError: () => {
+                        setIsAvatarLoaded(false);
+                      },
+                    }}
+                  >
+                    {message?.senderName?.charAt(0)}
+                  </Avatar>
+                </Badge>
               </WrapperUserAction>
               <UserBadge userInfo={userInfo} />
             </Box>

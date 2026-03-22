@@ -51,6 +51,19 @@ import {
   getVideoServerPort,
   isVideoServerRunning,
 } from './video-server';
+import {
+  startP2PNetwork,
+  stopP2PNetwork,
+  getP2PNetwork,
+  type P2PNetworkOptions,
+} from './p2p-network';
+import {
+  startPresenceManager,
+  stopPresenceManager,
+  getPresenceManager,
+  type PresenceEnvelope,
+  PRESENCE_MESSAGE_TYPES,
+} from './presence';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -1279,4 +1292,194 @@ ipcMain.handle('videoServer:getPort', async () => {
 
 ipcMain.handle('videoServer:isRunning', async () => {
   return isVideoServerRunning();
+});
+
+// ── P2P Network IPC Handlers ─────────────────────────────────────────────────
+
+const p2pMessageSubscribers = new Set<Electron.WebContents>();
+const p2pPeerChangeSubscribers = new Set<Electron.WebContents>();
+
+function broadcastToSet(
+  subscribers: Set<Electron.WebContents>,
+  channel: string,
+  payload: unknown
+): void {
+  for (const wc of subscribers) {
+    if (wc.isDestroyed()) {
+      subscribers.delete(wc);
+    } else {
+      wc.send(channel, payload);
+    }
+  }
+}
+
+export function attachP2PListeners(network: ReturnType<typeof getP2PNetwork>): void {
+  if (!network) return;
+  network.on('message', (payload) =>
+    broadcastToSet(p2pMessageSubscribers, 'p2p:message', payload)
+  );
+  network.on('peer-connected', (payload) =>
+    broadcastToSet(p2pPeerChangeSubscribers, 'p2p:peerChange', {
+      type: 'connected',
+      ...payload,
+    })
+  );
+  network.on('peer-disconnected', (payload) =>
+    broadcastToSet(p2pPeerChangeSubscribers, 'p2p:peerChange', {
+      type: 'disconnected',
+      ...payload,
+    })
+  );
+}
+
+ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
+  try {
+    const network = await startP2PNetwork(options ?? {});
+    attachP2PListeners(network);
+    return { success: true, port: network.getPort(), peerId: network.getPeerId() };
+  } catch (err) {
+    loggerError('[P2P] Failed to start:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:stop', async () => {
+  try {
+    stopP2PNetwork();
+    return { success: true };
+  } catch (err) {
+    loggerError('[P2P] Failed to stop:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:send', async (_event, to: string | null, data: unknown) => {
+  const network = getP2PNetwork();
+  if (!network) return { success: false, error: 'P2P network is not running' };
+  try {
+    const messageId = network.send(to, data);
+    return { success: true, messageId };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('p2p:getPeers', async () => {
+  const network = getP2PNetwork();
+  return network ? network.getPeers() : [];
+});
+
+ipcMain.handle('p2p:getStatus', async () => {
+  const network = getP2PNetwork();
+  if (!network) return { running: false, port: null, peerId: null, connectedPeers: 0 };
+  return {
+    running: network.isRunning(),
+    port: network.getPort(),
+    peerId: network.getPeerId(),
+    connectedPeers: network.connectedCount(),
+  };
+});
+
+ipcMain.handle('p2p:addPeer', async (_event, addr: string) => {
+  const network = getP2PNetwork();
+  if (!network) return { success: false, error: 'P2P network is not running' };
+  network.addPeer(addr);
+  return { success: true };
+});
+
+ipcMain.on('p2p:message:subscribe', (event) => {
+  p2pMessageSubscribers.add(event.sender);
+});
+ipcMain.on('p2p:message:unsubscribe', (event) => {
+  p2pMessageSubscribers.delete(event.sender);
+});
+
+ipcMain.on('p2p:peerChange:subscribe', (event) => {
+  p2pPeerChangeSubscribers.add(event.sender);
+});
+ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
+  p2pPeerChangeSubscribers.delete(event.sender);
+});
+
+// ── Presence IPC Handlers ────────────────────────────────────────────────────
+
+const presenceUpdateSubscribers = new Set<Electron.WebContents>();
+
+function broadcastPresenceUpdate(payload: unknown): void {
+  broadcastToSet(presenceUpdateSubscribers, 'presence:update', payload);
+}
+
+export function attachPresenceListeners(
+  manager: ReturnType<typeof getPresenceManager>
+): void {
+  if (!manager) return;
+  manager.on('presence-updated', broadcastPresenceUpdate);
+}
+
+/** Validates a renderer-supplied envelope, applies it locally, then relays. */
+function handleLocalPresenceEnvelope(envelope: unknown): boolean {
+  const pm = getPresenceManager();
+  const p2p = getP2PNetwork();
+  if (!pm || !p2p) return false;
+
+  const accepted = pm.handleEnvelope(envelope, 'local');
+  if (accepted) {
+    // Broadcast to connected peers. p2p.send() creates a new P2P message
+    // (new ID) which gossips the presence envelope once across the network.
+    p2p.send(null, envelope as PresenceEnvelope);
+  }
+  return accepted;
+}
+
+ipcMain.handle('presence:announce', async (_event, envelope: unknown) => {
+  try {
+    const ok = handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] announce error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:heartbeat', async (_event, envelope: unknown) => {
+  try {
+    const ok = handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] heartbeat error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:offline', async (_event, envelope: unknown) => {
+  try {
+    const ok = handleLocalPresenceEnvelope(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Presence] offline error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+ipcMain.handle('presence:getStatus', async (_event, address: string) => {
+  const pm = getPresenceManager();
+  if (!pm) return { online: false, lastSeen: null, sessions: [] };
+  return pm.getStatus(address);
+});
+
+ipcMain.handle('presence:getOnlineAddresses', async () => {
+  const pm = getPresenceManager();
+  return pm ? pm.getOnlineAddresses() : [];
+});
+
+ipcMain.handle('presence:getAllOnline', async () => {
+  const pm = getPresenceManager();
+  return pm ? pm.getAllOnline() : [];
+});
+
+ipcMain.on('presence:subscribe', (event) => {
+  presenceUpdateSubscribers.add(event.sender);
+});
+ipcMain.on('presence:unsubscribe', (event) => {
+  presenceUpdateSubscribers.delete(event.sender);
 });

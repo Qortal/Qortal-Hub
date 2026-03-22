@@ -1,5 +1,6 @@
 import {
   Avatar,
+  Badge,
   Box,
   ListItem,
   ListItemAvatar,
@@ -20,6 +21,9 @@ import { LoadingButton } from '@mui/lab';
 import { getFee } from '../../background/background.ts';
 import { getBaseApiReact } from '../../App';
 import { useTranslation } from 'react-i18next';
+import { useOnlineAddresses, statusDotColor } from '../../hooks/usePresence';
+import { useAtomValue } from 'jotai';
+import { statusMapAtom } from '../../atoms/presence';
 
 const cache = new CellMeasurerCache({
   fixedWidth: true,
@@ -51,6 +55,8 @@ const ListOfMembers = ({
     'tutorial',
   ]);
   const listRef = useRef(null);
+  const onlineAddresses = useOnlineAddresses();
+  const statusMap = useAtomValue(statusMapAtom);
 
   const handlePopoverOpen = (event, index) => {
     setPopoverAnchor(event.currentTarget);
@@ -390,14 +396,31 @@ const ListOfMembers = ({
                 onClick={(event) => handlePopoverOpen(event, index)}
               >
                 <ListItemAvatar>
-                  <Avatar
-                    alt={member?.primaryName || member?.member}
-                    src={
-                      member?.primaryName
-                        ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
-                        : ''
-                    }
-                  />
+                  <Badge
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    variant="dot"
+                    invisible={!onlineAddresses.has(member?.member)}
+                    sx={{
+                      '& .MuiBadge-dot': {
+                        backgroundColor: statusDotColor(statusMap.get(member?.member) ?? null),
+                        border: `2px solid ${theme.palette.background.paper}`,
+                        borderRadius: '50%',
+                        height: 10,
+                        minWidth: 10,
+                        width: 10,
+                      },
+                    }}
+                  >
+                    <Avatar
+                      alt={member?.primaryName || member?.member}
+                      src={
+                        member?.primaryName
+                          ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${member?.primaryName}/qortal_avatar?async=true`
+                          : ''
+                      }
+                    />
+                  </Badge>
                 </ListItemAvatar>
 
                 <ListItemText
