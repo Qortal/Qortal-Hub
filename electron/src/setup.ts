@@ -64,6 +64,12 @@ import {
   type PresenceEnvelope,
   PRESENCE_MESSAGE_TYPES,
 } from './presence';
+import {
+  startChatManager,
+  stopChatManager,
+  getChatManager,
+  flushChatStore,
+} from './chat';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -1354,6 +1360,11 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     stopPresenceManager();
     const pm = startPresenceManager(network);
     attachPresenceListeners(pm);
+    // (Re-)start the chat manager wired to the new network instance.
+    stopChatManager();
+    const chatDataDir = path.join(app.getPath('userData'), 'p2p-chat');
+    const cm = await startChatManager(network, chatDataDir);
+    attachChatListeners(cm);
     // Notify renderers that P2P / presence is live again.
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return { success: true, port: network.getPort(), peerId: network.getPeerId() };
@@ -1365,15 +1376,10 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 
 ipcMain.handle('p2p:stop', async () => {
   try {
-    // Stop the network first — socket close events may fire synchronously or
-    // on the next tick.  The presence listeners are now guarded with optional
-    // chaining, but stopping P2P before presence means any in-flight events
-    // still have a valid manager to call into.
     stopP2PNetwork();
-    // Broadcast a clear event before destroying the manager so the renderer
-    // can flush its online-addresses and status-map atoms.
     broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
     stopPresenceManager();
+    stopChatManager();
     return { success: true };
   } catch (err) {
     loggerError('[P2P] Failed to stop:', err);
@@ -1510,4 +1516,142 @@ ipcMain.on('presence:subscribe', (event) => {
 });
 ipcMain.on('presence:unsubscribe', (event) => {
   presenceUpdateSubscribers.delete(event.sender);
+});
+
+// ── Chat IPC Handlers ─────────────────────────────────────────────────────────
+
+const chatEventSubscribers = new Set<Electron.WebContents>();
+const chatTypingSubscribers = new Set<Electron.WebContents>();
+
+export function attachChatListeners(
+  manager: ReturnType<typeof getChatManager>
+): void {
+  if (!manager) return;
+
+  manager.on('chat:event', (payload: unknown) =>
+    broadcastToSet(chatEventSubscribers, 'chat:event', payload)
+  );
+
+  manager.on('chat:typing', (payload: unknown) =>
+    broadcastToSet(chatTypingSubscribers, 'chat:typing', payload)
+  );
+
+  manager.on('chat:typingStopped', (payload: unknown) =>
+    broadcastToSet(chatTypingSubscribers, 'chat:typingStopped', payload)
+  );
+}
+
+/**
+ * Send a signed ChatEventEnvelope from the local renderer.
+ * The renderer must have already signed the event before calling this.
+ */
+ipcMain.handle('chat:sendEvent', async (_event, envelope: unknown) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  try {
+    const ok = cm.handleLocalEvent(envelope);
+    return { success: ok };
+  } catch (err) {
+    loggerError('[Chat] sendEvent error:', err);
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+/** Subscribe the local user to a chat and request sync from peers. */
+ipcMain.handle('chat:subscribe', async (_event, chatId: string) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  cm.subscribeToChat(chatId);
+  return { success: true };
+});
+
+/** Unsubscribe the local user from a chat. */
+ipcMain.handle('chat:unsubscribe', async (_event, chatId: string) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  cm.unsubscribeFromChat(chatId);
+  return { success: true };
+});
+
+/**
+ * Broadcast a typing indicator.
+ * authorAddress is the sender's Qortal address.
+ */
+ipcMain.handle(
+  'chat:sendTyping',
+  async (_event, chatId: string, authorAddress: string) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    cm.sendTyping(chatId, authorAddress);
+    return { success: true };
+  }
+);
+
+/**
+ * Retrieve message history for a chat.
+ * `beforeTimestamp` enables reverse-scroll pagination.
+ */
+ipcMain.handle(
+  'chat:getHistory',
+  async (
+    _event,
+    chatId: string,
+    limit: number,
+    beforeTimestamp?: number
+  ) => {
+    const cm = getChatManager();
+    if (!cm) return [];
+    return cm.getHistory(chatId, limit, beforeTimestamp);
+  }
+);
+
+/** Returns summaries of all known chats (last message + unread count). */
+ipcMain.handle('chat:getSummaries', async () => {
+  const cm = getChatManager();
+  return cm ? cm.getChatSummaries() : [];
+});
+
+/**
+ * Advance the read watermark for a chat.
+ * All events with timestamp ≤ upToTimestamp are considered read.
+ */
+ipcMain.handle(
+  'chat:markRead',
+  async (_event, chatId: string, upToTimestamp: number) => {
+    const cm = getChatManager();
+    cm?.markRead(chatId, upToTimestamp);
+    return { success: true };
+  }
+);
+
+/**
+ * Register the local user's Qortal address so the chat manager can
+ * auto-accept incoming DMs addressed to them.
+ * Call when the user logs in; call with [] when they log out.
+ */
+ipcMain.handle('chat:setLocalAddresses', async (_event, addresses: string[]) => {
+  const cm = getChatManager();
+  if (!cm) return { success: false, error: 'Chat manager is not running' };
+  cm.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+  return { success: true };
+});
+
+/** Returns the list of chatIds the local node is currently subscribed to. */
+ipcMain.handle('chat:getSubscriptions', async () => {
+  const cm = getChatManager();
+  return cm ? cm.getLocalSubscriptions() : [];
+});
+
+ipcMain.on('chat:event:subscribe', (event) => {
+  chatEventSubscribers.add(event.sender);
+});
+ipcMain.on('chat:event:unsubscribe', (event) => {
+  chatEventSubscribers.delete(event.sender);
+});
+
+ipcMain.on('chat:typing:subscribe', (event) => {
+  chatTypingSubscribers.add(event.sender);
+});
+ipcMain.on('chat:typing:unsubscribe', (event) => {
+  chatTypingSubscribers.delete(event.sender);
 });

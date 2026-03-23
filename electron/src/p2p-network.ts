@@ -11,7 +11,7 @@ export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
 export const DEFAULT_API_PORT = 62390;
 
-const MAX_RELAY_HOPS = 10;
+const MAX_RELAY_HOPS = 4;
 const SEEN_MESSAGE_TTL_MS = 60_000;
 const RECONNECT_BASE_MS = 2_000;
 const RECONNECT_MAX_MS = 60_000;

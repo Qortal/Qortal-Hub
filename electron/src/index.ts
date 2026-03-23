@@ -22,10 +22,12 @@ import {
   setupReloadWatcher,
   attachP2PListeners,
   attachPresenceListeners,
+  attachChatListeners,
   setLastP2POptions,
 } from './setup';
 import { startP2PNetwork, DEFAULT_P2P_PORT, DEFAULT_API_PORT } from './p2p-network';
 import { startPresenceManager } from './presence';
+import { startChatManager, flushChatStore } from './chat';
 import { readAppSettings } from './setup';
 
 import * as net from 'net';
@@ -210,6 +212,12 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): 
       const pm = startPresenceManager(p2pNetwork);
       attachPresenceListeners(pm);
       loggerLog('[Presence] Manager auto-started.');
+
+      // Start the chat manager, wired to the P2P network.
+      const chatDataDir = path.join(app.getPath('userData'), 'p2p-chat');
+      const cm = await startChatManager(p2pNetwork, chatDataDir);
+      attachChatListeners(cm);
+      loggerLog('[Chat] Manager auto-started.');
     } catch (err) {
       loggerError('[P2P] Auto-start failed:', err);
     }
@@ -232,6 +240,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): 
 app.on('before-quit', () => {
   setIsQuitting(true);
   flushPersistentStore();
+  flushChatStore();
 });
 
 // Handle when all of our windows are close (platforms have their own expectations).

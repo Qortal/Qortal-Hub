@@ -68,6 +68,71 @@ declare global {
       ) => () => void;
     };
 
+    // ── P2P Chat ─────────────────────────────────────────────────────────────
+    chat?: {
+      /**
+       * Send a pre-signed ChatEventEnvelope.
+       * Build and sign the event in the renderer, then call this.
+       */
+      sendEvent: (envelope: {
+        type: 'CHAT_EVENT';
+        event: P2PChatEvent;
+      }) => Promise<{ success: boolean; error?: string }>;
+
+      /** Subscribe to a chat (start receiving events + request sync). */
+      subscribe: (chatId: string) => Promise<{ success: boolean; error?: string }>;
+
+      /** Unsubscribe from a chat. */
+      unsubscribe: (chatId: string) => Promise<{ success: boolean }>;
+
+      /** Broadcast an ephemeral typing indicator. */
+      sendTyping: (chatId: string, authorAddress: string) => Promise<{ success: boolean }>;
+
+      /** Retrieve message history. Pass `beforeTimestamp` for pagination. */
+      getHistory: (
+        chatId: string,
+        limit: number,
+        beforeTimestamp?: number
+      ) => Promise<P2PChatEvent[]>;
+
+      /** Summary of every known chat (last event + unread count). */
+      getSummaries: () => Promise<
+        Array<{
+          chatId: string;
+          lastEvent: P2PChatEvent | null;
+          unreadCount: number;
+          updatedAt: number;
+        }>
+      >;
+
+      /** Advance the read watermark for a chat. */
+      markRead: (chatId: string, upToTimestamp: number) => Promise<{ success: boolean }>;
+
+      /**
+       * Register the local user's address(es) for DM auto-delivery.
+       * Call on login with [address]; call with [] on logout.
+       */
+      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+
+      /** Returns currently subscribed chatIds. */
+      getSubscriptions: () => Promise<string[]>;
+
+      /**
+       * Subscribe to incoming chat events.
+       * Returns an unsubscribe function.
+       */
+      onEvent: (cb: (payload: { event: P2PChatEvent }) => void) => () => void;
+
+      /**
+       * Subscribe to typing indicators.
+       * `active: true` = started typing, `active: false` = stopped.
+       * Returns an unsubscribe function.
+       */
+      onTyping: (
+        cb: (payload: { chatId: string; authorAddress: string; active: boolean }) => void
+      ) => () => void;
+    };
+
     // ── Presence ─────────────────────────────────────────────────────────────
     presence?: {
       /**
@@ -98,6 +163,32 @@ declare global {
       /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
       onStarted: (cb: () => void) => () => void;
     };
+  }
+
+  // ── P2P Chat shared types ──────────────────────────────────────────────────
+
+  interface P2PChatEvent {
+    /** UUID, assigned by the renderer and included in the signature. */
+    id: string;
+    /**
+     * Conversation identifier:
+     *   DM:    [addrA, addrB].sort().join(':')
+     *   Group: "group:" + numericGroupId
+     */
+    chatId: string;
+    eventType: 'message' | 'edit' | 'delete' | 'reaction';
+    authorAddress: string;
+    /** Base58-encoded Ed25519 public key. */
+    authorPublicKey: string;
+    /** Per-author monotonic counter within this chatId (starts at 1). */
+    seq: number;
+    /** Unix timestamp in milliseconds. */
+    timestamp: number;
+    content: string;
+    replyTo?: string;
+    targetId?: string;
+    /** Base58 Ed25519 detached signature. */
+    signature: string;
   }
 
   // ── Presence shared types ──────────────────────────────────────────────────

@@ -43,6 +43,7 @@ import {
 } from './components/App';
 
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
+import { SupportChat } from './components/Chat/SupportChat';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
@@ -1052,6 +1053,9 @@ function App() {
             />
           </Suspense>
         )}
+
+        {/* P2P support chat test window — fixed bottom-right, always visible */}
+        {extState === 'authenticated' && isMainWindow && <SupportChat />}
 
         {isOpenSendQort && isMainWindow && (
           <SendQortOverlay

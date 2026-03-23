@@ -237,8 +237,6 @@ try {
   });
 
   // Presence API — see electron/src/presence.ts for full type definitions.
-  //
-  // Renderer responsibilities:
   //   1. Generate sessionId (crypto.randomUUID())
   //   2. Build the canonical signed-data object (sorted keys → JSON → UTF-8)
   //   3. Sign with nacl.sign.detached(bytes, privateKeyBytes) → Base58-encode
@@ -313,6 +311,127 @@ try {
   });
 
   ipcRenderer.send('test-ipc');
+
+  // ── Chat API ────────────────────────────────────────────────────────────────
+  //
+  // Renderer responsibilities for sending a message:
+  //   1. Generate a UUID for the event id.
+  //   2. Compute seq = (lastKnownSeqForAuthorInChat + 1).
+  //   3. Build canonical signed-data:
+  //        { authorAddress, authorPublicKey, chatId, content, eventType,
+  //          id, seq, timestamp }
+  //      (plus replyTo / targetId if present, keys sorted alphabetically)
+  //   4. Sign with nacl.sign.detached(canonicalBytes, privateKeyBytes).
+  //   5. Base58-encode the signature.
+  //   6. Call window.chat.sendEvent({ type: 'CHAT_EVENT', event: { ...fields, signature } }).
+  //
+  // chatId conventions:
+  //   DM:    [addrA, addrB].sort().join(':')   e.g. "Qaddr1:Qaddr2"
+  //   Group: "group:" + numericGroupId         e.g. "group:12345"
+  contextBridge.exposeInMainWorld('chat', {
+    /**
+     * Send a signed ChatEventEnvelope (message, edit, delete, or reaction).
+     * The renderer must sign the event before calling this.
+     * Returns { success: boolean }.
+     */
+    sendEvent: async (envelope: unknown) =>
+      ipcRenderer.invoke('chat:sendEvent', envelope),
+
+    /**
+     * Subscribe the local user to a chat.
+     * Announces subscription to peers and requests a sync so missed
+     * messages are recovered.  Returns { success: boolean }.
+     */
+    subscribe: async (chatId: string) =>
+      ipcRenderer.invoke('chat:subscribe', chatId),
+
+    /** Unsubscribe the local user from a chat. */
+    unsubscribe: async (chatId: string) =>
+      ipcRenderer.invoke('chat:unsubscribe', chatId),
+
+    /**
+     * Broadcast a typing indicator for a chat.
+     * Ephemeral — not stored.  Returns { success: boolean }.
+     */
+    sendTyping: async (chatId: string, authorAddress: string) =>
+      ipcRenderer.invoke('chat:sendTyping', chatId, authorAddress),
+
+    /**
+     * Retrieve message history for a chat.
+     * Pass `beforeTimestamp` for reverse-scroll pagination.
+     * Returns ChatEvent[].
+     */
+    getHistory: async (chatId: string, limit: number, beforeTimestamp?: number) =>
+      ipcRenderer.invoke('chat:getHistory', chatId, limit, beforeTimestamp),
+
+    /**
+     * Returns a summary of every known chat (last event + unread count).
+     * Returns ChatSummary[].
+     */
+    getSummaries: async () => ipcRenderer.invoke('chat:getSummaries'),
+
+    /**
+     * Advance the read watermark for a chat.
+     * Events with timestamp ≤ upToTimestamp are marked read.
+     */
+    markRead: async (chatId: string, upToTimestamp: number) =>
+      ipcRenderer.invoke('chat:markRead', chatId, upToTimestamp),
+
+    /**
+     * Register the local user's Qortal address(es).
+     * The chat manager uses this to auto-accept incoming DMs.
+     * Call on login with the user's address; call with [] on logout.
+     */
+    setLocalAddresses: async (addresses: string[]) =>
+      ipcRenderer.invoke('chat:setLocalAddresses', addresses),
+
+    /** Returns the chatIds the local node is currently subscribed to. */
+    getSubscriptions: async () => ipcRenderer.invoke('chat:getSubscriptions'),
+
+    /**
+     * Subscribe to incoming chat events (messages, edits, deletes, reactions).
+     * `cb` receives `{ event: ChatEvent }`.
+     * Returns an unsubscribe function.
+     */
+    onEvent: (cb: (payload: { event: unknown }) => void) => {
+      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
+      ipcRenderer.on('chat:event', handler);
+      ipcRenderer.send('chat:event:subscribe');
+      return () => {
+        ipcRenderer.removeListener('chat:event', handler);
+        ipcRenderer.send('chat:event:unsubscribe');
+      };
+    },
+
+    /**
+     * Subscribe to typing indicator events.
+     * `cb` receives `{ chatId: string; authorAddress: string }`.
+     * Returns an unsubscribe function.
+     * Both 'chat:typing' (started) and 'chat:typingStopped' are forwarded
+     * with an additional `active` boolean field for convenience.
+     */
+    onTyping: (
+      cb: (payload: {
+        chatId: string;
+        authorAddress: string;
+        active: boolean;
+      }) => void
+    ) => {
+      const startHandler = (_e: unknown, payload: unknown) =>
+        cb({ ...(payload as any), active: true });
+      const stopHandler = (_e: unknown, payload: unknown) =>
+        cb({ ...(payload as any), active: false });
+
+      ipcRenderer.on('chat:typing', startHandler);
+      ipcRenderer.on('chat:typingStopped', stopHandler);
+      ipcRenderer.send('chat:typing:subscribe');
+      return () => {
+        ipcRenderer.removeListener('chat:typing', startHandler);
+        ipcRenderer.removeListener('chat:typingStopped', stopHandler);
+        ipcRenderer.send('chat:typing:unsubscribe');
+      };
+    },
+  });
 } catch (error) {
   loggerError('error', error);
 }

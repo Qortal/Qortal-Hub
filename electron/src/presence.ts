@@ -175,7 +175,7 @@ function base58Encode(bytes: Uint8Array): string {
   return result;
 }
 
-function base58Decode(str: string): Uint8Array {
+export function base58Decode(str: string): Uint8Array {
   const alphabetMap: Record<string, number> = {};
   for (let i = 0; i < BASE58_ALPHABET.length; i++) {
     alphabetMap[BASE58_ALPHABET[i]] = i;
