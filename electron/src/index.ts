@@ -22,9 +22,11 @@ import {
   setupReloadWatcher,
   attachP2PListeners,
   attachPresenceListeners,
+  setLastP2POptions,
 } from './setup';
-import { startP2PNetwork, DEFAULT_P2P_PORT } from './p2p-network';
+import { startP2PNetwork, DEFAULT_P2P_PORT, DEFAULT_API_PORT } from './p2p-network';
 import { startPresenceManager } from './presence';
+import { readAppSettings } from './setup';
 
 import * as net from 'net';
 
@@ -140,7 +142,7 @@ async function isPortTaken(port: number): Promise<boolean> {
   });
 }
 
-async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
+async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): Promise<number> {
   for (let i = 0; i < maxInstances; i++) {
     const port = basePort + i;
     if (!(await isPortTaken(port))) {
@@ -156,17 +158,18 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
 
       // Reserve the port so this instance is considered active
       net.createServer().listen(port, '127.0.0.1');
-      return;
+      return i;
     }
   }
 
   loggerError('❌ Too many instances already running.');
   app.quit();
+  return 0;
 }
 
 // Run Application
 (async () => {
-  setupMultiInstanceUserData();
+  const instanceIndex = await setupMultiInstanceUserData();
 
   await app.whenReady();
 
@@ -182,22 +185,36 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
 
   await myCapacitorApp.init();
 
-  // Auto-start the P2P network with default settings.
-  // The renderer can reconfigure it at any time via window.p2pNetwork.start().
-  try {
-    const p2pNetwork = await startP2PNetwork({
-      port: DEFAULT_P2P_PORT,
-      initialPeers: ['qortal.home.ro:62361'],
-    });
-    attachP2PListeners(p2pNetwork);
-    loggerLog(`[P2P] Auto-started on port ${DEFAULT_P2P_PORT}`);
+  // Auto-start the P2P network unless the user has disabled it in settings.
+  const appSettings = await readAppSettings();
+  if (appSettings.p2pEnabled !== false) {
+    try {
+      // Each instance gets a unique P2P and API port derived from its index so
+      // multiple instances can run side-by-side on the same machine.
+      // Instance 0: P2P=62391, API=62490
+      // Instance 1: P2P=62392, API=62491  … and so on.
+      const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
+      const apiPort = DEFAULT_API_PORT + instanceIndex;
+      const p2pOptions = {
+        port: p2pPort,
+        apiPort,
+        initialPeers: ['qortal.home.ro:62391'],
+      };
+      // Persist the options so the settings toggle can restart with the same config.
+      setLastP2POptions(p2pOptions);
+      const p2pNetwork = await startP2PNetwork(p2pOptions);
+      attachP2PListeners(p2pNetwork);
+      loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
 
-    // Start the presence manager, wired to the P2P network.
-    const pm = startPresenceManager(p2pNetwork);
-    attachPresenceListeners(pm);
-    loggerLog('[Presence] Manager auto-started.');
-  } catch (err) {
-    loggerError('[P2P] Auto-start failed:', err);
+      // Start the presence manager, wired to the P2P network.
+      const pm = startPresenceManager(p2pNetwork);
+      attachPresenceListeners(pm);
+      loggerLog('[Presence] Manager auto-started.');
+    } catch (err) {
+      loggerError('[P2P] Auto-start failed:', err);
+    }
+  } else {
+    loggerLog('[P2P] Disabled by user setting — skipping auto-start.');
   }
 
   // Also set on main window session (same as default when no partition; ensures activate/recreate path is covered)

@@ -17,7 +17,14 @@ export type UserStatus = 'online' | 'away' | 'busy' | 'idle';
 export type SelectableStatus = 'online' | 'away' | 'busy' | 'offline';
 
 /**
- * True while the local user has been inactive for ≥ 30 minutes.
+ * Tracks whether the P2P network is currently enabled and running.
+ * When false the status badge shows "Offline" and the status picker is disabled.
+ * Initialised to `true` (optimistic); `usePresence` reads the real value from
+ * `appSettings` on mount and keeps it in sync with the settings toggle.
+ */
+export const p2pEnabledAtom = atom<boolean>(true);
+
+/**
  * Drives the "Idle" label on the profile card without affecting the
  * status the user has chosen in the picker (myStatusAtom).
  */

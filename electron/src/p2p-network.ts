@@ -57,6 +57,7 @@ export interface P2PPeerInfo {
 
 export interface P2PNetworkOptions {
   port?: number;
+  apiPort?: number;
   maxPeers?: number;
   initialPeers?: string[];
 }
@@ -126,6 +127,14 @@ export class P2PNetwork extends EventEmitter {
   private server: tls.Server | null = null;
   private apiServer: http.Server | null = null;
   private peers = new Map<string, PeerRecord>();
+  /** addr → discovery metadata, accumulated for the lifetime of this session. */
+  private discoveredPeers = new Map<string, {
+    address: string;
+    discoveredAt: number;
+    /** nodeId of the peer that told us about this address, or 'seed' for
+     *  addresses from the initial peer list. */
+    source: string;
+  }>();
   /** id → absolute expiry timestamp */
   private seenMessages = new Map<string, number>();
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -143,8 +152,10 @@ export class P2PNetwork extends EventEmitter {
   private upnpClient: any = null;
   /** Set to true in stop() so a concurrent setupUPnP() knows to tear down immediately. */
   private upnpStopped = false;
+  private stopped = false;
 
   private readonly port: number;
+  private readonly apiPort: number;
   private readonly maxPeers: number;
   private readonly initialPeers: string[];
   /** Stable random UUID that uniquely identifies this node instance. Shared
@@ -156,6 +167,7 @@ export class P2PNetwork extends EventEmitter {
   constructor(options: P2PNetworkOptions = {}) {
     super();
     this.port = options.port ?? DEFAULT_P2P_PORT;
+    this.apiPort = options.apiPort ?? DEFAULT_API_PORT;
     this.maxPeers = options.maxPeers ?? DEFAULT_MAX_PEERS;
     this.initialPeers = options.initialPeers ?? [];
     this.nodeId = crypto.randomUUID();
@@ -194,11 +206,26 @@ export class P2PNetwork extends EventEmitter {
     await this.generateTLSCredentials();
     await this.listenForInbound();
     this.upnpStopped = false;
+    this.stopped = false;
     this.setupUPnP(); // fire-and-forget — UPnP failure must never block startup
     this.scheduleSeenCleanup();
     this.schedulePing();
     this.startApiServer();
     for (const addr of this.initialPeers) {
+      // Seed the discovery registry with the bootstrap list.
+      const [rawHost, portStr] = addr.split(':');
+      const host = normalizeHost(rawHost);
+      const port = parseInt(portStr, 10);
+      if (host && !isNaN(port)) {
+        const normalizedAddr = `${host}:${port}`;
+        if (!this.discoveredPeers.has(normalizedAddr)) {
+          this.discoveredPeers.set(normalizedAddr, {
+            address: normalizedAddr,
+            discoveredAt: Date.now(),
+            source: 'seed',
+          });
+        }
+      }
       this.connectToPeer(addr);
     }
     loggerLog(
@@ -209,6 +236,7 @@ export class P2PNetwork extends EventEmitter {
   stop(): void {
     // Signal any in-progress setupUPnP() to abort immediately.
     this.upnpStopped = true;
+    this.stopped = true;
 
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.cleanupTimer) clearInterval(this.cleanupTimer);
@@ -216,12 +244,17 @@ export class P2PNetwork extends EventEmitter {
     this.cleanupTimer = null;
 
     for (const peer of this.peers.values()) {
+      // Mark before destroying so the async 'close' event handler (onClose)
+      // sees abortReconnect and does NOT schedule a reconnect attempt.
+      peer.abortReconnect = true;
       if (peer.reconnectTimer) clearTimeout(peer.reconnectTimer);
+      peer.reconnectTimer = undefined;
       peer.socket.destroy();
     }
     this.peers.clear();
     this.server?.close();
     this.server = null;
+    this.apiServer?.closeAllConnections();
     this.apiServer?.close();
     this.apiServer = null;
 
@@ -590,6 +623,7 @@ export class P2PNetwork extends EventEmitter {
 
   /** Re-attempt connections to initial peers that have no live socket. */
   private recheckInitialPeers(): void {
+    if (this.stopped) return;
     for (const addr of this.initialPeers) {
       if (this.connectedCount() >= this.maxPeers) return;
       this.connectToPeer(addr);
@@ -597,8 +631,8 @@ export class P2PNetwork extends EventEmitter {
   }
 
   private scheduleReconnect(peer: PeerRecord): void {
-    // Use the original dial address, not the re-keyed nodeId, so we connect
-    // to the correct TCP destination.
+    // Don't schedule reconnects after the network has been stopped.
+    if (this.stopped) return;
     const target = peer.dialAddr || peer.id;
     peer.reconnectAttempts++;
     const delay = Math.min(
@@ -794,8 +828,13 @@ export class P2PNetwork extends EventEmitter {
       // Never share private/loopback/link-local addresses — they are
       // unreachable by peers on the public internet and would only generate
       // spurious connection attempts and log noise.
-      const host = p.dialAddr.split(':')[0];
+      const [host, portStr] = p.dialAddr.split(':');
       if (isPrivateIP(host)) continue;
+      // Only advertise peers on the canonical P2P port. Non-default ports
+      // (62392, 62393 …) belong to secondary local instances that are not
+      // externally reachable, so sharing them would only waste connection
+      // attempts on remote peers.
+      if (parseInt(portStr, 10) !== DEFAULT_P2P_PORT) continue;
       addrs.push(p.dialAddr);
       if (addrs.length >= MAX_PEER_ADDRS) break;
     }
@@ -837,6 +876,16 @@ export class P2PNetwork extends EventEmitter {
 
       const normalizedAddr = `${host}:${port}`;
       if (this.isSelfAddr(normalizedAddr)) continue;
+
+      // Record in the discovery registry regardless of whether we can
+      // connect right now — first-seen wins, so we never overwrite.
+      if (!this.discoveredPeers.has(normalizedAddr)) {
+        this.discoveredPeers.set(normalizedAddr, {
+          address: normalizedAddr,
+          discoveredAt: Date.now(),
+          source: msg.from,
+        });
+      }
 
       // connectToPeer already deduplicates — but skip early if obviously known.
       let alreadyConnected = false;
@@ -959,7 +1008,9 @@ export class P2PNetwork extends EventEmitter {
         const peers = connectedPeers().map((p) => {
           const ageMs = p.connectedAt != null ? t - p.connectedAt : 0;
           const lastPingSec =
-            p.lastPingAt != null ? Math.floor((t - p.lastPingAt) / 1000) : null;
+            p.lastPingAt != null
+              ? Math.floor((t - p.lastPingAt) / 1000)
+              : null;
           return {
             nodeId: p.id,
             address: p.dialAddr || `${p.host}:${p.port}`,
@@ -975,12 +1026,44 @@ export class P2PNetwork extends EventEmitter {
         return;
       }
 
+      if (url === '/hub/peers/discovered') {
+        const t = Date.now();
+        const result = Array.from(this.discoveredPeers.values()).map((d) => {
+          // Derive live connection status from the peers map.
+          let status: 'connected' | 'connecting' | 'unreachable' | 'unknown' =
+            'unknown';
+          for (const p of this.peers.values()) {
+            if (p.dialAddr === d.address || p.id === d.address) {
+              if (p.connected) { status = 'connected'; break; }
+              if (!p.socket.destroyed) { status = 'connecting'; break; }
+              status = 'unreachable';
+              break;
+            }
+          }
+          return {
+            address: d.address,
+            discoveredAt: d.discoveredAt,
+            discoveredAgo: `${Math.floor((t - d.discoveredAt) / 1000)}s ago`,
+            source: d.source,
+            status,
+          };
+        });
+        // Sort: connected first, then connecting, then the rest by discovery time desc.
+        result.sort((a, b) => {
+          const order = { connected: 0, connecting: 1, unknown: 2, unreachable: 3 };
+          const diff = order[a.status] - order[b.status];
+          return diff !== 0 ? diff : b.discoveredAt - a.discoveredAt;
+        });
+        sendJson(res, result);
+        return;
+      }
+
       sendJson(res, { error: 'Not found' }, 404);
     });
 
-    this.apiServer.listen(DEFAULT_API_PORT, '127.0.0.1', () => {
+    this.apiServer.listen(this.apiPort, '127.0.0.1', () => {
       loggerLog(
-        `[P2P] API server listening on http://127.0.0.1:${DEFAULT_API_PORT}`
+        `[P2P] API server listening on http://127.0.0.1:${this.apiPort}`
       );
     });
 

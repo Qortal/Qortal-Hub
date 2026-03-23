@@ -31,7 +31,12 @@ import {
   openSnackGlobalAtom,
   infoSnackGlobalAtom,
 } from '../../atoms/global';
-import { onlineAddressesAtom, isIdleAtom, type SelectableStatus } from '../../atoms/presence';
+import {
+  onlineAddressesAtom,
+  isIdleAtom,
+  p2pEnabledAtom,
+  type SelectableStatus,
+} from '../../atoms/presence';
 import { statusDotColor, useMyStatus, useStatus } from '../../hooks/usePresence';
 import { QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background.ts';
@@ -101,6 +106,7 @@ export const HomeProfileCard = () => {
   const [myStatus, setMyStatus] = useMyStatus();
   const isIdle = useAtomValue(isIdleAtom);
   const onlineAddresses = useAtomValue(onlineAddressesAtom);
+  const isP2PEnabled = useAtomValue(p2pEnabledAtom);
   const totalOnline = onlineAddresses.size;
 
   const [statusMenuAnchor, setStatusMenuAnchor] =
@@ -112,6 +118,9 @@ export const HomeProfileCard = () => {
     { value: 'busy',    label: 'Busy',    color: '#ef4444' },
     { value: 'offline', label: 'Offline', color: '#9e9e9e' },
   ];
+
+  // Show "Offline" whenever: P2P is disabled, user chose offline, or not yet online.
+  const showAsOffline = !isP2PEnabled || myStatus === 'offline' || !isSelfOnline;
 
   const handleCopyAddress = () => {
     if (!address) return;
@@ -239,7 +248,7 @@ export const HomeProfileCard = () => {
                     width: 13,
                     height: 13,
                     borderRadius: '50%',
-                    bgcolor: myStatus === 'offline' || !isSelfOnline
+                    bgcolor: showAsOffline
                       ? theme.palette.grey[500]
                       : isIdle
                         ? '#78909c'
@@ -289,31 +298,37 @@ export const HomeProfileCard = () => {
           </Typography>
 
           {/* Clickable status label opens the status picker */}
-          <Tooltip title="Change status" disableInteractive>
-            <ButtonBase
-              onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
-              sx={{ borderRadius: '4px', mt: '2px' }}
-            >
-              <Typography
-                sx={{
-                  color: myStatus === 'offline' || !isSelfOnline
-                    ? theme.palette.text.disabled
-                    : isIdle
-                      ? '#78909c'
-                      : statusDotColor(myStatus),
-                  fontSize: '0.72rem',
-                  fontWeight: 500,
-                  px: '2px',
-                  '&:hover': { opacity: 0.8 },
-                }}
+          <Tooltip
+            title={isP2PEnabled ? 'Change status' : 'Enable Hub P2P to change status'}
+            disableInteractive
+          >
+            <span>
+              <ButtonBase
+                onClick={(e) => isP2PEnabled && setStatusMenuAnchor(e.currentTarget)}
+                disabled={!isP2PEnabled}
+                sx={{ borderRadius: '4px', mt: '2px' }}
               >
-                {myStatus === 'offline' || !isSelfOnline
-                  ? '● Offline'
-                  : isIdle
-                    ? '● Idle'
-                    : `● ${STATUS_OPTIONS.find((o) => o.value === myStatus)?.label ?? 'Online'}`}
-              </Typography>
-            </ButtonBase>
+                <Typography
+                  sx={{
+                    color: showAsOffline
+                      ? theme.palette.text.disabled
+                      : isIdle
+                        ? '#78909c'
+                        : statusDotColor(myStatus),
+                    fontSize: '0.72rem',
+                    fontWeight: 500,
+                    px: '2px',
+                    '&:hover': { opacity: isP2PEnabled ? 0.8 : 1 },
+                  }}
+                >
+                  {showAsOffline
+                    ? '● Offline'
+                    : isIdle
+                      ? '● Idle'
+                      : `● ${STATUS_OPTIONS.find((o) => o.value === myStatus)?.label ?? 'Online'}`}
+                </Typography>
+              </ButtonBase>
+            </span>
           </Tooltip>
 
           {/* Status picker menu */}

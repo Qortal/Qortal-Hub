@@ -20,8 +20,8 @@ declare global {
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => void;
-      getAppSettings?: () => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit' }>;
-      setAppSettings?: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit' }) => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit' }>;
+      getAppSettings?: () => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }>;
+      setAppSettings?: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }) => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }>;
     };
     videoServer?: {
       start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
@@ -93,6 +93,10 @@ declare global {
       onUpdate: (
         cb: (payload: { address: string; online: boolean; status: UserStatus | null }) => void
       ) => () => void;
+      /** Subscribe to the "all presence cleared" event (fired when P2P is disabled). */
+      onCleared: (cb: () => void) => () => void;
+      /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
+      onStarted: (cb: () => void) => () => void;
     };
   }
 

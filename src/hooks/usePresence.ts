@@ -6,6 +6,7 @@ import {
   isOnlineAtomFamily,
   myStatusAtom,
   onlineAddressesAtom,
+  p2pEnabledAtom,
   SelectableStatus,
   statusAtomFamily,
   statusMapAtom,
@@ -77,12 +78,13 @@ export function statusDotColor(status: string | null): string {
  *
  * Call this once at the App level.
  */
-export function usePresence(): void {
+export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } {
   const extState = useAtomValue(extStateAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
-  const myStatus = useAtomValue(myStatusAtom);
+  const setP2pEnabled = useSetAtom(p2pEnabledAtom);
+  const [myStatus, setMyStatus] = useAtom(myStatusAtom);
   const setIsIdle = useSetAtom(isIdleAtom);
 
   const sessionIdRef = useRef<string | null>(null);
@@ -285,22 +287,53 @@ export function usePresence(): void {
 
   useEffect(() => {
     if (!isAuthenticated || !userInfo?.address || !userInfo?.publicKey || !window.presence) {
+      // On logout, reset the atom to 'online' so the next login starts clean.
+      // The status-change effect guards against sending an announce because
+      // isAuthenticatedRef.current is already false by the time that effect runs.
+      if (!isAuthenticated) {
+        setMyStatus('online');
+        myStatusRef.current = 'online';
+        isAppearedOfflineRef.current = false;
+      }
       return;
     }
 
     sessionIdRef.current = crypto.randomUUID();
+    let cancelled = false;
 
-    if (myStatusRef.current === 'offline') {
-      isAppearedOfflineRef.current = true;
-      return;
-    }
+    // Read any persisted 'offline' preference for this address before deciding
+    // whether to announce.  All other statuses are ephemeral and default back
+    // to 'online' on next login.
+    (async () => {
+      const stored = window.appStorage
+        ? await window.appStorage.get(`presence-status:${userInfo.address}`)
+        : null;
+      if (cancelled) return;
 
-    isAppearedOfflineRef.current = false;
-    sendAnnounce();
-    stopHeartbeat();
-    heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+      if (stored === 'offline') {
+        // Set the flag BEFORE updating the atom so the status-change effect
+        // (which watches `myStatus`) sees isAppearedOfflineRef=true and skips
+        // sending an unnecessary OFFLINE message.
+        isAppearedOfflineRef.current = true;
+        setMyStatus('offline');
+        myStatusRef.current = 'offline';
+        return;
+      }
+
+      // Non-offline path — proceed with announce + heartbeat.
+      if (myStatusRef.current === 'offline') {
+        isAppearedOfflineRef.current = true;
+        return;
+      }
+
+      isAppearedOfflineRef.current = false;
+      sendAnnounce();
+      stopHeartbeat();
+      heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    })();
 
     return () => {
+      cancelled = true;
       stopHeartbeat();
       sendOfflineCallback();
     };
@@ -330,6 +363,22 @@ export function usePresence(): void {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myStatus]);
 
+  // ── Persist / clear 'offline' status keyed by address ────────────────────
+  //
+  // Only 'offline' is persisted — all other statuses are ephemeral and restore
+  // to 'online' on next login.  Written/deleted whenever the authenticated
+  // user changes their status.
+
+  useEffect(() => {
+    if (!isAuthenticated || !userInfo?.address) return;
+    const key = `presence-status:${userInfo.address}`;
+    if (myStatus === 'offline') {
+      window.appStorage?.set(key, 'offline');
+    } else {
+      window.appStorage?.delete(key);
+    }
+  }, [myStatus, isAuthenticated, userInfo?.address]);
+
   // ── Re-announce when a new peer connects ─────────────────────────────────
 
   useEffect(() => {
@@ -357,6 +406,12 @@ export function usePresence(): void {
   useEffect(() => {
     if (!window.presence) return;
 
+    // Seed the p2pEnabled flag from persisted settings so the badge reflects
+    // the correct state immediately on mount (before any network activity).
+    (window.electronAPI as any)?.getAppSettings?.().then((settings: { p2pEnabled?: boolean } | undefined) => {
+      setP2pEnabled(settings?.p2pEnabled !== false);
+    });
+
     window.presence.getAllOnline().then((sessions) => {
       const addressSet = new Set<string>();
       const statusMap = new Map<string, UserStatus>();
@@ -383,9 +438,25 @@ export function usePresence(): void {
       });
     });
 
-    return unsubscribe;
+    const unsubscribeCleared = window.presence.onCleared?.(() => {
+      setOnlineAddresses(new Set());
+      setStatusMap(new Map());
+      setP2pEnabled(false);
+    });
+
+    const unsubscribeStarted = window.presence.onStarted?.(() => {
+      setP2pEnabled(true);
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeCleared?.();
+      unsubscribeStarted?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  return { sendOfflineBeforeLogout: sendOfflineCallback };
 }
 
 // ── Component-level helpers ───────────────────────────────────────────────────

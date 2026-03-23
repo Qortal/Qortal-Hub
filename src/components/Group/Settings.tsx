@@ -35,6 +35,7 @@ import {
   infoSnackGlobalAtom,
   openSnackGlobalAtom,
 } from '../../atoms/global';
+import { onlineAddressesAtom, statusMapAtom } from '../../atoms/presence';
 import { walletVersion } from '../../background/background.ts';
 import { TransitionUp } from '../../common/Transitions.tsx';
 import Base58 from '../../encryption/Base58.ts';
@@ -82,7 +83,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
+  const [p2pEnabled, setP2pEnabled] = useState(true);
   const [platform, setPlatform] = useState<string>('');
+  const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
+  const setStatusMap = useSetAtom(statusMapAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -157,6 +161,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     if (typeof window.electronAPI?.getAppSettings !== 'function') return;
     const settings = await window.electronAPI.getAppSettings();
     if (settings?.closeAction) setCloseAction(settings.closeAction);
+    // p2pEnabled defaults to true when absent
+    setP2pEnabled(settings?.p2pEnabled !== false);
     if (typeof window.electronAPI?.getPlatform === 'function') {
       const p = await window.electronAPI.getPlatform();
       setPlatform(p || '');
@@ -175,6 +181,25 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
       }
     },
     []
+  );
+
+  const handleP2pToggle = useCallback(
+    async (enabled: boolean) => {
+      setP2pEnabled(enabled);
+      if (typeof window.electronAPI?.setAppSettings === 'function') {
+        await window.electronAPI.setAppSettings({ p2pEnabled: enabled });
+      }
+      // Apply the change live without requiring a restart.
+      if (enabled) {
+        await window.p2pNetwork?.start();
+      } else {
+        await window.p2pNetwork?.stop();
+        // Clear stale presence data so the UI no longer shows peers as online.
+        setOnlineAddresses(new Set());
+        setStatusMap(new Map());
+      }
+    },
+    [setOnlineAddresses, setStatusMap]
   );
 
   return (
@@ -293,6 +318,31 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         JSON.stringify(e.target.checked)
                       );
                     }}
+                  />
+                </Box>
+                {/* Hub P2P networking */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      Enable Hub P2P networking
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled">
+                      Allows presence, peer discovery and direct messaging.
+                    </Typography>
+                  </Box>
+                  <LocalNodeSwitch
+                    checked={p2pEnabled}
+                    onChange={(e) => handleP2pToggle(e.target.checked)}
                   />
                 </Box>
                 <Box

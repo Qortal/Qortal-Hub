@@ -660,9 +660,11 @@ export type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
 
 export interface AppSettings {
   closeAction?: CloseAction;
+  /** Whether the Hub P2P network auto-starts on launch (default true). */
+  p2pEnabled?: boolean;
 }
 
-const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask' };
+const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask', p2pEnabled: true };
 
 export async function readAppSettings(): Promise<AppSettings> {
   try {
@@ -678,6 +680,7 @@ export async function readAppSettings(): Promise<AppSettings> {
         ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
+      p2pEnabled: parsed.p2pEnabled === false ? false : true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -1313,6 +1316,14 @@ function broadcastToSet(
   }
 }
 
+/** Stores the options used when P2P was last started so the IPC toggle can
+ *  restart with the same ports, seeds, etc. */
+let lastP2POptions: P2PNetworkOptions = {};
+
+export function setLastP2POptions(opts: P2PNetworkOptions): void {
+  lastP2POptions = opts;
+}
+
 export function attachP2PListeners(network: ReturnType<typeof getP2PNetwork>): void {
   if (!network) return;
   network.on('message', (payload) =>
@@ -1334,8 +1345,17 @@ export function attachP2PListeners(network: ReturnType<typeof getP2PNetwork>): v
 
 ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
   try {
-    const network = await startP2PNetwork(options ?? {});
+    // Re-use the last known options if none supplied (e.g. from the settings toggle).
+    const opts = (options && Object.keys(options).length > 0) ? options : lastP2POptions;
+    lastP2POptions = opts;
+    const network = await startP2PNetwork(opts);
     attachP2PListeners(network);
+    // (Re-)start the presence manager wired to the new network instance.
+    stopPresenceManager();
+    const pm = startPresenceManager(network);
+    attachPresenceListeners(pm);
+    // Notify renderers that P2P / presence is live again.
+    broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return { success: true, port: network.getPort(), peerId: network.getPeerId() };
   } catch (err) {
     loggerError('[P2P] Failed to start:', err);
@@ -1345,7 +1365,15 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 
 ipcMain.handle('p2p:stop', async () => {
   try {
+    // Stop the network first — socket close events may fire synchronously or
+    // on the next tick.  The presence listeners are now guarded with optional
+    // chaining, but stopping P2P before presence means any in-flight events
+    // still have a valid manager to call into.
     stopP2PNetwork();
+    // Broadcast a clear event before destroying the manager so the renderer
+    // can flush its online-addresses and status-map atoms.
+    broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
+    stopPresenceManager();
     return { success: true };
   } catch (err) {
     loggerError('[P2P] Failed to stop:', err);

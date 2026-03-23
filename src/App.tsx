@@ -248,7 +248,7 @@ function App() {
     validateApiKeyFromRegistration,
   } = useAuth();
   useBlockedAddressesLoader(extState === 'authenticated');
-  usePresence();
+  const { sendOfflineBeforeLogout } = usePresence();
 
   const useLocalNode = isLocalNodeUrl(selectedNode?.url);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -720,6 +720,10 @@ function App() {
           }),
         });
       }
+      // Send the offline presence notice while the key is still in secure
+      // storage. The background clears keyPair as part of logout, so signing
+      // must happen here — before sendMessage('logout') is called.
+      await sendOfflineBeforeLogout();
       window
         .sendMessage('logout', {})
         .then((response) => {
@@ -737,7 +741,7 @@ function App() {
     } catch (error) {
       console.log(error);
     }
-  }, [hasSettingsChanged, extState]);
+  }, [hasSettingsChanged, extState, sendOfflineBeforeLogout]);
 
   const returnToMain = useCallback(() => {
     setPaymentTo('');

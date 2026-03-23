@@ -29,6 +29,7 @@ try {
     getAppSettings: () => ipcRenderer.invoke('appSettings:get'),
     setAppSettings: (settings: {
       closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+      p2pEnabled?: boolean;
     }) => ipcRenderer.invoke('appSettings:set', settings),
   });
 
@@ -291,6 +292,23 @@ try {
         ipcRenderer.removeListener('presence:update', handler);
         ipcRenderer.send('presence:unsubscribe');
       };
+    },
+
+    /**
+     * Subscribe to a one-shot "all presence cleared" event that fires when
+     * P2P is disabled.  Returns an unsubscribe function.
+     */
+    onCleared: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('presence:cleared', handler);
+      return () => ipcRenderer.removeListener('presence:cleared', handler);
+    },
+
+    /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
+    onStarted: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('presence:started', handler);
+      return () => ipcRenderer.removeListener('presence:started', handler);
     },
   });
 

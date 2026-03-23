@@ -772,21 +772,21 @@ export function startPresenceManager(p2p: P2PNetwork): PresenceManager {
       typeof data === 'object' &&
       PRESENCE_MESSAGE_TYPES.has((data as PresenceEnvelope).type)
     ) {
-      presenceManager!.handleEnvelope(data, from, via ?? from);
+      presenceManager?.handleEnvelope(data, from, via ?? from);
     }
   });
 
   p2p.on('peer-connected', ({ id }) => {
     // Immediately send our own cached presence to the newly connected peer so
     // they learn we're online without waiting up to 25 s for the next heartbeat.
-    const cached = presenceManager!.getLastLocalEnvelope();
+    const cached = presenceManager?.getLastLocalEnvelope();
     if (cached) {
       p2p.send(id, cached);
     }
   });
 
   p2p.on('peer-disconnected', ({ id }) => {
-    presenceManager!.removeSessionsForPeer(id);
+    presenceManager?.removeSessionsForPeer(id);
   });
 
   loggerLog('[Presence] Manager started.');
